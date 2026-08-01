@@ -79,14 +79,23 @@ PosOrderDetail _detail({
 
 Object? _applied(Map<String, dynamic> params) {
   final ops = params['p_operations'] as List;
-  final localOp = (ops.single as Map)['local_operation_id'] as String;
+  final op = ops.single as Map;
+  final localOp = op['local_operation_id'] as String;
   return {
     'ok': true,
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'applied',
         'ok': true,
+        // MONEY-CODEX-FINAL-CLOSURE-005 (F2): the server ALWAYS names the order
+        // it applied to (`app.add_order_items` returns `order_id`), and the
+        // client now requires it to match the attempt's target. Echoed from the
+        // pushed operation so this fixture stays faithful for any target.
+        'order_id': op['target_id'],
         'round_id': 'r-new',
         'round_number': 2,
       },
@@ -102,6 +111,9 @@ Object? _rejected(Map<String, dynamic> params) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'rejected',
         'ok': false,
         'error': 'rejected',
@@ -318,6 +330,18 @@ void main() {
         final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
         expect(op2['local_operation_id'], op1['local_operation_id']);
         expect(op2['payload'], op1['payload']);
+        // UNCHANGED BY MONEY-DURABLE-ADDITIONS-003C, and worth saying why.
+        //
+        // The failure scripted above is a TYPED BUSINESS REJECTION — the server
+        // answered and said no, so no round exists under this identity.
+        // Abandoning it is safe, and the cashier must be able to: this is the
+        // ordinary "the kitchen is out of that, let me redo it" path.
+        //
+        // 003C locks the identity down only when the outcome is UNCERTAIN (a
+        // transport failure or an applied-awaiting-refresh), where the server
+        // may already own the round. That case is proven separately in
+        // money_durable_additions_test.dart D1/D2.
+        //
         // EXPLICIT cancel: unlock, lines INTACT, attempt gone.
         expect(notifier.exit(), isTrue);
         final unlockedCart = container.read(cartControllerProvider);

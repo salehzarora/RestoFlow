@@ -203,6 +203,14 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
 
   @override
+  String get posAdditionLoadingPending =>
+      'בודקים שינויים שלא הושלמו — נסו שוב בעוד רגע';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'בהזמנה הזו יש שינויים סותרים שלא הושלמו ויש לפתור אותם לפני עריכה';
+
+  @override
   String get posReadyBellTooltip => 'התראות מוכנות';
 
   @override
@@ -791,6 +799,31 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOutboxRetryAll => 'נסה שוב';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count שהסתיימו — ניקוי';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'ניקוי שגיאות שהסתיימו';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'נוקו $count שגיאות שהסתיימו';
+  }
+
+  @override
+  String get posStorageWriteRefused => 'המכשיר לא הצליח לשמור הזמנה';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count רשומות מקומיות לא ניתנות לקריאה';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'האחסון המקומי דורש טיפול — הרשומות נשמרות אך אינן מסתנכרנות';
+
+  @override
   String get posOrderSubmittedTitle => 'ההזמנה נשלחה';
 
   @override
@@ -1222,6 +1255,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
+
+  @override
+  String get printStatusWaitingForPrinter => 'ממתין למוכנות המדפסת…';
 
   @override
   String get printStatusPrepared =>
@@ -3711,6 +3747,83 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posDiscountDemoNote => 'הנחת דמו — הוחלה מקומית';
 
   @override
+  String get printerProfilesHeading => 'מדפסות שמורות';
+
+  @override
+  String get printerProfilesAddAction => 'הוספת מדפסת';
+
+  @override
+  String get printerProfilesEditAction => 'עריכת מדפסת';
+
+  @override
+  String get printerProfilesDeleteAction => 'מחיקת מדפסת';
+
+  @override
+  String get printerProfilesSelectAction => 'שימוש במדפסת זו';
+
+  @override
+  String get printerProfilesActiveBadge => 'פעילה';
+
+  @override
+  String get printerProfilesDefaultName => 'מדפסת שמורה';
+
+  @override
+  String get printerProfilesNameLabel => 'שם המדפסת';
+
+  @override
+  String get printerProfilesEmpty =>
+      'אין עדיין מדפסות שמורות. הוסיפו אחת כדי לעבור בין מדפסות במהירות.';
+
+  @override
+  String get printerProfilesLoading => 'טוען מדפסות שמורות…';
+
+  @override
+  String get printerProfilesLoadFailure => 'לא ניתן לטעון את המדפסות השמורות.';
+
+  @override
+  String get printerProfilesRetryAction => 'נסה שוב';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'למחוק את המדפסת?';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return '$name תוסר ממכשיר זה.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'זו המדפסת הפעילה. לא תהיה מדפסת עד שתבחרו אחרת.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'קיימת מדפסת שמורה עם כתובת ופורט אלה.';
+
+  @override
+  String get printerProfilesNameRequired => 'הזינו שם מדפסת.';
+
+  @override
+  String get printerProfilesSaveFailure => 'לא ניתן לשמור את המדפסת.';
+
+  @override
+  String get printerProfilesCancelAction => 'ביטול';
+
+  @override
+  String get posPrintBillAction => 'הדפסת חשבון';
+
+  @override
+  String get receiptUnpaidBillLabel => 'לא שולם - תשלום בהמשך';
+
+  @override
+  String get receiptAmountDueLabel => 'סכום לתשלום';
+
+  @override
+  String get posPrintBillStarted => 'מדפיס חשבון';
+
+  @override
+  String get posPrintBillFailed => 'הדפסת החשבון נכשלה';
+
+  @override
   String get posNetworkPrinterHeading => 'מדפסת רשת (מכשיר זה)';
 
   @override
@@ -4145,6 +4258,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posEditSaveChanges => 'שמירת שינויים';
 
   @override
+  String get posModifierOptionsUnavailable =>
+      'לא ניתן היה לטעון את האפשרויות. אפשר לערוך רק את ההערה - האפשרויות השמורות של הפריט נשמרות כפי שהן.';
+
+  @override
+  String get posModifierSavedOptionsChanged =>
+      'חלק מהאפשרויות השמורות על הפריט השתנו בתפריט. רענן את התפריט כדי לשנות אותו, או בטל כדי להשאיר אותו כפי שהן.';
+
+  @override
+  String get posModifierSavedOptionsUnavailable =>
+      'חלק מהאפשרויות השמורות על הפריט כבר אינן בתפריט. רענן את התפריט כדי לשנות אותו, או בטל כדי להשאיר אותו כפי שהוא.';
+
+  @override
   String get kdsNewOrderBadge => 'הזמנה חדשה';
 
   @override
@@ -4539,6 +4664,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posMenuItemSoldOut => 'אזל מהמלאי';
+
+  @override
+  String get posMenuItemConfigurationUnavailable => 'האפשרויות אינן זמינות';
 
   @override
   String get posMenuItemPaused => 'לא זמין זמנית';
@@ -4940,4 +5068,174 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'לא הצלחנו לאמת את השינוי. רעננו ובדקו לפני ניסיון נוסף.';
+
+  @override
+  String get posParkOrder => 'השהיית הזמנה';
+
+  @override
+  String get posParkedOrders => 'הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersEmpty => 'אין הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersLoading => 'טוען הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'לא ניתן לטעון הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersRetry => 'נסה שוב';
+
+  @override
+  String get posParkedRestore => 'שחזור';
+
+  @override
+  String get posParkedDelete => 'מחיקה';
+
+  @override
+  String get posParkedDeleteTitle => 'מחיקת הזמנה מושהית';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'למחוק את $label? ההזמנה לא נשלחה, ולכן דבר אינו מבוטל בשרת.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'ההזמנה הושהתה';
+
+  @override
+  String get posParkedParkFailed =>
+      'לא ניתן להשהות את ההזמנה. היא נשארה בעגלה.';
+
+  @override
+  String get posParkedRestoreFailed =>
+      'לא ניתן לשחזר את ההזמנה. היא נשארה מושהית.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'השולחן כבר אינו זמין, ולכן ההזמנה שוחזרה ללא שולחן.';
+
+  @override
+  String get posParkedActiveCartTitle => 'העגלה הנוכחית אינה ריקה';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'השהו תחילה את העגלה הנוכחית ולאחר מכן שחזרו את זו. דבר אינו ממוזג או נמחק.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'השהיית העגלה הנוכחית ושחזור';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'השהיה אינה זמינה בעת הוספת פריטים להזמנה';
+
+  @override
+  String get posParkedCopyRetained =>
+      'שוחזר, אך לא ניתן היה להסיר את העותק המושהה.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'הושהה $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'הזמנות מושהות: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'הזמנה מושהית';
+
+  @override
+  String get posOrderPreviewTitle => 'פרטי ההזמנה';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'לא ניתן לטעון את ההזמנה';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'פרטי ההזמנה אינם זמינים כעת. דבר לא שונה.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'עותק מקומי - לא רוענן';
+
+  @override
+  String get posOrderPreviewRetry => 'נסה שוב';
+
+  @override
+  String get posOrderPreviewLoading => 'טוען את פרטי ההזמנה';
+
+  @override
+  String get posOrderPreviewItems => 'פריטים';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'נפתח $time';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'תהליך העבודה במטבח';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'מסך מטבח ייעודי';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'ההזמנות מנוהלות ממסך מטבח נפרד.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel => 'מכשיר אחד עם מדפסת מטבח';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'הקופה מדפיסה כרטיסי מטבח ויכולה לסגור סבבי מטבח מאושרים ללא מכשיר מטבח נפרד.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'רק בעלים יכול לשנות הגדרה זו.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'לא הצלחנו לטעון את ההגדרה כעת. נסה שוב מאוחר יותר.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle =>
+      'לשנות את תהליך העבודה במטבח?';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'סניף: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'מ-$from ל-$to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'סניף זה אמור לעבוד עם הקופה ומדפסות המטבח, ללא תהליך עבודה של מסך מטבח ייעודי.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'שמירת תהליך העבודה';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'תהליך העבודה במטבח נשמר.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied => 'אין לך הרשאה לשנות הגדרה זו.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound =>
+      'הסניף אינו זמין עבור החשבון שלך.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'לא הצלחנו לשמור את תהליך העבודה במטבח. נסה שוב.';
 }

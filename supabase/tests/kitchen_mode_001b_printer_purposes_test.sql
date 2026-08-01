@@ -9,7 +9,7 @@
 --     before/after role audited.
 --   * get_device_printer_assignments: KDS -> kitchen+both (never receipt-only);
 --     POS@kds -> receipt+both (never kitchen-only; both = customer purpose
---     ONLY); POS@printer_only (privileged fixture — no setter exists) ->
+--     ONLY); POS@printer_only (privileged fixture; this phase adds none; the approved 008 owner setter is the only one) ->
 --     receipt+kitchen+both with full purpose derivation. OLD-CLIENT
 --     COMPATIBILITY: the legacy `role` key NEVER carries 'both' (device-
 --     perspective mapping); configured_role/supported_purposes are additive;
@@ -256,18 +256,31 @@ select ok(
   'endpoints (nested), identifiers and HOSTILE money keys are all dropped for printer.%');                       -- 29
 
 -- ===== E. dormancy regression (001A guarantees hold verbatim) ================
-select is(
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008, which
+-- ships the approved guarded owner setter this phase deliberately deferred.
+-- The guard is KEPT and TIGHTENED rather than dropped: EXACTLY the approved
+-- app+public pair may exist, so any unreviewed additional setter/writer still
+-- fails this suite.
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
       and p.proname like '%kitchen_workflow_mode%'
-      and p.proname not like 'get\_%'),
-  0, 'STILL no setter/updater function for kitchen_workflow_mode anywhere in app/public');                       -- 30
-select is(
+      and p.proname not like 'get\_%') = 2
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode')
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'set_kitchen_workflow_mode'),
+  'the ONLY kitchen_workflow_mode setter is the approved 008 owner pair');                                       -- 30
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
       and p.prosrc ~* 'update\s+(public\.)?branches\y'
-      and p.prosrc ilike '%kitchen_workflow_mode%'),
-  0, 'STILL no function that UPDATEs branches touches kitchen_workflow_mode (001B added none)');                 -- 31
+      and p.prosrc ilike '%kitchen_workflow_mode%') = 1
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode'
+                 and p.prosrc ~* 'update\s+(public\.)?branches\y'
+                 and p.prosrc ilike '%kitchen_workflow_mode%'),
+  'ONLY app.set_kitchen_workflow_mode UPDATEs branches.kitchen_workflow_mode (001B still adds none)');           -- 31
 set local role authenticated;
 select throws_ok(
   $$ update branches set kitchen_workflow_mode = 'printer_only'

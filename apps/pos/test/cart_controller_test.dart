@@ -186,8 +186,9 @@ void main() {
 
     controller().updateLineModifiers(lineId, const [extraPatty]);
     expect(state().lines.single.quantity, 2); // preserved
-    // 2 × 4200 + 900 (one patty, once per line) = 9300.
-    expect(state().subtotalMinor, 9300);
+    // MONEY-PRICING-FORMULA-002A: 2 x (4200 + 900) = 10200 - the surcharge is
+    // part of the configured UNIT, so it is charged for each of the 2 items.
+    expect(state().subtotalMinor, 10200);
   });
 
   test('updateLineModifiers can clear modifiers + set/clear a note', () {

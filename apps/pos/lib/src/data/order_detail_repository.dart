@@ -562,13 +562,50 @@ CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
 /// detail: the local order-time lines can miss another till's additions, so a
 /// failed load or parse returns NULL (an honest "couldn't load — retry", shown
 /// by the caller) and is NEVER silently substituted with a partial local
-/// receipt. The one legitimate stand-in is this till's OWN recorded payment
-/// when the detail has no completed payment yet (a queued, not-yet-synced
-/// payment) — the itemized view stays authoritative even then.
+/// receipt.
+///
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F6/F9): this used to say "the one legitimate
+/// stand-in is this till's OWN recorded payment when the detail has no
+/// completed payment yet". THERE IS NO SUCH STAND-IN, and there never should
+/// have been. A queued local payment is this till's intention, not the server's
+/// record: it may be unsent in the outbox, it may have been rejected, and the
+/// order may have been settled elsewhere or not at all. When the authoritative
+/// detail names no completed payment, the server is telling us nothing has been
+/// paid, and this returns NULL.
 ///
 /// Demo mode keeps its self-contained local receipt: there is no server to
 /// ask. The just-submitted confirmation-screen print is a DIFFERENT flow and
 /// keeps its intentional local rendering; it does not pass through here.
+/// DEFERRED-PAYMENT-RECEIPTS-001: the authoritative order snapshot for an UNPAID
+/// order, with no payment involved.
+///
+/// [authoritativeReceiptSource] cannot serve this: it REQUIRES a payment and
+/// returns null without one, because a paid receipt without a payment would be a
+/// lie. A bill has no payment by definition, so this returns the itemized view
+/// alone — and never fabricates a [CashPayment] to get past that check.
+///
+/// Same authority rule as the receipt: a server-backed order comes from
+/// `pos_order_detail` (a failed load/parse is an honest null the caller reports,
+/// never a partial local document), and demo keeps its self-contained local
+/// record.
+Future<SubmittedOrderView?> authoritativeUnpaidOrderSource({
+  required bool isDemoMode,
+  required String? orderId,
+  required SubmittedOrderView? localView,
+  required OrderDetailRepository repository,
+}) async {
+  if (isDemoMode) return localView;
+  if (orderId != null) {
+    try {
+      return submittedOrderViewFromDetail(await repository.fetch(orderId));
+    } on PosOrderDetailException {
+      return null;
+    }
+  }
+  // No server identity at all — the local record or nothing.
+  return localView;
+}
+
 Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
   required bool isDemoMode,
   required String? orderId,
@@ -589,7 +626,21 @@ Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
     } on PosOrderDetailException {
       return null;
     }
-    final payment = cashPaymentFromDetail(detail) ?? localPayment;
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F6): NO LOCAL FALLBACK.
+    //
+    // This read `cashPaymentFromDetail(detail) ?? localPayment`. When the
+    // authoritative detail carried no completed payment — the server reporting
+    // the order as UNPAID — it silently fell back to this device's local record
+    // and produced a paid receipt anyway. The entire point of the authoritative
+    // path is that the SERVER decides whether money was taken; substituting the
+    // local guess is the same fabricated receipt the strict decoders exist to
+    // prevent, arriving through the front door.
+    //
+    // (A pending, failed or malformed payment was already refused, because
+    // `PosOrderDetailPayment.fromJson` returns null and that fails the whole
+    // detail. Only the ABSENT case reached this fallback — which is precisely
+    // the case where the server is telling us nothing has been paid.)
+    final payment = cashPaymentFromDetail(detail);
     if (payment == null) return null;
     return (submittedOrderViewFromDetail(detail), payment);
   }

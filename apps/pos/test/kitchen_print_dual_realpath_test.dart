@@ -135,6 +135,8 @@ KitchenTicketPrintLabels _kdsLabels() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 class _StubAutoKitchen extends PosAutoPrintKitchenTicketController {

@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(6);
+select plan(7);
 
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000a0', 'Org A', 'rf056k-a', 'USD');
@@ -51,8 +51,23 @@ select is(
   (app.sync_push('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',
     '[{"local_operation_id":"op-1","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d1","order_type":"dine_in","table_id":"00000000-0000-0000-0000-000000ab1e01","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":2000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":2000}}]'::jsonb)
    -> 'results' -> 0 ->> 'error'), 'conflict', 'reusing op-1 with a different payload returns conflict');
-select is((select count(*) from orders)::int, 1, 'the conflicting push dispatched nothing (still one order)');
-select is((select count(*) from audit_events where action='sync.operation_conflict')::int, 1, 'one sync.operation_conflict audit row');
+-- MONEY-CODEX-FINAL-CORRECTIONS-004 (F6): SCOPED, not global. These counted
+-- every row in the whole database, so the assertions held only because this
+-- transaction happened to be the sole writer. A fixture added by any other
+-- suite, or a shared/seeded database, would break them for a reason that has
+-- nothing to do with RF-056 -- and, worse, a genuine cross-tenant leak would be
+-- invisible to a global count. Every assertion below names the fixture org, the
+-- fixture device and the operation key it is actually about.
+select is((select count(*) from orders
+             where organization_id = '00000000-0000-0000-0000-0000000000a0'
+               and branch_id       = '00000000-0000-0000-0000-00000000a1b1')::int,
+          1, 'the conflicting push dispatched nothing (still one order in THIS branch)');
+select is((select count(*) from audit_events
+             where action          = 'sync.operation_conflict'
+               and organization_id = '00000000-0000-0000-0000-0000000000a0'
+               and device_id       = '00000000-0000-0000-0000-00000000da11'
+               and new_values ->> 'local_operation_id' = 'op-1')::int,
+          1, 'one sync.operation_conflict audit row for THIS org/device/op-1');
 
 -- second push of op-1 with a DIFFERENT operation_type -> conflict ------------ 5
 select is(
@@ -60,8 +75,22 @@ select is(
     '[{"local_operation_id":"op-1","operation_type":"payment.create","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d1","tender_type":"cash","amount_tendered_minor":1000}}]'::jsonb)
    -> 'results' -> 0 ->> 'error'), 'conflict', 'reusing op-1 with a different operation_type returns conflict');
 
--- the stored ledger row is unchanged (still applied) ------------------------- 6
-select is((select status from sync_operations where local_operation_id='op-1')::text, 'applied', 'the stored op-1 row is unchanged by the conflicting attempts');
+-- the DIFFERENT-operation_type conflict is audited too ---------------------- 6
+-- F6: this was never asserted. The count now proves BOTH conflicting attempts
+-- were recorded, still scoped to this org/device/key.
+select is((select count(*) from audit_events
+             where action          = 'sync.operation_conflict'
+               and organization_id = '00000000-0000-0000-0000-0000000000a0'
+               and device_id       = '00000000-0000-0000-0000-00000000da11'
+               and new_values ->> 'local_operation_id' = 'op-1')::int,
+          2, 'both conflicting attempts on op-1 are audited for THIS org/device');
+
+-- the stored ledger row is unchanged (still applied) ------------------------- 7
+select is((select status from sync_operations
+             where local_operation_id = 'op-1'
+               and organization_id    = '00000000-0000-0000-0000-0000000000a0'
+               and device_id          = '00000000-0000-0000-0000-00000000da11')::text,
+          'applied', 'the stored op-1 row is unchanged by the conflicting attempts');
 
 select * from finish();
 rollback;

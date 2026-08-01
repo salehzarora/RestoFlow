@@ -472,6 +472,18 @@ abstract class AppLocalizations {
   /// **'Addition failed — tap to retry'**
   String get posAdditionFailedRetry;
 
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F1): shown when Add-items is tapped before the durable amendment journal has finished loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for unfinished changes — try again in a moment'**
+  String get posAdditionLoadingPending;
+
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F4): shown when two live amendment records claim the same order.
+  ///
+  /// In en, this message translates to:
+  /// **'This order has conflicting unfinished changes and needs to be resolved before it can be edited'**
+  String get posAdditionConflictBlocked;
+
   /// PSC-001A: tooltip/semantic label of the POS app-bar ready-notification bell.
   ///
   /// In en, this message translates to:
@@ -1576,6 +1588,42 @@ abstract class AppLocalizations {
   /// **'Retry all'**
   String get posOutboxRetryAll;
 
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox chip — N failed submissions the server permanently refused, so no order exists for them and they can be cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} resolved — clear'**
+  String posOutboxResolvedFailures(int count);
+
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox — action that removes the terminal, never-applied failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear resolved failures'**
+  String get posOutboxClearResolved;
+
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: confirmation after clearing resolved failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared {count} resolved failures'**
+  String posOutboxClearResolvedDone(int count);
+
+  /// MONEY-DURABLE-STORES-003B: POS storage status — a durable local write was refused (full disk / browser refusing storage). The affected order was NOT sent.
+  ///
+  /// In en, this message translates to:
+  /// **'This device could not save an order'**
+  String get posStorageWriteRefused;
+
+  /// MONEY-DURABLE-STORES-003B: POS storage status — N stored records this build cannot decode. They are kept, not deleted, but they will not sync.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} local records cannot be read'**
+  String posStorageUnreadable(int count);
+
+  /// MONEY-DURABLE-STORES-003B: POS storage status — the full spoken/tooltip explanation behind the storage warning icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Local storage needs attention — records are being kept but cannot sync'**
+  String get posStorageNeedsAttention;
+
   /// POS heading on the local order-confirmation panel after Send Order.
   ///
   /// In en, this message translates to:
@@ -2385,6 +2433,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No printer configured'**
   String get printStatusNotConfigured;
+
+  /// Print-job status: the paid receipt job exists and is held while printer configuration and branding finish loading. Nothing has been sent yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the printer to be ready…'**
+  String get printStatusWaitingForPrinter;
 
   /// Print-job status: the job payload is ready; no physical transport exists in this build, so it is NOT claimed as printed.
   ///
@@ -7036,6 +7090,150 @@ abstract class AppLocalizations {
   /// **'Demo discount — applied locally'**
   String get posDiscountDemoNote;
 
+  /// Heading for the device-local saved network printer list (WIFI-PRINTER-PROFILE-LISTS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved printers'**
+  String get printerProfilesHeading;
+
+  /// Action that opens the form to save a new network printer profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get printerProfilesAddAction;
+
+  /// Accessible label for the edit action on a saved printer row.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit printer'**
+  String get printerProfilesEditAction;
+
+  /// Accessible label for the delete action on a saved printer row.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete printer'**
+  String get printerProfilesDeleteAction;
+
+  /// Action that makes a saved printer the active one for this slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this printer'**
+  String get printerProfilesSelectAction;
+
+  /// Badge marking the currently selected saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get printerProfilesActiveBadge;
+
+  /// Default name given once to a printer migrated from the previous single configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved printer'**
+  String get printerProfilesDefaultName;
+
+  /// Label for the saved printer profile name input.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer name'**
+  String get printerProfilesNameLabel;
+
+  /// Empty state guiding the user to add a first saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved printers yet. Add one to switch between printers quickly.'**
+  String get printerProfilesEmpty;
+
+  /// Compact loading state shown while the saved printer list resolves.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading saved printers…'**
+  String get printerProfilesLoading;
+
+  /// Actionable error shown when the saved printer list cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load saved printers.'**
+  String get printerProfilesLoadFailure;
+
+  /// Action that reloads the saved printer list after a load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get printerProfilesRetryAction;
+
+  /// Title of the confirmation dialog shown before deleting a saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete printer?'**
+  String get printerProfilesDeleteConfirmTitle;
+
+  /// Body of the delete confirmation, naming the printer being removed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed from this device.'**
+  String printerProfilesDeleteConfirmBody(Object name);
+
+  /// Extra warning shown when the profile being deleted is the active one.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the active printer. This slot will have no printer until you select another.'**
+  String get printerProfilesDeleteActiveWarning;
+
+  /// Validation message shown when the entered endpoint duplicates a saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'A saved printer already uses this address and port.'**
+  String get printerProfilesDuplicateError;
+
+  /// Validation message shown when the profile name is blank.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a printer name.'**
+  String get printerProfilesNameRequired;
+
+  /// Error shown when persisting a saved printer fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the printer.'**
+  String get printerProfilesSaveFailure;
+
+  /// Action that closes the add/edit printer form without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get printerProfilesCancelAction;
+
+  /// POS Orders action that prints a customer-facing bill for an order that is still unpaid (DEFERRED-PAYMENT-RECEIPTS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Print bill'**
+  String get posPrintBillAction;
+
+  /// Prominent label printed on an UNPAID customer bill so it can never be mistaken for a paid receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'UNPAID - PAY LATER'**
+  String get receiptUnpaidBillLabel;
+
+  /// Label for the total still owed on an unpaid customer bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get receiptAmountDueLabel;
+
+  /// Snackbar confirming that an unpaid bill print was requested.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing bill'**
+  String get posPrintBillStarted;
+
+  /// Shown when an unpaid bill could not be printed; the order itself is unaffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill print failed'**
+  String get posPrintBillFailed;
+
   /// POS device-settings heading for the on-device network (Wi-Fi/Ethernet) ESC/POS printer setup (ANDROID-002).
   ///
   /// In en, this message translates to:
@@ -7858,6 +8056,24 @@ abstract class AppLocalizations {
   /// **'Save changes'**
   String get posEditSaveChanges;
 
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001: shown in the customization sheet when EDITING a cart line whose modifier groups could not be resolved (menu loading/unavailable, or the item is gone). The edit becomes note-only and the stored paid modifiers are preserved untouched, so the line is never silently repriced.
+  ///
+  /// In en, this message translates to:
+  /// **'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.'**
+  String get posModifierOptionsUnavailable;
+
+  /// MONEY-EDIT-INTEGRITY-002C: shown when EDITING a cart line whose stored selection still exists on the menu but no longer as the line describes it - the option was MOVED to another modifier group, or a legacy record written before group ids existed cannot be attributed to exactly one group. Saving is blocked so the stored selection is never reinterpreted under another group's price and semantics. Distinct from posModifierSavedOptionsUnavailable, which means the option is genuinely gone.
+  ///
+  /// In en, this message translates to:
+  /// **'Some options saved on this item have changed on the menu. Refresh the menu to change it, or cancel to keep it as it is.'**
+  String get posModifierSavedOptionsChanged;
+
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001: shown when EDITING a cart line whose stored selections cannot all be represented by the live groups (an option was removed or moved). Saving is blocked so the missing paid option is never silently dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Some options saved on this item are no longer on the menu. Refresh the menu to change it, or cancel to keep it as it is.'**
+  String get posModifierSavedOptionsUnavailable;
+
   /// TABLET-UX-001: a small attention badge shown on a KDS card while a freshly-arrived order is still new, so the chef notices it. Money-free chrome.
   ///
   /// In en, this message translates to:
@@ -8565,6 +8781,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sold out'**
   String get posMenuItemSoldOut;
+
+  /// MONEY-LOCAL-ATOMICITY-003A: shown on a menu-item card whose MODIFIER CONFIGURATION could not be read from the menu payload. The item cannot be added, because selling it now would mean selling it without a choice the operator configured and possibly charged for. Distinct from Sold out / Paused, which are stock decisions.
+  ///
+  /// In en, this message translates to:
+  /// **'Options unavailable'**
+  String get posMenuItemConfigurationUnavailable;
 
   /// Overlay pill on a POS menu tile whose item is temporarily paused in this branch.
   ///
@@ -9279,6 +9501,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We could not confirm the change. Refresh and check before trying again.'**
   String get brandingErrorUncertain;
+
+  /// PARKED-CARTS-001: full-width action below Send that sets the current unsent cart aside as a local draft.
+  ///
+  /// In en, this message translates to:
+  /// **'Park order'**
+  String get posParkOrder;
+
+  /// PARKED-CARTS-001: title of the sheet listing carts set aside on this till.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked orders'**
+  String get posParkedOrders;
+
+  /// PARKED-CARTS-001: empty state of the parked-orders sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No parked orders'**
+  String get posParkedOrdersEmpty;
+
+  /// PARKED-CARTS-001: shown while the parked-orders list is being read from local storage.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading parked orders'**
+  String get posParkedOrdersLoading;
+
+  /// PARKED-CARTS-001: shown when the stored parked-orders data could not be read. Never rendered as an empty list, because the orders may still be on disk.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load parked orders'**
+  String get posParkedOrdersLoadFailed;
+
+  /// PARKED-CARTS-001: retries reading the parked-orders list after a load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posParkedOrdersRetry;
+
+  /// PARKED-CARTS-001: action that brings a parked cart back as the active cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get posParkedRestore;
+
+  /// PARKED-CARTS-001: action that discards a parked cart (local draft only).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get posParkedDelete;
+
+  /// PARKED-CARTS-001: title of the delete-confirmation dialog for a parked cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete parked order'**
+  String get posParkedDeleteTitle;
+
+  /// PARKED-CARTS-001: body of the delete-confirmation dialog. {label} identifies the selected parked cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {label}? It was never sent, so nothing is cancelled on the server.'**
+  String posParkedDeleteBody(String label);
+
+  /// PARKED-CARTS-001: confirmation that the cart was set aside and the till is ready for the next customer.
+  ///
+  /// In en, this message translates to:
+  /// **'Order parked'**
+  String get posParkedParkSucceeded;
+
+  /// PARKED-CARTS-001: shown when the parked cart could not be stored. The cashier keeps their cart unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not park the order. It is still in the cart.'**
+  String get posParkedParkFailed;
+
+  /// PARKED-CARTS-001: shown when a parked cart could not be restored. Nothing was lost.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not restore the order. It is still parked.'**
+  String get posParkedRestoreFailed;
+
+  /// PARKED-CARTS-001: shown after restoring a dine-in cart whose saved table is now occupied, out of service, or gone.
+  ///
+  /// In en, this message translates to:
+  /// **'That table is no longer available, so the order was restored without one.'**
+  String get posParkedTableUnavailable;
+
+  /// PARKED-CARTS-001: title of the dialog shown when restoring while another cart is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'The current cart is not empty'**
+  String get posParkedActiveCartTitle;
+
+  /// PARKED-CARTS-001: body of that dialog. The only two choices are to park the current cart and restore, or cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Park the current cart first, then restore this one. Nothing is merged or discarded.'**
+  String get posParkedActiveCartBody;
+
+  /// PARKED-CARTS-001: the confirming action of that dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Park current cart and restore'**
+  String get posParkedParkCurrentAndRestore;
+
+  /// PARKED-CARTS-001: explains why Park is disabled during an add-items (amendment) flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking is unavailable while adding items to an order'**
+  String get posParkedBlockedByAddition;
+
+  /// PARKED-CARTS-001: shown when a restore succeeded but deleting the stored copy failed; the restored cart is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Restored, but the parked copy could not be removed.'**
+  String get posParkedCopyRetained;
+
+  /// PARKED-CARTS-001: item count on a parked-order row. {count} is the number of physical items.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String posParkedItemCount(int count);
+
+  /// PARKED-CARTS-001: when the cart was set aside. {time} is an already-formatted local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked {time}'**
+  String posParkedAt(String time);
+
+  /// PARKED-CARTS-001: tooltip of the cart-header parked-orders button. {count} is how many carts are parked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked orders: {count}'**
+  String posParkedOrdersTooltip(int count);
+
+  /// PARKED-CARTS-001: fallback label for a parked cart with no customer name.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked order'**
+  String get posParkedUnnamedOrder;
+
+  /// ORDER-DETAIL-PREVIEW-001: title of the READ-ONLY order detail preview opened by tapping an Orders row.
+  ///
+  /// In en, this message translates to:
+  /// **'Order details'**
+  String get posOrderPreviewTitle;
+
+  /// ORDER-DETAIL-PREVIEW-001: title shown when the authoritative order detail could not be read and no local copy exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this order'**
+  String get posOrderPreviewLoadFailedTitle;
+
+  /// ORDER-DETAIL-PREVIEW-001: body of that failure state. It reassures the cashier that only a READ failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The order details are not available right now. Nothing was changed.'**
+  String get posOrderPreviewLoadFailedBody;
+
+  /// ORDER-DETAIL-PREVIEW-001: warning shown when the server read failed and this device's own copy is being shown instead. It may be missing another till's changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Local copy - not refreshed'**
+  String get posOrderPreviewLocalCopy;
+
+  /// ORDER-DETAIL-PREVIEW-001: retries ONLY the order-detail read. It never resends a payment, print or status change.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posOrderPreviewRetry;
+
+  /// ORDER-DETAIL-PREVIEW-001: shown while the authoritative order detail is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading order details'**
+  String get posOrderPreviewLoading;
+
+  /// ORDER-DETAIL-PREVIEW-001: section heading above the order's item list.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get posOrderPreviewItems;
+
+  /// ORDER-DETAIL-PREVIEW-001: when the order was created. {time} is an already-formatted local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened {time}'**
+  String posOrderPreviewOpenedAt(String time);
+
+  /// DASHBOARD-PRINTER-ONLY-MODE-TOGGLE-010: Settings section for the per-branch kitchen workflow mode (branches.kitchen_workflow_mode).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen workflow'**
+  String get dashboardKitchenWorkflowSectionTitle;
+
+  /// 010: option label for the kds workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dedicated kitchen screen'**
+  String get dashboardKitchenWorkflowKdsLabel;
+
+  /// 010: explanation under the dedicated-kitchen-screen option.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders are managed from a separate kitchen display.'**
+  String get dashboardKitchenWorkflowKdsHelp;
+
+  /// 010: option label for the printer_only workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'One device with kitchen printer'**
+  String get dashboardKitchenWorkflowPrinterLabel;
+
+  /// 010: explanation under the one-device-with-kitchen-printer option.
+  ///
+  /// In en, this message translates to:
+  /// **'The POS prints kitchen tickets and can finish confirmed kitchen rounds without a separate KDS device.'**
+  String get dashboardKitchenWorkflowPrinterHelp;
+
+  /// 010: note shown to non-owners; the control is read-only for them.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an owner can change this setting.'**
+  String get dashboardKitchenWorkflowOwnerOnly;
+
+  /// 010: shown when the current mode cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this setting right now. Try again later.'**
+  String get dashboardKitchenWorkflowUnavailable;
+
+  /// 010: title of the confirmation dialog shown before saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the kitchen workflow?'**
+  String get dashboardKitchenWorkflowConfirmTitle;
+
+  /// 010: confirmation line naming the branch being changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch: {branch}'**
+  String dashboardKitchenWorkflowConfirmBranch(String branch);
+
+  /// 010: confirmation line naming the old and new workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'From {from} to {to}'**
+  String dashboardKitchenWorkflowConfirmChange(String from, String to);
+
+  /// 010: warning shown when switching a branch to printer_only.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch should use POS and kitchen printers without a dedicated KDS workflow.'**
+  String get dashboardKitchenWorkflowPrinterWarning;
+
+  /// 010: confirm button in the workflow-change dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Save workflow'**
+  String get dashboardKitchenWorkflowConfirmAction;
+
+  /// 010: confirmation snackbar after a successful save.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen workflow saved.'**
+  String get dashboardKitchenWorkflowSaved;
+
+  /// 010: snackbar when the server denies the write (rank below owner).
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to change this setting.'**
+  String get dashboardKitchenWorkflowDenied;
+
+  /// 010: snackbar when the server reports the branch as not found.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch is not available for your account.'**
+  String get dashboardKitchenWorkflowNotFound;
+
+  /// 010: snackbar when the write fails for a transient reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the kitchen workflow. Please try again.'**
+  String get dashboardKitchenWorkflowSaveFailed;
 }
 
 class _AppLocalizationsDelegate

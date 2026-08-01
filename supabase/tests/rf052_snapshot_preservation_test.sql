@@ -38,12 +38,21 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the submitted modifier option must now be a
+-- REAL option owned by a group of THIS item. The LIVE catalogue delta is
+-- deliberately 7777 while the submits below declare 100 — so these assertions
+-- keep proving the server stores the CLIENT'S frozen snapshot and never
+-- substitutes the current catalogue price (D-008).
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('00000000-0000-0000-0000-00000000cf01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000000f1', 'Cheese');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000cf01', 'Extra', 7777);
 
--- submit: 2 x 500 + modifier 100 + a size snapshot; line/subtotal = 1100, grand = 1100
+-- submit: 2 x (500 + modifier 100) + a size snapshot; line/subtotal = grand = 1200
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
   '00000000-0000-0000-0000-00000000da11','op-snap','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD','table note',
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","item_size_snapshot":{"name":"Large","price_delta_minor":0},"modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"modifier_name_snapshot":"Cheese","option_name_snapshot":"Extra"}]}]'::jsonb,
-  1100, 0, 0, 1100, null);
+  1200, 0, 0, 1200, null);
 
 -- client snapshots are persisted EXACTLY ------------------------------------- 1-4
 select is((select unit_price_minor_snapshot from order_items)::bigint, 500::bigint,  'order_items.unit_price_minor_snapshot persisted exactly (500)');
@@ -55,8 +64,8 @@ select is((select option_name_snapshot from order_item_modifiers)::text, 'Extra'
 select is((select item_size_snapshot ->> 'name' from order_items), 'Large', 'order_items.item_size_snapshot persisted as jsonb');
 
 -- totals recomputed from snapshots (never the live menu) --------------------- 6-7
-select is((select subtotal_minor from orders)::bigint, 1100::bigint,    'orders.subtotal_minor recomputed from snapshots (2*500 + 100)');
-select is((select grand_total_minor from orders)::bigint, 1100::bigint, 'orders.grand_total_minor = subtotal - discount + tax');
+select is((select subtotal_minor from orders)::bigint, 1200::bigint,    'orders.subtotal_minor recomputed from snapshots (2*(500+100))');
+select is((select grand_total_minor from orders)::bigint, 1200::bigint, 'orders.grand_total_minor = subtotal - discount + tax');
 
 -- a tampered client total is rejected ---------------------------------------- 8
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d2',
@@ -69,8 +78,8 @@ select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c50
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d3',
   '00000000-0000-0000-0000-00000000da11','op-grand','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Extra"}]}]'::jsonb,
-  1100, 0, 0, 999, null) $$, '42501', NULL,
-  'a correct subtotal but a tampered grand_total (1100 vs 999) is rejected (grand_total validation fires independently)');
+  1200, 0, 0, 999, null) $$, '42501', NULL,
+  'a correct subtotal but a tampered grand_total (1200 vs 999) is rejected (grand_total validation fires independently)');
 
 select * from finish();
 rollback;

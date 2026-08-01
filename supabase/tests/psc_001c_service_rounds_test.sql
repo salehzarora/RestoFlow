@@ -93,6 +93,14 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('c0000000-0000-0000-0000-0000000000f9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'Item', 500, 'USD', 1),
   ('c0000000-0000-0000-0000-0000000000f8', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'SoldOut', 400, 'USD', 2);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the modifier option added at test 20 must be
+-- a REAL option owned by a group of item ...f9. Its LIVE delta is deliberately
+-- 6666 while the addition declares 100, so test 19's snapshot assertions keep
+-- proving the amendment stores the submitted snapshot, not the catalogue price.
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('c0000000-0000-0000-0000-00000000fb01', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000f9', 'Extras');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('c0000000-0000-0000-0000-00000000fc01', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-00000000fb01', 'Extra', 6666);
 insert into menu_item_branch_availability (organization_id, restaurant_id, branch_id, menu_item_id, availability, reason) values
   ('c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000f8', 'unavailable', 'sold_out');
 insert into tables (id, organization_id, restaurant_id, branch_id, label) values
@@ -316,9 +324,13 @@ select is(
   1, '23. exactly ONE order.items_added audit for round 2 (replay wrote no second)');
 
 -- ===== (24-36) eligibility + payload contracts ===============================
+-- DEFERRED-ORDER-AMENDMENTS-001 replaces the old takeaway-denied assertion: a
+-- takeaway order is now an ELIGIBLE amendment target (no table is required).
+-- The full takeaway identity/idempotency contract lives in
+-- supabase/tests/deferred_order_amendments_001_test.sql.
 select is(
   (pg_temp.cadd('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'add-tw', 'c0000000-0000-0000-0000-00000000a003') -> 'results' -> 0 ->> 'error'),
-  'order_not_dine_in', '24. a TAKEAWAY order refuses additions (out of scope this version)');
+  null, '24. a TAKEAWAY order now ACCEPTS additions (DEFERRED-ORDER-AMENDMENTS-001)');
 select pg_temp.cvoid('vd-o4', 'c0000000-0000-0000-0000-00000000a004');
 select is(
   (pg_temp.cadd('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'add-void', 'c0000000-0000-0000-0000-00000000a004') -> 'results' -> 0 ->> 'error'),

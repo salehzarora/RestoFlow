@@ -1,13 +1,21 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show DevicePrinterAssignments, DevicePrinterAssignmentsFailure;
+import 'package:restoflow_core/restoflow_core.dart'
+    show Failure, Result, Success;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
+import '../state/pos_device_context.dart' show posPrinterScopeSegmentProvider;
 import '../state/pos_network_printer_config.dart';
+import '../state/pos_printer_assignments.dart';
 import '../state/pos_printer_transport.dart';
+import '../state/receipt_print_controller.dart'
+    show ReceiptReadiness, ReceiptReadinessResolver;
 import 'bluetooth_printer.dart';
 import 'print_bridge.dart';
 import 'print_document.dart' as app;
@@ -233,6 +241,127 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       }
   }
   return ref.watch(posPrintBridgeProvider);
+});
+
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT) — the RESOLVED customer
+/// print bridge for the FIRST receipt of a fresh process.
+///
+/// [posActivePrintBridgeProvider] samples `posSelectedPrinterTransportProvider`
+/// and the printer configs with `.valueOrNull` (:198, :202, :225). Those are
+/// `AsyncNotifier`s with an async `build()`, so on their FIRST synchronous read
+/// in a new process they are necessarily still `AsyncLoading` — the bridge falls
+/// through to `posPrintBridgeProvider`, which is `null` in every shipped build.
+/// The paid receipt was then dispatched to NO bridge and stopped at `prepared`,
+/// which shows no Retry. The second receipt printed because the providers had
+/// landed and the `Provider` recomputed.
+///
+/// The readiness work (Defect 1) fixed the JOB-CREATION half of that race — it
+/// awaits the same sources — but the bridge was captured as an eager argument
+/// BEFORE that await ran, so the dispatch half stayed broken. This provider
+/// awaits, so the bridge can be resolved AFTER readiness, on the same job.
+/// It changes no transport, connection, retry or layout behaviour.
+final posActivePrintBridgeReadyProvider = FutureProvider<PosPrintBridge?>((
+  ref,
+) async {
+  if (!ref.watch(posNativePrintingAvailableProvider)) {
+    return ref.watch(posPrintBridgeProvider);
+  }
+  final rasterizer = ref.watch(nativePrintRasterizerProvider);
+  final selected = await ref.watch(posSelectedPrinterTransportProvider.future);
+  switch (selected) {
+    case PosPrinterTransportKind.bluetooth:
+      final bt = await ref.watch(posBluetoothPrinterConfigProvider.future);
+      if (bt != null) {
+        final connector = ref.watch(bluetoothPrinterConnectorProvider);
+        return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
+          mediaProfile: bt.mediaProfile,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
+            bt.address,
+          ),
+          transportFactory: () => BluetoothClassicPrintTransport(
+            connector: connector,
+            address: bt.address,
+            timeout: kBluetoothPrintTimeout,
+          ),
+        );
+      }
+    case PosPrinterTransportKind.network:
+      final net = await ref.watch(posNetworkPrinterConfigProvider.future);
+      if (net != null) {
+        return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
+          mediaProfile: net.mediaProfile,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.networkKey(
+            net.host,
+            net.port,
+          ),
+          transportFactory: () => pp.NetworkTcpPrintTransport(
+            host: net.host,
+            port: net.port,
+            timeout: kPosNativePrintTimeout,
+          ),
+        );
+      }
+  }
+  return ref.watch(posPrintBridgeProvider);
+});
+
+/// PRINT-STARTUP-REPRINT-001 — the AUTHORITATIVE receipt-readiness resolver.
+///
+/// The receipt trigger used to read every printer source with `.valueOrNull` and
+/// return silently while they were unresolved, which dropped the paid receipt on
+/// a cold start. This resolver AWAITS each authoritative source instead, so an
+/// unresolved source can never be mistaken for "not configured":
+///
+///  1. the Defect 3 preference scope (a pending device restore is waited out);
+///  2. the native path — selected transport + its saved profile;
+///  3. the bridge/assignment path.
+///
+/// A load failure is reported distinctly from "definitively none" so the UI can
+/// offer a meaningful Retry. No timeouts are introduced: each awaited source
+/// already resolves on its own (local prefs, or the assignment reader's own
+/// bounded load).
+final posReceiptReadinessResolverProvider = Provider<ReceiptReadinessResolver>((
+  ref,
+) {
+  return () async {
+    // 1. Never choose a namespace from a transient null (Defect 3 contract).
+    await ref.read(posPrinterScopeSegmentProvider.future);
+
+    // 2. A native printer configured on THIS device counts on its own.
+    if (ref.read(posNativePrintingAvailableProvider)) {
+      final transport = await ref.read(
+        posSelectedPrinterTransportProvider.future,
+      );
+      final nativeConfigured = switch (transport) {
+        PosPrinterTransportKind.bluetooth =>
+          await ref.read(posBluetoothPrinterConfigProvider.future) != null,
+        PosPrinterTransportKind.network =>
+          await ref.read(posNetworkPrinterConfigProvider.future) != null,
+      };
+      if (nativeConfigured) return ReceiptReadiness.configured;
+    }
+
+    // 3. Otherwise the backend assignment/bridge path.
+    final Result<DevicePrinterAssignments, DevicePrinterAssignmentsFailure>?
+    assignments;
+    try {
+      assignments = await ref.read(posPrinterAssignmentsProvider.future);
+    } catch (_) {
+      return ReceiptReadiness.loadFailed; // retryable, NOT "not configured"
+    }
+    return switch (assignments) {
+      Success(:final value) =>
+        value.hasEnabledPrinter
+            ? ReceiptReadiness.configured
+            : ReceiptReadiness.notConfigured,
+      Failure() => ReceiptReadiness.loadFailed,
+      _ => ReceiptReadiness.notConfigured, // demo / no reader wired
+    };
+  };
 });
 
 /// Whether THIS device has a native printer configured for the selected

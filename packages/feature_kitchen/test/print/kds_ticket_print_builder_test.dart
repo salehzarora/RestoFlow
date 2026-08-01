@@ -42,6 +42,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'KTotal $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
   restaurantNameFallback: 'Restaurant',
 );
 
@@ -58,6 +60,8 @@ KitchenTicketPrintLabels _labelsNoFallback() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'KTotal $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 /// A DETAILED representative order: two items, qty>1, whole-order kitchen counts

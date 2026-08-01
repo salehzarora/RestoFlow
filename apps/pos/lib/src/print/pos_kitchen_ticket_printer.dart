@@ -20,12 +20,13 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
-import '../state/cart_controller.dart' show CartLineView;
+import '../state/cart_controller.dart' show CartLineView, kitchenMeatSnapshots;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/pos_printer_transport.dart';
+import '../data/round_print_claim_store.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
 import 'kitchen_ticket_render.dart' show renderKitchenTicketBytes;
@@ -194,6 +195,19 @@ final posHasKitchenNativePrinterProvider = Provider<bool>((ref) {
 /// device data loss. The MANUAL action never uses this guard (a deliberate
 /// reprint is always allowed).
 final class PosAutoKitchenPrintGuard {
+  PosAutoKitchenPrintGuard({PosRoundPrintClaimStore? claims})
+    : _claims = claims;
+
+  /// MONEY-DURABLE-ADDITIONS-003C: the DURABLE half of the claim, or null when
+  /// nothing durable is wired (demo mode / tests) — in which case the guard
+  /// behaves exactly as it did before, session-scoped and honest about it.
+  ///
+  /// Consulted BEFORE `attempt` runs and written BEFORE the send, so a process
+  /// that dies mid-print does not come back and print the round again. The
+  /// in-memory halves stay: they are what makes concurrent callbacks share ONE
+  /// send within a session, which no durable store can do.
+  final PosRoundPrintClaimStore? _claims;
+
   final Map<String, Future<PosKitchenPrintOutcome>> _inFlight = {};
   final Set<String> _succeeded = {};
 
@@ -216,6 +230,17 @@ final class PosAutoKitchenPrintGuard {
     final active = _inFlight[orderId];
     if (active != null) return active;
 
+    // 003C: a DURABLE claim from an earlier process suppresses the automatic
+    // send. `claimed` counts as suppressing: after a crash between claiming and
+    // sending, the honest answer is "a ticket may already be at the printer",
+    // and printing again to be sure is precisely the duplicate this prevents.
+    // Only `failed` releases the round, so a genuine retry still runs.
+    final durable = _claims?.claimOf(orderId);
+    if (durable == PosRoundPrintClaimState.claimed ||
+        durable == PosRoundPrintClaimState.sent) {
+      return Future.value(PosKitchenPrintOutcome.printed);
+    }
+
     // Race-safe: publish the in-flight future via a Completer FIRST, then invoke
     // attempt() inside a guarded driver. This holds even if attempt() throws
     // SYNCHRONOUSLY (before returning a Future) — the `finally` always removes
@@ -233,6 +258,22 @@ final class PosAutoKitchenPrintGuard {
   ) async {
     PosKitchenPrintOutcome outcome;
     try {
+      // 003C: CLAIM BEFORE SENDING. The window between "bytes went out" and
+      // "we recorded that they did" is exactly where a crash produces the
+      // duplicate ticket, so the claim is written first and a claim that could
+      // not be written REFUSES the print. Choosing not to print is recoverable
+      // — the operator can reprint on demand — while printing a second ticket
+      // for a round the kitchen is already cooking is not.
+      final claims = _claims;
+      if (claims != null) {
+        try {
+          await claims.record(orderId, PosRoundPrintClaimState.claimed);
+        } catch (_) {
+          _inFlight.remove(orderId);
+          completer.complete(PosKitchenPrintOutcome.failed);
+          return;
+        }
+      }
       // A synchronous throw from attempt() is caught here just like an async one.
       outcome = await attempt();
     } catch (_) {
@@ -246,12 +287,40 @@ final class PosAutoKitchenPrintGuard {
     if (outcome == PosKitchenPrintOutcome.printed) {
       _succeeded.add(orderId); // suppress duplicate auto callbacks this session
     }
+    // 003C: settle the durable claim TRUTHFULLY. `sent` means the transport
+    // accepted the bytes — never that paper was produced, which the platform
+    // does not tell us (PRINT-STABILITY-001). A non-success RELEASES the round
+    // so a later legitimate automatic retry can still run; a print that never
+    // happened must not be remembered as one that did.
+    final claims = _claims;
+    if (claims != null) {
+      try {
+        await claims.record(
+          orderId,
+          outcome == PosKitchenPrintOutcome.printed
+              ? PosRoundPrintClaimState.sent
+              : PosRoundPrintClaimState.failed,
+        );
+      } catch (_) {
+        // The claim is already `claimed` on disk, which errs toward NOT
+        // printing again — the safe direction. Surfaced via isDegraded.
+      }
+    }
     completer.complete(outcome);
   }
 }
 
+/// MONEY-DURABLE-ADDITIONS-003C: the durable round-print claim store. Null by
+/// default => session-scoped guarding only (demo mode / tests / the pre-003C
+/// behaviour). `main.dart` overrides it for the real app.
+final posRoundPrintClaimStoreProvider = Provider<PosRoundPrintClaimStore?>(
+  (_) => null,
+);
+
 final posAutoKitchenPrintGuardProvider = Provider<PosAutoKitchenPrintGuard>(
-  (_) => PosAutoKitchenPrintGuard(),
+  (ref) => PosAutoKitchenPrintGuard(
+    claims: ref.watch(posRoundPrintClaimStoreProvider),
+  ),
 );
 
 /// TEST SEAM: overrides how the kitchen printer builds its transport, so a
@@ -366,6 +435,13 @@ Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
 /// order's dispatch_mode), so the print and the dispatch can never disagree and a
 /// toggle change mid-submit cannot split the workflow — this NO LONGER re-reads
 /// the toggle here.
+/// DEFERRED-ORDER-AMENDMENTS-001: [guardKey] overrides the exactly-once identity
+/// the print is guarded under. It defaults to [orderId] — correct for an initial
+/// order, where the order IS the work unit — but an ADDITION must never share
+/// that key: the parent order has already printed once, so a parent-keyed guard
+/// would silently swallow every later round's ticket and the kitchen would never
+/// see the added food. Additions pass
+/// [posAdditionKitchenPrintGuardKey] (order identity AND round identity).
 Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required ProviderContainer container,
   required String orderId,
@@ -375,6 +451,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   bool isDemoMode = false,
   String? rejectionCode,
   PosKitchenTicketPrinter? printer,
+  String? guardKey,
 }) async {
   // Rejected / demo / blank / placeholder orders never print (shared rule).
   if (!isOrderEligibleForKitchenPrint(
@@ -408,7 +485,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   return container
       .read(posAutoKitchenPrintGuardProvider)
       .runGuarded(
-        orderId,
+        guardKey ?? orderId,
         () => printKitchenTicketForOrder(
           container: container,
           ticket: ticket,
@@ -417,6 +494,19 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
         ),
       );
 }
+
+/// DEFERRED-ORDER-AMENDMENTS-001 — the exactly-once print identity of ONE service
+/// round: the original order AND the round the server applied.
+///
+/// The parent order id alone is NOT an identity here. It is the same order for
+/// every addition, and the initial ticket already claimed it, so a parent-keyed
+/// guard reports "already printed" and the kitchen silently never receives the
+/// added items. Round-scoped, so each round prints exactly once and a failed
+/// round print can still be retried on its own.
+String posAdditionKitchenPrintGuardKey({
+  required String orderId,
+  required String roundId,
+}) => '$orderId|round:$roundId';
 
 /// Maps a live cart (the rich submit-time lines) + the menu's PER-ITEM prep
 /// snapshot into the SHARED [KdsTicketView] — the SAME model the KDS renders —
@@ -429,6 +519,12 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
 /// [prepByItemId] is the live menu's `menuItemId -> prepComponents` snapshot
 /// (D-008), looked up the SAME way the outbox builds the order payload; empty
 /// for unconfigured items.
+/// DEFERRED-ORDER-AMENDMENTS-001: [roundId] / [roundNumber] are the SERVER's
+/// applied service-round identity. Passing them makes the resulting view an
+/// ADDITION ticket — the shared builder derives
+/// [KitchenTicketDocumentKind.orderAddition] from the round number and prints
+/// the "Addition · Round N" marker. Omitting them (the initial-order path) is
+/// byte-identical to before.
 KdsTicketView kdsTicketViewFromCartLines({
   required String orderCode,
   required OrderType orderType,
@@ -439,6 +535,8 @@ KdsTicketView kdsTicketViewFromCartLines({
   String? customerName,
   String? customerPhone,
   String? orderNote,
+  String? roundId,
+  int? roundNumber,
 }) {
   // MENU-ORDER-001: order items by the shared canonical print order (category ->
   // item display order -> cart index) so the POS-direct kitchen ticket matches
@@ -449,41 +547,93 @@ KdsTicketView kdsTicketViewFromCartLines({
     lines,
     (l) => [l.categoryDisplayOrder, l.itemDisplayOrder],
   );
+  return _kdsTicketViewFromKitchenLines(
+    orderCode: orderCode,
+    orderType: orderType,
+    tableLabel: tableLabel,
+    customerName: customerName,
+    customerPhone: customerPhone,
+    orderNote: orderNote,
+    roundId: roundId,
+    roundNumber: roundNumber,
+    lines: [
+      for (final line in sortedLines)
+        _KitchenTicketLine(
+          name: line.name,
+          quantity: line.quantity,
+          // Structured modifier lines (name first, ×N when >1 — the KDS
+          // convention), via the ONE shared formatter.
+          modifierLines: [for (final m in line.modifiers) m.displayName],
+          note: line.note,
+          // KITCHEN-MEAT-001: each option's meat_snapshot PRE-multiplied by its
+          // modifier units (× the item quantity is applied by the aggregator).
+          meats: kitchenMeatSnapshots(line.modifiers),
+          prepComponents:
+              prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[],
+        ),
+    ],
+  );
+}
+
+/// PRINT-STARTUP-REPRINT-001 (Defect 2) — ONE canonical, money-free kitchen
+/// ticket line. Both the automatic initial print (from live cart lines) and the
+/// manual reprint (from the stored order snapshot) map onto this shape, so the
+/// two tickets cannot drift apart.
+class _KitchenTicketLine {
+  const _KitchenTicketLine({
+    required this.name,
+    required this.quantity,
+    required this.modifierLines,
+    required this.note,
+    required this.meats,
+    required this.prepComponents,
+  });
+
+  final String name;
+  final int quantity;
+
+  /// Already-formatted modifier text (`name ×N`). NEVER parsed back for counts.
+  final List<String> modifierLines;
+  final String? note;
+
+  /// Meat contributions, pre-multiplied by the option's units. Deliberately not
+  /// index-aligned with [modifierLines].
+  final List<KitchenMeat> meats;
+  final List<KitchenPrepComponent> prepComponents;
+}
+
+/// The SINGLE kitchen-ticket mapper: canonical lines (already in canonical
+/// print order) -> the shared [KdsTicketView], with the ONE whole-order
+/// [aggregateOrderKitchenCounts] invocation in the POS. Money-free throughout —
+/// a [KdsTicketView] cannot carry money (D-007).
+KdsTicketView _kdsTicketViewFromKitchenLines({
+  required String orderCode,
+  required OrderType orderType,
+  required List<_KitchenTicketLine> lines,
+  String? tableLabel,
+  String? customerName,
+  String? customerPhone,
+  String? orderNote,
+  String? roundId,
+  int? roundNumber,
+}) {
   final items = <KdsItemView>[];
   final countInputs = <KitchenCountItemInput>[];
-  for (final line in sortedLines) {
-    final prep =
-        prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[];
+  for (final line in lines) {
     items.add(
       KdsItemView(
         name: line.name,
         quantity: line.quantity,
-        // Structured modifier lines (name first, ×N when >1 — the KDS convention).
-        modifiers: [
-          for (final modifier in line.modifiers)
-            modifier.quantity > 1
-                ? '${modifier.optionName} ×${modifier.quantity}'
-                : modifier.optionName,
-        ],
+        modifiers: line.modifierLines,
         note: line.note,
-        prepComponents: prep,
+        prepComponents: line.prepComponents,
       ),
     );
-    // KITCHEN-MEAT-001: an option's meat_snapshot, PRE-multiplied by its modifier
-    // units (× the item quantity is the count factor, applied by the aggregator).
     countInputs.add(
       KitchenCountItemInput(
         quantity: line.quantity,
-        meats: [
-          for (final modifier in line.modifiers)
-            if (modifier.kitchenMeat case final meat?)
-              if (modifier.quantity > 0)
-                KitchenMeat(
-                  quantity: meat.quantity * modifier.quantity,
-                  unit: meat.unit,
-                ),
-        ],
-        prepComponents: prep,
+        meats: line.meats,
+        prepComponents: line.prepComponents,
       ),
     );
   }
@@ -502,37 +652,47 @@ KdsTicketView kdsTicketViewFromCartLines({
     customerPhone: customerPhone,
     notes: orderNote,
     kitchenCounts: aggregateOrderKitchenCounts(countInputs),
+    // DEFERRED-ORDER-AMENDMENTS-001: null on the initial order (work unit 1) —
+    // the shared builder then prints no marker; the server's applied round
+    // identity on an addition.
+    roundId: roundId,
+    roundNumber: roundNumber,
   );
 }
 
-/// Maps an already-created [SubmittedOrderView] (flattened lines) to a
-/// [KdsTicketView] — used by the manual reprint action. The confirmation
-/// snapshot carries name/qty/modifiers/note/table/customer/type but NOT the
-/// per-item prep/meat snapshot, so a reprinted ticket omits the whole-order
-/// counts (it is a best-effort reprint of what the confirmation shows).
+/// Maps an already-created [SubmittedOrderView] (flattened lines) to the SHARED
+/// [KdsTicketView] — used by the manual reprint action.
+///
+/// PRINT-STARTUP-REPRINT-001 (Defect 2): the submitted view now carries the
+/// ORDER-TIME kitchen count snapshots, so a reprint goes through the SAME
+/// mapper and aggregates the SAME whole-order counts as the automatic ticket.
+///
+/// A record stored BEFORE that change — or a view rebuilt from the server
+/// projection, which exposes no meat/prep — decodes to empty snapshots, and the
+/// count section is then honestly OMITTED. Quantities are never recovered by
+/// parsing the `name ×N` display strings, and never re-read from the live menu.
 KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) {
   // MENU-ORDER-001: items in the canonical menu-configured print order (shared
   // getter) so the manual kitchen reprint matches the cashier receipt + KDS.
   final sortedLines = order.printOrderedLines;
-  return KdsTicketView(
-    kitchenTicketId: order.orderNumber,
-    stationId: KdsTicketMapper.unassignedStation,
-    items: [
-      for (final line in sortedLines)
-        KdsItemView(
-          name: line.name,
-          quantity: line.quantity,
-          // Already pre-formatted as `name ×N` on the submitted view.
-          modifiers: line.modifiers,
-          note: line.note,
-        ),
-    ],
-    status: KitchenTicketStatus.newTicket,
-    orderNumber: order.orderNumber,
-    orderType: _orderTypeWire(order.orderType),
+  return _kdsTicketViewFromKitchenLines(
+    orderCode: order.orderNumber,
+    orderType: order.orderType,
     tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    lines: [
+      for (final line in sortedLines)
+        _KitchenTicketLine(
+          name: line.name,
+          quantity: line.quantity,
+          // Already pre-formatted as `name ×N` on the submitted view.
+          modifierLines: line.modifiers,
+          note: line.note,
+          meats: line.kitchenMeats,
+          prepComponents: line.prepComponents,
+        ),
+    ],
   );
 }
 

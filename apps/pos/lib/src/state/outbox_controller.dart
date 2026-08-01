@@ -138,6 +138,30 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// rather than a second concurrent push.
   Future<void> pushQueued() => _sweep();
 
+  /// How many failures are TERMINAL and provably created nothing on the server,
+  /// so an operator may clear them — see
+  /// [OutboxEntry.isDismissibleResolvedFailure].
+  int get dismissibleFailureCount =>
+      state.where((e) => e.isDismissibleResolvedFailure).length;
+
+  /// Removes the resolved (terminal, never-applied) failures and returns how
+  /// many went. The removal is DURABLE-OR-NOTHING: a device whose storage
+  /// refuses the write keeps every entry and throws, rather than showing a
+  /// cleared queue that repopulates on the next start. It touches nothing else — no shift, no order, no payment, no
+  /// server call. Everything uncertain, retryable, conflicted or unreadable
+  /// stays exactly where it is.
+  Future<int> dismissResolvedFailures() async {
+    final Object repo = _repo;
+    // A repository that stores nothing has nothing to retire (the demo/test
+    // doubles). Learning that is the honest outcome — never a silent success.
+    if (repo is! PosOutboxFailureDismissal) return 0;
+    final removed = await repo.dismissResolvedFailures();
+    if (removed > 0 && !_disposed) {
+      state = await _repo.recentEntries();
+    }
+    return removed;
+  }
+
   /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
   /// retry all"). REVIEW B2: permanently-rejected business operations are
   /// excluded — their verdict is ledgered and replay cannot change it.
@@ -321,9 +345,11 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             nameSnapshot: l.name,
             quantity: l.quantity,
             unitPriceMinorSnapshot: l.unitPriceMinor,
-            // Already includes the line's modifier deltas × quantities
-            // (RF-052 formula) — the server recomputes
-            // qty×unit + Σ(delta × modifier_qty) and must match.
+            // Already includes the line's modifier deltas × quantities, inside
+            // the per-unit multiplication — the server recomputes
+            // qty × (unit + Σ(delta × modifier_qty)) and must match
+            // (MONEY-PRICING-FORMULA-002A). The wire still carries the BARE
+            // unit price and the UNIT delta; only this total is multiplied.
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
             prepComponents:

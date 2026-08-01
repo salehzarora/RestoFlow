@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_core/restoflow_core.dart';
@@ -179,7 +180,12 @@ class KdsSyncedHome extends ConsumerWidget {
                     // this Android display, else the loopback bridge. With no
                     // target the job stays honestly "prepared"; a confirmed write
                     // flips it to "sent to printer", never a fabricated print.
-                    final bridge = ref.read(kdsActivePrintBridgeProvider);
+                    // BLUETOOTH-FIRST-PRINT: AWAIT the saved printer profile
+                    // instead of sampling an unresolved provider, so the FIRST
+                    // ticket after process recreation reaches the printer.
+                    final bridge = await ref.read(
+                      kdsActivePrintBridgeReadyProvider.future,
+                    );
                     ref
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
@@ -239,7 +245,9 @@ class KdsSyncedHome extends ConsumerWidget {
     final hasAction = isError || isReprint;
     return KdsTicketPrintStatus(
       label: label,
-      onRetry: hasAction ? () => _retryPrint(ref, l10n, ticket) : null,
+      onRetry: hasAction
+          ? () => unawaited(_retryPrint(ref, l10n, ticket))
+          : null,
       // The recoverable states ARE the attention states — render them in the
       // danger tone on the card (DESIGN-001). A reprint is a quiet action.
       isError: isError,
@@ -248,7 +256,11 @@ class KdsSyncedHome extends ConsumerWidget {
   }
 
   /// Re-runs a recoverable kitchen print job through the same pipeline.
-  void _retryPrint(WidgetRef ref, AppLocalizations l10n, KdsTicketView ticket) {
+  Future<void> _retryPrint(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    KdsTicketView ticket,
+  ) async {
     final assignments = switch (ref
         .read(kdsPrinterAssignmentsProvider)
         .valueOrNull) {
@@ -258,7 +270,7 @@ class KdsSyncedHome extends ConsumerWidget {
     // ANDROID-004: retry through the ACTIVE bridge (native local printer when set
     // up on this display, else the loopback bridge). A device-local printer
     // counts as an enabled printer even without a server assignment.
-    final bridge = ref.read(kdsActivePrintBridgeProvider);
+    final bridge = await ref.read(kdsActivePrintBridgeReadyProvider.future);
     final hasNativePrinter = ref.read(hasNativePrinterProvider);
     ref
         .read(kdsKitchenPrintControllerProvider.notifier)

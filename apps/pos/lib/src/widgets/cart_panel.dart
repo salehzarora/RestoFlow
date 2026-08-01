@@ -21,9 +21,11 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
+        posAdditionKitchenPrintGuardKey,
         runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
+import '../state/parked_carts_controller.dart';
 import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
@@ -34,6 +36,7 @@ import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import 'modifier_selection_sheet.dart';
 import 'order_confirmation.dart';
+import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
 
@@ -169,138 +172,190 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           ? taxMinorExclusive(cart.subtotalMinor, tax.rateBp)
           : 0;
 
+      // POS-CART-VERTICAL-FIT-001: the totals/actions footer is built ONCE and
+      // placed by whichever branch below owns the remaining space.
+      final footer = _CartFooter(
+        l10n: l10n,
+        subtotalMinor: cart.subtotalMinor,
+        taxMinor: taxMinor,
+        taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
+        currencyCode: cart.currencyCode,
+        orderType: setup.orderType,
+        tableLabel: setup.assignedTable?.label,
+        showNeedsTableHint:
+            cart.isNotEmpty && setup.needsTableWarning && !addition.active,
+        sendLabelOverride: addition.active ? l10n.posSubmitAddition : null,
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the workflow-mode
+        // loading/unavailable reason (new orders only); a retry appears for
+        // the retryable unavailable case.
+        kitchenModeHint: (!addition.active && !submissionDecision.canSubmit)
+            ? (submissionDecision.blockReason ==
+                      PosSubmissionBlockReason.kitchenModeUnavailable
+                  ? l10n.posCloseWorkflowUnavailable
+                  : l10n.posKitchenModeLoading)
+            : null,
+        onRetryKitchenMode:
+            (!addition.active &&
+                submissionDecision.blockReason ==
+                    PosSubmissionBlockReason.kitchenModeUnavailable)
+            ? () => ref
+                  .read(posKitchenModeReadinessProvider.notifier)
+                  .requestResolution()
+            : null,
+        // PARKED-CARTS-001: Park is offered only when the controller says
+        // this cart is parkable — not empty, no submit/confirmation in
+        // flight, and no amendment owning it. The controller re-checks
+        // every condition regardless, so this is honesty, not the gate.
+        onPark:
+            (!_submitting &&
+                ref.watch(parkedCartsControllerProvider.notifier).canPark)
+            ? () => handleParkFromCart(ref: ref, context: context, l10n: l10n)
+            : null,
+        // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
+        // is in flight.
+        submitting: _submitting,
+        onSend: canSend
+            ? () => _handleSend(
+                cart: cart,
+                setup: setup,
+                cartController: controller,
+                setupController: setupController,
+                l10n: l10n,
+                taxTotalMinor: taxMinor,
+                taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
+              )
+            : null,
+      );
+
+      // POS-CART-VERTICAL-FIT-001 — the cart body is ONE scroll view.
+      //
+      // It used to be a plain Column: a RIGID header, a RIGID order-setup
+      // section (measured 240px) and a RIGID totals/actions footer around a
+      // single `Expanded` holding the lines. As soon as those rigid children
+      // exceeded the panel the `Expanded` clamped to zero and the Column
+      // overflowed — at 800x480 by 244px — and nothing in it could ever scroll.
+      //
+      // Now the whole body is a CustomScrollView, so at short heights every
+      // part of it scrolls instead of overflowing, while at normal heights it
+      // looks exactly as before:
+      //
+      //   * the lines are a SliverList, NOT a nested ListView — there is only
+      //     ever ONE scrollable here, so no nested-scroll conflict;
+      //   * the footer rides in a trailing SliverFillRemaining, which lays its
+      //     child out with a TIGHT height of max(remaining, intrinsic). When
+      //     there is room left it is pinned to the bottom exactly as the old
+      //     Column pinned it; when there is not, it simply scrolls into reach
+      //     rather than overflowing. That also means `Expanded` still works
+      //     inside it, which is how the empty state stays vertically centred.
+      //
+      // No fixed heights, no viewport-specific conditions, nothing clipped, and
+      // no control is ever removed — only reached by scrolling when the screen
+      // is genuinely too short to show everything at once.
       body = Material(
         key: const ValueKey('cart-view'),
         color: Colors.white,
-        child: Column(
-          children: [
-            _CartHeader(
-              l10n: l10n,
-              itemCount: cart.itemCount,
-              pendingSync: pendingSync,
-              // Cart-safety: a frozen addition attempt owns the cart — the
-              // Clear control is disabled (the controller refuses regardless).
-              onClear: cart.isEmpty || cart.lockedByAddition
-                  ? null
-                  : controller.clear,
-            ),
-            const Divider(height: 1),
-            // PSC-001C: while ADDING to an existing order the setup section
-            // (type/table) is replaced by the target banner — the parent
-            // order's context is fixed and must stay visible.
-            if (addition.active)
-              _AdditionBanner(
-                l10n: l10n,
-                orderCode: addition.target!.orderCode,
-                tableLabel: addition.target!.tableLabel,
-                failed: addition.failed,
-                awaitingRefresh: addition.awaitingRefresh,
-                // Finding 2: cancel is DISABLED while the attempt is on the
-                // wire or applied-awaiting-refresh — the controller refuses
-                // it anyway (defense in depth); the banner is honest about it.
-                canCancel: addition.canCancel,
-                onCancel: () =>
-                    ref.read(additionControllerProvider.notifier).exit(),
-                // Finding 4: the ONLY retry offered after applied is the
-                // authoritative refresh — never a second dispatch.
-                onRetryRefresh: () => ref
-                    .read(additionControllerProvider.notifier)
-                    .retryRefresh(),
-              )
-            else
-              const OrderSetupSection(),
-            const Divider(height: 1),
-            Expanded(
-              child: cart.isEmpty
-                  ? _EmptyCart(message: l10n.posCartEmpty)
-                  : ListView.separated(
-                      padding: EdgeInsets.symmetric(
-                        vertical: dense
-                            ? RestoflowSpacing.xs
-                            : RestoflowSpacing.sm,
-                        horizontal: RestoflowSpacing.sm,
-                      ),
-                      itemCount: cart.lines.length,
-                      separatorBuilder: (_, _) => SizedBox(
-                        height: dense
-                            ? RestoflowSpacing.xs
-                            : RestoflowSpacing.sm,
-                      ),
-                      itemBuilder: (context, index) {
-                        final line = cart.lines[index];
-                        // Cart-safety: while a frozen addition attempt owns
-                        // the cart, every line control is disabled — the
-                        // visible lines ARE the frozen payload.
-                        final locked = cart.lockedByAddition;
-                        return _CartLineTile(
-                          line: line,
-                          l10n: l10n,
-                          dense: dense,
-                          onIncrease: locked
-                              ? null
-                              : () => controller.increaseQuantity(line.lineId),
-                          onDecrease: locked
-                              ? null
-                              : () => controller.decreaseQuantity(line.lineId),
-                          onRemove: locked
-                              ? null
-                              : () => controller.removeLine(line.lineId),
-                          onEdit: locked
-                              ? null
-                              : () =>
-                                    _editLine(context, menu, line, controller),
-                        );
-                      },
-                    ),
-            ),
-            _CartFooter(
-              l10n: l10n,
-              subtotalMinor: cart.subtotalMinor,
-              taxMinor: taxMinor,
-              taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
-              currencyCode: cart.currencyCode,
-              orderType: setup.orderType,
-              tableLabel: setup.assignedTable?.label,
-              showNeedsTableHint:
-                  cart.isNotEmpty &&
-                  setup.needsTableWarning &&
-                  !addition.active,
-              sendLabelOverride: addition.active
-                  ? l10n.posSubmitAddition
-                  : null,
-              // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the workflow-mode
-              // loading/unavailable reason (new orders only); a retry appears for
-              // the retryable unavailable case.
-              kitchenModeHint:
-                  (!addition.active && !submissionDecision.canSubmit)
-                  ? (submissionDecision.blockReason ==
-                            PosSubmissionBlockReason.kitchenModeUnavailable
-                        ? l10n.posCloseWorkflowUnavailable
-                        : l10n.posKitchenModeLoading)
-                  : null,
-              onRetryKitchenMode:
-                  (!addition.active &&
-                      submissionDecision.blockReason ==
-                          PosSubmissionBlockReason.kitchenModeUnavailable)
-                  ? () => ref
-                        .read(posKitchenModeReadinessProvider.notifier)
-                        .requestResolution()
-                  : null,
-              // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
-              // is in flight.
-              submitting: _submitting,
-              onSend: canSend
-                  ? () => _handleSend(
-                      cart: cart,
-                      setup: setup,
-                      cartController: controller,
-                      setupController: setupController,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _CartHeader(
+                    l10n: l10n,
+                    itemCount: cart.itemCount,
+                    pendingSync: pendingSync,
+                    // Cart-safety: a frozen addition attempt owns the cart —
+                    // the Clear control is disabled (the controller refuses
+                    // regardless).
+                    onClear: cart.isEmpty || cart.lockedByAddition
+                        ? null
+                        : controller.clear,
+                  ),
+                  const Divider(height: 1),
+                  // PSC-001C: while ADDING to an existing order the setup
+                  // section (type/table) is replaced by the target banner — the
+                  // parent order's context is fixed and must stay visible.
+                  if (addition.active)
+                    _AdditionBanner(
                       l10n: l10n,
-                      taxTotalMinor: taxMinor,
-                      taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
+                      orderCode: addition.target!.orderCode,
+                      tableLabel: addition.target!.tableLabel,
+                      failed: addition.failed,
+                      awaitingRefresh: addition.awaitingRefresh,
+                      // Finding 2: cancel is DISABLED while the attempt is on
+                      // the wire or applied-awaiting-refresh — the controller
+                      // refuses it anyway (defense in depth); the banner is
+                      // honest about it.
+                      canCancel: addition.canCancel,
+                      onCancel: () =>
+                          ref.read(additionControllerProvider.notifier).exit(),
+                      // Finding 4: the ONLY retry offered after applied is the
+                      // authoritative refresh — never a second dispatch.
+                      onRetryRefresh: () => ref
+                          .read(additionControllerProvider.notifier)
+                          .retryRefresh(),
                     )
-                  : null,
+                  else
+                    const OrderSetupSection(),
+                  const Divider(height: 1),
+                ],
+              ),
             ),
+            if (cart.isEmpty)
+              // The empty state keeps its centred placement: SliverFillRemaining
+              // gives a TIGHT height, so the Expanded below resolves exactly as
+              // it did inside the old Column.
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Column(
+                  children: [
+                    Expanded(child: _EmptyCart(message: l10n.posCartEmpty)),
+                    footer,
+                  ],
+                ),
+              )
+            else ...[
+              SliverPadding(
+                padding: EdgeInsets.symmetric(
+                  vertical: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+                  horizontal: RestoflowSpacing.sm,
+                ),
+                sliver: SliverList.separated(
+                  itemCount: cart.lines.length,
+                  separatorBuilder: (_, _) => SizedBox(
+                    height: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+                  ),
+                  itemBuilder: (context, index) {
+                    final line = cart.lines[index];
+                    // Cart-safety: while a frozen addition attempt owns the
+                    // cart, every line control is disabled — the visible lines
+                    // ARE the frozen payload.
+                    final locked = cart.lockedByAddition;
+                    return _CartLineTile(
+                      line: line,
+                      l10n: l10n,
+                      dense: dense,
+                      onIncrease: locked
+                          ? null
+                          : () => controller.increaseQuantity(line.lineId),
+                      onDecrease: locked
+                          ? null
+                          : () => controller.decreaseQuantity(line.lineId),
+                      onRemove: locked
+                          ? null
+                          : () => controller.removeLine(line.lineId),
+                      onEdit: locked
+                          ? null
+                          : () => _editLine(context, menu, line, controller),
+                    );
+                  },
+                ),
+              ),
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Align(alignment: Alignment.bottomCenter, child: footer),
+              ),
+            ],
           ],
         ),
       );
@@ -356,6 +411,34 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       if (mounted) setState(() => _submitting = false);
     }
   }
+}
+
+/// PARKED-CARTS-001 — the Park handler.
+///
+/// Sets the current UNSENT cart aside as a local draft. It sends nothing,
+/// prints nothing, takes no payment and claims no table; the controller
+/// persists the draft and only then resets the cart, so a failed write leaves
+/// the cashier exactly where they were.
+///
+/// PUBLIC (visible for testing): this is the Park button's handler, and the
+/// atomic persist-then-reset ordering can only be proven by driving THIS seam.
+@visibleForTesting
+Future<void> handleParkFromCart({
+  required WidgetRef ref,
+  required BuildContext context,
+  required AppLocalizations l10n,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final result = await ref.read(parkedCartsControllerProvider.notifier).park();
+  final message = switch (result) {
+    ParkResult.parked => l10n.posParkedParkSucceeded,
+    ParkResult.blockedByAddition => l10n.posParkedBlockedByAddition,
+    // cartEmpty / busy / noScope are states the disabled button already
+    // prevents; if one is somehow reached, say the honest thing rather than
+    // implying the cart was stored.
+    _ => l10n.posParkedParkFailed,
+  };
+  messenger.showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// The phone sheet's drag handle + close row (DESIGN-004 §6.8).
@@ -423,6 +506,9 @@ Future<void> submitOrderFromCart({
   // controller, together with the authoritative refresh).
   final additionState = ref.read(additionControllerProvider);
   if (additionState.active) {
+    // Captured BEFORE the await: the widget's ref dies with the tree, the
+    // container and the notifiers it owns do not.
+    final additionContainer = ProviderScope.containerOf(context, listen: false);
     final result = await ref.read(additionControllerProvider.notifier).submit();
     // Finding 4: applied-but-not-refreshed is its own honest message — the
     // addition IS saved; only the authoritative view still needs a reload.
@@ -437,6 +523,47 @@ Future<void> submitOrderFromCart({
         ),
       ),
     );
+    // DEFERRED-ORDER-AMENDMENTS-001: print ONE kitchen ADDITION ticket for the
+    // round the server just applied — the DELTA only, never the whole parent
+    // order (the kitchen already has that paper, and reprinting it would get the
+    // original food cooked twice). Best-effort and fully decoupled: the amendment
+    // is ALREADY applied server-side, so a print failure never resends
+    // `order.items_add` and never turns the applied addition into a failure — the
+    // guard releases the round so only the PRINT can be retried. Guarded on the
+    // round-scoped identity, so each round prints exactly once while the parent's
+    // initial ticket keeps its own separate claim.
+    final payload = result.printPayload;
+    final additionOrderType = payload?.orderType;
+    if (payload != null && additionOrderType != null) {
+      unawaited(
+        runAutoKitchenTicketPrintOnSubmit(
+          container: additionContainer,
+          orderId: payload.orderId,
+          guardKey: posAdditionKitchenPrintGuardKey(
+            orderId: payload.orderId,
+            roundId: payload.roundId,
+          ),
+          isDemoMode: additionContainer.read(runtimeConfigProvider).isDemoMode,
+          // The frozen delta lines + the ONE order-time prep snapshot the wire
+          // payload used, plus the parent's PRESERVED identity, type and table
+          // (null for takeaway — no table is invented). The round id/number make
+          // this an addition ticket, so the shared builder prints the localized
+          // "Addition · Round N" marker under the original order code.
+          ticket: kdsTicketViewFromCartLines(
+            orderCode: payload.orderCode,
+            orderType: additionOrderType,
+            lines: payload.lines,
+            prepByItemId: payload.prepByItemId,
+            tableLabel: payload.tableLabel,
+            customerName: payload.customerName,
+            customerPhone: payload.customerPhone,
+            roundId: payload.roundId,
+            roundNumber: payload.roundNumber,
+          ),
+          labels: kitchenTicketPrintLabelsFromL10n(l10n),
+        ),
+      );
+    }
     return;
   }
   final outbox = ref.read(outboxControllerProvider.notifier);
@@ -932,6 +1059,20 @@ void _editLine(
     categoryId: '',
     categoryName: '',
   );
+  // MONEY-MODIFIER-PRICING-INTEGRITY-001 — the money-safe edit routing.
+  //
+  // When no authoritative groups resolve (menu unavailable/loading, item gone)
+  // the sheet CANNOT represent the line's stored modifiers. Confirming used to
+  // call `updateLineModifiers(lineId, [])`, which deleted the paid snapshots
+  // and silently re-priced the line down to its base — the reported
+  // under-charge. The old comment claimed "note only"; nothing enforced it.
+  //
+  // Now the fallback is note-only BY CONSTRUCTION: it is routed to
+  // `updateLineNote`, which has no access to `_lineModifiers` at all, so this
+  // path cannot change money even if the sheet handed back an empty list. The
+  // sheet separately explains why options are missing, and blocks Save when
+  // groups DID resolve but a stored selection cannot be represented.
+  final noteOnly = groups.isEmpty && line.modifiers.isNotEmpty;
   ModifierSelectionSheet.show(
     context,
     item: item,
@@ -941,8 +1082,20 @@ void _editLine(
     initialSelections: line.modifiers,
     initialNote: line.note,
     isEdit: true,
-    onConfirm: (selections, note) =>
-        controller.updateLineModifiers(line.lineId, selections, note: note),
+    // MONEY-EDIT-INTEGRITY-002C (Codex Blocker 5): the sheet must price this
+    // edit against the line's FROZEN base (D-008), not against whatever the
+    // Dashboard charges for the product today. `updateLineModifiers` keeps the
+    // snapshot, so showing the live price meant showing one amount and saving
+    // another. `CartLineView.unitPriceMinor` is the BARE per-unit base — the
+    // modifier deltas are carried separately and the sheet adds them itself.
+    displayBasePriceMinor: line.unitPriceMinor,
+    onConfirm: noteOnly
+        ? (selections, note) => controller.updateLineNote(line.lineId, note)
+        : (selections, note) => controller.updateLineModifiers(
+            line.lineId,
+            selections,
+            note: note,
+          ),
   );
 }
 
@@ -1013,6 +1166,10 @@ class _CartHeader extends StatelessWidget {
             ),
           ],
           const Spacer(),
+          // PARKED-CARTS-001: the parked-orders list lives BESIDE Clear in the
+          // cart header rather than as another global app-bar action. It hides
+          // itself at zero, so a till that never parks sees no new chrome.
+          const ParkedOrdersButton(compact: true),
           if (onClear != null)
             TextButton.icon(
               onPressed: onClear,
@@ -1532,7 +1689,13 @@ class _CartFooter extends StatelessWidget {
     this.sendLabelOverride,
     this.kitchenModeHint,
     this.onRetryKitchenMode,
+    this.onPark,
   });
+
+  /// PARKED-CARTS-001: sets the current unsent cart aside as a local draft.
+  /// Null when parking does not apply (nothing to park, or an amendment owns
+  /// the cart) — the action is then absent rather than shown disabled.
+  final VoidCallback? onPark;
 
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): a localized reason shown while
   /// the kitchen workflow mode is not yet verified (Send is blocked). Null once
@@ -1684,6 +1847,23 @@ class _CartFooter extends StatelessWidget {
                 ),
               ),
             ),
+            // PARKED-CARTS-001: Park sits directly BELOW Send, as a secondary
+            // (outlined) action — Send keeps its size, glow and primary filled
+            // treatment, so the main path is never diluted. Absent entirely
+            // when parking is not applicable (empty cart, amendment mode),
+            // rather than shown as a dead control.
+            if (onPark != null) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('park-cart-button'),
+                  onPressed: onPark,
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: Text(l10n.posParkOrder),
+                ),
+              ),
+            ],
           ],
         ),
       ),

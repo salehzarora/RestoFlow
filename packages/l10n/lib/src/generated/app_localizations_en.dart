@@ -209,6 +209,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAdditionFailedRetry => 'Addition failed — tap to retry';
 
   @override
+  String get posAdditionLoadingPending =>
+      'Checking for unfinished changes — try again in a moment';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'This order has conflicting unfinished changes and needs to be resolved before it can be edited';
+
+  @override
   String get posReadyBellTooltip => 'Ready notifications';
 
   @override
@@ -805,6 +813,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOutboxRetryAll => 'Retry all';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count resolved — clear';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'Clear resolved failures';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'Cleared $count resolved failures';
+  }
+
+  @override
+  String get posStorageWriteRefused => 'This device could not save an order';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count local records cannot be read';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'Local storage needs attention — records are being kept but cannot sync';
+
+  @override
   String get posOrderSubmittedTitle => 'Order sent';
 
   @override
@@ -1240,6 +1273,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get printStatusNotConfigured => 'No printer configured';
+
+  @override
+  String get printStatusWaitingForPrinter =>
+      'Waiting for the printer to be ready…';
 
   @override
   String get printStatusPrepared =>
@@ -3766,6 +3803,83 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posDiscountDemoNote => 'Demo discount — applied locally';
 
   @override
+  String get printerProfilesHeading => 'Saved printers';
+
+  @override
+  String get printerProfilesAddAction => 'Add printer';
+
+  @override
+  String get printerProfilesEditAction => 'Edit printer';
+
+  @override
+  String get printerProfilesDeleteAction => 'Delete printer';
+
+  @override
+  String get printerProfilesSelectAction => 'Use this printer';
+
+  @override
+  String get printerProfilesActiveBadge => 'Active';
+
+  @override
+  String get printerProfilesDefaultName => 'Saved printer';
+
+  @override
+  String get printerProfilesNameLabel => 'Printer name';
+
+  @override
+  String get printerProfilesEmpty =>
+      'No saved printers yet. Add one to switch between printers quickly.';
+
+  @override
+  String get printerProfilesLoading => 'Loading saved printers…';
+
+  @override
+  String get printerProfilesLoadFailure => 'Could not load saved printers.';
+
+  @override
+  String get printerProfilesRetryAction => 'Retry';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'Delete printer?';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return '$name will be removed from this device.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'This is the active printer. This slot will have no printer until you select another.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'A saved printer already uses this address and port.';
+
+  @override
+  String get printerProfilesNameRequired => 'Enter a printer name.';
+
+  @override
+  String get printerProfilesSaveFailure => 'Could not save the printer.';
+
+  @override
+  String get printerProfilesCancelAction => 'Cancel';
+
+  @override
+  String get posPrintBillAction => 'Print bill';
+
+  @override
+  String get receiptUnpaidBillLabel => 'UNPAID - PAY LATER';
+
+  @override
+  String get receiptAmountDueLabel => 'Amount due';
+
+  @override
+  String get posPrintBillStarted => 'Printing bill';
+
+  @override
+  String get posPrintBillFailed => 'Bill print failed';
+
+  @override
   String get posNetworkPrinterHeading => 'Network printer (this device)';
 
   @override
@@ -4205,6 +4319,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posEditSaveChanges => 'Save changes';
 
   @override
+  String get posModifierOptionsUnavailable =>
+      'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.';
+
+  @override
+  String get posModifierSavedOptionsChanged =>
+      'Some options saved on this item have changed on the menu. Refresh the menu to change it, or cancel to keep it as it is.';
+
+  @override
+  String get posModifierSavedOptionsUnavailable =>
+      'Some options saved on this item are no longer on the menu. Refresh the menu to change it, or cancel to keep it as it is.';
+
+  @override
   String get kdsNewOrderBadge => 'New order';
 
   @override
@@ -4608,6 +4734,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posMenuItemSoldOut => 'Sold out';
+
+  @override
+  String get posMenuItemConfigurationUnavailable => 'Options unavailable';
 
   @override
   String get posMenuItemPaused => 'Temporarily unavailable';
@@ -5018,4 +5147,176 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'We could not confirm the change. Refresh and check before trying again.';
+
+  @override
+  String get posParkOrder => 'Park order';
+
+  @override
+  String get posParkedOrders => 'Parked orders';
+
+  @override
+  String get posParkedOrdersEmpty => 'No parked orders';
+
+  @override
+  String get posParkedOrdersLoading => 'Loading parked orders';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'Could not load parked orders';
+
+  @override
+  String get posParkedOrdersRetry => 'Retry';
+
+  @override
+  String get posParkedRestore => 'Restore';
+
+  @override
+  String get posParkedDelete => 'Delete';
+
+  @override
+  String get posParkedDeleteTitle => 'Delete parked order';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'Delete $label? It was never sent, so nothing is cancelled on the server.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'Order parked';
+
+  @override
+  String get posParkedParkFailed =>
+      'Could not park the order. It is still in the cart.';
+
+  @override
+  String get posParkedRestoreFailed =>
+      'Could not restore the order. It is still parked.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'That table is no longer available, so the order was restored without one.';
+
+  @override
+  String get posParkedActiveCartTitle => 'The current cart is not empty';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'Park the current cart first, then restore this one. Nothing is merged or discarded.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'Park current cart and restore';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'Parking is unavailable while adding items to an order';
+
+  @override
+  String get posParkedCopyRetained =>
+      'Restored, but the parked copy could not be removed.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'Parked $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'Parked orders: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'Parked order';
+
+  @override
+  String get posOrderPreviewTitle => 'Order details';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'Could not load this order';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'The order details are not available right now. Nothing was changed.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'Local copy - not refreshed';
+
+  @override
+  String get posOrderPreviewRetry => 'Retry';
+
+  @override
+  String get posOrderPreviewLoading => 'Loading order details';
+
+  @override
+  String get posOrderPreviewItems => 'Items';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'Opened $time';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'Kitchen workflow';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'Dedicated kitchen screen';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'Orders are managed from a separate kitchen display.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel =>
+      'One device with kitchen printer';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'The POS prints kitchen tickets and can finish confirmed kitchen rounds without a separate KDS device.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'Only an owner can change this setting.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'Couldn\'t load this setting right now. Try again later.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle =>
+      'Change the kitchen workflow?';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'Branch: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'From $from to $to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'This branch should use POS and kitchen printers without a dedicated KDS workflow.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'Save workflow';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'Kitchen workflow saved.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied =>
+      'You don\'t have permission to change this setting.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound =>
+      'This branch is not available for your account.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'Couldn\'t save the kitchen workflow. Please try again.';
 }

@@ -126,9 +126,29 @@ void _wide(WidgetTester tester, [Size size = const Size(1000, 2400)]) {
 /// Commit 3: the operational centre lands on OPEN. A test about a TERMINAL order (or
 /// about all orders at once) must select the section it now lives in -- that is the
 /// point of having sections.
+///
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F6). This used to tap and assert NOTHING.
+/// Every caller then reasoned about what is on screen after a switch it never
+/// confirmed happened: had the control been renamed, moved out of the hit-test
+/// area, or stopped filtering, the tap would have thrown or silently done
+/// nothing and the `findsNothing` assertions downstream would still have passed
+/// -- for the wrong reason. It now proves the control is there, scrolls it into
+/// view before tapping, and proves the switch TOOK EFFECT by finding a terminal
+/// order that the OPEN section does not contain.
 Future<void> _showAllSections(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('orders-section-all')));
+  final control = find.byKey(const Key('orders-section-all'));
+  expect(control, findsOneWidget, reason: 'the All section control exists');
+  await tester.ensureVisible(control);
   await tester.pumpAndSettle();
+  await tester.tap(control);
+  await tester.pumpAndSettle();
+  expect(
+    find.byKey(const Key('recent-order-#ZC')),
+    findsOneWidget,
+    reason:
+        'the switch really happened: #ZC is COMPLETED, so it appears only once '
+        'the All section is showing -- a no-op tap leaves it hidden',
+  );
 }
 
 void main() {

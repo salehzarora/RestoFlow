@@ -39,13 +39,21 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Burger', 500, 'USD', 1);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the submitted modifier option must be a REAL
+-- option owned by a group of the submitted item. The LIVE delta below is
+-- deliberately unequal to the declared snapshot, so this suite keeps proving the
+-- server stores the CLIENT'S frozen snapshot and never the catalogue price (D-008).
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('00000000-0000-0000-0000-00000003de01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000000f1', 'Extras');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000003de01', 'Extra', 8888);
 
--- ---- first submit: 1 item (qty 2 @ 500) + 1 modifier (100) => line/subtotal 1100
+-- ---- first submit: 1 item, 2 x (500 + modifier 100) => line/subtotal 1200
 select app.submit_order(
   '00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-00000000a0d1',
   '00000000-0000-0000-0000-00000000da11', 'op-1', 'takeaway', null, null, 'USD', null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Cheese"}]}]'::jsonb,
-  1100, 0, 0, 1100, null);
+  1200, 0, 0, 1200, null);
 
 select is((select count(*) from orders)::int, 1,               'first submit created exactly one order');                       -- 1
 select is((select count(*) from order_items)::int, 1,          'first submit created exactly one order_item');                  -- 2
@@ -59,14 +67,14 @@ select is(
     '00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-00000000a0d1',
     '00000000-0000-0000-0000-00000000da11', 'op-1', 'takeaway', null, null, 'USD', null,
     '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Cheese"}]}]'::jsonb,
-    1100, 0, 0, 1100, null) ->> 'idempotency_replay')::boolean,
+    1200, 0, 0, 1200, null) ->> 'idempotency_replay')::boolean,
   true, 'second submit with the same (device_id, local_operation_id) is an idempotent replay');                                  -- 6
 select is(
   (app.submit_order(
     '00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-00000000a0d1',
     '00000000-0000-0000-0000-00000000da11', 'op-1', 'takeaway', null, null, 'USD', null,
     '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Cheese"}]}]'::jsonb,
-    1100, 0, 0, 1100, null) ->> 'order_id')::uuid,
+    1200, 0, 0, 1200, null) ->> 'order_id')::uuid,
   '00000000-0000-0000-0000-00000000a0d1'::uuid, 'replay returns the same order_id');                                            -- 7
 select is((select count(*) from orders)::int, 1,      'replay created NO duplicate order');                                     -- 8
 select is((select count(*) from order_items)::int, 1, 'replay created NO duplicate order_item');                                -- 9

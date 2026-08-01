@@ -169,16 +169,34 @@ class PosDraftRecovery {
     final rawTable = json['table'];
     final orderTypeName = (json['order_type'] ?? OrderType.takeaway.name)
         .toString();
+    // MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blockers 2/6): an absent or
+    // non-object `draft` previously became an EMPTY draft, so a recovery record
+    // we could not read presented itself as a real, recoverable order with no
+    // lines at all. `toJson` writes `draft` unconditionally, so its absence is
+    // corruption, never history — refuse it and let the store QUARANTINE the
+    // raw record rather than hand the cashier a silently emptied order.
+    final rawDraft = json['draft'];
+    if (rawDraft is! Map) {
+      throw FormatException(
+        'draft recovery draft is not an object: '
+        '${rawDraft == null ? 'absent/null' : rawDraft.runtimeType}',
+      );
+    }
+    // The record's own key. Blank would collide with every other blank one.
+    final rawEntryId = json['outbox_entry_id'];
+    if (rawEntryId is! String || rawEntryId.trim().isEmpty) {
+      throw FormatException(
+        'draft recovery outbox_entry_id is not a non-blank string: '
+        '${rawEntryId == null ? 'absent/null' : rawEntryId.runtimeType}',
+      );
+    }
     return PosDraftRecovery(
-      draft: CartDraftSnapshot.fromJson(
-        (json['draft'] as Map?)?.cast<String, Object?>() ??
-            const <String, Object?>{},
-      ),
+      draft: CartDraftSnapshot.fromJson(rawDraft.cast<String, Object?>()),
       orderType: OrderType.values.firstWhere(
         (t) => t.name == orderTypeName,
         orElse: () => OrderType.takeaway,
       ),
-      outboxEntryId: (json['outbox_entry_id'] ?? '').toString(),
+      outboxEntryId: rawEntryId,
       binding: PosRecoveryBinding.fromJson(
         (json['binding'] as Map?)?.cast<String, Object?>() ??
             const <String, Object?>{},
@@ -253,6 +271,15 @@ class PosDraftRecoveryController
   /// submit's recovery, whose loss simply means the operator re-keys that one order.
   /// The correction LIFECYCLE (link / supersede / accepted cleanup / discard) instead
   /// uses the AWAITED [_persistMap] so it never claims success on a failed write.
+  ///
+  /// MONEY-DURABLE-STORES-003B: the store now THROWS on a refused write rather
+  /// than completing silently, and this call still swallows it — deliberately,
+  /// because [capture] has no caller waiting on a verdict and blocking the till
+  /// on a lost recovery snapshot would be worse than losing it. The failure is
+  /// no longer invisible: the store latches it as
+  /// [PosDurableStoreHealth.isDegraded], which the operator-facing storage
+  /// status reads. Every path where the result CHANGES what the app does next
+  /// goes through [_persistMap] instead.
   void _persist() {
     if (_disposed) return;
     unawaited(_store.persist(state).catchError((Object _) {}));

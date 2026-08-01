@@ -1,18 +1,30 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
+
+import '../data/order_detail_repository.dart'
+    show authoritativeReceiptSource, orderDetailRepositoryProvider;
 import '../data/order_identity.dart';
 import '../data/payment.dart';
 import '../data/payment_repository.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
+import '../print/native_print_bridges.dart'
+    show posActivePrintBridgeReadyProvider, posReceiptReadinessResolverProvider;
+import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/order_sync_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
+import '../state/receipt_print_controller.dart';
 import '../state/recent_orders_controller.dart';
+import 'receipt_print_preview.dart' show buildReceiptDocument;
 
 /// The ASCII decimal separator the cash field accepts (mirrors the input
 /// formatter's `[0-9.]`). A format character, not user-facing copy.
@@ -210,6 +222,12 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final payments = ref.read(paymentControllerProvider.notifier);
     final orders = ref.read(posRecentOrdersControllerProvider.notifier);
     final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    // DEFERRED-PAYMENT-RECEIPTS-001: the receipt seams, captured on the same
+    // rule as the notifiers above — the sheet is dismissible mid-flight, and the
+    // paid receipt must still be requested. Reading `ref` after a dismissal
+    // throws; these outlive the sheet.
+    final receiptRef = ref;
+    final l10n = AppLocalizations.of(context);
     try {
       await payments.payCash(
         identity: widget.identity,
@@ -226,6 +244,20 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       // money or the settlement, and a payment that auto-completes a served order
       // changes BOTH. We do not infer completion from "the button worked" — we ask.
       await _reconcile(sync);
+      // DEFERRED-PAYMENT-RECEIPTS-001: THE PAYMENT COMMAND EDGE. `payCash`
+      // returning without throwing is authoritative success, so this is the one
+      // place a receipt may be requested — never a passive observer of a paid
+      // status during hydration, which would reprint on every refresh.
+      //
+      // On the IMMEDIATE checkout path OrderConfirmation also requests the same
+      // receipt; ReceiptPrintController is keyed per order identity and refuses
+      // a job that already exists, so whichever fires first wins and the other
+      // is a no-op. Exactly one receipt either way.
+      //
+      // Deliberately AFTER the payment is recorded and BEFORE the pop, and
+      // deliberately not awaited into the payment result: a print failure must
+      // never roll back a successful payment.
+      unawaited(_requestPaidReceipt(receiptRef, l10n));
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
       if (mounted) navigator.pop();
@@ -272,6 +304,64 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// (never the widget's `ref`, which dies with a dismissed sheet). Never throws: the
   /// coordinator records its own failure, and a failed refresh must not turn a
   /// SUCCESSFUL payment into an error the cashier sees.
+  /// Requests the NORMAL paid customer receipt for the order just paid.
+  ///
+  /// Uses the canonical [ReceiptPrintController.requestReceipt] lifecycle, so it
+  /// inherits the completed printer-readiness work: the authoritative printer
+  /// configuration is awaited, the bridge is resolved AFTER readiness (never an
+  /// eagerly captured null on a cold start), the first definitive logo outcome is
+  /// waited for, a waiting/failed state is visible, and the per-order in-flight
+  /// guard makes it exactly-once.
+  ///
+  /// The document comes from the SAME authoritative source the manual reprint
+  /// uses, so a deferred-payment receipt is identical to one printed at checkout.
+  /// Every failure here is swallowed: the payment is already recorded and must
+  /// never be rolled back because a printer misbehaved.
+  Future<void> _requestPaidReceipt(WidgetRef ref, AppLocalizations l10n) async {
+    try {
+      final record = ref
+          .read(posRecentOrdersControllerProvider)
+          .where((o) => o.identity.key == widget.identity.key)
+          .firstOrNull;
+      final source = await authoritativeReceiptSource(
+        isDemoMode: ref.read(runtimeConfigProvider).isDemoMode,
+        orderId: widget.orderId,
+        localView: record?.order,
+        localPayment:
+            ref
+                .read(paymentControllerProvider.notifier)
+                .paymentFor(widget.identity) ??
+            record?.payment,
+        repository: ref.read(orderDetailRepositoryProvider),
+      );
+      if (source == null) return; // honest: no complete receipt to print
+      final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
+      await ref
+          .read(receiptPrintControllerProvider.notifier)
+          .requestReceipt(
+            // The SAME key the reprint action uses, so the two can never
+            // produce two jobs for one order.
+            orderKey: widget.identity.key,
+            resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
+            awaitLogoReady: () =>
+                ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+            buildDocument: () => buildReceiptDocument(
+              l10n,
+              source.$1,
+              source.$2,
+              isDemo: isDemo,
+              restaurantName: ref.read(posRestaurantNameProvider),
+              branding: ref.read(posReceiptLogoAssetProvider),
+            ),
+            resolveBridge: () async => (await ref.read(
+              posActivePrintBridgeReadyProvider.future,
+            ))?.submit,
+          );
+    } catch (_) {
+      // A print problem is never a payment problem.
+    }
+  }
+
   Future<void> _reconcile(PosOrderSyncController sync) async {
     final orderId = widget.orderId;
     if (orderId == null || orderId.isEmpty) return;

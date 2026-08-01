@@ -81,14 +81,39 @@ const Set<String> kPermanentRejectionCodes = {
   // kitchen print is suppressed. The cashier re-submits and the fresh op
   // resolves the correct mode.
   'dispatch_mode_not_allowed',
+  // MONEY-SERVER-MODIFIER-SCOPE-003D: the server refused a modifier whose
+  // option does not belong to the submitted item within this organization —
+  // nonexistent, foreign-tenant, wrong-item, or a broken ownership chain, all
+  // reported under one code so the refusal is not an existence oracle.
+  //
+  // TERMINAL: the payload names an option that cannot legitimately price that
+  // line, and re-sending the SAME frozen operation can only be refused again.
+  // Retrying would be a loop; printing would send the kitchen food nobody can
+  // be charged for correctly. The cashier re-picks the modifier from the live
+  // menu, which produces a fresh operation.
+  //
+  // Deliberately NOT a cue to reprice or to drop the offending modifier and
+  // send the rest — that would silently turn a paid option into a free one.
+  'modifier_option_not_in_scope',
   'rejected',
 };
 
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
 /// into `order_item_modifiers` (RF-052, D-008). [priceMinorSnapshot] is a
-/// SIGNED integer minor-unit UNIT delta; the server counts it × [quantity]
-/// once per line in its total formula (`Σ delta × modifier_qty`).
+/// SIGNED integer minor-unit UNIT delta.
+///
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F9): this said the server counts the delta
+/// "once per line", which is the superseded formula A. It does not.
+/// `app.submit_order` computes
+///
+///     line_total = item_quantity × (unit_price_snapshot
+///                                   + Σ(price_minor_snapshot × modifier_qty))
+///                  − line_discount
+///
+/// so the delta is counted once per MODIFIER unit and then again per ITEM unit.
+/// A cart line of 2 burgers each with 1 paid 240g upgrade is charged the
+/// upgrade twice, not once (MONEY-PRICING-FORMULA-002A).
 class OrderSubmissionModifier {
   const OrderSubmissionModifier({
     required this.modifierOptionId,
@@ -129,8 +154,28 @@ class OrderSubmissionModifier {
 /// A single line on an [OrderSubmissionPayload]. Money is integer minor units
 /// only (DECISION D-007); the name + unit price are snapshots captured at order
 /// time (DECISION D-008), never recomputed from a live menu. [lineTotalMinor]
-/// follows the RF-052 server formula `qty × unit + Σmodifiers` (the server
-/// recomputes and rejects any mismatch).
+/// follows the server formula corrected in MONEY-PRICING-FORMULA-002A,
+/// `qty × (unit + Σmodifiers)`. [unitPriceMinorSnapshot] stays the BARE unit
+/// price and each modifier's `price_minor_snapshot` stays its UNIT delta —
+/// neither is pre-multiplied on the wire.
+///
+/// WHAT THE SERVER ACTUALLY CHECKS, stated accurately (F9). This said "the
+/// server recomputes and rejects any mismatch", which overstates the contract.
+/// Precisely:
+///
+///  1. `app.submit_order` recomputes ALL of the item and modifier arithmetic
+///     itself, from the order-time snapshots on the wire — each modifier as
+///     `price_minor_snapshot × modifier_qty`, summed, added to the bare unit
+///     price, and multiplied by the item quantity;
+///  2. it validates only the AGGREGATE: `p_client_subtotal_minor` must equal
+///     the recomputed subtotal, or the whole submit is refused;
+///  3. it never reads this per-line field back for comparison. The stored
+///     `order_items.line_total_minor` is the server's own computation.
+///
+/// So [lineTotalMinor] is NOT independently trusted as authoritative — a wrong
+/// value here is caught only when it moves the subtotal, and two compensating
+/// line errors would pass. Send the exact 002A figure; do not rely on the
+/// server to correct this field.
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,
@@ -442,6 +487,30 @@ class OutboxEntry {
   /// retryable/unknown failure is likewise excluded — it has no durable verdict.
   bool get isNeverCreatedOrderSubmit =>
       operationType == 'order.submit' && isPermanentBusinessRejection;
+
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — whether this entry
+  /// may leave the active retry queue on an explicit operator action.
+  ///
+  /// DELIBERATELY the narrowest provable class: a permanently-rejected
+  /// `order.submit`. `app.sync_push` validates and dispatches every operation
+  /// inside its own subtransaction and rejects an `order.submit` BEFORE
+  /// `app.submit_order` inserts anything, so a permanent rejection of one is
+  /// positive proof that NO `orders` row exists — nothing is orphaned by
+  /// removing the local record, and there is no authoritative server order to
+  /// reconcile against.
+  ///
+  /// Everything else stays, on purpose:
+  ///   * `pending` / `created` / `in_flight` — the server may be about to own
+  ///     it, or already does;
+  ///   * `dead`, and a `rejected` carrying an UNRECOGNISED code — no positive
+  ///     server verdict was recorded, so a replay is still meaningful;
+  ///   * `conflict` / `resolved` — a person has to settle them;
+  ///   * a permanent rejection of a LATER operation (a payment, a discount) —
+  ///     it says nothing about whether the ORDER exists, which is exactly why
+  ///     [isNeverCreatedOrderSubmit] is scoped to `order.submit`;
+  ///   * an unreadable record — never decoded, so never in this list at all; it
+  ///     is preserved verbatim and counted by the storage-health surface.
+  bool get isDismissibleResolvedFailure => isNeverCreatedOrderSubmit;
 
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the

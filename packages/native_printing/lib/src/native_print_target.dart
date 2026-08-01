@@ -101,6 +101,51 @@ final activeNativeTransportFactoryProvider =
       return null;
     });
 
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT) — the RESOLVED transport
+/// factory for the FIRST print of a fresh process.
+///
+/// [activeNativeTransportFactoryProvider] samples its async dependencies with
+/// `.valueOrNull`. Those dependencies are `AsyncNotifier`s whose `build()` is
+/// async, so on their FIRST synchronous read in a new process they are
+/// necessarily still `AsyncLoading` — the sync factory then answers `null` and
+/// the first real job silently has no transport, even though a printer profile
+/// is sitting on disk. The second job works because the providers have landed
+/// by then. That is the whole "first print after force-stop does nothing"
+/// defect; no Bluetooth byte is ever encoded on the lost job.
+///
+/// This provider AWAITS the persisted selection and its config instead, so a
+/// caller can hold the real job pending until the saved profile is genuinely
+/// resolved. It adds no connection logic, no retry and no warm-up: the
+/// Bluetooth transport's own stateless connect + single proven-pre-write retry
+/// is unchanged and still owns everything below this line.
+final activeNativeTransportFactoryReadyProvider =
+    FutureProvider<pp.PrintTransport Function()?>((ref) async {
+      if (!ref.watch(nativePrintingAvailableProvider)) return null;
+      final selected = await ref.watch(selectedPrinterTransportProvider.future);
+      switch (selected) {
+        case PrinterTransportKind.bluetooth:
+          final bt = await ref.watch(bluetoothPrinterConfigProvider.future);
+          if (bt != null) {
+            final connector = ref.watch(bluetoothPrinterConnectorProvider);
+            return () => BluetoothClassicPrintTransport(
+              connector: connector,
+              address: bt.address,
+              timeout: kBluetoothPrintTimeout,
+            );
+          }
+        case PrinterTransportKind.network:
+          final net = await ref.watch(networkPrinterConfigProvider.future);
+          if (net != null) {
+            return () => pp.NetworkTcpPrintTransport(
+              host: net.host,
+              port: net.port,
+              timeout: kNativePrintTimeout,
+            );
+          }
+      }
+      return null;
+    });
+
 /// PRINT-LAYOUT-001A: the media profile of THIS device's ACTIVE native printer
 /// assignment (the config for the selected transport), or the backward-compatible
 /// `continuous80` default when nothing is configured / native printing is off.

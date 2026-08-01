@@ -1,10 +1,19 @@
+import 'dart:async' show scheduleMicrotask;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show
+        NetworkPrinterProfile,
+        SavedPrinterSaveResult,
+        SavedPrintersSection,
+        SavedPrintersStrings;
 import 'package:restoflow_printing/restoflow_printing.dart'
     show MediaProfileId, PrinterDestinationSendGate;
+
+import '../state/pos_network_printer_profiles.dart';
 
 import 'media_profile_selector.dart';
 
@@ -51,8 +60,25 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   );
   final TextEditingController _nameController = TextEditingController();
 
-  bool _prefilled = false;
+  /// PRINT-STARTUP-REPRINT-001 — prefill state.
+  ///
+  /// The old single `_prefilled` latch was set on the FIRST `hasValue`, which on
+  /// a cold start is the transient `AsyncData(null)` produced while the device
+  /// scope was still unresolved. The field then stayed blank forever even after
+  /// the real device-scoped profile resolved. Now:
+  ///  * [_dirty] — the cashier has typed; never overwrite their text.
+  ///  * [_prefilledIdentity] — WHICH saved profile the fields were filled from,
+  ///    so a later authoritative profile (or an explicit save/removal) re-fills,
+  ///    while an unchanged rebuild does not.
+  bool _dirty = false;
+  String? _prefilledIdentity;
+
   _TestStatus _status = _TestStatus.idle;
+
+  /// A stable identity for a saved profile (null = definitively none).
+  static String? _identityOf(PosNetworkPrinterConfig? c) => c == null
+      ? null
+      : '${c.host}|${c.port}|${c.name ?? ''}|${c.mediaProfile.id.name}';
 
   /// PRINT-LAYOUT-001A: the selected media profile for THIS purpose slot.
   /// Prefilled from the saved config; defaults to the continuous-80 roll.
@@ -84,7 +110,8 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     // slot, so switching tabs can never overwrite a configuration.
     if (oldWidget.purpose != widget.purpose) {
       setState(() {
-        _prefilled = false;
+        _dirty = false;
+        _prefilledIdentity = null;
         _status = _TestStatus.idle;
         _fieldError = null;
         _lastHostPort = null;
@@ -133,7 +160,13 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         .read(posNetworkPrinterConfigFamily(widget.purpose).notifier)
         .save(config);
     if (!mounted) return;
-    setState(() => _status = _TestStatus.idle);
+    // The fields now match what was persisted: hand control back to the
+    // authoritative prefill (identity re-sync) instead of staying 'dirty'.
+    setState(() {
+      _dirty = false;
+      _prefilledIdentity = _identityOf(config);
+      _status = _TestStatus.idle;
+    });
     messenger.showSnackBar(
       SnackBar(content: Text(l10n.posNetworkPrinterSavedSnack)),
     );
@@ -189,14 +222,27 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     final savedAsync = ref.watch(posNetworkPrinterConfigFamily(widget.purpose));
     final saved = savedAsync.valueOrNull;
 
-    // Prefill the fields once from the saved config (if any).
-    if (!_prefilled && savedAsync.hasValue) {
-      _prefilled = true;
-      if (saved != null) {
-        _ipController.text = saved.host;
+    // PRINT-STARTUP-REPRINT-001: prefill whenever the RESOLVED saved profile
+    // differs from what the fields were last filled from — so a cold start that
+    // first reported "no profile" still populates once the authoritative
+    // device-scoped profile arrives. Never while the cashier is mid-edit, and
+    // never repeatedly for an unchanged profile.
+    if (savedAsync.hasValue && !_dirty) {
+      final identity = _identityOf(saved);
+      if (identity != null && identity != _prefilledIdentity) {
+        _prefilledIdentity = identity;
+        _ipController.text = saved!.host;
         _portController.text = '${saved.port}';
         _nameController.text = saved.name ?? '';
         _selectedProfile = saved.mediaProfile.id;
+      } else if (identity == null && _prefilledIdentity != null) {
+        // An explicit removal (a resolved null AFTER a real profile) clears the
+        // fields; a merely-still-empty slot leaves them untouched.
+        _prefilledIdentity = null;
+        _ipController.clear();
+        _portController.text = '9100';
+        _nameController.clear();
+        _selectedProfile = MediaProfileId.continuous80;
       }
     }
 
@@ -226,7 +272,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z.\-]')),
           ],
-          onChanged: (_) => setState(() => _fieldError = null),
+          onChanged: (_) => setState(() {
+            _dirty = true;
+            _fieldError = null;
+          }),
           decoration: InputDecoration(
             labelText: l10n.posNetworkPrinterIpLabel,
             hintText: l10n.posNetworkPrinterIpHint,
@@ -248,7 +297,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(5),
                 ],
-                onChanged: (_) => setState(() => _fieldError = null),
+                onChanged: (_) => setState(() {
+                  _dirty = true;
+                  _fieldError = null;
+                }),
                 decoration: InputDecoration(
                   labelText: l10n.posNetworkPrinterPortLabel,
                   border: const OutlineInputBorder(),
@@ -273,7 +325,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           fieldKey: _k('network-printer-media-size'),
           value: _selectedProfile,
           enabled: !busy,
-          onChanged: (id) => setState(() => _selectedProfile = id),
+          onChanged: (id) => setState(() {
+            _dirty = true;
+            _selectedProfile = id;
+          }),
         ),
         if (_fieldError != null) ...[
           const SizedBox(height: RestoflowSpacing.sm),
@@ -308,9 +363,160 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           saved: saved,
           hostPort: _lastHostPort,
         ),
+        const SizedBox(height: RestoflowSpacing.md),
+        const Divider(height: 1),
+        const SizedBox(height: RestoflowSpacing.sm),
+        // WIFI-PRINTER-PROFILE-LISTS-001: the device-local saved printers for
+        // THIS slot. Purely a view over the slot's profile provider — selecting
+        // writes through the canonical config, so nothing here is a second
+        // source of truth.
+        _savedPrinters(l10n),
       ],
     );
   }
+
+  /// The saved-printer list for this purpose slot.
+  Widget _savedPrinters(AppLocalizations l10n) {
+    final async = ref.watch(posNetworkPrinterProfilesFamily(widget.purpose));
+    final controller = ref.read(
+      posNetworkPrinterProfilesFamily(widget.purpose).notifier,
+    );
+    final state = async.valueOrNull;
+    // Name an unnamed MIGRATED profile once, in the active language, then leave
+    // it alone (a later rebuild finds it named and does nothing).
+    if (state != null) _ensureMigratedName(l10n, state, controller);
+    return SavedPrintersSection(
+      keySuffix: widget.purpose == PosPrinterPurpose.customerReceipt
+          ? ''
+          : '-kitchen',
+      strings: _savedPrinterStrings(l10n),
+      profiles: state?.profiles ?? const <NetworkPrinterProfile>[],
+      activeId: state?.activeId,
+      loading: async.isLoading && !async.hasValue,
+      failed: async.hasError,
+      onRetry: () =>
+          ref.invalidate(posNetworkPrinterProfilesFamily(widget.purpose)),
+      onSelect: (id) async {
+        await controller.selectProfile(id);
+        final selected = ref
+            .read(posNetworkPrinterProfilesFamily(widget.purpose))
+            .valueOrNull
+            ?.active;
+        if (selected == null || !mounted) return;
+        // Selecting DELIBERATELY replaces the endpoint fields (unlike a
+        // background rebuild, which must never touch what the user typed).
+        setState(() {
+          _dirty = false;
+          _prefilledIdentity = _identityOf(selected.config);
+          _ipController.text = selected.config.host;
+          _portController.text = '${selected.config.port}';
+          _nameController.text = selected.config.name ?? '';
+          _selectedProfile = selected.config.mediaProfile.id;
+          _fieldError = null;
+        });
+      },
+      onAdd: (name, config) async {
+        final before = state?.profiles.length ?? 0;
+        final added = await controller.addProfile(name: name, config: config);
+        if (added == null) return SavedPrinterSaveResult.invalid;
+        final after = ref
+            .read(posNetworkPrinterProfilesFamily(widget.purpose))
+            .valueOrNull;
+        if ((after?.profiles.length ?? 0) == before) {
+          // The store returned an EXISTING profile for this endpoint.
+          return SavedPrinterSaveResult.duplicate;
+        }
+        // A newly saved printer becomes the one this slot uses.
+        await controller.selectProfile(added.id);
+        if (mounted) {
+          setState(() {
+            _dirty = false;
+            _prefilledIdentity = _identityOf(added.config);
+            _ipController.text = added.config.host;
+            _portController.text = '${added.config.port}';
+            _nameController.text = added.config.name ?? '';
+          });
+        }
+        return SavedPrinterSaveResult.saved;
+      },
+      onEdit: (profile) async {
+        final ok = await controller.updateProfile(profile);
+        if (!ok) return SavedPrinterSaveResult.duplicate;
+        final active = ref
+            .read(posNetworkPrinterProfilesFamily(widget.purpose))
+            .valueOrNull;
+        if (active?.activeId == profile.id && mounted) {
+          setState(() {
+            _dirty = false;
+            _prefilledIdentity = _identityOf(profile.config);
+            _ipController.text = profile.config.host;
+            _portController.text = '${profile.config.port}';
+          });
+        }
+        return SavedPrinterSaveResult.saved;
+      },
+      onRemove: (id) async {
+        final wasActive = state?.activeId == id;
+        await controller.removeProfile(id);
+        // Clearing the form is honest ONLY when the removed printer was the
+        // one this slot was using.
+        if (wasActive && mounted) {
+          setState(() {
+            _dirty = false;
+            _prefilledIdentity = null;
+            _status = _TestStatus.idle;
+          });
+        }
+      },
+    );
+  }
+
+  /// Assigns the localized default name ONCE to a profile migrated from the
+  /// previous single configuration. An explicitly named profile is never
+  /// renamed, and the write happens at most once because the name is then no
+  /// longer blank.
+  void _ensureMigratedName(
+    AppLocalizations l10n,
+    PosNetworkProfilesState state,
+    PosNetworkPrinterProfilesController controller,
+  ) {
+    for (final p in state.profiles) {
+      if (p.name.trim().isEmpty) {
+        scheduleMicrotask(() {
+          controller.updateProfile(
+            p.copyWith(name: l10n.printerProfilesDefaultName),
+          );
+        });
+        return;
+      }
+    }
+  }
+
+  SavedPrintersStrings _savedPrinterStrings(AppLocalizations l10n) =>
+      SavedPrintersStrings(
+        heading: l10n.printerProfilesHeading,
+        addAction: l10n.printerProfilesAddAction,
+        editAction: l10n.printerProfilesEditAction,
+        deleteAction: l10n.printerProfilesDeleteAction,
+        activeBadge: l10n.printerProfilesActiveBadge,
+        defaultName: l10n.printerProfilesDefaultName,
+        nameLabel: l10n.printerProfilesNameLabel,
+        hostLabel: l10n.posNetworkPrinterIpLabel,
+        portLabel: l10n.posNetworkPrinterPortLabel,
+        empty: l10n.printerProfilesEmpty,
+        loading: l10n.printerProfilesLoading,
+        loadFailure: l10n.printerProfilesLoadFailure,
+        retryAction: l10n.printerProfilesRetryAction,
+        deleteConfirmTitle: l10n.printerProfilesDeleteConfirmTitle,
+        deleteConfirmBody: l10n.printerProfilesDeleteConfirmBody,
+        deleteActiveWarning: l10n.printerProfilesDeleteActiveWarning,
+        duplicateError: l10n.printerProfilesDuplicateError,
+        nameRequired: l10n.printerProfilesNameRequired,
+        invalidHost: l10n.posNetworkPrinterInvalidIp,
+        invalidPort: l10n.posNetworkPrinterInvalidPort,
+        saveAction: l10n.posNetworkPrinterSaveAction,
+        cancelAction: l10n.printerProfilesCancelAction,
+      );
 }
 
 /// The honest status line: not configured / saved / testing / succeeded /

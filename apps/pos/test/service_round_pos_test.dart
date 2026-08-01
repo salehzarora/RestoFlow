@@ -209,8 +209,14 @@ Object? _applied(Map<String, dynamic> params, {int roundNumber = 2}) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'applied',
         'ok': true,
+        // F2: the server always names the order it applied to; the
+        // client now REQUIRES it to match the attempt's target.
+        'order_id': 'o-1',
         'round_id': 'r-new',
         'round_number': roundNumber,
       },
@@ -226,6 +232,9 @@ Object? _rejected(Map<String, dynamic> params, String error) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'rejected',
         'ok': false,
         'error': error,
@@ -363,10 +372,15 @@ void main() {
       expect(resolveOrderActions(_order(status: 'served')).canAddItems, isTrue);
     });
 
-    test('A2 a TAKEAWAY order never takes additions (locked scope)', () {
+    // DEFERRED-ORDER-AMENDMENTS-001 replaces the old takeaway-denied assertion:
+    // takeaway is now an eligible amendment target on both sides (the POS policy
+    // here and the widened `app.add_order_items` gate). The full takeaway
+    // eligibility matrix lives in deferred_order_amendments_pos_test.dart.
+    test('A2 a TAKEAWAY order NOW takes additions '
+        '(DEFERRED-ORDER-AMENDMENTS-001)', () {
       expect(
         resolveOrderActions(_order(orderType: 'takeaway')).canAddItems,
-        isFalse,
+        isTrue,
       );
     });
 
@@ -1251,21 +1265,49 @@ void main() {
       expect(source!.$2.paymentId, 'local-1');
     });
 
-    test('I5 an authoritative detail WITHOUT a payment may stand on this '
-        'till\'s own queued payment record — the itemized view stays '
-        'authoritative', () async {
-      final repo = _FakeDetailRepo(); // default detail has NO payment block
-      final source = await authoritativeReceiptSource(
-        isDemoMode: false,
-        orderId: 'o-1',
-        localView: null,
-        localPayment: localPayment(),
-        repository: repo,
-      );
-      expect(source, isNotNull);
-      expect(source!.$2.paymentId, 'local-1'); // the real local record
-      expect(repo.fetches, 1);
-    });
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F6) — THIS EXPECTATION WAS CORRECTED.
+    //
+    // I5 used to assert that an authoritative detail with NO payment "may stand
+    // on this till's own queued payment record", pinning the resulting
+    // paymentId to 'local-1'. That is the local fallback, and it produced a PAID
+    // RECEIPT for an order the server reports as unpaid.
+    //
+    // The whole point of the authoritative path is that the SERVER decides
+    // whether money was taken. A queued local payment is this till's intention,
+    // not the server's record: it may still be sitting unsent in the outbox, it
+    // may have been rejected, and the order may have been settled elsewhere or
+    // not at all. Printing a customer receipt from it is the same fabricated
+    // financial document the strict decoders exist to prevent.
+    //
+    // The itemized view is still authoritative: an unpaid BILL remains
+    // available through `authoritativeUnpaidOrderSource`, which by design never
+    // invents a payment to get past this check.
+    test(
+      'I5 an authoritative detail WITHOUT a payment yields NO receipt — a '
+      'queued local payment can never stand in for the server record',
+      () async {
+        final repo = _FakeDetailRepo(); // default detail has NO payment block
+        final source = await authoritativeReceiptSource(
+          isDemoMode: false,
+          orderId: 'o-1',
+          localView: null,
+          localPayment: localPayment(),
+          repository: repo,
+        );
+        expect(
+          source,
+          isNull,
+          reason:
+              'the server says nothing has been paid; a receipt claiming '
+              'otherwise is a fabricated financial document',
+        );
+        expect(
+          repo.fetches,
+          1,
+          reason: 'the authoritative source was still consulted',
+        );
+      },
+    );
   });
 
   group('J. authoritative payment identity/status (final Finding 3)', () {

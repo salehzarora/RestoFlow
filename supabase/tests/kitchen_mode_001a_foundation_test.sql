@@ -95,12 +95,20 @@ select is(
   'printer_only', 'privileged SQL (the test fixture path) can flip a branch to printer_only');                   -- 6
 
 -- ===== B. NO ACTIVATION PATH =================================================
-select is(
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008, which
+-- ships the guarded owner setter this phase deliberately deferred. The check is
+-- KEPT and TIGHTENED rather than dropped: exactly the approved app+public pair
+-- may exist, so an unreviewed third writer still fails this suite.
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
       and p.proname like '%kitchen_workflow_mode%'
-      and p.proname not like 'get\_%'),
-  0, 'NO setter/updater function for kitchen_workflow_mode exists anywhere in app/public');                      -- 7
+      and p.proname not like 'get\_%') = 2
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode')
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'set_kitchen_workflow_mode'),
+  'the ONLY kitchen_workflow_mode setter is the approved 008 owner pair');                                       -- 7
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
@@ -275,12 +283,19 @@ select is(
   'printer_only', 'with EVERY liveness dimension restored, the valid token reads the real mode again');          -- 44
 
 -- ===== H. broadened no-activation-path (review MEDIUM-1) =====================
-select is(
+-- SUPERSEDED BY 008 (see #7). Still source-inspects EVERY function, so any
+-- OTHER branch/settings setter that starts touching kitchen_workflow_mode is
+-- still caught - only the one approved setter is allowed to.
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
       and p.prosrc ~* 'update\s+(public\.)?branches\y'
-      and p.prosrc ilike '%kitchen_workflow_mode%'),
-  0, 'NO function in app/public that UPDATEs branches touches kitchen_workflow_mode (all current and future branch/settings setters inspected by source)'); -- 45
+      and p.prosrc ilike '%kitchen_workflow_mode%') = 1
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode'
+                 and p.prosrc ~* 'update\s+(public\.)?branches\y'
+                 and p.prosrc ilike '%kitchen_workflow_mode%'),
+  'ONLY app.set_kitchen_workflow_mode UPDATEs branches.kitchen_workflow_mode (all other branch/settings setters inspected by source)'); -- 45
 
 select * from finish();
 rollback;

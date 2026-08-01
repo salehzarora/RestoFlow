@@ -514,15 +514,34 @@ void main() {
       expect(back.isTerminal, isTrue);
     });
 
-    test(
-      'F3 a CORRUPT snapshot does not destroy the order that carries it',
-      () {
-        final json = local().toJson()..['snapshot'] = <String, Object?>{'x': 1};
-        final back = PosRecentOrder.fromJson(json);
-        expect(back.orderId, 'o-1', reason: 'the order survives');
-        expect(back.snapshot, isNull, reason: 'only the bad field is dropped');
-      },
-    );
+    test('F3 a CORRUPT snapshot REFUSES the record rather than silently '
+        'falling back to stale local money', () {
+      // MEANING CHANGED, deliberately (MONEY-LOCAL-ATOMICITY-003A).
+      //
+      // This used to assert that a malformed snapshot was dropped and the
+      // order kept, on the reasoning that "throwing would drop a real order
+      // over a bad optional field". That reasoning was true when a
+      // FormatException meant DELETION. Since MONEY-LOCAL-DECODE-INTEGRITY-002B
+      // it means QUARANTINE: the raw record is preserved verbatim on disk and
+      // re-emitted by every later write, so refusing it destroys nothing.
+      //
+      // What the old behaviour DID do was show the order's OLDER local money
+      // and status as if they were current, because the authoritative snapshot
+      // silently vanished. That is the opposite of what an authoritative record
+      // is for, and it is the same rule sibling G1 already applies to a page:
+      // one malformed row rejects atomically.
+      final json = local().toJson()..['snapshot'] = <String, Object?>{'x': 1};
+      expect(
+        () => PosRecentOrder.fromJson(json),
+        throwsA(isA<FormatException>()),
+      );
+
+      // ...while an ABSENT snapshot key remains legitimate history.
+      final legacy = local().toJson()..remove('snapshot');
+      final back = PosRecentOrder.fromJson(legacy);
+      expect(back.orderId, 'o-1');
+      expect(back.snapshot, isNull);
+    });
   });
 
   group('G. the repository page contract', () {

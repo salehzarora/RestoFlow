@@ -108,17 +108,30 @@ class MenuItemCard extends StatelessWidget {
     final unavailable = item.isUnavailable;
     // Accessibility: the unavailable state (and its reason) is announced, not just
     // shown as a colour scrim + pill (A3 — not colour alone).
+    // MONEY-LOCAL-ATOMICITY-003A: a THIRD reason. `sold_out` / `paused` are
+    // operator stock decisions; `configuration_unreadable` means the POS could
+    // not read the item's modifier configuration and so cannot price it — a
+    // different fact, which must not be reported as "Sold out".
     final unavailableLabel = unavailable
-        ? (item.availabilityReason == 'paused'
-              ? l10n.posMenuItemPaused
-              : l10n.posMenuItemSoldOut)
+        ? _unavailableLabel(l10n, item.availabilityReason)
         : null;
+    // POS-PRODUCT-DESCRIPTIONS-001: the operator's description, already
+    // normalized at the parse boundary. Re-checked for blankness here only so a
+    // caller that hands the card raw text cannot produce an empty line — this
+    // is a guard, not a second normalization.
+    final description = item.description?.trim();
+    final hasDescription = description != null && description.isNotEmpty;
 
     return Semantics(
       container: true,
-      label: unavailableLabel == null
-          ? item.name
-          : '${item.name}, $unavailableLabel',
+      // ONE semantic node for the card, extended in reading order: product
+      // name, then its description, then the availability status. A second
+      // node here would make every tile announce itself twice.
+      label: [
+        item.name,
+        if (hasDescription) description,
+        if (unavailableLabel != null) unavailableLabel,
+      ].join(', '),
       child: _buildCard(
         context,
         l10n,
@@ -127,6 +140,7 @@ class MenuItemCard extends StatelessWidget {
         priceText,
         bandTags,
         unavailable,
+        hasDescription ? description : null,
       ),
     );
   }
@@ -139,7 +153,11 @@ class MenuItemCard extends StatelessWidget {
     String priceText,
     List<String> bandTags,
     bool unavailable,
+
+    /// Already trimmed and proven non-empty by [build]; null = render nothing.
+    String? description,
   ) {
+    final hasDescription = description != null;
     return Card(
       elevation: 1.5,
       color: theme.colorScheme.surface,
@@ -179,14 +197,43 @@ class MenuItemCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      item.name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: kRestoflowInk,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: kRestoflowInk,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        // POS-PRODUCT-DESCRIPTIONS-001: the description sits
+                        // directly under the name, in the secondary ink, and is
+                        // purely presentational — no tap target, no tooltip, no
+                        // placeholder when absent. `letterSpacing` is
+                        // deliberately left alone: forcing one breaks
+                        // Arabic/Hebrew shaping. Ambient Directionality and the
+                        // directional start alignment handle RTL.
+                        if (hasDescription) ...[
+                          const SizedBox(height: RestoflowSpacing.xxs),
+                          Text(
+                            description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: kRestoflowInk2,
+                              height: 1.25,
+                              // EXPLICITLY zero: the ambient bodySmall carries
+                              // a 0.4 tracking that pulls Arabic and Hebrew
+                              // glyphs apart and breaks their shaping.
+                              letterSpacing: 0,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
                     ),
                     Row(
                       children: [
@@ -311,9 +358,7 @@ class _ImageBand extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: RestoflowStatusPill(
                   key: Key('menu-item-unavailable-${item.id}'),
-                  label: item.availabilityReason == 'paused'
-                      ? l10n.posMenuItemPaused
-                      : l10n.posMenuItemSoldOut,
+                  label: _unavailableLabel(l10n, item.availabilityReason),
                   tone: RestoflowTone.danger,
                   icon: Icons.do_not_disturb_on_outlined,
                 ),
@@ -468,3 +513,14 @@ class _CategoryBand extends StatelessWidget {
     );
   }
 }
+
+/// MONEY-LOCAL-ATOMICITY-003A — the ONE place an availability reason becomes a
+/// label, so the scrim pill and the accessibility announcement can never
+/// disagree about WHY an item cannot be sold.
+String _unavailableLabel(AppLocalizations l10n, String? reason) =>
+    switch (reason) {
+      'paused' => l10n.posMenuItemPaused,
+      DemoMenuItem.configurationUnavailableReason =>
+        l10n.posMenuItemConfigurationUnavailable,
+      _ => l10n.posMenuItemSoldOut,
+    };

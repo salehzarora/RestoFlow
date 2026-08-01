@@ -73,6 +73,17 @@ insert into modifier_options (id, organization_id, restaurant_id, branch_id, mod
   ('e0000000-0000-0000-0000-0000000000d6', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 1', 0, 1),
   ('e0000000-0000-0000-0000-0000000000d7', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 2', 0, 2),
   ('e0000000-0000-0000-0000-0000000000d8', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 3', 0, 3);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the service-round add below submits these
+-- same options under ITEM B, so Item B needs its OWN group owning options with
+-- the ids the amendment names. Group d5 above belongs to Item A, and an option
+-- may only price the item its group belongs to. Display orders are preserved so
+-- the MENU-ORDER-001 rank-snapshot assertions keep their meaning.
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name, display_order) values
+  ('e0000000-0000-0000-0000-0000000000e5', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000f2', 'Extras', 1);
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order) values
+  ('e0000000-0000-0000-0000-0000000000e6', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000e5', 'Opt 1', 0, 1),
+  ('e0000000-0000-0000-0000-0000000000e7', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000e5', 'Opt 2', 0, 2),
+  ('e0000000-0000-0000-0000-0000000000e8', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000e5', 'Opt 3', 0, 3);
 insert into tables (id, organization_id, restaurant_id, branch_id, label) values
   ('e0000000-0000-0000-0000-0000000000b1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'T1');
 -- A SECOND org (Org N) with its own category — for cross-tenant reorder rejection.
@@ -252,8 +263,8 @@ select public.sync_push(
           -- derives line_position 1..N and snapshots the CURRENT live-menu ranks —
           -- so the forged 999s are ignored end to end (asserted below).
           'modifiers', jsonb_build_array(
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000e7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000e6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
 select is(
   (select category_display_order_snapshot from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
@@ -287,8 +298,8 @@ select public.sync_push(
           -- #10: the idempotent replay carries the SAME malicious 999 fields; the
           -- replay is a no-op (idempotency ledger), so nothing is re-derived either.
           'modifiers', jsonb_build_array(
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000e7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000e6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
 select is(
   (select count(*)::int from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
@@ -340,7 +351,7 @@ select is(
     where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
       and oi.menu_item_name_snapshot = 'Item B'
       and oim.option_name_snapshot = 'Opt 2'),
-  1, 'a service-round modifier snapshots the CURRENT group rank (d5 is now 1)');
+  1, 'a service-round modifier snapshots the CURRENT group rank (e5, Item B''s own group, is rank 1) — the SERVER overrides the client''s bogus 999');
 
 -- ===== #9 HISTORICAL MODIFIER A/B: the OLD order A (submitted BEFORE the option
 --       + group reorder) keeps its ORIGINAL modifier snapshots — IMMUTABLE.

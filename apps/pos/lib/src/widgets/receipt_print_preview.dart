@@ -325,6 +325,22 @@ class ReceiptPrintPreview extends ConsumerWidget {
 
 /// Builds the ISOLATED print document for a paid receipt (RF-118). The printed
 /// page contains ONLY these lines — never the POS menu/app behind the modal.
+/// DEFERRED-PAYMENT-RECEIPTS-001: which customer document is being produced.
+///
+/// Both kinds share ONE builder body — branding, restaurant details, order
+/// number, service details, customer, items, modifiers, quantities, item prices,
+/// discount/tax and the money formatting are identical. Only the payment-only
+/// rows differ, and they are suppressed by [ReceiptDocumentKind.unpaidBill].
+enum ReceiptDocumentKind {
+  /// The normal PAID receipt. Unchanged output.
+  paidReceipt,
+
+  /// A customer-facing bill for an order that has NOT been paid yet.
+  unpaidBill,
+}
+
+/// The PAID customer receipt. Signature and output unchanged — every existing
+/// caller keeps working and the printed bytes are the same.
 PrintDocument buildReceiptDocument(
   AppLocalizations l10n,
   SubmittedOrderView order,
@@ -332,8 +348,51 @@ PrintDocument buildReceiptDocument(
   bool isDemo = true,
   String? restaurantName,
   ReceiptLogoAsset? branding,
+}) => _buildCustomerDocument(
+  l10n,
+  order,
+  payment,
+  kind: ReceiptDocumentKind.paidReceipt,
+  isDemo: isDemo,
+  restaurantName: restaurantName,
+  branding: branding,
+);
+
+/// The UNPAID customer bill — the same document WITHOUT any payment content.
+///
+/// There is deliberately no [CashPayment] parameter: an unpaid order has no
+/// payment, and inventing one to satisfy the paid builder would print a document
+/// claiming money had been taken. Every payment-only row is suppressed rather
+/// than filled with a placeholder.
+PrintDocument buildBillDocument(
+  AppLocalizations l10n,
+  SubmittedOrderView order, {
+  bool isDemo = true,
+  String? restaurantName,
+  ReceiptLogoAsset? branding,
+}) => _buildCustomerDocument(
+  l10n,
+  order,
+  null,
+  kind: ReceiptDocumentKind.unpaidBill,
+  isDemo: isDemo,
+  restaurantName: restaurantName,
+  branding: branding,
+);
+
+PrintDocument _buildCustomerDocument(
+  AppLocalizations l10n,
+  SubmittedOrderView order,
+  CashPayment? payment, {
+  required ReceiptDocumentKind kind,
+  bool isDemo = true,
+  String? restaurantName,
+  ReceiptLogoAsset? branding,
 }) {
-  final currency = payment.currencyCode;
+  final paid = kind == ReceiptDocumentKind.paidReceipt && payment != null;
+  // An unpaid bill has no payment to take the currency from; the order snapshot
+  // carries the same currency the payment would have.
+  final currency = payment?.currencyCode ?? order.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
   // PRINT-LAYOUT-001B: the brand HERO is the restaurant name — the demo name in
   // demo mode, else the real name threaded from the paired-device context (DATA,
@@ -362,8 +421,13 @@ PrintDocument buildReceiptDocument(
       // Header — restaurant-name brand HERO, a secondary "Receipt" label, then
       // a PAID chip.
       PrintLine.title(brandName),
-      PrintLine.center(l10n.posReceiptTitle),
-      PrintLine.center(l10n.posPaidChip),
+      // A BILL is never titled "Receipt" and never carries the Paid chip — those
+      // two lines are the whole difference in the header.
+      if (paid) ...[
+        PrintLine.center(l10n.posReceiptTitle),
+        PrintLine.center(l10n.posPaidChip),
+      ] else
+        PrintLine.center(l10n.receiptUnpaidBillLabel),
       PrintLine.rule(),
       // The customer-facing ORDER NUMBER — a prominent secondary identifier
       // below the brand (not the hero). PRINT-LAYOUT-001: the INTERNAL receipt
@@ -386,7 +450,9 @@ PrintDocument buildReceiptDocument(
       // leading `+` render correctly.
       if (order.customerPhone case final phone?)
         PrintLine.center('${l10n.customerPhoneReceiptLabel}: $phone'),
-      PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
+      // The paid timestamp MEANS payment completion, so a bill omits it rather
+      // than substituting some other time that could be read as a payment.
+      if (paid) PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
       // Items — quantity + name at the larger item size, line total on the
       // right; modifiers and the note indented underneath. A blank spacer before
@@ -434,25 +500,29 @@ PrintDocument buildReceiptDocument(
       // then "Paid" (cash tendered) and "Change" for cash. The subtotal/discount/
       // tax breakout above still appears only when a discount or tax is present.
       PrintLine.kv(
-        l10n.posReceiptOrderTotal,
+        paid ? l10n.posReceiptOrderTotal : l10n.receiptAmountDueLabel,
         MoneyFormatter.formatMinor(order.grandTotalMinor, currency),
         emphasised: true,
       ),
-      if (payment.method.isCash) ...[
+      // PAYMENT-ONLY ROWS. A bill omits tender, change and the payment method
+      // outright — never a zero, a dash or a fabricated tender.
+      if (paid) ...[
+        if (payment.method.isCash) ...[
+          PrintLine.kv(
+            l10n.posReceiptPaid,
+            MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
+          ),
+          PrintLine.kv(
+            l10n.posReceiptChange,
+            MoneyFormatter.formatMinor(payment.changeMinor, currency),
+          ),
+        ],
+        PrintLine.rule(),
         PrintLine.kv(
-          l10n.posReceiptPaid,
-          MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
-        ),
-        PrintLine.kv(
-          l10n.posReceiptChange,
-          MoneyFormatter.formatMinor(payment.changeMinor, currency),
+          l10n.posPaymentMethodLabel,
+          paymentMethodLabel(l10n, payment.method),
         ),
       ],
-      PrintLine.rule(),
-      PrintLine.kv(
-        l10n.posPaymentMethodLabel,
-        paymentMethodLabel(l10n, payment.method),
-      ),
       // Footer — a short thank-you, then (demo only) the mode notes.
       PrintLine.center(l10n.posReceiptThankYou),
       // TABLET-UX-001 (E): a printer-status message must NEVER be baked into the

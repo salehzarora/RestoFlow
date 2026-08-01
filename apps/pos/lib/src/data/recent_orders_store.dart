@@ -94,13 +94,85 @@ class SharedPrefsRecentOrdersStore implements PosRecentOrdersStore {
     }
   }
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 6): the raw entries of
+  /// [scopeKey]'s CURRENT envelope that this build cannot decode.
+  ///
+  /// Re-read here rather than remembered from [load], because the caller
+  /// replaces the whole set on every write and a guarantee that depends on the
+  /// caller having loaded first is not a guarantee.
+  ///
+  /// [keep] returns false for an entry whose order is also in the set being
+  /// written — a repaired record must not sit behind its broken shadow.
+  List<Object?> _quarantined(String scopeKey, bool Function(Object?) keep) {
+    final raw = _prefs.getString(_keyFor(scopeKey));
+    if (raw == null || raw.isEmpty) return const <Object?>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const <Object?>[];
+      if ((decoded['version'] as num?)?.toInt() != schemaVersion) {
+        // Already ignored by `load`, and this store only writes its OWN
+        // version — there is nothing here we could carry forward safely.
+        return const <Object?>[];
+      }
+      final list = decoded['orders'];
+      if (list is! List) return const <Object?>[];
+      final out = <Object?>[];
+      for (final e in list) {
+        if (e is Map) {
+          try {
+            PosRecentOrder.fromJson(e.cast<String, Object?>());
+            continue; // readable — the caller owns it
+          } on FormatException {
+            // unreadable — falls through and is kept VERBATIM
+          }
+        }
+        if (keep(e)) out.add(e);
+      }
+      return out;
+    } catch (_) {
+      return const <Object?>[];
+    }
+  }
+
+  /// The cashier-visible code and the server id of a RAW stored entry, read as
+  /// plain strings. Used ONLY to recognise a record the caller is rewriting —
+  /// never to price it, and never to decide what it means.
+  static Set<String> _identityOf(Object? entry) {
+    if (entry is! Map) return const <String>{};
+    final out = <String>{};
+    void add(Object? container, String key, String prefix) {
+      if (container is! Map) return;
+      final v = container[key];
+      if (v is String && v.trim().isNotEmpty) out.add('$prefix:$v');
+    }
+
+    add(entry['order'], 'order_number', 'number');
+    add(entry['order'], 'order_id', 'id');
+    add(entry['snapshot'], 'order_id', 'id');
+    return out;
+  }
+
   @override
   Future<void> persist(String scopeKey, List<PosRecentOrder> orders) async {
     // BUILD AND SERIALIZE FIRST. If any row cannot be encoded we fail here, before
     // touching the durable store — the old set is still on disk and still correct.
+    //
+    // Entries this build cannot decode are re-emitted VERBATIM ahead of the
+    // caller's set: a record we cannot read is not a record we are entitled to
+    // destroy. They are dropped only when the caller is writing the SAME order,
+    // so a repaired record replaces its broken shadow instead of doubling it.
+    final rewritten = <String>{
+      for (final o in orders) ..._identityOf(o.toJson()),
+    };
     final envelope = <String, Object?>{
       'version': schemaVersion,
-      'orders': [for (final o in orders) o.toJson()],
+      'orders': [
+        ..._quarantined(
+          scopeKey,
+          (e) => _identityOf(e).intersection(rewritten).isEmpty,
+        ),
+        for (final o in orders) o.toJson(),
+      ],
     };
     final encoded = jsonEncode(envelope);
 

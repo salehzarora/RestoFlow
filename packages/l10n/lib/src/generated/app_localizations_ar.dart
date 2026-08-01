@@ -206,6 +206,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
 
   @override
+  String get posAdditionLoadingPending =>
+      'جارٍ التحقق من التغييرات غير المكتملة — أعد المحاولة بعد لحظات';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'هذا الطلب يحتوي على تغييرات غير مكتملة متعارضة ويجب حلّها قبل تعديله';
+
+  @override
   String get posReadyBellTooltip => 'إشعارات الجاهزية';
 
   @override
@@ -797,6 +805,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOutboxRetryAll => 'إعادة المحاولة';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count منتهية — امسح';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'مسح الأخطاء المنتهية';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'تم مسح $count من الأخطاء المنتهية';
+  }
+
+  @override
+  String get posStorageWriteRefused => 'هذا الجهاز لم يستطع حفظ طلب';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count سجلات محلية لا يمكن قراءتها';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'التخزين المحلي يحتاج انتباه — السجلات محفوظة لكن لا يمكن مزامنتها';
+
+  @override
   String get posOrderSubmittedTitle => 'تم إرسال الطلب';
 
   @override
@@ -1233,6 +1266,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
+
+  @override
+  String get printStatusWaitingForPrinter => 'بانتظار جاهزية الطابعة…';
 
   @override
   String get printStatusPrepared =>
@@ -3739,6 +3775,83 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posDiscountDemoNote => 'خصم تجريبي — مُطبّق محليًا';
 
   @override
+  String get printerProfilesHeading => 'طابعات محفوظة';
+
+  @override
+  String get printerProfilesAddAction => 'إضافة طابعة';
+
+  @override
+  String get printerProfilesEditAction => 'تعديل الطابعة';
+
+  @override
+  String get printerProfilesDeleteAction => 'حذف الطابعة';
+
+  @override
+  String get printerProfilesSelectAction => 'استخدام هذه الطابعة';
+
+  @override
+  String get printerProfilesActiveBadge => 'نشطة';
+
+  @override
+  String get printerProfilesDefaultName => 'طابعة محفوظة';
+
+  @override
+  String get printerProfilesNameLabel => 'اسم الطابعة';
+
+  @override
+  String get printerProfilesEmpty =>
+      'لا توجد طابعات محفوظة بعد. أضف واحدة للتبديل بين الطابعات بسرعة.';
+
+  @override
+  String get printerProfilesLoading => 'جارٍ تحميل الطابعات المحفوظة…';
+
+  @override
+  String get printerProfilesLoadFailure => 'تعذّر تحميل الطابعات المحفوظة.';
+
+  @override
+  String get printerProfilesRetryAction => 'إعادة المحاولة';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'حذف الطابعة؟';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return 'سيتم حذف $name من هذا الجهاز.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'هذه هي الطابعة النشطة. لن تكون هناك طابعة لهذه الفتحة حتى تختار أخرى.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'توجد طابعة محفوظة تستخدم هذا العنوان والمنفذ.';
+
+  @override
+  String get printerProfilesNameRequired => 'أدخل اسم الطابعة.';
+
+  @override
+  String get printerProfilesSaveFailure => 'تعذّر حفظ الطابعة.';
+
+  @override
+  String get printerProfilesCancelAction => 'إلغاء';
+
+  @override
+  String get posPrintBillAction => 'طباعة الحساب';
+
+  @override
+  String get receiptUnpaidBillLabel => 'غير مدفوع - الدفع لاحقاً';
+
+  @override
+  String get receiptAmountDueLabel => 'المبلغ المستحق';
+
+  @override
+  String get posPrintBillStarted => 'جارٍ طباعة الحساب';
+
+  @override
+  String get posPrintBillFailed => 'فشلت طباعة الحساب';
+
+  @override
   String get posNetworkPrinterHeading => 'طابعة الشبكة (هذا الجهاز)';
 
   @override
@@ -4176,6 +4289,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posEditSaveChanges => 'حفظ التعديلات';
 
   @override
+  String get posModifierOptionsUnavailable =>
+      'تعذّر تحميل الخيارات. يمكنك تعديل الملاحظة فقط - الخيارات المحفوظة لهذا الصنف تبقى كما هي.';
+
+  @override
+  String get posModifierSavedOptionsChanged =>
+      'بعض الخيارات المحفوظة على هذا الصنف تغيّرت في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.';
+
+  @override
+  String get posModifierSavedOptionsUnavailable =>
+      'بعض الخيارات المحفوظة على هذا الصنف لم تعد موجودة في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.';
+
+  @override
   String get kdsNewOrderBadge => 'طلب جديد';
 
   @override
@@ -4571,6 +4696,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posMenuItemSoldOut => 'نفدت الكمية';
+
+  @override
+  String get posMenuItemConfigurationUnavailable => 'الخيارات غير متاحة';
 
   @override
   String get posMenuItemPaused => 'غير متوفر مؤقتاً';
@@ -4977,4 +5105,171 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'تعذّر تأكيد التغيير. حدّث الصفحة وتحقّق قبل المحاولة مجدداً.';
+
+  @override
+  String get posParkOrder => 'تعليق الطلب';
+
+  @override
+  String get posParkedOrders => 'الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersEmpty => 'لا توجد طلبات معلّقة';
+
+  @override
+  String get posParkedOrdersLoading => 'جارٍ تحميل الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'تعذّر تحميل الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersRetry => 'إعادة المحاولة';
+
+  @override
+  String get posParkedRestore => 'استعادة';
+
+  @override
+  String get posParkedDelete => 'حذف';
+
+  @override
+  String get posParkedDeleteTitle => 'حذف الطلب المعلّق';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'حذف $label؟ لم يُرسل الطلب، لذلك لن يُلغى أي شيء على الخادم.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'تم تعليق الطلب';
+
+  @override
+  String get posParkedParkFailed => 'تعذّر تعليق الطلب. ما زال في السلة.';
+
+  @override
+  String get posParkedRestoreFailed => 'تعذّرت استعادة الطلب. ما زال معلّقاً.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'لم تعد الطاولة متاحة، لذلك تمت استعادة الطلب بدون طاولة.';
+
+  @override
+  String get posParkedActiveCartTitle => 'السلة الحالية ليست فارغة';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'علّق السلة الحالية أولاً ثم استعد هذه. لا يتم أي دمج أو حذف.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'تعليق السلة الحالية والاستعادة';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'التعليق غير متاح أثناء إضافة أصناف إلى طلب';
+
+  @override
+  String get posParkedCopyRetained =>
+      'تمت الاستعادة، لكن تعذّر حذف النسخة المعلّقة.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count صنف';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'عُلِّق $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'الطلبات المعلّقة: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'طلب معلّق';
+
+  @override
+  String get posOrderPreviewTitle => 'تفاصيل الطلب';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'تعذّر تحميل هذا الطلب';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'تفاصيل الطلب غير متاحة حالياً. لم يتم تغيير أي شيء.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'نسخة محلية - غير محدّثة';
+
+  @override
+  String get posOrderPreviewRetry => 'إعادة المحاولة';
+
+  @override
+  String get posOrderPreviewLoading => 'جارٍ تحميل تفاصيل الطلب';
+
+  @override
+  String get posOrderPreviewItems => 'الأصناف';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'فُتح $time';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'سير عمل المطبخ';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'شاشة مطبخ منفصلة';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'تُدار الطلبات من شاشة مطبخ منفصلة.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel => 'جهاز واحد مع طابعة مطبخ';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'في هذا الوضع يدير جهاز نقطة البيع الطلبات ويطبع تذاكر المطبخ، ويمكنه إنهاء جولات المطبخ المؤكدة دون الحاجة إلى جهاز مطبخ منفصل.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'يمكن للمالك فقط تغيير هذا الإعداد.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'تعذّر تحميل هذا الإعداد الآن. حاول مرة أخرى لاحقًا.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle => 'تغيير سير عمل المطبخ؟';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'الفرع: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'يجب أن يعمل هذا الفرع بنقطة البيع وطابعات المطبخ دون سير عمل شاشة مطبخ مخصّصة.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'حفظ سير العمل';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'تم حفظ سير عمل المطبخ.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied =>
+      'ليست لديك صلاحية لتغيير هذا الإعداد.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound => 'هذا الفرع غير متاح لحسابك.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'تعذّر حفظ سير عمل المطبخ. يرجى المحاولة مرة أخرى.';
 }

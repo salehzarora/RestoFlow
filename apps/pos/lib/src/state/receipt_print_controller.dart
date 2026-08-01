@@ -21,14 +21,42 @@ import '../print/print_document.dart';
 ///  * [printed] — a HARDWARE-confirmed print. It is UNREACHABLE by design: no
 ///    transport can confirm a physical print, so nothing ever sets it. Kept only
 ///    so a future hardware-ack transport could light it up without a UI change.
+///  * [waitingForPrinter] — PRINT-STARTUP-REPRINT-001: the payment succeeded and
+///    the receipt job EXISTS, but authoritative printer readiness (and the first
+///    definitive logo outcome) are still resolving. Previously this window
+///    produced NO job at all — a cold-start receipt was silently dropped with no
+///    status row and no retry. The job is honest and visible while it waits, and
+///    no bytes are sent from this state.
 enum PrintJobStatus {
   notConfigured,
+  waitingForPrinter,
   prepared,
   sentToPrinter,
   bridgeUnavailable,
   printed,
   failed,
 }
+
+/// PRINT-STARTUP-REPRINT-001 — the authoritative outcome of resolving whether
+/// this station can print a customer receipt right now.
+enum ReceiptReadiness {
+  /// A usable native or bridge/assignment printer path exists.
+  configured,
+
+  /// Every authoritative source resolved and none yields a usable printer.
+  notConfigured,
+
+  /// An authoritative source failed to resolve (e.g. the assignment load threw).
+  /// Distinct from [notConfigured]: it is retryable.
+  loadFailed,
+}
+
+/// Resolves [ReceiptReadiness] by AWAITING authoritative sources. Must never
+/// classify a still-loading source as [ReceiptReadiness.notConfigured].
+typedef ReceiptReadinessResolver = Future<ReceiptReadiness> Function();
+
+/// Awaits the first DEFINITIVE logo outcome (image or no usable image).
+typedef ReceiptLogoReadyAwaiter = Future<void> Function();
 
 /// One prepared (or refused / dispatched) print job + its payload.
 class ReceiptPrintJob {
@@ -72,6 +100,14 @@ class ReceiptPrintJob {
 typedef ReceiptBridgeSubmit =
     Future<BridgeSubmitResult> Function(PrintDocument document);
 
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT): resolves the print bridge
+/// LAZILY, after readiness. Passing an already-read bridge cannot work on a cold
+/// start: the bridge provider samples async printer configs with `.valueOrNull`,
+/// so an eagerly-captured value is `null` on the first read of a fresh process
+/// and the paid receipt is dispatched to nothing. Returning null here still
+/// means "no bridge wired" and leaves the job honestly `prepared`.
+typedef ReceiptBridgeResolver = Future<ReceiptBridgeSubmit?> Function();
+
 /// Holds the receipt print job per ORDER IDENTITY (RF-115).
 ///
 /// POS-OPERATIONS-SYNC-001 (second review correction): these jobs were keyed by the
@@ -90,6 +126,175 @@ typedef ReceiptBridgeSubmit =
 class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   @override
   Map<String, ReceiptPrintJob> build() => const {};
+
+  /// Order keys whose readiness→dispatch flow is currently running. This is the
+  /// exactly-once latch: provider rebuilds, repeated payment notifications,
+  /// device-context republication, logo resolution and an impatient Retry can
+  /// all re-enter [requestReceipt], and only the first starts a flow.
+  final Set<String> _inFlight = <String>{};
+
+  /// PRINT-STARTUP-REPRINT-001 — the cold-start-safe receipt entry point.
+  ///
+  /// Creates the job IMMEDIATELY (so a paid receipt can never be silently
+  /// dropped while printer state loads), parks it in
+  /// [PrintJobStatus.waitingForPrinter], then AWAITS authoritative readiness and
+  /// the first definitive logo outcome before building and dispatching exactly
+  /// once. No timers, no warm-up ticket, no auto-resend.
+  ///
+  /// Idempotent per [orderKey]: a job that already exists is never re-created
+  /// and never re-dispatched (use [retry] for a deliberate re-run).
+  Future<void> requestReceipt({
+    required String orderKey,
+    required ReceiptReadinessResolver resolveReadiness,
+    required PrintDocument Function() buildDocument,
+    ReceiptLogoReadyAwaiter? awaitLogoReady,
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  }) async {
+    if (state.containsKey(orderKey) || _inFlight.contains(orderKey)) return;
+    _inFlight.add(orderKey);
+    // The job exists from this moment on: visible, honest, and retryable.
+    state = {
+      ...state,
+      orderKey: const ReceiptPrintJob(status: PrintJobStatus.waitingForPrinter),
+    };
+    try {
+      final ReceiptReadiness readiness;
+      try {
+        readiness = await resolveReadiness();
+      } catch (_) {
+        _setStatus(orderKey, PrintJobStatus.failed);
+        return;
+      }
+      switch (readiness) {
+        case ReceiptReadiness.notConfigured:
+          _setStatus(orderKey, PrintJobStatus.notConfigured);
+          return;
+        case ReceiptReadiness.loadFailed:
+          _setStatus(orderKey, PrintJobStatus.failed);
+          return;
+        case ReceiptReadiness.configured:
+          break;
+      }
+      // Only now is the logo awaited: a definitive outcome (image OR no usable
+      // image) must be known before the FIRST receipt is built, otherwise it
+      // prints branding-less by pure timing.
+      if (awaitLogoReady != null) {
+        try {
+          await awaitLogoReady();
+        } catch (_) {
+          // A logo that cannot resolve never blocks the receipt — the existing
+          // text-only fallback contract applies.
+        }
+      }
+      final PrintDocument document;
+      try {
+        document = buildDocument();
+      } catch (_) {
+        _setStatus(orderKey, PrintJobStatus.failed);
+        return;
+      }
+      state = {
+        ...state,
+        orderKey: ReceiptPrintJob(
+          status: PrintJobStatus.prepared,
+          document: document,
+        ),
+      };
+      await _dispatch(
+        orderKey,
+        await _resolveSubmit(submitToBridge, resolveBridge),
+      );
+    } finally {
+      _inFlight.remove(orderKey);
+    }
+  }
+
+  /// The bridge is resolved HERE — after readiness — never captured before it.
+  /// A resolver that throws is treated as "no bridge": the job stays `prepared`
+  /// rather than claiming a print that never happened.
+  static Future<ReceiptBridgeSubmit?> _resolveSubmit(
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  ) async {
+    if (resolveBridge == null) return submitToBridge;
+    try {
+      return await resolveBridge() ?? submitToBridge;
+    } catch (_) {
+      return submitToBridge;
+    }
+  }
+
+  /// DEFERRED-PAYMENT-RECEIPTS-001: an intentionally REPEATABLE manual document
+  /// request (the unpaid customer bill).
+  ///
+  /// [requestReceipt] is once-per-order on purpose — a paid receipt must never
+  /// print twice off one payment. A bill is the opposite: the cashier may hand
+  /// the customer another copy whenever they ask. So a TERMINAL job for this key
+  /// is cleared first and the full readiness lifecycle re-runs.
+  ///
+  /// The in-flight guard is still honoured, so a rapid double tap produces ONE
+  /// send; only a press after the previous print reached a terminal state starts
+  /// another. Nothing here is keyed to a permanent per-order flag.
+  Future<void> requestRepeatableDocument({
+    required String orderKey,
+    required ReceiptReadinessResolver resolveReadiness,
+    required PrintDocument Function() buildDocument,
+    ReceiptLogoReadyAwaiter? awaitLogoReady,
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  }) async {
+    if (_inFlight.contains(orderKey)) return; // a double tap sends once
+    state = {...state}..remove(orderKey);
+    await requestReceipt(
+      orderKey: orderKey,
+      resolveReadiness: resolveReadiness,
+      buildDocument: buildDocument,
+      awaitLogoReady: awaitLogoReady,
+      submitToBridge: submitToBridge,
+      resolveBridge: resolveBridge,
+    );
+  }
+
+  /// Re-runs a job that ended in an actionable state, RE-RESOLVING printer
+  /// readiness and logo state first. Refuses while a flow is already running so
+  /// an impatient Retry can never open a concurrent second send.
+  Future<void> retryReceipt({
+    required String orderKey,
+    required ReceiptReadinessResolver resolveReadiness,
+    required PrintDocument Function() buildDocument,
+    ReceiptLogoReadyAwaiter? awaitLogoReady,
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  }) async {
+    if (_inFlight.contains(orderKey)) return;
+    final job = state[orderKey];
+    // Never re-send something a transport may already have accepted.
+    if (job != null &&
+        job.status != PrintJobStatus.failed &&
+        job.status != PrintJobStatus.bridgeUnavailable &&
+        job.status != PrintJobStatus.notConfigured) {
+      return;
+    }
+    state = {...state}..remove(orderKey);
+    await requestReceipt(
+      orderKey: orderKey,
+      resolveReadiness: resolveReadiness,
+      buildDocument: buildDocument,
+      awaitLogoReady: awaitLogoReady,
+      submitToBridge: submitToBridge,
+      resolveBridge: resolveBridge,
+    );
+  }
+
+  void _setStatus(String orderKey, PrintJobStatus status) {
+    final job = state[orderKey];
+    if (job == null) return;
+    state = {
+      ...state,
+      orderKey: job.copyWith(status: status, at: DateTime.now()),
+    };
+  }
 
   /// Prepares the receipt job for [orderKey] once. No enabled printer =>
   /// an honest [PrintJobStatus.notConfigured] marker; a throwing builder =>

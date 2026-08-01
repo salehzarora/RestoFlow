@@ -3,7 +3,6 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
-import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
 import 'pos_printer_purpose.dart';
 
 /// True when this build can print directly to a native (Wi-Fi/Bluetooth) printer
@@ -41,20 +40,28 @@ final posKitchenSelectedPrinterTransportProvider =
 
 class PosSelectedPrinterTransportController
     extends FamilyAsyncNotifier<PosPrinterTransportKind, PosPrinterPurpose> {
-  String get _key {
-    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
-    final segment = (deviceId == null || deviceId.isEmpty)
-        ? kPosNetworkPrinterLocalKey
-        : deviceId;
-    return '$kPosPrinterTransportKeyPrefix${arg.keySegment}$segment';
-  }
+  String _keyFor(String segment) =>
+      '$kPosPrinterTransportKeyPrefix${arg.keySegment}$segment';
 
   @override
   Future<PosPrinterTransportKind> build(PosPrinterPurpose arg) async {
-    ref.watch(posDeviceContextProvider);
+    // PRINT-STARTUP-REPRINT-001: resolve the authoritative namespace first so a
+    // cold start never latches the legacy `local` choice for a paired device.
+    final segment = await ref.watch(posPrinterScopeSegmentProvider.future);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
+      var raw = prefs.getString(_keyFor(segment));
+      if ((raw == null || raw.isEmpty) && segment != kPosPrinterScopeLocalKey) {
+        // Legacy local selection of this SAME installation, adopted once.
+        raw = prefs.getString(_keyFor(kPosPrinterScopeLocalKey));
+        if (raw != null && raw.isNotEmpty) {
+          try {
+            await prefs.setString(_keyFor(segment), raw);
+          } catch (_) {
+            // Keep serving the legacy value this session.
+          }
+        }
+      }
       return raw == 'bluetooth'
           ? PosPrinterTransportKind.bluetooth
           : PosPrinterTransportKind.network;
@@ -63,12 +70,18 @@ class PosSelectedPrinterTransportController
     }
   }
 
-  /// Persists the selected transport (state first, storage best-effort).
+  /// Persists the selected transport into the authoritative namespace.
   Future<void> select(PosPrinterTransportKind kind) async {
+    final segment = await ref.read(posPrinterScopeSegmentProvider.future);
+    try {
+      await future;
+    } catch (_) {
+      // A failed load must not block an explicit selection.
+    }
     state = AsyncData(kind);
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_key, kind.name);
+      await prefs.setString(_keyFor(segment), kind.name);
     } catch (_) {
       // Best-effort persistence: the in-session choice still applies.
     }

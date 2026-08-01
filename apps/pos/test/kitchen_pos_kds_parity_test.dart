@@ -51,6 +51,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'KTotal $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 /// The SAME representative order expressed as KDS sync_pull rows.

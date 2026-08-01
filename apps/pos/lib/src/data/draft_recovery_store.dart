@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/draft_recovery_controller.dart' show PosDraftRecovery;
+import 'local_storage_health.dart';
+import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// MENU-ORDER-001 (Codex #8/#9): persistence for the POS draft-recovery map so a
 /// permanently-rejected order's recovery — its draft (products, quantities,
@@ -20,6 +22,12 @@ abstract class PosDraftRecoveryStore {
   Future<Map<String, PosDraftRecovery>> load();
 
   /// Replaces the persisted recovery map with [recoveries].
+  ///
+  /// MONEY-DURABLE-STORES-003B: THROWS [PosPersistenceException] when the write
+  /// does not stick. `PosDraftRecoveryController._persistMap` reports success to
+  /// the PRE-DISPATCH correction gate on the strength of this call, so a write
+  /// that quietly failed would let an order be sent whose correction link exists
+  /// only in memory — precisely what that gate exists to prevent.
   Future<void> persist(Map<String, PosDraftRecovery> recoveries);
 }
 
@@ -44,7 +52,8 @@ class InMemoryDraftRecoveryStore implements PosDraftRecoveryStore {
 /// (localStorage). Each installed app / paired device has its OWN
 /// shared_preferences, and every stored record carries its scope binding, so a
 /// restored draft is still access-gated to its own scope + PIN session.
-class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
+class SharedPrefsDraftRecoveryStore
+    implements PosDraftRecoveryStore, PosDurableStoreHealth {
   SharedPrefsDraftRecoveryStore(this._prefs, {String key = _defaultKey})
     : _key = key;
 
@@ -60,6 +69,20 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
   /// persisted — so a v1 record (pin-session-keyed, unattributable to the stable
   /// worker) is intentionally dropped on load rather than silently mis-owned.
   static const int schemaVersion = 2;
+
+  bool _degraded = false;
+
+  @override
+  bool get isDegraded => _degraded;
+
+  @override
+  int unreadableRecordCount(String scopeKey) {
+    var preserved = 0;
+    for (var slot = 0; slot < _maxPreservedEnvelopes; slot++) {
+      if ((_prefs.getString(_preservedKey(slot)) ?? '').isNotEmpty) preserved++;
+    }
+    return _quarantined().length + preserved;
+  }
 
   @override
   Future<Map<String, PosDraftRecovery>> load() async {
@@ -82,11 +105,105 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
           );
         } catch (_) {
           // Drop a single corrupt/foreign record; never crash the POS on start.
+          // It is not lost — `_quarantined` re-emits it verbatim on every write.
         }
       }
       return out;
     } catch (_) {
+      // An envelope this build cannot interpret at all. Start clean, but the
+      // bytes are NOT discarded — `persist` preserves them before overwriting.
       return <String, PosDraftRecovery>{};
+    }
+  }
+
+  /// Sidecar keys holding envelopes this build could not interpret at all.
+  static const int _maxPreservedEnvelopes = 5;
+
+  String _preservedKey(int slot) =>
+      slot == 0 ? '$_key.unreadable' : '$_key.unreadable.${slot + 1}';
+
+  /// MONEY-DURABLE-STORES-003B: copies an envelope this build cannot interpret
+  /// to a sidecar key BEFORE the primary key is overwritten.
+  ///
+  /// The per-record quarantine added in 002B only reaches records inside an
+  /// envelope this build can still open. A whole envelope that fails — damaged
+  /// JSON, the wrong shape, or a schema version from a newer build — was simply
+  /// replaced, taking every rejected order's recoverable draft with it. A v1
+  /// envelope is the concrete case: it is intentionally not loaded (its records
+  /// are pin-session-keyed and unattributable to a stable worker), and it was
+  /// then destroyed rather than left for a build that could migrate it.
+  ///
+  /// Fails CLOSED, like the outbox: when the copy cannot be made, [persist]
+  /// throws rather than destroying the original.
+  Future<void> _preserveUnreadableEnvelope() async {
+    final raw = _prefs.getString(_key);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map &&
+          (decoded['version'] as num?)?.toInt() == schemaVersion &&
+          decoded['recoveries'] is Map) {
+        return; // interpretable; per-record quarantine covers it
+      }
+    } catch (_) {
+      // not decodable at all — preserve it
+    }
+    for (var slot = 0; slot < _maxPreservedEnvelopes; slot++) {
+      final key = _preservedKey(slot);
+      final existing = _prefs.getString(key);
+      if (existing == raw) return; // already preserved (idempotent)
+      if (existing != null && existing.isNotEmpty) continue;
+      if (await _prefs.setString(key, raw)) return;
+      _degraded = true;
+      throw const PosPersistenceException(
+        'an unreadable draft-recovery envelope could not be set aside, so it '
+        'was not overwritten',
+      );
+    }
+    _degraded = true;
+    throw const PosPersistenceException(
+      'too many unreadable draft-recovery envelopes are already being held; '
+      'refusing to overwrite another',
+    );
+  }
+
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 6): the raw records this
+  /// build cannot decode, read back from the CURRENT envelope.
+  ///
+  /// Deliberately re-read here rather than remembered from [load]: a guarantee
+  /// that only holds when the caller happens to have loaded first is not a
+  /// guarantee. The controller replaces the whole map on every write, so
+  /// preservation has to live where it cannot be bypassed.
+  Map<String, Object?> _quarantined() {
+    final raw = _prefs.getString(_key);
+    if (raw == null || raw.isEmpty) return const <String, Object?>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const <String, Object?>{};
+      if ((decoded['version'] as num?)?.toInt() != schemaVersion) {
+        // A version this build does not understand is already left untouched
+        // by `load`, and this store only ever writes its OWN version — so
+        // there is nothing here we could carry forward without mis-shaping it.
+        return const <String, Object?>{};
+      }
+      final map = decoded['recoveries'];
+      if (map is! Map) return const <String, Object?>{};
+      final out = <String, Object?>{};
+      for (final entry in map.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          try {
+            PosDraftRecovery.fromJson(value.cast<String, Object?>());
+            continue; // readable — the caller owns it
+          } catch (_) {
+            // unreadable — falls through and is kept VERBATIM
+          }
+        }
+        out[entry.key.toString()] = value;
+      }
+      return out;
+    } catch (_) {
+      return const <String, Object?>{};
     }
   }
 
@@ -94,12 +211,34 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
   Future<void> persist(Map<String, PosDraftRecovery> recoveries) async {
     // Build + serialize FIRST so an unencodable record fails here, before the
     // durable store is touched (the old set stays on disk and still correct).
+    //
+    // A record we cannot read is NOT a record we are entitled to destroy, so
+    // the quarantined raw entries are re-emitted byte-for-byte. A readable
+    // record under the same key REPLACES its quarantined shadow — the caller's
+    // set is written last and wins — so a key never ends up duplicated and a
+    // repaired record never stays hidden behind the broken one.
+    await _preserveUnreadableEnvelope();
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'recoveries': <String, Object?>{
+        ..._quarantined(),
         for (final e in recoveries.entries) e.key: e.value.toJson(),
       },
     };
-    await _prefs.setString(_key, jsonEncode(envelope));
+    // MONEY-DURABLE-STORES-003B: setString returns Future<bool> and can report
+    // FALSE WITHOUT THROWING (a full disk; a browser refusing localStorage).
+    // The previous build discarded that value, so `_persistMap` — which reports
+    // to the PRE-DISPATCH correction gate — returned true on a write that never
+    // happened, and the corrected order was sent with its source association
+    // held only in memory. A crash between the server accepting and the client
+    // recording it then left the source recovery unlinked, so the same order
+    // could be recovered and re-keyed a second time.
+    final ok = await _prefs.setString(_key, jsonEncode(envelope));
+    if (!ok) {
+      _degraded = true;
+      throw const PosPersistenceException(
+        'the draft-recovery map could not be persisted',
+      );
+    }
   }
 }

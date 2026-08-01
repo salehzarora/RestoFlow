@@ -286,7 +286,12 @@ class PosRecentOrder {
   /// True when a receipt can actually be rebuilt: it needs the ORDER-TIME lines,
   /// which only a device-owned order has, plus a real payment. A discovered order
   /// has no lines — printing "a receipt" for it would be printing a forgery.
-  bool get canReprintReceipt => order != null && payment != null;
+  /// MONEY-LOCAL-ATOMICITY-003A: a receipt needs a SETTLEMENT, not merely a
+  /// payment object. The decoder already refuses to build a non-completed
+  /// persisted payment, and this gate states the same rule independently — the
+  /// eligibility must not depend on a construction detail one refactor away.
+  bool get canReprintReceipt =>
+      order != null && payment != null && payment!.status.isPaid;
 
   PosRecentOrder copyWith({
     CashPayment? payment,
@@ -377,10 +382,35 @@ class PosRecentOrder {
     final submittedAtRaw = json['submitted_at'];
     final orderRaw = json['order'];
 
+    // MONEY-LOCAL-ATOMICITY-003A — ABSENT and MALFORMED are different things.
+    //
+    // `PosOrderSnapshot.fromJson` is a strict all-or-nothing parse that returns
+    // null for BOTH, and this used to treat both as "no snapshot" and fall back
+    // to the older local money and status. So a corrupt authoritative snapshot
+    // silently showed a stale total as if it were current — the opposite of
+    // what an authoritative record is for.
+    //
+    // The key's ABSENCE stays legitimate: records written before
+    // POS-OPERATIONS-SYNC-001 carry no snapshot at all and are the cashier's
+    // real day's work. A key that is PRESENT but unreadable is corruption, and
+    // the containing record is refused so the existing quarantine seam keeps it
+    // instead of re-pricing the order from stale local data.
+    final PosOrderSnapshot? snapshotEarly;
+    if (!json.containsKey('snapshot')) {
+      snapshotEarly = null;
+    } else {
+      final parsed = PosOrderSnapshot.fromJson(json['snapshot']);
+      if (parsed == null) {
+        throw const FormatException(
+          'recent order: snapshot is present but unreadable',
+        );
+      }
+      snapshotEarly = parsed;
+    }
+
     // A record must be ONE of the two things it can be: something this device
     // submitted (an `order` view) or something the server told us about (a
     // `snapshot`). Neither is not an order.
-    final snapshotEarly = PosOrderSnapshot.fromJson(json['snapshot']);
     if (orderRaw is! Map && snapshotEarly == null) {
       throw const FormatException('recent order: neither order nor snapshot');
     }
@@ -410,15 +440,46 @@ class PosRecentOrder {
         ? _orderFromJson(orderRaw.cast<String, Object?>())
         : null;
 
+    // MONEY-CODEX-FINAL-CORRECTIONS-004 (F7). `payment` and `voided_at` were
+    // read as `raw is Map ? ... : null` / `raw is String ? ... : null`, so
+    // ABSENT and PRESENT-BUT-WRONG-TYPE were indistinguishable — and the
+    // wrong-type reading was always the MORE PERMISSIVE one:
+    //   * a settled order read as unpaid is payable again (double charge, and
+    //     a drawer count that never reconciles);
+    //   * a voided order read as live is payable, printable and re-sendable.
+    // Neither may be inferred from a value we could not read. The record goes
+    // to quarantine instead (002B), where it is preserved verbatim.
+    if (paymentRaw != null && paymentRaw is! Map) {
+      throw FormatException(
+        'recent order: payment must be an object when present, got '
+        '${paymentRaw.runtimeType}',
+      );
+    }
+    if (voidedAtRaw != null && voidedAtRaw is! String) {
+      throw FormatException(
+        'recent order: voided_at must be a string when present, got '
+        '${voidedAtRaw.runtimeType}',
+      );
+    }
+    final voidedAt = voidedAtRaw is String
+        ? DateTime.tryParse(voidedAtRaw)
+        : null;
+    if (voidedAtRaw is String && voidedAt == null) {
+      // A void marker that parses to nothing is the same silent resurrection.
+      throw FormatException('recent order: bad voided_at "$voidedAtRaw"');
+    }
+
     return PosRecentOrder(
       order: parsedOrder,
       submittedAt: submittedAt,
       payment: paymentRaw is Map
           ? _paymentFromJson(paymentRaw.cast<String, Object?>())
           : null,
-      voidedAt: voidedAtRaw is String ? DateTime.tryParse(voidedAtRaw) : null,
+      voidedAt: voidedAt,
       voidReason: _strOrNull(voidReasonRaw),
-      status: _strOrNull(json['status']),
+      // The record status gates Pay, Print bill and Void. A stringified int or
+      // list is not a status this build knows how to reason about.
+      status: _optionalString(json['status'], 'record', 'status'),
       snapshot: snapshot,
       syncState: syncState,
       // A record with no `order` view was never submitted here, so it can only be
@@ -482,27 +543,56 @@ SubmittedOrderView _orderFromJson(Map<String, Object?> j) {
   if (orderNumber is! String || currencyCode is! String) {
     throw const FormatException('recent order: bad order header');
   }
+  // MONEY-LOCAL-DECODE-INTEGRITY-002B: `lines` is written unconditionally. A
+  // non-list previously became an EMPTY order — every item silently gone while
+  // the totals stayed — and a non-object element was SKIPPED, yielding a
+  // shorter itemisation than the bill it accompanies. Both are refused, so the
+  // caller quarantines the raw record instead of showing a mismatched order.
   final linesRaw = j['lines'];
+  if (linesRaw is! List) {
+    throw FormatException(
+      'recent order: lines is not a list '
+      '(${linesRaw == null ? 'absent/null' : linesRaw.runtimeType})',
+    );
+  }
+  final lines = <SubmittedLineView>[];
+  for (var i = 0; i < linesRaw.length; i++) {
+    final l = linesRaw[i];
+    if (l is! Map) {
+      throw FormatException(
+        'recent order: line $i is not an object '
+        '(${l == null ? 'absent/null' : l.runtimeType})',
+      );
+    }
+    lines.add(_lineFromJson(l.cast<String, Object?>()));
+  }
   return SubmittedOrderView(
     orderNumber: orderNumber,
-    orderType: _orderTypeFromName(j['order_type']),
+    orderType: _requireOrderType(j, 'order_type'),
     currencyCode: currencyCode,
-    subtotalMinor: _int(j['subtotal_minor']),
-    discountTotalMinor: _int(j['discount_total_minor']),
-    taxTotalMinor: _int(j['tax_total_minor']),
-    taxRateBp: _int(j['tax_rate_bp']),
+    // MONEY-LOCAL-DECODE-INTEGRITY-002B: all four are written unconditionally,
+    // so absence is corruption, and a coerced 0 would understate the bill.
+    subtotalMinor: _requireMoney(j, 'subtotal_minor', 'order'),
+    discountTotalMinor: _requireMoney(j, 'discount_total_minor', 'order'),
+    taxTotalMinor: _requireMoney(j, 'tax_total_minor', 'order'),
+    taxRateBp: _requireMoney(j, 'tax_rate_bp', 'order'),
     tableLabel: _strOrNull(j['table_label']),
     customerName: _strOrNull(j['customer_name']),
     customerPhone: _strOrNull(j['customer_phone']),
-    orderId: _strOrNull(j['order_id']),
-    outboxEntryId: _strOrNull(j['outbox_entry_id']),
-    localOperationId: _strOrNull(j['local_operation_id']),
-    lines: linesRaw is List
-        ? [
-            for (final l in linesRaw)
-              if (l is Map) _lineFromJson(l.cast<String, Object?>()),
-          ]
-        : const <SubmittedLineView>[],
+    // F7: IDENTITY, not display text — these reach the D-022 idempotency key,
+    // the order-targeting lookups and the reprint path.
+    orderId: _optionalString(j['order_id'], 'order', 'order_id'),
+    outboxEntryId: _optionalString(
+      j['outbox_entry_id'],
+      'order',
+      'outbox_entry_id',
+    ),
+    localOperationId: _optionalString(
+      j['local_operation_id'],
+      'order',
+      'local_operation_id',
+    ),
+    lines: lines,
   );
 }
 
@@ -521,6 +611,14 @@ Map<String, Object?> _lineToJson(SubmittedLineView l) => <String, Object?>{
   if (l.itemDisplayOrder != 0)
     'item_display_order_snapshot': l.itemDisplayOrder,
   if (l.linePosition != 0) 'line_position': l.linePosition,
+  // PRINT-STARTUP-REPRINT-001: persist the ORDER-TIME kitchen count snapshots
+  // (ADDITIVE — only when set) so a MANUAL kitchen reprint after a relaunch
+  // still aggregates the same whole-order counts the automatic ticket printed.
+  // Older records simply lack the keys and decode to empty (see _lineFromJson).
+  if (l.kitchenMeats.isNotEmpty)
+    'kitchen_meat_snapshots': [for (final m in l.kitchenMeats) m.toJson()],
+  if (l.prepComponents.isNotEmpty)
+    'prep_snapshot': [for (final c in l.prepComponents) c.toJson()],
 };
 
 SubmittedLineView _lineFromJson(Map<String, Object?> j) {
@@ -529,22 +627,66 @@ SubmittedLineView _lineFromJson(Map<String, Object?> j) {
   if (name is! String || currencyCode is! String) {
     throw const FormatException('recent order: bad line');
   }
+  // MONEY-LOCAL-DECODE-INTEGRITY-002B: `modifiers` is written unconditionally,
+  // so a non-list is corruption; reinterpreting it as empty would hide the
+  // paid options this line was actually charged for.
   final modsRaw = j['modifiers'];
+  if (modsRaw is! List) {
+    throw FormatException(
+      'recent order: line modifiers is not a list '
+      '(${modsRaw == null ? 'absent/null' : modsRaw.runtimeType})',
+    );
+  }
+  final quantity = _requireInt(j, 'quantity', 'line');
+  if (quantity < 1) {
+    throw FormatException(
+      'recent order: line quantity must be >= 1, got '
+      '$quantity',
+    );
+  }
   return SubmittedLineView(
     name: name,
-    quantity: _int(j['quantity']),
-    lineTotalMinor: _int(j['line_total_minor']),
+    quantity: quantity,
+    lineTotalMinor: _requireMoney(j, 'line_total_minor', 'line'),
     currencyCode: currencyCode,
-    modifiers: modsRaw is List
-        ? [for (final m in modsRaw) '$m']
-        : const <String>[],
+    modifiers: <String>[
+      for (final m in modsRaw)
+        if (m is String)
+          m
+        else
+          throw FormatException(
+            'recent order: line modifier is not a string (${m.runtimeType})',
+          ),
+    ],
     note: _strOrNull(j['note']),
-    // MENU-ORDER-001: tolerant read of the persisted menu-order snapshots (older
-    // records lack them -> 0 -> keep stored order).
-    categoryDisplayOrder: _int(j['category_display_order_snapshot']),
-    itemDisplayOrder: _int(j['item_display_order_snapshot']),
-    linePosition: _int(j['line_position']),
+    // MENU-ORDER-001: the menu-order snapshots are ADDITIVE — older records
+    // lack them and keep their stored order (0). Present but unreadable is
+    // corruption, so the tolerance is now absence only.
+    categoryDisplayOrder: _optionalInt(
+      j,
+      'category_display_order_snapshot',
+      'line',
+    ),
+    itemDisplayOrder: _optionalInt(j, 'item_display_order_snapshot', 'line'),
+    linePosition: _optionalInt(j, 'line_position', 'line'),
+    // PRINT-STARTUP-REPRINT-001: tolerant read of the kitchen count snapshots.
+    // A record written before this change lacks the keys and decodes to EMPTY —
+    // the reprint then honestly omits the count section instead of guessing
+    // quantities out of the stored `name ×N` display strings, and nothing is
+    // ever re-read from the current menu.
+    kitchenMeats: _kitchenMeats(j['kitchen_meat_snapshots']),
+    prepComponents: parseKitchenPrepComponents(j['prep_snapshot']),
   );
+}
+
+List<KitchenMeat> _kitchenMeats(Object? raw) {
+  if (raw is! List) return const <KitchenMeat>[];
+  final out = <KitchenMeat>[];
+  for (final element in raw) {
+    final meat = KitchenMeat.tryFromJson(element);
+    if (meat != null) out.add(meat);
+  }
+  return out;
 }
 
 // --- CashPayment serialization ----------------------------------------------
@@ -582,46 +724,192 @@ Map<String, Object?> _paymentToJson(CashPayment p) => <String, Object?>{
 /// between two orders that share one is precisely the misfiling this correction exists
 /// to end.
 CashPayment _paymentFromJson(Map<String, Object?> j) {
-  final paidAt = DateTime.tryParse('${j['paid_at']}');
+  // MONEY-LOCAL-ATOMICITY-003A — `paid_at` must be an EXACT String.
+  //
+  // This used to read `DateTime.tryParse('${j['paid_at']}')`. Interpolation
+  // turned the integer 20260805 into "20260805", which is a valid compact-ISO
+  // date — so a corrupt numeric field became a real settlement timestamp. The
+  // timestamp is never invented here either: an absent or unreadable value
+  // refuses the record.
+  final rawPaidAt = j['paid_at'];
+  if (rawPaidAt is! String) {
+    throw FormatException(
+      'recent order: payment paid_at is not a string '
+      '(${rawPaidAt == null ? 'absent/null' : rawPaidAt.runtimeType})',
+    );
+  }
+  final paidAt = DateTime.tryParse(rawPaidAt);
   if (paidAt == null) {
     throw const FormatException('recent order: bad payment paid_at');
   }
+  // MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 3). An UNKNOWN method
+  // used to fall back to cash and an UNKNOWN status to `completed`, so a
+  // record we could not read presented itself as a settled cash payment —
+  // with a reprintable receipt — for an order that may never have been paid.
+  // Both are written unconditionally, so neither fallback was ever legacy
+  // tolerance; it was a fabricated settlement.
+  final method = PaymentMethod.fromWire(j['method']);
+  if (method == null) {
+    throw FormatException(
+      'recent order: payment method is not a known method (${j['method']})',
+    );
+  }
+  final status = _statusFromWire(j['status']);
+  if (status == null) {
+    throw FormatException(
+      'recent order: payment status is not a known status (${j['status']})',
+    );
+  }
+  // MONEY-LOCAL-ATOMICITY-003A — a PERSISTED local payment records a
+  // SETTLEMENT, and only `completed` is one.
+  //
+  // 002B stopped an UNKNOWN status becoming `completed`, but a KNOWN
+  // non-terminal one still decoded into a payment object — and every receipt
+  // gate downstream asked only whether a payment existed. So a `pending`,
+  // `tendered`, `voided` or `failed` marker presented itself as settled and
+  // offered a reprintable receipt for money that was never taken.
+  //
+  // Refusing the record is the right outcome rather than "keep it unpaid":
+  // this device only ever writes a payment here on a CONFIRMED settlement, so a
+  // non-completed value is corruption. The quarantine seam keeps the raw record
+  // and the order stays visible and payable from its own (valid) order money —
+  // a later real payment attaches normally.
+  if (!status.isPaid) {
+    throw FormatException(
+      'recent order: a persisted payment must be a settlement, got '
+      '"${status.wire}"',
+    );
+  }
   return CashPayment(
-    paymentId: '${j['payment_id'] ?? ''}',
-    orderId: _strOrNull(j['order_id']),
-    orderNumber: '${j['order_number'] ?? ''}',
-    deviceId: '${j['device_id'] ?? ''}',
-    localOperationId: '${j['local_operation_id'] ?? ''}',
-    method: PaymentMethod.fromWire(j['method']) ?? PaymentMethod.cash,
-    status: _statusFromWire(j['status']),
-    amountMinor: _int(j['amount_minor']),
-    tenderedMinor: _int(j['tendered_minor']),
-    changeMinor: _int(j['change_minor']),
-    currencyCode: '${j['currency_code'] ?? ''}',
-    receiptNumber: '${j['receipt_number'] ?? ''}',
+    paymentId: _requireString(j, 'payment_id', 'payment'),
+    orderId: _optionalString(j['order_id'], 'payment', 'order_id'),
+    orderNumber: _requireString(j, 'order_number', 'payment'),
+    // The D-022 idempotency key halves. Written unconditionally; a coerced
+    // '7' or 'null' would silently re-key the operation.
+    deviceId: _requireString(j, 'device_id', 'payment', allowBlank: true),
+    localOperationId: _requireString(
+      j,
+      'local_operation_id',
+      'payment',
+      allowBlank: true,
+    ),
+    method: method,
+    status: status,
+    amountMinor: _requireMoney(j, 'amount_minor', 'payment'),
+    tenderedMinor: _requireMoney(j, 'tendered_minor', 'payment'),
+    changeMinor: _requireMoney(j, 'change_minor', 'payment'),
+    currencyCode: _requireString(j, 'currency_code', 'payment'),
+    // A payment may legitimately hold no receipt number yet (offline, before
+    // the branch sequence assigns one), so blank is allowed — but a non-string
+    // is still corruption.
+    receiptNumber: _requireString(
+      j,
+      'receipt_number',
+      'payment',
+      allowBlank: true,
+    ),
     paidAt: paidAt,
-    orderStatus: _strOrNull(j['order_status']),
+    orderStatus: _optionalString(j['order_status'], 'payment', 'order_status'),
   );
 }
 
-OrderType _orderTypeFromName(Object? name) {
+/// MONEY-LOCAL-ATOMICITY-003A — fail closed on an UNKNOWN order type.
+///
+/// This used to map anything unrecognised to takeaway, so a corrupt or foreign
+/// token silently changed a dine-in order's operational meaning. Absence keeps
+/// its documented legacy default (records written before the key existed); a
+/// PRESENT value must be an exact known token, and anything else refuses the
+/// record like the money fields around it.
+OrderType _requireOrderType(Map<String, Object?> j, String key) {
+  // Absence is history. An explicit null is a PRESENT wrong type, and is
+  // corruption — the same containsKey distinction the money decoders use.
+  if (!j.containsKey(key)) return OrderType.takeaway;
+  final raw = j[key];
   for (final t in OrderType.values) {
-    if (t.name == name) return t;
+    if (t.name == raw) return t;
   }
-  return OrderType.takeaway;
+  throw FormatException(
+    'recent order: order_type is not a known type ('
+    '${raw is String ? '"$raw"' : raw.runtimeType})',
+  );
 }
 
-PaymentStatus _statusFromWire(Object? wire) {
+/// MONEY-LOCAL-DECODE-INTEGRITY-002B: null on an unknown wire value. The
+/// caller refuses the record rather than assuming it was `completed`.
+PaymentStatus? _statusFromWire(Object? wire) {
   for (final s in PaymentStatus.values) {
     if (s.wire == wire) return s;
   }
-  return PaymentStatus.completed;
+  return null;
 }
 
-int _int(Object? v) => v is int ? v : int.tryParse('$v') ?? 0;
+/// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 3) — money is read
+/// EXACTLY. The old `_int` coerced through `int.tryParse('$v') ?? 0`, so a
+/// corrupt or foreign total read as 0: an order that had been paid in full
+/// could re-present itself as free, and the cashier would have no way to tell.
+/// A value we cannot read is not a zero — it is a record we must refuse.
+int _requireInt(Map<String, Object?> j, String key, String what) {
+  final raw = j[key];
+  if (raw is int) return raw;
+  throw FormatException(
+    'recent order: $what $key is not an integer '
+    '(${raw == null ? 'absent/null' : raw.runtimeType})',
+  );
+}
+
+/// A money field that must be exact AND non-negative.
+int _requireMoney(Map<String, Object?> j, String key, String what) {
+  final v = _requireInt(j, key, what);
+  if (v < 0) {
+    throw FormatException('recent order: $what $key must be >= 0, got $v');
+  }
+  return v;
+}
+
+/// An ADDITIVE snapshot written only when non-zero: absent is legitimate
+/// history, present-but-unreadable is corruption.
+int _optionalInt(Map<String, Object?> j, String key, String what) {
+  if (!j.containsKey(key) || j[key] == null) return 0;
+  return _requireInt(j, key, what);
+}
+
+String _requireString(
+  Map<String, Object?> j,
+  String key,
+  String what, {
+  bool allowBlank = false,
+}) {
+  final raw = j[key];
+  if (raw is String && (allowBlank || raw.trim().isNotEmpty)) return raw;
+  throw FormatException(
+    'recent order: $what $key is not a '
+    '${allowBlank ? '' : 'non-blank '}string '
+    '(${raw == null ? 'absent/null' : raw.runtimeType})',
+  );
+}
 
 String? _strOrNull(Object? v) {
   if (v == null) return null;
   final s = '$v';
+  return s.isEmpty ? null : s;
+}
+
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F7) — an optional field that IS present
+/// must be its own type.
+///
+/// [_strOrNull] stringifies anything, so `42` decoded as `'42'` and a list
+/// decoded as its `toString()`. That is fine for display text a human typed
+/// (a table label reads badly and nothing else happens) and unacceptable for
+/// an IDENTITY, which flows into the D-022 idempotency key, order targeting
+/// and reprint lookups. A fabricated identity is worse than no record.
+String? _optionalString(Object? v, String what, String key) {
+  if (v == null) return null;
+  if (v is! String) {
+    throw FormatException(
+      'recent order: $what $key must be a string when present, '
+      'got ${v.runtimeType}',
+    );
+  }
+  final s = v.trim();
   return s.isEmpty ? null : s;
 }

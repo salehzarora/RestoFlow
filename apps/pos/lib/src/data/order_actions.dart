@@ -158,6 +158,16 @@ PosOrderActions resolveOrderActions(
   // offering a control that cannot work. Collecting a shortfall needs split payment,
   // which is explicitly out of scope; the order stays visibly Unpaid, which is the
   // honest state, rather than being hidden behind a button that fails.
+  // MONEY-DURABLE-ADDITIONS-003C: an UNRESOLVED items-add withdraws every money
+  // action on that order. The total on screen predates the amendment — the
+  // server has either already applied it or may still be about to — so acting
+  // on that number charges, discounts or voids the wrong amount. This is not a
+  // race we can win by being quick: for payment it is unrecoverable, because
+  // `payments_one_completed_per_order_uidx` permits exactly ONE completed
+  // payment per order, so a payment taken against the pre-addition total cannot
+  // be topped up afterwards. It withdraws actions on THIS order only.
+  final amending = pending == PosPendingKind.itemsAdd;
+
   final canPay =
       !terminal &&
       settlement == PosSettlement.unpaid && // excludes paid AND notChargeable
@@ -165,6 +175,7 @@ PosOrderActions resolveOrderActions(
           0 && //                          a non-positive total is never payable
       !alreadyCharged &&
       !refusedAsNonChargeable &&
+      !amending && //                      the total predates the amendment
       pending != PosPendingKind.payment && // no second concurrent payment
       pending != PosPendingKind.cancellation;
 
@@ -178,6 +189,7 @@ PosOrderActions resolveOrderActions(
       !terminal &&
       !frozenByPayment &&
       mayDiscount &&
+      !amending && // the base the discount applies to is still moving (003C)
       pending != PosPendingKind.discount &&
       pending != PosPendingKind.cancellation;
 
@@ -192,6 +204,7 @@ PosOrderActions resolveOrderActions(
   final canVoid =
       !terminal &&
       !frozenByPayment &&
+      !amending && // voiding an order mid-amendment races the round (003C)
       pending != PosPendingKind.cancellation &&
       pending != PosPendingKind.payment;
 
@@ -204,12 +217,18 @@ PosOrderActions resolveOrderActions(
       !terminal && order.orderType == OrderType.dineIn && pending == null;
 
   // ADD ITEMS (PSC-001C). New work joins the SAME bill as a service round —
-  // dine-in only (locked; takeaway is out of scope), never on a terminal
-  // order, FROZEN once the order has been charged (the same freeze that
-  // guards discounts: a charged bill's total must keep matching its numbered
-  // receipt), and withheld while THIS device has any operation in flight for
-  // the order (a stale expected state helps nobody). A comped-to-zero UNPAID
-  // order stays eligible — the addition simply makes it chargeable again.
+  // never on a terminal order, FROZEN once the order has been charged (the same
+  // freeze that guards discounts: a charged bill's total must keep matching its
+  // numbered receipt), and withheld while THIS device has any operation in
+  // flight for the order (a stale expected state helps nobody). A comped-to-zero
+  // UNPAID order stays eligible — the addition simply makes it chargeable again.
+  //
+  // DEFERRED-ORDER-AMENDMENTS-001: TAKEAWAY is now eligible too, matching the
+  // widened server gate (`app.add_order_items` accepts dine_in AND takeaway). A
+  // takeaway customer who orders more while still waiting is the same operation
+  // as a dine-in table asking for another round; refusing it forced a second,
+  // separately-paid order for one visit. NO table is required — a takeaway order
+  // has none, and the server does not ask for one.
   //
   // "Charged" here spans BOTH channels: this device's own payment MARKER and
   // the SERVER's settlement verdict — a branch-DISCOVERED paid order has no
@@ -219,7 +238,8 @@ PosOrderActions resolveOrderActions(
   final chargedPerServer = alreadyCharged || settlement == PosSettlement.paid;
   final canAddItems =
       !terminal &&
-      order.orderType == OrderType.dineIn &&
+      (order.orderType == OrderType.dineIn ||
+          order.orderType == OrderType.takeaway) &&
       !chargedPerServer &&
       pending == null;
 

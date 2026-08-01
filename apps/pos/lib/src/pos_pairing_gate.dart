@@ -63,6 +63,16 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
   void initState() {
     super.initState();
     _device = widget.initialDevice;
+    // PRINT-STARTUP-REPRINT-001: a device-context publish is now PENDING (this
+    // frame for an injected device, or after the async restore). Device-scoped
+    // preference providers must WAIT for it rather than resolve a transient
+    // null to the legacy `local` namespace — see [posPrinterScopeProvider].
+    // Marked synchronously here, before any POS subtree can build.
+    // Marked WITHOUT touching a provider: writes are illegal while the tree is
+    // building (see _publish), and this must land before the POS subtree builds.
+    if (_device != null || widget.repository is DeviceSessionManager) {
+      markPosDeviceRestorePending();
+    }
     if (_device != null) _publish(_device);
     // Real mode: re-derive a previously-paired session from secure storage.
     if (widget.repository case final DeviceSessionManager manager
@@ -70,6 +80,14 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
       _restoring = true;
       _restore(manager);
     }
+  }
+
+  @override
+  void dispose() {
+    // A gate torn down before it ever published must not leave a pending mark
+    // behind for the next composition to wait on.
+    clearPosDeviceRestorePendingMark();
+    super.dispose();
   }
 
   /// Mirrors the gate's device into [posDeviceContextProvider] (device

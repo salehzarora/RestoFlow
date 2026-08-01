@@ -21,7 +21,8 @@
 --     idempotent completion, permanent possibly_printed hold, order state
 --     untouched);
 --   * transition-readiness inspection (typed blockers + safe counts only);
---   * dormancy: no setter, kds byte-identical, all branches default kds.
+--   * dormancy: 001C1 adds no setter (the approved 008 owner setter is the
+--     only one), kds byte-identical, all branches default kds.
 -- Session pinned to UTC; hex-only UUIDs; GUC/token conventions per house style.
 -- ============================================================================
 begin;
@@ -42,7 +43,7 @@ insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-0001c1000a1a', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', 'Branch K (kds)'),
   ('00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', 'Branch P (printer-only)'),
   ('00000000-0000-0000-0000-0001c1000b1a', '00000000-0000-0000-0000-0001c1000b00', '00000000-0000-0000-0000-0001c1000b10', 'Branch B (printer-only)');
--- privileged fixture flips (the ONLY write path; no setter exists).
+-- privileged fixture flips (the ONLY write path used by this suite).
 update branches set kitchen_workflow_mode = 'printer_only'
   where id in ('00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000b1a');
 -- KITCHEN-MODE-001C3B1A: readiness now requires a stable valid kitchen 80mm
@@ -678,12 +679,21 @@ select throws_ok(
 reset role;
 
 -- ===== J. dormancy + security ===============================================
-select is(
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008, which
+-- ships the approved guarded owner setter this phase deliberately deferred.
+-- The guard is KEPT and TIGHTENED rather than dropped: EXACTLY the approved
+-- app+public pair may exist, so any unreviewed additional setter/writer still
+-- fails this suite.
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
       and p.prosrc ~* 'update\s+(public\.)?branches\y'
-      and p.prosrc ilike '%kitchen_workflow_mode%'),
-  0, 'STILL no function updates branches.kitchen_workflow_mode (001C1 added no setter, no activation path)');    -- 76
+      and p.prosrc ilike '%kitchen_workflow_mode%') = 1
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode'
+                 and p.prosrc ~* 'update\s+(public\.)?branches\y'
+                 and p.prosrc ilike '%kitchen_workflow_mode%'),
+  'ONLY app.set_kitchen_workflow_mode updates branches.kitchen_workflow_mode (001C1 still adds none)');          -- 76
 select ok(
   not has_function_privilege('authenticated', 'app.create_kitchen_dispatch(uuid,uuid,uuid,uuid,uuid,text,jsonb,uuid,uuid,uuid)', 'execute')
   and not has_function_privilege('authenticated', 'app.kitchen_dispatch_payload_initial(uuid,uuid)', 'execute')

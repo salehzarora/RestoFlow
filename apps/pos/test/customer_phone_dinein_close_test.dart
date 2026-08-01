@@ -163,7 +163,11 @@ void main() {
       'PosDraftRecovery JSON round-trips the phone; legacy decodes null',
       () {
         final rec = PosDraftRecovery(
-          draft: CartDraftSnapshot.fromJson(const {}),
+          // MONEY-LOCAL-DECODE-INTEGRITY-002B: an EMPTY draft is now spelled
+          // out. `{}` used to decode as one only because a missing `lines` key
+          // was reinterpreted as an empty cart — the fail-open this phase
+          // removes. The subject of this test is the phone round-trip.
+          draft: CartDraftSnapshot.fromJson(const {'lines': <Object?>[]}),
           orderType: OrderType.takeaway,
           outboxEntryId: 'e1',
           binding: const PosRecoveryBinding(

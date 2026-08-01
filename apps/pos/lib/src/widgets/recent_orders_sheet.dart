@@ -13,39 +13,30 @@ import '../data/kitchen_mode_readiness.dart'
 import '../data/order_actions.dart';
 import '../data/order_center_view.dart';
 import '../data/order_close_policy.dart';
-import '../data/order_detail_repository.dart';
 import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
 import '../data/kitchen_finish_repository.dart' show kActiveKitchenStatuses;
 import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
-import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
-import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
-import '../state/pos_order_complete_controller.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
-import '../state/addition_controller.dart';
-import '../state/cart_controller.dart' show cartControllerProvider;
 import '../state/discount_controller.dart';
 import '../state/kitchen_finish_controller.dart';
-import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
-import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/pos_auto_print_prefs.dart'
     show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
-import '../state/submitted_order_view.dart' show SubmittedOrderView;
+import '../state/addition_controller.dart';
+import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
+import '../state/order_setup_controller.dart' show tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
-import '../state/receipt_print_controller.dart';
+import '../state/pos_order_complete_controller.dart';
 import '../state/recent_orders_controller.dart';
-import 'cancel_order_sheet.dart';
-import 'cash_payment_sheet.dart';
-import 'discount_sheet.dart';
-import 'move_table_sheet.dart';
+import 'order_action_row.dart';
+import 'order_detail_preview.dart';
 import 'order_status_pills.dart';
-import 'receipt_print_preview.dart';
 import 'recovery_coordinator.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001: an app-bar button that opens the operational orders
@@ -223,10 +214,36 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     // controls, exactly like any other pending local operation. Keyed by the
     // server order id — an addition only ever targets a real server order.
     final addition = ref.watch(additionControllerProvider);
-    final additionTarget = addition.target;
-    if (additionTarget != null &&
-        (addition.sending || addition.failed || addition.awaitingRefresh)) {
-      pendingByIdentity[additionTarget.orderId] = PosPendingKind.itemsAdd;
+    final additionNotifier = ref.read(additionControllerProvider.notifier);
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F1/F4). Every order with a live durable
+    // amendment record, not just the one that happens to be the ACTIVE attempt,
+    // and every order at all while the journal is still being read.
+    //
+    // KEYED THROUGH `identity.key`, WHICH IS THE BUG THIS ALSO FIXES. The map is
+    // keyed by `PosOrderIdentity.key` — `srv:<uuid>` for a server order — while
+    // the PSC-001C line here wrote the RAW `additionTarget.orderId`. Those never
+    // matched, so the addition has in fact NEVER withdrawn an order's money
+    // actions in this sheet. The lookup below resolves each blocked order id to
+    // the row that actually carries it.
+    //
+    // (F1) Before hydration finishes we do not know WHICH orders are affected,
+    // so no money action may be offered on any of them. It is a disk read, and
+    // the alternative is taking a payment against an order whose total is about
+    // to change. Rows, search and the read-only receipt view are untouched.
+    final hydrating = additionNotifier.isStartupBlocked;
+    final blockedOrderIds = <String>{
+      ...additionNotifier.blockedOrderIds,
+      if (addition.target case final t?)
+        if (addition.sending || addition.failed || addition.awaitingRefresh)
+          t.orderId,
+    };
+    if (hydrating || blockedOrderIds.isNotEmpty) {
+      for (final o in orders) {
+        final id = o.orderId;
+        if (hydrating || (id != null && blockedOrderIds.contains(id))) {
+          pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
+        }
+      }
     }
 
     final counts = sectionCounts(orders);
@@ -542,14 +559,77 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // (2) Under the controller's running guard: refresh the authoritative window,
     //     then derive the FRESH eligible list (active kitchen statuses only). If
     //     nothing is eligible any more, the batch sends nothing (zero/zero).
-    List<KitchenFinishTarget> deriveActive() => [
-      for (final o in container.read(posRecentOrdersControllerProvider))
-        if (o.orderId != null &&
-            !o.isTerminal &&
-            o.serverStatus != null &&
-            kActiveKitchenStatuses.contains(o.serverStatus))
-          (orderId: o.orderId!, fromStatus: o.serverStatus!),
-    ];
+    // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007. Two eligible kinds:
+    //
+    //  * ACTIVE on the kitchen board (submitted/accepted/preparing/ready) —
+    //    advanced to `served`, unchanged behaviour;
+    //  * ALREADY `served` AND fully settled — completed explicitly. On a
+    //    printer_only branch an order that received Add-items can never
+    //    auto-complete (`app.try_auto_complete_order` requires
+    //    `app.order_rounds_all_served`, and no KDS exists to serve the new
+    //    round), so it strands at `served` with the money already taken. It was
+    //    excluded here as "already off the kitchen board" — which is true of the
+    //    kitchen, and false of the ACTIVE ORDERS LIST the operator is looking at.
+    //
+    // An order with an UNRESOLVED Add-items attempt on this device is excluded:
+    // its amendment has no server verdict yet, so its total may still change and
+    // closing it would be a claim we cannot support.
+    // The exclusion set matches the SIBLING money gate in this same file, not
+    // just `blockedOrderIds`: while the journal is being read — and durably,
+    // after an unreadable one — `blockedOrderIds` is EMPTY precisely because the
+    // device does not yet know which orders carry an unresolved amendment.
+    //
+    // The `served -> completed` branch is a CLOSE, so it goes through the ONE
+    // close policy the per-row Complete button uses. This button's visibility
+    // keys on a per-device PRINTING preference, which is not the branch's
+    // kitchen workflow mode; without the policy a KDS-workflow branch would
+    // start completing orders the POS must never complete, and would collect a
+    // permanent "N failed" for the rest. Advancing a board order to `served` is
+    // unchanged — that is not a close.
+    List<KitchenFinishTarget> deriveActive() {
+      final additionNotifier = container.read(
+        additionControllerProvider.notifier,
+      );
+      final addition = container.read(additionControllerProvider);
+      final startupBlocked = additionNotifier.isStartupBlocked;
+      final blockedByAddition = <String>{
+        ...additionNotifier.blockedOrderIds,
+        if (addition.target case final t?)
+          if (addition.sending || addition.failed || addition.awaitingRefresh)
+            t.orderId,
+      };
+      final verifiedMode = container.read(posVerifiedKitchenModeProvider);
+      final completingIds = container.read(posOrderCompleteControllerProvider);
+      final actorAuthorized =
+          container
+              .read(staffCapabilitiesProvider)
+              .valueOrNull
+              ?.canFinishKitchenOrders ??
+          false;
+      return [
+        for (final o in container.read(posRecentOrdersControllerProvider))
+          if (o.orderId != null &&
+              !o.isTerminal &&
+              o.serverStatus != null &&
+              !blockedByAddition.contains(o.orderId))
+            if (kActiveKitchenStatuses.contains(o.serverStatus))
+              (
+                orderId: o.orderId!,
+                fromStatus: o.serverStatus!,
+                settled: o.settlement != PosSettlement.unpaid,
+              )
+            else if (!startupBlocked &&
+                posOrderCloseEligibility(
+                      status: o.serverStatus!,
+                      settled: o.settlement != PosSettlement.unpaid,
+                      verifiedMode: verifiedMode,
+                      actorAuthorized: actorAuthorized,
+                      transitionInFlight: completingIds.contains(o.orderId),
+                    ) ==
+                    PosOrderCloseEligibility.allowed)
+              (orderId: o.orderId!, fromStatus: 'served', settled: true),
+      ];
+    }
 
     final summary = await ref
         .read(kitchenFinishControllerProvider.notifier)
@@ -573,6 +653,22 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // (3) A final authoritative refresh, then an honest result message. An empty
     //     post-confirmation set reports the same "no active orders" outcome.
     await sync.refreshWindow();
+    // PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008. Table occupancy is
+    // DERIVED, never stored: `pos_tables.active_order_count` counts live dine-in
+    // orders in (submitted..served). So the SERVER releases the table the moment
+    // the order leaves that set - there is no table write to make, and making
+    // one locally would be exactly the UI-only release this must not do.
+    //
+    // What was missing is the re-read. `tablesProvider` is the one floor source
+    // (picker, floor view, table-operations sheet); nothing invalidated it after
+    // a batch, so a MOUNTED floor view kept showing the table as occupied while
+    // the release was already committed.
+    //
+    // Only when something actually finished, and never on a refusal: a failed
+    // order is still active and its table is still genuinely occupied. An
+    // advance to `served` counts too - a paid order auto-completes on reaching
+    // served, which frees its table just as a direct completion does.
+    if (summary.finished > 0) container.invalidate(tablesProvider);
     final String message;
     if (summary.total == 0) {
       message = l10n.posFinishAllNoActiveOrders;
@@ -888,121 +984,143 @@ class _OrderCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            order.orderNumber,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+          // ORDER-DETAIL-PREVIEW-001: the INFORMATIONAL body opens the
+          // read-only detail preview. The action row deliberately sits OUTSIDE
+          // this InkWell, so an action press can never also fire the row tap —
+          // that is structural, not a reliance on event absorption.
+          Semantics(
+            button: true,
+            child: InkWell(
+              key: Key('recent-order-preview-${order.orderNumber}'),
+              onTap: () => OrderDetailPreview.show(
+                context,
+                order: order,
+                // The SAME central policy result the row already resolved: the
+                // preview never recomputes eligibility.
+                actions: actions,
+              ),
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    order.orderNumber,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: RestoflowSpacing.sm),
+                                Text(
+                                  _hhmm(order.sortAt),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            if (meta.isNotEmpty) ...[
+                              const SizedBox(height: RestoflowSpacing.xs),
+                              Text(
+                                meta,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: RestoflowSpacing.sm),
-                        Text(
-                          _hhmm(order.sortAt),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (meta.isNotEmpty) ...[
-                      const SizedBox(height: RestoflowSpacing.xs),
+                      ),
+                      const SizedBox(width: RestoflowSpacing.sm),
                       Text(
-                        meta,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        // AUTHORITATIVE money. This is the "stale 40" fix, at the pixel.
+                        MoneyFormatter.formatMinor(
+                          order.grandTotalMinor,
+                          order.currencyCode,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  Wrap(
+                    spacing: RestoflowSpacing.xs,
+                    runSpacing: RestoflowSpacing.xs,
+                    children: [
+                      // A3: a PERMANENTLY-REJECTED submit created no server order. It shows ONE
+                      // honest "Not created" marker instead of a lifecycle/settlement that would
+                      // imply a real order — and it carries no actions (the policy fails closed).
+                      if (order.isNeverCreated)
+                        RestoflowStatusPill(
+                          key: Key('recent-not-created-${order.orderNumber}'),
+                          label: l10n.posRecentOrderNotCreated,
+                          tone: RestoflowTone.danger,
+                          icon: Icons.error_outline,
+                        )
+                      else
+                        // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
+                        // surfaces speak (see order_status_pills.dart). The confirmation screen
+                        // renders exactly these.
+                        OrderStatusPills(
+                          serverStatus: serverStatus,
+                          settlement: order.settlement,
+                          keySuffix: order.orderNumber,
+                          // A takeaway's `served` reads "Picked up" - same state machine,
+                          // honest operational words (RESTAURANT-OPERATIONS-V1-001).
+                          orderType: order.orderType,
+                        ),
+                      // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
+                      // "My payment is syncing" is a fact about this till, not the order.
+                      if (actions.pendingKind case final p?)
+                        RestoflowStatusPill(
+                          key: Key('order-pending-${order.orderNumber}'),
+                          label: _pendingLabel(l10n, p),
+                          tone: RestoflowTone.info,
+                          icon: Icons.sync,
+                        ),
+                      if (outboxState != null && outboxState!.isFailed)
+                        RestoflowStatusPill(
+                          label: l10n.posRecentSyncFailed,
+                          tone: RestoflowTone.danger,
+                          icon: Icons.sync_problem,
+                        ),
+                    ],
+                  ),
+                  // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
+                  // still active but owes nothing, the missing Take-payment button needs an
+                  // explanation — otherwise the cashier just sees a button that "should be
+                  // there" and does not know why it is not.
+                  if (!order.isTerminal &&
+                      order.settlement == PosSettlement.notChargeable &&
+                      order.payment == null) ...[
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Text(
+                      key: Key('recent-nocharge-note-${order.orderNumber}'),
+                      l10n.posNoChargeNoPayment,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
-                ),
-              ),
-              const SizedBox(width: RestoflowSpacing.sm),
-              Text(
-                // AUTHORITATIVE money. This is the "stale 40" fix, at the pixel.
-                MoneyFormatter.formatMinor(
-                  order.grandTotalMinor,
-                  order.currencyCode,
-                ),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: RestoflowSpacing.sm),
-          Wrap(
-            spacing: RestoflowSpacing.xs,
-            runSpacing: RestoflowSpacing.xs,
-            children: [
-              // A3: a PERMANENTLY-REJECTED submit created no server order. It shows ONE
-              // honest "Not created" marker instead of a lifecycle/settlement that would
-              // imply a real order — and it carries no actions (the policy fails closed).
-              if (order.isNeverCreated)
-                RestoflowStatusPill(
-                  key: Key('recent-not-created-${order.orderNumber}'),
-                  label: l10n.posRecentOrderNotCreated,
-                  tone: RestoflowTone.danger,
-                  icon: Icons.error_outline,
-                )
-              else
-                // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
-                // surfaces speak (see order_status_pills.dart). The confirmation screen
-                // renders exactly these.
-                OrderStatusPills(
-                  serverStatus: serverStatus,
-                  settlement: order.settlement,
-                  keySuffix: order.orderNumber,
-                  // A takeaway's `served` reads "Picked up" - same state machine,
-                  // honest operational words (RESTAURANT-OPERATIONS-V1-001).
-                  orderType: order.orderType,
-                ),
-              // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
-              // "My payment is syncing" is a fact about this till, not the order.
-              if (actions.pendingKind case final p?)
-                RestoflowStatusPill(
-                  key: Key('order-pending-${order.orderNumber}'),
-                  label: _pendingLabel(l10n, p),
-                  tone: RestoflowTone.info,
-                  icon: Icons.sync,
-                ),
-              if (outboxState != null && outboxState!.isFailed)
-                RestoflowStatusPill(
-                  label: l10n.posRecentSyncFailed,
-                  tone: RestoflowTone.danger,
-                  icon: Icons.sync_problem,
-                ),
-            ],
-          ),
-          // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
-          // still active but owes nothing, the missing Take-payment button needs an
-          // explanation — otherwise the cashier just sees a button that "should be
-          // there" and does not know why it is not.
-          if (!order.isTerminal &&
-              order.settlement == PosSettlement.notChargeable &&
-              order.payment == null) ...[
-            const SizedBox(height: RestoflowSpacing.sm),
-            Text(
-              key: Key('recent-nocharge-note-${order.orderNumber}'),
-              l10n.posNoChargeNoPayment,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                ],
               ),
             ),
-          ],
+          ),
           // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): a permanently-rejected shell
           // exposes its recovery actions (Edit / Restore + Discard) HERE — never
           // payment / discount / void / receipt (the central policy already returns
@@ -1013,7 +1131,7 @@ class _OrderCard extends ConsumerWidget {
             _RejectedRecoveryActions(order: order, l10n: l10n),
           ] else if (!actions.isEmpty) ...[
             const SizedBox(height: RestoflowSpacing.sm),
-            _ActionRow(order: order, l10n: l10n, actions: actions),
+            OrderActionRow(order: order, l10n: l10n, actions: actions),
           ],
         ],
       ),
@@ -1065,7 +1183,7 @@ class _RejectedRecoveryActions extends ConsumerWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         if (recovery != null)
-          _ActionButton(
+          OrderActionButton(
             child: FilledButton.icon(
               key: Key('recent-restore-${order.orderNumber}'),
               onPressed: cartLocked
@@ -1095,7 +1213,7 @@ class _RejectedRecoveryActions extends ConsumerWidget {
         // so its owner can still recover their rejected draft. The coordinator ALSO fails
         // closed if asked to orphan-dismiss a shell that still has any recovery.
         if (!otherSession)
-          _ActionButton(
+          OrderActionButton(
             child: OutlinedButton.icon(
               key: Key('recent-discard-${order.orderNumber}'),
               onPressed: () async {
@@ -1138,298 +1256,6 @@ class _RejectedRecoveryActions extends ConsumerWidget {
   }
 }
 
-/// The trailing actions — EVERY one of them decided by the central policy. A control
-/// that the server would refuse is not drawn at all: a button that always fails is a
-/// lie, and under a lunch rush it is an expensive one.
-class _ActionRow extends ConsumerWidget {
-  const _ActionRow({
-    required this.order,
-    required this.l10n,
-    required this.actions,
-  });
-
-  final PosRecentOrder order;
-  final AppLocalizations l10n;
-  final PosOrderActions actions;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final children = <Widget>[];
-
-    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the printer-only Complete safety
-    // net — shown ONLY when the central policy allowed it (served + fully settled +
-    // verified printer_only + authorized + not terminal + none in flight). One tap
-    // sends exactly one order.status(completed) op; a second is suppressed while it
-    // runs. On success the order leaves the board + its table frees (derived
-    // occupancy); no payment, no resubmit, no reprint. The server re-enforces.
-    if (actions.canComplete) {
-      final completing = ref
-          .watch(posOrderCompleteControllerProvider)
-          .contains(order.orderId);
-      children.add(
-        _ActionButton(
-          child: FilledButton.icon(
-            key: Key('recent-complete-${order.orderNumber}'),
-            onPressed: completing
-                ? null
-                : () => ref
-                      .read(posOrderCompleteControllerProvider.notifier)
-                      .complete(order.orderId ?? ''),
-            icon: completing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle_outline, size: 18),
-            label: Text(l10n.posCompleteOrder),
-          ),
-        ),
-      );
-    }
-
-    if (actions.canPay) {
-      children.add(
-        _ActionButton(
-          child: FilledButton.icon(
-            key: Key('recent-pay-${order.orderNumber}'),
-            onPressed: () => CashPaymentSheet.show(
-              context,
-              identity: order.identity,
-              orderId: order.orderId,
-              orderNumber: order.orderNumber,
-              // AUTHORITATIVE total + revision. The sheet no longer receives the
-              // submit-time figure it used to be handed.
-              amountMinor: order.grandTotalMinor,
-              currencyCode: order.currencyCode,
-              expectedRevision: order.revision,
-            ),
-            icon: const Icon(Icons.payments_outlined, size: 18),
-            label: Text(l10n.posTakePayment),
-          ),
-        ),
-      );
-    }
-
-    if (actions.canDiscount) {
-      children.add(
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-discount-${order.orderNumber}'),
-            onPressed: () => DiscountSheet.show(
-              context,
-              orderId: order.orderId ?? '',
-              subtotalMinor: order.subtotalMinor,
-              taxTotalMinor: order.taxTotalMinor,
-              currencyCode: order.currencyCode,
-              expectedRevision: order.revision,
-            ),
-            icon: const Icon(Icons.percent, size: 18),
-            label: Text(l10n.posApplyDiscount),
-          ),
-        ),
-      );
-    }
-
-    if (actions.canVoid) {
-      children.add(
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-cancel-${order.orderNumber}'),
-            onPressed: () => CancelOrderSheet.show(context, order: order),
-            icon: const Icon(Icons.block, size: 18),
-            label: Text(l10n.posCancelOrderAction),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: RestoflowTone.danger.styleOf(theme).accent,
-              side: BorderSide(
-                color: RestoflowTone.danger.styleOf(theme).accent,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (actions.canMoveTable) {
-      children.add(
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-move-table-${order.orderNumber}'),
-            onPressed: () => MoveTableSheet.show(context, order: order),
-            icon: const Icon(Icons.swap_horiz, size: 18),
-            label: Text(l10n.posMoveTableAction),
-          ),
-        ),
-      );
-    }
-
-    // PSC-001C: extend an eligible dine-in order with a NEW service round. The
-    // authoritative existing items load first (pos_order_detail) so the cart
-    // enters addition mode showing server truth — never a local guess.
-    if (actions.canAddItems) {
-      children.add(
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-add-items-${order.orderNumber}'),
-            onPressed: () => _startAddition(context, ref),
-            icon: const Icon(Icons.playlist_add, size: 18),
-            label: Text(l10n.posAddItemsAction),
-          ),
-        ),
-      );
-    }
-
-    if (actions.canOpenReceipt) {
-      children.add(
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-reprint-${order.orderNumber}'),
-            onPressed: () => _reprint(context, ref),
-            icon: const Icon(Icons.print_outlined, size: 18),
-            label: Text(l10n.posRecentReprintAction),
-          ),
-        ),
-      );
-      children.add(
-        _ActionButton(
-          child: TextButton.icon(
-            key: Key('recent-view-${order.orderNumber}'),
-            onPressed: () => _viewReceipt(context, ref),
-            icon: const Icon(Icons.visibility_outlined, size: 18),
-            label: Text(l10n.receiptPreviewTitle),
-          ),
-        ),
-      );
-    }
-
-    // A WRAP, not a Row: on a phone the actions stack instead of being squeezed
-    // below a usable touch target, and on a tablet they sit on one line.
-    return Wrap(
-      spacing: RestoflowSpacing.sm,
-      runSpacing: RestoflowSpacing.sm,
-      children: children,
-    );
-  }
-
-  /// PSC-001C: enters ADDITION MODE for this order and closes the sheet so
-  /// the cashier lands on the menu with the "Adding to #CODE" cart banner.
-  ///
-  /// Finding 1 (correction): the COMPLETE entry transition is owned by
-  /// [AdditionController.enterForOrder] — it reserves the target BEFORE the
-  /// authoritative load and re-verifies the token + still-empty cart before
-  /// committing, so a cart line added during the load can never silently
-  /// become an addition. The [canBeginAddition] call below is an EARLY
-  /// CONVENIENCE check only (instant feedback without a fetch); it is not
-  /// the guarantee.
-  Future<void> _startAddition(BuildContext context, WidgetRef ref) async {
-    final orderId = order.orderId;
-    if (orderId == null) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    if (!canBeginAddition(
-      addition: ref.read(additionControllerProvider),
-      cartIsEmpty: ref.read(cartControllerProvider).isEmpty,
-      orderId: orderId,
-    )) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
-      );
-      return;
-    }
-    final entry = await ref
-        .read(additionControllerProvider.notifier)
-        .enterForOrder(orderId);
-    switch (entry) {
-      case AdditionEntryResult.entered:
-        if (navigator.canPop()) navigator.pop();
-      case AdditionEntryResult.detailUnavailable:
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.posAdditionFailedRetry)),
-        );
-      case AdditionEntryResult.superseded:
-        break; // a newer entry owns the flow — nothing to report here
-      case AdditionEntryResult.blockedPendingAttempt:
-      case AdditionEntryResult.blockedDifferentTarget:
-      case AdditionEntryResult.cartNotEmpty:
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
-        );
-    }
-  }
-
-  /// The COMBINED order view + payment for the receipt surfaces — the ONE
-  /// [authoritativeReceiptSource] policy: a server-backed order's receipt
-  /// comes from `pos_order_detail` (Finding 4 — a failed load/parse is an
-  /// honest retry, NEVER a silent partial local receipt that could miss
-  /// another till's additions); demo keeps its self-contained local record.
-  Future<(SubmittedOrderView, CashPayment)?> _receiptSource(WidgetRef ref) =>
-      authoritativeReceiptSource(
-        isDemoMode: ref.read(runtimeConfigProvider).isDemoMode,
-        orderId: order.orderId,
-        localView: order.order,
-        localPayment: order.payment,
-        repository: ref.read(orderDetailRepositoryProvider),
-      );
-
-  Future<void> _viewReceipt(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final source = await _receiptSource(ref);
-    if (source == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
-      );
-      return;
-    }
-    if (!context.mounted) return;
-    ReceiptPrintPreview.show(context, order: source.$1, payment: source.$2);
-  }
-
-  /// Reprints the receipt from the COMBINED authoritative source — see
-  /// [_receiptSource]; an unavailable source is an honest retry message,
-  /// never a partial receipt presented as complete.
-  Future<void> _reprint(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final bridge = ref.read(posActivePrintBridgeProvider);
-    if (bridge == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.printStatusNotConfigured)),
-      );
-      return;
-    }
-    final source = await _receiptSource(ref);
-    if (source == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
-      );
-      return;
-    }
-    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    final document = buildReceiptDocument(
-      l10n,
-      source.$1,
-      source.$2,
-      isDemo: isDemo,
-      restaurantName: ref.read(posRestaurantNameProvider),
-      // PRINT-BRANDING-LOGO-001: old-order reprints use the CURRENT logo (no
-      // order-time snapshot); null -> text-only.
-      branding: ref.read(posReceiptLogoAssetProvider),
-    );
-    await ref
-        .read(receiptPrintControllerProvider.notifier)
-        .reprint(
-          // The receipt belongs to THIS order, keyed by its identity — not to whichever
-          // order shares its printed code.
-          orderKey: order.identity.key,
-          document: document,
-          submitToBridge: bridge.submit,
-        );
-    messenger.showSnackBar(
-      SnackBar(content: Text(l10n.posRecentReprintStarted)),
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Labels. Every user-facing string is localized; no raw wire token ever reaches
 // the screen (`not_chargeable` is a protocol detail, not English).
@@ -1468,19 +1294,4 @@ String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
 String _hhmm(DateTime dt) {
   String two(int v) => v.toString().padLeft(2, '0');
   return '${two(dt.hour)}:${two(dt.minute)}';
-}
-
-/// One action control, sized so it stays a real touch target on a phone and does
-/// not stretch absurdly wide on a tablet. (It is deliberately NOT `Expanded`: these
-/// live in a `Wrap`, which is not a Flex, and `Expanded` there is a crash.)
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(minWidth: 148, minHeight: 44),
-    child: child,
-  );
 }

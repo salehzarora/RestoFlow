@@ -10,9 +10,11 @@ import 'submitted_order_view.dart';
 /// order-time snapshot (D-008) the payload sends as an `order_item_modifiers`
 /// entry: option id + group/option name snapshots + a SIGNED minor-unit price
 /// delta. [quantity] (modifier-quantity sprint) is how many units of THIS
-/// option the cashier took (extra cheese ×2) — the frozen RF-052 total
-/// formula the server recomputes is
-/// `line_total = qty × unit + Σ(delta × modifier_qty) − discount`.
+/// option the cashier took (extra cheese ×2). The total formula the server
+/// recomputes is the CORRECTED per-unit one (MONEY-PRICING-FORMULA-002A):
+/// `line_total = qty × (unit + Σ(delta × modifier_qty)) − discount`.
+/// The surcharge belongs to the per-unit price, so it is charged once per ITEM
+/// UNIT — the old `qty × unit + Σ` under-charged every extra unit.
 class SelectedModifier {
   const SelectedModifier({
     required this.optionId,
@@ -21,9 +23,28 @@ class SelectedModifier {
     required this.priceDeltaMinor,
     this.quantity = 1,
     this.kitchenMeat,
+    this.modifierGroupId,
   });
 
   final String optionId;
+
+  /// MONEY-EDIT-INTEGRITY-002C (Codex Blocker 4) — the STABLE id of the
+  /// modifier group this option was selected from (`PosModifierGroup.id`, i.e.
+  /// the server `modifiers.id` the POS menu payload serves).
+  ///
+  /// LOCAL EDIT-SAFETY METADATA ONLY. It never reaches the order wire, the
+  /// `order_item_modifiers` schema, an RPC argument, a receipt, a kitchen
+  /// ticket or a KDS payload: those are built from a SEPARATE
+  /// `OrderSubmissionModifier` whose `toJson` writes its own fixed key set, so
+  /// the wire shape and the server's content fingerprint are untouched.
+  ///
+  /// Null on a LEGACY record written before this field existed. That absence is
+  /// tolerated — rejecting proven-valid history would be a worse defect than
+  /// the one this fixes — and resolved fail-closed at edit time instead (see
+  /// the modifier sheet). A group id is only ever WRITTEN after a healthy,
+  /// intentional edit where the current group→option relationship was proven.
+  final String? modifierGroupId;
+
   final String groupName;
   final String optionName;
 
@@ -52,6 +73,12 @@ class SelectedModifier {
   /// integer minor (D-007); the kitchen count rides through KitchenMeat's json.
   Map<String, Object?> toJson() => <String, Object?>{
     'option_id': optionId,
+    // MONEY-EDIT-INTEGRITY-002C: emitted ONLY when known, so a record that
+    // carries no proven group id stays byte-identical to one written before
+    // this field existed — the same additive shape `kitchen_meat` uses. This
+    // is LOCAL persistence (cart draft / parked cart / draft recovery); the
+    // order wire is built from `OrderSubmissionModifier`, not from here.
+    if (modifierGroupId != null) 'modifier_group_id': modifierGroupId,
     'group_name': groupName,
     'option_name': optionName,
     'price_delta_minor': priceDeltaMinor,
@@ -59,26 +86,186 @@ class SelectedModifier {
     if (kitchenMeat != null) 'kitchen_meat': kitchenMeat!.toJson(),
   };
 
-  /// Tolerant decode — a missing/absent field defaults safely so an older or
-  /// partial record never crashes the till on start.
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — FAIL-CLOSED decode.
+  ///
+  /// This used to be "tolerant": `int.tryParse('${v ?? ''}') ?? 0`. That turned
+  /// unreadable MONEY into a free option — the modifier name still rendered, so
+  /// a 15.00 surcharge silently vanished and the line fell back to its base
+  /// price. A cart we cannot read is not a cart we are entitled to re-price.
+  ///
+  /// The contract, derived from the ACTUAL serialized history rather than
+  /// assumed — [toJson] has written BOTH `price_delta_minor` and `quantity`
+  /// since it was introduced (ab43893, MENU-ORDER-001), so no record this app
+  /// ever wrote can be missing either:
+  ///
+  ///  * `price_delta_minor` ABSENT      -> corrupt (never "free").
+  ///  * `price_delta_minor` present but not an int -> corrupt.
+  ///  * `quantity` ABSENT               -> 1. The ONLY legacy allowance, kept
+  ///    for records predating explicit modifier quantities. Absence is
+  ///    distinguished from an explicit null via [Map.containsKey], so a
+  ///    corrupt null can never masquerade as a legacy record.
+  ///  * `quantity` present but not an int, or < 1 -> corrupt. A zero quantity
+  ///    would zero [totalDeltaMinor], which is the same under-charge by
+  ///    another route.
+  ///  * `option_id` blank -> corrupt: an unidentifiable option cannot be
+  ///    re-priced, re-sent or reasoned about.
+  ///
+  /// Throwing is what makes this safe: every caller already treats a throw as
+  /// "this record is unreadable". A parked cart lands in
+  /// `ParkedCartsSnapshot.unreadable`, which is preserved VERBATIM on disk and
+  /// re-emitted untouched by the next write, so the record is never destroyed
+  /// and the active cart is never replaced by an under-charged one.
   static SelectedModifier fromJson(Map<String, Object?> json) {
-    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    int requireInt(String key) {
+      final raw = json[key];
+      if (raw is int) return raw;
+      throw FormatException(
+        'modifier $key is not an integer minor-unit value: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    // MONEY-LOCAL-ATOMICITY-003A — an IDENTITY is exact or it is corrupt.
+    //
+    // This used to be `(json['option_id'] ?? '').toString()`, so an int, a
+    // bool, a double, a list or a map all became plausible option ids and only
+    // emptiness was caught. An unidentifiable option cannot be re-priced,
+    // re-sent or reasoned about — and a fabricated one is worse, because it
+    // looks resolvable.
+    //
+    // Stored UNTRIMMED, deliberately. Every consumer compares ids byte-exactly
+    // (the sheet's group match, the domain's line lookup, the side-map keys), so
+    // trimming here would silently re-point a stored selection at a live group
+    // and re-price it — exactly the class of defect 002C closed.
+    final rawOptionId = json['option_id'];
+    if (rawOptionId is! String || rawOptionId.trim().isEmpty) {
+      throw FormatException(
+        'modifier option_id is not a non-blank string: '
+        '${rawOptionId == null ? 'absent/null' : rawOptionId.runtimeType}',
+      );
+    }
+    final optionId = rawOptionId;
+
+    /// A DISPLAY snapshot: type-strict, but blank is legitimate history — the
+    /// menu parse can produce an empty option name, so requiring non-blank here
+    /// would quarantine a real cashier's parked cart.
+    String requireDisplayName(String key) {
+      final raw = json[key];
+      if (raw is String) return raw;
+      throw FormatException(
+        'modifier $key is not a string: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    final priceDeltaMinor = requireInt('price_delta_minor');
+    final int quantity;
+    if (!json.containsKey('quantity')) {
+      quantity = 1; // legacy record, written before modifier quantities
+    } else {
+      quantity = requireInt('quantity');
+      if (quantity < 1) {
+        throw FormatException('modifier quantity must be >= 1, got $quantity');
+      }
+    }
+    // MONEY-EDIT-INTEGRITY-002C — strict, under the SAME 002B corruption
+    // contract as the money above. ABSENT is the one legacy allowance (a record
+    // written before the field existed); a value that is PRESENT must be an
+    // exact non-blank String. Absence is distinguished from an explicit null
+    // via containsKey, so a corrupt null can never masquerade as legacy — that
+    // is precisely the coercion that would hand a moved option a free pass.
+    final String? modifierGroupId;
+    if (!json.containsKey('modifier_group_id')) {
+      modifierGroupId = null;
+    } else {
+      final raw = json['modifier_group_id'];
+      if (raw is! String || raw.trim().isEmpty) {
+        throw FormatException(
+          'modifier modifier_group_id is not a non-blank string: '
+          '${raw == null ? 'null' : raw.runtimeType}',
+        );
+      }
+      modifierGroupId = raw;
+    }
     return SelectedModifier(
-      optionId: (json['option_id'] ?? '').toString(),
-      groupName: (json['group_name'] ?? '').toString(),
-      optionName: (json['option_name'] ?? '').toString(),
-      priceDeltaMinor: intOf(json['price_delta_minor']),
-      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      optionId: optionId,
+      modifierGroupId: modifierGroupId,
+      groupName: requireDisplayName('group_name'),
+      optionName: requireDisplayName('option_name'),
+      priceDeltaMinor: priceDeltaMinor,
+      quantity: quantity,
       kitchenMeat: KitchenMeat.tryFromJson(json['kitchen_meat']),
     );
   }
 }
 
+/// MONEY-PRICING-FORMULA-002A — THE ONE client pricing formula.
+///
+/// A cart line is N identical FULLY CONFIGURED items, so a modifier surcharge is
+/// part of the per-unit price and is charged once per ITEM UNIT:
+///
+///   configuredUnitAmountMinor = basePriceMinor + Σ(priceDeltaMinor × modifierQty)
+///   lineTotalMinor            = configuredUnitAmountMinor × itemQuantity
+///
+/// This is the authoritative contract in `docs/MONEY_AND_TAX_SPEC.md` §9:157,
+/// whose worked example §9.1:179 reads "Line A per-unit = 4500 + 700 = 5200;
+/// × 2 = 10400". §9:155 requires the server RPC and every offline client to
+/// follow it IDENTICALLY.
+///
+/// It replaces four independently-maintained copies of `base × itemQty + Σ`,
+/// which added the surcharge once per LINE and so under-charged every extra
+/// unit — while the kitchen already multiplied meat and prep by item quantity
+/// (`aggregateOrderKitchenCounts`), cooking N upgraded meals for one upgrade's
+/// money. The two rules agree at quantity 1, which is why it survived.
+///
+/// Integer minor units only (D-007). Keep this the ONLY implementation: the
+/// payload still transmits the BARE unit price and the UNIT modifier delta, and
+/// the server recombines them with the same rule.
+int configuredUnitAmountMinor(
+  int basePriceMinor,
+  Iterable<SelectedModifier> modifiers,
+) {
+  var total = basePriceMinor;
+  for (final m in modifiers) {
+    total += m.totalDeltaMinor;
+  }
+  return total;
+}
+
+/// [configuredUnitAmountMinor] × [quantity] — a line's total BEFORE any line
+/// discount, which the existing discount/tax ordering then consumes unchanged.
+int configuredLineTotalMinor({
+  required int basePriceMinor,
+  required Iterable<SelectedModifier> modifiers,
+  required int quantity,
+}) => configuredUnitAmountMinor(basePriceMinor, modifiers) * quantity;
+
+/// PRINT-STARTUP-REPRINT-001 (Defect 2) — the SINGLE place selected modifiers
+/// become kitchen meat contributions, so the automatic ticket, the stored order
+/// snapshot and the manual reprint can never drift apart.
+///
+/// Each option's owner-configured [KitchenMeat] is multiplied by the UNITS of
+/// that option (`extra meat ×2` => two patties); the item quantity is applied
+/// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
+/// with non-positive units, contribute nothing — so the result is deliberately
+/// NOT index-aligned with the modifier display list. Money-free (D-007).
+List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
+    [
+      for (final modifier in modifiers)
+        if (modifier.kitchenMeat case final meat?)
+          if (modifier.quantity > 0)
+            KitchenMeat(
+              quantity: meat.quantity * modifier.quantity,
+              unit: meat.unit,
+            ),
+    ];
+
 /// Immutable view of a single cart line for the POS UI.
 ///
 /// Money fields are integer minor units (DECISION D-007); [unitPrice] and
 /// [lineTotal] expose them as [Money] for type-safe display formatting.
-/// [lineTotalMinor] uses the SERVER's formula: `qty × unit + Σmodifiers`.
+/// [lineTotalMinor] uses the SERVER's formula, corrected in
+/// MONEY-PRICING-FORMULA-002A: `qty × (unit + Σmodifiers)`.
 class CartLineView {
   const CartLineView({
     required this.lineId,
@@ -123,6 +310,51 @@ class CartLineView {
 /// the token binds the lock to ONE exact attempt (its entry generation, parent
 /// order and idempotency id), so a stale callback from an earlier attempt can
 /// never clear or unlock a cart owned by a later one.
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F1) — THE STARTUP HYDRATION GATE.
+///
+/// The durable Add-items journal is read from disk, so there is a window
+/// between "the app is on screen" and "we know which orders carry an unresolved
+/// amendment". Before 005 the cart was fully editable in that window: the
+/// cashier could type lines no journal covered, and the attempt restored a
+/// moment later would take ownership of — and, on reconciliation, destroy —
+/// them. The same window let Add-items be entered for the very order that
+/// already had a pending operation, which is how a second identity gets minted.
+///
+/// The affected order ids are not knowable until the read finishes, so the gate
+/// is deliberately GLOBAL and deliberately brief. It is closed SYNCHRONOUSLY by
+/// `AdditionController.build()` — before its first `await` — and opened once
+/// hydration has either restored every actionable record or FAILED, in which
+/// case it stays closed: an unreadable journal is not an empty one.
+///
+/// A PLAIN OBJECT, not provider state, for one specific reason: Riverpod forbids
+/// a provider from modifying another provider during initialization, and the
+/// gate must be observable from inside `AdditionController.build()`. Mutating a
+/// shared object is not a provider write, so the ordering constraint disappears
+/// and the guarantee — no editable window, ever — is kept.
+///
+/// Kept separate from [CartLockOwner] because it is not an ownership claim: no
+/// attempt holds the cart yet. It only folds into `_locked`, so every normal
+/// mutation entry point refuses through the ONE existing path while
+/// `lockForAddition` / `unlockForAddition` / `ownsAdditionLock` /
+/// `clearForAddition` keep reading the owner token alone — the restore must
+/// still be able to take real ownership while the gate is shut.
+class PosAdditionHydrationGate {
+  bool _closed = false;
+
+  /// Whether cart mutation is currently barred pending journal hydration.
+  bool get isClosed => _closed;
+
+  void close() => _closed = true;
+
+  void open() => _closed = false;
+}
+
+/// One gate per container. Scoped like every other POS seam, so two containers
+/// in a test (a simulated process restart) never share a gate.
+final posAdditionHydrationGateProvider = Provider<PosAdditionHydrationGate>(
+  (_) => PosAdditionHydrationGate(),
+);
+
 class CartLockOwner {
   const CartLockOwner({
     required this.generation,
@@ -151,6 +383,17 @@ enum CartMutationResult {
   /// must stay exactly what was frozen. The UI shows the existing pending /
   /// refresh-required messaging and disables the controls.
   lockedByAddition,
+
+  /// MONEY-LOCAL-ATOMICITY-003A — the incoming draft could not be turned into a
+  /// valid cart (a duplicate line id, a currency mismatch, an impossible
+  /// quantity), so NOTHING was applied.
+  ///
+  /// This is a distinct outcome from [lockedByAddition]: the cart was free to
+  /// change, and the change was refused on its own merits. The previous cart,
+  /// its money and every side map are exactly as they were, and no state was
+  /// emitted. Callers keep their source record (the parked entry, the durable
+  /// recovery) so the cashier can try again or read it on a later build.
+  invalidDraft,
 }
 
 /// Immutable snapshot of the cart for the POS UI (the Riverpod state value).
@@ -180,8 +423,17 @@ class CartViewState {
     final views = cart.lines
         .map((line) {
           final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
-          final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
-          modifiersTotal += modSum;
+          // MONEY-PRICING-FORMULA-002A: the modifier surcharge belongs to the
+          // per-unit price, so it is multiplied by the item quantity like the
+          // base is. `line.unitPriceMinor` is the BARE unit price here (the POS
+          // carries modifier snapshots out-of-band in `lineModifiers`, never on
+          // the domain CartLine), and it stays bare on the wire.
+          final lineTotal = configuredLineTotalMinor(
+            basePriceMinor: line.unitPriceMinor,
+            modifiers: mods,
+            quantity: line.quantity,
+          );
+          modifiersTotal += lineTotal - line.lineTotalMinor;
           final order = lineDisplayOrders[line.lineId];
           return CartLineView(
             lineId: line.lineId,
@@ -189,7 +441,7 @@ class CartViewState {
             name: line.itemNameSnapshot,
             quantity: line.quantity,
             unitPriceMinor: line.unitPriceMinor,
-            lineTotalMinor: line.lineTotalMinor + modSum,
+            lineTotalMinor: lineTotal,
             currencyCode: line.currencyCodeSnapshot,
             modifiers: mods,
             note: lineNotes[line.lineId],
@@ -257,16 +509,63 @@ class CartDraftSnapshot {
     'lines': [for (final l in lines) l.toJson()],
   };
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 2) — decode EXACTLY, or
+  /// not at all.
+  ///
+  /// This previously reinterpreted a non-List `lines` as an empty cart and
+  /// SKIPPED any element that was not a Map, so a truncated or partially
+  /// corrupt record restored as a smaller — but entirely plausible — cart that
+  /// the cashier would then charge. A draft we cannot read in full is a draft
+  /// we are not entitled to re-price, so the whole snapshot is refused and the
+  /// caller quarantines the raw record instead of silently reducing it.
   static CartDraftSnapshot fromJson(Map<String, Object?> json) {
     final rawLines = json['lines'];
-    return CartDraftSnapshot(
-      currencyCode: (json['currency_code'] ?? 'ILS').toString(),
-      lines: <CartDraftLine>[
-        if (rawLines is List)
-          for (final l in rawLines)
-            if (l is Map) CartDraftLine.fromJson(l.cast<String, Object?>()),
-      ],
-    );
+    if (rawLines is! List) {
+      throw FormatException(
+        'cart draft lines must be a list, got '
+        '${rawLines == null ? 'absent/null' : rawLines.runtimeType}',
+      );
+    }
+    final lines = <CartDraftLine>[];
+    // MONEY-LOCAL-ATOMICITY-003A: line ids must be UNIQUE within a draft. The
+    // domain refuses a duplicate by throwing, so a record carrying one can
+    // never become a cart — catching it here means the existing quarantine
+    // seams receive it exactly like any other corruption, instead of the
+    // restore path discovering it half-way through. No first-wins, no
+    // last-wins, no silent regeneration: a cart we cannot rebuild faithfully
+    // is not one we may rebuild approximately.
+    final seenLineIds = <String>{};
+    for (var i = 0; i < rawLines.length; i++) {
+      final l = rawLines[i];
+      if (l is! Map) {
+        throw FormatException(
+          'cart draft line $i is not an object: '
+          '${l == null ? 'absent/null' : l.runtimeType}',
+        );
+      }
+      final line = CartDraftLine.fromJson(l.cast<String, Object?>());
+      final id = line.lineId;
+      if (id != null && !seenLineIds.add(id)) {
+        throw FormatException('cart draft has duplicate line_id "$id"');
+      }
+      lines.add(line);
+    }
+    // The currency is only ever omitted by a record written before it was
+    // serialized; the pilot is ILS-only, so absence keeps its historical
+    // meaning while a present-but-unreadable value is corruption.
+    final rawCurrency = json['currency_code'];
+    final String currencyCode;
+    if (rawCurrency == null) {
+      currencyCode = 'ILS';
+    } else if (rawCurrency is String && rawCurrency.trim().isNotEmpty) {
+      currencyCode = rawCurrency;
+    } else {
+      throw FormatException(
+        'cart draft currency_code is not a non-blank string: '
+        '${rawCurrency.runtimeType}',
+      );
+    }
+    return CartDraftSnapshot(currencyCode: currencyCode, lines: lines);
   }
 }
 
@@ -281,6 +580,7 @@ class CartDraftLine {
     this.note,
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   final String menuItemId;
@@ -302,6 +602,15 @@ class CartDraftLine {
   final int categoryDisplayOrder;
   final int itemDisplayOrder;
 
+  /// PARKED-CARTS-001: the item's PER-UNIT kitchen prep components, captured at
+  /// ADD time (the order-time D-008 snapshot). The draft previously dropped
+  /// them, so any capture -> restore round-trip silently lost the chef's prep
+  /// summary. Empty is a valid, honest value (an item with none configured, or
+  /// a record written before this field existed) — it is never re-read from the
+  /// live menu at restore time, which would substitute today's configuration
+  /// for the one the cashier actually ordered against.
+  final List<KitchenPrepComponent> prepComponents;
+
   /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the stable
   /// lineId, ranks, modifiers, and note through a restart so a recovered order
   /// keeps its line identity and still prints in menu order. Money is integer
@@ -318,26 +627,127 @@ class CartDraftLine {
     if (categoryDisplayOrder != 0)
       'category_display_order': categoryDisplayOrder,
     if (itemDisplayOrder != 0) 'item_display_order': itemDisplayOrder,
+    // PARKED-CARTS-001: omitted when empty, so a record that carries no prep
+    // stays byte-identical to one written before this field existed.
+    if (prepComponents.isNotEmpty)
+      'prep_components': [for (final p in prepComponents) p.toJson()],
   };
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 2) — strict, atomic.
+  ///
+  /// Every field this line is priced or identified by is read EXACTLY. The old
+  /// decoder coerced through `int.tryParse('${v}') ?? 0`, so a corrupt
+  /// `base_price_minor` became a free item, a corrupt `quantity` became 0, and
+  /// a `modifiers` value that was not a list became "no modifiers" — each of
+  /// them an UNDER-CHARGE that looked like a normal cart.
+  ///
+  /// The tolerated absences are evidence-based, not invented: [toJson] has,
+  /// since the commit that introduced it (MENU-ORDER-001), ALWAYS written
+  /// `menu_item_id`, `name`, `base_price_minor` and `quantity`, and
+  /// conditionally omitted `line_id`, `modifiers`, `note`, the display orders
+  /// and `prep_components`. So exactly those omissions are legitimate history;
+  /// anything else missing is corruption.
   static CartDraftLine fromJson(Map<String, Object?> json) {
-    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
-    final rawMods = json['modifiers'];
+    int requireInt(String key) {
+      final raw = json[key];
+      if (raw is int) return raw;
+      throw FormatException(
+        'cart draft line $key is not an integer: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    /// A rank omitted when 0 is legitimate; a present one must be exact.
+    int optionalRank(String key) {
+      if (!json.containsKey(key) || json[key] == null) return 0;
+      final v = requireInt(key);
+      if (v < 0) throw FormatException('cart draft line $key must be >= 0');
+      return v;
+    }
+
+    String requireId(String key) {
+      final raw = json[key];
+      if (raw is String && raw.trim().isNotEmpty) return raw;
+      throw FormatException(
+        'cart draft line $key is not a non-blank string: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    final basePriceMinor = requireInt('base_price_minor');
+    if (basePriceMinor < 0) {
+      throw FormatException(
+        'cart draft line base_price_minor must be >= 0, got $basePriceMinor',
+      );
+    }
+    final quantity = requireInt('quantity');
+    if (quantity < 1) {
+      throw FormatException(
+        'cart draft line quantity must be >= 1, got $quantity',
+      );
+    }
+
+    // An ABSENT `modifiers` key is a plain line. A present one that is not a
+    // list is corruption: treating it as empty deletes paid surcharges.
+    final modifiers = <SelectedModifier>[];
+    if (json.containsKey('modifiers')) {
+      final rawMods = json['modifiers'];
+      if (rawMods is! List) {
+        throw FormatException(
+          'cart draft line modifiers must be a list, got '
+          '${rawMods == null ? 'absent/null' : rawMods.runtimeType}',
+        );
+      }
+      for (var i = 0; i < rawMods.length; i++) {
+        final m = rawMods[i];
+        if (m is! Map) {
+          throw FormatException(
+            'cart draft line modifier $i is not an object: '
+            '${m == null ? 'absent/null' : m.runtimeType}',
+          );
+        }
+        modifiers.add(SelectedModifier.fromJson(m.cast<String, Object?>()));
+      }
+    }
+
+    final rawName = json['name'];
+    if (rawName is! String) {
+      throw FormatException(
+        'cart draft line name is not a string: '
+        '${rawName == null ? 'absent/null' : rawName.runtimeType}',
+      );
+    }
     final rawNote = json['note'];
+    if (rawNote != null && rawNote is! String) {
+      throw FormatException(
+        'cart draft line note is not a string: ${rawNote.runtimeType}',
+      );
+    }
+    // PARKED-CARTS-001: absent on an older record -> empty. Present but not a
+    // list is corruption, for the same reason as `modifiers`.
+    if (json.containsKey('prep_components') &&
+        json['prep_components'] is! List) {
+      throw FormatException(
+        'cart draft line prep_components must be a list, got '
+        '${json['prep_components']!.runtimeType}',
+      );
+    }
+
     return CartDraftLine(
-      lineId: json['line_id']?.toString(),
-      menuItemId: (json['menu_item_id'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      basePriceMinor: intOf(json['base_price_minor']),
-      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
-      modifiers: <SelectedModifier>[
-        if (rawMods is List)
-          for (final m in rawMods)
-            if (m is Map) SelectedModifier.fromJson(m.cast<String, Object?>()),
-      ],
-      note: rawNote == null ? null : rawNote.toString(),
-      categoryDisplayOrder: intOf(json['category_display_order']),
-      itemDisplayOrder: intOf(json['item_display_order']),
+      // Absent line_id is legitimate (a fresh id is minted); a present one
+      // must be an exact non-blank string, never a coerced number.
+      lineId: json.containsKey('line_id') ? requireId('line_id') : null,
+      menuItemId: requireId('menu_item_id'),
+      name: rawName,
+      basePriceMinor: basePriceMinor,
+      quantity: quantity,
+      modifiers: modifiers,
+      note: rawNote as String?,
+      categoryDisplayOrder: optionalRank('category_display_order'),
+      itemDisplayOrder: optionalRank('item_display_order'),
+      // The shared tolerant element parser drops blank-name / non-positive
+      // rows rather than showing the chef a bogus count.
+      prepComponents: parseKitchenPrepComponents(json['prep_components']),
     );
   }
 }
@@ -355,7 +765,17 @@ class CartController extends Notifier<CartViewState> {
   /// unrelated line may be introduced only to be cleared on reconciliation.
   CartLockOwner? _lockOwner;
 
-  bool get _locked => _lockOwner != null;
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F1): the shared startup gate, read on EVERY
+  /// mutation. See [PosAdditionHydrationGate].
+  PosAdditionHydrationGate get _gate =>
+      ref.read(posAdditionHydrationGateProvider);
+
+  bool get _locked => _lockOwner != null || _gate.isClosed;
+
+  /// Recomputes the published view after the startup gate opened. Called by the
+  /// Addition controller from an ASYNC continuation — never during a build, which
+  /// Riverpod forbids for cross-provider writes.
+  void refreshAdditionLockView() => _emit();
 
   /// Selected modifier snapshots per line id (the domain [Cart] predates
   /// modifiers; the app carries them alongside — D-008 snapshots).
@@ -370,6 +790,14 @@ class CartController extends Notifier<CartViewState> {
   /// add time and carried onto CartLineView + SubmittedLineView so every POS
   /// print surface orders items into Dashboard-configured order. Non-money.
   final Map<String, (int, int)> _lineDisplayOrders = {};
+
+  /// PRINT-STARTUP-REPRINT-001 (Defect 2): the item's PER-UNIT kitchen prep
+  /// components per line id, captured from the DemoMenuItem at ADD time — the
+  /// same order-time snapshot the outbox payload carries (D-008) — and carried
+  /// onto SubmittedLineView so a MANUAL kitchen reprint can aggregate the same
+  /// whole-order counts as the automatic ticket. Never re-read from the live
+  /// menu at reprint time. Non-money.
+  final Map<String, List<KitchenPrepComponent>> _linePrep = {};
 
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
@@ -392,8 +820,12 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     _lockOwner = null;
-    return CartViewState.fromCart(_cart);
+    // F1: the gate may ALREADY be closed — `AdditionController.build()` closes
+    // it synchronously and this controller is built lazily, often afterwards. The
+    // published view must agree with `_locked` from its very first frame.
+    return CartViewState.fromCart(_cart, lockedByAddition: _locked);
   }
 
   // -------------------------------------------------------------------------
@@ -481,6 +913,7 @@ class CartController extends Notifier<CartViewState> {
         item.categoryDisplayOrder,
         item.itemDisplayOrder,
       );
+      _linePrep[lineId] = item.prepComponents;
     }
     _emit();
     return CartMutationResult.applied;
@@ -488,8 +921,12 @@ class CartController extends Notifier<CartViewState> {
 
   /// Adds a CONFIGURED [item] with its selected [modifiers] and optional
   /// cashier [note] as its OWN line (never merged — each configured item is
-  /// priced/kitchen-routed on its own; the RF-052 formula counts each
-  /// modifier's delta × its quantity once per line).
+  /// priced/kitchen-routed on its own).
+  ///
+  /// Priced by [configuredLineTotalMinor]: `qty × (unit + Σ(delta × modQty))`
+  /// (MONEY-PRICING-FORMULA-002A). This used to say the delta is counted "once
+  /// per line", which was the pre-002A rule the fix replaced — it under-charged
+  /// every unit after the first.
   CartMutationResult addItemWithModifiers(
     DemoMenuItem item,
     List<SelectedModifier> modifiers, {
@@ -519,6 +956,7 @@ class CartController extends Notifier<CartViewState> {
       item.categoryDisplayOrder,
       item.itemDisplayOrder,
     );
+    _linePrep[lineId] = item.prepComponents;
     _emit();
     return CartMutationResult.applied;
   }
@@ -541,6 +979,30 @@ class CartController extends Notifier<CartViewState> {
     } else {
       _lineModifiers[lineId] = List.unmodifiable(modifiers);
     }
+    final trimmedNote = note?.trim();
+    if (trimmedNote != null && trimmedNote.isNotEmpty) {
+      _lineNotes[lineId] = trimmedNote;
+    } else {
+      _lineNotes.remove(lineId);
+    }
+    _emit();
+    return CartMutationResult.applied;
+  }
+
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — updates ONLY the cashier note on
+  /// [lineId], never its modifier snapshots.
+  ///
+  /// The cart's Edit action falls back to a note-only sheet when the live menu
+  /// cannot supply authoritative modifier groups. Routing that fallback through
+  /// [updateLineModifiers] meant confirming it replaced the stored snapshots
+  /// with whatever the (empty) sheet could resolve — silently deleting a paid
+  /// modifier and re-pricing the line down to base. This entry point cannot do
+  /// that: it never touches `_lineModifiers`, so a note edit is money-safe by
+  /// CONSTRUCTION rather than by the caller remembering to pass the old list
+  /// back in.
+  CartMutationResult updateLineNote(String lineId, String? note) {
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (_lineById(lineId) == null) return CartMutationResult.applied;
     final trimmedNote = note?.trim();
     if (trimmedNote != null && trimmedNote.isNotEmpty) {
       _lineNotes[lineId] = trimmedNote;
@@ -624,6 +1086,10 @@ class CartController extends Notifier<CartViewState> {
           // draft so a restored (item_unavailable) cart still prints in menu order.
           categoryDisplayOrder: _lineDisplayOrders[line.lineId]?.$1 ?? 0,
           itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
+          // PARKED-CARTS-001: carry the ORDER-TIME kitchen prep snapshot too.
+          // Without it every draft round-trip dropped the chef's prep summary.
+          prepComponents:
+              _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
         ),
     ],
   );
@@ -632,48 +1098,122 @@ class CartController extends Notifier<CartViewState> {
   /// (products, quantities, modifiers, notes). Idempotent replacement — it always
   /// REPLACES the current cart, so a repeated "Back to cart" cannot duplicate
   /// lines. Line ids keep advancing so they stay unique.
+  /// MONEY-LOCAL-ATOMICITY-003A — BUILD, VALIDATE, THEN SWAP ONCE.
+  ///
+  /// This used to replace the live `Cart` and clear all four side maps BEFORE
+  /// validating a single incoming line, then add lines one at a time. Because
+  /// the domain refuses a duplicate line id by THROWING
+  /// (`Cart.addLine` -> `DuplicateLineException`), a draft whose third of five
+  /// lines repeated an id destroyed the cashier's active cart, left a shorter
+  /// and cheaper one behind, and threw into the UI on the way out.
+  ///
+  /// Everything below is assembled into LOCAL structures. Nothing owned by this
+  /// controller is touched until the whole replacement exists and is valid, and
+  /// then it is swapped in as one committed step with exactly one emit. On any
+  /// failure the previous cart, its money, every side map, the line sequence and
+  /// the submitted-order confirmation are untouched and NOTHING is emitted —
+  /// the caller gets [CartMutationResult.invalidDraft] and keeps its source
+  /// record.
   CartMutationResult restoreDraft(CartDraftSnapshot draft) {
     if (_locked) return CartMutationResult.lockedByAddition;
-    _cart = Cart(
+
+    // ---- build into TEMPORARIES; the live state is not touched yet ---------
+    final nextCart = Cart(
       orderId: 'demo-order',
       organizationId: 'demo-org',
       restaurantId: 'demo-restaurant',
       branchId: 'demo-branch',
       currencyCode: draft.currencyCode,
     );
-    _lineModifiers.clear();
-    _lineNotes.clear();
-    _lineDisplayOrders.clear();
-    for (final l in draft.lines) {
-      // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
-      // edits/removals target the original line and a re-restore never
-      // duplicates; a legacy record with no id mints a fresh one. Keep _lineSeq
-      // AHEAD of any restored `line-N` so a later add can never collide with it.
-      final lineId = l.lineId ?? 'line-${_lineSeq++}';
-      final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
-      if (seqMatch != null) {
-        final n = int.tryParse(seqMatch.group(1)!) ?? -1;
-        if (n >= _lineSeq) _lineSeq = n + 1;
+    final nextModifiers = <String, List<SelectedModifier>>{};
+    final nextNotes = <String, String>{};
+    final nextDisplayOrders = <String, (int, int)>{};
+    final nextPrep = <String, List<KitchenPrepComponent>>{};
+    // A LOCAL sequence: a rejected draft must not advance the real one either,
+    // or a failed restore would silently consume line ids.
+    var nextSeq = _lineSeq;
+
+    // A legacy line carries no id and is MINTED one. Scan the explicit ids
+    // FIRST so a mint can never collide with an id that appears later in the
+    // same draft — otherwise a legitimate mixed draft (some legacy lines, some
+    // `line-N`) would self-collide and be refused for a reason of our own
+    // making. Failing closed would still be safe; restoring it correctly is
+    // better.
+    final explicitIds = <String>{
+      for (final l in draft.lines)
+        if (l.lineId != null) l.lineId!,
+    };
+    for (final id in explicitIds) {
+      final m = RegExp(r'^line-(\d+)$').firstMatch(id);
+      if (m != null) {
+        final n = int.tryParse(m.group(1)!) ?? -1;
+        if (n >= nextSeq) nextSeq = n + 1;
       }
-      _cart.addLine(
-        CartLine.snapshot(
-          lineId: lineId,
-          menuItemId: l.menuItemId,
-          itemNameSnapshot: l.name,
-          basePriceMinorSnapshot: l.basePriceMinor,
-          currencyCodeSnapshot: draft.currencyCode,
-        ),
-      );
-      if (l.quantity > 1) _cart.changeQuantity(lineId, l.quantity);
-      if (l.modifiers.isNotEmpty) {
-        _lineModifiers[lineId] = List.unmodifiable(l.modifiers);
-      }
-      final note = l.note;
-      if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
-      // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
-      // resubmit prints in the same menu order the original attempt would have.
-      _lineDisplayOrders[lineId] = (l.categoryDisplayOrder, l.itemDisplayOrder);
     }
+
+    try {
+      for (final l in draft.lines) {
+        // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
+        // edits/removals target the original line and a re-restore never
+        // duplicates; a legacy record with no id mints a fresh one. Keep the
+        // sequence AHEAD of any restored `line-N` so a later add cannot collide.
+        final lineId = l.lineId ?? 'line-${nextSeq++}';
+        final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
+        if (seqMatch != null) {
+          final n = int.tryParse(seqMatch.group(1)!) ?? -1;
+          if (n >= nextSeq) nextSeq = n + 1;
+        }
+        // Throws DuplicateLineException / CurrencyMismatchException on a draft
+        // that cannot become a cart — caught below, with nothing yet swapped.
+        nextCart.addLine(
+          CartLine.snapshot(
+            lineId: lineId,
+            menuItemId: l.menuItemId,
+            itemNameSnapshot: l.name,
+            basePriceMinorSnapshot: l.basePriceMinor,
+            currencyCodeSnapshot: draft.currencyCode,
+          ),
+        );
+        if (l.quantity > 1) nextCart.changeQuantity(lineId, l.quantity);
+        if (l.modifiers.isNotEmpty) {
+          nextModifiers[lineId] = List.unmodifiable(l.modifiers);
+        }
+        final note = l.note;
+        if (note != null && note.isNotEmpty) nextNotes[lineId] = note;
+        // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the
+        // corrected resubmit prints in the menu order the original would have.
+        nextDisplayOrders[lineId] = (
+          l.categoryDisplayOrder,
+          l.itemDisplayOrder,
+        );
+        // PARKED-CARTS-001: repopulate the ORDER-TIME prep snapshot the draft
+        // carries. It is deliberately NOT re-read from the live menu — a
+        // restored cart must keep the configuration it was ordered against, and
+        // a record written before the field existed honestly restores none.
+        if (l.prepComponents.isNotEmpty) {
+          nextPrep[lineId] = List.unmodifiable(l.prepComponents);
+        }
+      }
+    } on CartException {
+      // The draft cannot become a cart. Nothing was swapped, nothing emitted.
+      return CartMutationResult.invalidDraft;
+    }
+
+    // ---- ONE committed swap ------------------------------------------------
+    _cart = nextCart;
+    _lineModifiers
+      ..clear()
+      ..addAll(nextModifiers);
+    _lineNotes
+      ..clear()
+      ..addAll(nextNotes);
+    _lineDisplayOrders
+      ..clear()
+      ..addAll(nextDisplayOrders);
+    _linePrep
+      ..clear()
+      ..addAll(nextPrep);
+    _lineSeq = nextSeq;
     _submittedOrder = null;
     _emit();
     return CartMutationResult.applied;
@@ -704,8 +1244,10 @@ class CartController extends Notifier<CartViewState> {
     // submit flow; fall back to a local number for the RF-101 in-memory path.
     final resolvedNumber =
         orderNumber ?? 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
-    // Line totals mirror the RF-052 server formula (each modifier delta
-    // counted × its own quantity, once per line).
+    // Line totals mirror the server formula as CORRECTED in
+    // MONEY-PRICING-FORMULA-002A: `qty × (unit + Σ(delta × modQty))`. The old
+    // comment here said "once per line" — the pre-002A rule — directly above
+    // code that had already been fixed to charge the surcharge per ITEM UNIT.
     var modifiersTotal = 0;
     var linePosition = 0;
     final lines = <SubmittedLineView>[];
@@ -714,8 +1256,15 @@ class CartController extends Notifier<CartViewState> {
       // LocalOrderItem.orderItemId carries the source cart line id.
       final mods =
           _lineModifiers[item.orderItemId] ?? const <SelectedModifier>[];
-      final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
-      modifiersTotal += modSum;
+      // MONEY-PRICING-FORMULA-002A: the ONE formula. `lineTotalMinorPreview` is
+      // the BARE base × quantity, so the configured total re-derives from the
+      // per-unit base to keep the surcharge inside the multiplication.
+      final lineTotal = configuredLineTotalMinor(
+        basePriceMinor: item.basePriceMinorSnapshot,
+        modifiers: mods,
+        quantity: item.quantity,
+      );
+      modifiersTotal += lineTotal - item.lineTotalMinorPreview;
       // MENU-ORDER-001: carry the item's Dashboard ranks + its 1-based cart
       // position so every POS surface (receipt, kitchen ticket) orders items
       // into the SAME Dashboard-configured sequence the KDS + server reprint use.
@@ -724,7 +1273,7 @@ class CartController extends Notifier<CartViewState> {
         SubmittedLineView(
           name: item.itemNameSnapshot,
           quantity: item.quantity,
-          lineTotalMinor: item.lineTotalMinorPreview + modSum,
+          lineTotalMinor: lineTotal,
           currencyCode: item.currencyCodeSnapshot,
           // `name ×N` snapshots — quantity rides the display string so the
           // confirmation/receipt/print paths all show it unchanged.
@@ -733,6 +1282,13 @@ class CartController extends Notifier<CartViewState> {
           categoryDisplayOrder: dispOrder?.$1 ?? 0,
           itemDisplayOrder: dispOrder?.$2 ?? 0,
           linePosition: linePosition,
+          // PRINT-STARTUP-REPRINT-001: the ORDER-TIME kitchen count snapshots,
+          // so a manual reprint aggregates the SAME totals the automatic
+          // ticket printed. Meat is pre-multiplied by the option's units,
+          // exactly as kdsTicketViewFromCartLines does.
+          kitchenMeats: kitchenMeatSnapshots(mods),
+          prepComponents:
+              _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
         ),
       );
     }
@@ -756,6 +1312,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -765,9 +1322,11 @@ class CartController extends Notifier<CartViewState> {
   /// only when a submit result lands AFTER a PIN handover on the same till: the ORIGINAL
   /// session's recent-orders row is materialized from ITS captured draft, so the CURRENT
   /// session's cart, setup, and confirmation are never touched. The money arithmetic
-  /// mirrors [submitOrder] EXACTLY — integer minor units, base price × line quantity plus
-  /// each modifier delta counted once per line (D-007) — so a recovered row shows the same
-  /// figures it would have shown in its own session.
+  /// mirrors [submitOrder] EXACTLY — integer minor units, and the ONE 002A formula
+  /// `qty × (unit + Σ(delta × modQty))` (D-007) — so a recovered row shows the same
+  /// figures it would have shown in its own session. (It read "base price × line
+  /// quantity plus each modifier delta counted once per line", which is the
+  /// superseded formula A; the code has used `configuredLineTotalMinor` since 002A.)
   SubmittedOrderView viewFromDraft({
     required CartDraftSnapshot draft,
     OrderType orderType = OrderType.takeaway,
@@ -786,11 +1345,13 @@ class CartController extends Notifier<CartViewState> {
     final lines = <SubmittedLineView>[];
     for (final l in draft.lines) {
       linePosition++;
-      final modSum = l.modifiers.fold<int>(
-        0,
-        (sum, m) => sum + m.totalDeltaMinor,
+      // MONEY-PRICING-FORMULA-002A: the SAME one formula, so a recovered draft
+      // bills exactly what it displayed.
+      final lineTotal = configuredLineTotalMinor(
+        basePriceMinor: l.basePriceMinor,
+        modifiers: l.modifiers,
+        quantity: l.quantity,
       );
-      final lineTotal = l.basePriceMinor * l.quantity + modSum;
       subtotal += lineTotal;
       lines.add(
         SubmittedLineView(
@@ -806,6 +1367,15 @@ class CartController extends Notifier<CartViewState> {
           categoryDisplayOrder: l.categoryDisplayOrder,
           itemDisplayOrder: l.itemDisplayOrder,
           linePosition: linePosition,
+          // PRINT-STARTUP-REPRINT-001: the recovered draft carries its own
+          // order-time modifier snapshots, so meat survives a restart.
+          kitchenMeats: kitchenMeatSnapshots(l.modifiers),
+          // PARKED-CARTS-001: the draft now carries its ORDER-TIME prep
+          // snapshot as well, so a recovered row's manual kitchen reprint
+          // aggregates the real counts instead of silently omitting them. Still
+          // never re-read from the current catalog: a record written before the
+          // field existed honestly yields none.
+          prepComponents: l.prepComponents,
         ),
       );
     }
@@ -830,10 +1400,40 @@ class CartController extends Notifier<CartViewState> {
   /// applied (RF-117 part C). In real mode the values are the
   /// SERVER-AUTHORITATIVE `discount_total_minor` (+ recomputed grand) from
   /// `apply_discount`; in demo mode they are computed locally with the same
-  /// clamp. No-op when no order is being confirmed.
-  void applyOrderDiscount({required int discountTotalMinor}) {
+  /// clamp.
+  ///
+  /// MONEY-DISCOUNT-TARGET-INTEGRITY-002E — [orderId] IS THE POINT.
+  ///
+  /// This used to take the amount alone and write it onto whatever order the
+  /// confirmation happened to be holding. The discount sheet is reachable per
+  /// RECENT ORDER, so discounting order B wrote B's discount onto order A: A's
+  /// confirmation showed a discount it never received, A's printed customer
+  /// bill was built from that view, and A's payment sheet opened under-charged.
+  /// The server was always told the right order — only the LOCAL write was
+  /// blind. Passing the id to the RPC is therefore not enough; the identity
+  /// has to be checked at THIS boundary, where the state actually changes.
+  ///
+  /// FAIL CLOSED. The mutation happens only on an EXACT id match against the
+  /// currently held order. A stale response (the held confirmation moved on
+  /// while the request was in flight), a response for a different order, a
+  /// held order with no server identity yet, or a blank target are all a SAFE
+  /// NO-OP: no discount, no subtotal, tax, grand-total or payment change, no
+  /// confirmation change, no cart-line change, no substitution — and no
+  /// cashier-facing crash, because a late response is normal, not exceptional.
+  ///
+  /// Comparison is EXACT, deliberately. Order ids are not canonically trimmed
+  /// anywhere on the way in, so a whitespace-tolerant compare could match two
+  /// orders that the rest of the system considers distinct.
+  void applyOrderDiscount({
+    required String orderId,
+    required int discountTotalMinor,
+  }) {
     final current = _submittedOrder;
-    if (current == null) return;
+    if (current == null) return; // nothing is being confirmed
+    final heldOrderId = current.orderId;
+    if (heldOrderId == null || heldOrderId.isEmpty) return;
+    if (orderId.isEmpty) return;
+    if (orderId != heldOrderId) return; // a DIFFERENT order — never ours
     _submittedOrder = current.copyWith(discountTotalMinor: discountTotalMinor);
     _emit();
   }
@@ -846,6 +1446,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     // A fresh order ends any in-progress correction (see [clear]).
     ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();

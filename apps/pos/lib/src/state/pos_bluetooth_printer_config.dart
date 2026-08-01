@@ -5,7 +5,6 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
-import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
 import 'pos_printer_purpose.dart';
 
 export 'package:restoflow_native_printing/restoflow_native_printing.dart'
@@ -47,49 +46,80 @@ final posKitchenBluetoothPrinterConfigProvider =
 
 class PosBluetoothPrinterConfigController
     extends FamilyAsyncNotifier<PosBluetoothPrinterConfig?, PosPrinterPurpose> {
-  String get _key {
-    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
-    final segment = (deviceId == null || deviceId.isEmpty)
-        ? kPosNetworkPrinterLocalKey
-        : deviceId;
-    return '$kPosBluetoothPrinterKeyPrefix${arg.keySegment}$segment';
-  }
+  String _keyFor(String segment) =>
+      '$kPosBluetoothPrinterKeyPrefix${arg.keySegment}$segment';
 
   @override
   Future<PosBluetoothPrinterConfig?> build(PosPrinterPurpose arg) async {
-    ref.watch(posDeviceContextProvider);
+    // PRINT-STARTUP-REPRINT-001: same authoritative-scope contract as the
+    // network slot. Bluetooth and Wi-Fi remain fully separate key families.
+    final segment = await ref.watch(posPrinterScopeSegmentProvider.future);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      if (raw == null || raw.isEmpty) return null;
+      final own = _parse(prefs.getString(_keyFor(segment)));
+      if (own != null) return own;
+      if (segment == kPosPrinterScopeLocalKey) return null;
+      final legacyRaw = prefs.getString(_keyFor(kPosPrinterScopeLocalKey));
+      final legacy = _parse(legacyRaw);
+      if (legacy == null) return null;
+      try {
+        await prefs.setString(_keyFor(segment), legacyRaw!);
+      } catch (_) {
+        // Serve it this session; the legacy source is never deleted.
+      }
+      return legacy;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Persists [config] for this device+purpose into the authoritative scope.
+  Future<void> save(PosBluetoothPrinterConfig config) async {
+    if (config.address.trim().isEmpty) return; // never clobber with invalid
+    final segment = await ref.read(posPrinterScopeSegmentProvider.future);
+    await _settle();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyFor(segment), jsonEncode(config.toJson()));
+      state = AsyncData(config);
+    } catch (_) {
+      // Persistence failed: the previously saved profile stands.
+    }
+  }
+
+  /// Removes this device+purpose's saved Bluetooth printer.
+  Future<void> clear() async {
+    final segment = await ref.read(posPrinterScopeSegmentProvider.future);
+    await _settle();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyFor(segment));
+      if (segment != kPosPrinterScopeLocalKey) {
+        await prefs.remove(_keyFor(kPosPrinterScopeLocalKey));
+      }
+    } catch (_) {
+      // Best-effort.
+    }
+    state = const AsyncData(null);
+  }
+
+  Future<void> _settle() async {
+    try {
+      await future;
+    } catch (_) {
+      // A failed load must not block an explicit action.
+    }
+  }
+
+  PosBluetoothPrinterConfig? _parse(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
       final decoded = jsonDecode(raw);
       return decoded is Map<String, dynamic>
           ? PosBluetoothPrinterConfig.fromJson(decoded)
           : null;
     } catch (_) {
       return null;
-    }
-  }
-
-  /// Persists [config] for this device+purpose (state first, best-effort).
-  Future<void> save(PosBluetoothPrinterConfig config) async {
-    state = AsyncData(config);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_key, jsonEncode(config.toJson()));
-    } catch (_) {
-      // Best-effort persistence: the in-session config still applies.
-    }
-  }
-
-  /// Removes this device+purpose's saved Bluetooth printer.
-  Future<void> clear() async {
-    state = const AsyncData(null);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_key);
-    } catch (_) {
-      // Best-effort.
     }
   }
 }

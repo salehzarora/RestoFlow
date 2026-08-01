@@ -10,6 +10,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// RF-114 — durable offline outbox: queued orders survive refresh/restart, retry
 /// safely (idempotent, no duplicates), and never fake a "sent" state.
+///
+/// SCOPE, stated honestly (MONEY-PRODUCTION-PATH-TESTS-002D, Codex Blocker 7).
+/// This suite proves QUEUE MECHANICS. It hand-builds an [OutboxEntry] around a
+/// PLAIN item (2100 x 2 = 4200) and drives [RealOutboxRepository] directly, so
+/// it does NOT cross the cart, the submit handler, or any modifier pricing — and
+/// it must not be read as evidence that a paid modifier survives the real submit
+/// path. That end-to-end proof lives in
+/// `money_durable_outbox_production_test.dart`, which drives PIN sign-in, the
+/// real `submitOrderFromCart` handler, a real `SharedPrefsOutboxStore`, a full
+/// container disposal, and the production retry.
 
 class _RecordingTransport implements SyncRpcTransport {
   _RecordingTransport(this._handler);

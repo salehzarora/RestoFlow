@@ -55,6 +55,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     this.initialSelections = const <SelectedModifier>[],
     this.initialNote,
     this.isEdit = false,
+    this.displayBasePriceMinor,
     super.key,
   });
 
@@ -106,6 +107,22 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// button reads "Save changes" (saving REPLACES the line, never duplicates it).
   final bool isEdit;
 
+  /// MONEY-EDIT-INTEGRITY-002C (Codex Blocker 5) — the EDITED cart line's
+  /// FROZEN base price, in integer minor units. Null in the add flow.
+  ///
+  /// A cart line captures its base price at add time (D-008) and `Save` keeps
+  /// that snapshot. The sheet, however, is populated from the LIVE menu, so it
+  /// used to render today's `item.priceMinor` as both the header base price and
+  /// the running total's base. Once the Dashboard changed the product price the
+  /// cashier was shown one amount and Save produced another — with nothing on
+  /// screen to say so.
+  ///
+  /// Passed EXPLICITLY rather than inferred, and never by handing the sheet a
+  /// fabricated menu item with the historical price written over the live one:
+  /// the option deltas, availability and group rules must all keep coming from
+  /// the real catalogue, and only the BASE is historical.
+  final int? displayBasePriceMinor;
+
   /// Presents the picker as a MODAL BOTTOM SHEET at EVERY width — the cashier
   /// workflow the POS is built around: it slides up from the bottom edge over
   /// the dimmed POS, with rounded top corners and a Material drag handle, and
@@ -133,6 +150,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     List<SelectedModifier> initialSelections = const <SelectedModifier>[],
     String? initialNote,
     bool isEdit = false,
+    int? displayBasePriceMinor,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -164,6 +182,7 @@ class ModifierSelectionSheet extends StatefulWidget {
         initialSelections: initialSelections,
         initialNote: initialNote,
         isEdit: isEdit,
+        displayBasePriceMinor: displayBasePriceMinor,
       ),
     );
   }
@@ -172,10 +191,39 @@ class ModifierSelectionSheet extends StatefulWidget {
   State<ModifierSelectionSheet> createState() => _ModifierSelectionSheetState();
 }
 
+/// MONEY-EDIT-INTEGRITY-002C — how a stored selection matched the LIVE groups.
+enum _Resolution {
+  /// Matched a live group + option this sheet is entitled to re-price against.
+  resolved,
+
+  /// The option is not on the menu at all any more.
+  missing,
+
+  /// The option still exists, but NOT as the stored selection describes it: it
+  /// was moved into a different group, or a legacy record without a group id
+  /// cannot be attributed to exactly one group without guessing. Distinct from
+  /// [missing] because "no longer on the menu" would be untrue here, and the
+  /// cashier is entitled to an honest reason.
+  changed,
+}
+
 class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// Selected quantity per option id, per group id (>= 1; an absent option is
   /// unselected). Non-quantity selections are simply quantity 1.
   final Map<String, Map<String, int>> _selected = {};
+
+  /// MONEY-EDIT-INTEGRITY-002C — the stored ORDER-TIME snapshots of the
+  /// selections this edit opened with, keyed `'<groupId>|<optionId>'`, kept
+  /// only while the cashier has NOT touched that option.
+  ///
+  /// `_selected` holds ids and integer quantities alone, so it cannot tell an
+  /// untouched selection from one that was deselected and re-picked — every
+  /// re-selection path leaves the map byte-identical. Without that distinction
+  /// the sheet must either reprice everything from the live catalogue (silently
+  /// changing a line the cashier only LOOKED at) or freeze everything (ignoring
+  /// a deliberate re-pick). An entry is dropped the moment its option is
+  /// touched, which makes "touched" explicit rather than inferred.
+  final Map<String, SelectedModifier> _pristine = {};
 
   /// The optional per-item cashier note ("بدون بصل").
   final TextEditingController _noteController = TextEditingController();
@@ -219,8 +267,30 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// down fresh instances with the same configuration) produce the SAME
   /// signature, so ordinary locale / theme / MediaQuery / parent rebuilds
   /// preserve the in-progress selections and note.
+  ///
+  /// MONEY-EDIT-INTEGRITY-002C adds the EDITED LINE's identity — its frozen
+  /// display base and its stored selections. Those were safely excluded while
+  /// state held ids and quantities alone, but `_pristine` now caches the
+  /// stored ORDER-TIME SNAPSHOTS of one specific line. Reusing this widget
+  /// position for a DIFFERENT line of the SAME product with the same groups
+  /// would otherwise carry another line's prices into this one's save. Each
+  /// edit opens its own modal route today, so this is a guard rather than an
+  /// observed bug — but it is money, and it costs one string.
   static String _configSignature(ModifierSelectionSheet w) {
-    final buffer = StringBuffer(w.item.id);
+    final buffer = StringBuffer(w.item.id)
+      ..write('|b:')
+      ..write(w.displayBasePriceMinor);
+    for (final selection in w.initialSelections) {
+      buffer
+        ..write('|s:')
+        ..write(selection.modifierGroupId)
+        ..write(':')
+        ..write(selection.optionId)
+        ..write(':')
+        ..write(selection.priceDeltaMinor)
+        ..write(':')
+        ..write(selection.quantity);
+    }
     for (final group in w.groups) {
       buffer
         ..write('|g:')
@@ -250,24 +320,91 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     return buffer.toString();
   }
 
-  /// TABLET-UX-001 (A): prefill from the cart line being edited. Each initial
-  /// selection is matched back to its group by option id (a SelectedModifier
-  /// snapshot carries the option id + its taken quantity), so re-picking works
-  /// against the live groups. The note is restored verbatim. This is also the
-  /// reset path when the represented product genuinely changes.
+  /// TABLET-UX-001 (A): prefill from the cart line being edited.
+  ///
+  /// MONEY-EDIT-INTEGRITY-002C: only selections that resolve to a live group we
+  /// are ENTITLED to re-price against are seeded. An unresolved one is left out
+  /// deliberately — and Save is blocked while any exists, so nothing is lost by
+  /// omitting it. The note is restored verbatim. This is also the reset path
+  /// when the represented product genuinely changes.
   void _applyInitialState() {
     _selected.clear();
+    _pristine.clear();
     for (final selection in widget.initialSelections) {
-      for (final group in widget.groups) {
-        if (group.options.any((o) => o.id == selection.optionId)) {
-          (_selected[group.id] ??= <String, int>{})[selection.optionId] =
-              selection.quantity;
-          break;
-        }
-      }
+      final match = _resolve(selection);
+      final group = match.group;
+      if (group == null) continue;
+      (_selected[group.id] ??= <String, int>{})[selection.optionId] =
+          selection.quantity;
+      // The stored ORDER-TIME snapshot, kept aside so an untouched selection
+      // can be saved back exactly as it was priced (see [_snapshotFor]).
+      _pristine['${group.id}|${selection.optionId}'] = selection;
     }
     _noteController.text = widget.initialNote ?? '';
   }
+
+  /// MONEY-EDIT-INTEGRITY-002C — how one stored selection matches the LIVE
+  /// groups. [group]/[option] are non-null only when [outcome] is
+  /// [_Resolution.resolved].
+  ({_Resolution outcome, PosModifierGroup? group, PosModifierOption? option})
+  _resolve(SelectedModifier selection) {
+    final unresolved = (
+      outcome: _Resolution.missing,
+      group: null as PosModifierGroup?,
+      option: null as PosModifierOption?,
+    );
+    final changed = (
+      outcome: _Resolution.changed,
+      group: null as PosModifierGroup?,
+      option: null as PosModifierOption?,
+    );
+
+    final candidates = <PosModifierGroup>[
+      for (final g in widget.groups)
+        if (g.options.any((o) => o.id == selection.optionId)) g,
+    ];
+    if (candidates.isEmpty) return unresolved;
+
+    ({_Resolution outcome, PosModifierGroup? group, PosModifierOption? option})
+    accept(PosModifierGroup g) => (
+      outcome: _Resolution.resolved,
+      group: g,
+      option: g.options.firstWhere((o) => o.id == selection.optionId),
+    );
+
+    final storedGroupId = selection.modifierGroupId;
+    if (storedGroupId != null) {
+      // A CURRENT record names the group it was configured against, and that
+      // id is authoritative. Finding the option id in some OTHER group is NOT
+      // sufficient: an option moved between groups keeps its id while its
+      // price, name and selection semantics all become someone else's.
+      for (final g in candidates) {
+        if (_stableGroupId(g) == storedGroupId) return accept(g);
+      }
+      return changed;
+    }
+
+    // LEGACY record (written before group ids existed). Rejecting these
+    // outright would destroy proven-valid history, so attribute one ONLY when
+    // there is a single possibility and the group NAME still agrees.
+    if (candidates.length > 1) return changed; // ambiguous: never guess
+    final only = candidates.single;
+    if (!_sameGroupName(only.name, selection.groupName)) return changed;
+    // ...and never infer identity from a display name that several live groups
+    // share, even when the option happens to narrow it down.
+    final sharingName = widget.groups
+        .where((g) => _sameGroupName(g.name, only.name))
+        .length;
+    if (sharingName > 1) return changed;
+    return accept(only);
+  }
+
+  /// Group-name comparison for LEGACY attribution only. No shared normalizer
+  /// exists in the repository; this follows the prevailing `trim().toLowerCase()`
+  /// shape used elsewhere for name-identity comparisons. A blank stored name
+  /// can never match a real group, which is the fail-closed outcome we want.
+  static bool _sameGroupName(String a, String b) =>
+      a.trim().toLowerCase() == b.trim().toLowerCase() && a.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -278,19 +415,74 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   Map<String, int> _groupSelection(String groupId) =>
       _selected[groupId] ?? const {};
 
-  /// Min/max selection rules keep counting DISTINCT options — a quantity on
-  /// one option never changes how many options are considered chosen.
-  bool get _satisfied => widget.groups.every(
-    (g) => _groupSelection(g.id).length >= g.effectiveMin,
+  /// MONEY-EDIT-INTEGRITY-002C: [group]'s stable id, or null when the live menu
+  /// did not supply one. `PosModifierGroup.id` is non-nullable but the payload
+  /// parse is tolerant, so a row without an `id` arrives as the empty string.
+  /// Treating that as an identity would either persist a record the strict
+  /// decoder rejects, or let two id-less groups look like the same group.
+  static String? _stableGroupId(PosModifierGroup group) =>
+      group.id.trim().isEmpty ? null : group.id;
+
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — the stored selections this sheet
+  /// CANNOT represent against the live groups (option removed, moved to another
+  /// group, or the groups could not be loaded at all).
+  ///
+  /// [_applyInitialState] silently skips these, so without this they would be
+  /// dropped by a Save the cashier believed was harmless — deleting a paid
+  /// modifier and re-pricing the line downward.
+  /// MONEY-EDIT-INTEGRITY-002C: resolution is now GROUP-AWARE. The old test
+  /// asked only whether the option id appeared in SOME group, so an option
+  /// moved between groups looked perfectly resolved and was silently re-priced
+  /// and re-named under its new owner.
+  List<SelectedModifier> get _unresolvedInitialSelections => [
+    for (final selection in widget.initialSelections)
+      if (_resolve(selection).outcome != _Resolution.resolved) selection,
+  ];
+
+  /// True when at least one unresolved selection is unresolved because the
+  /// option is genuinely GONE, rather than merely changed. Chooses which of the
+  /// two honest explanations the cashier is given.
+  bool get _hasMissingSelections => widget.initialSelections.any(
+    (s) => _resolve(s).outcome == _Resolution.missing,
   );
 
+  /// True when this edit cannot offer options at all (menu unavailable/loading,
+  /// item not found, or no authoritative groups) while the line DOES carry
+  /// stored modifiers. The sheet then edits the NOTE only and the caller routes
+  /// confirmation to a note-only mutation, so the snapshots survive untouched.
+  bool get _noteOnlyEdit =>
+      widget.isEdit &&
+      widget.groups.isEmpty &&
+      widget.initialSelections.isNotEmpty;
+
+  /// True when groups DID resolve but one or more stored selections did not.
+  /// Saving would silently keep the survivors and drop the rest, so Save is
+  /// blocked until the cashier refreshes the menu or cancels.
+  bool get _hasUnrepresentableSelections =>
+      widget.isEdit &&
+      widget.groups.isNotEmpty &&
+      _unresolvedInitialSelections.isNotEmpty;
+
+  /// Min/max selection rules keep counting DISTINCT options — a quantity on
+  /// one option never changes how many options are considered chosen.
+  ///
+  /// NOTE the empty-group trap this now closes: `Iterable.every` on an EMPTY
+  /// group list is vacuously TRUE, so an edit opened with no resolvable groups
+  /// used to report "satisfied" and enable Save over an empty selection.
+  bool get _satisfied =>
+      !_hasUnrepresentableSelections &&
+      widget.groups.every(
+        (g) => _groupSelection(g.id).length >= g.effectiveMin,
+      );
+
+  /// MONEY-EDIT-INTEGRITY-002C: derived from [_selections] — the very list Save
+  /// persists — rather than recomputed from the live catalogue. That makes
+  /// "what the sheet shows" and "what Save writes" the SAME arithmetic over the
+  /// SAME snapshots by construction, so the two cannot drift apart again.
   int get _deltaTotal {
     var total = 0;
-    for (final group in widget.groups) {
-      final picked = _groupSelection(group.id);
-      for (final option in group.options) {
-        total += option.priceDeltaMinor * (picked[option.id] ?? 0);
-      }
+    for (final selection in _selections()) {
+      total += selection.totalDeltaMinor;
     }
     return total;
   }
@@ -306,15 +498,30 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     return max == null || _groupSelection(group.id).length < max;
   }
 
+  /// MONEY-EDIT-INTEGRITY-002C: the cashier TOUCHED this option, so it is no
+  /// longer the stored snapshot — it is a deliberate choice, priced at what the
+  /// menu charges for it today. Deselect-and-reselect counts: the sheet cannot
+  /// distinguish it from a fresh pick, and pretending otherwise would show one
+  /// price and save another.
+  void _touch(PosModifierGroup group, PosModifierOption option) =>
+      _pristine.remove('${group.id}|${option.id}');
+
+  /// A single-select tap clears the whole group, so every stored snapshot in it
+  /// is superseded at once.
+  void _touchGroup(PosModifierGroup group) =>
+      _pristine.removeWhere((key, _) => key.startsWith('${group.id}|'));
+
   void _toggle(PosModifierGroup group, PosModifierOption option) {
     setState(() {
       final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
       if (group.singleSelect) {
+        _touchGroup(group);
         picked
           ..clear()
           ..[option.id] = 1;
         return;
       }
+      _touch(group, option);
       if (picked.containsKey(option.id)) {
         picked.remove(option.id);
         return;
@@ -330,6 +537,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// Selecting a NEW option still respects the distinct-options capacity.
   void _increment(PosModifierGroup group, PosModifierOption option) {
     setState(() {
+      _touch(group, option);
       final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
       final current = picked[option.id] ?? 0;
       if (current == 0) {
@@ -347,6 +555,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// − on a quantity-enabled option: counts down; 0 unselects it.
   void _decrement(PosModifierGroup group, PosModifierOption option) {
     setState(() {
+      _touch(group, option);
       final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
       final current = picked[option.id] ?? 0;
       if (current <= 1) {
@@ -357,19 +566,70 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     });
   }
 
+  /// The exact snapshot this sheet will SAVE for one picked option.
+  ///
+  /// MONEY-EDIT-INTEGRITY-002C. An UNTOUCHED stored selection keeps its
+  /// order-time snapshot verbatim — price, names and kitchen metadata (D-008).
+  /// Merely opening a line must never re-price it against a catalogue that has
+  /// moved on since; the cashier did not choose that.
+  ///
+  /// The one thing an untouched selection DOES gain is the group id we just
+  /// PROVED it belongs to. That is how a legacy record earns a stable identity:
+  /// only through a healthy, intentional save where the current group→option
+  /// relationship actually resolved.
+  ///
+  /// A TOUCHED option is a deliberate choice and takes the live catalogue's
+  /// price and names, so what the cashier picked is what the cashier is billed.
+  SelectedModifier _snapshotFor(
+    PosModifierGroup group,
+    PosModifierOption option,
+    int quantity,
+  ) {
+    final stored = _pristine['${group.id}|${option.id}'];
+    if (stored != null && stored.quantity == quantity) {
+      return SelectedModifier(
+        optionId: stored.optionId,
+        modifierGroupId: _stableGroupId(group),
+        groupName: stored.groupName,
+        optionName: stored.optionName,
+        priceDeltaMinor: stored.priceDeltaMinor,
+        quantity: stored.quantity,
+        kitchenMeat: stored.kitchenMeat,
+      );
+    }
+    return SelectedModifier(
+      optionId: option.id,
+      // MONEY-EDIT-INTEGRITY-002C: capture the STABLE group id this option was
+      // actually chosen from, so a later edit can tell a genuine re-selection
+      // from an option that has since been moved into a different group with
+      // different semantics and price.
+      //
+      // BLANK is written as NULL, never as ''. The menu parse is tolerant — a
+      // payload row with no `id` yields the empty string rather than skipping
+      // the group (pos_menu_provider.dart) — and persisting '' would produce a
+      // record the strict decoder rejects, quarantining the cashier's own cart
+      // on the next restart. A blank id is simply "unknown", which resolves
+      // fail-closed by name.
+      modifierGroupId: _stableGroupId(group),
+      groupName: group.name,
+      optionName: option.name,
+      priceDeltaMinor: option.priceDeltaMinor,
+      quantity: quantity,
+      // KITCHEN-MEAT-001: carry the option's meat contribution into the
+      // order-time snapshot (money-free; null when unconfigured).
+      kitchenMeat: option.kitchenMeat,
+    );
+  }
+
+  /// Everything this sheet will save, in live group/option order.
   List<SelectedModifier> _selections() => [
     for (final group in widget.groups)
       for (final option in group.options)
         if (_groupSelection(group.id).containsKey(option.id))
-          SelectedModifier(
-            optionId: option.id,
-            groupName: group.name,
-            optionName: option.name,
-            priceDeltaMinor: option.priceDeltaMinor,
-            quantity: _groupSelection(group.id)[option.id] ?? 1,
-            // KITCHEN-MEAT-001: carry the option's meat contribution into the
-            // order-time snapshot (money-free; null when unconfigured).
-            kitchenMeat: option.kitchenMeat,
+          _snapshotFor(
+            group,
+            option,
+            _groupSelection(group.id)[option.id] ?? 1,
           ),
   ];
 
@@ -406,11 +666,16 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final category = widget.category ?? categoryById(widget.item.categoryId);
+    // MONEY-EDIT-INTEGRITY-002C (Blocker 5): in EDIT mode the base is the cart
+    // line's FROZEN snapshot, not today's catalogue price. In the add flow
+    // there is no line yet, so the current price is the right one and the
+    // behaviour is unchanged.
+    final baseMinor = widget.displayBasePriceMinor ?? widget.item.priceMinor;
     final basePriceText = MoneyFormatter.formatMinor(
-      widget.item.priceMinor,
+      baseMinor,
       widget.currencyCode,
     );
-    final totalMinor = widget.item.priceMinor + _deltaTotal;
+    final totalMinor = baseMinor + _deltaTotal;
     final totalText = MoneyFormatter.formatMinor(
       totalMinor,
       widget.currencyCode,
@@ -425,8 +690,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     // Part E header: thumbnail + name + BASE price, so the cashier reads base
     // vs the running total at the bottom. NOTE: the base price is a DIFFERENT
     // money string than the running total once any paid option is picked —
-    // tests pin the total's render count. (No description line: the menu item
-    // model carries no description field, and nothing is ever fabricated.)
+    // tests pin the total's render count. (No description line: since
+    // POS-PRODUCT-DESCRIPTIONS-001 the menu item DOES carry a description, but
+    // it is deliberately not repeated here — the cashier already read it on the
+    // card they just tapped, and this sheet is for configuring the item, not
+    // re-describing it.)
     final header = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -599,12 +867,42 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 ),
               ],
             ),
+            // MONEY-MODIFIER-PRICING-INTEGRITY-001: never let an edit look like
+            // "this item simply has no options". Say WHY, so the cashier
+            // refreshes or cancels instead of saving money away.
+            if (_noteOnlyEdit) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              RestoflowNoticeBanner(
+                key: const Key('modifier-options-unavailable'),
+                body: l10n.posModifierOptionsUnavailable,
+              ),
+            ] else if (_hasUnrepresentableSelections) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              // MONEY-EDIT-INTEGRITY-002C: say which it is. An option that was
+              // MOVED to another group — or a legacy record we cannot attribute
+              // to exactly one group — is still very much on the menu, so
+              // "no longer on the menu" would be a false explanation and would
+              // send the cashier looking for something that is right there.
+              if (_hasMissingSelections)
+                RestoflowNoticeBanner(
+                  key: const Key('modifier-saved-options-unavailable'),
+                  body: l10n.posModifierSavedOptionsUnavailable,
+                  tone: RestoflowTone.warning,
+                )
+              else
+                RestoflowNoticeBanner(
+                  key: const Key('modifier-saved-options-changed'),
+                  body: l10n.posModifierSavedOptionsChanged,
+                  tone: RestoflowTone.warning,
+                ),
+            ],
             const SizedBox(height: RestoflowSpacing.sm),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('modifier-add-button'),
-                // Disabled until every required group meets its minimum.
+                // Disabled until every required group meets its minimum, and
+                // while any stored selection cannot be represented.
                 onPressed: _satisfied
                     ? () {
                         widget.onConfirm(_selections(), _note);
