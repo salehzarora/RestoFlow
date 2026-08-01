@@ -363,6 +363,20 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     setState(() => _submitting = false);
     outcome.fold(
       (_) {
+        // 017 (Codex MEDIUM #5): the save DROPPED every dangling link from the
+        // payload, so the in-memory row must stop claiming one — otherwise the
+        // editor keeps showing a stale id and a warning for a link that is no
+        // longer persisted. Resource name/quantity/unit and every unrelated
+        // field are untouched; a link that RESOLVED is left exactly as it is.
+        final cleared = _prepRows.where((r) => r.classifierMissing).toList();
+        if (cleared.isNotEmpty) {
+          setState(() {
+            for (final row in cleared) {
+              row.classifierOptionId = '';
+              row.classifierMissing = false;
+            }
+          });
+        }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(l10n.menuSavedSnack)));
@@ -752,6 +766,11 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     // A link to a since-deleted option cannot be the picker's value; show the
     // "not split" state plus the validation error instead of crashing.
     final resolved = options.any((o) => o.id == row.classifierOptionId);
+    // 017 (Codex MEDIUM #5): a dangling link must be VISIBLE BEFORE Save, and
+    // visible even when the item now has NO options at all — the case where the
+    // picker itself is hidden and the problem would otherwise be silent. This is
+    // computed from the row's own state, so it does not wait for a save attempt.
+    final dangling = row.classifierOptionId.isNotEmpty && !resolved;
     return Padding(
       padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
       child: Column(
@@ -821,6 +840,21 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               ),
             ],
           ),
+          // 017 (Codex MEDIUM #5): the dangling-link warning stands on its OWN,
+          // outside the picker, so it is shown BEFORE any save attempt AND when
+          // the item has no options left to offer — the exact case where the
+          // picker is hidden and the stale link would otherwise be invisible.
+          if (dangling && options.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+              child: Text(
+                l10n.menuPrepClassifierMissing,
+                key: ValueKey('menu-item-prep-classifier-dangling-$index'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
           // 016: only offered once the item HAS modifier options — there is
           // nothing to split by before that, and a not-yet-created item has no
           // options at all. Existing rows default to "Not split", so no
@@ -840,7 +874,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                   labelText: l10n.menuPrepClassifierLabel,
                   border: const OutlineInputBorder(),
                   isDense: true,
-                  errorText: row.classifierMissing
+                  // 017: `dangling` surfaces the problem the moment the editor
+                  // renders — the operator no longer has to press Save to
+                  // discover that the linked option is gone.
+                  errorText: (dangling || row.classifierMissing)
                       ? l10n.menuPrepClassifierMissing
                       : null,
                 ),

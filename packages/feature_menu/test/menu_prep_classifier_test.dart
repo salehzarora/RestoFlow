@@ -391,14 +391,20 @@ void main() {
     );
     expect(picker.initialValue, '');
 
+    // 017 (Codex MEDIUM #5): the admin is told BEFORE pressing Save — the
+    // warning no longer waits for a save attempt to appear.
+    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
+
     await _save(tester);
 
     // Saved WITHOUT the dangling link (the resource keeps one total) …
     expect(store.lastAttributes!['prep_components'], [
       {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
     ]);
-    // … and the admin is told why.
-    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
+    // … and the now-resolved state is CLEARED, so the editor stops warning
+    // about a link it no longer holds.
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
   });
 
   testWidgets('the picker is hidden when the item has no options to split by', (
@@ -500,6 +506,146 @@ void main() {
       'classifier_option_id': 'opt-cheese-chicken',
       'classifier_option_name': 'Cheese',
     });
+  });
+
+  // 017 (Codex MEDIUM #5): deleted-link UX ------------------------------------
+  testWidgets('017-1. the dangling warning shows BEFORE Save', (tester) async {
+    final store = _burgerStore(
+      prep: const [
+        {
+          'name': 'Meat pieces',
+          'quantity': 2,
+          'unit': '',
+          'classifier_option_id': 'opt-gone',
+          'classifier_option_name': 'Bacon',
+        },
+      ],
+    );
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger 240g');
+
+    // No save attempt has happened yet.
+    expect(store.upsertItemCalls, 0);
+    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
+  });
+
+  testWidgets('017-2. the warning shows even when the item has ZERO options', (
+    tester,
+  ) async {
+    // The picker itself is hidden here — the problem must still be visible.
+    final store = _RecordingStore(
+      categories: const [_category],
+      items: [
+        _item(
+          id: 'item-1',
+          name: 'Burger 240g',
+          prep: const [
+            {
+              'name': 'Meat pieces',
+              'quantity': 2,
+              'unit': '',
+              'classifier_option_id': 'opt-gone',
+              'classifier_option_name': 'Cheese',
+            },
+          ],
+        ),
+      ],
+    );
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger 240g');
+
+    expect(
+      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
+      findsNothing,
+      reason: 'no options to pick from',
+    );
+    expect(
+      find.byKey(const ValueKey('menu-item-prep-classifier-dangling-0')),
+      findsOneWidget,
+    );
+    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
+  });
+
+  testWidgets('017-3. saving drops the dangling link and CLEARS the stale '
+      'state', (tester) async {
+    final store = _burgerStore(
+      prep: const [
+        {
+          'name': 'Meat pieces',
+          'quantity': 2,
+          'unit': '',
+          'classifier_option_id': 'opt-gone',
+          'classifier_option_name': 'Bacon',
+        },
+      ],
+    );
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger 240g');
+    await _save(tester);
+
+    // The payload is clean …
+    expect(store.lastAttributes!['prep_components'], [
+      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
+    ]);
+    // … the resource kept name/quantity/unit …
+    final row =
+        (store.lastAttributes!['prep_components'] as List).single as Map;
+    expect(row['name'], 'Meat pieces');
+    expect(row['quantity'], 2);
+    // … and the in-memory row no longer claims a link, so the warning is gone.
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
+    final picker = tester.widget<DropdownButtonFormField<String>>(
+      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
+    );
+    expect(picker.initialValue, '');
+  });
+
+  testWidgets('017-4. the option is deleted while the editor is OPEN', (
+    tester,
+  ) async {
+    final store = _burgerStore(
+      prep: const [
+        {'name': 'Bread', 'quantity': 1, 'unit': ''},
+        {
+          'name': 'Meat pieces',
+          'quantity': 2,
+          'unit': '',
+          'classifier_option_id': 'opt-cheese',
+          'classifier_option_name': 'Cheese',
+        },
+      ],
+    );
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger 240g');
+
+    // Healthy to begin with.
+    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
+
+    // The linked option is deleted from underneath the OPEN editor, through the
+    // app's own write path, so the editor refreshes exactly as in production.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MenuManagementScreen)),
+    );
+    await container
+        .read(menuWriteControllerProvider)
+        .softDelete(
+          entity: MenuEntityType.modifierOption,
+          id: 'opt-cheese',
+          parentId: 'mod-1',
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
+
+    // Saving is still allowed, drops the link, and preserves everything else.
+    await _save(tester);
+    expect(store.lastAttributes!['prep_components'], [
+      {'name': 'Bread', 'quantity': 1, 'unit': ''},
+      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
   });
 
   test('the parsed model exposes the stored link', () {

@@ -45,6 +45,64 @@ class PosMenuData {
     for (final group in modifierGroups)
       if (group.menuItemId == menuItemId && group.options.isNotEmpty) group,
   ];
+
+  /// 017 (Codex HIGH #2) — THE trusted classifier boundary for the POS.
+  ///
+  /// A menu item's stored `attributes.prep_components` may assert that a
+  /// preparation resource is classified by some modifier option id. That
+  /// assertion is checked HERE, once, against the item's OWN options, and the
+  /// resulting items replace the raw ones — so every downstream consumer (the
+  /// cart's add-time snapshot, the submit-time map the outbox and the kitchen
+  /// ticket share, the Add-items snapshot, a parked draft) can only ever see a
+  /// link that was proven against the same product.
+  ///
+  /// An id naming another product's option, a deleted option, an empty id or a
+  /// nameless target is stripped and the resource keeps its ordinary unsplit
+  /// line; the resource's name/quantity/unit are never touched. The printed
+  /// option name always comes from THIS item's live option, never from the
+  /// stored pair, so a stale or hostile name cannot reach a ticket and a
+  /// renamed option refreshes on the next menu read. Nothing is queried: the
+  /// data is already in hand, so no cross-tenant lookup is possible.
+  static PosMenuData withTrustedPrepClassifiers(PosMenuData menu) {
+    var changed = false;
+    final items = <DemoMenuItem>[];
+    for (final item in menu.items) {
+      final configured = item.prepComponents;
+      if (configured.isEmpty) {
+        items.add(item);
+        continue;
+      }
+      final optionNamesById = <String, String>{
+        for (final group in menu.modifierGroups)
+          if (group.menuItemId == item.id)
+            for (final option in group.options) option.id: option.name,
+      };
+      final trusted = resolveTrustedPrepClassifiers(
+        configured,
+        optionNamesById,
+      );
+      if (identical(trusted, configured)) {
+        items.add(item);
+        continue;
+      }
+      changed = true;
+      items.add(
+        item.copyWith(
+          attributes: <String, dynamic>{
+            ...item.attributes,
+            'prep_components': [for (final c in trusted) c.toJson()],
+          },
+        ),
+      );
+    }
+    if (!changed) return menu;
+    return PosMenuData(
+      categories: menu.categories,
+      items: items,
+      currencyCode: menu.currencyCode,
+      modifierGroups: menu.modifierGroups,
+    );
+  }
 }
 
 /// One selectable option inside a [PosModifierGroup]. [priceDeltaMinor] is a
@@ -240,11 +298,16 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
               else
                 item,
           ];
-    return PosMenuData(
-      categories: kDemoCategories,
-      items: items,
-      currencyCode: kDemoCurrencyCode,
-      modifierGroups: kDemoModifierGroups,
+    // 017: the demo menu goes through the SAME trusted classifier boundary as
+    // the real one, so demo and real mode can never diverge on what a valid
+    // classifier link is.
+    return PosMenuData.withTrustedPrepClassifiers(
+      PosMenuData(
+        categories: kDemoCategories,
+        items: items,
+        currencyCode: kDemoCurrencyCode,
+        modifierGroups: kDemoModifierGroups,
+      ),
     );
   }
   final transport = ref.watch(posAuthTransportProvider);
@@ -689,10 +752,14 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   );
 
   final currency = (raw['currency_code'] ?? '').toString();
-  return PosMenuData(
-    categories: orderedCategories,
-    items: orderedItems,
-    currencyCode: currency.length == 3 ? currency : kDemoCurrencyCode,
-    modifierGroups: groups,
+  // 017 (Codex HIGH #2): every classifier link the server sent is proven
+  // against the SAME item's own options before any consumer sees it.
+  return PosMenuData.withTrustedPrepClassifiers(
+    PosMenuData(
+      categories: orderedCategories,
+      items: orderedItems,
+      currencyCode: currency.length == 3 ? currency : kDemoCurrencyCode,
+      modifierGroups: groups,
+    ),
   );
 });

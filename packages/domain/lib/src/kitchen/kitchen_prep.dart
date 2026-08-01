@@ -107,18 +107,30 @@ class KitchenPrepComponent {
     final rawQty = raw['quantity'];
     final quantity = rawQty is num ? rawQty : num.tryParse('${rawQty ?? ''}');
     if (quantity == null || quantity <= 0) return null;
+    // 017 (Codex HIGH #2): the classifier triple is read STRICTLY BY TYPE. A
+    // non-string id/name or a non-boolean answer is DROPPED, never stringified
+    // — otherwise `{"classifier_option_id": {"x": 1}}` would arrive as the
+    // literal text "{x: 1}" and be carried as if it were an identifier. A
+    // dropped field simply leaves the resource UNSPLIT; the resource itself
+    // (name/quantity/unit) is never lost to malformed classifier metadata.
+    final rawId = raw['classifier_option_id'];
+    final rawName = raw['classifier_option_name'];
     final selected = raw['classifier_selected'];
+    final classifierOptionId = rawId is String ? rawId.trim() : '';
+    final classifierOptionName = rawName is String ? rawName.trim() : '';
     return KitchenPrepComponent(
       name: name,
       quantity: quantity,
       unit: (raw['unit'] ?? '').toString().trim(),
       // ADDITIVE (016): absent on every record written before this feature, so
       // those decode to the unclassified default and stay UNSPLIT.
-      classifierOptionId: (raw['classifier_option_id'] ?? '').toString().trim(),
-      classifierOptionName: (raw['classifier_option_name'] ?? '')
-          .toString()
-          .trim(),
-      classifierSelected: selected is bool ? selected : null,
+      classifierOptionId: classifierOptionId,
+      classifierOptionName: classifierOptionName,
+      // An answer without a usable link is meaningless — drop it so a
+      // half-decoded element can never present itself as classified.
+      classifierSelected: selected is bool && classifierOptionId.isNotEmpty
+          ? selected
+          : null,
     );
   }
 
@@ -149,11 +161,85 @@ class KitchenPrepComponent {
       '${classifierSelected == null ? '' : '=$classifierSelected'})';
 }
 
+/// 017 (Codex HIGH #2) — THE trusted classifier boundary.
+///
+/// A stored `classifier_option_id` is only ever an *assertion*: the attributes
+/// bag is edited over time, options get deleted, and a snapshot may be replayed
+/// long after. This is the ONE place that assertion is checked against reality —
+/// [optionNamesById] must be the option id → name map of the SAME menu item the
+/// [components] belong to, read from the live menu at capture time.
+///
+/// A link survives ONLY when its id is a non-empty string naming an option of
+/// THAT item. Anything else — an id from another product, a deleted option, an
+/// empty id, a link whose target has no usable name — is STRIPPED, and the
+/// resource keeps its ordinary unsplit line. The resource itself (name,
+/// quantity, unit) is never touched: invalid classification must never remove a
+/// preparation resource the kitchen needs.
+///
+/// The display name is always taken from the trusted map, never from the stored
+/// pair, so a stale or hostile name in JSON can never be printed and a renamed
+/// option refreshes automatically. Nothing here queries anything: the caller
+/// supplies its own item's options, so no cross-tenant lookup is possible.
+///
+/// Because this is the only writer of a surviving link, a component that still
+/// carries one downstream has, by construction, been validated here.
+List<KitchenPrepComponent> resolveTrustedPrepClassifiers(
+  List<KitchenPrepComponent> components,
+  Map<String, String> optionNamesById,
+) {
+  if (components.isEmpty) return components;
+  var changed = false;
+  final out = <KitchenPrepComponent>[];
+  for (final component in components) {
+    final id = component.classifierOptionId;
+    final trustedName = id.isEmpty ? null : optionNamesById[id]?.trim();
+    if (trustedName == null || trustedName.isEmpty) {
+      // Unknown / foreign / deleted / nameless target -> unsplit resource.
+      if (id.isEmpty &&
+          component.classifierOptionName.isEmpty &&
+          component.classifierSelected == null) {
+        out.add(component);
+        continue;
+      }
+      changed = true;
+      out.add(
+        KitchenPrepComponent(
+          name: component.name,
+          quantity: component.quantity,
+          unit: component.unit,
+        ),
+      );
+      continue;
+    }
+    if (component.classifierOptionName == trustedName &&
+        component.classifierSelected == null) {
+      out.add(component);
+      continue;
+    }
+    changed = true;
+    out.add(
+      KitchenPrepComponent(
+        name: component.name,
+        quantity: component.quantity,
+        unit: component.unit,
+        classifierOptionId: id,
+        classifierOptionName: trustedName,
+      ),
+    );
+  }
+  return changed ? out : components;
+}
+
 /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the SINGLE place a menu item's
 /// configured prep [components] acquire their ORDER-TIME (D-008) classification
 /// answer, so the wire payload, the durable journal, the direct kitchen print
 /// and the manual reprint can never disagree about which bucket a resource
 /// belongs to.
+///
+/// 017: this answers WHICH BUCKET only. Whether the link may exist at all is
+/// decided upstream by [resolveTrustedPrepClassifiers] against the item's own
+/// options — so a link reaching here has already been proven, and this function
+/// never promotes an unproven id/name pair into a classification.
 ///
 /// A component with no configured classifier is returned UNCHANGED (identity,
 /// not a copy) — the historical unsplit behaviour, byte-identical on the wire.
