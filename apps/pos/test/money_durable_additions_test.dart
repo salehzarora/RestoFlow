@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
+    show KdsItemView, KdsTicketView;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
 import 'package:restoflow_pos/src/data/demo_menu.dart' show DemoMenuItem;
@@ -312,6 +314,53 @@ Future<AdditionResult> _buildAndSubmit(ProviderContainer c) async {
   return c.read(additionControllerProvider.notifier).submit();
 }
 
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F8) — a [PosKitchenTicketPrinter] that
+/// counts sends instead of opening a socket, so K4 can drive the REAL manual
+/// entry point (`printKitchenTicketForOrder`) rather than assert about it.
+class _ManualPrinter extends PosKitchenTicketPrinter {
+  _ManualPrinter(super.container);
+
+  int sends = 0;
+
+  @override
+  Future<PosKitchenPrintOutcome> printKitchenTicket({
+    required KdsTicketView ticket,
+    required KitchenTicketPrintLabels labels,
+  }) async {
+    sends++;
+    return PosKitchenPrintOutcome.printed;
+  }
+}
+
+/// The ticket and labels are only carried THROUGH the manual entry point here
+/// (`_ManualPrinter` renders nothing), so the minimum valid shapes are used.
+KdsTicketView _manualTicket() => KdsTicketView(
+  kitchenTicketId: 'kt-1',
+  stationId: 'st-1',
+  items: const <KdsItemView>[],
+  orderId: 'o-1',
+  orderNumber: 'A-1',
+);
+
+String _roundLabel(int n) => 'Round $n';
+
+String _kitchenTotal(String count, String unit) => '$count $unit';
+
+KitchenTicketPrintLabels _manualLabels() => const KitchenTicketPrintLabels(
+  ticketLabel: 'Ticket',
+  previewTitle: 'Kitchen ticket',
+  dineIn: 'Dine-in',
+  takeaway: 'Takeaway',
+  tableLabel: 'Table',
+  customerLabel: 'Customer',
+  customerPhoneLabel: 'Phone',
+  stationLabel: 'Station',
+  noteLabel: 'Note',
+  kitchenTotal: _kitchenTotal,
+  additionLabel: 'Addition',
+  roundLabel: _roundLabel,
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -560,6 +609,193 @@ void main() {
         await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send);
         await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send);
         expect(sends, 1, reason: 'the in-session guard still works on its own');
+      },
+    );
+  });
+
+  // =========================================================================
+  // K — MONEY-CODEX-FINAL-CORRECTIONS-004 (F8). AN UNREADABLE CLAIM ENVELOPE
+  // IS NOT AN EMPTY ONE.
+  //
+  // `_claims()` returned `{}` for damaged JSON, a non-Map envelope, a missing
+  // `claims` map and a schema version from a newer build. Every claim the
+  // envelope held then read as "never claimed", so the guard let the automatic
+  // send run — and the kitchen received a second ticket for a round it was
+  // already cooking. The failure is silent and it is exactly the one the store
+  // was built to prevent.
+  //
+  // The safe reading of "we cannot tell whether this round was claimed" is the
+  // one this store already applies to a state written by a NEWER build: assume
+  // someone committed to printing it. Not printing is recoverable — the
+  // operator reprints on demand, which never consults this guard.
+  // =========================================================================
+  group('K. an unreadable print-claim envelope blocks AUTOMATIC printing', () {
+    final key = posAdditionKitchenPrintGuardKey(orderId: 'o-1', roundId: 'r-2');
+    const storeKey = 'restoflow.pos.round_print_claims.v1.dev-1';
+
+    Future<SharedPreferences> prefsWith(Object envelope) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        storeKey: envelope is String ? envelope : jsonEncode(envelope),
+      });
+      return SharedPreferences.getInstance();
+    }
+
+    final broken = <String, Object>{
+      'damaged JSON': '{not json',
+      'a non-Map envelope': '["claims"]',
+      'a missing claims map': <String, Object?>{'version': 1},
+      'a non-Map claims value': <String, Object?>{
+        'version': 1,
+        'claims': <Object?>[],
+      },
+      'a NEWER schema version': <String, Object?>{
+        'version': 999,
+        'claims': <String, Object?>{'anything': 'sent'},
+      },
+    };
+
+    broken.forEach((label, envelope) {
+      test('K1 $label must not read as "never claimed"', () async {
+        final prefs = await prefsWith(envelope);
+        var sends = 0;
+        final c = _container(_FakeTransport([_applied]), prefs: prefs);
+        addTearDown(c.dispose);
+
+        final outcome = await c
+            .read(posAutoKitchenPrintGuardProvider)
+            .runGuarded(key, () async {
+              sends++;
+              return PosKitchenPrintOutcome.printed;
+            });
+
+        expect(
+          sends,
+          0,
+          reason:
+              'the round may already have been printed; sending again puts a '
+              'SECOND ticket in front of a kitchen already cooking it',
+        );
+        expect(
+          outcome,
+          PosKitchenPrintOutcome.printed,
+          reason:
+              'the caller is told the ticket is handled, exactly as it is for '
+              'a claim we CAN read — it must not fall into a retry loop',
+        );
+      });
+    });
+
+    test('K2 the unreadable bytes are PRESERVED, never overwritten', () async {
+      const raw = '{"version":999,"claims":{"o-9|round:r-9":"sent"}}';
+      final prefs = await prefsWith(raw);
+      final store = SharedPrefsRoundPrintClaimStore(prefs)..scopeKey = 'dev-1';
+
+      // A later round writes its own claim, which must start a fresh envelope
+      // WITHOUT destroying the one this build cannot interpret.
+      await store.record('o-2|round:r-1', PosRoundPrintClaimState.claimed);
+
+      expect(
+        prefs.getString('$storeKey.unreadable'),
+        raw,
+        reason:
+            'a claim map we cannot read is the only record of what a newer '
+            'build already printed — overwriting it destroys that evidence',
+      );
+      expect(
+        store.claimOf('o-2|round:r-1'),
+        PosRoundPrintClaimState.claimed,
+        reason: 'and the new envelope works normally from here',
+      );
+    });
+
+    test(
+      'K3 the operator is TOLD, and the count survives preservation',
+      () async {
+        final prefs = await prefsWith('{not json');
+        final store = SharedPrefsRoundPrintClaimStore(prefs)
+          ..scopeKey = 'dev-1';
+        expect(store.unreadableRecordCount('dev-1'), 1);
+
+        await store.record('o-2|round:r-1', PosRoundPrintClaimState.sent);
+        expect(
+          store.unreadableRecordCount('dev-1'),
+          1,
+          reason:
+              'setting the bytes aside is not the same as resolving them — a '
+              'till holding claims it cannot read must not look healthy again',
+        );
+      },
+    );
+
+    test(
+      'K4 a MANUAL reprint is still available while claims are unreadable',
+      () async {
+        final prefs = await prefsWith('{not json');
+        var sends = 0;
+        final c = _container(_FakeTransport([_applied]), prefs: prefs);
+        addTearDown(c.dispose);
+
+        // The automatic path is blocked...
+        await c.read(posAutoKitchenPrintGuardProvider).runGuarded(
+          key,
+          () async {
+            sends++;
+            return PosKitchenPrintOutcome.printed;
+          },
+        );
+        expect(sends, 0);
+
+        // ...and the REAL manual entry point still sends. `_ManualPrinter`
+        // stands in for the resolved printer, so this drives the production
+        // function the "Print kitchen ticket" button calls — the point being
+        // that `printKitchenTicketForOrder` never consults the guard, and F8
+        // must not make it collateral damage.
+        final manual = _ManualPrinter(c);
+        final outcome = await printKitchenTicketForOrder(
+          container: c,
+          ticket: _manualTicket(),
+          labels: _manualLabels(),
+          printer: manual,
+        );
+
+        expect(
+          (sends, manual.sends, outcome),
+          (0, 1, PosKitchenPrintOutcome.printed),
+          reason:
+              'blocking AUTOMATIC printing must never block the copy a cashier '
+              'deliberately asks for — that is the workflow people fall back '
+              'on when paper jams, and it is now the only way to recover a '
+              'round whose claim we cannot read',
+        );
+      },
+    );
+
+    test(
+      'K5 an EMPTY or absent envelope still means "never claimed"',
+      () async {
+        for (final envelope in <Object>[
+          '',
+          <String, Object?>{'version': 1, 'claims': <String, Object?>{}},
+        ]) {
+          final prefs = await prefsWith(envelope);
+          var sends = 0;
+          final c = _container(_FakeTransport([_applied]), prefs: prefs);
+          addTearDown(c.dispose);
+          await c.read(posAutoKitchenPrintGuardProvider).runGuarded(
+            key,
+            () async {
+              sends++;
+              return PosKitchenPrintOutcome.printed;
+            },
+          );
+          expect(
+            sends,
+            1,
+            reason:
+                'a genuinely empty store must keep printing — fail-closed here '
+                'would withhold every first ticket on every device',
+          );
+        }
       },
     );
   });
