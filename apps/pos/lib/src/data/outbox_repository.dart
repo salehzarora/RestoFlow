@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -236,8 +237,11 @@ class DemoOutboxStore implements OutboxRepository, PosOutboxFailureDismissal {
 
   @override
   Future<OutboxEntry> push(String entryId) async {
-    final idx = _indexOf(entryId);
     await _delay(pushDelay);
+    // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 self-review:
+    // `dismissResolvedFailures` REMOVES entries, so an index captured before
+    // this delay would address a different row afterwards. Locate it late.
+    final idx = _indexOf(entryId);
     final current = _entries[idx];
     final fail = nextPushFails;
     nextPushFails = false;
@@ -359,6 +363,72 @@ class RealOutboxRepository
     }());
   }
 
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 self-review — the
+  /// DURABLE-COMMIT critical section (build `next` -> persist -> publish).
+  ///
+  /// [dismissResolvedFailures] is the FIRST operation in this class that can
+  /// SHRINK the queue. Every other mutator captured an index (or the whole
+  /// list) before an `await` and wrote it back afterwards, which was safe only
+  /// while nothing could ever remove an element. Once a dismissal can land
+  /// mid-flight that assumption breaks in two ways, both silent:
+  ///
+  ///   * a captured INDEX addresses a DIFFERENT entry after the shift, so a
+  ///     push result would overwrite an unsent order (and then persist it), or
+  ///     run past the end and report a real submit as failed;
+  ///   * a captured LIST re-publishes the rows the operator just cleared, so
+  ///     they come back — durably, on the very next persist.
+  ///
+  /// The network call deliberately stays OUTSIDE this gate: pushes still
+  /// overlap, and only the short commit windows are ordered.
+  Future<void> _commitGate = Future<void>.value();
+
+  Future<T> _withCommitLock<T>(Future<T> Function() body) async {
+    final previous = _commitGate;
+    final done = Completer<void>();
+    _commitGate = done.future;
+    await previous;
+    try {
+      return await body();
+    } finally {
+      done.complete();
+    }
+  }
+
+  /// Writes [updated] over the stored entry [entryId] under [_withCommitLock].
+  /// The index is resolved HERE — after every await the caller performed.
+  ///
+  /// [fatal] selects the caller's existing durability rule: a re-queue must
+  /// throw if it cannot be stored ([_persistOrThrow]); a post-dispatch result
+  /// must not ([_persistAfterDispatch]).
+  Future<OutboxEntry> _commitEntry(
+    String entryId,
+    OutboxEntry updated, {
+    required bool fatal,
+  }) => _withCommitLock(() async {
+    final current = _entries!;
+    final at = _indexOrNull(entryId, current);
+    // Unreachable by construction — only a `rejected` entry is dismissible and
+    // an entry with a push in flight is not `rejected` — but if it ever were,
+    // the safe answer is to honour the operator's explicit clear and NOT
+    // resurrect the row, rather than to append it back behind their action.
+    if (at == null) return updated;
+    final next = <OutboxEntry>[...current]..[at] = updated;
+    if (fatal) {
+      await _persistOrThrow(next);
+    } else {
+      await _persistAfterDispatch(next);
+    }
+    _entries = next;
+    return updated;
+  });
+
+  int? _indexOrNull(String entryId, List<OutboxEntry> entries) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id == entryId) return i;
+    }
+    return null;
+  }
+
   /// Writes [next] to the durable store and CONFIRMS it, or throws.
   ///
   /// MONEY-DURABLE-STORES-003B: callers must persist BEFORE committing [next]
@@ -424,27 +494,33 @@ class RealOutboxRepository
   Future<OutboxEntry> enqueue(OutboxEntry entry) async {
     _ensureReady();
     await _ensureLoaded();
-    final entries = _entries!;
-    // Idempotency: at most one row per (deviceId, localOperationId) - mirrors the
-    // server transport identity (DECISION D-022). A duplicate returns the stored
-    // entry instead of adding a second.
-    for (final e in entries) {
-      if (e.deviceId == entry.deviceId &&
-          e.localOperationId == entry.localOperationId) {
-        return e;
+    // 007 self-review: the duplicate check, the build, the persist and the
+    // publish all sit INSIDE the commit gate. Reading the list before the
+    // gate and publishing a list derived from it afterwards is what would
+    // resurrect entries a concurrent dismissal had just removed.
+    return _withCommitLock(() async {
+      final entries = _entries!;
+      // Idempotency: at most one row per (deviceId, localOperationId) - mirrors the
+      // server transport identity (DECISION D-022). A duplicate returns the stored
+      // entry instead of adding a second.
+      for (final e in entries) {
+        if (e.deviceId == entry.deviceId &&
+            e.localOperationId == entry.localOperationId) {
+          return e;
+        }
       }
-    }
-    // MONEY-DURABLE-STORES-003B: BUILD, PERSIST, THEN COMMIT. The previous build
-    // appended to the live list and then persisted whatever happened to be in
-    // the field, ignoring whether the write stuck — so a refused durable write
-    // left an order that existed only in RAM, which the caller immediately
-    // pushed to the server. Now a failed write throws with NOTHING mutated: the
-    // queue in memory and the queue on disk still hold exactly the previous set,
-    // and the submit is abandoned before any network call.
-    final next = <OutboxEntry>[...entries, entry];
-    await _persistOrThrow(next);
-    _entries = next;
-    return entry;
+      // MONEY-DURABLE-STORES-003B: BUILD, PERSIST, THEN COMMIT. The previous build
+      // appended to the live list and then persisted whatever happened to be in
+      // the field, ignoring whether the write stuck — so a refused durable write
+      // left an order that existed only in RAM, which the caller immediately
+      // pushed to the server. Now a failed write throws with NOTHING mutated: the
+      // queue in memory and the queue on disk still hold exactly the previous set,
+      // and the submit is abandoned before any network call.
+      final next = <OutboxEntry>[...entries, entry];
+      await _persistOrThrow(next);
+      _entries = next;
+      return entry;
+    });
   }
 
   @override
@@ -460,8 +536,7 @@ class RealOutboxRepository
     await _ensureLoaded();
     final transport = _transport!;
     final session = _session!;
-    final idx = _indexOf(entryId);
-    final entry = _entries![idx];
+    final entry = _entries![_indexOf(entryId)];
 
     // RF-114 scope guard (defence in depth beyond the per-device store key): an
     // order queued for a DIFFERENT device MUST NOT be submitted under this
@@ -474,10 +549,7 @@ class RealOutboxRepository
         attemptCount: entry.attemptCount + 1,
         lastErrorCode: 'device_scope_mismatch',
       );
-      final next = <OutboxEntry>[..._entries!]..[idx] = stale;
-      await _persistAfterDispatch(next);
-      _entries = next;
-      return stale;
+      return _commitEntry(entryId, stale, fatal: false);
     }
 
     OutboxEntry updated;
@@ -498,18 +570,14 @@ class RealOutboxRepository
         lastErrorCode: e.code ?? e.kind.name,
       );
     }
-    final next = <OutboxEntry>[..._entries!]..[idx] = updated;
-    await _persistAfterDispatch(next);
-    _entries = next;
-    return updated;
+    return _commitEntry(entryId, updated, fatal: false);
   }
 
   @override
   Future<OutboxEntry> retry(String entryId) async {
     _ensureReady();
     await _ensureLoaded();
-    final idx = _indexOf(entryId);
-    final current = _entries![idx];
+    final current = _entries![_indexOf(entryId)];
     if (!current.syncState.isFailed) return current;
     final updated = current.copyWith(
       syncState: OutboxSyncState.pending,
@@ -518,29 +586,31 @@ class RealOutboxRepository
     // Persist BEFORE publishing (as `enqueue` does): a re-queue that only exists
     // in memory would show the cashier a retryable order that reverts to
     // `failed` on the next restart.
-    final next = <OutboxEntry>[..._entries!]..[idx] = updated;
-    await _persistOrThrow(next);
-    _entries = next;
-    return updated;
+    return _commitEntry(entryId, updated, fatal: true);
   }
 
   @override
   Future<int> dismissResolvedFailures() async {
     _ensureReady();
     await _ensureLoaded();
+    return _withCommitLock(_dismissResolvedFailures);
+  }
+
+  Future<int> _dismissResolvedFailures() async {
     final next = <OutboxEntry>[
       for (final e in _entries!)
         if (!e.isDismissibleResolvedFailure) e,
     ];
     final removed = _entries!.length - next.length;
     if (removed == 0) return 0;
-    // PERSIST BEFORE PUBLISHING, the same order `enqueue` and `retry` use: a
-    // removal that only existed in memory would come straight back on the next
-    // start, which is the whole defect being fixed. Non-fatal by design — these
-    // entries are already terminal and nothing is being sent, so a refused write
-    // simply leaves them visible to clear again, and the store records the
-    // refusal in its own degraded health for the operator surface.
-    await _persistAfterDispatch(next);
+    // PERSIST BEFORE PUBLISHING, and DURABLE-OR-NOTHING — the same rule
+    // `retry` uses, for the same reason (007 self-review). A removal that only
+    // reached memory would come straight back on the next start, which is
+    // precisely the defect being fixed, so a refused write must leave the queue
+    // exactly as it was rather than show a cleared list that silently repopulates.
+    // The operator still learns why: the store records the refusal in its own
+    // degraded health, which the status chip ranks above every queue state.
+    await _persistOrThrow(next);
     _entries = next;
     return removed;
   }

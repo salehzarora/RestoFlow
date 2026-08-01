@@ -573,25 +573,62 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // An order with an UNRESOLVED Add-items attempt on this device is excluded:
     // its amendment has no server verdict yet, so its total may still change and
     // closing it would be a claim we cannot support.
-    final blockedByAddition = container
-        .read(additionControllerProvider.notifier)
-        .blockedOrderIds;
-    List<KitchenFinishTarget> deriveActive() => [
-      for (final o in container.read(posRecentOrdersControllerProvider))
-        if (o.orderId != null &&
-            !o.isTerminal &&
-            o.serverStatus != null &&
-            !blockedByAddition.contains(o.orderId))
-          if (kActiveKitchenStatuses.contains(o.serverStatus))
-            (
-              orderId: o.orderId!,
-              fromStatus: o.serverStatus!,
-              settled: o.settlement != PosSettlement.unpaid,
-            )
-          else if (o.serverStatus == 'served' &&
-              o.settlement != PosSettlement.unpaid)
-            (orderId: o.orderId!, fromStatus: 'served', settled: true),
-    ];
+    // The exclusion set matches the SIBLING money gate in this same file, not
+    // just `blockedOrderIds`: while the journal is being read — and durably,
+    // after an unreadable one — `blockedOrderIds` is EMPTY precisely because the
+    // device does not yet know which orders carry an unresolved amendment.
+    //
+    // The `served -> completed` branch is a CLOSE, so it goes through the ONE
+    // close policy the per-row Complete button uses. This button's visibility
+    // keys on a per-device PRINTING preference, which is not the branch's
+    // kitchen workflow mode; without the policy a KDS-workflow branch would
+    // start completing orders the POS must never complete, and would collect a
+    // permanent "N failed" for the rest. Advancing a board order to `served` is
+    // unchanged — that is not a close.
+    List<KitchenFinishTarget> deriveActive() {
+      final additionNotifier = container.read(
+        additionControllerProvider.notifier,
+      );
+      final addition = container.read(additionControllerProvider);
+      final startupBlocked = additionNotifier.isStartupBlocked;
+      final blockedByAddition = <String>{
+        ...additionNotifier.blockedOrderIds,
+        if (addition.target case final t?)
+          if (addition.sending || addition.failed || addition.awaitingRefresh)
+            t.orderId,
+      };
+      final verifiedMode = container.read(posVerifiedKitchenModeProvider);
+      final completingIds = container.read(posOrderCompleteControllerProvider);
+      final actorAuthorized =
+          container
+              .read(staffCapabilitiesProvider)
+              .valueOrNull
+              ?.canFinishKitchenOrders ??
+          false;
+      return [
+        for (final o in container.read(posRecentOrdersControllerProvider))
+          if (o.orderId != null &&
+              !o.isTerminal &&
+              o.serverStatus != null &&
+              !blockedByAddition.contains(o.orderId))
+            if (kActiveKitchenStatuses.contains(o.serverStatus))
+              (
+                orderId: o.orderId!,
+                fromStatus: o.serverStatus!,
+                settled: o.settlement != PosSettlement.unpaid,
+              )
+            else if (!startupBlocked &&
+                posOrderCloseEligibility(
+                      status: o.serverStatus!,
+                      settled: o.settlement != PosSettlement.unpaid,
+                      verifiedMode: verifiedMode,
+                      actorAuthorized: actorAuthorized,
+                      transitionInFlight: completingIds.contains(o.orderId),
+                    ) ==
+                    PosOrderCloseEligibility.allowed)
+              (orderId: o.orderId!, fromStatus: 'served', settled: true),
+      ];
+    }
 
     final summary = await ref
         .read(kitchenFinishControllerProvider.notifier)

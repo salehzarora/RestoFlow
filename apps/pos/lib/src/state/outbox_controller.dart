@@ -138,22 +138,6 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// rather than a second concurrent push.
   Future<void> pushQueued() => _sweep();
 
-  /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
-  /// retry all"). REVIEW B2: permanently-rejected business operations are
-  /// excluded — their verdict is ledgered and replay cannot change it.
-  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — how many failures a
-  /// Retry can actually do something about.
-  ///
-  /// The banner counted `rejected` + `dead` together and offered "N failed —
-  /// retry", while [retryAllFailed] deliberately skips a permanent business
-  /// rejection (replaying that identity returns the same stored refusal for
-  /// ever). The number could therefore never move — which is exactly what the
-  /// cashier saw: entries that came back on every start, where only ending the
-  /// shift appeared to clear them.
-  int get retryableFailureCount => state
-      .where((e) => e.syncState.isFailed && !e.isPermanentBusinessRejection)
-      .length;
-
   /// How many failures are TERMINAL and provably created nothing on the server,
   /// so an operator may clear them — see
   /// [OutboxEntry.isDismissibleResolvedFailure].
@@ -161,8 +145,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       state.where((e) => e.isDismissibleResolvedFailure).length;
 
   /// Removes the resolved (terminal, never-applied) failures and returns how
-  /// many went. The removal is PERSISTED, so they do not return on the next
-  /// start, and it touches nothing else — no shift, no order, no payment, no
+  /// many went. The removal is DURABLE-OR-NOTHING: a device whose storage
+  /// refuses the write keeps every entry and throws, rather than showing a
+  /// cleared queue that repopulates on the next start. It touches nothing else — no shift, no order, no payment, no
   /// server call. Everything uncertain, retryable, conflicted or unreadable
   /// stays exactly where it is.
   Future<int> dismissResolvedFailures() async {
@@ -177,6 +162,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     return removed;
   }
 
+  /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
+  /// retry all"). REVIEW B2: permanently-rejected business operations are
+  /// excluded — their verdict is ledgered and replay cannot change it.
   Future<void> retryAllFailed() async {
     final failed = <String>[
       for (final e in state)

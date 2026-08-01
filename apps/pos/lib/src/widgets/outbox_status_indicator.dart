@@ -39,8 +39,10 @@ class OutboxStatusIndicator extends ConsumerWidget {
     // CONSERVATIVE aggregation (RF-114 Codex fix): "All orders synced" shows ONLY
     // when EVERY entry is `applied` (backend-confirmed). Non-final / ambiguous
     // states never fall through to synced.
-    //  * failed    = rejected/dead      -> retryable; tap = retry all.
-    //  * attention = conflict/resolved  -> needs review; NOT auto-retried, NOT synced.
+    //  * failed    = RETRYABLE rejected/dead -> tap = retry all.
+    //  * resolved  = terminal + provably never created -> tap = clear them.
+    //  * attention = conflict/resolved, and any OTHER permanent rejection ->
+    //                needs review; NOT auto-retried, NOT synced, NOT "retry".
     //  * syncing   = in_flight.
     //  * pending   = created/pending.
     // Priority (safest first): failed / attention  >  syncing  >  pending  >  synced.
@@ -60,6 +62,21 @@ class OutboxStatusIndicator extends ConsumerWidget {
     for (final e in entries) {
       if (e.isDismissibleResolvedFailure) {
         resolved++;
+        continue;
+      }
+      // 007 self-review — DEFENCE, not a live defect, and stated as such.
+      // A permanent business rejection that is NOT dismissible cannot occur in
+      // this queue today: only `order.submit` is ever enqueued here (a payment
+      // or a table operation is dispatched straight to `sync_push` and never
+      // becomes an [OutboxEntry]), and a permanently-rejected `order.submit` is
+      // dismissible by definition. Should that ever change, the invariant this
+      // branch protects still holds: `retryAllFailed` deliberately SKIPS a
+      // permanent rejection, so offering "retry" for one would show a number
+      // that can never fall — and because `failed` outranks `resolved`, it
+      // would also wedge the clear affordance shut. Such an entry needs a
+      // person, which is what `attention` says.
+      if (e.isPermanentBusinessRejection) {
+        attention++;
         continue;
       }
       switch (e.syncState) {
@@ -115,9 +132,20 @@ class OutboxStatusIndicator extends ConsumerWidget {
       label = l10n.posOutboxResolvedFailures(resolved);
       onTap = () async {
         final messenger = ScaffoldMessenger.maybeOf(context);
-        final removed = await ref
-            .read(outboxControllerProvider.notifier)
-            .dismissResolvedFailures();
+        // The clear is DURABLE-OR-NOTHING (see `dismissResolvedFailures`), so a
+        // device whose storage refuses the write removes nothing and must be
+        // told nothing went — never a confident "cleared" over entries that
+        // will be back on the next start. The reason is already on screen: a
+        // refused write marks the store degraded, and storage health outranks
+        // every queue state in this same chip.
+        var removed = 0;
+        try {
+          removed = await ref
+              .read(outboxControllerProvider.notifier)
+              .dismissResolvedFailures();
+        } catch (_) {
+          removed = 0;
+        }
         messenger?.showSnackBar(
           SnackBar(content: Text(l10n.posOutboxClearResolvedDone(removed))),
         );

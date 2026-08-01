@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,10 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
+import 'package:restoflow_pos/src/data/outbox_repository.dart'
+    show OrderSubmissionException, PosOutboxFailureDismissal;
+import 'package:restoflow_pos/src/data/sync_cursor_store.dart'
+    show PosPersistenceException;
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
     show
         SyncRpcTransport,
@@ -104,6 +109,50 @@ class _OfflineTransport implements SyncRpcTransport {
   }
 }
 
+/// A transport held open INSIDE `sync_push`, so a dismissal can land while a
+/// push is genuinely in flight. It then reports the operation APPLIED — the
+/// worst case, because the result must be written back over the RIGHT entry.
+class _BlockingTransport implements SyncRpcTransport {
+  _BlockingTransport(this.appliedFor);
+
+  final String appliedFor;
+  final Completer<void> entered = Completer<void>();
+  final Completer<void> release = Completer<void>();
+
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (!entered.isCompleted) entered.complete();
+    await release.future;
+    return <String, Object?>{
+      'results': <Object?>[
+        <String, Object?>{
+          'local_operation_id': appliedFor,
+          'status': 'applied',
+        },
+      ],
+    };
+  }
+}
+
+/// Loads normally, then refuses every write — the till whose storage has gone
+/// bad. `SharedPreferences.clear()` would not do: that is a store that WORKS
+/// and happens to be empty, which is the opposite of the case under test.
+class _RefusingStore implements DurableOutboxStore {
+  _RefusingStore(this._entries);
+
+  final List<OutboxEntry> _entries;
+  int persistAttempts = 0;
+
+  @override
+  Future<List<OutboxEntry>> load(String scopeKey) async => [..._entries];
+
+  @override
+  Future<void> persist(String scopeKey, List<OutboxEntry> entries) async {
+    persistAttempts++;
+    throw const PosPersistenceException('storage refused the write');
+  }
+}
+
 Future<SharedPreferences> _seed(List<OutboxEntry> entries) async {
   SharedPreferences.setMockInitialValues(<String, Object>{
     _prefsKey: jsonEncode(<String, Object?>{
@@ -114,7 +163,11 @@ Future<SharedPreferences> _seed(List<OutboxEntry> entries) async {
   return SharedPreferences.getInstance();
 }
 
-ProviderContainer _container(SharedPreferences prefs) {
+ProviderContainer _container(
+  SharedPreferences prefs, {
+  SyncRpcTransport? transport,
+  DurableOutboxStore? store,
+}) {
   final c = ProviderContainer(
     overrides: [
       // REAL mode: demo uses an in-memory `DemoOutboxStore` that never touches
@@ -126,9 +179,11 @@ ProviderContainer _container(SharedPreferences prefs) {
       // A transport that always fails transiently: the repository is `_ready`
       // (it refuses to work without one) but nothing can actually be sent, so
       // no stored verdict is altered by the recovery sweep.
-      posAuthTransportProvider.overrideWithValue(_OfflineTransport()),
+      posAuthTransportProvider.overrideWithValue(
+        transport ?? _OfflineTransport(),
+      ),
       durableOutboxStoreProvider.overrideWithValue(
-        SharedPrefsOutboxStore(prefs),
+        store ?? SharedPrefsOutboxStore(prefs),
       ),
     ],
   );
@@ -141,6 +196,13 @@ Future<void> _settle() async {
     await Future<void>.microtask(() {});
   }
 }
+
+/// The failures a Retry can actually do something about — restated here, from
+/// the same public predicate production uses, because `retryAllFailed` skips a
+/// permanent business rejection.
+Iterable<OutboxEntry> _retryable(ProviderContainer c) => c
+    .read(outboxControllerProvider)
+    .where((e) => e.syncState.isFailed && !e.isPermanentBusinessRejection);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -166,8 +228,8 @@ void main() {
             'order row was ever created for it',
       );
       expect(
-        outbox.retryableFailureCount,
-        0,
+        _retryable(c),
+        isEmpty,
         reason:
             'THE MISLEADING PART: they were counted under "N failed — retry" '
             'while retryAllFailed deliberately skips them, so the number could '
@@ -263,8 +325,8 @@ void main() {
         'pay-1',
       }, reason: 'nothing whose outcome is unknown or unproven may disappear');
       expect(
-        outbox.retryableFailureCount,
-        2,
+        _retryable(c),
+        hasLength(2),
         reason: 'the transport failure and the dead entry are still retryable',
       );
     });
@@ -362,5 +424,149 @@ void main() {
         );
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // D. THE HAZARD THE DISMISSAL ITSELF INTRODUCED (007 self-review).
+  //
+  // `dismissResolvedFailures` is the FIRST operation in `RealOutboxRepository`
+  // that can SHRINK the queue. Every other mutator located its entry by INDEX
+  // before an `await` and wrote the result back afterwards, which was safe only
+  // while nothing could ever remove an element. These pin both proven failures:
+  // a silent overwrite of a DIFFERENT queued order, and a `RangeError` thrown
+  // after the server had already applied the operation — which would tell the
+  // cashier a submitted order failed.
+  //
+  // The window is not theoretical: the auto-sweep runs every 25s, and the chip
+  // ranks `resolved` ABOVE `syncing`, so Clear is on offer precisely while a
+  // push is in flight.
+  // -------------------------------------------------------------------------
+  group('D concurrent dismissal', () {
+    test('D1 a clear DURING an in-flight push destroys no queued order and '
+        'duplicates none', () async {
+      final prefs = await _seed([
+        _entry(
+          localOperationId: 'op-old-1',
+          syncState: OutboxSyncState.rejected,
+          lastErrorCode: 'rejected',
+        ),
+        _entry(localOperationId: 'a', syncState: OutboxSyncState.pending),
+        _entry(localOperationId: 'b', syncState: OutboxSyncState.pending),
+        _entry(localOperationId: 'c', syncState: OutboxSyncState.pending),
+      ]);
+      final transport = _BlockingTransport('b');
+      final c = _container(prefs, transport: transport);
+      final repo = c.read(outboxRepositoryProvider);
+      await _settle();
+
+      // `b` sits at index 2 while the queue still holds the stale rejection.
+      final pushing = repo.push('outbox-b');
+      await transport.entered.future;
+
+      expect(
+        await (repo as PosOutboxFailureDismissal).dismissResolvedFailures(),
+        1,
+      );
+
+      transport.release.complete();
+      await pushing;
+      await _settle();
+
+      final entries = await repo.recentEntries();
+      expect(
+        entries.map((e) => e.localOperationId).toSet(),
+        {'a', 'b', 'c'},
+        reason:
+            'the shift left by the clear must not make the push result land on '
+            'a different row — `c` was overwritten by `b` before the fix',
+      );
+      expect(
+        entries,
+        hasLength(3),
+        reason:
+            'and nothing may be duplicated: two rows sharing one '
+            '(deviceId, localOperationId) breaks the identity the queue assumes',
+      );
+      expect(
+        entries.firstWhere((e) => e.localOperationId == 'b').syncState,
+        OutboxSyncState.applied,
+        reason: 'the result still lands on the entry it belongs to',
+      );
+      expect(
+        entries
+            .where((e) => e.localOperationId != 'b')
+            .every((e) => e.syncState == OutboxSyncState.pending),
+        isTrue,
+        reason: 'the untouched orders keep their own state',
+      );
+
+      // AND THE DISK AGREES — the corruption was persisted, not just in RAM.
+      final restarted = _container(prefs, transport: _OfflineTransport());
+      await _settle();
+      expect(
+        (await restarted.read(outboxRepositoryProvider).recentEntries())
+            .map((e) => e.localOperationId)
+            .toSet(),
+        {'a', 'b', 'c'},
+      );
+    });
+
+    test('D2 a clear that empties the queue ahead of an in-flight push does '
+        'not report a server-applied order as failed', () async {
+      final prefs = await _seed([
+        for (var i = 1; i <= 3; i++)
+          _entry(
+            localOperationId: 'op-old-$i',
+            syncState: OutboxSyncState.rejected,
+            lastErrorCode: 'rejected',
+          ),
+        _entry(localOperationId: 'a', syncState: OutboxSyncState.pending),
+      ]);
+      final transport = _BlockingTransport('a');
+      final c = _container(prefs, transport: transport);
+      final repo = c.read(outboxRepositoryProvider);
+      await _settle();
+
+      // `a` is the LAST index; clearing three ahead of it used to leave the
+      // captured index past the end -> RangeError out of `push`, surfaced to
+      // the cashier as a failed submit the server had in fact accepted.
+      final pushing = repo.push('outbox-a');
+      await transport.entered.future;
+      expect(
+        await (repo as PosOutboxFailureDismissal).dismissResolvedFailures(),
+        3,
+      );
+      transport.release.complete();
+
+      final result = await pushing;
+      expect(result.syncState, OutboxSyncState.applied);
+      await _settle();
+      expect(await repo.recentEntries(), hasLength(1));
+    });
+
+    test('D3 a refused durable write clears NOTHING — the queue is never '
+        'shown as cleared and then repopulated', () async {
+      final prefs = await _seed(const []);
+      final store = _RefusingStore(_sixStale());
+      final c = _container(prefs, store: store);
+      final repo = c.read(outboxRepositoryProvider);
+      await _settle();
+      expect(await repo.recentEntries(), hasLength(6));
+
+      // DURABLE-OR-NOTHING, the same rule `retry` uses. A dismissal that only
+      // reached memory would show a cleared queue that repopulates on the next
+      // start — which IS the defect this ticket exists to remove, so reporting
+      // it as cleared would be worse than refusing.
+      await expectLater(
+        (repo as PosOutboxFailureDismissal).dismissResolvedFailures(),
+        throwsA(isA<OrderSubmissionException>()),
+      );
+      expect(store.persistAttempts, 1);
+      expect(
+        await repo.recentEntries(),
+        hasLength(6),
+        reason: 'nothing was durably removed, so nothing may look removed',
+      );
+    });
   });
 }
