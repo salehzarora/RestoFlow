@@ -355,15 +355,29 @@ const String kAdditionOperationType = 'order.items_add';
 ///  * the seven typed refusals `app.add_order_items` returns —
 ///    `invalid_device_type`, `permission_denied`, `invalid_item_payload`,
 ///    `order_not_dine_in`, `order_not_eligible`, `order_already_settled`,
-///    `item_unavailable` (20260722090000_psc_001c_service_rounds.sql, and the
-///    same set in the 20260725090000 dispatch-ledger re-creation);
+///    `item_unavailable`. The LIVE definition is
+///    `20260806090000_money_modifier_scope_003d_option_ownership.sql` (the RPC
+///    has been re-created by 20260804090000 and 20260805090000 since its
+///    20260722090000 introduction; the refusal set is unchanged across all of
+///    them, but the live body is the one to read);
 ///  * `modifier_option_not_in_scope`, the 003D ownership refusal raised inside
 ///    the shared submit_order-parity pricing loop;
+///  * `invalid_payload`, `public.sync_push`'s identity-hardening refusal for
+///    `order.items_add` when `target_id` and `payload.order_id` are not a
+///    matching uuid pair. TERMINAL and, critically, emitted BEFORE the ledger
+///    claim — there is no stored row to replay, so re-sending the same identity
+///    gets the identical answer forever. Omitting it left such an operation
+///    looping as outcome-unknown, which locks the cart and withdraws Pay / Void
+///    / Discount on that order permanently;
 ///  * `rejected`, `public.sync_push`'s generic permanent collapse of a raised
 ///    validation/authorization failure, which it ledgers terminally.
 ///
 /// It reuses [kPermanentRejectionCodes] — the established set — and adds only
-/// the add-items-specific codes, so the two contracts cannot drift apart.
+/// the add-items-specific codes, so the two contracts cannot drift apart. Four
+/// members inherited from that spread (`table_required`, `table_not_allowed`,
+/// `table_not_available`, `dispatch_mode_not_allowed`) are `order.submit`
+/// refusals this RPC never emits; harmless, because a row is matched on the
+/// operation identity AND type before its code is consulted.
 ///
 /// WHY AN ALLOWLIST AT ALL. A rejecting status with an unrecognised code used to
 /// be treated as a definitive no: the identity was released and the next send
@@ -371,11 +385,15 @@ const String kAdditionOperationType = 'order.items_add';
 /// idempotency on (org, device, local_operation_id) — under a new key it builds
 /// a SECOND round, and the kitchen cooks the same food twice. An unknown code
 /// is not evidence that nothing happened.
-final Set<String> kAdditionTerminalRefusalCodes = <String>{
+///
+/// `const`, so nothing can widen the set that decides which server refusals free
+/// an idempotency identity.
+const Set<String> kAdditionTerminalRefusalCodes = <String>{
   ...kPermanentRejectionCodes,
   'invalid_device_type',
   'permission_denied',
   'invalid_item_payload',
+  'invalid_payload',
   'order_not_dine_in',
   'order_not_eligible',
   'order_already_settled',
@@ -406,7 +424,6 @@ class AdditionOutcome {
   const AdditionOutcome.applied({
     required this.roundId,
     required this.roundNumber,
-    this.replay = false,
   }) : kind = AdditionOutcomeKind.applied,
        reason = null;
 
@@ -414,21 +431,18 @@ class AdditionOutcome {
     : kind = AdditionOutcomeKind.refused,
       reason = code,
       roundId = null,
-      roundNumber = null,
-      replay = false;
+      roundNumber = null;
 
   const AdditionOutcome.conflict()
     : kind = AdditionOutcomeKind.conflict,
       reason = 'conflict',
       roundId = null,
-      roundNumber = null,
-      replay = false;
+      roundNumber = null;
 
   const AdditionOutcome.unknown(this.reason)
     : kind = AdditionOutcomeKind.unknown,
       roundId = null,
-      roundNumber = null,
-      replay = false;
+      roundNumber = null;
 
   final AdditionOutcomeKind kind;
   final String? reason;
@@ -438,11 +452,12 @@ class AdditionOutcome {
   final String? roundId;
   final int? roundNumber;
 
-  /// Whether the server told us this is a replay of a round it already built.
-  final bool replay;
-
-  bool get isApplied => kind == AdditionOutcomeKind.applied;
-  bool get isUnknown => kind == AdditionOutcomeKind.unknown;
+  // NO `replay` FLAG. `app.sync_push`'s applied merge is
+  // `v_dispatch || {..., 'idempotency_replay', false}` and the right operand
+  // wins, so an APP-level replay from `app.add_order_items` (which returns
+  // true) reaches the client as false. The field would have been unread and
+  // wrong; recovery does not need it, because a replay is deliberately handled
+  // identically to a first application.
 }
 
 class AdditionController extends Notifier<AdditionState> {
@@ -657,6 +672,14 @@ class AdditionController extends Notifier<AdditionState> {
   ///    invisible for the rest of the session.
   Future<void> _restoreJournal() async {
     if (_disposed) return;
+    // FIRST FRAME HONESTY. The gate is consulted live by every cart mutation, so
+    // money is safe from the instant `build()` closes it — but `CartController`
+    // is built LAZILY and in production (`cart_panel.dart`) it is watched BEFORE
+    // the addition controller, so its published `lockedByAddition` can have been
+    // computed while the gate was still open. Republishing here, in the first
+    // microtask (never during a build, which Riverpod forbids), makes the flag
+    // agree with the gate before anything is painted.
+    ref.read(cartControllerProvider.notifier).refreshAdditionLockView();
     final journal = _journal;
     final scope = _journalScope;
     if (journal == null || scope.isEmpty) {
@@ -727,7 +750,9 @@ class AdditionController extends Notifier<AdditionState> {
       return;
     }
     final record = _pending
-        .where((r) => !_conflictingOrderIds.contains(r.orderId))
+        .where(
+          (r) => !_conflictingOrderIds.contains(r.orderId) && _mayTakeCart(r),
+        )
         .firstOrNull;
     if (record == null) {
       // THE GENERATION IS PRESERVED, never reset. It is the single-flight join
@@ -745,6 +770,40 @@ class AdditionController extends Notifier<AdditionState> {
       return;
     }
     _activateRecord(record);
+  }
+
+  /// Whether [record] may take the cart right now.
+  ///
+  /// SELF-REVIEW CORRECTION (D1). Activation used to lock unconditionally, and
+  /// `lockForAddition` succeeds on ANY unlocked cart regardless of contents. The
+  /// queue advances from an async continuation — after `await _journalClose`,
+  /// two real SharedPreferences round-trips — and the cart is unlocked for that
+  /// whole window. A cashier who starts the next customer's order in it would
+  /// find those lines seized under a DIFFERENT order's identity: every mutation
+  /// refused, `exit()` refused (the record is dispatched), the cart panel
+  /// showing the new lines under the restored attempt's banner while a submit
+  /// would dispatch the frozen payload instead. The only escape was a successful
+  /// replay — over the network whose absence created the record.
+  ///
+  /// So a non-empty cart defers activation. The record stays pending, its order
+  /// stays blocked in the orders sheet, and `enterForOrder` resumes it once the
+  /// cashier has cleared or sent what they were doing.
+  bool _mayTakeCart(PosAdditionJournalRecord record) {
+    if (ref.read(cartControllerProvider).isEmpty) return true;
+    // Already ours (an idempotent re-activation) is fine.
+    return ref
+        .read(cartControllerProvider.notifier)
+        .ownsAdditionLock(
+          _ownerOf(
+            record.generation,
+            AdditionAttempt(
+              orderId: record.orderId,
+              localOperationId: record.localOperationId,
+              itemsJson: record.itemsJson,
+              clientCreatedAt: record.clientCreatedAt,
+            ),
+          ),
+        );
   }
 
   /// Installs [record] as the active attempt and re-owns its cart.
@@ -868,23 +927,6 @@ class AdditionController extends Notifier<AdditionState> {
   /// the orders sheet so no money action is offered on an unknown journal.
   bool get isStartupBlocked => state.startupBlocked;
 
-  /// How many records are merely waiting to be worked (not conflicted).
-  int get actionableCount =>
-      _pending.where((r) => !_conflictingOrderIds.contains(r.orderId)).length;
-
-  /// How many actionable records provably never reached the transport.
-  int get preparedCount => _pending.where((r) => !r.wasDispatched).length;
-
-  /// How many actionable records reached the wire without a verdict.
-  int get uncertainCount => _pending
-      .where(
-        (r) =>
-            r.wasDispatched &&
-            !r.isConflict &&
-            !_conflictingOrderIds.contains(r.orderId),
-      )
-      .length;
-
   /// Finding 1 — CONTROLLER-OWNED SAFE ENTRY into addition mode.
   ///
   /// The complete transition lives here, not in the UI: the synchronous part
@@ -915,6 +957,10 @@ class AdditionController extends Notifier<AdditionState> {
     if (s.attempt == null && s.entryOrderId == null) {
       final queued = _pending.where((r) => r.orderId == orderId).firstOrNull;
       if (queued != null) {
+        // D1/D2: the same empty-cart guarantee every other entry path enforces.
+        // Resuming must never take lines the cashier is holding — this method is
+        // documented as the ACTUAL guarantee, not the UI's convenience check.
+        if (!_mayTakeCart(queued)) return AdditionEntryResult.cartNotEmpty;
         _activateRecord(queued);
         return AdditionEntryResult.entered;
       }
@@ -1244,7 +1290,7 @@ class AdditionController extends Notifier<AdditionState> {
           PosAdditionJournalPhase.transportUncertain,
           errorCode: outcome.reason,
         );
-        if (_isCurrentAttempt(gen, attempt)) {
+        if (!_disposed && _isCurrentAttempt(gen, attempt)) {
           state = state.copyWith(
             phase: AdditionPhase.failed,
             lastError: outcome.reason,
@@ -1261,11 +1307,21 @@ class AdditionController extends Notifier<AdditionState> {
         );
         // NOT definitive: the identity is already in use server-side and only a
         // person can untangle it, so it stays locked and dispatched.
-        state = state.copyWith(
-          phase: AdditionPhase.failed,
-          lastError: 'conflict',
-          dispatched: true,
-        );
+        //
+        // FENCED like the unknown branch above. `_journalPhase` is a real disk
+        // read AND write, so this resumes after an await; writing state without
+        // re-checking the attempt would stamp this verdict onto whatever attempt
+        // is current by then.
+        if (_disposed) {
+          return const AdditionResult(applied: false, error: 'conflict');
+        }
+        if (_isCurrentAttempt(gen, attempt)) {
+          state = state.copyWith(
+            phase: AdditionPhase.failed,
+            lastError: 'conflict',
+            dispatched: true,
+          );
+        }
         return const AdditionResult(applied: false, error: 'conflict');
 
       case AdditionOutcomeKind.refused:
@@ -1277,11 +1333,21 @@ class AdditionController extends Notifier<AdditionState> {
         // A definitive business rejection RESOLVES the uncertainty: the server
         // refused, so no round exists under this identity and the cashier may
         // abandon it.
-        state = state.copyWith(
-          phase: AdditionPhase.failed,
-          lastError: outcome.reason,
-          dispatched: false,
-        );
+        //
+        // THE MOST DANGEROUS WRITE IN THIS CLASS is `dispatched: false` — it is
+        // what re-opens `canCancel` and lets `exit()` release an identity. It is
+        // therefore fenced on the attempt AND on disposal, not left to an
+        // invariant enforced elsewhere by accident.
+        if (_disposed) {
+          return AdditionResult(applied: false, error: outcome.reason);
+        }
+        if (_isCurrentAttempt(gen, attempt)) {
+          state = state.copyWith(
+            phase: AdditionPhase.failed,
+            lastError: outcome.reason,
+            dispatched: false,
+          );
+        }
         return AdditionResult(applied: false, error: outcome.reason);
 
       case AdditionOutcomeKind.applied:
@@ -1590,10 +1656,12 @@ class AdditionController extends Notifier<AdditionState> {
 
         // OUR row. From here the response says something about this operation —
         // but only a complete, well-formed statement counts.
-        final type = r['operation_type'];
-        if (type != null && type != kAdditionOperationType) {
-          // The same identity answered under a different operation type. That is
-          // not our verdict and must never settle our attempt.
+        // The row must positively identify itself as OUR operation type. A
+        // missing type used to be skipped; today no row can reach here without
+        // one (`sync_push` stamps it on every row that carries a
+        // local_operation_id), so failing closed costs nothing and removes a
+        // guarantee that currently rests on an external invariant.
+        if (r['operation_type'] != kAdditionOperationType) {
           return const AdditionOutcome.unknown('operation_type_mismatch');
         }
         final status = r['status'];
@@ -1624,11 +1692,22 @@ class AdditionController extends Notifier<AdditionState> {
           return AdditionOutcome.applied(
             roundId: roundId,
             roundNumber: roundNumberRaw,
-            replay: r['idempotency_replay'] == true,
           );
         }
 
-        if (status == 'rejected' || status == 'conflict' || status == 'dead') {
+        if (status == 'dead') {
+          // SELF-REVIEW CORRECTION: `dead` was routed through the refusal
+          // allowlist, which contradicts this repository's own contract for the
+          // same ledger column — `order_submission.dart`: "`dead` entries stay
+          // retryable: no server verdict was positively recorded". `dead` means
+          // retry exhaustion, which is the definition of outcome-unknown, and
+          // treating it as a refusal frees the identity so the next send builds
+          // a SECOND round. (No migration currently writes it; it exists in the
+          // CHECK constraint and the terminal-replay lists. It was wrong in the
+          // unsafe direction regardless.)
+          return const AdditionOutcome.unknown('dead_no_server_verdict');
+        }
+        if (status == 'rejected' || status == 'conflict') {
           final error = r['error'];
           if (error is! String) {
             return const AdditionOutcome.unknown('refusal_without_code');

@@ -427,34 +427,73 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // Groups that lost an option we could still ATTRIBUTE to them — their owning
   // item is known, so only that item stops selling.
   final orphanedOptionGroupIds = <String>{};
-  // MONEY-CODEX-FINAL-CLOSURE-005 (F3): options we could not attribute to any
-  // declared group AT ALL. See `unattributable` below for why these cannot be
-  // narrowed to one product.
+  // MONEY-CODEX-FINAL-CLOSURE-005 (F3): rows we could not attribute to any
+  // declared group AT ALL. See the payload-level decision below for why these
+  // cannot be narrowed to one product.
   var hasUnattributableOption = false;
+
+  // ---- GROUP PRE-SCAN --------------------------------------------------
   // Every group id declared in this payload, so an option naming an UNDECLARED
   // parent is recognised as unattributable rather than silently discarded.
-  final declaredGroupIds = <String>{
-    for (final row in (raw['modifiers'] as List?) ?? const [])
-      if (row is Map)
-        if (exactId(row['id']) case final id?) id,
-  };
-  // A group row that NAMED ITS ITEM but whose own id could not be read. Its item
-  // is marked broken by the group loop below, and its options necessarily point
-  // at an id we cannot match — so an unmatched option is EXPLAINED by it, and
-  // the damage is already bounded to an item we can name. Without such a row an
-  // unmatched option is genuinely unexplainable and the payload fails closed.
-  final hasOwnedButUnreadableGroup = ((raw['modifiers'] as List?) ?? const [])
-      .any(
-        (row) =>
-            row is Map &&
-            exactId(row['menu_item_id']) != null &&
-            (exactId(row['id']) == null ||
-                row['name'] is! String ||
-                (row['name'] as String).trim().isEmpty),
-      );
+  final declaredGroupIds = <String>{};
+  // A group row that is not an object AT ALL. It loses a WHOLE configured group
+  // and names nothing, so an item whose only group it was appears with no
+  // configuration and keeps selling plain at base price. Strictly worse than
+  // losing one option — which already fails the payload — so the pre-005
+  // asymmetry (silent `continue` for groups, fail-closed for options) favoured
+  // the more dangerous case.
+  var hasUnreadableGroupRow = false;
+  // Two rows claiming ONE group id both render, both read the same selection
+  // map, and one tap emits the modifier twice — a real OVER-charge that reaches
+  // the receipt and the wire. `groupsForItem` does not dedupe, so it is caught
+  // here.
+  final duplicateGroupIds = <String>{};
+  // THE EXCUSE, bounded exactly. A group row we REJECTED but which named its
+  // owner leaves that item unavailable, so an option we cannot match MAY be
+  // accounted for by it — but only in the two shapes where that is actually
+  // true:
+  //
+  //  * `rejectedGroupIds` — the row's ID was readable (only its name was not),
+  //    so an option naming THAT id is provably the rejected group's;
+  //  * `hasUnidentifiableOwnedGroup` — the row's ID was unreadable, so its
+  //    options can name no id we hold and any unmatched option could be one of
+  //    them.
+  //
+  // SELF-REVIEW CORRECTION: this began as a single payload-wide boolean, a hole
+  // exactly as wide as the one F3 closed — ONE rejected group row anywhere
+  // excused EVERY unmatched option in the payload, including options belonging
+  // to a completely different item, which could then lose its only paid group
+  // and go on selling plain at base price.
+  final rejectedGroupIds = <String>{};
+  var hasUnidentifiableOwnedGroup = false;
+  for (final row in (raw['modifiers'] as List?) ?? const []) {
+    if (row is! Map) {
+      hasUnreadableGroupRow = true;
+      continue;
+    }
+    final id = exactId(row['id']);
+    final owner = exactId(row['menu_item_id']);
+    final name = row['name'];
+    final nameOk = name is String && name.trim().isNotEmpty;
+    if (id != null && nameOk) {
+      if (!declaredGroupIds.add(id)) duplicateGroupIds.add(id);
+    } else if (owner != null) {
+      if (id != null) {
+        rejectedGroupIds.add(id);
+      } else {
+        hasUnidentifiableOwnedGroup = true;
+      }
+    }
+  }
+
+  // ---- OPTION LOOP -----------------------------------------------------
   // An option id that appears more than once is AMBIGUOUS — it could price two
-  // different lines and we cannot tell which the operator meant.
-  final seenOptionIds = <String>{};
+  // different lines and we cannot tell which the operator meant. EVERY group
+  // that claimed it is suspect, the first one included: blaming only the later
+  // claimant would leave the first holding an ambiguous price, and if the
+  // operator's real delta was the second, that is a silent undercharge.
+  final firstClaimantByOptionId = <String, String>{};
+  final duplicateOptionIds = <String>{};
   for (final row in (raw['modifier_options'] as List?) ?? const []) {
     if (row is! Map) {
       // Not even a row. Nothing identifies it, so nothing can be blamed.
@@ -472,11 +511,14 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       continue;
     }
     if (!declaredGroupIds.contains(groupId)) {
-      // The parent group is not declared in this payload. If a group row DID
-      // name an item but could not be read, this option is explained by it and
-      // that item is already being marked unavailable. Otherwise nothing
-      // accounts for it and the affected product cannot be identified.
-      if (!hasOwnedButUnreadableGroup) hasUnattributableOption = true;
+      // The parent group is not declared in this payload. EXCUSED only when
+      // some group row named its item and was rejected — that item is being
+      // marked unavailable, so the damage is contained to a product we can
+      // name. Otherwise nothing accounts for this option and the affected
+      // product cannot be identified at all.
+      final excused =
+          rejectedGroupIds.contains(groupId) || hasUnidentifiableOwnedGroup;
+      if (!excused) hasUnattributableOption = true;
       continue;
     }
     if (optionId == null || delta is! int || name is! String) {
@@ -486,11 +528,19 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       orphanedOptionGroupIds.add(groupId);
       continue;
     }
-    if (!seenOptionIds.add(optionId)) {
-      // The same option id twice. Both claimants are suspect.
+    if (!duplicateOptionIds.contains(optionId) &&
+        firstClaimantByOptionId.containsKey(optionId)) {
+      // Second sighting: blame BOTH claimants and drop this one.
+      duplicateOptionIds.add(optionId);
+      orphanedOptionGroupIds.add(firstClaimantByOptionId[optionId]!);
       orphanedOptionGroupIds.add(groupId);
       continue;
     }
+    if (duplicateOptionIds.contains(optionId)) {
+      orphanedOptionGroupIds.add(groupId);
+      continue;
+    }
+    firstClaimantByOptionId[optionId] = groupId;
     (optionsByGroup[groupId] ??= <PosModifierOption>[]).add(
       PosModifierOption(
         id: optionId,
@@ -502,6 +552,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       ),
     );
   }
+
   final groups = <PosModifierGroup>[];
   for (final row in (raw['modifiers'] as List?) ?? const []) {
     if (row is! Map) continue;
@@ -530,6 +581,14 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     // cashier would be offered a subset of the real choices, at the real
     // prices, with no sign that one is missing.
     if (orphanedOptionGroupIds.contains(id)) {
+      brokenConfigItemIds.add(menuItemId);
+      continue;
+    }
+    // A group id claimed by TWO rows renders twice and double-counts every
+    // selection made in it. Neither row can be trusted to be the one the
+    // operator configured, so the product stops selling until the menu is
+    // unambiguous.
+    if (duplicateGroupIds.contains(id)) {
       brokenConfigItemIds.add(menuItemId);
       continue;
     }
@@ -588,7 +647,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // nothing about what was lost. The POS refuses the whole menu and shows its
   // existing safe error state. That is recoverable — the operator fixes the row
   // and reloads; an undercharged sale is not.
-  if (hasUnattributableOption) throw const PosMenuUnavailable();
+  //
+  // An unreadable group ROW is the same class and strictly worse: it loses a
+  // WHOLE configured group and names nothing at all.
+  if (hasUnattributableOption || hasUnreadableGroupRow) {
+    throw const PosMenuUnavailable();
+  }
 
   // THE CHOSEN RULE, stated: a product is unavailable when ANY group associated
   // with it cannot be interpreted safely — not merely the broken group dropped.

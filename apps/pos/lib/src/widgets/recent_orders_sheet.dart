@@ -214,31 +214,34 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     // server order id — an addition only ever targets a real server order.
     final addition = ref.watch(additionControllerProvider);
     final additionNotifier = ref.read(additionControllerProvider.notifier);
-    final additionTarget = addition.target;
-    if (additionTarget != null &&
-        (addition.sending || addition.failed || addition.awaitingRefresh)) {
-      pendingByIdentity[additionTarget.orderId] = PosPendingKind.itemsAdd;
-    }
-    // MONEY-CODEX-FINAL-CLOSURE-005 (F4): EVERY order with a live durable
-    // amendment record, not just the one that happens to be the ACTIVE attempt.
-    // After a restart with two pending amendments only the first was ever
-    // installed as `addition.target`, so the second order's Pay / Void /
-    // Discount stayed fully available against a total the server is about to
-    // change. The controller's durable index is the truthful source.
-    for (final orderId in additionNotifier.blockedOrderIds) {
-      pendingByIdentity[orderId] = PosPendingKind.itemsAdd;
-    }
-    // (F1) HYDRATION. Before the journal has been read we do not know WHICH
-    // orders are affected, so no money action may be offered on any of them.
-    // This is a disk read, not a network call, and the alternative is taking a
-    // payment against an order whose total is about to change. Read-only rows,
-    // search, and the receipt view are untouched.
-    if (additionNotifier.isStartupBlocked) {
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F1/F4). Every order with a live durable
+    // amendment record, not just the one that happens to be the ACTIVE attempt,
+    // and every order at all while the journal is still being read.
+    //
+    // KEYED THROUGH `identity.key`, WHICH IS THE BUG THIS ALSO FIXES. The map is
+    // keyed by `PosOrderIdentity.key` — `srv:<uuid>` for a server order — while
+    // the PSC-001C line here wrote the RAW `additionTarget.orderId`. Those never
+    // matched, so the addition has in fact NEVER withdrawn an order's money
+    // actions in this sheet. The lookup below resolves each blocked order id to
+    // the row that actually carries it.
+    //
+    // (F1) Before hydration finishes we do not know WHICH orders are affected,
+    // so no money action may be offered on any of them. It is a disk read, and
+    // the alternative is taking a payment against an order whose total is about
+    // to change. Rows, search and the read-only receipt view are untouched.
+    final hydrating = additionNotifier.isStartupBlocked;
+    final blockedOrderIds = <String>{
+      ...additionNotifier.blockedOrderIds,
+      if (addition.target case final t?)
+        if (addition.sending || addition.failed || addition.awaitingRefresh)
+          t.orderId,
+    };
+    if (hydrating || blockedOrderIds.isNotEmpty) {
       for (final o in orders) {
-        if (o.order?.orderId case final id?) {
-          pendingByIdentity[id] = PosPendingKind.itemsAdd;
+        final id = o.orderId;
+        if (hydrating || (id != null && blockedOrderIds.contains(id))) {
+          pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
         }
-        pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
       }
     }
 

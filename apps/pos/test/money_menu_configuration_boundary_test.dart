@@ -610,6 +610,116 @@ void main() {
     });
   });
 
+  // MONEY-CODEX-FINAL-CLOSURE-005 SELF-REVIEW — three holes the first cut of the
+  // F3 fix left open. Each of these is a silent money error with no crash and no
+  // indicator, which is why they are pinned separately from the [F] matrix.
+  group('[G] the attribution rules have no bypass', () {
+    test('G1 an unreadable group row for item A does NOT excuse an unmatched '
+        'option belonging to item B', () async {
+      // The first cut used ONE payload-wide boolean: any rejected group row
+      // excused EVERY unmatched option. Item B could then lose its only paid
+      // group and go on selling plain at base price with nothing recorded.
+      await expectLater(
+        loadMenu(
+          envelope(
+            modifiers: [
+              // Rejected (blank name) but it NAMES the burger, so the burger is
+              // accounted for...
+              groupRow({'name': ''}),
+            ],
+            options: [
+              optionRow(),
+              // ...and this option belongs to a group of the COLA that is not
+              // in the payload at all. Nothing accounts for it.
+              optionRow({'id': 'opt-ice', 'modifier_id': 'grp-ice-not-here'}),
+            ],
+          ),
+        ),
+        throwsA(isA<PosMenuUnavailable>()),
+        reason:
+            'the excuse may only cover what it can actually account for; a '
+            'second item losing its configuration is a separate undercharge',
+      );
+    });
+
+    test(
+      'G2 a group ROW that is not an object fails the payload closed',
+      () async {
+        // Losing a whole group is strictly worse than losing one option — which
+        // already fails closed — because an item whose ONLY group it was appears
+        // unconfigured and stays plain-addable.
+        await expectLater(
+          loadMenu(
+            envelope(
+              modifiers: [groupRow(), 'not-a-map'],
+              options: [optionRow()],
+            ),
+          ),
+          throwsA(isA<PosMenuUnavailable>()),
+        );
+      },
+    );
+
+    test('G3 a DUPLICATE option id makes BOTH claiming groups unavailable — '
+        'not just the second', () async {
+      // Blaming only the later claimant leaves the first holding an ambiguous
+      // price. If the operator's real delta was the second one, the first is a
+      // silent undercharge.
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [
+            groupRow(),
+            groupRow({'id': 'grp-ice', 'menu_item_id': kColaId, 'name': 'Ice'}),
+          ],
+          options: [
+            optionRow({'id': 'opt-dup', 'modifier_id': 'grp-meat'}),
+            optionRow({
+              'id': 'opt-dup',
+              'modifier_id': 'grp-ice',
+              'price_delta_minor': 900,
+            }),
+          ],
+        ),
+      );
+      expect(
+        itemOf(menu, kBurgerId).isUnavailable,
+        isTrue,
+        reason:
+            'the FIRST claimant is suspect too — it may hold the wrong price',
+      );
+      expect(itemOf(menu, kColaId).isUnavailable, isTrue);
+    });
+
+    test('G4 a DUPLICATE group id makes its product unavailable — a group '
+        'rendered twice double-charges every selection', () async {
+      // Two rows with one id both render, both read the same selection map, and
+      // one tap emits the modifier twice: `configuredUnitAmountMinor` counts the
+      // 1500 delta twice. That is an OVER-charge on the receipt and on the wire,
+      // and `groupsForItem` does not dedupe.
+      final menu = await loadMenu(
+        envelope(modifiers: [groupRow(), groupRow()], options: [optionRow()]),
+      );
+      expect(
+        itemOf(menu, kBurgerId).isUnavailable,
+        isTrue,
+        reason: 'neither row can be trusted to be the configured one',
+      );
+      expect(
+        itemOf(menu, kBurgerId).availabilityReason,
+        DemoMenuItem.configurationUnavailableReason,
+      );
+    });
+
+    test('G5 the healthy payload is still completely unaffected', () async {
+      final menu = await loadMenu(
+        envelope(modifiers: [groupRow()], options: [optionRow()]),
+      );
+      expect(itemOf(menu, kBurgerId).isUnavailable, isFalse);
+      expect(itemOf(menu, kColaId).isUnavailable, isFalse);
+      expect(menu.groupsForItem(kBurgerId).single.options, hasLength(1));
+    });
+  });
+
   test('E7 a BROKEN group alongside a HEALTHY one still makes the product '
       'unavailable — the safe default for money', () async {
     final menu = await loadMenu(

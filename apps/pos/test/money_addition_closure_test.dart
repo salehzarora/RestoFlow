@@ -168,6 +168,42 @@ class _DelayedJournalStore implements PosAdditionJournalStore {
   }
 }
 
+/// A journal that delays its WRITES on demand. `_journalClose` awaits `persist`,
+/// and the cart is unlocked for that whole window — which is exactly where a
+/// cashier starts the next customer's order. Holding it open makes the D1 window
+/// deterministic without any sleep.
+class _GatedPersistJournalStore implements PosAdditionJournalStore {
+  _GatedPersistJournalStore(this._inner);
+  final PosAdditionJournalStore _inner;
+
+  /// Held write, released by the test.
+  Completer<void>? hold;
+
+  /// Hold only the write that REMOVES this key — the closing write. A submit
+  /// also persists a phase transition first, and gating that one would stop the
+  /// flow before the cart is ever released.
+  String? holdWhenClosing;
+
+  @override
+  Future<Map<String, PosAdditionJournalRecord>> load(String scopeKey) =>
+      _inner.load(scopeKey);
+
+  @override
+  Future<void> persist(
+    String scopeKey,
+    Map<String, PosAdditionJournalRecord> records,
+  ) async {
+    final gate = hold;
+    final key = holdWhenClosing;
+    if (gate != null && key != null && !records.containsKey(key)) {
+      hold = null;
+      holdWhenClosing = null;
+      await gate.future;
+    }
+    await _inner.persist(scopeKey, records);
+  }
+}
+
 /// A journal whose load always throws — hydration must NOT fall back to idle.
 class _FailingJournalStore implements PosAdditionJournalStore {
   final Completer<void> gate = Completer<void>();
@@ -224,7 +260,13 @@ ProviderContainer _container({
   required PosAdditionJournalStore? journal,
   _FakeTransport? transport,
   OrderDetailRepository? details,
-  List<String> mintedIds = const ['op-1'],
+  // SELF-REVIEW CORRECTION. This defaulted to `['op-1']`, and
+  // `FixedClientIdGenerator` CLAMPS on its last element instead of throwing —
+  // so a production regression that re-minted an identity would hand out 'op-1'
+  // again and every "the replay carries the ORIGINAL identity" assertion would
+  // still pass green, blind to the one failure this whole program exists to
+  // prevent. The second id exists solely to make a re-mint visible.
+  List<String> mintedIds = const ['op-1', 'RE-MINTED-SECOND-IDENTITY'],
 }) {
   final c = ProviderContainer(
     overrides: [
@@ -346,6 +388,21 @@ void main() {
         cart.addItemWithModifiers(_burger, const [_meat240]),
         isNot(CartMutationResult.applied),
       );
+      // Quantity, note and clear are separate entry points and each is gated.
+      expect(
+        cart.increaseQuantity('line-0'),
+        isNot(CartMutationResult.applied),
+        reason: 'a quantity edit changes money and is refused too',
+      );
+      expect(
+        cart.decreaseQuantity('line-0'),
+        isNot(CartMutationResult.applied),
+      );
+      expect(
+        cart.updateLineNote('line-0', 'no onions'),
+        isNot(CartMutationResult.applied),
+      );
+      expect(cart.clear(), isNot(CartMutationResult.applied));
       expect(
         c.read(cartControllerProvider).lines,
         isEmpty,
@@ -378,9 +435,19 @@ void main() {
       expect(
         transport.pushedOperationIds,
         isEmpty,
-        reason: 'and no local_operation_id may be generated',
+        reason: 'nothing carrying an identity reached the wire',
       );
       expect(c.read(additionControllerProvider).attempt, isNull);
+      // AND THE GENERATOR WAS NEVER ASKED. `pushedOperationIds` only records
+      // what was SENT, so a minted-but-unsent id would be invisible to it. The
+      // first id is still unissued, which proves no identity was created.
+      expect(
+        c.read(clientIdGeneratorProvider).newId(),
+        'op-1',
+        reason:
+            'the generator is still on its first id — nothing consumed one '
+            'during the hydration window',
+      );
 
       // ---- COMPLETE THE LOAD
       journal.gate.complete();
@@ -501,6 +568,16 @@ void main() {
     }
 
     /// Every assertion an OUTCOME-UNKNOWN response must satisfy.
+    ///
+    /// HONESTY NOTE (self-review). Not every case below is a REGRESSION guard.
+    /// The pre-005 `_appliedResult`/`_definitiveRefusal` pair already returned
+    /// unknown for a wrong operation id, a non-true `ok`, an unknown status and
+    /// an unparseable envelope, so F2-5, F2-6b, F2-8 and F2-9 are
+    /// CHARACTERIZATION — they pin behaviour that was already correct and would
+    /// not fail on a revert. The cases that genuinely discriminate the 005 fix
+    /// are F2-1/2/2b/3/4 (round completeness), F2-6 (target-order match),
+    /// F2-7 (unknown refusal code) and F2-10 (the parser exception, which used
+    /// to escape `_submit` entirely).
     Future<void> expectUncertain(Object? response, String label) async {
       final (c, transport, result) = await submitAgainst(response);
       final addition = c.read(additionControllerProvider.notifier);
@@ -732,6 +809,89 @@ void main() {
           reason: '$code releases the identity',
         );
       }
+    });
+
+    test('F2-7b a DEAD status is not a verdict either — retry exhaustion is '
+        'not a server answer', () async {
+      // The repository's own contract for this ledger column
+      // (`order_submission.dart`) is that `dead` entries stay retryable: no
+      // server verdict was positively recorded. Routing it through the refusal
+      // allowlist would free the identity and let the next send build a SECOND
+      // round. (No migration writes `dead` today; it was wrong in the unsafe
+      // direction regardless.)
+      await expectUncertain(
+        _envelope([
+          <String, Object?>{
+            'local_operation_id': 'op-1',
+            'operation_type': 'order.items_add',
+            'status': 'dead',
+            'ok': false,
+            'error': 'item_unavailable',
+          },
+        ]),
+        'dead status with an allowlisted code',
+      );
+    });
+
+    test('F2-7c a row answering under a DIFFERENT operation type, or under '
+        'none at all, is not our verdict', () async {
+      await expectUncertain(
+        _envelope([
+          <String, Object?>{
+            'local_operation_id': 'op-1',
+            'operation_type': 'order.submit',
+            'status': 'rejected',
+            'ok': false,
+            'error': 'item_unavailable',
+          },
+        ]),
+        'foreign operation type',
+      );
+      await expectUncertain(
+        _envelope([
+          <String, Object?>{
+            'local_operation_id': 'op-1',
+            'status': 'applied',
+            'ok': true,
+            'order_id': 'o-1',
+            'round_id': 'r-2',
+            'round_number': 2,
+          },
+        ]),
+        'missing operation type',
+      );
+    });
+
+    test('F2-7d invalid_payload IS a terminal refusal — omitting it from the '
+        'allowlist bricked the order forever', () async {
+      // `sync_push` emits this for order.items_add when target_id and
+      // payload.order_id are not a matching uuid pair, and it is emitted BEFORE
+      // the ledger claim — so there is no stored row to replay and the same
+      // identity gets the identical answer every time. Classified as unknown the
+      // cart stayed locked and Pay / Void / Discount stayed withdrawn on that
+      // order for the life of the install.
+      final (c, _, result) = await submitAgainst(
+        _envelope([
+          <String, Object?>{
+            'local_operation_id': 'op-1',
+            'operation_type': 'order.items_add',
+            'status': 'rejected',
+            'ok': false,
+            'error': 'invalid_payload',
+          },
+        ]),
+      );
+      expect(result.error, 'invalid_payload');
+      expect(
+        c.read(additionControllerProvider).dispatched,
+        isFalse,
+        reason: 'the server refused before any ledger row existed',
+      );
+      expect(
+        c.read(additionControllerProvider.notifier).exit(),
+        isTrue,
+        reason: 'so the cashier can abandon it and correct the order',
+      );
     });
 
     test(
@@ -1032,7 +1192,14 @@ void main() {
       expect(
         transport.pushedOperationIds,
         isEmpty,
-        reason: 'no third local_operation_id is generated',
+        reason: 'nothing was dispatched for the conflicted order',
+      );
+      // The generator is the only thing that can prove an id was not MINTED —
+      // `pushedOperationIds` would miss one that was created but never sent.
+      expect(
+        c.read(clientIdGeneratorProvider).newId(),
+        'op-1',
+        reason: 'no third local_operation_id was generated',
       );
 
       // 13 — order actions stay blocked for the conflicted order.
@@ -1042,6 +1209,210 @@ void main() {
       // 14 — the UNRELATED order is usable: it is the safe active record.
       expect(c.read(additionControllerProvider).attempt?.orderId, 'o-9');
     });
+
+    test(
+      'F4-18 the queue advance NEVER seizes a cart the cashier is using',
+      () async {
+        // SELF-REVIEW (D1). The advance runs in a continuation after
+        // `await _journalClose` — two real SharedPreferences round-trips — and the
+        // cart is unlocked for that whole window. Locking whatever it holds would
+        // strand the next customer's lines under a DIFFERENT order's identity:
+        // every mutation refused, `exit()` refused because the record is
+        // dispatched, and the only escape a successful replay over the network
+        // whose absence created the record.
+        final prefs = await seed([
+          _record(
+            localOperationId: 'op-old',
+            orderId: 'o-1',
+            createdAt: DateTime.utc(2026, 8, 6, 10),
+          ),
+          _record(
+            localOperationId: 'op-new',
+            orderId: 'o-2',
+            createdAt: DateTime.utc(2026, 8, 6, 11),
+            lineId: 'l-2',
+          ),
+        ]);
+        final transport = _FakeTransport(<Object?>[
+          _envelope([_appliedRow(localOp: 'op-old', orderId: 'o-1')]),
+        ]);
+        final store = _GatedPersistJournalStore(
+          SharedPrefsAdditionJournalStore(prefs),
+        );
+        final c = _container(journal: store, transport: transport);
+        c.read(additionControllerProvider);
+        await _settle();
+
+        final addition = c.read(additionControllerProvider.notifier);
+        final cart = c.read(cartControllerProvider.notifier);
+        expect(
+          c.read(additionControllerProvider).attempt?.localOperationId,
+          'op-old',
+        );
+
+        // HOLD the closing write. `_journalClose` awaits it, the cart has
+        // already been released, and the queue has not advanced yet — the exact
+        // window a real device spends on two SharedPreferences round-trips.
+        final closeGate = Completer<void>();
+        store
+          ..hold = closeGate
+          ..holdWhenClosing = 'op-old';
+        final first = addition.submit();
+        await _settle();
+
+        // The cashier starts the next customer in the freed cart.
+        expect(
+          cart.addItemWithModifiers(_burger, const [_meat240]),
+          CartMutationResult.applied,
+          reason: 'the cart really is free at this moment',
+        );
+
+        closeGate.complete(); // the write lands; the queue now advances
+        expect((await first).applied, isTrue);
+        await _settle();
+
+        expect(
+          c.read(cartControllerProvider).lines,
+          hasLength(1),
+          reason: 'the new work is intact',
+        );
+        expect(
+          c.read(cartControllerProvider).lockedByAddition,
+          isFalse,
+          reason:
+              'op-new must NOT have seized it — those lines belong to the '
+              'cashier, not to a frozen payload',
+        );
+        expect(
+          c.read(additionControllerProvider).attempt,
+          isNull,
+          reason: 'activation is DEFERRED, not forced',
+        );
+        // The record is not lost, and its order stays blocked.
+        expect(addition.pendingAmendments.map((r) => r.localOperationId), [
+          'op-new',
+        ]);
+        expect(addition.blockedOrderIds, {'o-2'});
+
+        // Once the cart is free, entering for that order resumes it normally.
+        expect(cart.clear(), CartMutationResult.applied);
+        expect(
+          await addition.enterForOrder('o-2'),
+          AdditionEntryResult.entered,
+        );
+        expect(
+          c.read(additionControllerProvider).attempt?.localOperationId,
+          'op-new',
+        );
+      },
+    );
+
+    test(
+      'F4-19 resuming a queued record is REFUSED while the cart is busy',
+      () async {
+        // D2: `enterForOrder` is documented as the actual guarantee, so the
+        // resume branch must respect the empty-cart rule every other entry path
+        // enforces rather than sitting above it.
+        final prefs = await seed([
+          _record(
+            localOperationId: 'op-prepared',
+            orderId: 'o-1',
+            phase: PosAdditionJournalPhase.prepared,
+            createdAt: DateTime.utc(2026, 8, 6, 10),
+          ),
+          _record(
+            localOperationId: 'op-queued',
+            orderId: 'o-2',
+            createdAt: DateTime.utc(2026, 8, 6, 11),
+            lineId: 'l-2',
+          ),
+        ]);
+        final c = _container(journal: SharedPrefsAdditionJournalStore(prefs));
+        c.read(additionControllerProvider);
+        await _settle();
+
+        final addition = c.read(additionControllerProvider.notifier);
+        final cart = c.read(cartControllerProvider.notifier);
+        expect(addition.exit(), isTrue); // prepared => safe to abandon
+        expect(cart.addItem(_burger), CartMutationResult.applied);
+
+        expect(
+          await addition.enterForOrder('o-2'),
+          AdditionEntryResult.cartNotEmpty,
+          reason:
+              'a cart holding the cashier\'s work is never silently retargeted',
+        );
+        expect(c.read(cartControllerProvider).lines, hasLength(1));
+        expect(c.read(cartControllerProvider).lockedByAddition, isFalse);
+      },
+    );
+
+    test(
+      'F4-17 the RESUME branch: entering for a queued order between exit() '
+      'and the queue advancing resumes it instead of minting a new identity',
+      () async {
+        // `exit()` resets the state SYNCHRONOUSLY, while `_journalClose` and the
+        // queue advance run in a continuation. In that window `state.attempt` is
+        // null and a second order's record is still pending — the exact case
+        // `enterForOrder`'s resume branch exists for. Without it, entering would
+        // reserve a fresh target and the next submit would mint a SECOND identity
+        // for an operation the server may already own.
+        final prefs = await seed([
+          _record(
+            localOperationId: 'op-prepared',
+            orderId: 'o-1',
+            phase: PosAdditionJournalPhase.prepared,
+            createdAt: DateTime.utc(2026, 8, 6, 10),
+          ),
+          _record(
+            localOperationId: 'op-queued',
+            orderId: 'o-2',
+            createdAt: DateTime.utc(2026, 8, 6, 11),
+            lineId: 'l-2',
+          ),
+        ]);
+        final transport = _FakeTransport();
+        final c = _container(
+          journal: SharedPrefsAdditionJournalStore(prefs),
+          transport: transport,
+        );
+        c.read(additionControllerProvider);
+        await _settle();
+
+        final addition = c.read(additionControllerProvider.notifier);
+        expect(
+          c.read(additionControllerProvider).attempt?.localOperationId,
+          'op-prepared',
+        );
+
+        // A PREPARED record provably never reached the transport, so abandoning
+        // it is safe — and it is the only phase where that is true.
+        expect(addition.exit(), isTrue);
+        expect(
+          c.read(additionControllerProvider).attempt,
+          isNull,
+          reason: 'the window is open: no attempt, queue not yet advanced',
+        );
+
+        // SYNCHRONOUSLY, inside that window:
+        expect(
+          await addition.enterForOrder('o-2'),
+          AdditionEntryResult.entered,
+        );
+        expect(
+          c.read(additionControllerProvider).attempt?.localOperationId,
+          'op-queued',
+          reason:
+              'the QUEUED record was resumed — a fresh reservation would have '
+              'made the next submit mint a second identity for o-2',
+        );
+        expect(
+          c.read(clientIdGeneratorProvider).newId(),
+          'op-1',
+          reason: 'and no identity was generated to do it',
+        );
+      },
+    );
 
     test(
       'F4-16 unreadable records are counted separately and never dispatched',

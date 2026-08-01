@@ -803,7 +803,7 @@ void main() {
       final detail = _RawServerDetail(_completedPaymentJson());
       final payments = _SettlingPaymentRepo();
       final transport = _CountingTransport();
-      final journal = InMemoryAdditionJournalStore();
+      final journal = _CountingJournalStore();
       final container = ProviderContainer(
         overrides: [
           runtimeConfigProvider.overrideWithValue(
@@ -840,7 +840,6 @@ void main() {
 
       // ---- BEFORE
       final cartBefore = container.read(cartControllerProvider);
-      final journalBefore = await journal.load('dev-1');
       expect(payments.calls, 0);
       expect(transport.calls, isEmpty);
 
@@ -884,26 +883,24 @@ void main() {
         isEmpty,
         reason: 'no server operation of any kind is created',
       );
+      // The journal is asserted through its OWN persistence, under the scope the
+      // controller would use. Comparing `load('dev-1')` before and after was a
+      // tautology: no session is wired here, so `_journalScope` is '' and no
+      // code path could ever write to that scope.
       expect(
-        await journal.load('dev-1'),
-        journalBefore,
-        reason: 'the Addition journal is untouched',
+        journal.writes,
+        0,
+        reason: 'the Addition journal was never written to',
       );
       expect(
         container.read(cartControllerProvider).lines,
         cartBefore.lines,
         reason: 'the cart is untouched',
       );
-      expect(
-        row.payment!.status,
-        PaymentStatus.completed,
-        reason: 'the payment status is unchanged',
-      );
-      expect(
-        row.order!.orderId,
-        'oid-RCPT1',
-        reason: 'the order identity/revision is unchanged',
-      );
+      // NOT asserted here: `row.payment.status` and `row.order.orderId`. Those
+      // are fields of an immutable value object this test constructed itself —
+      // they cannot change, so asserting them proves nothing. What CAN change is
+      // the till's own state, and that is what is counted above.
 
       // ---- AND IT REMAINS REPEATABLE, still with no writes.
       await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
@@ -914,6 +911,29 @@ void main() {
       expect(detail.fetched, ['oid-RCPT1', 'oid-RCPT1']);
     });
   });
+}
+
+/// Counts journal WRITES so a read-only action can prove it made none. The
+/// in-memory store alone cannot: a before/after `load()` comparison of two empty
+/// maps is true whether or not anything was attempted.
+class _CountingJournalStore implements PosAdditionJournalStore {
+  final Map<String, Map<String, PosAdditionJournalRecord>> _data = {};
+  int writes = 0;
+
+  @override
+  Future<Map<String, PosAdditionJournalRecord>> load(String scopeKey) async =>
+      Map<String, PosAdditionJournalRecord>.of(
+        _data[scopeKey] ?? const <String, PosAdditionJournalRecord>{},
+      );
+
+  @override
+  Future<void> persist(
+    String scopeKey,
+    Map<String, PosAdditionJournalRecord> records,
+  ) async {
+    writes++;
+    _data[scopeKey] = Map<String, PosAdditionJournalRecord>.of(records);
+  }
 }
 
 /// Counts every RPC so a read-only action can prove it made none.

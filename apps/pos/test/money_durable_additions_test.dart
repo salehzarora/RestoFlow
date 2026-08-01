@@ -115,6 +115,9 @@ Object? _applied(Map<String, dynamic> params) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'applied',
         'ok': true,
         // F2: the server always names the order it applied to; the
@@ -139,6 +142,9 @@ Object? _replayApplied(Map<String, dynamic> params) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'applied',
         'ok': true,
         // F2: the server always names the order it applied to; the
@@ -1068,6 +1074,9 @@ void main() {
         'results': [
           {
             'local_operation_id': localOp,
+            // F2: `sync_push` stamps the operation type on every result row that
+            // carries a local_operation_id; the client requires it to be OURS.
+            'operation_type': 'order.items_add',
             'status': 'conflict',
             'ok': false,
             'error': 'conflict',
@@ -1085,6 +1094,9 @@ void main() {
         'results': [
           {
             'local_operation_id': localOp,
+            // F2: `sync_push` stamps the operation type on every result row that
+            // carries a local_operation_id; the client requires it to be OURS.
+            'operation_type': 'order.items_add',
             'status': 'rejected',
             'ok': false,
             'error': 'item_unavailable',
@@ -1384,6 +1396,9 @@ void main() {
         'results': [
           {
             'local_operation_id': localOp,
+            // F2: `sync_push` stamps the operation type on every result row that
+            // carries a local_operation_id; the client requires it to be OURS.
+            'operation_type': 'order.items_add',
             'status': 'rejected',
             'ok': false,
             'error': 'modifier_option_not_in_scope',

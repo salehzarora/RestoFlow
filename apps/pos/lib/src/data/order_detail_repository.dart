@@ -562,9 +562,16 @@ CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
 /// detail: the local order-time lines can miss another till's additions, so a
 /// failed load or parse returns NULL (an honest "couldn't load — retry", shown
 /// by the caller) and is NEVER silently substituted with a partial local
-/// receipt. The one legitimate stand-in is this till's OWN recorded payment
-/// when the detail has no completed payment yet (a queued, not-yet-synced
-/// payment) — the itemized view stays authoritative even then.
+/// receipt.
+///
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F6/F9): this used to say "the one legitimate
+/// stand-in is this till's OWN recorded payment when the detail has no
+/// completed payment yet". THERE IS NO SUCH STAND-IN, and there never should
+/// have been. A queued local payment is this till's intention, not the server's
+/// record: it may be unsent in the outbox, it may have been rejected, and the
+/// order may have been settled elsewhere or not at all. When the authoritative
+/// detail names no completed payment, the server is telling us nothing has been
+/// paid, and this returns NULL.
 ///
 /// Demo mode keeps its self-contained local receipt: there is no server to
 /// ask. The just-submitted confirmation-screen print is a DIFFERENT flow and

@@ -86,6 +86,9 @@ Object? _applied(Map<String, dynamic> params) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'applied',
         'ok': true,
         // MONEY-CODEX-FINAL-CLOSURE-005 (F2): the server ALWAYS names the order
@@ -108,6 +111,9 @@ Object? _rejected(Map<String, dynamic> params) {
     'results': [
       {
         'local_operation_id': localOp,
+        // F2: `sync_push` stamps the operation type on every result row that
+        // carries a local_operation_id; the client requires it to be OURS.
+        'operation_type': 'order.items_add',
         'status': 'rejected',
         'ok': false,
         'error': 'rejected',
