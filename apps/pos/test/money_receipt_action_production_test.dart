@@ -17,6 +17,15 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show SyncRpcTransport;
+import 'package:restoflow_pos/src/data/addition_journal_store.dart';
+import 'package:restoflow_pos/src/state/addition_controller.dart'
+    show additionJournalStoreProvider;
+import 'package:restoflow_pos/src/state/cart_controller.dart'
+    show cartControllerProvider;
+import 'package:restoflow_pos/src/state/pos_session.dart'
+    show posAuthTransportProvider;
 import 'package:restoflow_pos/src/data/order_actions.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
@@ -205,6 +214,77 @@ class _ServerDetail implements OrderDetailRepository {
     );
   }
 }
+
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F6): a server detail built from the RAW wire
+/// shape, so a PENDING / FAILED / MALFORMED payment goes through the real
+/// `PosOrderDetailPayment.fromJson` refusal rather than a hand-made object the
+/// parser never saw.
+class _RawServerDetail implements OrderDetailRepository {
+  _RawServerDetail(this.paymentJson);
+
+  /// The `payment` object exactly as `pos_order_detail` would emit it, or null
+  /// for an order the server reports as unpaid.
+  final Map<String, Object?>? paymentJson;
+  final List<String> fetched = <String>[];
+
+  @override
+  Future<PosOrderDetail> fetch(String orderId) async {
+    fetched.add(orderId);
+    final parsed = PosOrderDetail.fromJson(<String, Object?>{
+      'ok': true,
+      'order': <String, Object?>{
+        'order_id': orderId,
+        'order_code': '#RCPT1',
+        'order_type': 'dine_in',
+        'status': 'submitted',
+        'revision': 1,
+        'currency_code': 'ILS',
+        'subtotal_minor': kTotal,
+        'discount_total_minor': 0,
+        'tax_total_minor': 0,
+        'grand_total_minor': kTotal,
+        'table_label': 'T7',
+        'customer_name': 'Dana',
+        'receipt_number': 'R-77',
+      },
+      // `items`, `rounds` and `payment` sit at the TOP level of the
+      // `pos_order_detail` envelope, alongside `order` — not inside it.
+      'rounds': <Object?>[],
+      'items': <Object?>[
+        <String, Object?>{
+          'menu_item_name_snapshot': 'Burger',
+          'quantity': 2,
+          'unit_price_minor_snapshot': kBase,
+          'line_discount_minor': 0,
+          'line_total_minor': kTotal,
+          'modifiers': <Object?>[
+            <String, Object?>{
+              'option_name_snapshot': '240g',
+              'price_minor_snapshot': kDelta,
+              'quantity': 1,
+            },
+          ],
+        },
+      ],
+      if (paymentJson != null) 'payment': paymentJson,
+    });
+    if (parsed == null) {
+      throw const PosOrderDetailException(PosOrderDetailFailure.malformed);
+    }
+    return parsed;
+  }
+}
+
+/// A COMPLETED payment on the wire — the control case.
+Map<String, Object?> _completedPaymentJson() => <String, Object?>{
+  'payment_id': '11111111-2222-4333-8444-555555555555',
+  'payment_status': 'completed',
+  'method': 'cash',
+  'amount_minor': kTotal,
+  'tendered_minor': kTendered,
+  'change_minor': kChange,
+  'created_at': '2026-08-06T10:01:00.000Z',
+};
 
 PosOrderDetailPayment _serverPayment() => PosOrderDetailPayment(
   paymentId: 'pay-RCPT1',
@@ -535,6 +615,315 @@ void main() {
       expect(bridge.documents, isEmpty);
     });
   });
+
+  // =========================================================================
+  // C — MONEY-CODEX-FINAL-CLOSURE-005 (F6). THE AUTHORITATIVE PAYMENT STATE
+  //     DECIDES, AND THERE IS NO LOCAL FALLBACK.
+  //
+  // `authoritativeReceiptSource` read
+  //
+  //     final payment = cashPaymentFromDetail(detail) ?? localPayment;
+  //
+  // so when the server's detail carried NO completed payment — pending, failed,
+  // malformed, or simply absent — it silently fell back to THIS DEVICE'S local
+  // record and produced a paid receipt anyway. The whole point of the
+  // authoritative path is that the server decides whether money was taken; a
+  // fallback to the local guess is the same fabricated receipt the strict
+  // decoders exist to prevent, arriving through the front door.
+  // =========================================================================
+  group('C. a non-completed authoritative payment prints nothing', () {
+    final cases = <String, Map<String, Object?>?>{
+      'PENDING': <String, Object?>{
+        ..._completedPaymentJson(),
+        'payment_status': 'pending',
+      },
+      'FAILED': <String, Object?>{
+        ..._completedPaymentJson(),
+        'payment_status': 'failed',
+      },
+      'MALFORMED (money is a string)': <String, Object?>{
+        ..._completedPaymentJson(),
+        'amount_minor': '12000',
+      },
+      'MALFORMED (fabricated id)': <String, Object?>{
+        ..._completedPaymentJson(),
+        'payment_id': 'not-a-uuid',
+      },
+      'ABSENT': null,
+    };
+
+    cases.forEach((label, paymentJson) {
+      testWidgets('C1 $label: the automatic action produces NO receipt and no '
+          'local fallback', (tester) async {
+        tester.view.physicalSize = const Size(1200, 2200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final connector = _RecordingConnector();
+        final detail = _RawServerDetail(paymentJson);
+        final payments = _SettlingPaymentRepo();
+        final container = ProviderContainer(
+          overrides: [
+            runtimeConfigProvider.overrideWithValue(
+              RuntimeConfig.test(isDemoMode: false),
+            ),
+            orderDetailRepositoryProvider.overrideWithValue(detail),
+            paymentRepositoryProvider.overrideWithValue(payments),
+            posNativePrintingAvailableProvider.overrideWithValue(true),
+            nativePrinterNamespaceProvider.overrideWithValue('pos'),
+            bluetoothPrinterConnectorProvider.overrideWithValue(connector),
+          ],
+        );
+        addTearDown(container.dispose);
+        container
+            .read(posRecentOrdersControllerProvider.notifier)
+            .recordSubmitted(_order);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: CashPaymentSheet(
+                  identity: _identity,
+                  orderId: 'oid-RCPT1',
+                  orderNumber: '#RCPT1',
+                  amountMinor: kTotal,
+                  currencyCode: 'ILS',
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).first, '150');
+        await tester.pump();
+        await tester.tap(find.byType(FilledButton).last);
+        await tester.pumpAndSettle();
+
+        expect(
+          connector.sent,
+          isEmpty,
+          reason:
+              '$label: the server does not say this order is settled, so no '
+              'receipt may claim it is',
+        );
+        expect(
+          container.read(receiptPrintControllerProvider)[_orderKey],
+          isNull,
+          reason: '$label: no job may exist at all',
+        );
+        expect(
+          detail.fetched,
+          isNotEmpty,
+          reason: '$label: the authoritative source WAS consulted',
+        );
+        expect(
+          payments.calls,
+          1,
+          reason: '$label: exactly one payment request, never a retry',
+        );
+      });
+    });
+
+    testWidgets('C2 the CONTROL case: a completed authoritative payment DOES '
+        'print, so C1 is not passing for an unrelated reason', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final connector = _RecordingConnector();
+      final detail = _RawServerDetail(_completedPaymentJson());
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          orderDetailRepositoryProvider.overrideWithValue(detail),
+          paymentRepositoryProvider.overrideWithValue(_SettlingPaymentRepo()),
+          posNativePrintingAvailableProvider.overrideWithValue(true),
+          nativePrinterNamespaceProvider.overrideWithValue('pos'),
+          bluetoothPrinterConnectorProvider.overrideWithValue(connector),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(posRecentOrdersControllerProvider.notifier)
+          .recordSubmitted(_order);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: CashPaymentSheet(
+                identity: _identity,
+                orderId: 'oid-RCPT1',
+                orderNumber: '#RCPT1',
+                amountMinor: kTotal,
+                currencyCode: 'ILS',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '150');
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton).last);
+      await tester.pumpAndSettle();
+
+      expect(connector.sent, hasLength(1));
+      expect(_text(connector.sent.single), contains('120.00'));
+    });
+  });
+
+  // =========================================================================
+  // D — MONEY-CODEX-FINAL-CLOSURE-005 (F6). MANUAL REPRINT IS A READ.
+  //
+  // A deliberate reprint must produce paper and NOTHING else. It is offered
+  // repeatedly, often on an order the kitchen is still cooking, and any write
+  // it caused would be multiplied by every press.
+  // =========================================================================
+  group('D. the manual reprint has no side effects at all', () {
+    testWidgets('D1 reprint fetches the authoritative detail, prints one '
+        'receipt, and touches no payment, outbox, journal, cart or server '
+        'operation', (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final bridge = _RecordingBridge();
+      final detail = _RawServerDetail(_completedPaymentJson());
+      final payments = _SettlingPaymentRepo();
+      final transport = _CountingTransport();
+      final journal = InMemoryAdditionJournalStore();
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          orderDetailRepositoryProvider.overrideWithValue(detail),
+          paymentRepositoryProvider.overrideWithValue(payments),
+          posAuthTransportProvider.overrideWithValue(transport),
+          additionJournalStoreProvider.overrideWithValue(journal),
+          posNativePrintingAvailableProvider.overrideWithValue(false),
+          posPrintBridgeProvider.overrideWithValue(bridge),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final row = PosRecentOrder(
+        order: _order,
+        payment: CashPayment(
+          paymentId: 'pay-RCPT1',
+          orderNumber: '#RCPT1',
+          deviceId: 'dev-1',
+          localOperationId: 'op-pay-1',
+          method: PaymentMethod.cash,
+          status: PaymentStatus.completed,
+          amountMinor: kTotal,
+          tenderedMinor: kTendered,
+          changeMinor: kChange,
+          currencyCode: 'ILS',
+          receiptNumber: 'R-77',
+          paidAt: DateTime.now().toUtc(),
+          orderId: 'oid-RCPT1',
+        ),
+      );
+
+      // ---- BEFORE
+      final cartBefore = container.read(cartControllerProvider);
+      final journalBefore = await journal.load('dev-1');
+      expect(payments.calls, 0);
+      expect(transport.calls, isEmpty);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Builder(
+              builder: (ctx) => Scaffold(
+                body: OrderActionRow(
+                  order: row,
+                  l10n: AppLocalizations.of(ctx),
+                  actions: resolveOrderActions(row),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
+      await tester.pumpAndSettle();
+
+      // ---- AFTER: exactly one read, exactly one document, zero writes.
+      expect(
+        detail.fetched,
+        ['oid-RCPT1'],
+        reason: 'the authoritative detail IS consulted — this is the read',
+      );
+      expect(bridge.documents, hasLength(1), reason: 'one copy, as asked');
+      expect(
+        payments.calls,
+        0,
+        reason: 'a reprint must never replay the payment',
+      );
+      expect(
+        transport.calls,
+        isEmpty,
+        reason: 'no server operation of any kind is created',
+      );
+      expect(
+        await journal.load('dev-1'),
+        journalBefore,
+        reason: 'the Addition journal is untouched',
+      );
+      expect(
+        container.read(cartControllerProvider).lines,
+        cartBefore.lines,
+        reason: 'the cart is untouched',
+      );
+      expect(
+        row.payment!.status,
+        PaymentStatus.completed,
+        reason: 'the payment status is unchanged',
+      );
+      expect(
+        row.order!.orderId,
+        'oid-RCPT1',
+        reason: 'the order identity/revision is unchanged',
+      );
+
+      // ---- AND IT REMAINS REPEATABLE, still with no writes.
+      await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
+      await tester.pumpAndSettle();
+      expect(bridge.documents, hasLength(2));
+      expect(payments.calls, 0);
+      expect(transport.calls, isEmpty);
+      expect(detail.fetched, ['oid-RCPT1', 'oid-RCPT1']);
+    });
+  });
+}
+
+/// Counts every RPC so a read-only action can prove it made none.
+class _CountingTransport implements SyncRpcTransport {
+  final List<String> calls = <String>[];
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    calls.add(function);
+    return null;
+  }
 }
 
 /// Refuses every payment, the way the server does for a non-chargeable order.
@@ -547,6 +936,11 @@ void main() {
 class _SettlingPaymentRepo implements PaymentRepository {
   final DemoPaymentStore _inner = DemoPaymentStore();
 
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F6): how many payment requests this
+  /// repository received, so a read-only action can prove it made none and a
+  /// settlement can prove it made exactly one.
+  int calls = 0;
+
   @override
   Future<CashPayment> recordCashPayment({
     required String orderId,
@@ -556,15 +950,18 @@ class _SettlingPaymentRepo implements PaymentRepository {
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
     int? expectedRevision,
-  }) => _inner.recordCashPayment(
-    orderId: orderId,
-    orderNumber: orderNumber,
-    amountMinor: amountMinor,
-    tenderedMinor: tenderedMinor,
-    currencyCode: currencyCode,
-    method: method,
-    expectedRevision: expectedRevision,
-  );
+  }) {
+    calls++;
+    return _inner.recordCashPayment(
+      orderId: orderId,
+      orderNumber: orderNumber,
+      amountMinor: amountMinor,
+      tenderedMinor: tenderedMinor,
+      currencyCode: currencyCode,
+      method: method,
+      expectedRevision: expectedRevision,
+    );
+  }
 
   @override
   ShiftContext shiftContext() => _inner.shiftContext();

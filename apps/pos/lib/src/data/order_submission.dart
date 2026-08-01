@@ -101,8 +101,19 @@ const Set<String> kPermanentRejectionCodes = {
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
 /// into `order_item_modifiers` (RF-052, D-008). [priceMinorSnapshot] is a
-/// SIGNED integer minor-unit UNIT delta; the server counts it × [quantity]
-/// once per line in its total formula (`Σ delta × modifier_qty`).
+/// SIGNED integer minor-unit UNIT delta.
+///
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F9): this said the server counts the delta
+/// "once per line", which is the superseded formula A. It does not.
+/// `app.submit_order` computes
+///
+///     line_total = item_quantity × (unit_price_snapshot
+///                                   + Σ(price_minor_snapshot × modifier_qty))
+///                  − line_discount
+///
+/// so the delta is counted once per MODIFIER unit and then again per ITEM unit.
+/// A cart line of 2 burgers each with 1 paid 240g upgrade is charged the
+/// upgrade twice, not once (MONEY-PRICING-FORMULA-002A).
 class OrderSubmissionModifier {
   const OrderSubmissionModifier({
     required this.modifierOptionId,
@@ -149,14 +160,22 @@ class OrderSubmissionModifier {
 /// neither is pre-multiplied on the wire.
 ///
 /// WHAT THE SERVER ACTUALLY CHECKS, stated accurately (F9). This said "the
-/// server recomputes and rejects any mismatch", which overstates the contract:
-/// `app.submit_order` recomputes each line from the SNAPSHOTS and compares only
-/// the resulting SUBTOTAL against the client's `subtotal_minor`. It never reads
-/// this per-line field back for comparison, and the stored
-/// `order_items.line_total_minor` is the server's own computation. So a wrong
-/// value here is caught only when it moves the subtotal — two compensating line
-/// errors would pass. Send the exact 002A figure; do not rely on the server to
-/// correct this field.
+/// server recomputes and rejects any mismatch", which overstates the contract.
+/// Precisely:
+///
+///  1. `app.submit_order` recomputes ALL of the item and modifier arithmetic
+///     itself, from the order-time snapshots on the wire — each modifier as
+///     `price_minor_snapshot × modifier_qty`, summed, added to the bare unit
+///     price, and multiplied by the item quantity;
+///  2. it validates only the AGGREGATE: `p_client_subtotal_minor` must equal
+///     the recomputed subtotal, or the whole submit is refused;
+///  3. it never reads this per-line field back for comparison. The stored
+///     `order_items.line_total_minor` is the server's own computation.
+///
+/// So [lineTotalMinor] is NOT independently trusted as authoritative — a wrong
+/// value here is caught only when it moves the subtotal, and two compensating
+/// line errors would pass. Send the exact 002A figure; do not rely on the
+/// server to correct this field.
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,

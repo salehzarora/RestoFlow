@@ -619,7 +619,21 @@ Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
     } on PosOrderDetailException {
       return null;
     }
-    final payment = cashPaymentFromDetail(detail) ?? localPayment;
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F6): NO LOCAL FALLBACK.
+    //
+    // This read `cashPaymentFromDetail(detail) ?? localPayment`. When the
+    // authoritative detail carried no completed payment — the server reporting
+    // the order as UNPAID — it silently fell back to this device's local record
+    // and produced a paid receipt anyway. The entire point of the authoritative
+    // path is that the SERVER decides whether money was taken; substituting the
+    // local guess is the same fabricated receipt the strict decoders exist to
+    // prevent, arriving through the front door.
+    //
+    // (A pending, failed or malformed payment was already refused, because
+    // `PosOrderDetailPayment.fromJson` returns null and that fails the whole
+    // detail. Only the ABSENT case reached this fallback — which is precisely
+    // the case where the server is telling us nothing has been paid.)
+    final payment = cashPaymentFromDetail(detail);
     if (payment == null) return null;
     return (submittedOrderViewFromDetail(detail), payment);
   }
