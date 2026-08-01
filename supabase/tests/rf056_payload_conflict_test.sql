@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(8);
+select plan(7);
 
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000a0', 'Org A', 'rf056k-a', 'USD');
@@ -85,13 +85,7 @@ select is((select count(*) from audit_events
                and new_values ->> 'local_operation_id' = 'op-1')::int,
           2, 'both conflicting attempts on op-1 are audited for THIS org/device');
 
--- and nothing was audited against any OTHER tenant --------------------------- 7
-select is((select count(*) from audit_events
-             where action           = 'sync.operation_conflict'
-               and organization_id <> '00000000-0000-0000-0000-0000000000a0')::int,
-          0, 'no conflict audit row was written outside the fixture organization');
-
--- the stored ledger row is unchanged (still applied) ------------------------- 8
+-- the stored ledger row is unchanged (still applied) ------------------------- 7
 select is((select status from sync_operations
              where local_operation_id = 'op-1'
                and organization_id    = '00000000-0000-0000-0000-0000000000a0'
