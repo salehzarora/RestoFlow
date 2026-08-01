@@ -29,6 +29,7 @@ import '../state/pos_auto_print_prefs.dart'
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
+import '../state/order_setup_controller.dart' show tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_order_complete_controller.dart';
@@ -652,6 +653,22 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // (3) A final authoritative refresh, then an honest result message. An empty
     //     post-confirmation set reports the same "no active orders" outcome.
     await sync.refreshWindow();
+    // PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008. Table occupancy is
+    // DERIVED, never stored: `pos_tables.active_order_count` counts live dine-in
+    // orders in (submitted..served). So the SERVER releases the table the moment
+    // the order leaves that set - there is no table write to make, and making
+    // one locally would be exactly the UI-only release this must not do.
+    //
+    // What was missing is the re-read. `tablesProvider` is the one floor source
+    // (picker, floor view, table-operations sheet); nothing invalidated it after
+    // a batch, so a MOUNTED floor view kept showing the table as occupied while
+    // the release was already committed.
+    //
+    // Only when something actually finished, and never on a refusal: a failed
+    // order is still active and its table is still genuinely occupied. An
+    // advance to `served` counts too - a paid order auto-completes on reaching
+    // served, which frees its table just as a direct completion does.
+    if (summary.finished > 0) container.invalidate(tablesProvider);
     final String message;
     if (summary.total == 0) {
       message = l10n.posFinishAllNoActiveOrders;

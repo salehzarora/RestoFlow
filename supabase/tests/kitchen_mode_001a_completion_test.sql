@@ -189,10 +189,15 @@ create temp table t_p11 as
 select ok((select (res ->> 'auto_completed')::boolean = true from t_p11)
   and (select status = 'completed' from orders where id = '00000000-0000-0000-0000-0001a200010b'),
   'P11: the ROUNDS GATE IS SKIPPED in printer-only mode — an active round cannot strand the order'); -- 11
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008: the
+-- AUTOMATIC printer-only path skipped the rounds gate and left the round live,
+-- exactly as the manual path did. 008 closes it in the same transaction. This
+-- is not "fabricating kitchen work" - in printer_only there is no KDS writer
+-- for a round at all, and leaving it open stranded the order's read models.
 select ok(
-  (select bool_and(r.status <> 'served') from order_service_rounds r
+  (select bool_and(r.status = 'served') from order_service_rounds r
     where r.order_id = '00000000-0000-0000-0000-0001a200010b'),
-  'P11: the round itself was NOT rewritten to served — completion never fabricates kitchen work');   -- 12
+  'P11: 008 closes the skipped round when the printer-only order auto-completes'); -- 12
 
 -- =============================================================================
 -- B. PRINTER-ONLY: unpaid / partial / terminal stay EXACTLY where they are (13-19)

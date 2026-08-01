@@ -37,181 +37,356 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 select plan(32);
-
-insert into organizations (id, name, slug, default_currency) values
-  ('c0000000-0000-0000-0000-000000000c01', 'Org RC', 'rc-a', 'USD'),
-  ('f0000000-0000-0000-0000-000000000c01', 'Org RB', 'rc-b', 'USD');
-insert into restaurants (id, organization_id, name) values
-  ('c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c01', 'Rest RC'),
-  ('f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c01', 'Rest RB');
-insert into branches (id, organization_id, restaurant_id, name) values
-  ('c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'Branch RC'),
-  ('f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'Branch RB');
-insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
-  ('c0000000-0000-0000-0000-0000000000d1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'pos'),
-  ('c0000000-0000-0000-0000-0000000000d2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kds'),
-  ('c0000000-0000-0000-0000-0000000000d3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kds'),
-  ('c0000000-0000-0000-0000-0000000000d4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'pos'),
-  ('f0000000-0000-0000-0000-0000000000d1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'pos');
-insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
-  ('c0000000-0000-0000-0000-0000000000a1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d1', 'active'),
-  ('c0000000-0000-0000-0000-0000000000a2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d2', 'active'),
-  ('c0000000-0000-0000-0000-0000000000a3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d3', 'active'),
-  ('c0000000-0000-0000-0000-0000000000a4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d4', 'active'),
-  ('f0000000-0000-0000-0000-0000000000a1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000d1', 'active');
-insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
-  ('c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d1', 'c0000000-0000-0000-0000-0000000000a1'),
-  ('c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d2', 'c0000000-0000-0000-0000-0000000000a2'),
-  ('c0000000-0000-0000-0000-0000000000e3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d3', 'c0000000-0000-0000-0000-0000000000a3'),
-  ('c0000000-0000-0000-0000-0000000000e4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d4', 'c0000000-0000-0000-0000-0000000000a4'),
-  ('f0000000-0000-0000-0000-0000000000e1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000d1', 'f0000000-0000-0000-0000-0000000000a1');
-insert into app_users (id, email) values
-  ('c0000000-0000-0000-0000-0000000ae001', 'rc-mgr@example.test'),
-  ('c0000000-0000-0000-0000-0000000ae002', 'rc-cash@example.test'),
-  ('c0000000-0000-0000-0000-0000000ae003', 'rc-kitchen@example.test'),
-  ('f0000000-0000-0000-0000-0000000be001', 'rb-mgr@example.test');
-insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
-  ('c0000000-0000-0000-0000-0000000ab001', 'c0000000-0000-0000-0000-0000000ae001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'manager', '{}'::jsonb),
-  ('c0000000-0000-0000-0000-0000000ab002', 'c0000000-0000-0000-0000-0000000ae002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'cashier', '{}'::jsonb),
-  ('c0000000-0000-0000-0000-0000000ab003', 'c0000000-0000-0000-0000-0000000ae003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kitchen_staff', '{}'::jsonb),
-  ('f0000000-0000-0000-0000-0000000bb001', 'f0000000-0000-0000-0000-0000000be001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'manager', '{}'::jsonb);
-insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
-  ('c0000000-0000-0000-0000-0000000ac001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae001', 'c0000000-0000-0000-0000-0000000ab001'),
-  ('c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae002', 'c0000000-0000-0000-0000-0000000ab002'),
-  ('c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae003', 'c0000000-0000-0000-0000-0000000ab003'),
-  ('f0000000-0000-0000-0000-0000000bc001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000be001', 'f0000000-0000-0000-0000-0000000bb001');
--- PIN sessions: mgr/cashier/kitchen on POS-1; kitchen/mgr/cashier on KDS-1;
--- kitchen on KDS-2; cashier on POS-2; Org B mgr on B's POS.
-insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
-  ('c0000000-0000-0000-0000-0000000ad001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac001', 'c0000000-0000-0000-0000-0000000ab001', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad004', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad005', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad007', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e3', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
-  ('c0000000-0000-0000-0000-0000000ad009', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e4', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
-  ('f0000000-0000-0000-0000-0000000bd001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000e1', 'f0000000-0000-0000-0000-0000000bc001', 'f0000000-0000-0000-0000-0000000bb001', now() + interval '1 hour');
-
--- Menu + floor fixtures for org A.
-insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
-  ('c0000000-0000-0000-0000-0000000000c9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'Fixture Food', 1);
-insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
-  ('c0000000-0000-0000-0000-0000000000f9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'Item', 500, 'USD', 1),
-  ('c0000000-0000-0000-0000-0000000000f8', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'SoldOut', 400, 'USD', 2);
-insert into menu_item_branch_availability (organization_id, restaurant_id, branch_id, menu_item_id, availability, reason) values
-  ('c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000f8', 'unavailable', 'sold_out');
-insert into tables (id, organization_id, restaurant_id, branch_id, label) values
-  ('c0000000-0000-0000-0000-00000000ba01', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'T1');
-
--- ---- helpers ---------------------------------------------------------------
--- submit a dine-in (table T1) or takeaway one-line order: item f9 qty 2 @500.
-create or replace function pg_temp.csubmit(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_type text) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.submit', 'target_entity', 'order',
-    'payload', jsonb_build_object(
-      'order_id', p_order, 'order_type', p_type,
-      'table_id', case when p_type = 'dine_in' then 'c0000000-0000-0000-0000-00000000ba01' end,
-      'currency_code', 'USD',
-      'subtotal_minor', 1000, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 1000,
-      'order_items', jsonb_build_array(jsonb_build_object(
-        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 2,
-        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
-$$;
-create or replace function pg_temp.cstatus(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_to text) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.status', 'target_entity', 'order',
-    'payload', jsonb_build_object('order_id', p_order, 'new_status', p_to))));
-$$;
--- advance an ORDER submitted -> served with four kitchen ops.
-create or replace function pg_temp.cserve(p_prefix text, p_order uuid) returns void language plpgsql as $$
-begin
-  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-a', p_order, 'accepted');
-  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-b', p_order, 'preparing');
-  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-c', p_order, 'ready');
-  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-d', p_order, 'served');
-end;
-$$;
-create or replace function pg_temp.cpay(p_op text, p_order uuid) returns jsonb language sql as $$
-  select public.sync_push('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
-    jsonb_build_array(jsonb_build_object(
-      'local_operation_id', p_op, 'operation_type', 'payment.create', 'target_entity', 'payment',
-      'payload', jsonb_build_object('order_id', p_order, 'tender_type', 'card', 'amount_tendered_minor', 0))));
-$$;
-create or replace function pg_temp.cvoid(p_op text, p_order uuid) returns jsonb language sql as $$
-  select public.sync_push('c0000000-0000-0000-0000-0000000ad001', 'c0000000-0000-0000-0000-0000000000d1',
-    jsonb_build_array(jsonb_build_object(
-      'local_operation_id', p_op, 'operation_type', 'order.void', 'target_entity', 'order',
-      'payload', jsonb_build_object('order_id', p_order, 'reason', 'customer left'))));
-$$;
--- canonical items_add: one line, item f9 qty 1 @500 (delta 500).
-create or replace function pg_temp.cadd(p_pin uuid, p_dev uuid, p_op text, p_order uuid) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
-    'target_id', p_order,
-    'payload', jsonb_build_object(
-      'order_id', p_order,
-      'order_items', jsonb_build_array(jsonb_build_object(
-        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 1,
-        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
-$$;
--- adversarial items_add: independent payload order + (possibly malformed) target.
-create or replace function pg_temp.cadd2(p_pin uuid, p_dev uuid, p_op text, p_payload_order uuid, p_target text) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
-    'target_id', p_target,
-    'payload', jsonb_build_object(
-      'order_id', p_payload_order,
-      'order_items', jsonb_build_array(jsonb_build_object(
-        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 1,
-        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
-$$;
--- items_add with a CUSTOM item list.
-create or replace function pg_temp.caddx(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_items jsonb) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
-    'target_id', p_order,
-    'payload', jsonb_build_object('order_id', p_order, 'order_items', p_items))));
-$$;
--- canonical round_status.
-create or replace function pg_temp.crst(p_pin uuid, p_dev uuid, p_op text, p_round uuid, p_to text) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.round_status', 'target_entity', 'order_service_round',
-    'target_id', p_round,
-    'payload', jsonb_build_object('round_id', p_round, 'new_status', p_to))));
-$$;
--- adversarial round_status.
-create or replace function pg_temp.crst2(p_pin uuid, p_dev uuid, p_op text, p_payload_round uuid, p_target text, p_to text) returns jsonb language sql as $$
-  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
-    'local_operation_id', p_op, 'operation_type', 'order.round_status', 'target_entity', 'order_service_round',
-    'target_id', p_target,
-    'payload', jsonb_build_object('round_id', p_payload_round, 'new_status', p_to))));
-$$;
-
-
--- ===== base flow fixtures ====================================================
--- Open ONE shift + drawer on POS-1 (cashier) so payments are possible.
-select public.sync_push('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
-  jsonb_build_array(jsonb_build_object(
-    'local_operation_id', 'sh-1', 'operation_type', 'shift.open', 'target_entity', 'shift',
-    'payload', jsonb_build_object(
-      'shift_id', 'c0000000-0000-0000-0000-00000000fa01',
-      'cash_drawer_session_id', 'c0000000-0000-0000-0000-00000000fb01',
-      'opening_float_minor', 0))));
--- Orders (dine-in unless stated): o1 (main additions target), o2 (served-state
--- additions), o3 takeaway, o4 (voided-eligibility), o5 (completed-eligibility),
--- o6 (paid-open), o8 (zero-round completion regression), oR1/oR2/oR3 (races),
--- oV (void integration).
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o1', 'c0000000-0000-0000-0000-00000000a001', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o2', 'c0000000-0000-0000-0000-00000000a002', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o3', 'c0000000-0000-0000-0000-00000000a003', 'takeaway');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o4', 'c0000000-0000-0000-0000-00000000a004', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o5', 'c0000000-0000-0000-0000-00000000a005', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o6', 'c0000000-0000-0000-0000-00000000a006', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o8', 'c0000000-0000-0000-0000-00000000a008', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r1', 'c0000000-0000-0000-0000-00000000a0b1', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r2', 'c0000000-0000-0000-0000-00000000a0b2', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r3', 'c0000000-0000-0000-0000-00000000a0b3', 'dine_in');
-select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-ov', 'c0000000-0000-0000-0000-00000000a0c1', 'dine_in');
+
+
+insert into organizations (id, name, slug, default_currency) values
+
+  ('c0000000-0000-0000-0000-000000000c01', 'Org RC', 'rc-a', 'USD'),
+
+  ('f0000000-0000-0000-0000-000000000c01', 'Org RB', 'rc-b', 'USD');
+
+insert into restaurants (id, organization_id, name) values
+
+  ('c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c01', 'Rest RC'),
+
+  ('f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c01', 'Rest RB');
+
+insert into branches (id, organization_id, restaurant_id, name) values
+
+  ('c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'Branch RC'),
+
+  ('f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'Branch RB');
+
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+
+  ('c0000000-0000-0000-0000-0000000000d1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'pos'),
+
+  ('c0000000-0000-0000-0000-0000000000d2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kds'),
+
+  ('c0000000-0000-0000-0000-0000000000d3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kds'),
+
+  ('c0000000-0000-0000-0000-0000000000d4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'pos'),
+
+  ('f0000000-0000-0000-0000-0000000000d1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'pos');
+
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+
+  ('c0000000-0000-0000-0000-0000000000a1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d1', 'active'),
+
+  ('c0000000-0000-0000-0000-0000000000a2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d2', 'active'),
+
+  ('c0000000-0000-0000-0000-0000000000a3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d3', 'active'),
+
+  ('c0000000-0000-0000-0000-0000000000a4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d4', 'active'),
+
+  ('f0000000-0000-0000-0000-0000000000a1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000d1', 'active');
+
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
+
+  ('c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d1', 'c0000000-0000-0000-0000-0000000000a1'),
+
+  ('c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d2', 'c0000000-0000-0000-0000-0000000000a2'),
+
+  ('c0000000-0000-0000-0000-0000000000e3', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d3', 'c0000000-0000-0000-0000-0000000000a3'),
+
+  ('c0000000-0000-0000-0000-0000000000e4', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000d4', 'c0000000-0000-0000-0000-0000000000a4'),
+
+  ('f0000000-0000-0000-0000-0000000000e1', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000d1', 'f0000000-0000-0000-0000-0000000000a1');
+
+insert into app_users (id, email) values
+
+  ('c0000000-0000-0000-0000-0000000ae001', 'rc-mgr@example.test'),
+
+  ('c0000000-0000-0000-0000-0000000ae002', 'rc-cash@example.test'),
+
+  ('c0000000-0000-0000-0000-0000000ae003', 'rc-kitchen@example.test'),
+
+  ('f0000000-0000-0000-0000-0000000be001', 'rb-mgr@example.test');
+
+insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
+
+  ('c0000000-0000-0000-0000-0000000ab001', 'c0000000-0000-0000-0000-0000000ae001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'manager', '{}'::jsonb),
+
+  ('c0000000-0000-0000-0000-0000000ab002', 'c0000000-0000-0000-0000-0000000ae002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'cashier', '{}'::jsonb),
+
+  ('c0000000-0000-0000-0000-0000000ab003', 'c0000000-0000-0000-0000-0000000ae003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'kitchen_staff', '{}'::jsonb),
+
+  ('f0000000-0000-0000-0000-0000000bb001', 'f0000000-0000-0000-0000-0000000be001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'manager', '{}'::jsonb);
+
+insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
+
+  ('c0000000-0000-0000-0000-0000000ac001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae001', 'c0000000-0000-0000-0000-0000000ab001'),
+
+  ('c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae002', 'c0000000-0000-0000-0000-0000000ab002'),
+
+  ('c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000ae003', 'c0000000-0000-0000-0000-0000000ab003'),
+
+  ('f0000000-0000-0000-0000-0000000bc001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000be001', 'f0000000-0000-0000-0000-0000000bb001');
+
+-- PIN sessions: mgr/cashier/kitchen on POS-1; kitchen/mgr/cashier on KDS-1;
+
+-- kitchen on KDS-2; cashier on POS-2; Org B mgr on B's POS.
+
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
+
+  ('c0000000-0000-0000-0000-0000000ad001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac001', 'c0000000-0000-0000-0000-0000000ab001', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad004', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e2', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad005', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e1', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad007', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e3', 'c0000000-0000-0000-0000-0000000ac003', 'c0000000-0000-0000-0000-0000000ab003', now() + interval '1 hour'),
+
+  ('c0000000-0000-0000-0000-0000000ad009', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000e4', 'c0000000-0000-0000-0000-0000000ac002', 'c0000000-0000-0000-0000-0000000ab002', now() + interval '1 hour'),
+
+  ('f0000000-0000-0000-0000-0000000bd001', 'f0000000-0000-0000-0000-000000000c01', 'f0000000-0000-0000-0000-000000000c02', 'f0000000-0000-0000-0000-000000000c03', 'f0000000-0000-0000-0000-0000000000e1', 'f0000000-0000-0000-0000-0000000bc001', 'f0000000-0000-0000-0000-0000000bb001', now() + interval '1 hour');
+
+
+
+-- Menu + floor fixtures for org A.
+
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+
+  ('c0000000-0000-0000-0000-0000000000c9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'Fixture Food', 1);
+
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+
+  ('c0000000-0000-0000-0000-0000000000f9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'Item', 500, 'USD', 1),
+
+  ('c0000000-0000-0000-0000-0000000000f8', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'SoldOut', 400, 'USD', 2);
+
+insert into menu_item_branch_availability (organization_id, restaurant_id, branch_id, menu_item_id, availability, reason) values
+
+  ('c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'c0000000-0000-0000-0000-0000000000f8', 'unavailable', 'sold_out');
+
+insert into tables (id, organization_id, restaurant_id, branch_id, label) values
+
+  ('c0000000-0000-0000-0000-00000000ba01', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', 'c0000000-0000-0000-0000-000000000c03', 'T1');
+
+
+
+-- ---- helpers ---------------------------------------------------------------
+
+-- submit a dine-in (table T1) or takeaway one-line order: item f9 qty 2 @500.
+
+create or replace function pg_temp.csubmit(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_type text) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.submit', 'target_entity', 'order',
+
+    'payload', jsonb_build_object(
+
+      'order_id', p_order, 'order_type', p_type,
+
+      'table_id', case when p_type = 'dine_in' then 'c0000000-0000-0000-0000-00000000ba01' end,
+
+      'currency_code', 'USD',
+
+      'subtotal_minor', 1000, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 1000,
+
+      'order_items', jsonb_build_array(jsonb_build_object(
+
+        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 2,
+
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
+
+$$;
+
+create or replace function pg_temp.cstatus(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_to text) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.status', 'target_entity', 'order',
+
+    'payload', jsonb_build_object('order_id', p_order, 'new_status', p_to))));
+
+$$;
+
+-- advance an ORDER submitted -> served with four kitchen ops.
+
+create or replace function pg_temp.cserve(p_prefix text, p_order uuid) returns void language plpgsql as $$
+
+begin
+
+  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-a', p_order, 'accepted');
+
+  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-b', p_order, 'preparing');
+
+  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-c', p_order, 'ready');
+
+  perform pg_temp.cstatus('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2', p_prefix || '-d', p_order, 'served');
+
+end;
+
+$$;
+
+create or replace function pg_temp.cpay(p_op text, p_order uuid) returns jsonb language sql as $$
+
+  select public.sync_push('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
+
+    jsonb_build_array(jsonb_build_object(
+
+      'local_operation_id', p_op, 'operation_type', 'payment.create', 'target_entity', 'payment',
+
+      'payload', jsonb_build_object('order_id', p_order, 'tender_type', 'card', 'amount_tendered_minor', 0))));
+
+$$;
+
+create or replace function pg_temp.cvoid(p_op text, p_order uuid) returns jsonb language sql as $$
+
+  select public.sync_push('c0000000-0000-0000-0000-0000000ad001', 'c0000000-0000-0000-0000-0000000000d1',
+
+    jsonb_build_array(jsonb_build_object(
+
+      'local_operation_id', p_op, 'operation_type', 'order.void', 'target_entity', 'order',
+
+      'payload', jsonb_build_object('order_id', p_order, 'reason', 'customer left'))));
+
+$$;
+
+-- canonical items_add: one line, item f9 qty 1 @500 (delta 500).
+
+create or replace function pg_temp.cadd(p_pin uuid, p_dev uuid, p_op text, p_order uuid) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
+
+    'target_id', p_order,
+
+    'payload', jsonb_build_object(
+
+      'order_id', p_order,
+
+      'order_items', jsonb_build_array(jsonb_build_object(
+
+        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 1,
+
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
+
+$$;
+
+-- adversarial items_add: independent payload order + (possibly malformed) target.
+
+create or replace function pg_temp.cadd2(p_pin uuid, p_dev uuid, p_op text, p_payload_order uuid, p_target text) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
+
+    'target_id', p_target,
+
+    'payload', jsonb_build_object(
+
+      'order_id', p_payload_order,
+
+      'order_items', jsonb_build_array(jsonb_build_object(
+
+        'menu_item_id', 'c0000000-0000-0000-0000-0000000000f9', 'quantity', 1,
+
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item'))))));
+
+$$;
+
+-- items_add with a CUSTOM item list.
+
+create or replace function pg_temp.caddx(p_pin uuid, p_dev uuid, p_op text, p_order uuid, p_items jsonb) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.items_add', 'target_entity', 'order',
+
+    'target_id', p_order,
+
+    'payload', jsonb_build_object('order_id', p_order, 'order_items', p_items))));
+
+$$;
+
+-- canonical round_status.
+
+create or replace function pg_temp.crst(p_pin uuid, p_dev uuid, p_op text, p_round uuid, p_to text) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.round_status', 'target_entity', 'order_service_round',
+
+    'target_id', p_round,
+
+    'payload', jsonb_build_object('round_id', p_round, 'new_status', p_to))));
+
+$$;
+
+-- adversarial round_status.
+
+create or replace function pg_temp.crst2(p_pin uuid, p_dev uuid, p_op text, p_payload_round uuid, p_target text, p_to text) returns jsonb language sql as $$
+
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', p_op, 'operation_type', 'order.round_status', 'target_entity', 'order_service_round',
+
+    'target_id', p_target,
+
+    'payload', jsonb_build_object('round_id', p_payload_round, 'new_status', p_to))));
+
+$$;
+
+
+
+
+
+-- ===== base flow fixtures ====================================================
+
+-- Open ONE shift + drawer on POS-1 (cashier) so payments are possible.
+
+select public.sync_push('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
+
+  jsonb_build_array(jsonb_build_object(
+
+    'local_operation_id', 'sh-1', 'operation_type', 'shift.open', 'target_entity', 'shift',
+
+    'payload', jsonb_build_object(
+
+      'shift_id', 'c0000000-0000-0000-0000-00000000fa01',
+
+      'cash_drawer_session_id', 'c0000000-0000-0000-0000-00000000fb01',
+
+      'opening_float_minor', 0))));
+
+-- Orders (dine-in unless stated): o1 (main additions target), o2 (served-state
+
+-- additions), o3 takeaway, o4 (voided-eligibility), o5 (completed-eligibility),
+
+-- o6 (paid-open), o8 (zero-round completion regression), oR1/oR2/oR3 (races),
+
+-- oV (void integration).
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o1', 'c0000000-0000-0000-0000-00000000a001', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o2', 'c0000000-0000-0000-0000-00000000a002', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o3', 'c0000000-0000-0000-0000-00000000a003', 'takeaway');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o4', 'c0000000-0000-0000-0000-00000000a004', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o5', 'c0000000-0000-0000-0000-00000000a005', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o6', 'c0000000-0000-0000-0000-00000000a006', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-o8', 'c0000000-0000-0000-0000-00000000a008', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r1', 'c0000000-0000-0000-0000-00000000a0b1', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r2', 'c0000000-0000-0000-0000-00000000a0b2', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-r3', 'c0000000-0000-0000-0000-00000000a0b3', 'dine_in');
+
+select pg_temp.csubmit('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'sub-ov', 'c0000000-0000-0000-0000-00000000a0c1', 'dine_in');
+
 
 -- ===========================================================================
 -- (1-10) TAKEAWAY additions: the widened order-type gate.
@@ -352,10 +527,18 @@ select is(
 select is(
   (select status from orders where id = 'c0000000-0000-0000-0000-00000000a002'),
   'completed', '22. printer_only: the order is authoritatively terminal (not merely hidden)');
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008.
+-- This migration skipped the gate WITHOUT writing any round status, which is
+-- what the original assertion pinned. That left a live round hanging off a
+-- TERMINAL order for ever (app.order_rounds_all_served false for a COMPLETED
+-- order) - the defect 008 fixes. The round is now CLOSED by the completion, in
+-- the same transaction, so the contract asserted here is inverted on purpose.
+-- What 20260804090000 owns is unchanged and still asserted by 21/22: the GATE
+-- is skipped and the order completes.
 select ok(
-  (select bool_and(status <> 'served') from order_service_rounds
+  (select bool_and(status = 'served') from order_service_rounds
     where order_id = 'c0000000-0000-0000-0000-00000000a002' and deleted_at is null),
-  '23. printer_only SKIPPED the gate - it did NOT fabricate a served round status');
+  '23. printer_only: 008 now CLOSES the round the gate skipped (no dangling round)');
 
 -- ===========================================================================
 -- (24-25) printer_only widened NOTHING else: the D-025 payment gate still
