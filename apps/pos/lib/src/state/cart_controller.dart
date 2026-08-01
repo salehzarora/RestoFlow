@@ -249,6 +249,29 @@ int configuredLineTotalMinor({
 /// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
 /// with non-positive units, contribute nothing — so the result is deliberately
 /// NOT index-aligned with the modifier display list. Money-free (D-007).
+/// 018 (Codex HIGH #1) — the AUTHORITATIVE lookup into a submitted operation's
+/// prep snapshot.
+///
+/// `map?[id] ?? legacy` conflated two different situations:
+///
+///  * `map == null` — no authoritative snapshot was supplied at all (the legacy
+///    in-memory/demo path), so falling back to the add-to-cart capture is right;
+///  * `map != null` but carrying no entry for the item — the authoritative
+///    answer IS "this item has no preparation resources". An owner who removed
+///    every resource between add-to-cart and submit produces exactly this, and
+///    the old expression silently resurrected the deleted add-time prep.
+///
+/// Returning `null` ONLY for the first case keeps the two distinguishable at the
+/// call site: a non-null map always answers, with an empty list when it has no
+/// entry, and the legacy fallback is unreachable.
+List<KitchenPrepComponent>? submittedPrepForItem(
+  Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
+  String menuItemId,
+) {
+  if (submittedPrepByItemId == null) return null;
+  return submittedPrepByItemId[menuItemId] ?? const <KitchenPrepComponent>[];
+}
+
 /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the POS adapter over the shared
 /// [classifyPrepComponents]: the item's configured prep [components] resolved
 /// against the option ids actually selected on THIS line.
@@ -1328,7 +1351,7 @@ class CartController extends Notifier<CartViewState> {
           // outbox payload, this confirmation view, the automatic ticket and
           // the manual reprint therefore all describe ONE accepted operation.
           prepComponents: classifiedPrepForLine(
-            submittedPrepByItemId?[item.menuItemId] ??
+            submittedPrepForItem(submittedPrepByItemId, item.menuItemId) ??
                 _linePrep[item.orderItemId] ??
                 const <KitchenPrepComponent>[],
             mods,
@@ -1383,6 +1406,16 @@ class CartController extends Notifier<CartViewState> {
     String? orderId,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
+    // 018 (Codex HIGH #2): the AUTHORITATIVE prep snapshot of the operation that
+    // was actually submitted — the same map the outbox payload and the automatic
+    // ticket were built from.
+    //
+    // The draft is captured BEFORE the submit and carries each line's ADD-TIME
+    // prep, so a departed worker's retained recent order (and every manual
+    // reprint from it) described a different configuration than the order the
+    // server accepted. A PIN handover mid-submit must not rewind the prep.
+    // Null keeps the legacy behaviour for callers with no submitted operation.
+    Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
   }) {
     var subtotal = 0;
     var linePosition = 0;
@@ -1419,7 +1452,18 @@ class CartController extends Notifier<CartViewState> {
           // aggregates the real counts instead of silently omitting them. Still
           // never re-read from the current catalog: a record written before the
           // field existed honestly yields none.
-          prepComponents: l.prepComponents,
+          //
+          // 018 (Codex HIGH #2): when this view materializes a SUBMITTED
+          // operation (the PIN-handover path), the submitted snapshot wins over
+          // the draft's older add-time capture — resolved against THIS line's
+          // own selected options, exactly as the submitting session would have.
+          // A non-null map always answers, so a resource the owner deleted
+          // before submit cannot reappear here.
+          prepComponents: classifiedPrepForLine(
+            submittedPrepForItem(submittedPrepByItemId, l.menuItemId) ??
+                l.prepComponents,
+            l.modifiers,
+          ),
         ),
       );
     }

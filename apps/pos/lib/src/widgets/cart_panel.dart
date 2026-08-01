@@ -733,6 +733,12 @@ Future<void> submitOrderFromCart({
         customerPhone: customerPhoneBefore,
         taxTotalMinor: taxTotalMinor,
         taxRateBp: taxRateBp,
+        // 018 (Codex HIGH #2): the SAME immutable prep snapshot the outbox
+        // payload and the automatic ticket were built from. The captured draft
+        // holds each line's ADD-TIME prep, so without this a PIN handover
+        // rewound the departed worker's retained order (and every reprint from
+        // it) to a configuration the server never accepted.
+        submittedPrepByItemId: kitchenPrepByItemId,
         // MENU-ORDER-001 (§3): when this was a CORRECTION, the departed-session path must
         // settle onto the SINGLE source recovery (already superseded + linked before
         // dispatch), NEVER capture a standalone recovery keyed by the corrected entry.
@@ -923,6 +929,11 @@ void _retainDepartedSessionResult({
   required String? customerPhone,
   required int taxTotalMinor,
   required int taxRateBp,
+
+  /// 018 (Codex HIGH #2): the submitted operation's authoritative prep snapshot,
+  /// carried into BOTH departed-session views below so the retained row and its
+  /// manual reprint describe the accepted operation, not the pre-submit draft.
+  required Map<String, List<KitchenPrepComponent>> submittedPrepByItemId,
   CorrectionSettlementContext? settlement,
 }) {
   final entry = container
@@ -961,6 +972,7 @@ void _retainDepartedSessionResult({
               orderId: result.entry.targetId,
               taxTotalMinor: taxTotalMinor,
               taxRateBp: taxRateBp,
+              submittedPrepByItemId: submittedPrepByItemId,
             ),
           );
     }
@@ -1019,6 +1031,7 @@ void _retainDepartedSessionResult({
     orderId: result.entry.targetId,
     taxTotalMinor: taxTotalMinor,
     taxRateBp: taxRateBp,
+    submittedPrepByItemId: submittedPrepByItemId,
   );
   recent.recordSubmitted(view);
   if (permanentlyRejected) {
