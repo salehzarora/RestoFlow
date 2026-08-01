@@ -134,8 +134,13 @@ class KitchenFinishController extends Notifier<KitchenFinishState> {
                 ? await repo.completeServedOrder(
                     orderId: t.orderId,
                     // The SAME stable-key discipline as the advance path:
-                    // batch + order + target, so a repeat press replays the
-                    // stored result instead of double-completing.
+                    // batch + order + target. It makes the key stable WITHIN a
+                    // run (a transport retry replays the stored result); it
+                    // does NOT cover a second PRESS, which mints a fresh
+                    // batchRunId and therefore a fresh identity. What protects
+                    // that case is the server: a completed order refuses the
+                    // transition with `invalid_transition`, which the
+                    // repository maps to a per-order failure.
                     localOperationId: '$batchRunId:${t.orderId}:completed',
                   )
                 : await repo.advanceToServed(
