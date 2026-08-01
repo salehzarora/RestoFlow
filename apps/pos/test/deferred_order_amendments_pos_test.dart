@@ -248,6 +248,9 @@ Object? _applied(
         'local_operation_id': localOp,
         'status': 'applied',
         'ok': true,
+        // F2: the server always names the order it applied to; the
+        // client now REQUIRES it to match the attempt's target.
+        'order_id': 'o-1',
         'round_id': roundId,
         'round_number': roundNumber,
       },
@@ -647,9 +650,24 @@ void main() {
       expect(result.printPayload!.tableLabel, 'T5');
     });
 
-    test('F3 FAIL-CLOSED: an applied result WITHOUT a round identity yields no '
-        'print payload — the addition stays applied, nothing is printed on a '
-        'guess', () async {
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F2) — THIS EXPECTATION WAS CORRECTED.
+    //
+    // It used to assert `result.applied, isTrue` for a response that claimed
+    // `applied` while naming NO round: "the server DID apply it". That reading
+    // cannot be justified from the response. `app.add_order_items` returns
+    // `round_id` and `round_number` on every success, so a row without them is
+    // not a success this build can act on — and treating it as one moved the
+    // flow to APPLIED-AWAITING-REFRESH with a null round, where
+    // `_reconcileApplied`'s check degenerates to `roundId == null || …` and
+    // verifies NOTHING. It then cleared the cart and closed the journal on a
+    // response that never proved a round exists.
+    //
+    // The safe reading is OUTCOME-UNKNOWN: keep the identity, keep the payload,
+    // replay the same operation. Not printing was always right; calling it
+    // applied was not.
+    test('F3 FAIL-CLOSED: an applied result WITHOUT a round identity is '
+        'OUTCOME-UNKNOWN — no print, and the identity is retained for a '
+        'same-identity replay', () async {
       for (final broken in [
         (roundId: null, roundNumber: 2),
         (roundId: 'r-new', roundNumber: null),
@@ -661,15 +679,32 @@ void main() {
             roundNumber: broken.roundNumber,
           ),
         ]);
-        await container
-            .read(additionControllerProvider.notifier)
-            .enterForOrder('o-1');
+        final notifier = container.read(additionControllerProvider.notifier);
+        await notifier.enterForOrder('o-1');
         container.read(cartControllerProvider.notifier).addItem(_menuItem);
-        final result = await container
-            .read(additionControllerProvider.notifier)
-            .submit();
-        expect(result.applied, isTrue, reason: 'the server DID apply it');
+        final result = await notifier.submit();
+        expect(
+          result.applied,
+          isFalse,
+          reason: '$broken: the response never proved a round exists',
+        );
         expect(result.printPayload, isNull, reason: '$broken');
+        final state = container.read(additionControllerProvider);
+        expect(
+          state.dispatched,
+          isTrue,
+          reason: '$broken: it reached the wire, so the server may own it',
+        );
+        expect(
+          state.attempt,
+          isNotNull,
+          reason: '$broken: the identity is retained for the replay',
+        );
+        expect(
+          notifier.exit(),
+          isFalse,
+          reason: '$broken: an unknown outcome can never be cancelled away',
+        );
       }
     });
 

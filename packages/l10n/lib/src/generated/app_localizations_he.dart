@@ -203,6 +203,14 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
 
   @override
+  String get posAdditionLoadingPending =>
+      'בודקים שינויים שלא הושלמו — נסו שוב בעוד רגע';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'בהזמנה הזו יש שינויים סותרים שלא הושלמו ויש לפתור אותם לפני עריכה';
+
+  @override
   String get posReadyBellTooltip => 'התראות מוכנות';
 
   @override

@@ -62,6 +62,8 @@
   "posAdditionApplied": "התוספת נשלחה למטבח",
   "posAdditionClearCartFirst": "סיימו או בטלו את הסל הנוכחי לפני הוספה להזמנה אחרת",
   "posAdditionFailedRetry": "התוספת נכשלה — הקישו לניסיון חוזר",
+  "posAdditionLoadingPending": "בודקים שינויים שלא הושלמו — נסו שוב בעוד רגע",
+  "posAdditionConflictBlocked": "בהזמנה הזו יש שינויים סותרים שלא הושלמו ויש לפתור אותם לפני עריכה",
   "posReadyBellTooltip": "התראות מוכנות",
   "posReadyHistoryTitle": "היסטוריית התראות",
   "posReadyOrderReady": "ההזמנה מוכנה",

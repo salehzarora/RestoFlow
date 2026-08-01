@@ -209,6 +209,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAdditionFailedRetry => 'Addition failed — tap to retry';
 
   @override
+  String get posAdditionLoadingPending =>
+      'Checking for unfinished changes — try again in a moment';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'This order has conflicting unfinished changes and needs to be resolved before it can be edited';
+
+  @override
   String get posReadyBellTooltip => 'Ready notifications';
 
   @override

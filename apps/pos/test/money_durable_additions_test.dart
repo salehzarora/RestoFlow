@@ -117,6 +117,9 @@ Object? _applied(Map<String, dynamic> params) {
         'local_operation_id': localOp,
         'status': 'applied',
         'ok': true,
+        // F2: the server always names the order it applied to; the
+        // client now REQUIRES it to match the attempt's target.
+        'order_id': 'o-1',
         'round_id': 'r-2',
         'round_number': 2,
       },
@@ -138,6 +141,9 @@ Object? _replayApplied(Map<String, dynamic> params) {
         'local_operation_id': localOp,
         'status': 'applied',
         'ok': true,
+        // F2: the server always names the order it applied to; the
+        // client now REQUIRES it to match the attempt's target.
+        'order_id': 'o-1',
         'round_id': 'r-2',
         'round_number': 2,
         'idempotency_replay': true,
@@ -287,6 +293,7 @@ Future<void> _settle(ProviderContainer c) async {
 /// submitting again, and the frozen payload goes back out under the frozen
 /// identity. Session 2 must use this, not [_buildAndSubmit].
 Future<AdditionResult> _resumeSubmit(ProviderContainer c) async {
+  await _settle(c);
   expect(
     c.read(cartControllerProvider).lockedByAddition,
     isTrue,
@@ -298,7 +305,13 @@ Future<AdditionResult> _resumeSubmit(ProviderContainer c) async {
 }
 
 /// Builds the canonical paid addition in [c]'s cart and submits it.
+///
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F1): hydration is awaited FIRST. A till with a
+/// durable journal wired now refuses Add-items entry (and every cart mutation)
+/// until the journal has been read — before 005 the observable state said `idle`
+/// while the read was still in flight, which is the defect this phase closes.
 Future<AdditionResult> _buildAndSubmit(ProviderContainer c) async {
+  await _settle(c);
   final entry = await c
       .read(additionControllerProvider.notifier)
       .enterForOrder('o-1');

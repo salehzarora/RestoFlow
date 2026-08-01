@@ -310,6 +310,51 @@ class CartLineView {
 /// the token binds the lock to ONE exact attempt (its entry generation, parent
 /// order and idempotency id), so a stale callback from an earlier attempt can
 /// never clear or unlock a cart owned by a later one.
+/// MONEY-CODEX-FINAL-CLOSURE-005 (F1) — THE STARTUP HYDRATION GATE.
+///
+/// The durable Add-items journal is read from disk, so there is a window
+/// between "the app is on screen" and "we know which orders carry an unresolved
+/// amendment". Before 005 the cart was fully editable in that window: the
+/// cashier could type lines no journal covered, and the attempt restored a
+/// moment later would take ownership of — and, on reconciliation, destroy —
+/// them. The same window let Add-items be entered for the very order that
+/// already had a pending operation, which is how a second identity gets minted.
+///
+/// The affected order ids are not knowable until the read finishes, so the gate
+/// is deliberately GLOBAL and deliberately brief. It is closed SYNCHRONOUSLY by
+/// `AdditionController.build()` — before its first `await` — and opened once
+/// hydration has either restored every actionable record or FAILED, in which
+/// case it stays closed: an unreadable journal is not an empty one.
+///
+/// A PLAIN OBJECT, not provider state, for one specific reason: Riverpod forbids
+/// a provider from modifying another provider during initialization, and the
+/// gate must be observable from inside `AdditionController.build()`. Mutating a
+/// shared object is not a provider write, so the ordering constraint disappears
+/// and the guarantee — no editable window, ever — is kept.
+///
+/// Kept separate from [CartLockOwner] because it is not an ownership claim: no
+/// attempt holds the cart yet. It only folds into `_locked`, so every normal
+/// mutation entry point refuses through the ONE existing path while
+/// `lockForAddition` / `unlockForAddition` / `ownsAdditionLock` /
+/// `clearForAddition` keep reading the owner token alone — the restore must
+/// still be able to take real ownership while the gate is shut.
+class PosAdditionHydrationGate {
+  bool _closed = false;
+
+  /// Whether cart mutation is currently barred pending journal hydration.
+  bool get isClosed => _closed;
+
+  void close() => _closed = true;
+
+  void open() => _closed = false;
+}
+
+/// One gate per container. Scoped like every other POS seam, so two containers
+/// in a test (a simulated process restart) never share a gate.
+final posAdditionHydrationGateProvider = Provider<PosAdditionHydrationGate>(
+  (_) => PosAdditionHydrationGate(),
+);
+
 class CartLockOwner {
   const CartLockOwner({
     required this.generation,
@@ -720,7 +765,17 @@ class CartController extends Notifier<CartViewState> {
   /// unrelated line may be introduced only to be cleared on reconciliation.
   CartLockOwner? _lockOwner;
 
-  bool get _locked => _lockOwner != null;
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F1): the shared startup gate, read on EVERY
+  /// mutation. See [PosAdditionHydrationGate].
+  PosAdditionHydrationGate get _gate =>
+      ref.read(posAdditionHydrationGateProvider);
+
+  bool get _locked => _lockOwner != null || _gate.isClosed;
+
+  /// Recomputes the published view after the startup gate opened. Called by the
+  /// Addition controller from an ASYNC continuation — never during a build, which
+  /// Riverpod forbids for cross-provider writes.
+  void refreshAdditionLockView() => _emit();
 
   /// Selected modifier snapshots per line id (the domain [Cart] predates
   /// modifiers; the app carries them alongside — D-008 snapshots).
@@ -767,7 +822,10 @@ class CartController extends Notifier<CartViewState> {
     _lineDisplayOrders.clear();
     _linePrep.clear();
     _lockOwner = null;
-    return CartViewState.fromCart(_cart);
+    // F1: the gate may ALREADY be closed — `AdditionController.build()` closes
+    // it synchronously and this controller is built lazily, often afterwards. The
+    // published view must agree with `_locked` from its very first frame.
+    return CartViewState.fromCart(_cart, lockedByAddition: _locked);
   }
 
   // -------------------------------------------------------------------------

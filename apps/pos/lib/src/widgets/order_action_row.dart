@@ -281,6 +281,17 @@ class OrderActionRow extends ConsumerWidget {
         messenger.showSnackBar(
           SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
         );
+      // MONEY-CODEX-FINAL-CLOSURE-005: two refusals that are NOT "clear your
+      // cart" and must not be reported as though they were — one resolves by
+      // itself in a moment, the other needs a person.
+      case AdditionEntryResult.blockedHydrating:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.posAdditionLoadingPending)),
+        );
+      case AdditionEntryResult.blockedConflict:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.posAdditionConflictBlocked)),
+        );
     }
   }
 

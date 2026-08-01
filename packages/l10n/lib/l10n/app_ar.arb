@@ -62,6 +62,8 @@
   "posAdditionApplied": "أُرسلت الإضافة إلى المطبخ",
   "posAdditionClearCartFirst": "أكمل السلة الحالية أو ألغِها قبل الإضافة إلى طلب آخر",
   "posAdditionFailedRetry": "فشلت الإضافة — اضغط لإعادة المحاولة",
+  "posAdditionLoadingPending": "جارٍ التحقق من التغييرات غير المكتملة — أعد المحاولة بعد لحظات",
+  "posAdditionConflictBlocked": "هذا الطلب يحتوي على تغييرات غير مكتملة متعارضة ويجب حلّها قبل تعديله",
   "posReadyBellTooltip": "إشعارات الجاهزية",
   "posReadyHistoryTitle": "سجل الإشعارات",
   "posReadyOrderReady": "الطلب جاهز",

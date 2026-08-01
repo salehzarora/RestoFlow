@@ -472,6 +472,18 @@ abstract class AppLocalizations {
   /// **'Addition failed — tap to retry'**
   String get posAdditionFailedRetry;
 
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F1): shown when Add-items is tapped before the durable amendment journal has finished loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for unfinished changes — try again in a moment'**
+  String get posAdditionLoadingPending;
+
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F4): shown when two live amendment records claim the same order.
+  ///
+  /// In en, this message translates to:
+  /// **'This order has conflicting unfinished changes and needs to be resolved before it can be edited'**
+  String get posAdditionConflictBlocked;
+
   /// PSC-001A: tooltip/semantic label of the POS app-bar ready-notification bell.
   ///
   /// In en, this message translates to:

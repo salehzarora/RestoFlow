@@ -206,6 +206,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
 
   @override
+  String get posAdditionLoadingPending =>
+      'جارٍ التحقق من التغييرات غير المكتملة — أعد المحاولة بعد لحظات';
+
+  @override
+  String get posAdditionConflictBlocked =>
+      'هذا الطلب يحتوي على تغييرات غير مكتملة متعارضة ويجب حلّها قبل تعديله';
+
+  @override
   String get posReadyBellTooltip => 'إشعارات الجاهزية';
 
   @override

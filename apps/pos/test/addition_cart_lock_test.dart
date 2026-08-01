@@ -79,7 +79,8 @@ PosOrderDetail _detail({
 
 Object? _applied(Map<String, dynamic> params) {
   final ops = params['p_operations'] as List;
-  final localOp = (ops.single as Map)['local_operation_id'] as String;
+  final op = ops.single as Map;
+  final localOp = op['local_operation_id'] as String;
   return {
     'ok': true,
     'results': [
@@ -87,6 +88,11 @@ Object? _applied(Map<String, dynamic> params) {
         'local_operation_id': localOp,
         'status': 'applied',
         'ok': true,
+        // MONEY-CODEX-FINAL-CLOSURE-005 (F2): the server ALWAYS names the order
+        // it applied to (`app.add_order_items` returns `order_id`), and the
+        // client now requires it to match the attempt's target. Echoed from the
+        // pushed operation so this fixture stays faithful for any target.
+        'order_id': op['target_id'],
         'round_id': 'r-new',
         'round_number': 2,
       },

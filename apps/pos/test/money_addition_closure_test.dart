@@ -9,6 +9,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:restoflow_pos/src/data/addition_journal_store.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart' show DemoMenuItem;
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
+import 'package:restoflow_pos/src/data/ids.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
 import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
@@ -80,6 +81,19 @@ class _FakeTransport implements SyncRpcTransport {
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    // The container runs in REAL mode, so `posMenuProvider` fetches `pos_menu`
+    // through this same transport. Answer it with an empty-but-valid menu and
+    // do NOT let it consume a scripted sync_push response.
+    if (function == 'pos_menu') {
+      return <String, Object?>{
+        'ok': true,
+        'currency_code': 'ILS',
+        'categories': <Object?>[],
+        'items': <Object?>[],
+        'modifiers': <Object?>[],
+        'modifier_options': <Object?>[],
+      };
+    }
     calls++;
     final ops = params['p_operations'];
     if (ops is List) {
@@ -210,9 +224,15 @@ ProviderContainer _container({
   required PosAdditionJournalStore? journal,
   _FakeTransport? transport,
   OrderDetailRepository? details,
+  List<String> mintedIds = const ['op-1'],
 }) {
   final c = ProviderContainer(
     overrides: [
+      // Deterministic identities so a scripted response can name the operation
+      // the controller actually minted.
+      clientIdGeneratorProvider.overrideWithValue(
+        FixedClientIdGenerator(mintedIds),
+      ),
       runtimeConfigProvider.overrideWithValue(
         RuntimeConfig.test(isDemoMode: false),
       ),
@@ -288,6 +308,10 @@ void main() {
       final addition = c.read(additionControllerProvider.notifier);
       final hydratingState = c.read(additionControllerProvider);
 
+      // The restore is deliberately deferred one microtask so that NOTHING it
+      // does runs during build (Riverpod forbids cross-provider writes there).
+      // The gate, however, is closed synchronously — asserted below.
+      await Future<void>.microtask(() {});
       expect(
         journal.loads,
         1,
@@ -460,8 +484,10 @@ void main() {
       final journal = InMemoryAdditionJournalStore();
       final transport = _FakeTransport(<Object?>[response]);
       final c = _container(journal: journal, transport: transport);
-      await _settle();
+      // Build the controller FIRST, then let hydration settle — reading it is
+      // what starts hydration, so settling before the read settles nothing.
       final addition = c.read(additionControllerProvider.notifier);
+      await _settle();
       expect(await addition.enterForOrder('o-1'), AdditionEntryResult.entered);
       final cart = c.read(cartControllerProvider.notifier);
       cart.addItemWithModifiers(_burger, const [_meat240]);
@@ -740,8 +766,10 @@ void main() {
         _envelope([_appliedRow()]),
       ]);
       final c = _container(journal: journal, transport: transport);
-      await _settle();
+      // Build the controller FIRST, then let hydration settle — reading it is
+      // what starts hydration, so settling before the read settles nothing.
       final addition = c.read(additionControllerProvider.notifier);
+      await _settle();
       expect(await addition.enterForOrder('o-1'), AdditionEntryResult.entered);
       final cart = c.read(cartControllerProvider.notifier);
       cart.addItemWithModifiers(_burger, const [_meat240]);

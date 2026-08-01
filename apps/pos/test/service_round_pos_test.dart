@@ -211,6 +211,9 @@ Object? _applied(Map<String, dynamic> params, {int roundNumber = 2}) {
         'local_operation_id': localOp,
         'status': 'applied',
         'ok': true,
+        // F2: the server always names the order it applied to; the
+        // client now REQUIRES it to match the attempt's target.
+        'order_id': 'o-1',
         'round_id': 'r-new',
         'round_number': roundNumber,
       },

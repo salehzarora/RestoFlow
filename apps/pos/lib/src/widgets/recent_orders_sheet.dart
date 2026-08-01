@@ -213,10 +213,33 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     // controls, exactly like any other pending local operation. Keyed by the
     // server order id — an addition only ever targets a real server order.
     final addition = ref.watch(additionControllerProvider);
+    final additionNotifier = ref.read(additionControllerProvider.notifier);
     final additionTarget = addition.target;
     if (additionTarget != null &&
         (addition.sending || addition.failed || addition.awaitingRefresh)) {
       pendingByIdentity[additionTarget.orderId] = PosPendingKind.itemsAdd;
+    }
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F4): EVERY order with a live durable
+    // amendment record, not just the one that happens to be the ACTIVE attempt.
+    // After a restart with two pending amendments only the first was ever
+    // installed as `addition.target`, so the second order's Pay / Void /
+    // Discount stayed fully available against a total the server is about to
+    // change. The controller's durable index is the truthful source.
+    for (final orderId in additionNotifier.blockedOrderIds) {
+      pendingByIdentity[orderId] = PosPendingKind.itemsAdd;
+    }
+    // (F1) HYDRATION. Before the journal has been read we do not know WHICH
+    // orders are affected, so no money action may be offered on any of them.
+    // This is a disk read, not a network call, and the alternative is taking a
+    // payment against an order whose total is about to change. Read-only rows,
+    // search, and the receipt view are untouched.
+    if (additionNotifier.isStartupBlocked) {
+      for (final o in orders) {
+        if (o.order?.orderId case final id?) {
+          pendingByIdentity[id] = PosPendingKind.itemsAdd;
+        }
+        pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
+      }
     }
 
     final counts = sectionCounts(orders);
