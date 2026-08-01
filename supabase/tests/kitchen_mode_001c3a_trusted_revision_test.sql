@@ -11,7 +11,8 @@
 --     internals/idempotency keys);
 --   * audit safe-surface: the 001C3 kitchen-mode scalars project; kitchen.%
 --     money hardening intact; human-actor constraint + append-only intact;
---   * dormancy: NO setter exists; branches default kds/revision 1.
+--   * dormancy: 001C3A adds no setter (the approved 008 owner setter is the
+--     only one); branches default kds/revision 1.
 -- Session pinned to UTC; hex-only UUIDs; GUC conventions per house style.
 -- ============================================================================
 begin;
@@ -32,7 +33,7 @@ insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-0001c3a00a1a', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', 'Branch K (kds)'),
   ('00000000-0000-0000-0000-0001c3a00a2b', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', 'Branch P (printer-only)'),
   ('00000000-0000-0000-0000-0001c3a00b1a', '00000000-0000-0000-0000-0001c3a00b00', '00000000-0000-0000-0000-0001c3a00b10', 'Branch B');
--- privileged fixture flips (the ONLY write path; no setter exists).
+-- privileged fixture flips (the ONLY write path used by this suite).
 update branches set kitchen_workflow_mode = 'printer_only',
                     kitchen_workflow_mode_revision = 4
   where id = '00000000-0000-0000-0000-0001c3a00a2b';
@@ -343,12 +344,24 @@ select throws_ok(
   '42501', null, 'audit: append-only enforcement is UNCHANGED (update refused)');                                -- 42
 
 -- ===== D. dormancy ==========================================================
-select is(
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008, which
+-- ships the approved guarded owner setter this phase deliberately deferred.
+-- The guard is KEPT and TIGHTENED rather than dropped: EXACTLY the approved
+-- app+public pair may exist, so any unreviewed additional setter/writer still
+-- fails this suite.
+select ok(
   (select count(*)::int from pg_proc p
      join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('app', 'public')
-      and p.proname in ('set_branch_kitchen_workflow_mode', 'set_kitchen_workflow_mode')),
-  0, 'dormancy: NO workflow-mode setter function exists');                                                       -- 43
+      and p.proname in ('set_branch_kitchen_workflow_mode', 'set_kitchen_workflow_mode')) = 2
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode')
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'set_kitchen_workflow_mode')
+  and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname in ('app', 'public')
+                     and p.proname = 'set_branch_kitchen_workflow_mode'),
+  'the ONLY workflow-mode setter is the approved 008 owner pair');                                               -- 43
 select ok(
   (select kitchen_workflow_mode = 'kds' and kitchen_workflow_mode_revision = 1
      from branches where id = '00000000-0000-0000-0000-0001c3a00a1a'),

@@ -6,7 +6,8 @@
 --   * report_kitchen_pos_status 6-arg (legacy, delegates 'unknown') + 7-arg
 --     (canonical) overloads, exact count, grants, typed rejections;
 --   * closed-vocab + cross-field validation; POS-only device-token auth;
---   * dormancy: no setter/writer/resolver; branches remain kds/rev 1.
+--   * dormancy: no writer/resolver (the approved 008 owner setter is the only
+--     setter); branches remain kds/rev 1.
 -- Session pinned to UTC; hex-only UUIDs; GUC conventions per house style.
 -- ============================================================================
 begin;
@@ -155,11 +156,23 @@ select ok(
   'the status table keeps FORCE RLS and ZERO direct client grants');                                             -- 29
 
 -- ===== D. dormancy ===========================================================
-select is(
+-- SUPERSEDED BY PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008, which
+-- ships the approved guarded owner setter this phase deliberately deferred.
+-- The guard is KEPT and TIGHTENED rather than dropped: EXACTLY the approved
+-- app+public pair may exist, so any unreviewed additional setter/writer still
+-- fails this suite.
+select ok(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname in ('app','public')
-      and (p.proname like 'set_%kitchen_workflow_mode%' or p.proname like 'resolve_kitchen_dispatch_ambiguous_hold%')),
-  0, 'dormancy: NO setter / writer / resolver function exists');                                                 -- 30
+      and (p.proname like 'set_%kitchen_workflow_mode%' or p.proname like 'resolve_kitchen_dispatch_ambiguous_hold%')) = 2
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'app' and p.proname = 'set_kitchen_workflow_mode')
+  and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'set_kitchen_workflow_mode')
+  and not exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                   where n.nspname in ('app','public')
+                     and p.proname like 'resolve_kitchen_dispatch_ambiguous_hold%'),
+  'the ONLY setter is the approved 008 owner pair; NO writer/resolver exists');                                  -- 30
 select ok(
   (select kitchen_workflow_mode = 'kds' and kitchen_workflow_mode_revision = 1
      from branches where id = '00000000-0000-0000-0000-0003b1200a1a'),
