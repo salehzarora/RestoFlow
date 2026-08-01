@@ -125,8 +125,12 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
       status: (row['status'] ?? '').toString(),
       orderType: (row['order_type'] ?? '').toString(),
       createdAtLabel: (row['created_at'] ?? '').toString(),
-      itemCount: _int(row['item_count']),
-      grandTotalMinor: _int(row['grand_total_minor']),
+      itemCount: _count(row['item_count']),
+      grandTotalMinor: _money(
+        row['grand_total_minor'],
+        'row',
+        'grand_total_minor',
+      ),
       currencyCode: currency,
       // paid | unpaid | not_chargeable, straight from the ONE server predicate.
       settlement: SettlementState.fromWire(row['payment_status']),
@@ -136,7 +140,11 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
       tableLabel: _strOrNull(row['table_label']),
       staffName: _strOrNull(row['staff_name']),
       paymentMethod: method,
-      paidAmountMinor: _intOrNull(row['paid_amount_minor']),
+      paidAmountMinor: _moneyOrNull(
+        row['paid_amount_minor'],
+        'row',
+        'paid_amount_minor',
+      ),
     );
   }
 
@@ -149,10 +157,26 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
       status: (order['status'] ?? '').toString(),
       orderType: (order['order_type'] ?? '').toString(),
       currencyCode: currency,
-      subtotalMinor: _int(order['subtotal_minor']),
-      discountTotalMinor: _int(order['discount_total_minor']),
-      taxTotalMinor: _int(order['tax_total_minor']),
-      grandTotalMinor: _int(order['grand_total_minor']),
+      subtotalMinor: _money(
+        order['subtotal_minor'],
+        'detail',
+        'subtotal_minor',
+      ),
+      discountTotalMinor: _money(
+        order['discount_total_minor'],
+        'detail',
+        'discount_total_minor',
+      ),
+      taxTotalMinor: _money(
+        order['tax_total_minor'],
+        'detail',
+        'tax_total_minor',
+      ),
+      grandTotalMinor: _money(
+        order['grand_total_minor'],
+        'detail',
+        'grand_total_minor',
+      ),
       createdAtLabel: _strOrNull(order['created_at']),
       customerName: _strOrNull(order['customer_name']),
       customerPhone: _strOrNull(order['customer_phone']),
@@ -175,10 +199,24 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
     final prepRaw = raw['prep_snapshot'];
     return OrderDetailItem(
       name: (raw['name'] ?? '').toString(),
-      quantity: _int(raw['quantity']),
-      unitPriceMinor: _int(raw['unit_price_minor']),
-      lineDiscountMinor: _int(raw['line_discount_minor']),
-      lineTotalMinor: _int(raw['line_total_minor']),
+      // The quantity MULTIPLIES the line (002A formula B:
+      // line = qty x (unit + Σ mods)), so it is read as strictly as the money.
+      quantity: _money(raw['quantity'], 'item', 'quantity'),
+      unitPriceMinor: _money(
+        raw['unit_price_minor'],
+        'item',
+        'unit_price_minor',
+      ),
+      lineDiscountMinor: _money(
+        raw['line_discount_minor'],
+        'item',
+        'line_discount_minor',
+      ),
+      lineTotalMinor: _money(
+        raw['line_total_minor'],
+        'item',
+        'line_total_minor',
+      ),
       notes: _strOrNull(raw['notes']),
       modifiers: modsRaw is List
           ? modsRaw.whereType<Map>().map(_modifier).toList(growable: false)
@@ -204,8 +242,12 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
     return OrderDetailModifier(
       optionName: (raw['option_name'] ?? '').toString(),
       modifierName: _strOrNull(raw['modifier_name']),
-      quantity: _int(raw['quantity'], fallback: 1),
-      priceMinor: _int(raw['price_minor']),
+      // Absent keeps its documented default of 1; a PRESENT value that cannot
+      // be read is corruption, not a 1.
+      quantity: raw['quantity'] == null
+          ? 1
+          : _money(raw['quantity'], 'modifier', 'quantity'),
+      priceMinor: _money(raw['price_minor'], 'modifier', 'price_minor'),
       meatQuantity: (meatUnit == null) ? null : meatQty,
       meatUnit: (meatQty == null) ? null : meatUnit,
     );
@@ -226,20 +268,58 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
   OrderPayment _payment(Map raw) => OrderPayment(
     method: (raw['method'] ?? '').toString(),
     status: (raw['status'] ?? '').toString(),
-    amountMinor: _int(raw['amount_minor']),
-    tenderedMinor: _int(raw['tendered_minor']),
-    changeMinor: _int(raw['change_minor']),
+    amountMinor: _money(raw['amount_minor'], 'payment', 'amount_minor'),
+    tenderedMinor: _money(raw['tendered_minor'], 'payment', 'tendered_minor'),
+    changeMinor: _money(raw['change_minor'], 'payment', 'change_minor'),
     receiptNumber: _strOrNull(raw['receipt_number']),
     createdAtLabel: _strOrNull(raw['created_at']),
   );
 
-  static int _int(Object? value, {int fallback = 0}) =>
-      value is int ? value : int.tryParse('$value') ?? fallback;
-
-  static int? _intOrNull(Object? value) {
-    if (value == null) return null;
-    return value is int ? value : int.tryParse('$value');
+  /// MONEY-CODEX-FINAL-CORRECTIONS-004 (F5): read a money / quantity field
+  /// EXACTLY, or fail the whole read.
+  ///
+  /// This replaced
+  ///
+  ///     static int _int(Object? value, {int fallback = 0}) =>
+  ///         value is int ? value : int.tryParse('$value') ?? fallback;
+  ///
+  /// which was used for twelve money fields. A value this build could not read
+  /// became **0**, and on a money screen 0 is not an error — it is a NUMBER.
+  /// The owner saw a real order, with a real code, customer and timestamp,
+  /// priced at 0.00, with nothing anywhere saying the figure was invented. It
+  /// is indistinguishable from a genuinely comped order and it is the basis
+  /// for decisions about staff, pricing and takings.
+  ///
+  /// A numeric STRING is accepted: PostgREST can render a bigint that way and
+  /// that is a legitimate wire form. A double is NOT — money is integer minor
+  /// units and no float may enter (D-007).
+  ///
+  /// Throwing is not a regression in availability: this repository's stated
+  /// contract is already "never fabricated data, never a silent demo
+  /// fallback", and [OrderHistoryException] is the signal it already uses. A
+  /// screen that says "could not load" is honest; a screen showing 0.00 is not.
+  static int _money(Object? value, String what, String key) {
+    if (value is int) return value;
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) return parsed;
+    }
+    throw OrderHistoryException(
+      'owner order $what: $key is not an exact integer '
+      '(${value == null ? 'absent/null' : value.runtimeType})',
+    );
   }
+
+  /// The optional form: absent stays absent (an unpaid order has no payment to
+  /// sum), but a PRESENT value that cannot be read is still a failed read.
+  static int? _moneyOrNull(Object? value, String what, String key) =>
+      value == null ? null : _money(value, what, key);
+
+  /// A count shown next to money but never multiplied into it. Kept tolerant
+  /// deliberately — a wrong item count misreads a badge, it does not misstate
+  /// a bill.
+  static int _count(Object? value) =>
+      value is int ? value : int.tryParse('$value') ?? 0;
 
   static num? _numOrNull(Object? value) {
     if (value == null) return null;
