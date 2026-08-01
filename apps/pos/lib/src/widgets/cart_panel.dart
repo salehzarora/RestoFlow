@@ -780,6 +780,12 @@ Future<void> submitOrderFromCart({
       orderId: result.entry.targetId,
       taxTotalMinor: taxTotalMinor,
       taxRateBp: taxRateBp,
+      // 017 (Codex HIGH #3): the SAME immutable prep snapshot the authoritative
+      // outbox payload above was built from — so the confirmation view, the
+      // automatic kitchen ticket and every later MANUAL REPRINT describe the
+      // operation that was actually submitted, not the (possibly older) menu
+      // configuration captured when the lines first entered the cart.
+      submittedPrepByItemId: kitchenPrepByItemId,
     );
     // POS-ORDERS-AND-PAYMENT-001: record the just-submitted order in the local
     // recent/unpaid-orders list (UNPAID — no payment yet). Best-effort: this

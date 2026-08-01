@@ -1256,6 +1256,16 @@ class CartController extends Notifier<CartViewState> {
     String? orderId,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
+    // 017 (Codex HIGH #3): the AUTHORITATIVE prep snapshot of the operation that
+    // was actually submitted — the very map the outbox payload was built from,
+    // captured once before the first await.
+    //
+    // Without it this view fell back to `_linePrep`, captured when each line
+    // ENTERED THE CART. A prep/classifier edit between add-to-cart and submit
+    // therefore made the manual reprint disagree with the ticket the kitchen
+    // and the server received. Null keeps the legacy in-memory/demo behaviour
+    // (no submitted operation exists to be authoritative).
+    Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_cart.isEmpty) return CartMutationResult.applied;
@@ -1311,8 +1321,16 @@ class CartController extends Notifier<CartViewState> {
           // 016: the ORDER-TIME classification resolved from the SAME selected
           // options this line was submitted with, so a manual kitchen reprint
           // splits the resource exactly as the automatic ticket did.
+          //
+          // 017 (Codex HIGH #3): resolved against the SUBMITTED operation's
+          // snapshot when one was supplied — never the older add-to-cart
+          // capture, and never re-read from the live menu after submit. The
+          // outbox payload, this confirmation view, the automatic ticket and
+          // the manual reprint therefore all describe ONE accepted operation.
           prepComponents: classifiedPrepForLine(
-            _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
+            submittedPrepByItemId?[item.menuItemId] ??
+                _linePrep[item.orderItemId] ??
+                const <KitchenPrepComponent>[],
             mods,
           ),
         ),
