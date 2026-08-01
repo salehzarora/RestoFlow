@@ -5257,4 +5257,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String posOrderPreviewOpenedAt(String time) {
     return 'Opened $time';
   }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'Kitchen workflow';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'Dedicated kitchen screen';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'Orders are managed from a separate kitchen display.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel =>
+      'One device with kitchen printer';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'The POS prints kitchen tickets and can finish confirmed kitchen rounds without a separate KDS device.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'Only an owner can change this setting.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'Couldn\'t load this setting right now. Try again later.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle =>
+      'Change the kitchen workflow?';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'Branch: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'From $from to $to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'This branch should use POS and kitchen printers without a dedicated KDS workflow.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'Save workflow';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'Kitchen workflow saved.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied =>
+      'You don\'t have permission to change this setting.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound =>
+      'This branch is not available for your account.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'Couldn\'t save the kitchen workflow. Please try again.';
 }

@@ -9687,6 +9687,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opened {time}'**
   String posOrderPreviewOpenedAt(String time);
+
+  /// DASHBOARD-PRINTER-ONLY-MODE-TOGGLE-010: Settings section for the per-branch kitchen workflow mode (branches.kitchen_workflow_mode).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen workflow'**
+  String get dashboardKitchenWorkflowSectionTitle;
+
+  /// 010: option label for the kds workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dedicated kitchen screen'**
+  String get dashboardKitchenWorkflowKdsLabel;
+
+  /// 010: explanation under the dedicated-kitchen-screen option.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders are managed from a separate kitchen display.'**
+  String get dashboardKitchenWorkflowKdsHelp;
+
+  /// 010: option label for the printer_only workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'One device with kitchen printer'**
+  String get dashboardKitchenWorkflowPrinterLabel;
+
+  /// 010: explanation under the one-device-with-kitchen-printer option.
+  ///
+  /// In en, this message translates to:
+  /// **'The POS prints kitchen tickets and can finish confirmed kitchen rounds without a separate KDS device.'**
+  String get dashboardKitchenWorkflowPrinterHelp;
+
+  /// 010: note shown to non-owners; the control is read-only for them.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an owner can change this setting.'**
+  String get dashboardKitchenWorkflowOwnerOnly;
+
+  /// 010: shown when the current mode cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this setting right now. Try again later.'**
+  String get dashboardKitchenWorkflowUnavailable;
+
+  /// 010: title of the confirmation dialog shown before saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the kitchen workflow?'**
+  String get dashboardKitchenWorkflowConfirmTitle;
+
+  /// 010: confirmation line naming the branch being changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch: {branch}'**
+  String dashboardKitchenWorkflowConfirmBranch(String branch);
+
+  /// 010: confirmation line naming the old and new workflow mode.
+  ///
+  /// In en, this message translates to:
+  /// **'From {from} to {to}'**
+  String dashboardKitchenWorkflowConfirmChange(String from, String to);
+
+  /// 010: warning shown when switching a branch to printer_only.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch should use POS and kitchen printers without a dedicated KDS workflow.'**
+  String get dashboardKitchenWorkflowPrinterWarning;
+
+  /// 010: confirm button in the workflow-change dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Save workflow'**
+  String get dashboardKitchenWorkflowConfirmAction;
+
+  /// 010: confirmation snackbar after a successful save.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen workflow saved.'**
+  String get dashboardKitchenWorkflowSaved;
+
+  /// 010: snackbar when the server denies the write (rank below owner).
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to change this setting.'**
+  String get dashboardKitchenWorkflowDenied;
+
+  /// 010: snackbar when the server reports the branch as not found.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch is not available for your account.'**
+  String get dashboardKitchenWorkflowNotFound;
+
+  /// 010: snackbar when the write fails for a transient reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the kitchen workflow. Please try again.'**
+  String get dashboardKitchenWorkflowSaveFailed;
 }
 
 class _AppLocalizationsDelegate

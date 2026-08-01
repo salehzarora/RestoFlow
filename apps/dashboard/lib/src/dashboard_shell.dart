@@ -8,6 +8,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'admin/branch_kitchen_workflow_repository.dart';
 import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
@@ -202,6 +203,32 @@ class _DashboardShellState extends State<DashboardShell> {
   late final BranchShiftClosePolicyRepository? _shiftClosePolicyRepo =
       _buildShiftClosePolicyRepo();
 
+  /// DASHBOARD-PRINTER-ONLY-MODE-TOGGLE-010: the per-branch kitchen-workflow
+  /// seam, built once on the same preconditions as the RF-113 policy seam — an
+  /// authenticated transport AND a concrete restaurant+branch in scope.
+  /// Otherwise null and the Settings section is omitted.
+  late final BranchKitchenWorkflowRepository? _kitchenWorkflowRepo =
+      _buildKitchenWorkflowRepo();
+
+  BranchKitchenWorkflowRepository? _buildKitchenWorkflowRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    final branchId = membership?.branchId;
+    if (transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        branchId == null) {
+      return null;
+    }
+    return SupabaseBranchKitchenWorkflowRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
+
   BranchShiftClosePolicyRepository? _buildShiftClosePolicyRepo() {
     final transport = widget.reportsTransport;
     final membership = widget.membership;
@@ -330,6 +357,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   membership: widget.membership!,
                   currencyCode: widget.currencyCode,
                   policyRepository: _shiftClosePolicyRepo,
+                  kitchenWorkflowRepository: _kitchenWorkflowRepo,
                   settingsRepository: _settingsRepo,
                   brandingRepository: _brandingRepo,
                   brandingStorage: widget.brandingLogoStorage,

@@ -5178,4 +5178,64 @@ class AppLocalizationsHe extends AppLocalizations {
   String posOrderPreviewOpenedAt(String time) {
     return 'נפתח $time';
   }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'תהליך העבודה במטבח';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'מסך מטבח ייעודי';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'ההזמנות מנוהלות ממסך מטבח נפרד.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel => 'מכשיר אחד עם מדפסת מטבח';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'הקופה מדפיסה כרטיסי מטבח ויכולה לסגור סבבי מטבח מאושרים ללא מכשיר מטבח נפרד.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'רק בעלים יכול לשנות הגדרה זו.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'לא הצלחנו לטעון את ההגדרה כעת. נסה שוב מאוחר יותר.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle =>
+      'לשנות את תהליך העבודה במטבח?';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'סניף: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'מ-$from ל-$to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'סניף זה אמור לעבוד עם הקופה ומדפסות המטבח, ללא תהליך עבודה של מסך מטבח ייעודי.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'שמירת תהליך העבודה';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'תהליך העבודה במטבח נשמר.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied => 'אין לך הרשאה לשנות הגדרה זו.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound =>
+      'הסניף אינו זמין עבור החשבון שלך.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'לא הצלחנו לשמור את תהליך העבודה במטבח. נסה שוב.';
 }

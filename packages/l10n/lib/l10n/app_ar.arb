@@ -1631,5 +1631,21 @@
   "posOrderPreviewRetry": "إعادة المحاولة",
   "posOrderPreviewLoading": "جارٍ تحميل تفاصيل الطلب",
   "posOrderPreviewItems": "الأصناف",
-  "posOrderPreviewOpenedAt": "فُتح {time}"
+  "posOrderPreviewOpenedAt": "فُتح {time}",
+  "dashboardKitchenWorkflowSectionTitle": "سير عمل المطبخ",
+  "dashboardKitchenWorkflowKdsLabel": "شاشة مطبخ منفصلة",
+  "dashboardKitchenWorkflowKdsHelp": "تُدار الطلبات من شاشة مطبخ منفصلة.",
+  "dashboardKitchenWorkflowPrinterLabel": "جهاز واحد مع طابعة مطبخ",
+  "dashboardKitchenWorkflowPrinterHelp": "في هذا الوضع يدير جهاز نقطة البيع الطلبات ويطبع تذاكر المطبخ، ويمكنه إنهاء جولات المطبخ المؤكدة دون الحاجة إلى جهاز مطبخ منفصل.",
+  "dashboardKitchenWorkflowOwnerOnly": "يمكن للمالك فقط تغيير هذا الإعداد.",
+  "dashboardKitchenWorkflowUnavailable": "تعذّر تحميل هذا الإعداد الآن. حاول مرة أخرى لاحقًا.",
+  "dashboardKitchenWorkflowConfirmTitle": "تغيير سير عمل المطبخ؟",
+  "dashboardKitchenWorkflowConfirmBranch": "الفرع: {branch}",
+  "dashboardKitchenWorkflowConfirmChange": "من {from} إلى {to}",
+  "dashboardKitchenWorkflowPrinterWarning": "يجب أن يعمل هذا الفرع بنقطة البيع وطابعات المطبخ دون سير عمل شاشة مطبخ مخصّصة.",
+  "dashboardKitchenWorkflowConfirmAction": "حفظ سير العمل",
+  "dashboardKitchenWorkflowSaved": "تم حفظ سير عمل المطبخ.",
+  "dashboardKitchenWorkflowDenied": "ليست لديك صلاحية لتغيير هذا الإعداد.",
+  "dashboardKitchenWorkflowNotFound": "هذا الفرع غير متاح لحسابك.",
+  "dashboardKitchenWorkflowSaveFailed": "تعذّر حفظ سير عمل المطبخ. يرجى المحاولة مرة أخرى."
 }

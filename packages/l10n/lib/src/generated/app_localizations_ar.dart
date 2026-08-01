@@ -5213,4 +5213,63 @@ class AppLocalizationsAr extends AppLocalizations {
   String posOrderPreviewOpenedAt(String time) {
     return 'فُتح $time';
   }
+
+  @override
+  String get dashboardKitchenWorkflowSectionTitle => 'سير عمل المطبخ';
+
+  @override
+  String get dashboardKitchenWorkflowKdsLabel => 'شاشة مطبخ منفصلة';
+
+  @override
+  String get dashboardKitchenWorkflowKdsHelp =>
+      'تُدار الطلبات من شاشة مطبخ منفصلة.';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterLabel => 'جهاز واحد مع طابعة مطبخ';
+
+  @override
+  String get dashboardKitchenWorkflowPrinterHelp =>
+      'في هذا الوضع يدير جهاز نقطة البيع الطلبات ويطبع تذاكر المطبخ، ويمكنه إنهاء جولات المطبخ المؤكدة دون الحاجة إلى جهاز مطبخ منفصل.';
+
+  @override
+  String get dashboardKitchenWorkflowOwnerOnly =>
+      'يمكن للمالك فقط تغيير هذا الإعداد.';
+
+  @override
+  String get dashboardKitchenWorkflowUnavailable =>
+      'تعذّر تحميل هذا الإعداد الآن. حاول مرة أخرى لاحقًا.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmTitle => 'تغيير سير عمل المطبخ؟';
+
+  @override
+  String dashboardKitchenWorkflowConfirmBranch(String branch) {
+    return 'الفرع: $branch';
+  }
+
+  @override
+  String dashboardKitchenWorkflowConfirmChange(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get dashboardKitchenWorkflowPrinterWarning =>
+      'يجب أن يعمل هذا الفرع بنقطة البيع وطابعات المطبخ دون سير عمل شاشة مطبخ مخصّصة.';
+
+  @override
+  String get dashboardKitchenWorkflowConfirmAction => 'حفظ سير العمل';
+
+  @override
+  String get dashboardKitchenWorkflowSaved => 'تم حفظ سير عمل المطبخ.';
+
+  @override
+  String get dashboardKitchenWorkflowDenied =>
+      'ليست لديك صلاحية لتغيير هذا الإعداد.';
+
+  @override
+  String get dashboardKitchenWorkflowNotFound => 'هذا الفرع غير متاح لحسابك.';
+
+  @override
+  String get dashboardKitchenWorkflowSaveFailed =>
+      'تعذّر حفظ سير عمل المطبخ. يرجى المحاولة مرة أخرى.';
 }

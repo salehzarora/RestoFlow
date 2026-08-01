@@ -1631,5 +1631,21 @@
   "posOrderPreviewRetry": "נסה שוב",
   "posOrderPreviewLoading": "טוען את פרטי ההזמנה",
   "posOrderPreviewItems": "פריטים",
-  "posOrderPreviewOpenedAt": "נפתח {time}"
+  "posOrderPreviewOpenedAt": "נפתח {time}",
+  "dashboardKitchenWorkflowSectionTitle": "תהליך העבודה במטבח",
+  "dashboardKitchenWorkflowKdsLabel": "מסך מטבח ייעודי",
+  "dashboardKitchenWorkflowKdsHelp": "ההזמנות מנוהלות ממסך מטבח נפרד.",
+  "dashboardKitchenWorkflowPrinterLabel": "מכשיר אחד עם מדפסת מטבח",
+  "dashboardKitchenWorkflowPrinterHelp": "הקופה מדפיסה כרטיסי מטבח ויכולה לסגור סבבי מטבח מאושרים ללא מכשיר מטבח נפרד.",
+  "dashboardKitchenWorkflowOwnerOnly": "רק בעלים יכול לשנות הגדרה זו.",
+  "dashboardKitchenWorkflowUnavailable": "לא הצלחנו לטעון את ההגדרה כעת. נסה שוב מאוחר יותר.",
+  "dashboardKitchenWorkflowConfirmTitle": "לשנות את תהליך העבודה במטבח?",
+  "dashboardKitchenWorkflowConfirmBranch": "סניף: {branch}",
+  "dashboardKitchenWorkflowConfirmChange": "מ-{from} ל-{to}",
+  "dashboardKitchenWorkflowPrinterWarning": "סניף זה אמור לעבוד עם הקופה ומדפסות המטבח, ללא תהליך עבודה של מסך מטבח ייעודי.",
+  "dashboardKitchenWorkflowConfirmAction": "שמירת תהליך העבודה",
+  "dashboardKitchenWorkflowSaved": "תהליך העבודה במטבח נשמר.",
+  "dashboardKitchenWorkflowDenied": "אין לך הרשאה לשנות הגדרה זו.",
+  "dashboardKitchenWorkflowNotFound": "הסניף אינו זמין עבור החשבון שלך.",
+  "dashboardKitchenWorkflowSaveFailed": "לא הצלחנו לשמור את תהליך העבודה במטבח. נסה שוב."
 }
