@@ -110,8 +110,29 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         name: component.name,
         quantity: formatPrepQuantity(component.quantity),
         unit: component.unit,
+        // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the stored classifier link.
+        // The NAME is re-resolved from the live option on save, so renaming an
+        // option in the Dashboard refreshes the label the kitchen prints.
+        classifierOptionId: component.classifierOptionId,
       ),
   ];
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: every modifier option of THIS
+  /// item, in Dashboard order — the candidates a prep resource may be split by.
+  ///
+  /// Product-scoped by construction: `modifiers.menu_item_id` ties each group to
+  /// one item, and modifier TEMPLATES are copy-on-attach, so a reusable template
+  /// can never carry another product's option id into this list. Empty on a
+  /// not-yet-created item (no options exist yet) — the picker is then hidden.
+  List<({String id, String name})> get _classifierOptions {
+    final item = _item;
+    if (item == null) return const <({String id, String name})>[];
+    return <({String id, String name})>[
+      for (final modifier in widget.snapshot.modifiersForItem(item.id))
+        for (final option in widget.snapshot.optionsForModifier(modifier.id))
+          (id: option.id, name: option.name),
+    ];
+  }
 
   late String? _categoryId = _item?.menuCategoryId ?? widget.target.categoryId;
   late String? _itemType = _item?.itemType;
@@ -215,9 +236,16 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   ({List<Map<String, Object?>> components, bool hasError}) _collectPrepRows() {
     final components = <Map<String, Object?>>[];
     var hasError = false;
+    // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: resolve each classifier link
+    // against the item's LIVE options, so the stored option name is refreshed on
+    // every save and a link to a deleted option is dropped rather than persisted.
+    final optionNames = <String, String>{
+      for (final option in _classifierOptions) option.id: option.name,
+    };
     for (final row in _prepRows) {
       row.nameError = null;
       row.quantityError = null;
+      row.classifierMissing = false;
       final name = row.name.text.trim();
       final quantityText = row.quantity.text.trim();
       final unit = row.unit.text.trim();
@@ -237,11 +265,24 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         row.quantityError = MenuFieldError.notAnInteger;
         hasError = true;
       }
+      // 016: a dangling target is surfaced as a validation error but never
+      // BLOCKS the save — the resource simply keeps its existing single total,
+      // which is the safe behaviour the kitchen already understands.
+      final classifierName = optionNames[row.classifierOptionId];
+      if (row.classifierOptionId.isNotEmpty && classifierName == null) {
+        row.classifierMissing = true;
+      }
       if (name.isNotEmpty && quantity != null && quantity > 0) {
         components.add(<String, Object?>{
           'name': name,
           'quantity': quantity,
           'unit': unit,
+          // ADDITIVE: written only for a resolved link, so an unsplit resource
+          // serializes exactly as it always did.
+          if (classifierName != null) ...<String, Object?>{
+            'classifier_option_id': row.classifierOptionId,
+            'classifier_option_name': classifierName,
+          },
         });
       }
     }
@@ -674,6 +715,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: state the one rule that is
+          // easy to get wrong — the classifying option re-buckets the quantity
+          // above, it never adds meat of its own.
+          if (_classifierOptions.isNotEmpty) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              l10n.menuPrepClassifierHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: RestoflowSpacing.sm),
           for (var i = 0; i < _prepRows.length; i++) _prepRowField(i, l10n),
           Align(
@@ -690,73 +743,124 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// One editable prep-component row: name / quantity / unit + a remove button.
+  /// One editable prep-component row: name / quantity / unit + a remove button,
+  /// and — KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the optional picker that
+  /// splits this resource by one of the item's modifier options.
   Widget _prepRowField(int index, AppLocalizations l10n) {
     final row = _prepRows[index];
+    final options = _classifierOptions;
+    // A link to a since-deleted option cannot be the picker's value; show the
+    // "not split" state plus the validation error instead of crashing.
+    final resolved = options.any((o) => o.id == row.classifierOptionId);
     return Padding(
       padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 4,
-            child: TextField(
-              key: ValueKey('menu-item-prep-name-$index'),
-              controller: row.name,
-              decoration: InputDecoration(
-                labelText: l10n.menuPrepComponentNameLabel,
-                border: const OutlineInputBorder(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 4,
+                child: TextField(
+                  key: ValueKey('menu-item-prep-name-$index'),
+                  controller: row.name,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPrepComponentNameLabel,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    errorText: row.nameError == null
+                        ? null
+                        : l10n.menuFieldErrorText(row.nameError!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  key: ValueKey('menu-item-prep-qty-$index'),
+                  controller: row.quantity,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPrepComponentQuantityLabel,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    errorText: row.quantityError == null
+                        ? null
+                        : l10n.menuFieldErrorText(row.quantityError!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  key: ValueKey('menu-item-prep-unit-$index'),
+                  controller: row.unit,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPrepComponentUnitLabel,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: ValueKey('menu-item-prep-remove-$index'),
+                tooltip: l10n.menuRemovePrepComponent,
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  final removed = _prepRows[index];
+                  setState(() => _prepRows.removeAt(index));
+                  // Dispose AFTER the frame so the removed row's TextFields are gone
+                  // from the tree first (no use-after-dispose).
+                  WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => removed.dispose(),
+                  );
+                },
+              ),
+            ],
+          ),
+          // 016: only offered once the item HAS modifier options — there is
+          // nothing to split by before that, and a not-yet-created item has no
+          // options at all. Existing rows default to "Not split", so no
+          // configured resource changes behaviour until an owner picks one.
+          if (options.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(
+                top: RestoflowSpacing.xs,
+                bottom: RestoflowSpacing.xs,
+              ),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('menu-item-prep-classifier-$index'),
+                initialValue: resolved ? row.classifierOptionId : '',
                 isDense: true,
-                errorText: row.nameError == null
-                    ? null
-                    : l10n.menuFieldErrorText(row.nameError!),
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: l10n.menuPrepClassifierLabel,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  errorText: row.classifierMissing
+                      ? l10n.menuPrepClassifierMissing
+                      : null,
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                    value: '',
+                    child: Text(l10n.menuPrepClassifierNone),
+                  ),
+                  for (final option in options)
+                    DropdownMenuItem<String>(
+                      value: option.id,
+                      child: Text(option.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (value) => setState(() {
+                  row.classifierOptionId = value ?? '';
+                  row.classifierMissing = false;
+                }),
               ),
             ),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              key: ValueKey('menu-item-prep-qty-$index'),
-              controller: row.quantity,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: l10n.menuPrepComponentQuantityLabel,
-                border: const OutlineInputBorder(),
-                isDense: true,
-                errorText: row.quantityError == null
-                    ? null
-                    : l10n.menuFieldErrorText(row.quantityError!),
-              ),
-            ),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              key: ValueKey('menu-item-prep-unit-$index'),
-              controller: row.unit,
-              decoration: InputDecoration(
-                labelText: l10n.menuPrepComponentUnitLabel,
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-          ),
-          IconButton(
-            key: ValueKey('menu-item-prep-remove-$index'),
-            tooltip: l10n.menuRemovePrepComponent,
-            icon: const Icon(Icons.close),
-            onPressed: () {
-              final removed = _prepRows[index];
-              setState(() => _prepRows.removeAt(index));
-              // Dispose AFTER the frame so the removed row's TextFields are gone
-              // from the tree first (no use-after-dispose).
-              WidgetsBinding.instance.addPostFrameCallback(
-                (_) => removed.dispose(),
-              );
-            },
-          ),
         ],
       ),
     );
@@ -1652,18 +1756,33 @@ class _ModifierCard extends StatelessWidget {
 /// KITCHEN-PREP-001: one editable kitchen prep component row (name / quantity /
 /// unit) held by the item editor. Owns its controllers; the editor disposes it.
 class _PrepRow {
-  _PrepRow({String name = '', String quantity = '', String unit = ''})
-    : name = TextEditingController(text: name),
-      quantity = TextEditingController(text: quantity),
-      unit = TextEditingController(text: unit);
+  _PrepRow({
+    String name = '',
+    String quantity = '',
+    String unit = '',
+    this.classifierOptionId = '',
+  }) : name = TextEditingController(text: name),
+       quantity = TextEditingController(text: quantity),
+       unit = TextEditingController(text: unit);
 
   final TextEditingController name;
   final TextEditingController quantity;
   final TextEditingController unit;
 
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the id of the modifier option
+  /// this resource is split by; `''` = not split (the default, and what every
+  /// existing row keeps). Never a quantity — only which bucket the configured
+  /// quantity is counted in.
+  String classifierOptionId;
+
   /// Inline validation errors surfaced on save (blank name / non-positive qty).
   MenuFieldError? nameError;
   MenuFieldError? quantityError;
+
+  /// 016: set when [classifierOptionId] no longer matches a live option of this
+  /// item (the option was deleted). Saving then CLEARS the link and the resource
+  /// falls back to its single unsplit total.
+  bool classifierMissing = false;
 
   void dispose() {
     name.dispose();

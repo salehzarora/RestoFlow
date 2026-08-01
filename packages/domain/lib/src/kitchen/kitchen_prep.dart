@@ -22,6 +22,9 @@ class KitchenPrepComponent {
     required this.name,
     required this.quantity,
     this.unit = '',
+    this.classifierOptionId = '',
+    this.classifierOptionName = '',
+    this.classifierSelected,
   });
 
   /// Component display name (data — rendered as-is, never a localized string).
@@ -35,10 +38,63 @@ class KitchenPrepComponent {
   /// Free-text unit ("قطع", "حبة", "g", …), or '' when a bare count reads fine.
   final String unit;
 
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — CONFIG: the id of the modifier
+  /// option that CLASSIFIES this resource (e.g. "Cheese" splitting "Meat
+  /// pieces" into with/without). `''` = no classifier, the historical default.
+  ///
+  /// A product-scoped id by construction: `modifiers.menu_item_id` ties every
+  /// modifier group — and so every option — to ONE menu item, and modifier
+  /// TEMPLATES are copy-on-attach, so a stored id can never address another
+  /// product's option.
+  ///
+  /// It NEVER contributes a quantity. The owner-configured [quantity] above
+  /// stays the sole source of how much of this resource a unit needs; the
+  /// option only decides WHICH BUCKET that quantity lands in.
+  final String classifierOptionId;
+
+  /// CONFIG: the classifying option's display name, captured beside
+  /// [classifierOptionId] so a ticket can label the "without" bucket too — the
+  /// option is by definition absent from an unselected line, so its name cannot
+  /// be recovered from the order's modifiers. `''` = no classifier.
+  final String classifierOptionName;
+
+  /// ORDER-TIME (D-008) resolution: whether the classifying option was selected
+  /// on THIS order line. `null` = unresolved (menu config, legacy order, or no
+  /// classifier) and the resource is then counted UNSPLIT, exactly as before.
+  ///
+  /// Presence-based: selecting the option twice, or with a modifier quantity
+  /// above one, still yields `true` — never a second helping of the resource.
+  final bool? classifierSelected;
+
+  /// True when this component carries a RESOLVED classification the kitchen
+  /// summary must split on (a named classifier + an order-time answer).
+  bool get isClassified =>
+      classifierSelected != null && classifierOptionName.isNotEmpty;
+
+  /// This component with the order-time [selected] answer applied. Config
+  /// (name/quantity/unit/classifier) is carried through untouched.
+  KitchenPrepComponent withClassifierSelected(bool selected) =>
+      KitchenPrepComponent(
+        name: name,
+        quantity: quantity,
+        unit: unit,
+        classifierOptionId: classifierOptionId,
+        classifierOptionName: classifierOptionName,
+        classifierSelected: selected,
+      );
+
   Map<String, Object?> toJson() => <String, Object?>{
     'name': name,
     'quantity': quantity,
     'unit': unit,
+    // ADDITIVE (016): emitted only when configured/resolved, so an unclassified
+    // component serializes byte-identically to every stored record and wire
+    // payload written before this feature existed.
+    if (classifierOptionId.isNotEmpty)
+      'classifier_option_id': classifierOptionId,
+    if (classifierOptionName.isNotEmpty)
+      'classifier_option_name': classifierOptionName,
+    if (classifierSelected != null) 'classifier_selected': classifierSelected,
   };
 
   /// Tolerantly parses ONE wire object. Returns null for a blank name or a
@@ -51,10 +107,18 @@ class KitchenPrepComponent {
     final rawQty = raw['quantity'];
     final quantity = rawQty is num ? rawQty : num.tryParse('${rawQty ?? ''}');
     if (quantity == null || quantity <= 0) return null;
+    final selected = raw['classifier_selected'];
     return KitchenPrepComponent(
       name: name,
       quantity: quantity,
       unit: (raw['unit'] ?? '').toString().trim(),
+      // ADDITIVE (016): absent on every record written before this feature, so
+      // those decode to the unclassified default and stay UNSPLIT.
+      classifierOptionId: (raw['classifier_option_id'] ?? '').toString().trim(),
+      classifierOptionName: (raw['classifier_option_name'] ?? '')
+          .toString()
+          .trim(),
+      classifierSelected: selected is bool ? selected : null,
     );
   }
 
@@ -63,13 +127,69 @@ class KitchenPrepComponent {
       other is KitchenPrepComponent &&
       other.name == name &&
       other.quantity == quantity &&
-      other.unit == unit;
+      other.unit == unit &&
+      other.classifierOptionId == classifierOptionId &&
+      other.classifierOptionName == classifierOptionName &&
+      other.classifierSelected == classifierSelected;
 
   @override
-  int get hashCode => Object.hash(name, quantity, unit);
+  int get hashCode => Object.hash(
+    name,
+    quantity,
+    unit,
+    classifierOptionId,
+    classifierOptionName,
+    classifierSelected,
+  );
 
   @override
-  String toString() => 'KitchenPrepComponent($name, $quantity, $unit)';
+  String toString() =>
+      'KitchenPrepComponent($name, $quantity, $unit'
+      '${classifierOptionName.isEmpty ? '' : ', by $classifierOptionName'}'
+      '${classifierSelected == null ? '' : '=$classifierSelected'})';
+}
+
+/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the SINGLE place a menu item's
+/// configured prep [components] acquire their ORDER-TIME (D-008) classification
+/// answer, so the wire payload, the durable journal, the direct kitchen print
+/// and the manual reprint can never disagree about which bucket a resource
+/// belongs to.
+///
+/// A component with no configured classifier is returned UNCHANGED (identity,
+/// not a copy) — the historical unsplit behaviour, byte-identical on the wire.
+/// A configured one records whether its target option id appears in
+/// [selectedOptionIds]: PRESENCE only, so selecting the option twice, or with a
+/// modifier quantity above one, still classifies the resource once and never
+/// multiplies the owner-configured [KitchenPrepComponent.quantity].
+///
+/// Idempotent: re-running it on already-resolved components (a parked cart
+/// restored, then submitted) recomputes the same answer from the same config.
+/// Money-free (D-007).
+List<KitchenPrepComponent> classifyPrepComponents(
+  List<KitchenPrepComponent> components,
+  Set<String> selectedOptionIds,
+) {
+  if (components.isEmpty) return components;
+  var changed = false;
+  final out = <KitchenPrepComponent>[];
+  for (final component in components) {
+    // Fail safe (016 §9): an unnamed target cannot be labelled on a ticket, so
+    // the resource keeps its existing unsplit line rather than printing a
+    // half-configured bucket. Admin configuration surfaces the error.
+    if (component.classifierOptionId.isEmpty ||
+        component.classifierOptionName.isEmpty) {
+      out.add(component);
+      continue;
+    }
+    final selected = selectedOptionIds.contains(component.classifierOptionId);
+    if (component.classifierSelected == selected) {
+      out.add(component);
+      continue;
+    }
+    changed = true;
+    out.add(component.withClassifierSelected(selected));
+  }
+  return changed ? out : components;
 }
 
 /// Parses a wire `prep_components` value — the menu item's configured list

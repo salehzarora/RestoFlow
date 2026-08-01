@@ -727,6 +727,16 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String kitchenPrepResourceWithOption(String resource, String option) {
+    return '$resource עם $option';
+  }
+
+  @override
+  String kitchenPrepResourceWithoutOption(String resource, String option) {
+    return '$resource בלי $option';
+  }
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '$minutes ד׳';
   }
@@ -2318,6 +2328,20 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get menuPrepComponentUnitLabel => 'יחידה';
+
+  @override
+  String get menuPrepClassifierLabel => 'פיצול לפי אפשרות';
+
+  @override
+  String get menuPrepClassifierNone => 'ללא פיצול';
+
+  @override
+  String get menuPrepClassifierHint =>
+      'האפשרות רק קובעת לאיזה סיכום נספרת הכמות שלמעלה, והיא לא מוסיפה כמות משלה.';
+
+  @override
+  String get menuPrepClassifierMissing =>
+      'האפשרות הזו כבר לא קיימת, ולכן המשאב לא יפוצל.';
 
   @override
   String get menuAddPrepComponent => 'הוספת משאב';

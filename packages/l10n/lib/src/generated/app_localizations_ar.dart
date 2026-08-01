@@ -733,6 +733,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String kitchenPrepResourceWithOption(String resource, String option) {
+    return '$resource مع $option';
+  }
+
+  @override
+  String kitchenPrepResourceWithoutOption(String resource, String option) {
+    return '$resource بدون $option';
+  }
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '$minutes د';
   }
@@ -2333,6 +2343,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get menuPrepComponentUnitLabel => 'الوحدة';
+
+  @override
+  String get menuPrepClassifierLabel => 'التقسيم حسب الخيار';
+
+  @override
+  String get menuPrepClassifierNone => 'بدون تقسيم';
+
+  @override
+  String get menuPrepClassifierHint =>
+      'الخيار يحدّد فقط في أي إجمالي تُحتسب الكمية أعلاه، ولا يضيف كمية من عنده.';
+
+  @override
+  String get menuPrepClassifierMissing =>
+      'هذا الخيار لم يعد موجودًا، ولن يتم تقسيم المكوّن.';
 
   @override
   String get menuAddPrepComponent => 'إضافة مورد';

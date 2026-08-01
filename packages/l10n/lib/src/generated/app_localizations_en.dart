@@ -740,6 +740,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String kitchenPrepResourceWithOption(String resource, String option) {
+    return '$resource with $option';
+  }
+
+  @override
+  String kitchenPrepResourceWithoutOption(String resource, String option) {
+    return '$resource without $option';
+  }
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '${minutes}m';
   }
@@ -2352,6 +2362,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuPrepComponentUnitLabel => 'Unit';
+
+  @override
+  String get menuPrepClassifierLabel => 'Split by option';
+
+  @override
+  String get menuPrepClassifierNone => 'Not split';
+
+  @override
+  String get menuPrepClassifierHint =>
+      'The option only decides which total the quantity above is counted in. It never adds a quantity of its own.';
+
+  @override
+  String get menuPrepClassifierMissing =>
+      'This option no longer exists, so the resource will not be split.';
 
   @override
   String get menuAddPrepComponent => 'Add resource';
