@@ -423,28 +423,72 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
 
   // Menu items whose modifier configuration cannot be trusted.
   final brokenConfigItemIds = <String>{};
-  // Groups we could not attribute to any item at all — their owning product is
-  // unknown, so they are dropped and recorded for the log-free honest path
-  // below (a group with no readable menu_item_id cannot make ONE item unsafe;
-  // it makes the payload itself suspect, which the group loop handles).
   final optionsByGroup = <String, List<PosModifierOption>>{};
+  // Groups that lost an option we could still ATTRIBUTE to them — their owning
+  // item is known, so only that item stops selling.
   final orphanedOptionGroupIds = <String>{};
+  // MONEY-CODEX-FINAL-CLOSURE-005 (F3): options we could not attribute to any
+  // declared group AT ALL. See `unattributable` below for why these cannot be
+  // narrowed to one product.
+  var hasUnattributableOption = false;
+  // Every group id declared in this payload, so an option naming an UNDECLARED
+  // parent is recognised as unattributable rather than silently discarded.
+  final declaredGroupIds = <String>{
+    for (final row in (raw['modifiers'] as List?) ?? const [])
+      if (row is Map)
+        if (exactId(row['id']) case final id?) id,
+  };
+  // A group row that NAMED ITS ITEM but whose own id could not be read. Its item
+  // is marked broken by the group loop below, and its options necessarily point
+  // at an id we cannot match — so an unmatched option is EXPLAINED by it, and
+  // the damage is already bounded to an item we can name. Without such a row an
+  // unmatched option is genuinely unexplainable and the payload fails closed.
+  final hasOwnedButUnreadableGroup = ((raw['modifiers'] as List?) ?? const [])
+      .any(
+        (row) =>
+            row is Map &&
+            exactId(row['menu_item_id']) != null &&
+            (exactId(row['id']) == null ||
+                row['name'] is! String ||
+                (row['name'] as String).trim().isEmpty),
+      );
+  // An option id that appears more than once is AMBIGUOUS — it could price two
+  // different lines and we cannot tell which the operator meant.
+  final seenOptionIds = <String>{};
   for (final row in (raw['modifier_options'] as List?) ?? const []) {
     if (row is! Map) {
-      orphanedOptionGroupIds.add('');
+      // Not even a row. Nothing identifies it, so nothing can be blamed.
+      hasUnattributableOption = true;
       continue;
     }
     final groupId = exactId(row['modifier_id']);
     final optionId = exactId(row['id']);
     final delta = row['price_delta_minor'];
     final name = row['name'];
-    if (groupId == null ||
-        optionId == null ||
-        delta is! int ||
-        name is! String) {
-      // Record the group so its owning item is marked below. A skipped PAID
-      // option is exactly the silent under-charge this phase exists to stop.
-      if (groupId != null) orphanedOptionGroupIds.add(groupId);
+    if (groupId == null) {
+      // UNATTRIBUTABLE: the parent id is unreadable, so the owning ITEM is
+      // unknown and cannot be narrowed by anything else on the row.
+      hasUnattributableOption = true;
+      continue;
+    }
+    if (!declaredGroupIds.contains(groupId)) {
+      // The parent group is not declared in this payload. If a group row DID
+      // name an item but could not be read, this option is explained by it and
+      // that item is already being marked unavailable. Otherwise nothing
+      // accounts for it and the affected product cannot be identified.
+      if (!hasOwnedButUnreadableGroup) hasUnattributableOption = true;
+      continue;
+    }
+    if (optionId == null || delta is! int || name is! String) {
+      // Attributable but unreadable: the group is known, so only its item is
+      // marked. A skipped PAID option is exactly the silent under-charge this
+      // boundary exists to stop.
+      orphanedOptionGroupIds.add(groupId);
+      continue;
+    }
+    if (!seenOptionIds.add(optionId)) {
+      // The same option id twice. Both claimants are suspect.
+      orphanedOptionGroupIds.add(groupId);
       continue;
     }
     (optionsByGroup[groupId] ??= <PosModifierOption>[]).add(
@@ -465,9 +509,14 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     final menuItemId = exactId(row['menu_item_id']);
     final name = row['name'];
     if (menuItemId == null) {
-      // No readable owner: the group cannot be attached to anything, and no
-      // single product can be blamed. Dropping it is the only option, and it
-      // cannot make an item plain-addable because it never named one.
+      // MONEY-CODEX-FINAL-CLOSURE-005 (F3). This used to `continue`, reasoning
+      // that a group naming no item "cannot make an item plain-addable". That
+      // is exactly backwards: the group belonged to SOME item, and if it was
+      // that item's only group, dropping it leaves the item looking PLAIN —
+      // `groupsForItem` returns nothing and the add handler takes the
+      // `groups.isEmpty -> addItem` branch, selling a configured product at base
+      // price. The item most at risk is precisely the one we cannot name.
+      hasUnattributableOption = true;
       continue;
     }
     if (id == null || name is! String || name.trim().isEmpty) {
@@ -519,6 +568,27 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   for (final g in groups) {
     if (g.options.isEmpty) brokenConfigItemIds.add(g.menuItemId);
   }
+
+  // MONEY-CODEX-FINAL-CLOSURE-005 (F3) — AN UNATTRIBUTABLE ROW FAILS THE WHOLE
+  // PAYLOAD CLOSED.
+  //
+  // The per-item rule below can only protect items we can NAME. When an option's
+  // parent cannot be read, or names a group this payload never declared, or a
+  // group names no readable item, the owning product is genuinely unknown — and
+  // `app.pos_menu` gives us no second path to it: a modifier row is
+  // {id, menu_item_id, name, …} and an option row is
+  // {id, modifier_id, name, display_order, price_delta_minor, kitchen_meat}.
+  //
+  // Marking "every item that has a group" would not be a safe superset either:
+  // if the LOST group was an item's only one, that item appears in the payload
+  // with no groups at all and would keep selling plain, at base price, missing a
+  // choice the operator configured and charged for.
+  //
+  // So the affected set cannot be bounded, and a valid sibling option proves
+  // nothing about what was lost. The POS refuses the whole menu and shows its
+  // existing safe error state. That is recoverable — the operator fixes the row
+  // and reloads; an undercharged sale is not.
+  if (hasUnattributableOption) throw const PosMenuUnavailable();
 
   // THE CHOSEN RULE, stated: a product is unavailable when ANY group associated
   // with it cannot be interpreted safely — not merely the broken group dropped.

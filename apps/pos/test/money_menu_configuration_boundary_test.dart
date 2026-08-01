@@ -184,21 +184,47 @@ void main() {
       }
     });
 
-    test('E3 a group with an unreadable menu_item_id is DROPPED, and cannot '
-        'make any one product unsafe because it never named one', () async {
-      final menu = await loadMenu(
-        envelope(
-          modifiers: [
-            groupRow({'menu_item_id': 7}),
-          ],
-          options: [optionRow()],
-        ),
-      );
-      // Nothing claims it, so no product is blamed — and no product gained a
-      // phantom group either.
-      expect(menu.groupsForItem(kBurgerId), isEmpty);
-      expect(itemOf(menu, kBurgerId).isUnavailable, isFalse);
-    });
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F3) — THIS EXPECTATION WAS CORRECTED.
+    //
+    // E3 used to assert that a group with an unreadable `menu_item_id` is simply
+    // DROPPED, on the reasoning that "it cannot make any one product unsafe
+    // because it never named one". That reasoning is exactly backwards. The
+    // group belonged to SOME item. If it was that item's only group, dropping it
+    // leaves the item looking PLAIN — `groupsForItem` returns nothing and
+    // `pos_menu_screen`'s add handler takes the `groups.isEmpty -> addItem`
+    // branch, selling a configured product at base price. The item that is most
+    // at risk is precisely the one we cannot identify.
+    //
+    // There is no field to recover the owner from: `app.pos_menu` emits a
+    // modifier row as {id, menu_item_id, name, …} and an option row as
+    // {id, modifier_id, name, display_order, price_delta_minor, kitchen_meat} —
+    // neither carries a second path to the item. So the affected set cannot be
+    // bounded, and the only honest answer is to fail the whole payload closed.
+    // The POS then shows its existing safe menu-error state, which is
+    // recoverable; an undercharged sale is not.
+    test(
+      'E3 a group whose owning item cannot be proven fails the WHOLE menu '
+      'payload closed — the unidentifiable item is the one most at risk',
+      () async {
+        for (final badOwner in <Object?>[null, '', '   ', 42, <Object?>[]]) {
+          await expectLater(
+            loadMenu(
+              envelope(
+                modifiers: [
+                  groupRow({'menu_item_id': badOwner}),
+                ],
+                options: [optionRow()],
+              ),
+            ),
+            throwsA(isA<PosMenuUnavailable>()),
+            reason:
+                'menu_item_id ${badOwner.runtimeType}: an entire configured group '
+                'was lost and we cannot say whose — any item may now be '
+                'plain-addable at base price',
+          );
+        }
+      },
+    );
   });
 
   group('[E] a broken OPTION row makes its product unavailable', () {
@@ -252,68 +278,138 @@ void main() {
     // unavailable, or emptied the group list, E6 would still have passed green.
     // It now pins the decided outcome exactly, and asserts the thing that
     // actually protects money — the item cannot be sold plain.
-    test('E6 an option with an unreadable modifier_id leaves the group intact '
-        'and the healthy option attached', () async {
-      final menu = await loadMenu(
-        envelope(
-          modifiers: [groupRow()],
-          options: [
-            optionRow(),
-            optionRow({'id': 'opt-360', 'modifier_id': ''}),
-          ],
-        ),
-      );
-      final groups = menu.groupsForItem(kBurgerId);
-      expect(groups, hasLength(1));
-      expect(groups.single.options.map((o) => o.id).toList(), ['opt-240']);
-      expect(
-        itemOf(menu, kBurgerId).isUnavailable,
-        isFalse,
-        reason:
-            'the group still offers a real choice, so the product is still '
-            'safely sellable through the modifier sheet',
-      );
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F3) — THIS EXPECTATION WAS CORRECTED.
+    //
+    // E6 used to assert the healthy outcome: the group keeps its good option and
+    // the product stays SELLABLE. That approved the defect. An option whose
+    // parent cannot be read belonged to a group belonging to an item, and if
+    // that group is not among the declared ones the item looks plain — so a
+    // valid sibling proves nothing about what was lost. "One choice we can read"
+    // is not "every choice the operator configured".
+    //
+    // A VALID SIBLING DOES NOT RESCUE THE CONFIGURATION.
+    test('E6 an option with an unreadable modifier_id fails the payload closed '
+        'even when a VALID sibling option is present', () async {
+      for (final badParent in <Object?>[null, '', '   ', 42, <Object?>[]]) {
+        await expectLater(
+          loadMenu(
+            envelope(
+              modifiers: [groupRow()],
+              options: [
+                optionRow(), // the healthy sibling
+                optionRow({'id': 'opt-360', 'modifier_id': badParent}),
+              ],
+            ),
+          ),
+          throwsA(isA<PosMenuUnavailable>()),
+          reason:
+              'modifier_id ${badParent.runtimeType}: the lost option may have '
+              'been the only one of a required PAID group on some OTHER item',
+        );
+      }
     });
+
+    test(
+      'E6a an option naming an UNKNOWN group fails the payload closed',
+      () async {
+        await expectLater(
+          loadMenu(
+            envelope(
+              modifiers: [groupRow()],
+              options: [
+                optionRow(),
+                optionRow({
+                  'id': 'opt-360',
+                  'modifier_id': 'grp-that-is-not-here',
+                }),
+              ],
+            ),
+          ),
+          throwsA(isA<PosMenuUnavailable>()),
+          reason:
+              'the parent group is not in this payload, so the owning item cannot '
+              'be identified and may look plain',
+        );
+      },
+    );
+
+    test(
+      'E6a2 an option row that is not an object at all fails closed',
+      () async {
+        await expectLater(
+          loadMenu(
+            envelope(
+              modifiers: [groupRow()],
+              options: [optionRow(), 'not-an-object'],
+            ),
+          ),
+          throwsA(isA<PosMenuUnavailable>()),
+        );
+      },
+    );
 
     // THE EXACT CASE CODEX ASKED FOR: a required PAID group whose ONLY option
     // is unattributable. The group then offers nothing, `groupsForItem` would
     // hide it, and the add handler would take the plain `addItem` branch —
     // selling a configured product at its base price with the surcharge gone.
-    test(
-      'E6b a required PAID group whose ONLY option has an unreadable '
-      'modifier_id makes the product UNAVAILABLE, never plain-sellable',
-      () async {
-        final menu = await loadMenu(
+    test('E6b a required PAID group whose ONLY option has an unreadable '
+        'modifier_id fails the whole menu payload closed', () async {
+      // MONEY-CODEX-FINAL-CLOSURE-005 (F3) upgraded this outcome. An option
+      // whose PARENT cannot be read is unattributable — nothing on the row
+      // names the owning item and `app.pos_menu` offers no second path to it —
+      // so 005 refuses the whole payload rather than guessing which product
+      // lost the choice. That is a strictly STRONGER version of the same
+      // guarantee, and the 004 intent is intact: the product is never
+      // plain-sellable at base price. E6b2 keeps the per-item path covered.
+      await expectLater(
+        loadMenu(
           envelope(
             modifiers: [groupRow()], // required: true, paid options
             options: [
               optionRow({'id': 'opt-240', 'modifier_id': ''}),
             ],
           ),
-        );
-        final burger = itemOf(menu, kBurgerId);
-        expect(
-          burger.isUnavailable,
-          isTrue,
-          reason:
-              'the configured paid choice was lost — selling at base price would '
-              'undercharge every customer who ordered it',
-        );
-        expect(
-          burger.availabilityReason,
-          DemoMenuItem.configurationUnavailableReason,
-          reason:
-              'the cashier is told it is a configuration fault, not sold out',
-        );
-        expect(
-          menu.groupsForItem(kBurgerId),
-          isEmpty,
-          reason:
-              'and there is no half-group to present — which is exactly why the '
-              'item must be blocked rather than silently plain-added',
-        );
-      },
-    );
+        ),
+        throwsA(isA<PosMenuUnavailable>()),
+        reason:
+            'the configured paid choice was lost — selling at base price '
+            'would undercharge every customer who ordered it',
+      );
+    });
+
+    // The ATTRIBUTABLE form of the same defect, so the per-item path stays
+    // proven: the option names its group correctly but its OWN fields are
+    // unreadable, leaving the group with nothing to offer.
+    test('E6b2 a required PAID group whose only option is unreadable makes '
+        'exactly THAT product unavailable', () async {
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [groupRow()],
+          options: [
+            optionRow({'id': ''}), // attributable: modifier_id is fine
+          ],
+        ),
+      );
+      final burger = itemOf(menu, kBurgerId);
+      expect(burger.isUnavailable, isTrue);
+      expect(
+        burger.availabilityReason,
+        DemoMenuItem.configurationUnavailableReason,
+        reason: 'the cashier is told it is a configuration fault, not sold out',
+      );
+      expect(
+        menu.groupsForItem(kBurgerId),
+        isEmpty,
+        reason:
+            'there is no half-group to present — which is exactly why the '
+            'item must be blocked rather than silently plain-added',
+      );
+      expect(
+        itemOf(menu, kColaId).isUnavailable,
+        isFalse,
+        reason: 'ownership is provable here, so the sibling keeps selling',
+      );
+    });
 
     // A PADDED identity used to validate (trim) but be stored raw, so it never
     // matched its group — the same silent loss by a different route.
@@ -352,11 +448,14 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    // F3/005: an ATTRIBUTABLE breakage, so a real `PosMenuData` still loads and
+    // the screen can be driven. (The unattributable form now fails the whole
+    // payload closed — proven by E6b — and there is no screen to test then.)
     final menu = await loadMenu(
       envelope(
         modifiers: [groupRow()], // required, paid
         options: [
-          optionRow({'id': 'opt-240', 'modifier_id': ''}),
+          optionRow({'id': ''}),
         ],
       ),
     );
@@ -413,6 +512,102 @@ void main() {
           '1500 paid choice — every such sale undercharges by 15.00',
     );
     expect(cart.subtotalMinor, 0);
+  });
+
+  // MONEY-CODEX-FINAL-CLOSURE-005 (F3) — the remaining matrix cases.
+  group('[F] every option must map to exactly one valid group', () {
+    test('F3-3 an OPTIONAL group with one valid and one malformed option is '
+        'still unsafe — optional does not mean free', () async {
+      await expectLater(
+        loadMenu(
+          envelope(
+            modifiers: [
+              groupRow({'is_required': false, 'selection_type': 'multi'}),
+            ],
+            options: [
+              optionRow(),
+              optionRow({'id': 'opt-360', 'modifier_id': ''}),
+            ],
+          ),
+        ),
+        throwsA(isA<PosMenuUnavailable>()),
+        reason:
+            'an optional group still carries PAID choices; losing one silently '
+            'undercharges exactly as much as losing a required one',
+      );
+    });
+
+    test('F3-4 PADDED group and parent ids normalize consistently and stay '
+        'healthy', () async {
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [
+            groupRow({'id': '  grp-meat  ', 'menu_item_id': '  $kBurgerId  '}),
+          ],
+          options: [
+            optionRow({'modifier_id': ' grp-meat '}),
+          ],
+        ),
+      );
+      final groups = menu.groupsForItem(kBurgerId);
+      expect(groups, hasLength(1), reason: 'trimmed ONCE, everywhere');
+      expect(groups.single.id, 'grp-meat');
+      expect(groups.single.options.single.id, 'opt-240');
+      expect(itemOf(menu, kBurgerId).isUnavailable, isFalse);
+    });
+
+    test('F3-5 an option whose parent group belongs to ANOTHER item affects '
+        'that item, and only that item', () async {
+      // Two items, two groups. Cola's group loses its only option because that
+      // option was attributed to the BURGER's group instead.
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [
+            groupRow(),
+            groupRow({'id': 'grp-ice', 'menu_item_id': kColaId, 'name': 'Ice'}),
+          ],
+          options: [
+            optionRow(),
+            // Declared for Cola's group in spirit, but pointing at the burger's.
+            optionRow({'id': 'opt-ice', 'modifier_id': 'grp-meat'}),
+          ],
+        ),
+      );
+      expect(
+        itemOf(menu, kColaId).isUnavailable,
+        isTrue,
+        reason: 'Cola\'s group ended up with zero options — a lost choice',
+      );
+      expect(
+        itemOf(menu, kColaId).availabilityReason,
+        DemoMenuItem.configurationUnavailableReason,
+      );
+      expect(
+        itemOf(menu, kBurgerId).isUnavailable,
+        isFalse,
+        reason:
+            'the burger group is fully readable and both its options attribute '
+            'to it — ownership isolation is provable here, so it keeps selling',
+      );
+    });
+
+    test('F3-7 a healthy UNRELATED item stays available when one item is '
+        'broken', () async {
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [
+            groupRow({'name': ''}), // broken: burger only
+          ],
+          options: [optionRow()],
+        ),
+      );
+      expect(itemOf(menu, kBurgerId).isUnavailable, isTrue);
+      expect(
+        itemOf(menu, kColaId).isUnavailable,
+        isFalse,
+        reason: 'a plain product with no configuration cannot have lost one',
+      );
+    });
   });
 
   test('E7 a BROKEN group alongside a HEALTHY one still makes the product '
