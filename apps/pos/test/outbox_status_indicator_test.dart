@@ -18,33 +18,42 @@ class _SeededOutbox extends OutboxController {
   _SeededOutbox(this._seed);
   final List<OutboxEntry> _seed;
   int retryAllCalls = 0;
+  int dismissCalls = 0;
 
   @override
   List<OutboxEntry> build() => _seed;
 
   @override
   Future<void> retryAllFailed() async => retryAllCalls++;
+
+  @override
+  Future<int> dismissResolvedFailures() async {
+    dismissCalls++;
+    return _seed.where((e) => e.isDismissibleResolvedFailure).length;
+  }
 }
 
-OutboxEntry _e(OutboxSyncState state, {String op = 'op'}) => OutboxEntry(
-  id: 'outbox-$op',
-  deviceId: 'd',
-  localOperationId: op,
-  operationType: 'order.submit',
-  targetEntity: 'order',
-  targetId: 'order-$op',
-  payloadJson: '{}',
-  summary: const OrderSummary(
-    orderNumber: 'DEMO-1',
-    orderType: OrderType.dineIn,
-    tableLabel: 'T1',
-    itemCount: 1,
-    subtotalMinor: 1000,
-    currencyCode: 'ILS',
-  ),
-  syncState: state,
-  clientCreatedAt: DateTime.utc(2026, 6, 29, 9),
-);
+OutboxEntry _e(OutboxSyncState state, {String op = 'op', String? errorCode}) =>
+    OutboxEntry(
+      id: 'outbox-$op',
+      deviceId: 'd',
+      localOperationId: op,
+      operationType: 'order.submit',
+      targetEntity: 'order',
+      targetId: 'order-$op',
+      payloadJson: '{}',
+      summary: const OrderSummary(
+        orderNumber: 'DEMO-1',
+        orderType: OrderType.dineIn,
+        tableLabel: 'T1',
+        itemCount: 1,
+        subtotalMinor: 1000,
+        currencyCode: 'ILS',
+      ),
+      syncState: state,
+      clientCreatedAt: DateTime.utc(2026, 6, 29, 9),
+      lastErrorCode: errorCode,
+    );
 
 Future<_SeededOutbox> _pump(
   WidgetTester tester,
@@ -251,6 +260,69 @@ void main() {
     ) async {
       await _pump(tester, const []);
       expect(find.byKey(const Key('outbox-status-indicator')), findsNothing);
+    });
+  });
+
+  // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — the chip separates a
+  // failure a Retry can move from one it never could.
+  group('resolved (terminal, never-applied) failures', () {
+    testWidgets('a permanently-rejected submit is NOT offered as retry — it is '
+        'offered as CLEAR, and tapping dismisses it', (tester) async {
+      final c = await _pump(tester, [
+        for (var i = 1; i <= 6; i++)
+          _e(OutboxSyncState.rejected, op: 'old-$i', errorCode: 'rejected'),
+      ]);
+
+      expect(
+        find.byKey(const Key('outbox-retry-all')),
+        findsNothing,
+        reason:
+            'THE DEFECT: they were shown as "N failed — retry" while retry '
+            'deliberately skips them, so the count could never move',
+      );
+      final clear = find.byKey(const Key('outbox-clear-resolved'));
+      expect(clear, findsOneWidget);
+
+      await tester.tap(clear);
+      await tester.pumpAndSettle();
+      expect(c.dismissCalls, 1);
+      expect(c.retryAllCalls, 0, reason: 'nothing is re-sent');
+    });
+
+    testWidgets('a RETRYABLE failure still shows the retry affordance and is '
+        'never offered as clear', (tester) async {
+      final c = await _pump(tester, [
+        _e(OutboxSyncState.rejected, op: 'transient', errorCode: 'transport'),
+      ]);
+      expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
+      expect(find.byKey(const Key('outbox-clear-resolved')), findsNothing);
+      await tester.tap(find.byKey(const Key('outbox-retry-all')));
+      await tester.pumpAndSettle();
+      expect(c.retryAllCalls, 1);
+      expect(c.dismissCalls, 0);
+    });
+
+    testWidgets('with BOTH kinds present the RETRYABLE state is shown first — '
+        'the safest-first order this chip already uses', (tester) async {
+      await _pump(tester, [
+        _e(OutboxSyncState.rejected, op: 'transient', errorCode: 'transport'),
+        _e(OutboxSyncState.rejected, op: 'old-1', errorCode: 'rejected'),
+      ]);
+      expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
+      expect(
+        find.byKey(const Key('outbox-clear-resolved')),
+        findsNothing,
+        reason:
+            'documented limitation: the clear action becomes reachable once the '
+            'retryable failures are dealt with',
+      );
+    });
+
+    testWidgets('a conflict is neither retried nor cleared', (tester) async {
+      await _pump(tester, [_e(OutboxSyncState.conflict, op: 'c1')]);
+      expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
+      expect(find.byKey(const Key('outbox-clear-resolved')), findsNothing);
+      expect(find.byKey(const Key('outbox-status-indicator')), findsOneWidget);
     });
   });
 }
