@@ -802,11 +802,20 @@ Future<void> _requestReceipt(
   CashPayment paid, {
   required bool isDemo,
 }) async {
+  // HIDE-REDUNDANT-AUTO-PRINT-SETTINGS-014: on a printer_only branch the
+  // customer receipt is mandatory, so the stored preference is not consulted at
+  // all (and is left untouched). Under `kds` this is false and the existing
+  // stored-preference behaviour below is byte-identical.
+  final forcedByWorkflow = ref.read(posPrinterOnlyAutoPrintProvider);
   final bool? autoPrint;
-  try {
-    autoPrint = await ref.read(posAutoPrintReceiptProvider.future);
-  } catch (_) {
-    return; // preference unreadable: unchanged conservative behaviour
+  if (forcedByWorkflow) {
+    autoPrint = true;
+  } else {
+    try {
+      autoPrint = await ref.read(posAutoPrintReceiptProvider.future);
+    } catch (_) {
+      return; // preference unreadable: unchanged conservative behaviour
+    }
   }
   if (autoPrint == false) return; // explicitly off — show nothing
   await ref

@@ -131,12 +131,22 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       const SizedBox(height: RestoflowSpacing.md),
                       // Part C: the per-device auto-print choice (local,
                       // per browser/device, no owner login involved).
-                      _AutoPrintSection(
-                        l10n: l10n,
-                        hasEnabledPrinter:
-                            assignments?.hasEnabledPrinter ?? false,
-                      ),
-                      const SizedBox(height: RestoflowSpacing.md),
+                      //
+                      // HIDE-REDUNDANT-AUTO-PRINT-SETTINGS-014: omitted ENTIRELY
+                      // on a printer_only branch — heading, both switches and
+                      // the spacing. Both behaviours are mandatory there, so a
+                      // toggle would be a control that cannot change anything.
+                      // The section holds nothing else, so nothing is left
+                      // behind; manual printing, printer setup and test print
+                      // are separate sections and are untouched.
+                      if (!ref.watch(posPrinterOnlyAutoPrintProvider)) ...[
+                        _AutoPrintSection(
+                          l10n: l10n,
+                          hasEnabledPrinter:
+                              assignments?.hasEnabledPrinter ?? false,
+                        ),
+                        const SizedBox(height: RestoflowSpacing.md),
+                      ],
                       // Part B: the receipt printers the Dashboard assigned
                       // to this station's branch (safe metadata only).
                       PrinterAssignmentsSection(

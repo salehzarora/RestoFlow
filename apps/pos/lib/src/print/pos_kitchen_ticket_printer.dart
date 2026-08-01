@@ -470,6 +470,13 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   final bool effectiveEnabled;
   if (enabled != null) {
     effectiveEnabled = enabled;
+  } else if (container.read(posPrinterOnlyAutoPrintProvider)) {
+    // HIDE-REDUNDANT-AUTO-PRINT-SETTINGS-014: on a printer_only branch the
+    // ticket MUST print — the station is the kitchen. Decided without reading
+    // the stored preference at all, so neither a stale `false` nor an
+    // unreadable preference can stop the kitchen seeing the food. The stored
+    // value is untouched and governs again under `kds`.
+    effectiveEnabled = true;
   } else {
     try {
       effectiveEnabled =
