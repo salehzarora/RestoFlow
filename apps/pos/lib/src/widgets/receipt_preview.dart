@@ -213,10 +213,14 @@ class ReceiptPreview extends ConsumerWidget {
     );
   }
 
+  /// 015: LOCAL exactly once — a server-parsed `paid_at` is UTC, and reading its
+  /// wall-clock fields directly showed the customer a time hours off. No-op for
+  /// a device-clock value, so both sources render identically.
   static String _formatTimestamp(DateTime dt) {
+    final local = dt.toLocal();
     String two(int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 }
 

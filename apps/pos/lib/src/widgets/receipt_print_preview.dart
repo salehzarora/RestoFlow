@@ -536,10 +536,14 @@ PrintDocument _buildCustomerDocument(
   );
 }
 
+/// 015: LOCAL exactly once. This ONE formatter feeds both the on-screen print
+/// preview and the printed receipt line, so leaving it on UTC while fixing the
+/// receipt preview would have made the two disagree by the same offset.
 String _formatReceiptTimestamp(DateTime dt) {
+  final local = dt.toLocal();
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-      '${two(dt.hour)}:${two(dt.minute)}';
+  return '${local.year}-${two(local.month)}-${two(local.day)} '
+      '${two(local.hour)}:${two(local.minute)}';
 }
 
 /// Shared preview header (title + close icon).

@@ -205,16 +205,36 @@ void main() {
     expect(find.byKey(_finishKey), findsNothing);
   });
 
-  testWidgets('D: visible with the toggle ON and an authorized role', (
+  // POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: visibility now additionally requires
+  // a POSITIVELY VERIFIED printer_only branch — this action drives the
+  // printer-only round-close path, and a kds branch must never be offered it.
+  testWidgets('D: visible with the toggle ON, an authorized role AND a '
+      'verified printer_only branch', (tester) async {
+    await _pump(tester, toggleOn: true, role: 'manager', mode: _printerOnly);
+    expect(find.byKey(_finishKey), findsOneWidget);
+  });
+
+  testWidgets('D: hidden on a kds branch even with the toggle ON and an '
+      'authorized role (015)', (tester) async {
+    await _pump(
+      tester,
+      toggleOn: true,
+      role: 'manager',
+      mode: KitchenModeVerifiedKds(verifiedAt: _verifiedAtValue, revision: 4),
+    );
+    expect(find.byKey(_finishKey), findsNothing);
+  });
+
+  testWidgets('D: hidden while the branch mode is still unresolved (015)', (
     tester,
   ) async {
     await _pump(tester, toggleOn: true, role: 'manager');
-    expect(find.byKey(_finishKey), findsOneWidget);
+    expect(find.byKey(_finishKey), findsNothing);
   });
 
   testWidgets('D: confirming with no active kitchen orders (post-confirmation '
       'refresh) shows an honest localized message', (tester) async {
-    await _pump(tester, toggleOn: true, role: 'cashier');
+    await _pump(tester, toggleOn: true, role: 'cashier', mode: _printerOnly);
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     // Press -> the confirmation dialog appears FIRST (the eligible set is derived
     // only AFTER confirmation, never captured before the dialog).
@@ -316,8 +336,9 @@ void main() {
           ),
         ],
       );
-      await confirm(tester);
-
+      // 015: the action is no longer even OFFERED on a kds branch, which is
+      // strictly stronger than the previous "it is offered but refuses".
+      expect(find.byKey(_finishKey), findsNothing);
       expect(
         repo.completed,
         isEmpty,
@@ -342,8 +363,8 @@ void main() {
           ),
         ],
       );
-      await confirm(tester);
-
+      // 015: an unverified mode fails closed at the visibility gate too.
+      expect(find.byKey(_finishKey), findsNothing);
       expect(repo.completed, isEmpty);
     });
 

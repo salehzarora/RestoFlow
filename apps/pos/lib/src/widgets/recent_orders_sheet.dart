@@ -499,6 +499,20 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     if (ref.watch(runtimeConfigProvider).isDemoMode) {
       return const SizedBox.shrink();
     }
+    // POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: this bulk action drives the
+    // printer-only round-close path, which the SERVER only honours on a
+    // printer_only branch. Its visibility keyed on a per-device PRINTING
+    // preference, so a kds branch whose POS happened to have a kitchen printer
+    // with auto-print on still offered a cashier a KDS action that could only
+    // ever be refused. Gate on the AUTHORITATIVE branch workflow instead.
+    //
+    // Fail-safe: this provider is derived from the server-verified kitchen mode
+    // and is false while the mode is loading and if it never resolves, so the
+    // action is HIDDEN until printer_only is positively known — never disabled
+    // with a misleading tooltip, and never shown prematurely.
+    if (!ref.watch(posPrinterOnlyAutoPrintProvider)) {
+      return const SizedBox.shrink();
+    }
     final autoPrintOn = posAutoPrintKitchenTicketEnabled(
       stored: ref.watch(posAutoPrintKitchenTicketProvider).valueOrNull,
       hasKitchenPrinter: ref.watch(posHasKitchenNativePrinterProvider),
@@ -1297,7 +1311,19 @@ String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
 };
 
+/// POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: convert to LOCAL exactly once before
+/// reading the wall-clock fields.
+///
+/// The order time comes from two sources with DIFFERENT timezone semantics: a
+/// cart-submitted order carries the device's own local `submittedAt`, while an
+/// order refreshed from the server carries `snapshot.createdAt` parsed from an
+/// ISO-8601 UTC string. Reading `.hour`/`.minute` off the UTC one printed the
+/// UTC wall clock, so the SAME order showed a different (earlier) time as soon
+/// as a server refresh attached its snapshot — which is what paying from the
+/// orders list does. `toLocal()` is a no-op on an already-local value, so this
+/// converts exactly once for both sources and adds no fixed offset.
 String _hhmm(DateTime dt) {
+  final local = dt.toLocal();
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${two(dt.hour)}:${two(dt.minute)}';
+  return '${two(local.hour)}:${two(local.minute)}';
 }
