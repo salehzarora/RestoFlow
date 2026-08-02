@@ -84,7 +84,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Confirmation replaces the cart.
-    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posSendOrder), findsNothing);
     // The order is visibly queued for sync, honestly labelled, with a ref.
     expect(find.byKey(const Key('sync-status-card')), findsOneWidget);
@@ -139,7 +139,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400)); // snackbar entrance
 
     // No confirmation; the cart is intact and can still be submitted.
-    expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
+    expect(find.text(l10n.posOrderPendingTitle), findsNothing);
     expect(find.text(l10n.posSubmitFailed), findsOneWidget);
     expect(find.text(l10n.posSendOrder), findsOneWidget);
     expect(find.text('Classic Burger'), findsNWidgets(2)); // menu card + cart
@@ -162,7 +162,7 @@ void main() {
     await tester.tap(find.text(l10n.posSendOrder));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posOrderTypeDineIn), findsOneWidget); // type chip
     expect(find.text('${l10n.posTableLabel} T1'), findsOneWidget); // table chip
     expect(find.byKey(const Key('sync-status-card')), findsOneWidget);
@@ -219,7 +219,7 @@ void main() {
     gate.complete();
     await tester.pumpAndSettle();
     expect(repo.enqueueCount, 1);
-    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posSendOrder), findsNothing);
   });
 
@@ -232,14 +232,14 @@ void main() {
     await _addItem(tester);
     await tester.tap(find.text(l10n.posSendOrder));
     await tester.pumpAndSettle();
-    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
 
     // POS-ORDERS-AND-PAYMENT-001: the unpaid confirmation's reset action is
     // "Pay later" (order stays unpaid, findable in Recent orders).
     await tester.tap(find.text(l10n.posPayLaterAction));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
+    expect(find.text(l10n.posOrderPendingTitle), findsNothing);
     expect(find.text(l10n.posCartEmpty), findsOneWidget);
     expect(find.text(l10n.posSendOrder), findsOneWidget);
   });

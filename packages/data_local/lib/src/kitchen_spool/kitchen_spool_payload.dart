@@ -367,23 +367,123 @@ final class KitchenDispatchPrepComponent {
   }
 }
 
-/// One modifier line ({qty, name}).
+/// One modifier line ({qty, name}) plus — KITCHEN-MODIFIER-PREP-CLASSIFIER-019
+/// — its OWN optional kitchen preparation contribution.
 final class KitchenDispatchModifier {
-  KitchenDispatchModifier({required this.qty, required this.name});
+  KitchenDispatchModifier({required this.qty, required this.name, this.prep});
 
   final int qty;
   final String name;
 
-  Map<String, Object?> toJson() => {'qty': qty, 'name': name};
+  /// 019: the option's own preparation contribution — where Saleh's meat
+  /// actually lives (a 240g size option contributes 2 Meat pieces) — together
+  /// with the classifier that re-buckets it. Null when the option has no
+  /// "count in preparation total" contribution, which is every option today,
+  /// so an existing payload encodes byte-identically.
+  ///
+  /// Before 019 the server projected each modifier as {qty, name} only, so this
+  /// contribution never reached the durable spool at all: the direct print and
+  /// the KDS showed it, the crash-recovery ticket did not.
+  final KitchenDispatchModifierPrep? prep;
+
+  Map<String, Object?> toJson() => {
+    'qty': qty,
+    'name': name,
+    if (prep != null) 'prep': prep!.toJson(),
+  };
 
   static KitchenDispatchModifier fromJson(Map<String, Object?> raw) {
     final r = _StrictReader(raw, 'modifier');
+    final prepRaw = r.optionalMap('prep');
     final m = KitchenDispatchModifier(
       qty: r.requirePositiveInt('qty'),
       name: r.requireString('name'),
+      prep: prepRaw == null
+          ? null
+          : KitchenDispatchModifierPrep.fromJson(prepRaw),
     );
     r.finish();
     return m;
+  }
+}
+
+/// One modifier option's preparation contribution ({quantity, unit}) plus the
+/// optional 019 classifier triple. Mirrors the server's
+/// `app.kitchen_modifier_prep_projection` allowlist exactly.
+final class KitchenDispatchModifierPrep {
+  KitchenDispatchModifierPrep({
+    this.quantity,
+    this.unit,
+    this.classifierOptionId,
+    this.classifierOptionName,
+    this.classifierSelected,
+  });
+
+  final num? quantity;
+  final String? unit;
+  final String? classifierOptionId;
+  final String? classifierOptionName;
+  final bool? classifierSelected;
+
+  /// True only when the triple is complete — a partial/degraded set is treated
+  /// as an ordinary unsplit contribution.
+  bool get isClassified =>
+      classifierOptionId != null &&
+      classifierOptionName != null &&
+      classifierSelected != null;
+
+  Map<String, Object?> toJson() => {
+    if (quantity != null) 'quantity': quantity,
+    if (unit != null) 'unit': unit,
+    if (classifierOptionId != null) 'classifier_option_id': classifierOptionId,
+    if (classifierOptionName != null)
+      'classifier_option_name': classifierOptionName,
+    if (classifierSelected != null) 'classifier_selected': classifierSelected,
+  };
+
+  static KitchenDispatchModifierPrep fromJson(Map<String, Object?> raw) {
+    final r = _StrictReader(raw, 'modifier.prep');
+    final prep = KitchenDispatchModifierPrep(
+      // The contribution itself keeps the strict KITCHEN-MEAT-001 contract —
+      // a count that may be fractional but never zero/negative.
+      quantity: r.optionalPositiveNum('quantity'),
+      unit: r.optionalString('unit'),
+      // 019: DEGRADING reads — a wrong-typed or empty classifier field yields
+      // null instead of throwing, so a malformed classifier costs the split and
+      // nothing else. Rejecting here would discard an otherwise valid ticket and
+      // leave the kitchen with NO paper, which is far worse than an unsplit
+      // contribution.
+      classifierOptionId: r.degradingString('classifier_option_id'),
+      classifierOptionName: r.degradingString('classifier_option_name'),
+      classifierSelected: r.degradingBool('classifier_selected'),
+    );
+    r.finish();
+    // A half-present triple is not a classification: drop it to unsplit rather
+    // than print a bucket the operator never configured.
+    if (prep.isClassified) return prep;
+    return KitchenDispatchModifierPrep(
+      quantity: prep.quantity,
+      unit: prep.unit,
+    );
+  }
+
+  /// 020 (Codex HIGH #3) — the DEFENSIVE client mirror of the server gate.
+  ///
+  /// A contribution is only real when it has BOTH a strictly-positive finite
+  /// quantity AND a usable unit. The server projection now refuses to emit
+  /// anything else, but a payload written by an older server (or a corrupted
+  /// row) could still carry a unit with no count — and the renderer would have
+  /// printed a bullet naming a resource with no number, which reads to the
+  /// kitchen as an instruction it cannot follow.
+  ///
+  /// A malformed CLASSIFIER never reaches this: it degrades to unsplit above,
+  /// and the contribution survives.
+  bool get isRenderable {
+    final q = quantity;
+    return q != null &&
+        q > 0 &&
+        q.isFinite &&
+        (unit?.trim().isNotEmpty ?? false);
   }
 }
 
@@ -675,6 +775,17 @@ final class _StrictReader {
     if (v is Map<String, Object?>) return v;
     throw KitchenSpoolPayloadFormatException(
       '$_context.$key must be an object',
+    );
+  }
+
+  /// 019: an OPTIONAL nested object — absent yields null (every payload written
+  /// before this feature), a present non-object is still corruption and throws.
+  Map<String, Object?>? optionalMap(String key) {
+    final v = _take(key);
+    if (v == null) return null;
+    if (v is Map<String, Object?>) return v;
+    throw KitchenSpoolPayloadFormatException(
+      '$_context.$key must be an object when present',
     );
   }
 

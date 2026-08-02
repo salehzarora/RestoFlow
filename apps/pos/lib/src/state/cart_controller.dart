@@ -289,16 +289,80 @@ List<KitchenPrepComponent> classifiedPrepForLine(
     if (m.quantity > 0) m.optionId,
 });
 
-List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
-    [
-      for (final modifier in modifiers)
-        if (modifier.kitchenMeat case final meat?)
-          if (modifier.quantity > 0)
-            KitchenMeat(
-              quantity: meat.quantity * modifier.quantity,
-              unit: meat.unit,
-            ),
-    ];
+List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) {
+  // KITCHEN-MODIFIER-PREP-CLASSIFIER-019: the option ids actually selected on
+  // THIS line — the order-time answer for every classifier configured on a
+  // contributing option. PRESENCE-based, so a classifier taken twice (or with a
+  // quantity above one) still classifies once and never multiplies the
+  // contribution.
+  final selectedOptionIds = <String>{
+    for (final m in modifiers)
+      if (m.quantity > 0) m.optionId,
+  };
+  return [
+    for (final modifier in modifiers)
+      if (modifier.kitchenMeat case final meat?)
+        if (modifier.quantity > 0)
+          // The option's own units still scale ITS contribution (extra patty ×2
+          // = two patties); the classifier is applied on top, unscaled.
+          _resolvedMeat(meat.scaledBy(modifier.quantity), selectedOptionIds),
+  ];
+}
+
+/// Applies the ORDER-TIME classification answer to one already-scaled
+/// contribution. A contribution with no configured classifier is returned
+/// unchanged — the historical unsplit behaviour, byte-identical on the wire.
+///
+/// The link itself was already proven against the item's own options at the
+/// menu boundary ([resolveTrustedMeatClassifier]); this only answers
+/// with-or-without.
+KitchenMeat _resolvedMeat(KitchenMeat meat, Set<String> selectedOptionIds) =>
+    resolveOrderTimeMeatSnapshot(meat, selectedOptionIds) ?? meat;
+
+/// 020 (Codex BLOCKER #1 / HIGH #2) — THE ONE authoritative wire snapshot
+/// resolver, shared by the initial submit and the Add-items operation.
+///
+/// The wire previously carried `m.kitchenMeat` verbatim: MENU CONFIGURATION
+/// (quantity, unit, classifier id/name) with **no order-time answer**, so
+/// `classifier_selected` was absent from every submitted snapshot and both the
+/// server and the KDS saw an unresolved contribution. The direct print looked
+/// right only because it resolved locally.
+///
+/// The answer is PRESENCE-based over [selectedOptionIds] — the complete,
+/// immutable set of option ids selected on THAT order line — so a classifier
+/// taken once or four times gives the same result.
+///
+/// QUANTITY IS PER MODIFIER UNIT and is deliberately NOT scaled here: the wire
+/// carries the option's per-unit contribution alongside its own
+/// `quantity` field, and the KDS/aggregation applies the modifier units and the
+/// order-item quantity exactly once downstream. Scaling here would double-count.
+///
+/// Returns null when [meat] is null (the option contributes nothing), so the
+/// caller emits no snapshot at all — byte-identical to a pre-feature payload.
+KitchenMeat? resolveOrderTimeMeatSnapshot(
+  KitchenMeat? meat,
+  Set<String> selectedOptionIds,
+) {
+  if (meat == null) return null;
+  // A half-configured link cannot be labelled on a ticket; the contribution
+  // keeps its ordinary unsplit line. The link's VALIDITY (same item, not self)
+  // was already proven at the menu boundary — this only answers with/without.
+  if (meat.classifierOptionId.isEmpty || meat.classifierOptionName.isEmpty) {
+    return meat;
+  }
+  return meat.withClassifierSelected(
+    selectedOptionIds.contains(meat.classifierOptionId),
+  );
+}
+
+/// The complete, immutable set of option ids selected on ONE order line — the
+/// authoritative input to [resolveOrderTimeMeatSnapshot]. A zero-unit selection
+/// contributes no presence.
+Set<String> selectedOptionIdsOf(Iterable<SelectedModifier> modifiers) =>
+    <String>{
+      for (final m in modifiers)
+        if (m.quantity > 0) m.optionId,
+    };
 
 /// Immutable view of a single cart line for the POS UI.
 ///

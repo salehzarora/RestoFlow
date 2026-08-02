@@ -203,9 +203,17 @@ class KdsTicketMapper {
       );
       final meat = KitchenMeat.tryFromJson(m['meat_snapshot']);
       if (meat != null && qty > 0) {
-        (meatByItem[itemId] ??= <KitchenMeat>[]).add(
-          KitchenMeat(quantity: meat.quantity * qty, unit: meat.unit),
-        );
+        // 020 (Codex HIGH #2): scale through the domain API so the WHOLE
+        // decoded contribution survives. Rebuilding it as
+        // `KitchenMeat(quantity: …, unit: …)` silently dropped
+        // classifierOptionId / classifierOptionName / classifierSelected, so a
+        // classified size option arrived at the KDS as an unsplit total even
+        // though the wire carried the answer.
+        //
+        // `scaledBy` multiplies the QUANTITY only, by the modifier's own units;
+        // the order-item quantity is applied exactly once downstream by
+        // [aggregateOrderKitchenCounts]. Nothing is multiplied twice.
+        (meatByItem[itemId] ??= <KitchenMeat>[]).add(meat.scaledBy(qty));
       }
     }
     // MENU-ORDER-001: order each item's modifiers by the shared canonical key

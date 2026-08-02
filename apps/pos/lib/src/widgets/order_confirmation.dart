@@ -85,7 +85,22 @@ class OrderConfirmation extends ConsumerWidget {
     // rejection of an `order.submit` — which app.sync_push guarantees is atomic
     // BEFORE order creation — regardless of which typed code carried it. Later
     // operations failing (a payment, a discount) are deliberately NOT included.
-    final isRejectedDraft = entry != null && entry.isNeverCreatedOrderSubmit;
+    // 024: the ONE authoritative question — did the server definitively create
+    // no order? Was `isNeverCreatedOrderSubmit`, which asked only whether the
+    // code was allowlisted, so an auth refusal or a structured refusal with an
+    // unrecognised code still offered Pay, Discount, printing and Retry.
+    final isRejectedDraft = entry != null && entry.isDefinitiveNoServerOrder;
+    // 023: what is actually KNOWN about this order. With no outbox entry at all
+    // (the RF-101 path) nothing was ever dispatched, so `pending` is the honest
+    // reading and the existing presentation is unchanged.
+    //
+    // MODE-HONEST, like the rest of this screen: a DEMO failure is a simulated
+    // one against a store that never spoke to a backend, so there is no
+    // "the backend rejected this" claim for it to contradict and no real
+    // delivery whose fate is unknown. Demo therefore keeps its established
+    // "Sync failed / Retry" presentation; the unconfirmed outcome is a REAL-mode
+    // statement about a real request whose answer was lost.
+    final outcome = presentedOrderOutcome(entry, isDemo: isDemo);
     // A2: the recovery for THIS submit, keyed by its outbox entry and offered ONLY when
     // the CURRENT operational context matches its binding — a PIN switch / branch /
     // device change makes the previous employee's draft inaccessible immediately.
@@ -204,7 +219,50 @@ class OrderConfirmation extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(RestoflowSpacing.lg),
               children: [
-                _SuccessHeader(title: l10n.posOrderSubmittedTitle),
+                // 022 (Codex HIGH): a never-created shell gets the REJECTION
+                // header. The success wording is reserved for a submit that was
+                // not permanently refused — a transport-ish failure keeps it,
+                // because no server verdict was recorded and the order may well
+                // exist; claiming it was rejected would be its own lie.
+                // 023 (Codex HIGH): THREE outcomes, not two. The old
+                // "anything that is not a recognised refusal is a success"
+                // default put the green header above a status card reading "the
+                // backend rejected this order" whenever a connection dropped.
+                // Success is now claimed only when the server said so, refusal
+                // only when it definitively did, and everything else says
+                // exactly what is true — we do not know yet.
+                switch (outcome) {
+                  PosOrderOutcome.rejected => _OutcomeHeader(
+                    key: const Key('confirmation-rejected-header'),
+                    title: l10n.posOrderRejectedTitle,
+                    tone: RestoflowTone.danger,
+                    icon: Icons.error_outline,
+                  ),
+                  PosOrderOutcome.deliveryUnconfirmed => _OutcomeHeader(
+                    key: const Key('confirmation-unconfirmed-header'),
+                    title: l10n.posOrderDeliveryUnconfirmedTitle,
+                    tone: RestoflowTone.warning,
+                    icon: Icons.cloud_off_outlined,
+                  ),
+                  // 024: PENDING is not ACCEPTED. A queued or in-flight order
+                  // has had no answer from the server, so the green
+                  // check-circle and "Order sent" — which every other surface
+                  // reads as acceptance — were a claim nobody had made. It gets
+                  // its own informational header; the offline lifecycle,
+                  // actions and printing behind it are deliberately unchanged.
+                  PosOrderOutcome.pending => _OutcomeHeader(
+                    key: const Key('confirmation-pending-header'),
+                    title: l10n.posOrderPendingTitle,
+                    tone: RestoflowTone.info,
+                    icon: Icons.cloud_upload_outlined,
+                  ),
+                  PosOrderOutcome.accepted => _OutcomeHeader(
+                    key: const Key('confirmation-success-header'),
+                    title: l10n.posOrderSubmittedTitle,
+                    tone: RestoflowTone.success,
+                    icon: Icons.check_circle,
+                  ),
+                },
                 const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
@@ -254,13 +312,23 @@ class OrderConfirmation extends ConsumerWidget {
                                   spacing: RestoflowSpacing.sm,
                                   runSpacing: RestoflowSpacing.xs,
                                   children: [
-                                    RestoflowStatusPill(
-                                      key: const Key(
-                                        'confirmation-local-status',
+                                    // 022 (Codex HIGH): NOT for a never-created
+                                    // shell. This pill is the local fallback for
+                                    // "we submitted it and the server has not
+                                    // spoken yet" — but for a permanent
+                                    // rejection the server HAS spoken, and it
+                                    // said no. A Submitted chip there claims a
+                                    // lifecycle state the order never entered
+                                    // and re-implies the order number was
+                                    // accepted.
+                                    if (!isRejectedDraft)
+                                      RestoflowStatusPill(
+                                        key: const Key(
+                                          'confirmation-local-status',
+                                        ),
+                                        label: l10n.posOrderStatusSubmitted,
+                                        tone: RestoflowTone.info,
                                       ),
-                                      label: l10n.posOrderStatusSubmitted,
-                                      tone: RestoflowTone.info,
-                                    ),
                                     if (payment != null)
                                       RestoflowStatusPill(
                                         label: l10n.posPaidChip,
@@ -315,7 +383,7 @@ class OrderConfirmation extends ConsumerWidget {
                   onRetry:
                       entry != null &&
                           entry.syncState.isFailed &&
-                          !entry.isPermanentBusinessRejection
+                          !entry.hasDefinitiveVerdict
                       ? () => outbox.retryEntry(entry.id)
                       : null,
                 ),
@@ -329,6 +397,9 @@ class OrderConfirmation extends ConsumerWidget {
                 if (isOrderEligibleForKitchenPrint(
                   orderId: order.orderId,
                   isDemoMode: isDemo,
+                  // 024: the authoritative flag, so an auth refusal and an
+                  // unrecognised structured refusal suppress the button too.
+                  definitivelyRejected: isRejectedDraft,
                   rejectionCode: entry?.lastErrorCode,
                 )) ...[
                   _KitchenTicketPrintButton(order: order),
@@ -573,18 +644,33 @@ class OrderConfirmation extends ConsumerWidget {
   }
 }
 
-/// Design-polish: a compact HORIZONTAL success header (true-green tone) —
+/// Design-polish: a compact HORIZONTAL outcome header —
 /// the confirmation is a ~10-second interaction, so the old 72px hero circle
 /// gave way to content the cashier actually needs on-screen.
-class _SuccessHeader extends StatelessWidget {
-  const _SuccessHeader({required this.title});
+///
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022 (Codex HIGH):
+/// this used to be success-only and was rendered unconditionally, so a
+/// PERMANENTLY REJECTED submit — for which the server created no order at all —
+/// still announced "Order submitted" in true-green above its own failed sync
+/// card, its "not created" notice and its withdrawn Pay/Discount. The tone and
+/// icon are now parameters of the same header rather than a second widget, so
+/// the two states cannot drift apart visually.
+class _OutcomeHeader extends StatelessWidget {
+  const _OutcomeHeader({
+    required this.title,
+    required this.tone,
+    required this.icon,
+    super.key,
+  });
 
   final String title;
+  final RestoflowTone tone;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final success = RestoflowTone.success.styleOf(theme);
+    final style = tone.styleOf(theme);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -592,14 +678,10 @@ class _SuccessHeader extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: success.container,
+            color: style.container,
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.check_circle,
-            size: RestoflowIconSizes.lg,
-            color: success.accent,
-          ),
+          child: Icon(icon, size: RestoflowIconSizes.lg, color: style.accent),
         ),
         const SizedBox(width: RestoflowSpacing.md),
         Flexible(
@@ -866,6 +948,9 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
   OutboxSyncState state,
   AppLocalizations l10n, {
   required bool isDemo,
+  // 023: the SAME derived outcome the header uses, so the card and the header
+  // are answers to one question rather than two independent guesses.
+  required PosOrderOutcome outcome,
   String? errorCode,
   String? errorDetail,
 }) {
@@ -897,14 +982,35 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
         rejectedNote = l10n.posSyncItemUnavailable(errorDetail ?? '—');
       } else if (errorCode == 'table_not_available') {
         rejectedNote = l10n.posSyncTableUnavailable;
+      } else if (outcome == PosOrderOutcome.deliveryUnconfirmed) {
+        // 023: the ONE line that used to contradict the header. A transport
+        // failure is not the backend rejecting anything — the request may well
+        // have been applied and only the answer was lost. Say that, and say the
+        // safe next step: re-send THIS order, whose identity the server is
+        // idempotent on, rather than writing a second one.
+        rejectedNote = l10n.posSyncDeliveryUnconfirmed;
+      } else if (errorCode == 'modifier_prep_snapshot_stale') {
+        // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the frozen
+        // kitchen-preparation snapshot no longer matches the menu, so the server
+        // refused rather than storing an answer this device would contradict.
+        // The generic "the backend rejected this order" line would leave the
+        // cashier tapping a Retry that is not there; this names the one action
+        // that resolves it.
+        rejectedNote = l10n.posPrepSnapshotStale;
       } else {
         rejectedNote = l10n.posSyncFailedReal;
       }
+      // 023: an unconfirmed delivery is not a danger-toned failure — nothing
+      // is known to have failed. It gets the warning tone and the same
+      // cloud-off icon as its header so the two read as one statement.
+      final unconfirmed = outcome == PosOrderOutcome.deliveryUnconfirmed;
       return (
-        label: l10n.posSyncStateFailed,
+        label: unconfirmed
+            ? l10n.posSyncStateUnconfirmed
+            : l10n.posSyncStateFailed,
         note: rejectedNote,
-        tone: RestoflowTone.danger,
-        icon: Icons.error_outline,
+        tone: unconfirmed ? RestoflowTone.warning : RestoflowTone.danger,
+        icon: unconfirmed ? Icons.cloud_off_outlined : Icons.error_outline,
       );
     case OutboxSyncState.created:
     case OutboxSyncState.pending:
@@ -945,6 +1051,7 @@ class _SyncStatusCard extends StatelessWidget {
       state,
       l10n,
       isDemo: isDemo,
+      outcome: presentedOrderOutcome(entry, isDemo: isDemo),
       errorCode: entry?.lastErrorCode,
       errorDetail: entry?.lastErrorDetail,
     );

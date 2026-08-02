@@ -95,7 +95,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
           // verdict forever — sweeping it would burn attempts on a foregone
           // conclusion and imply the order might still go through.
           if (e.syncState.isFailed &&
-              !e.isPermanentBusinessRejection &&
+              !e.hasDefinitiveVerdict &&
               e.attemptCount < _maxAutoAttempts)
             e.id,
       ];
@@ -163,12 +163,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   }
 
   /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
-  /// retry all"). REVIEW B2: permanently-rejected business operations are
-  /// excluded — their verdict is ledgered and replay cannot change it.
+  /// retry all"). REVIEW B2: definitively-refused operations are excluded —
+  /// their verdict exists and replay cannot change it.
+  ///
+  /// 024: the test is now [OutboxEntry.hasDefinitiveVerdict], not the narrower
+  /// code allowlist. A typed `auth` refusal and a structured refusal carrying an
+  /// unrecognised code were both being re-pushed forever, once per sweep, for an
+  /// answer that could not change.
   Future<void> retryAllFailed() async {
     final failed = <String>[
       for (final e in state)
-        if (e.syncState.isFailed && !e.isPermanentBusinessRejection) e.id,
+        if (e.syncState.isFailed && !e.hasDefinitiveVerdict) e.id,
     ];
     for (final id in failed) {
       try {
@@ -339,8 +344,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         }();
 
     final items = lines
-        .map(
-          (l) => OrderSubmissionItem(
+        .map((l) {
+          // 020 (Codex BLOCKER #1): the complete, immutable set of option ids
+          // selected on THIS line — computed ONCE per line and shared by every
+          // modifier snapshot below, so each option's classifier is answered
+          // against the same authoritative selection.
+          final lineSelectedOptionIds = selectedOptionIdsOf(l.modifiers);
+          return OrderSubmissionItem(
             menuItemId: l.menuItemId,
             nameSnapshot: l.name,
             quantity: l.quantity,
@@ -370,11 +380,21 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
                   priceMinorSnapshot: m.priceDeltaMinor,
                   quantity: m.quantity,
                   // KITCHEN-MEAT-001: snapshot the option's meat contribution.
-                  meatSnapshot: m.kitchenMeat,
+                  // 020 (Codex BLOCKER #1): the AUTHORITATIVE order-time
+                  // snapshot, not raw menu configuration. It carries the
+                  // per-unit quantity/unit plus classifier_selected, resolved
+                  // from the complete set of options selected on THIS line, so
+                  // the server and the KDS receive a decided answer instead of
+                  // an unresolved config. The option units stay in the
+                  // adjacent quantity field and are applied downstream once.
+                  meatSnapshot: resolveOrderTimeMeatSnapshot(
+                    m.kitchenMeat,
+                    lineSelectedOptionIds,
+                  ),
                 ),
             ],
-          ),
-        )
+          );
+        })
         .toList(growable: false);
     final itemCount = lines.fold<int>(0, (sum, l) => sum + l.quantity);
 
@@ -459,6 +479,31 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
   /// Demo-pushes [entryId]: shows "Sending…" then the delivered/failed result.
   Future<void> pushEntry(String entryId) async {
+    // POS-DEFINITIVE-REJECTION-PUSH-BOUNDARY-FIX-025 — THE PUSH BOUNDARY ITSELF.
+    //
+    // 024 closed `retryEntry`, `retryAllFailed` and the automatic sweep, but
+    // this is a PUBLIC controller method and stayed open. Anything reaching it
+    // directly — the "Sync now" callback captured while the entry was still
+    // retryable, a future call site, a sweep variant — could flip a
+    // definitively-refused entry back to `inFlight`, spend another transport
+    // attempt, and overwrite the recorded verdict with a fresh one.
+    //
+    // The guard re-reads the CURRENT entry by id rather than trusting anything
+    // the caller holds: the stale-callback case is precisely a caller carrying
+    // an entry object captured BEFORE the verdict landed. Current state wins.
+    //
+    // Failing closed means returning without a repository call, without a state
+    // transition and without a transport attempt — the rejected shell, its
+    // error code, its error kind, its attempt count and its operation identity
+    // are all left exactly as the verdict recorded them. Nothing throws: this
+    // controller uses typed refusals rather than exceptions for guarded
+    // commands, and a caller that has been overtaken by a server verdict has
+    // done nothing wrong.
+    //
+    // Everything uncertain still pushes — pending, in-flight, transient, server,
+    // unknown, an unreadable reply and a legacy row we cannot classify. Only a
+    // PROVEN verdict closes the door, so offline reconciliation is untouched.
+    if (entryById(entryId)?.hasDefinitiveVerdict ?? false) return;
     state = [
       for (final e in state)
         if (e.id == entryId)
@@ -473,9 +518,16 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // load. Reload it so the grid greys the item out before the cashier
     // re-enters the corrected order. Availability only travels with the menu
     // (there is no realtime push), so this is the honest refresh point.
+    //
+    // 022 (Codex MEDIUM): the same is true of a stale PREPARATION snapshot, and
+    // the test for it is now the ONE shared policy rather than a code compared
+    // here — the initial push and the Add-items refusal must not be able to
+    // disagree about what "our menu is stale" means. Invalidated exactly once,
+    // for the one entry whose verdict we just recorded: the provider refetches
+    // on the next read, so there is no loop and no eager round trip.
     for (final e in state) {
-      if (e.id == entryId && e.isPermanentBusinessRejection) {
-        if (e.lastErrorCode == 'item_unavailable') {
+      if (e.id == entryId && e.isDefinitiveNoServerOrder) {
+        if (shouldRefreshMenuForSubmissionError(e.lastErrorCode)) {
           ref.invalidate(posMenuProvider);
         }
         // PILOT-OPERATIONS-CORRECTIONS-001 (A3): the submit created NO server order.
@@ -497,7 +549,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   }
 
   /// Re-queues a failed [entryId] and pushes it again.
+  ///
+  /// 024: FAILS CLOSED for a definitively-refused operation. Withdrawing the
+  /// button is not enough — the command is reachable from the retry-all sweep,
+  /// a stale widget still holding a callback, and any future caller. Re-pushing
+  /// an operation the server has already answered cannot change the answer; it
+  /// only burns an attempt and, for an `order.submit`, re-asks about an order
+  /// that provably does not exist.
   Future<void> retryEntry(String entryId) async {
+    for (final e in state) {
+      if (e.id == entryId && e.hasDefinitiveVerdict) return;
+    }
     await _repo.retry(entryId);
     state = await _repo.recentEntries();
     await pushEntry(entryId);

@@ -85,6 +85,9 @@ Future<bool> showPricedChildFormDialog(
   bool initialKitchenMeatEnabled = false,
   num? initialKitchenMeatQuantity,
   String initialKitchenMeatUnit = '',
+  String initialKitchenMeatClassifierOptionId = '',
+  List<({String id, String name})> classifierOptions =
+      const <({String id, String name})>[],
 }) async {
   final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
@@ -102,6 +105,9 @@ Future<bool> showPricedChildFormDialog(
       initialKitchenMeatEnabled: initialKitchenMeatEnabled,
       initialKitchenMeatQuantity: initialKitchenMeatQuantity,
       initialKitchenMeatUnit: initialKitchenMeatUnit,
+      initialKitchenMeatClassifierOptionId:
+          initialKitchenMeatClassifierOptionId,
+      classifierOptions: classifierOptions,
     ),
   );
   return saved ?? false;
@@ -311,6 +317,8 @@ class _PricedChildFormDialog extends StatefulWidget {
     required this.initialKitchenMeatEnabled,
     required this.initialKitchenMeatQuantity,
     required this.initialKitchenMeatUnit,
+    this.initialKitchenMeatClassifierOptionId = '',
+    this.classifierOptions = const <({String id, String name})>[],
   });
 
   /// The CALLER's scoped write controller (see [_controllerOf]).
@@ -329,6 +337,17 @@ class _PricedChildFormDialog extends StatefulWidget {
   final bool initialKitchenMeatEnabled;
   final num? initialKitchenMeatQuantity;
   final String initialKitchenMeatUnit;
+
+  /// KITCHEN-MODIFIER-PREP-CLASSIFIER-019: the id of ANOTHER option on the SAME
+  /// menu item that classifies THIS option's preparation contribution (Cheese
+  /// splitting the size option's Meat pieces). '' = no split.
+  final String initialKitchenMeatClassifierOptionId;
+
+  /// The options this contribution may be split by: every option of the SAME
+  /// menu item, across all of its modifier groups. Supplied by the item editor,
+  /// which owns the item's snapshot — so another product's options can never
+  /// appear, and no name is ever parsed as an identifier.
+  final List<({String id, String name})> classifierOptions;
 
   @override
   State<_PricedChildFormDialog> createState() => _PricedChildFormDialogState();
@@ -356,12 +375,34 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
     text: widget.initialKitchenMeatUnit,
   );
   MenuFieldError? _meatQuantityError;
+
+  /// 019: the currently-picked classifier option id ('' = No split).
+  late String _meatClassifierOptionId =
+      widget.initialKitchenMeatClassifierOptionId;
   MenuFieldError? _nameError;
   MenuFieldError? _deltaError;
   MenuWriteFailure? _writeError;
   bool _submitting = false;
 
   bool get _showMeat => widget.kind == PricedChildKind.option;
+
+  /// 019: the options THIS contribution may be split by — the same item's
+  /// options minus the one being edited (a contribution cannot classify
+  /// itself). Ids are stable; names are display only.
+  List<({String id, String name})> get _classifierChoices => [
+    for (final o in widget.classifierOptions)
+      if (o.id != widget.id) o,
+  ];
+
+  /// The picker's value, or '' when the stored target no longer exists.
+  String get _resolvedClassifierId =>
+      _classifierChoices.any((o) => o.id == _meatClassifierOptionId)
+      ? _meatClassifierOptionId
+      : '';
+
+  /// True when a link is stored but its target is not a live sibling option.
+  bool get _classifierDangling =>
+      _meatClassifierOptionId.isNotEmpty && _resolvedClassifierId.isEmpty;
 
   @override
   void dispose() {
@@ -410,10 +451,24 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
     final order = int.tryParse(_order.text.trim()) ?? 0;
     // Full-state: an enabled toggle sends {quantity,unit}; disabled sends null
     // (clears any previously-configured meat on the option).
+    // 019: the classifier rides INSIDE the option's own contribution object, at
+    // the narrowest product-specific scope. It is resolved against the SAME
+    // item's live options here, so a stale / deleted / foreign / self id is
+    // dropped rather than persisted, and the stored NAME is always refreshed
+    // from the live option. Disabling the contribution clears the relation on
+    // Save — there is nothing left to classify — which is why the picker state
+    // is not destroyed before then.
+    final classifierName = <String, String>{
+      for (final o in _classifierChoices) o.id: o.name,
+    }[_meatClassifierOptionId];
     final kitchenMeat = (_showMeat && _meatEnabled)
         ? <String, dynamic>{
             'quantity': meatQuantity,
             'unit': _meatUnit.text.trim(),
+            if (classifierName != null) ...<String, dynamic>{
+              'classifier_option_id': _meatClassifierOptionId,
+              'classifier_option_name': classifierName,
+            },
           }
         : null;
     final outcome = await switch (widget.kind) {
@@ -545,6 +600,55 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
                 labelText: l10n.menuKitchenMeatUnitLabel,
               ),
             ),
+            // 019: split THIS contribution by another option of the same item —
+            // the 240g size contributes 2 Meat pieces, and Cheese decides
+            // whether they are reported with or without it. Shown only when the
+            // contribution is enabled (there is nothing to classify otherwise)
+            // and only when the item actually has another option to split by.
+            if (_classifierChoices.isNotEmpty) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('menu-option-meat-classifier'),
+                initialValue: _resolvedClassifierId,
+                isDense: true,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: l10n.menuPrepClassifierLabel,
+                  errorText: _classifierDangling
+                      ? l10n.menuPrepClassifierMissing
+                      : null,
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                    value: '',
+                    child: Text(l10n.menuPrepClassifierNone),
+                  ),
+                  for (final option in _classifierChoices)
+                    DropdownMenuItem<String>(
+                      value: option.id,
+                      child: Text(option.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _meatClassifierOptionId = value ?? ''),
+              ),
+              Text(
+                l10n.menuPrepClassifierHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            // A link whose target is gone is surfaced even when there is no
+            // picker left to show it in; Save then clears it.
+            if (_classifierChoices.isEmpty && _classifierDangling)
+              Text(
+                l10n.menuPrepClassifierMissing,
+                key: const ValueKey('menu-option-meat-classifier-dangling'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
           ],
         ],
       ],

@@ -95,8 +95,143 @@ const Set<String> kPermanentRejectionCodes = {
   // Deliberately NOT a cue to reprice or to drop the offending modifier and
   // send the rest — that would silently turn a paid option into a free one.
   'modifier_option_not_in_scope',
+  // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the frozen KITCHEN
+  // PREPARATION snapshot on a modifier (a 240g size option contributing 2 Meat
+  // pieces, split by Cheese) no longer matches the menu the server holds, so the
+  // server refused the operation rather than storing a different answer than the
+  // one this device confirmed and will print.
+  //
+  // TERMINAL, and for a stronger reason than the codes above: the refusal is a
+  // pure function of the FROZEN payload and the live menu. Re-sending the same
+  // operation cannot succeed unless the owner happens to edit the menu back, so
+  // a retry is a loop by construction. Printing would send the kitchen a
+  // preparation instruction the server never accepted.
+  //
+  // The recovery is deliberately a HUMAN one: refresh the menu, re-pick the
+  // affected line, and send a NEW operation with a freshly frozen snapshot. It
+  // is NOT a cue to re-derive the snapshot locally and resend the same identity
+  // — that would put back exactly the silent divergence this closes.
+  'modifier_prep_snapshot_stale',
   'rejected',
 };
+
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022 — THE ONE menu
+/// staleness policy, for every submission surface.
+///
+/// A refusal belongs here when the server's reason IS that our cached menu no
+/// longer matches its own, so the recovery instruction we show ("re-enter the
+/// order without these items" / "refresh the menu and select the item options
+/// again") is only actionable once the menu has actually been reloaded.
+/// Availability and preparation configuration travel ONLY with the menu — there
+/// is no realtime push — so this refusal is the honest refresh point.
+///
+///   * `item_unavailable` (RESTAURANT-OPERATIONS-V1-001) — a manager flipped
+///     availability after our last load; reload so the grid greys the item out.
+///   * `modifier_prep_snapshot_stale` (021) — the owner changed a modifier's
+///     preparation contribution or its classifier after the line was frozen.
+///     Without a reload the cashier re-picks the SAME stale option from the
+///     SAME cached menu and is refused again, forever: the message would be
+///     advice the app itself makes impossible to follow.
+///
+/// Deliberately NOT here: transport failures and timeouts (nothing says the
+/// menu moved), `table_*` refusals (table state is not menu data),
+/// `dispatch_mode_not_allowed` (branch configuration), `modifier_option_not_in_scope`
+/// (an ownership violation, not a stale copy), payment/printer failures, and an
+/// accepted idempotency replay (nothing was refused at all). Reloading on those
+/// would spend a round trip and reset the grid for no reason.
+///
+/// One predicate rather than a condition per widget: the two surfaces that can
+/// receive these codes (the initial outbox push and the Add-items terminal
+/// refusal) must not be able to disagree about what "stale menu" means.
+bool shouldRefreshMenuForSubmissionError(String? errorCode) =>
+    errorCode == 'item_unavailable' ||
+    errorCode == 'modifier_prep_snapshot_stale';
+
+/// POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023 — WHAT WE ACTUALLY KNOW about one
+/// submitted order, as opposed to which lifecycle state its outbox row is in.
+///
+/// The confirmation used to have two effective presentations: a recognised
+/// permanent business rejection, and "everything else gets the success header".
+/// But `RealOutboxRepository` turns EVERY [SyncTransportException] into the
+/// `rejected` state, so a dropped connection or a 500 produced one screen
+/// reading "Order submitted" in green above "The backend rejected this order —
+/// it was NOT sent to the kitchen." Both claims were about the same order and
+/// neither was known.
+///
+/// The missing distinction is epistemic, not lifecycle: did the server tell us
+/// something, and if so, what?
+enum PosOrderOutcome {
+  /// Queued locally and not yet resolved — offline, waiting, or in flight. The
+  /// order exists as a local record; nothing is claimed about the server.
+  pending,
+
+  /// The server accepted it. This is the ONLY state that may claim success.
+  accepted,
+
+  /// The server DEFINITIVELY refused it, so no order was created.
+  rejected,
+
+  /// The attempt ended without proof either way. The order may or may not exist
+  /// server-side; only an idempotent replay of the same identity can tell us.
+  deliveryUnconfirmed,
+}
+
+/// 023: the outcome the CONFIRMATION should present for [entry].
+///
+/// Identical to [OutboxEntry.outcome] except in demo mode, where a failure is
+/// simulated by a store that never contacted a backend. Nothing real was
+/// dispatched there, so its fate is not "unknown" in the sense this correction
+/// is about — and the demo surface already labels every state with its own demo
+/// notices. Demo failures therefore keep their established presentation rather
+/// than acquiring a delivery-uncertainty they cannot have.
+PosOrderOutcome presentedOrderOutcome(
+  OutboxEntry? entry, {
+  required bool isDemo,
+}) {
+  final outcome = entry?.outcome ?? PosOrderOutcome.pending;
+  if (isDemo && outcome == PosOrderOutcome.deliveryUnconfirmed) {
+    return PosOrderOutcome.pending;
+  }
+  return outcome;
+}
+
+/// 023: [OutboxEntry.lastErrorKind] for a failure that came from a STRUCTURED
+/// per-operation result — the server answered about this exact operation and
+/// said no.
+///
+/// Distinct from the transport kinds because the two answer different
+/// questions. `kPermanentRejectionCodes` decides whether re-sending the SAME
+/// identity could ever succeed; this decides whether a verdict EXISTS at all. A
+/// structured refusal carrying an unrecognised code (`invalid_payload`, a code
+/// added server-side after this build shipped) is still a verdict: the server
+/// read the operation and refused it, so nothing was created.
+const String kServerVerdictErrorKind = 'server_verdict';
+
+/// 023: [OutboxEntry.lastErrorKind] for a response we received but could not
+/// read — a malformed envelope, missing results, no row for our operation, an
+/// unknown status, or `applied` contradicted by `ok: false`. Something came
+/// back; what it meant is unknown, so acceptance is unknown.
+const String kUnreadableResponseErrorKind = 'unreadable_response';
+
+/// The [OutboxEntry.lastErrorKind] values that PROVE the operation was refused
+/// and nothing was created.
+///
+/// `auth` (SQLSTATE 42501) qualifies because `app.sync_push` raises it from its
+/// PREAMBLE — payload shape, PIN session validity, backing device session,
+/// device match — all of which run BEFORE the
+/// `for v_op in jsonb_array_elements(p_operations)` dispatch loop. A failure
+/// inside an operation is caught by that loop's own `exception when others` and
+/// comes back as a per-operation result, not as a thrown transport error. So a
+/// BATCH-level auth exception is positive proof that no operation ran.
+///
+/// [kServerVerdictErrorKind] qualifies because the server answered about this
+/// operation specifically.
+///
+/// `transient` and `server` deliberately do NOT qualify. A timeout, a dropped
+/// connection or a 5xx can all occur AFTER the server committed — the client
+/// merely lost the answer. Calling those "rejected" would tell the cashier the
+/// kitchen has nothing when it may already be cooking.
+const Set<String> kDefinitiveRefusalKinds = {'auth', kServerVerdictErrorKind};
 
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
@@ -426,6 +561,7 @@ class OutboxEntry {
     this.attemptCount = 0,
     this.lastErrorCode,
     this.lastErrorDetail,
+    this.lastErrorKind,
   });
 
   final String id;
@@ -460,6 +596,77 @@ class OutboxEntry {
   /// server echoed back from OUR OWN payload snapshots). Never raw backend
   /// JSON; null for every other outcome.
   final String? lastErrorDetail;
+
+  /// 023: the TYPED transport classification behind a failed delivery — the
+  /// `SyncTransportErrorKind.name` the transport itself assigned. Null for a
+  /// structured per-operation verdict (the server answered; [lastErrorCode]
+  /// carries its typed refusal) and null for every row written before this
+  /// correction.
+  ///
+  /// Stored as the bare enum NAME, never a raw exception object and never
+  /// backend text: it is the minimum needed to tell "the server refused this"
+  /// from "we never learned what happened", and it must survive a restart
+  /// because that distinction decides what the cashier is told.
+  final String? lastErrorKind;
+
+  /// 023: what is actually KNOWN about this order — see [PosOrderOutcome].
+  ///
+  /// Deliberately NOT "anything that is not an allowlisted rejection is a
+  /// success". Acceptance is claimed only when the server said so; a definitive
+  /// refusal is claimed only for a structured business verdict or a transport
+  /// kind that proves the batch never reached dispatch. Everything else,
+  /// INCLUDING a legacy row with no [lastErrorKind] and a response we could not
+  /// parse, is unconfirmed — the safe direction, because the failure mode of
+  /// guessing "accepted" is a kitchen that never got the food, and of guessing
+  /// "rejected" is a second order for food already cooking.
+  PosOrderOutcome get outcome {
+    if (syncState == OutboxSyncState.applied) return PosOrderOutcome.accepted;
+    if (!syncState.isFailed) return PosOrderOutcome.pending;
+    if (isPermanentBusinessRejection) return PosOrderOutcome.rejected;
+    if (lastErrorKind != null &&
+        kDefinitiveRefusalKinds.contains(lastErrorKind)) {
+      return PosOrderOutcome.rejected;
+    }
+    return PosOrderOutcome.deliveryUnconfirmed;
+  }
+
+  /// POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024 — THE authoritative
+  /// question for every action surface: did the server definitively refuse this
+  /// operation?
+  ///
+  /// TRUE for a [PosOrderOutcome.rejected] entry, which is every case where a
+  /// verdict provably exists: a permanent business code, a structured
+  /// per-operation refusal carrying ANY code (including one added server-side
+  /// after this build), and a typed `auth` transport failure that proves the
+  /// batch never reached dispatch.
+  ///
+  /// FALSE for accepted, pending, and every flavour of unconfirmed delivery —
+  /// transient, server, unknown, an unreadable reply, and a legacy row with too
+  /// little classification. Those may or may not have been applied, so nothing
+  /// may be withdrawn on the assumption that they were not.
+  ///
+  /// This REPLACES [isPermanentBusinessRejection] as the action-gating test.
+  /// That set answers the narrower "could re-sending this identity ever
+  /// succeed", and gating on it left Pay, Discount, printing and retry live for
+  /// an auth refusal or a structured refusal whose code simply was not
+  /// allowlisted yet — a new canonical server code would have silently reopened
+  /// every one of them until someone remembered to add it here.
+  bool get hasDefinitiveVerdict => outcome == PosOrderOutcome.rejected;
+
+  /// 024: TRUE when the server definitively created NO ORDER for this entry.
+  ///
+  /// [hasDefinitiveVerdict] scoped to `order.submit`, for the same reason
+  /// [isNeverCreatedOrderSubmit] was: `app.sync_push` validates and dispatches
+  /// an `order.submit` inside its own subtransaction and refuses it BEFORE
+  /// `app.submit_order` inserts anything, so a definitive refusal of one is
+  /// positive proof that no `orders` row exists. A definitive refusal of a LATER
+  /// operation (a payment, a discount) says nothing about whether the order
+  /// itself exists.
+  ///
+  /// Every surface that would act on a server order — Pay, Discount, receipt,
+  /// kitchen print, void, complete — must be withheld when this is true.
+  bool get isDefinitiveNoServerOrder =>
+      operationType == 'order.submit' && hasDefinitiveVerdict;
 
   /// REVIEW B2: TRUE when the server durably rejected THIS operation identity
   /// for a business reason — replaying the same identity returns the SAME
@@ -510,7 +717,11 @@ class OutboxEntry {
   ///     [isNeverCreatedOrderSubmit] is scoped to `order.submit`;
   ///   * an unreadable record — never decoded, so never in this list at all; it
   ///     is preserved verbatim and counted by the storage-health surface.
-  bool get isDismissibleResolvedFailure => isNeverCreatedOrderSubmit;
+  /// 024: retired through the SAME authoritative predicate, so an auth refusal
+  /// and a structured refusal with an unrecognised code are dismissible for
+  /// exactly the reason the allowlisted codes always were — the server provably
+  /// created no order, so nothing is orphaned by removing the local record.
+  bool get isDismissibleResolvedFailure => isDefinitiveNoServerOrder;
 
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
@@ -535,6 +746,7 @@ class OutboxEntry {
     'attempt_count': attemptCount,
     'last_error_code': lastErrorCode,
     if (lastErrorDetail != null) 'last_error_detail': lastErrorDetail,
+    if (lastErrorKind != null) 'last_error_kind': lastErrorKind,
   };
 
   /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
@@ -576,6 +788,7 @@ class OutboxEntry {
       attemptCount: (json['attempt_count'] as num?)?.toInt() ?? 0,
       lastErrorCode: json['last_error_code'] as String?,
       lastErrorDetail: json['last_error_detail'] as String?,
+      lastErrorKind: json['last_error_kind'] as String?,
     );
   }
 
@@ -584,6 +797,7 @@ class OutboxEntry {
     int? attemptCount,
     String? lastErrorCode,
     String? lastErrorDetail,
+    String? lastErrorKind,
     bool clearError = false,
   }) => OutboxEntry(
     id: id,
@@ -604,5 +818,8 @@ class OutboxEntry {
     lastErrorDetail: clearError
         ? null
         : (lastErrorDetail ?? this.lastErrorDetail),
+    // Cleared with the rest on a re-queue: a retry that has not run yet has no
+    // classification, and keeping a stale one would outlive its evidence.
+    lastErrorKind: clearError ? null : (lastErrorKind ?? this.lastErrorKind),
   );
 }

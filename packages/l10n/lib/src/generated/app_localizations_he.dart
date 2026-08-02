@@ -848,6 +848,22 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posReceiptThankYou => 'תודה על ביקורכם';
 
   @override
+  String get posOrderRejectedTitle => 'ההזמנה לא נשלחה';
+
+  @override
+  String get posOrderDeliveryUnconfirmedTitle => 'שליחת ההזמנה לא אושרה';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'לא הצלחנו לאמת אם ההזמנה הגיעה לשרת. בדוק את החיבור ושלח שוב את אותה ההזמנה — הפעולה בטוחה וההזמנה לא תישלח פעמיים.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'לא אושר';
+
+  @override
+  String get posOrderPendingTitle => 'ההזמנה ממתינה לשליחה';
+
+  @override
   String get posOrderStatusSubmitted => 'נשלחה';
 
   @override
@@ -4699,6 +4715,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String posSyncItemUnavailable(String items) {
     return 'לא זמין כרגע: $items. הזן את ההזמנה מחדש ללא פריטים אלה.';
   }
+
+  @override
+  String get posPrepSnapshotStale =>
+      'הגדרות ההכנה בתפריט השתנו. רענן את התפריט ובחר שוב את אפשרויות הפריט.';
 
   @override
   String get posSyncTableUnavailable =>

@@ -64,6 +64,14 @@ class PosMenuData {
   /// renamed option refreshes on the next menu read. Nothing is queried: the
   /// data is already in hand, so no cross-tenant lookup is possible.
   static PosMenuData withTrustedPrepClassifiers(PosMenuData menu) {
+    /// Every option of one menu item, across ALL of its modifier groups — the
+    /// only ids a link on that item may legitimately name.
+    Map<String, String> optionNamesFor(String menuItemId) => <String, String>{
+      for (final group in menu.modifierGroups)
+        if (group.menuItemId == menuItemId)
+          for (final option in group.options) option.id: option.name,
+    };
+
     var changed = false;
     final items = <DemoMenuItem>[];
     for (final item in menu.items) {
@@ -72,14 +80,9 @@ class PosMenuData {
         items.add(item);
         continue;
       }
-      final optionNamesById = <String, String>{
-        for (final group in menu.modifierGroups)
-          if (group.menuItemId == item.id)
-            for (final option in group.options) option.id: option.name,
-      };
       final trusted = resolveTrustedPrepClassifiers(
         configured,
-        optionNamesById,
+        optionNamesFor(item.id),
       );
       if (identical(trusted, configured)) {
         items.add(item);
@@ -95,12 +98,65 @@ class PosMenuData {
         ),
       );
     }
+
+    // 019: the SAME boundary for a MODIFIER OPTION's own preparation
+    // contribution — which is where Saleh's meat actually lives (the size
+    // option contributes the Meat pieces; Cheese classifies them). A link
+    // survives only when it names a DIFFERENT option of the SAME item; a
+    // foreign, deleted, empty, malformed or self-referencing target is stripped
+    // and the contribution keeps its ordinary unsplit line. Quantity and unit
+    // are never touched.
+    final groups = <PosModifierGroup>[];
+    for (final group in menu.modifierGroups) {
+      final names = optionNamesFor(group.menuItemId);
+      var groupChanged = false;
+      final options = <PosModifierOption>[];
+      for (final option in group.options) {
+        final meat = option.kitchenMeat;
+        final trusted = resolveTrustedMeatClassifier(
+          meat,
+          optionNamesById: names,
+          selfOptionId: option.id,
+        );
+        if (identical(trusted, meat)) {
+          options.add(option);
+          continue;
+        }
+        groupChanged = true;
+        changed = true;
+        options.add(
+          PosModifierOption(
+            id: option.id,
+            name: option.name,
+            priceDeltaMinor: option.priceDeltaMinor,
+            kitchenMeat: trusted,
+          ),
+        );
+      }
+      groups.add(
+        groupChanged
+            ? PosModifierGroup(
+                id: group.id,
+                menuItemId: group.menuItemId,
+                name: group.name,
+                options: options,
+                singleSelect: group.singleSelect,
+                minSelect: group.minSelect,
+                maxSelect: group.maxSelect,
+                isRequired: group.isRequired,
+                allowQuantity: group.allowQuantity,
+                maxQuantity: group.maxQuantity,
+              )
+            : group,
+      );
+    }
+
     if (!changed) return menu;
     return PosMenuData(
       categories: menu.categories,
       items: items,
       currencyCode: menu.currencyCode,
-      modifierGroups: menu.modifierGroups,
+      modifierGroups: groups,
     );
   }
 }

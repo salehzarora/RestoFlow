@@ -862,6 +862,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posReceiptThankYou => 'Thank you for your visit';
 
   @override
+  String get posOrderRejectedTitle => 'Order not submitted';
+
+  @override
+  String get posOrderDeliveryUnconfirmedTitle => 'Delivery not confirmed';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'We could not confirm whether this order reached the server. Check the connection and send this same order again — it is safe, and it will not be duplicated.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'Not confirmed';
+
+  @override
+  String get posOrderPendingTitle => 'Order pending';
+
+  @override
   String get posOrderStatusSubmitted => 'Submitted';
 
   @override
@@ -4769,6 +4785,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String posSyncItemUnavailable(String items) {
     return 'Not available right now: $items. Re-enter the order without these items.';
   }
+
+  @override
+  String get posPrepSnapshotStale =>
+      'The menu preparation settings changed. Refresh the menu and select the item options again.';
 
   @override
   String get posSyncTableUnavailable =>

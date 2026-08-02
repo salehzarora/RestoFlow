@@ -854,6 +854,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posReceiptThankYou => 'شكراً لزيارتكم';
 
   @override
+  String get posOrderRejectedTitle => 'لم يتم إرسال الطلب';
+
+  @override
+  String get posOrderDeliveryUnconfirmedTitle => 'لم يتم تأكيد إرسال الطلب';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'تعذّر التأكد مما إذا وصل الطلب إلى الخادم. افحص الاتصال وأعد إرسال الطلب نفسه — العملية آمنة ولن يتكرر الطلب.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'غير مؤكد';
+
+  @override
+  String get posOrderPendingTitle => 'الطلب قيد الإرسال';
+
+  @override
   String get posOrderStatusSubmitted => 'تم الإرسال';
 
   @override
@@ -4731,6 +4747,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String posSyncItemUnavailable(String items) {
     return 'غير متوفر حالياً: $items. أعد إدخال الطلب بدون هذه الأصناف.';
   }
+
+  @override
+  String get posPrepSnapshotStale =>
+      'تغيّرت إعدادات التحضير في القائمة. حدّث القائمة واختر خيارات الصنف من جديد.';
 
   @override
   String get posSyncTableUnavailable =>

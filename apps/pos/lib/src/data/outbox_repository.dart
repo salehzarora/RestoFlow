@@ -564,10 +564,18 @@ class RealOutboxRepository
       // A whole-batch failure (e.g. 42501 - revoked device / expired PIN
       // session) marks the entry rejected so the cashier sees failed -> retry.
       // Carry only the error code, never raw backend text.
+      //
+      // 023 (Codex HIGH): ALSO carry the TYPED kind. `e.code ?? e.kind.name`
+      // alone destroyed the one fact the confirmation needs — a coded transient
+      // failure ('504') and a coded auth refusal ('42501') both arrived as a
+      // bare string, so the UI could not tell "the server refused this" from
+      // "we never learned what happened" and defaulted to claiming success.
+      // Only the stable enum NAME is persisted; the exception object never is.
       updated = entry.copyWith(
         syncState: OutboxSyncState.rejected,
         attemptCount: entry.attemptCount + 1,
         lastErrorCode: e.code ?? e.kind.name,
+        lastErrorKind: e.kind.name,
       );
     }
     return _commitEntry(entryId, updated, fatal: false);
@@ -702,10 +710,13 @@ class RealOutboxRepository
   /// the raw backend JSON). A replayed op (`idempotency_replay`) reflects its
   /// stored status like any other; no duplicate is created.
   OutboxEntry _applyPushResult(OutboxEntry entry, Object? raw) {
+    // 023: a response we could not READ. Something came back; what it meant is
+    // unknown, so the order's fate is unknown — never presented as success.
     OutboxEntry rejected(String code) => entry.copyWith(
       syncState: OutboxSyncState.rejected,
       attemptCount: entry.attemptCount + 1,
       lastErrorCode: code,
+      lastErrorKind: kUnreadableResponseErrorKind,
     );
 
     if (raw is! Map) return rejected('malformed_response');
@@ -751,6 +762,13 @@ class RealOutboxRepository
       attemptCount: entry.attemptCount + 1,
       lastErrorCode: errorCode is String ? errorCode : null,
       lastErrorDetail: errorDetail,
+      // 023: a STRUCTURED per-operation refusal is a verdict — the server read
+      // this operation and said no — whatever its code. That is deliberately
+      // independent of kPermanentRejectionCodes, which answers the different
+      // question of whether re-sending the same identity could ever succeed.
+      lastErrorKind: errorCode is String && state.isFailed
+          ? kServerVerdictErrorKind
+          : null,
       clearError: errorCode is! String,
     );
   }

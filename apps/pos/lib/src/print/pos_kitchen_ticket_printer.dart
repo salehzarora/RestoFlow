@@ -83,15 +83,32 @@ enum PosKitchenPrintOutcome {
 ///
 ///  * it is NOT a demo order (demo mode, or a `demo-…` placeholder id);
 ///  * it carries a real, non-blank server order id; and
-///  * it was NOT permanently rejected — any code in the canonical
-///    [kPermanentRejectionCodes] (a permanently-rejected order has no server
-///    order to cook).
+///  * the server did NOT definitively refuse it — see
+///    [OutboxEntry.isDefinitiveNoServerOrder]. A definitively-refused submit has
+///    no server order to cook.
+///
+/// 024: the caller now passes that AUTHORITATIVE flag rather than an error code
+/// for this helper to look up in [kPermanentRejectionCodes]. Gating on the code
+/// set meant a typed `auth` refusal, and a structured refusal whose code was not
+/// allowlisted, both printed a kitchen ticket for an order the server had
+/// refused — and a new canonical server code would have silently reopened that
+/// hole until someone remembered to extend the set. `rejectionCode` is kept as a
+/// SECONDARY input so callers that only hold a code (older call sites, and the
+/// dispatch-mode path) keep their exact behaviour; either input suppressing the
+/// print is enough, and neither can re-enable it.
+///
+/// Deliberately unchanged for everything else: a PENDING or DELIVERY-UNCONFIRMED
+/// order still prints. That is the offline-first contract — the order may well
+/// exist, the ticket is money-free, and a kitchen with no paper is the worse
+/// failure. Only a PROVEN refusal suppresses it.
 bool isOrderEligibleForKitchenPrint({
   required String? orderId,
   required bool isDemoMode,
+  bool definitivelyRejected = false,
   String? rejectionCode,
 }) {
   if (isDemoMode) return false;
+  if (definitivelyRejected) return false;
   final id = orderId?.trim();
   if (id == null || id.isEmpty || id.startsWith('demo-')) return false;
   if (rejectionCode != null &&
@@ -450,6 +467,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required KitchenTicketPrintLabels labels,
   bool? enabled,
   bool isDemoMode = false,
+  bool definitivelyRejected = false,
   String? rejectionCode,
   PosKitchenTicketPrinter? printer,
   String? guardKey,
@@ -458,6 +476,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   if (!isOrderEligibleForKitchenPrint(
     orderId: orderId,
     isDemoMode: isDemoMode,
+    definitivelyRejected: definitivelyRejected,
     rejectionCode: rejectionCode,
   )) {
     return PosKitchenPrintOutcome.ineligibleOrder;

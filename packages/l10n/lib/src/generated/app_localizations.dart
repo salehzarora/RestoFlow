@@ -1660,6 +1660,36 @@ abstract class AppLocalizations {
   /// **'Thank you for your visit'**
   String get posReceiptThankYou;
 
+  /// Confirmation header shown INSTEAD of the success title when an order.submit was permanently rejected and the server therefore never created the order (KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022).
+  ///
+  /// In en, this message translates to:
+  /// **'Order not submitted'**
+  String get posOrderRejectedTitle;
+
+  /// Confirmation header shown when a submit attempt ended without proof that the server accepted or refused it (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023).
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery not confirmed'**
+  String get posOrderDeliveryUnconfirmedTitle;
+
+  /// Sync-status note for an order whose delivery could not be confirmed; the same operation is safe to send again because the server is idempotent on its identity (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023).
+  ///
+  /// In en, this message translates to:
+  /// **'We could not confirm whether this order reached the server. Check the connection and send this same order again — it is safe, and it will not be duplicated.'**
+  String get posSyncDeliveryUnconfirmed;
+
+  /// Short sync-status pill label for an order whose delivery could not be confirmed (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023). Distinct from the longer header title so the two do not read as duplicated text.
+  ///
+  /// In en, this message translates to:
+  /// **'Not confirmed'**
+  String get posSyncStateUnconfirmed;
+
+  /// Confirmation header for an order that is queued or in flight and has not yet received a final server answer (POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024). Distinct from the accepted title, which may only be shown once the server has accepted the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Order pending'**
+  String get posOrderPendingTitle;
+
   /// POS status chip label for a locally-submitted demo order.
   ///
   /// In en, this message translates to:
@@ -8835,6 +8865,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not available right now: {items}. Re-enter the order without these items.'**
   String posSyncItemUnavailable(String items);
+
+  /// Sync-status note and Add-items message when the server refused an operation because a modifier preparation snapshot no longer matches the menu (KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021).
+  ///
+  /// In en, this message translates to:
+  /// **'The menu preparation settings changed. Refresh the menu and select the item options again.'**
+  String get posPrepSnapshotStale;
 
   /// Sync-status note when the server refused an order because its table is no longer a live active table of this branch.
   ///

@@ -6,13 +6,22 @@ import 'package:restoflow_domain/restoflow_domain.dart'
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the admin configuration.
+/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the PRODUCT-LEVEL classifier.
 ///
-/// A preparation resource may be SPLIT BY one of the item's own modifier
-/// options. The relation is persisted at the narrowest existing product-scoped
-/// home — the item's `attributes.prep_components` bag — beside the quantity it
-/// re-buckets, so no reusable/shared row can ever carry one product's target
-/// into another.
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-019 moved the configuration UI: Saleh's meat
+/// comes from the selected SIZE option, not from a fixed product resource, so
+/// the "Split by option" picker now lives beside the modifier option's own
+/// preparation contribution (see menu_modifier_prep_classifier_019_test.dart).
+///
+/// What this suite now pins is the COMPATIBILITY half of that move:
+///  * the picker is GONE from the product's general preparation rows, so nobody
+///    is steered into configuring the relation in the wrong place; and
+///  * a product-level link ALREADY stored by 016 keeps decoding, keeps
+///    round-tripping through an item save, and is never silently destroyed.
+///
+/// The 016 picker-driving tests were REPLACED, not deleted: their persistence,
+/// no-leak and dangling-link contracts are now enforced — and tested — on the
+/// option-level surface that actually owns them.
 
 /// An [InMemoryMenuStore] recording the last upsertItem attributes.
 class _RecordingStore extends InMemoryMenuStore {
@@ -131,32 +140,27 @@ ModifierOption _option({
   isActive: true,
 );
 
-/// The 240g burger: Bread 1 + Meat pieces 2, with Cheese and Onion options.
-_RecordingStore _burgerStore({
-  List<Map<String, Object?>>? prep,
-  List<ModifierOption>? options,
-}) => _RecordingStore(
-  categories: const [_category],
-  items: [
-    _item(
-      id: 'item-1',
-      name: 'Burger 240g',
-      prep:
-          prep ??
-          const [
-            {'name': 'Bread', 'quantity': 1, 'unit': ''},
-            {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-          ],
-    ),
-  ],
-  modifiers: [_group(id: 'mod-1', menuItemId: 'item-1')],
-  modifierOptions:
-      options ??
-      [
+_RecordingStore _burgerStore({List<Map<String, Object?>>? prep}) =>
+    _RecordingStore(
+      categories: const [_category],
+      items: [
+        _item(
+          id: 'item-1',
+          name: 'Burger 240g',
+          prep:
+              prep ??
+              const [
+                {'name': 'Bread', 'quantity': 1, 'unit': ''},
+                {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
+              ],
+        ),
+      ],
+      modifiers: [_group(id: 'mod-1', menuItemId: 'item-1')],
+      modifierOptions: [
         _option(id: 'opt-cheese', modifierId: 'mod-1', name: 'Cheese'),
         _option(id: 'opt-onion', modifierId: 'mod-1', name: 'Onion'),
       ],
-);
+    );
 
 Future<AppLocalizations> _pump(
   WidgetTester tester,
@@ -199,58 +203,44 @@ Future<void> _openItem(WidgetTester tester, String name) async {
   await tester.pumpAndSettle();
 }
 
-/// Picks [optionName] in the split-by-option dropdown of prep row [index].
-Future<void> _pickClassifier(
-  WidgetTester tester,
-  int index,
-  String optionName,
-) async {
-  final picker = find.byKey(ValueKey('menu-item-prep-classifier-$index'));
-  await tester.ensureVisible(picker);
-  await tester.tap(picker);
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(optionName).last);
-  await tester.pumpAndSettle();
-}
-
 Future<void> _save(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('menu-item-save')));
   await tester.pumpAndSettle();
 }
 
 void main() {
-  // K. persistence ------------------------------------------------------------
-  testWidgets('K1. saving a classifier writes it beside the resource', (
+  // 019: the wrong configuration surface is gone -----------------------------
+  testWidgets('019. the product prep rows no longer offer the picker', (
     tester,
   ) async {
     final store = _burgerStore();
-    await _pump(tester, store);
+    final l10n = await _pump(tester, store);
     await _openItem(tester, 'Burger 240g');
 
-    // Row 1 is "Meat pieces" — split it by Cheese.
-    await _pickClassifier(tester, 1, 'Cheese');
-    await _save(tester);
+    // The preparation section itself is untouched — Bread still lives here.
+    expect(find.text(l10n.menuKitchenPrepSection), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-item-prep-name-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-item-prep-qty-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-item-prep-unit-0')), findsOneWidget);
 
-    expect(store.upsertItemCalls, 1);
-    expect(store.lastAttributes!['prep_components'], [
-      // Bread is untouched — no classifier keys at all.
-      {'name': 'Bread', 'quantity': 1, 'unit': ''},
-      {
-        'name': 'Meat pieces',
-        'quantity': 2,
-        'unit': '',
-        'classifier_option_id': 'opt-cheese',
-        'classifier_option_name': 'Cheese',
-      },
-    ]);
-    // Non-money (D-007) and no unrelated field invented.
-    final rows = (store.lastAttributes!['prep_components'] as List).cast<Map>();
-    for (final row in rows) {
-      expect(row.keys.any((k) => '$k'.contains('minor')), isFalse);
-    }
+    // The 016 picker, its hint and its dangling warning are all gone.
+    expect(
+      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('menu-item-prep-classifier-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('menu-item-prep-classifier-dangling-0')),
+      findsNothing,
+    );
+    expect(find.text(l10n.menuPrepClassifierHint), findsNothing);
   });
 
-  testWidgets('K2. the saved classifier reloads into the editor', (
+  // Compatibility: 016 data configured in the old place is not destroyed -----
+  testWidgets('019. a stored product-level link survives an item save', (
     tester,
   ) async {
     final store = _burgerStore(
@@ -267,77 +257,60 @@ void main() {
     );
     await _pump(tester, store);
     await _openItem(tester, 'Burger 240g');
-
-    final picker = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('menu-item-prep-classifier-1')),
-    );
-    expect(picker.initialValue, 'opt-cheese');
-
-    // An untouched round-trip save preserves the link byte for byte.
     await _save(tester);
-    expect((store.lastAttributes!['prep_components'] as List)[1], {
+
+    expect(store.upsertItemCalls, 1);
+    expect(
+      store.lastAttributes!['prep_components'],
+      [
+        {'name': 'Bread', 'quantity': 1, 'unit': ''},
+        {
+          'name': 'Meat pieces',
+          'quantity': 2,
+          'unit': '',
+          'classifier_option_id': 'opt-cheese',
+          'classifier_option_name': 'Cheese',
+        },
+      ],
+      reason: 'legacy 016 configuration must not be silently dropped',
+    );
+  });
+
+  testWidgets('019. editing a prep row keeps the stored link intact', (
+    tester,
+  ) async {
+    final store = _burgerStore(
+      prep: const [
+        {
+          'name': 'Meat pieces',
+          'quantity': 2,
+          'unit': '',
+          'classifier_option_id': 'opt-cheese',
+          'classifier_option_name': 'Cheese',
+        },
+      ],
+    );
+    await _pump(tester, store);
+    await _openItem(tester, 'Burger 240g');
+
+    // Change the QUANTITY the owner is still allowed to edit here …
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-item-prep-qty-0')),
+      '3',
+    );
+    await _save(tester);
+
+    // … the edit lands, and the link rides along untouched.
+    expect((store.lastAttributes!['prep_components'] as List).single, {
       'name': 'Meat pieces',
-      'quantity': 2,
+      'quantity': 3,
       'unit': '',
       'classifier_option_id': 'opt-cheese',
       'classifier_option_name': 'Cheese',
     });
   });
 
-  testWidgets('K3. the link can be edited to another option', (tester) async {
-    final store = _burgerStore(
-      prep: const [
-        {'name': 'Bread', 'quantity': 1, 'unit': ''},
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-cheese',
-          'classifier_option_name': 'Cheese',
-        },
-      ],
-    );
-    await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    await _pickClassifier(tester, 1, 'Onion');
-    await _save(tester);
-
-    expect((store.lastAttributes!['prep_components'] as List)[1], {
-      'name': 'Meat pieces',
-      'quantity': 2,
-      'unit': '',
-      'classifier_option_id': 'opt-onion',
-      'classifier_option_name': 'Onion',
-    });
-  });
-
-  testWidgets('K4. the link can be removed, returning to one total', (
-    tester,
-  ) async {
-    final store = _burgerStore(
-      prep: const [
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-cheese',
-          'classifier_option_name': 'Cheese',
-        },
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    await _pickClassifier(tester, 0, l10n.menuPrepClassifierNone);
-    await _save(tester);
-
-    expect(store.lastAttributes!['prep_components'], [
-      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-    ]);
-  });
-
-  testWidgets('K5. an unclassified item saves exactly the pre-016 shape', (
+  testWidgets('019. an unclassified item still saves the pre-016 shape', (
     tester,
   ) async {
     final store = _burgerStore();
@@ -351,304 +324,8 @@ void main() {
     ]);
   });
 
-  testWidgets('K6. the resource quantity and name are never touched by the '
-      'classifier', (tester) async {
-    final store = _burgerStore();
-    await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    await _pickClassifier(tester, 1, 'Cheese');
-    await _save(tester);
-
-    final meat = (store.lastAttributes!['prep_components'] as List)[1] as Map;
-    expect(meat['name'], 'Meat pieces');
-    expect(meat['quantity'], 2, reason: 'the option adds no quantity');
-    expect(meat['unit'], '');
-  });
-
-  // 9. invalid target ---------------------------------------------------------
-  testWidgets('a link to a deleted option surfaces an error and clears', (
-    tester,
-  ) async {
-    final store = _burgerStore(
-      prep: const [
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-gone',
-          'classifier_option_name': 'Bacon',
-        },
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    // The picker cannot show a value that no longer exists — it falls back to
-    // "Not split" rather than crashing.
-    final picker = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
-    );
-    expect(picker.initialValue, '');
-
-    // 017 (Codex MEDIUM #5): the admin is told BEFORE pressing Save — the
-    // warning no longer waits for a save attempt to appear.
-    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
-
-    await _save(tester);
-
-    // Saved WITHOUT the dangling link (the resource keeps one total) …
-    expect(store.lastAttributes!['prep_components'], [
-      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-    ]);
-    // … and the now-resolved state is CLEARED, so the editor stops warning
-    // about a link it no longer holds.
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
-  });
-
-  testWidgets('the picker is hidden when the item has no options to split by', (
-    tester,
-  ) async {
-    final store = _RecordingStore(
-      categories: const [_category],
-      items: [
-        _item(
-          id: 'item-1',
-          name: 'Burger 240g',
-          prep: const [
-            {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-          ],
-        ),
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    expect(
-      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
-      findsNothing,
-    );
-    expect(find.text(l10n.menuPrepClassifierHint), findsNothing);
-  });
-
-  // L. reusable-modifier safety ----------------------------------------------
-  testWidgets('L. a template-shaped option name shared by two products does '
-      'NOT leak the link', (tester) async {
-    // Both burgers carry a "Cheese" option — but they are SEPARATE rows, because
-    // modifier groups belong to one menu item and templates are copy-on-attach.
-    final store = _RecordingStore(
-      categories: const [_category],
-      items: [
-        _item(
-          id: 'item-1',
-          name: 'Burger 240g',
-          prep: const [
-            {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-          ],
-        ),
-        _item(
-          id: 'item-2',
-          name: 'Chicken 200g',
-          prep: const [
-            {'name': 'Meat pieces', 'quantity': 1, 'unit': ''},
-          ],
-        ),
-      ],
-      modifiers: [
-        _group(id: 'mod-1', menuItemId: 'item-1'),
-        _group(id: 'mod-2', menuItemId: 'item-2'),
-      ],
-      modifierOptions: [
-        _option(id: 'opt-cheese-burger', modifierId: 'mod-1', name: 'Cheese'),
-        _option(id: 'opt-cheese-chicken', modifierId: 'mod-2', name: 'Cheese'),
-      ],
-    );
-    await _pump(tester, store);
-
-    // Configure the BURGER only.
-    await _openItem(tester, 'Burger 240g');
-    await _pickClassifier(tester, 0, 'Cheese');
-    await _save(tester);
-    expect((store.lastAttributes!['prep_components'] as List)[0], {
-      'name': 'Meat pieces',
-      'quantity': 2,
-      'unit': '',
-      'classifier_option_id': 'opt-cheese-burger',
-      'classifier_option_name': 'Cheese',
-    });
-
-    // The CHICKEN is untouched: its resource still saves unsplit, and its own
-    // picker offers only ITS option id.
-    await tester.tap(find.byType(BackButtonIcon));
-    await tester.pumpAndSettle();
-    await _openItem(tester, 'Chicken 200g');
-
-    final picker = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
-    );
-    expect(picker.initialValue, '', reason: 'no link leaked from the burger');
-
-    // Saving untouched keeps the chicken's resource unsplit.
-    await _save(tester);
-    expect(store.lastAttributes!['prep_components'], [
-      {'name': 'Meat pieces', 'quantity': 1, 'unit': ''},
-    ]);
-
-    // Splitting the chicken by ITS "Cheese" stores the CHICKEN's option id —
-    // the identically-named burger option is not even a candidate here.
-    await _pickClassifier(tester, 0, 'Cheese');
-    await _save(tester);
-    expect((store.lastAttributes!['prep_components'] as List)[0], {
-      'name': 'Meat pieces',
-      'quantity': 1,
-      'unit': '',
-      'classifier_option_id': 'opt-cheese-chicken',
-      'classifier_option_name': 'Cheese',
-    });
-  });
-
-  // 017 (Codex MEDIUM #5): deleted-link UX ------------------------------------
-  testWidgets('017-1. the dangling warning shows BEFORE Save', (tester) async {
-    final store = _burgerStore(
-      prep: const [
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-gone',
-          'classifier_option_name': 'Bacon',
-        },
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    // No save attempt has happened yet.
-    expect(store.upsertItemCalls, 0);
-    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
-  });
-
-  testWidgets('017-2. the warning shows even when the item has ZERO options', (
-    tester,
-  ) async {
-    // The picker itself is hidden here — the problem must still be visible.
-    final store = _RecordingStore(
-      categories: const [_category],
-      items: [
-        _item(
-          id: 'item-1',
-          name: 'Burger 240g',
-          prep: const [
-            {
-              'name': 'Meat pieces',
-              'quantity': 2,
-              'unit': '',
-              'classifier_option_id': 'opt-gone',
-              'classifier_option_name': 'Cheese',
-            },
-          ],
-        ),
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    expect(
-      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
-      findsNothing,
-      reason: 'no options to pick from',
-    );
-    expect(
-      find.byKey(const ValueKey('menu-item-prep-classifier-dangling-0')),
-      findsOneWidget,
-    );
-    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
-  });
-
-  testWidgets('017-3. saving drops the dangling link and CLEARS the stale '
-      'state', (tester) async {
-    final store = _burgerStore(
-      prep: const [
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-gone',
-          'classifier_option_name': 'Bacon',
-        },
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-    await _save(tester);
-
-    // The payload is clean …
-    expect(store.lastAttributes!['prep_components'], [
-      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-    ]);
-    // … the resource kept name/quantity/unit …
-    final row =
-        (store.lastAttributes!['prep_components'] as List).single as Map;
-    expect(row['name'], 'Meat pieces');
-    expect(row['quantity'], 2);
-    // … and the in-memory row no longer claims a link, so the warning is gone.
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
-    final picker = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('menu-item-prep-classifier-0')),
-    );
-    expect(picker.initialValue, '');
-  });
-
-  testWidgets('017-4. the option is deleted while the editor is OPEN', (
-    tester,
-  ) async {
-    final store = _burgerStore(
-      prep: const [
-        {'name': 'Bread', 'quantity': 1, 'unit': ''},
-        {
-          'name': 'Meat pieces',
-          'quantity': 2,
-          'unit': '',
-          'classifier_option_id': 'opt-cheese',
-          'classifier_option_name': 'Cheese',
-        },
-      ],
-    );
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'Burger 240g');
-
-    // Healthy to begin with.
-    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
-
-    // The linked option is deleted from underneath the OPEN editor, through the
-    // app's own write path, so the editor refreshes exactly as in production.
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(MenuManagementScreen)),
-    );
-    await container
-        .read(menuWriteControllerProvider)
-        .softDelete(
-          entity: MenuEntityType.modifierOption,
-          id: 'opt-cheese',
-          parentId: 'mod-1',
-        );
-    await tester.pumpAndSettle();
-
-    expect(find.text(l10n.menuPrepClassifierMissing), findsOneWidget);
-
-    // Saving is still allowed, drops the link, and preserves everything else.
-    await _save(tester);
-    expect(store.lastAttributes!['prep_components'], [
-      {'name': 'Bread', 'quantity': 1, 'unit': ''},
-      {'name': 'Meat pieces', 'quantity': 2, 'unit': ''},
-    ]);
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.menuPrepClassifierMissing), findsNothing);
-  });
-
-  test('the parsed model exposes the stored link', () {
+  // The runtime model still decodes legacy product-level data ---------------
+  test('the parsed model exposes a stored product-level link', () {
     const item = MenuItem(
       id: 'item-1',
       organizationId: demoOrganizationId,

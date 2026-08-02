@@ -1338,6 +1338,19 @@ class AdditionController extends Notifier<AdditionState> {
         // what re-opens `canCancel` and lets `exit()` release an identity. It is
         // therefore fenced on the attempt AND on disposal, not left to an
         // invariant enforced elsewhere by accident.
+        //
+        // 022 (Codex MEDIUM): when the refusal says OUR MENU IS STALE, reload it
+        // through the SAME central policy the initial submit uses. Without this
+        // the message we show ("refresh the menu and select the item options
+        // again") is advice the app makes impossible to follow: the cashier
+        // re-picks the same stale option from the same cached menu and is
+        // refused again. Invalidation only marks the provider dirty, so the
+        // refetch happens on the next read — not eagerly, and not in a loop.
+        // Deliberately BEFORE the disposal fence: the menu is container state,
+        // not this attempt's state, and a stale menu outlives the widget.
+        if (shouldRefreshMenuForSubmissionError(outcome.reason)) {
+          ref.invalidate(posMenuProvider);
+        }
         if (_disposed) {
           return AdditionResult(applied: false, error: outcome.reason);
         }
@@ -1578,32 +1591,47 @@ class AdditionController extends Notifier<AdditionState> {
   ) {
     return [
       for (final l in lines)
-        OrderSubmissionItem(
-          menuItemId: l.menuItemId,
-          nameSnapshot: l.name,
-          quantity: l.quantity,
-          unitPriceMinorSnapshot: l.unitPriceMinor,
-          lineTotalMinor: l.lineTotalMinor,
-          notes: l.note,
-          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: an Add-items round resolves
-          // its classification exactly like the initial submission, so a round
-          // ticket splits its own new items correctly.
-          prepComponents: classifiedPrepForLine(
-            prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
-            l.modifiers,
-          ),
-          modifiers: [
-            for (final m in l.modifiers)
-              OrderSubmissionModifier(
-                modifierOptionId: m.optionId,
-                optionNameSnapshot: m.optionName,
-                modifierNameSnapshot: m.groupName,
-                priceMinorSnapshot: m.priceDeltaMinor,
-                quantity: m.quantity,
-                meatSnapshot: m.kitchenMeat,
-              ),
-          ],
-        ).toJson(),
+        // 020 (Codex BLOCKER #1): the complete, immutable set of option ids
+        // selected on THIS Add-items line, computed once and shared by every
+        // modifier snapshot below.
+        for (final lineSelectedOptionIds in [selectedOptionIdsOf(l.modifiers)])
+          OrderSubmissionItem(
+            menuItemId: l.menuItemId,
+            nameSnapshot: l.name,
+            quantity: l.quantity,
+            unitPriceMinorSnapshot: l.unitPriceMinor,
+            lineTotalMinor: l.lineTotalMinor,
+            notes: l.note,
+            // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: an Add-items round resolves
+            // its classification exactly like the initial submission, so a round
+            // ticket splits its own new items correctly.
+            prepComponents: classifiedPrepForLine(
+              prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+              l.modifiers,
+            ),
+            modifiers: [
+              for (final m in l.modifiers)
+                OrderSubmissionModifier(
+                  modifierOptionId: m.optionId,
+                  optionNameSnapshot: m.optionName,
+                  modifierNameSnapshot: m.groupName,
+                  priceMinorSnapshot: m.priceDeltaMinor,
+                  quantity: m.quantity,
+                  // 020 (Codex BLOCKER #1): the AUTHORITATIVE order-time snapshot
+                  // — the per-unit quantity/unit plus classifier_selected derived
+                  // from THIS line's complete selection — stored in the actual
+                  // Addition operation payload, exactly as the initial submit
+                  // does. Never raw menu config, never re-derived from modifier
+                  // text, and never re-read from the live menu after the
+                  // operation is accepted. The option's own units stay in the
+                  // adjacent quantity field and are applied downstream once.
+                  meatSnapshot: resolveOrderTimeMeatSnapshot(
+                    m.kitchenMeat,
+                    lineSelectedOptionIds,
+                  ),
+                ),
+            ],
+          ).toJson(),
     ];
   }
 

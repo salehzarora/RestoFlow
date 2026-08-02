@@ -7,7 +7,8 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
-import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show KitchenMeat, OrderType;
 import 'package:restoflow_pos/src/data/demo_menu.dart' show DemoMenuItem;
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
@@ -45,6 +46,45 @@ const _item = DemoMenuItem(
   priceMinor: 700,
   categoryId: 'c1',
   categoryName: 'Food',
+);
+
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020 (Codex BLOCKER #1, Add-items
+/// half): a burger whose 240g SIZE option contributes 2 Meat pieces and is
+/// classified by a Cheese option in another group on the same item.
+const _classifierBurger = DemoMenuItem(
+  id: 'm-lock',
+  name: 'Lock Burger',
+  priceMinor: 700,
+  categoryId: 'c1',
+  categoryName: 'Food',
+);
+
+const _size240 = SelectedModifier(
+  optionId: 'opt-size-240',
+  groupName: 'Size',
+  optionName: '240g',
+  priceDeltaMinor: 0,
+  kitchenMeat: KitchenMeat(
+    quantity: 2,
+    unit: 'Meat pieces',
+    classifierOptionId: 'opt-cheese',
+    classifierOptionName: 'Cheese',
+  ),
+);
+
+const _cheese = SelectedModifier(
+  optionId: 'opt-cheese',
+  groupName: 'Extras',
+  optionName: 'Cheese',
+  priceDeltaMinor: 300,
+);
+
+const _cheeseX4 = SelectedModifier(
+  optionId: 'opt-cheese',
+  groupName: 'Extras',
+  optionName: 'Cheese',
+  priceDeltaMinor: 300,
+  quantity: 4,
 );
 
 const _intruder = DemoMenuItem(
@@ -971,6 +1011,64 @@ void main() {
         container.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
         'entry-R',
       );
+    });
+  });
+  // ==========================================================================
+  // 020 (Codex BLOCKER #1) — the ADD-ITEMS wire carries the RESOLVED snapshot
+  // ==========================================================================
+  group('020. Add-items authoritative meat_snapshot', () {
+    /// Sends one Add-items round with [modifiers] and returns the
+    /// `meat_snapshot` the ACTUAL wire payload carried for the size option.
+    Future<Map<String, Object?>?> wireSnapshot(
+      List<SelectedModifier> modifiers,
+    ) async {
+      final transport = _GatedTransport();
+      final (container, _) = _container(transport);
+      final notifier = container.read(additionControllerProvider.notifier);
+      final cart = container.read(cartControllerProvider.notifier);
+      await notifier.enterForOrder('o-1');
+      expect(
+        cart.addItemWithModifiers(_classifierBurger, modifiers),
+        CartMutationResult.applied,
+      );
+      final submitted = notifier.submit();
+      final op = (transport.calls.single['p_operations'] as List).single as Map;
+      final items = (op['payload'] as Map)['order_items'] as List;
+      final mods = ((items.single as Map)['modifiers'] as List)
+          .cast<Map<dynamic, dynamic>>();
+      transport.gates.single.complete(_applied(transport.calls.single));
+      await submitted;
+      final sizeMod = mods.firstWhere(
+        (m) => m['modifier_option_id'] == 'opt-size-240',
+      );
+      final snap = sizeMod['meat_snapshot'];
+      return snap == null ? null : (snap as Map).cast<String, Object?>();
+    }
+
+    test('020-A1. 240g + Cheese sends quantity 2 and selected=true', () async {
+      final snap = await wireSnapshot(const [_size240, _cheese]);
+      expect(snap, isNotNull);
+      expect(snap!['quantity'], 2, reason: 'PER MODIFIER UNIT, not pre-scaled');
+      expect(snap['unit'], 'Meat pieces');
+      expect(snap['classifier_option_id'], 'opt-cheese');
+      expect(snap['classifier_option_name'], 'Cheese');
+      expect(
+        snap['classifier_selected'],
+        isTrue,
+        reason: 'the ORDER-TIME answer must reach the Addition operation',
+      );
+    });
+
+    test('020-A2. 240g without Cheese sends selected=false', () async {
+      final snap = await wireSnapshot(const [_size240]);
+      expect(snap!['quantity'], 2);
+      expect(snap['classifier_selected'], isFalse);
+    });
+
+    test('020-A3. Cheese x4 does not multiply the meat', () async {
+      final snap = await wireSnapshot(const [_size240, _cheeseX4]);
+      expect(snap!['quantity'], 2);
+      expect(snap['classifier_selected'], isTrue);
     });
   });
 }
