@@ -862,6 +862,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posReceiptThankYou => 'Thank you for your visit';
 
   @override
+  String get posOrderRejectedTitle => 'Order not submitted';
+
+  @override
   String get posOrderStatusSubmitted => 'Submitted';
 
   @override

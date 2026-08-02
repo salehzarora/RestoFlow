@@ -596,6 +596,8 @@
   "@posReceiptThankYou": {
     "description": "PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt."
   },
+  "posOrderRejectedTitle": "Order not submitted",
+  "@posOrderRejectedTitle": {"description": "Confirmation header shown INSTEAD of the success title when an order.submit was permanently rejected and the server therefore never created the order (KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022)."},
   "posOrderStatusSubmitted": "Submitted",
   "@posOrderStatusSubmitted": {
     "description": "POS status chip label for a locally-submitted demo order."

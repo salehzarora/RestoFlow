@@ -204,7 +204,25 @@ class OrderConfirmation extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(RestoflowSpacing.lg),
               children: [
-                _SuccessHeader(title: l10n.posOrderSubmittedTitle),
+                // 022 (Codex HIGH): a never-created shell gets the REJECTION
+                // header. The success wording is reserved for a submit that was
+                // not permanently refused — a transport-ish failure keeps it,
+                // because no server verdict was recorded and the order may well
+                // exist; claiming it was rejected would be its own lie.
+                if (isRejectedDraft)
+                  _OutcomeHeader(
+                    key: const Key('confirmation-rejected-header'),
+                    title: l10n.posOrderRejectedTitle,
+                    tone: RestoflowTone.danger,
+                    icon: Icons.error_outline,
+                  )
+                else
+                  _OutcomeHeader(
+                    key: const Key('confirmation-success-header'),
+                    title: l10n.posOrderSubmittedTitle,
+                    tone: RestoflowTone.success,
+                    icon: Icons.check_circle,
+                  ),
                 const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
@@ -254,13 +272,23 @@ class OrderConfirmation extends ConsumerWidget {
                                   spacing: RestoflowSpacing.sm,
                                   runSpacing: RestoflowSpacing.xs,
                                   children: [
-                                    RestoflowStatusPill(
-                                      key: const Key(
-                                        'confirmation-local-status',
+                                    // 022 (Codex HIGH): NOT for a never-created
+                                    // shell. This pill is the local fallback for
+                                    // "we submitted it and the server has not
+                                    // spoken yet" — but for a permanent
+                                    // rejection the server HAS spoken, and it
+                                    // said no. A Submitted chip there claims a
+                                    // lifecycle state the order never entered
+                                    // and re-implies the order number was
+                                    // accepted.
+                                    if (!isRejectedDraft)
+                                      RestoflowStatusPill(
+                                        key: const Key(
+                                          'confirmation-local-status',
+                                        ),
+                                        label: l10n.posOrderStatusSubmitted,
+                                        tone: RestoflowTone.info,
                                       ),
-                                      label: l10n.posOrderStatusSubmitted,
-                                      tone: RestoflowTone.info,
-                                    ),
                                     if (payment != null)
                                       RestoflowStatusPill(
                                         label: l10n.posPaidChip,
@@ -573,18 +601,33 @@ class OrderConfirmation extends ConsumerWidget {
   }
 }
 
-/// Design-polish: a compact HORIZONTAL success header (true-green tone) —
+/// Design-polish: a compact HORIZONTAL outcome header —
 /// the confirmation is a ~10-second interaction, so the old 72px hero circle
 /// gave way to content the cashier actually needs on-screen.
-class _SuccessHeader extends StatelessWidget {
-  const _SuccessHeader({required this.title});
+///
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022 (Codex HIGH):
+/// this used to be success-only and was rendered unconditionally, so a
+/// PERMANENTLY REJECTED submit — for which the server created no order at all —
+/// still announced "Order submitted" in true-green above its own failed sync
+/// card, its "not created" notice and its withdrawn Pay/Discount. The tone and
+/// icon are now parameters of the same header rather than a second widget, so
+/// the two states cannot drift apart visually.
+class _OutcomeHeader extends StatelessWidget {
+  const _OutcomeHeader({
+    required this.title,
+    required this.tone,
+    required this.icon,
+    super.key,
+  });
 
   final String title;
+  final RestoflowTone tone;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final success = RestoflowTone.success.styleOf(theme);
+    final style = tone.styleOf(theme);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -592,14 +635,10 @@ class _SuccessHeader extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: success.container,
+            color: style.container,
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.check_circle,
-            size: RestoflowIconSizes.lg,
-            color: success.accent,
-          ),
+          child: Icon(icon, size: RestoflowIconSizes.lg, color: style.accent),
         ),
         const SizedBox(width: RestoflowSpacing.md),
         Flexible(

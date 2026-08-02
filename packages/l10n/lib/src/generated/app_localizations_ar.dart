@@ -854,6 +854,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posReceiptThankYou => 'شكراً لزيارتكم';
 
   @override
+  String get posOrderRejectedTitle => 'لم يتم إرسال الطلب';
+
+  @override
   String get posOrderStatusSubmitted => 'تم الإرسال';
 
   @override

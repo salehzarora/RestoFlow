@@ -848,6 +848,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posReceiptThankYou => 'תודה על ביקורכם';
 
   @override
+  String get posOrderRejectedTitle => 'ההזמנה לא נשלחה';
+
+  @override
   String get posOrderStatusSubmitted => 'נשלחה';
 
   @override

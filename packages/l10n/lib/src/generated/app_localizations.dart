@@ -1660,6 +1660,12 @@ abstract class AppLocalizations {
   /// **'Thank you for your visit'**
   String get posReceiptThankYou;
 
+  /// Confirmation header shown INSTEAD of the success title when an order.submit was permanently rejected and the server therefore never created the order (KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022).
+  ///
+  /// In en, this message translates to:
+  /// **'Order not submitted'**
+  String get posOrderRejectedTitle;
+
   /// POS status chip label for a locally-submitted demo order.
   ///
   /// In en, this message translates to:
