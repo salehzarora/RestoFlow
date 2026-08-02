@@ -745,6 +745,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     final bodyChildren = <Widget>[
       for (final group in widget.groups) ...[
         Padding(
+          key: ValueKey('modifier-group-header-${group.id}'),
           padding: const EdgeInsets.only(
             top: RestoflowSpacing.md,
             bottom: RestoflowSpacing.xs,
@@ -787,6 +788,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
         // ("Choose one option") — derived from the group's real rules.
         if (group.singleSelect && group.effectiveMin > 0)
           Padding(
+            key: ValueKey('modifier-group-hint-${group.id}'),
             padding: const EdgeInsetsDirectional.only(
               bottom: RestoflowSpacing.xs,
             ),
@@ -797,12 +799,19 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
               ),
             ),
           ),
-        _groupOptions(group),
+        KeyedSubtree(
+          key: ValueKey('modifier-group-options-${group.id}'),
+          child: _groupOptions(group),
+        ),
       ],
       // Part F: the optional per-item note ("بدون بصل") — sent
       // with the order, shown under the cart line, on the KDS
       // ticket, and on the receipt/print. Data, never money.
       Padding(
+        // POS-PRODUCT-NOTE-LANDSCAPE-KEYBOARD-002: the DIRECT scroll child
+        // carries the identity. Keying only the nested TextField cannot help —
+        // reconciliation happens at this level.
+        key: const Key('modifier-note-row'),
         padding: const EdgeInsets.only(top: RestoflowSpacing.md),
         child: TextField(
           key: const Key('modifier-item-note'),
@@ -963,18 +972,39 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                     header,
                     const SizedBox(height: RestoflowSpacing.sm),
                   ],
+                  // POS-PRODUCT-NOTE-LANDSCAPE-KEYBOARD-002: a NON-LAZY scroll
+                  // body. A lazy ListView only builds what is near the
+                  // viewport, so when the keyboard collapsed this viewport
+                  // (487dp -> 171dp on an 11" landscape tablet) the note — the
+                  // LAST child — fell outside the built range and its element
+                  // was destroyed, closing the input connection and dismissing
+                  // the keyboard the instant it appeared. Keeping every child
+                  // built means the focused field survives the resize; the
+                  // body is a bounded sheet section, never a long list, so
+                  // there is nothing to gain from laziness here. The explicit
+                  // keys below carry identity across the compact reorder, which
+                  // prepends two children and shifts every index by two.
                   Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        // Squeezed: the header scrolls WITH the body rather
-                        // than eating the little height that is left.
-                        if (compact) ...[
-                          header,
-                          const SizedBox(height: RestoflowSpacing.sm),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Squeezed: the header scrolls WITH the body rather
+                          // than eating the little height that is left.
+                          if (compact) ...[
+                            KeyedSubtree(
+                              key: const Key('modifier-sheet-scrolled-header'),
+                              child: header,
+                            ),
+                            const SizedBox(
+                              key: Key('modifier-sheet-scrolled-header-gap'),
+                              height: RestoflowSpacing.sm,
+                            ),
+                          ],
+                          ...bodyChildren,
                         ],
-                        ...bodyChildren,
-                      ],
+                      ),
                     ),
                   ),
                   footer(compact: compact),
