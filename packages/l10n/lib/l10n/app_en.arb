@@ -598,6 +598,12 @@
   },
   "posOrderRejectedTitle": "Order not submitted",
   "@posOrderRejectedTitle": {"description": "Confirmation header shown INSTEAD of the success title when an order.submit was permanently rejected and the server therefore never created the order (KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022)."},
+  "posOrderDeliveryUnconfirmedTitle": "Delivery not confirmed",
+  "@posOrderDeliveryUnconfirmedTitle": {"description": "Confirmation header shown when a submit attempt ended without proof that the server accepted or refused it (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023)."},
+  "posSyncDeliveryUnconfirmed": "We could not confirm whether this order reached the server. Check the connection and send this same order again — it is safe, and it will not be duplicated.",
+  "@posSyncDeliveryUnconfirmed": {"description": "Sync-status note for an order whose delivery could not be confirmed; the same operation is safe to send again because the server is idempotent on its identity (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023)."},
+  "posSyncStateUnconfirmed": "Not confirmed",
+  "@posSyncStateUnconfirmed": {"description": "Short sync-status pill label for an order whose delivery could not be confirmed (POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023). Distinct from the longer header title so the two do not read as duplicated text."},
   "posOrderStatusSubmitted": "Submitted",
   "@posOrderStatusSubmitted": {
     "description": "POS status chip label for a locally-submitted demo order."

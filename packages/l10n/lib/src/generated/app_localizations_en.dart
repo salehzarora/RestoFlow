@@ -865,6 +865,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOrderRejectedTitle => 'Order not submitted';
 
   @override
+  String get posOrderDeliveryUnconfirmedTitle => 'Delivery not confirmed';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'We could not confirm whether this order reached the server. Check the connection and send this same order again — it is safe, and it will not be duplicated.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'Not confirmed';
+
+  @override
   String get posOrderStatusSubmitted => 'Submitted';
 
   @override

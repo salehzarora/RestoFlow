@@ -857,6 +857,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOrderRejectedTitle => 'لم يتم إرسال الطلب';
 
   @override
+  String get posOrderDeliveryUnconfirmedTitle => 'لم يتم تأكيد إرسال الطلب';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'تعذّر التأكد مما إذا وصل الطلب إلى الخادم. افحص الاتصال وأعد إرسال الطلب نفسه — العملية آمنة ولن يتكرر الطلب.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'غير مؤكد';
+
+  @override
   String get posOrderStatusSubmitted => 'تم الإرسال';
 
   @override

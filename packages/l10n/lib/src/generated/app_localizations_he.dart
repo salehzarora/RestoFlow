@@ -851,6 +851,16 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOrderRejectedTitle => 'ההזמנה לא נשלחה';
 
   @override
+  String get posOrderDeliveryUnconfirmedTitle => 'שליחת ההזמנה לא אושרה';
+
+  @override
+  String get posSyncDeliveryUnconfirmed =>
+      'לא הצלחנו לאמת אם ההזמנה הגיעה לשרת. בדוק את החיבור ושלח שוב את אותה ההזמנה — הפעולה בטוחה וההזמנה לא תישלח פעמיים.';
+
+  @override
+  String get posSyncStateUnconfirmed => 'לא אושר';
+
+  @override
   String get posOrderStatusSubmitted => 'נשלחה';
 
   @override

@@ -86,6 +86,17 @@ class OrderConfirmation extends ConsumerWidget {
     // BEFORE order creation — regardless of which typed code carried it. Later
     // operations failing (a payment, a discount) are deliberately NOT included.
     final isRejectedDraft = entry != null && entry.isNeverCreatedOrderSubmit;
+    // 023: what is actually KNOWN about this order. With no outbox entry at all
+    // (the RF-101 path) nothing was ever dispatched, so `pending` is the honest
+    // reading and the existing presentation is unchanged.
+    //
+    // MODE-HONEST, like the rest of this screen: a DEMO failure is a simulated
+    // one against a store that never spoke to a backend, so there is no
+    // "the backend rejected this" claim for it to contradict and no real
+    // delivery whose fate is unknown. Demo therefore keeps its established
+    // "Sync failed / Retry" presentation; the unconfirmed outcome is a REAL-mode
+    // statement about a real request whose answer was lost.
+    final outcome = presentedOrderOutcome(entry, isDemo: isDemo);
     // A2: the recovery for THIS submit, keyed by its outbox entry and offered ONLY when
     // the CURRENT operational context matches its binding — a PIN switch / branch /
     // device change makes the previous employee's draft inaccessible immediately.
@@ -209,20 +220,34 @@ class OrderConfirmation extends ConsumerWidget {
                 // not permanently refused — a transport-ish failure keeps it,
                 // because no server verdict was recorded and the order may well
                 // exist; claiming it was rejected would be its own lie.
-                if (isRejectedDraft)
-                  _OutcomeHeader(
+                // 023 (Codex HIGH): THREE outcomes, not two. The old
+                // "anything that is not a recognised refusal is a success"
+                // default put the green header above a status card reading "the
+                // backend rejected this order" whenever a connection dropped.
+                // Success is now claimed only when the server said so, refusal
+                // only when it definitively did, and everything else says
+                // exactly what is true — we do not know yet.
+                switch (outcome) {
+                  PosOrderOutcome.rejected => _OutcomeHeader(
                     key: const Key('confirmation-rejected-header'),
                     title: l10n.posOrderRejectedTitle,
                     tone: RestoflowTone.danger,
                     icon: Icons.error_outline,
-                  )
-                else
-                  _OutcomeHeader(
+                  ),
+                  PosOrderOutcome.deliveryUnconfirmed => _OutcomeHeader(
+                    key: const Key('confirmation-unconfirmed-header'),
+                    title: l10n.posOrderDeliveryUnconfirmedTitle,
+                    tone: RestoflowTone.warning,
+                    icon: Icons.cloud_off_outlined,
+                  ),
+                  PosOrderOutcome.accepted ||
+                  PosOrderOutcome.pending => _OutcomeHeader(
                     key: const Key('confirmation-success-header'),
                     title: l10n.posOrderSubmittedTitle,
                     tone: RestoflowTone.success,
                     icon: Icons.check_circle,
                   ),
+                },
                 const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
@@ -905,6 +930,9 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
   OutboxSyncState state,
   AppLocalizations l10n, {
   required bool isDemo,
+  // 023: the SAME derived outcome the header uses, so the card and the header
+  // are answers to one question rather than two independent guesses.
+  required PosOrderOutcome outcome,
   String? errorCode,
   String? errorDetail,
 }) {
@@ -936,6 +964,13 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
         rejectedNote = l10n.posSyncItemUnavailable(errorDetail ?? '—');
       } else if (errorCode == 'table_not_available') {
         rejectedNote = l10n.posSyncTableUnavailable;
+      } else if (outcome == PosOrderOutcome.deliveryUnconfirmed) {
+        // 023: the ONE line that used to contradict the header. A transport
+        // failure is not the backend rejecting anything — the request may well
+        // have been applied and only the answer was lost. Say that, and say the
+        // safe next step: re-send THIS order, whose identity the server is
+        // idempotent on, rather than writing a second one.
+        rejectedNote = l10n.posSyncDeliveryUnconfirmed;
       } else if (errorCode == 'modifier_prep_snapshot_stale') {
         // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the frozen
         // kitchen-preparation snapshot no longer matches the menu, so the server
@@ -947,11 +982,17 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
       } else {
         rejectedNote = l10n.posSyncFailedReal;
       }
+      // 023: an unconfirmed delivery is not a danger-toned failure — nothing
+      // is known to have failed. It gets the warning tone and the same
+      // cloud-off icon as its header so the two read as one statement.
+      final unconfirmed = outcome == PosOrderOutcome.deliveryUnconfirmed;
       return (
-        label: l10n.posSyncStateFailed,
+        label: unconfirmed
+            ? l10n.posSyncStateUnconfirmed
+            : l10n.posSyncStateFailed,
         note: rejectedNote,
-        tone: RestoflowTone.danger,
-        icon: Icons.error_outline,
+        tone: unconfirmed ? RestoflowTone.warning : RestoflowTone.danger,
+        icon: unconfirmed ? Icons.cloud_off_outlined : Icons.error_outline,
       );
     case OutboxSyncState.created:
     case OutboxSyncState.pending:
@@ -992,6 +1033,7 @@ class _SyncStatusCard extends StatelessWidget {
       state,
       l10n,
       isDemo: isDemo,
+      outcome: presentedOrderOutcome(entry, isDemo: isDemo),
       errorCode: entry?.lastErrorCode,
       errorDetail: entry?.lastErrorDetail,
     );
