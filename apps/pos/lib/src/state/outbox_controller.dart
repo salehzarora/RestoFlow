@@ -95,7 +95,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
           // verdict forever — sweeping it would burn attempts on a foregone
           // conclusion and imply the order might still go through.
           if (e.syncState.isFailed &&
-              !e.isPermanentBusinessRejection &&
+              !e.hasDefinitiveVerdict &&
               e.attemptCount < _maxAutoAttempts)
             e.id,
       ];
@@ -163,12 +163,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   }
 
   /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
-  /// retry all"). REVIEW B2: permanently-rejected business operations are
-  /// excluded — their verdict is ledgered and replay cannot change it.
+  /// retry all"). REVIEW B2: definitively-refused operations are excluded —
+  /// their verdict exists and replay cannot change it.
+  ///
+  /// 024: the test is now [OutboxEntry.hasDefinitiveVerdict], not the narrower
+  /// code allowlist. A typed `auth` refusal and a structured refusal carrying an
+  /// unrecognised code were both being re-pushed forever, once per sweep, for an
+  /// answer that could not change.
   Future<void> retryAllFailed() async {
     final failed = <String>[
       for (final e in state)
-        if (e.syncState.isFailed && !e.isPermanentBusinessRejection) e.id,
+        if (e.syncState.isFailed && !e.hasDefinitiveVerdict) e.id,
     ];
     for (final id in failed) {
       try {
@@ -496,7 +501,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // for the one entry whose verdict we just recorded: the provider refetches
     // on the next read, so there is no loop and no eager round trip.
     for (final e in state) {
-      if (e.id == entryId && e.isPermanentBusinessRejection) {
+      if (e.id == entryId && e.isDefinitiveNoServerOrder) {
         if (shouldRefreshMenuForSubmissionError(e.lastErrorCode)) {
           ref.invalidate(posMenuProvider);
         }
@@ -519,7 +524,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   }
 
   /// Re-queues a failed [entryId] and pushes it again.
+  ///
+  /// 024: FAILS CLOSED for a definitively-refused operation. Withdrawing the
+  /// button is not enough — the command is reachable from the retry-all sweep,
+  /// a stale widget still holding a callback, and any future caller. Re-pushing
+  /// an operation the server has already answered cannot change the answer; it
+  /// only burns an attempt and, for an `order.submit`, re-asks about an order
+  /// that provably does not exist.
   Future<void> retryEntry(String entryId) async {
+    for (final e in state) {
+      if (e.id == entryId && e.hasDefinitiveVerdict) return;
+    }
     await _repo.retry(entryId);
     state = await _repo.recentEntries();
     await pushEntry(entryId);

@@ -630,6 +630,44 @@ class OutboxEntry {
     return PosOrderOutcome.deliveryUnconfirmed;
   }
 
+  /// POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024 — THE authoritative
+  /// question for every action surface: did the server definitively refuse this
+  /// operation?
+  ///
+  /// TRUE for a [PosOrderOutcome.rejected] entry, which is every case where a
+  /// verdict provably exists: a permanent business code, a structured
+  /// per-operation refusal carrying ANY code (including one added server-side
+  /// after this build), and a typed `auth` transport failure that proves the
+  /// batch never reached dispatch.
+  ///
+  /// FALSE for accepted, pending, and every flavour of unconfirmed delivery —
+  /// transient, server, unknown, an unreadable reply, and a legacy row with too
+  /// little classification. Those may or may not have been applied, so nothing
+  /// may be withdrawn on the assumption that they were not.
+  ///
+  /// This REPLACES [isPermanentBusinessRejection] as the action-gating test.
+  /// That set answers the narrower "could re-sending this identity ever
+  /// succeed", and gating on it left Pay, Discount, printing and retry live for
+  /// an auth refusal or a structured refusal whose code simply was not
+  /// allowlisted yet — a new canonical server code would have silently reopened
+  /// every one of them until someone remembered to add it here.
+  bool get hasDefinitiveVerdict => outcome == PosOrderOutcome.rejected;
+
+  /// 024: TRUE when the server definitively created NO ORDER for this entry.
+  ///
+  /// [hasDefinitiveVerdict] scoped to `order.submit`, for the same reason
+  /// [isNeverCreatedOrderSubmit] was: `app.sync_push` validates and dispatches
+  /// an `order.submit` inside its own subtransaction and refuses it BEFORE
+  /// `app.submit_order` inserts anything, so a definitive refusal of one is
+  /// positive proof that no `orders` row exists. A definitive refusal of a LATER
+  /// operation (a payment, a discount) says nothing about whether the order
+  /// itself exists.
+  ///
+  /// Every surface that would act on a server order — Pay, Discount, receipt,
+  /// kitchen print, void, complete — must be withheld when this is true.
+  bool get isDefinitiveNoServerOrder =>
+      operationType == 'order.submit' && hasDefinitiveVerdict;
+
   /// REVIEW B2: TRUE when the server durably rejected THIS operation identity
   /// for a business reason — replaying the same identity returns the SAME
   /// stored rejection forever, so no Retry control may be offered and no
@@ -679,7 +717,11 @@ class OutboxEntry {
   ///     [isNeverCreatedOrderSubmit] is scoped to `order.submit`;
   ///   * an unreadable record — never decoded, so never in this list at all; it
   ///     is preserved verbatim and counted by the storage-health surface.
-  bool get isDismissibleResolvedFailure => isNeverCreatedOrderSubmit;
+  /// 024: retired through the SAME authoritative predicate, so an auth refusal
+  /// and a structured refusal with an unrecognised code are dismissible for
+  /// exactly the reason the allowlisted codes always were — the server provably
+  /// created no order, so nothing is orphaned by removing the local record.
+  bool get isDismissibleResolvedFailure => isDefinitiveNoServerOrder;
 
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the

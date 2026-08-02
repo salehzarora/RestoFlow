@@ -75,7 +75,7 @@ class OutboxStatusIndicator extends ConsumerWidget {
       // that can never fall — and because `failed` outranks `resolved`, it
       // would also wedge the clear affordance shut. Such an entry needs a
       // person, which is what `attention` says.
-      if (e.isPermanentBusinessRejection) {
+      if (e.hasDefinitiveVerdict) {
         attention++;
         continue;
       }

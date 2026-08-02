@@ -820,7 +820,7 @@ Future<void> submitOrderFromCart({
       final entry = container
           .read(outboxControllerProvider.notifier)
           .entryById(result.entry.id);
-      if (entry != null && entry.isPermanentBusinessRejection) {
+      if (entry != null && entry.isDefinitiveNoServerOrder) {
         recent.markLocallyRejected(submitted.identity);
       }
     }
@@ -850,7 +850,7 @@ Future<void> submitOrderFromCart({
               submittedOutboxEntryId: settlement.submittedOutboxEntryId,
               submittedWasPermanentlyRejected:
                   correctedEntry != null &&
-                  correctedEntry.isPermanentBusinessRejection,
+                  correctedEntry.isDefinitiveNoServerOrder,
             ),
       );
       // This correction attempt is done — the cart was submitted (emptied) above. Drop the
@@ -881,6 +881,11 @@ Future<void> submitOrderFromCart({
         orderId: result.entry.targetId,
         // Shared eligibility: a permanently-rejected or demo order never cooks.
         isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+        // 024: the AUTHORITATIVE suppression, evaluated on the entry whose
+        // verdict the push just recorded — an auth refusal or an unrecognised
+        // structured refusal must not reach the kitchen printer either.
+        definitivelyRejected:
+            kitchenPrintEntry?.isDefinitiveNoServerOrder ?? false,
         rejectionCode: kitchenPrintEntry?.lastErrorCode,
         // KITCHEN-PRINT-DUAL-001D: purely ADDITIVE — `enabled` omitted so the print
         // resolves the persisted auto-print toggle itself AFTER submit (it may
@@ -949,8 +954,7 @@ void _retainDepartedSessionResult({
   final entry = container
       .read(outboxControllerProvider.notifier)
       .entryById(result.entry.id);
-  final permanentlyRejected =
-      entry != null && entry.isPermanentBusinessRejection;
+  final permanentlyRejected = entry != null && entry.isDefinitiveNoServerOrder;
 
   // MENU-ORDER-001 (Codex correction-result settlement §3): a CORRECTED submission that
   // settles after the submitting worker/scope departed must NEVER be captured as a second
