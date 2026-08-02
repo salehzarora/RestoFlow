@@ -289,16 +289,41 @@ List<KitchenPrepComponent> classifiedPrepForLine(
     if (m.quantity > 0) m.optionId,
 });
 
-List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
-    [
-      for (final modifier in modifiers)
-        if (modifier.kitchenMeat case final meat?)
-          if (modifier.quantity > 0)
-            KitchenMeat(
-              quantity: meat.quantity * modifier.quantity,
-              unit: meat.unit,
-            ),
-    ];
+List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) {
+  // KITCHEN-MODIFIER-PREP-CLASSIFIER-019: the option ids actually selected on
+  // THIS line — the order-time answer for every classifier configured on a
+  // contributing option. PRESENCE-based, so a classifier taken twice (or with a
+  // quantity above one) still classifies once and never multiplies the
+  // contribution.
+  final selectedOptionIds = <String>{
+    for (final m in modifiers)
+      if (m.quantity > 0) m.optionId,
+  };
+  return [
+    for (final modifier in modifiers)
+      if (modifier.kitchenMeat case final meat?)
+        if (modifier.quantity > 0)
+          // The option's own units still scale ITS contribution (extra patty ×2
+          // = two patties); the classifier is applied on top, unscaled.
+          _resolvedMeat(meat.scaledBy(modifier.quantity), selectedOptionIds),
+  ];
+}
+
+/// Applies the ORDER-TIME classification answer to one already-scaled
+/// contribution. A contribution with no configured classifier is returned
+/// unchanged — the historical unsplit behaviour, byte-identical on the wire.
+///
+/// The link itself was already proven against the item's own options at the
+/// menu boundary ([resolveTrustedMeatClassifier]); this only answers
+/// with-or-without.
+KitchenMeat _resolvedMeat(KitchenMeat meat, Set<String> selectedOptionIds) {
+  if (meat.classifierOptionId.isEmpty || meat.classifierOptionName.isEmpty) {
+    return meat;
+  }
+  return meat.withClassifierSelected(
+    selectedOptionIds.contains(meat.classifierOptionId),
+  );
+}
 
 /// Immutable view of a single cart line for the POS UI.
 ///

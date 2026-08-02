@@ -4,10 +4,11 @@ import 'package:restoflow_data_local/restoflow_data_local.dart'
     show
         KitchenDispatchDocument,
         KitchenDispatchItem,
+        KitchenDispatchModifierPrep,
         KitchenDispatchPrepComponent,
         KitchenSpoolDispatchType;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show KitchenCount, kitchenCountDisplayLabel;
+    show KitchenCount, formatPrepQuantity, kitchenCountDisplayLabel;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 /// KITCHEN-MODE-001C2C — the MONEY-FREE kitchen ticket renderer.
@@ -253,11 +254,22 @@ final class KitchenTicketRenderer {
       emphasis: pp.TextEmphasis.bold,
       style: pp.PrintLineStyle.item,
     ),
-    for (final modifier in item.modifiers)
+    for (final modifier in item.modifiers) ...[
       pp.PrintTextLine(
         '  + ${modifier.name}${modifier.qty > 1 ? ' ×${modifier.qty}' : ''}',
         style: pp.PrintLineStyle.sub,
       ),
+      // 019: the option's OWN preparation contribution — a 240g size option
+      // contributes 2 Meat pieces — rendered directly under its modifier line,
+      // with the classifier worded through the SAME shared composer the direct
+      // POS print and the KDS card use. An option with no contribution prints
+      // nothing extra, so every existing ticket is byte-identical.
+      if (modifier.prep case final prep?)
+        pp.PrintTextLine(
+          '  • ${_modifierPrepText(prep, modifier.qty)}',
+          style: pp.PrintLineStyle.sub,
+        ),
+    ],
     for (final prep in item.prep)
       pp.PrintTextLine('  • ${_prepText(prep)}', style: pp.PrintLineStyle.sub),
     if (item.note != null)
@@ -270,6 +282,30 @@ final class KitchenTicketRenderer {
   /// SHARED [kitchenCountDisplayLabel] composer the direct POS print and the KDS
   /// card use — so a durable retry cannot word the split differently from the
   /// ticket it is replacing.
+  /// 019: one MODIFIER option's preparation contribution. [modifierQty] scales
+  /// it exactly as the shared aggregation does (an option taken twice
+  /// contributes twice); the classifier is PRESENCE-based and never scales.
+  /// Unclassified contributions read as a plain "N unit" line.
+  String _modifierPrepText(KitchenDispatchModifierPrep prep, int modifierQty) {
+    final quantity = prep.quantity;
+    final scaled = quantity == null ? null : quantity * modifierQty;
+    final base = [
+      if (scaled != null) formatPrepQuantity(scaled),
+      if (prep.unit != null) prep.unit,
+    ].join(' ');
+    if (!prep.isClassified) return base;
+    return kitchenCountDisplayLabel(
+      KitchenCount(
+        quantity: scaled ?? 0,
+        label: base,
+        classifier: prep.classifierOptionName!,
+        classifierSelected: prep.classifierSelected!,
+      ),
+      withOption: labels.prepWithOption,
+      withoutOption: labels.prepWithoutOption,
+    );
+  }
+
   String _prepText(KitchenDispatchPrepComponent prep) {
     final base = [
       if (prep.name != null) prep.name,
