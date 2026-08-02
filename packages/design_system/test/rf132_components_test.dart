@@ -141,6 +141,90 @@ void main() {
       expect(find.text('Last 30 days'), findsOneWidget);
     });
 
+    // POS-ORDER-TYPE-SELECTOR-UI-001 — `minSegmentHeight` is additive and
+    // default-preserving: every existing consumer keeps the RF-132 density,
+    // and a touch-first caller can raise the floor without any other change.
+    testWidgets('RestoflowSegmentedControl segment height defaults to the '
+        'RF-132 density and honours a raised floor ($tag)', (tester) async {
+      Future<double> segmentHeight({double? minSegmentHeight}) async {
+        await tester.pumpWidget(
+          _app(
+            SizedBox(
+              width: 380,
+              child: RestoflowSegmentedControl<int>(
+                expand: true,
+                selected: 0,
+                onSelected: (_) {},
+                minSegmentHeight:
+                    minSegmentHeight ?? kRestoflowSegmentMinHeight,
+                segments: const [
+                  RestoflowSegment(value: 0, label: 'One', key: Key('seg-one')),
+                  RestoflowSegment(value: 1, label: 'Two'),
+                ],
+              ),
+            ),
+            dir,
+          ),
+        );
+        await tester.pumpAndSettle();
+        return tester
+            .getSize(
+              find.descendant(
+                of: find.byKey(const Key('seg-one')),
+                matching: find.byType(InkWell),
+              ),
+            )
+            .height;
+      }
+
+      // The default is the documented constant, so untouched consumers
+      // (Overview range, Orders tabs, Active-orders queue) do not move.
+      expect(kRestoflowSegmentMinHeight, 38);
+      expect(await segmentHeight(), kRestoflowSegmentMinHeight);
+      // An explicit floor raises the TAPPABLE surface, not just the outer bar.
+      expect(await segmentHeight(minSegmentHeight: 44), 44);
+    });
+
+    testWidgets('RestoflowSegmentedControl minSegmentHeight is a floor, never '
+        'a clamp ($tag)', (tester) async {
+      // A label that must wrap is already taller than the floor; the floor must
+      // not shrink it (which would clip the second line).
+      await tester.pumpWidget(
+        _app(
+          SizedBox(
+            width: 200,
+            child: RestoflowSegmentedControl<int>(
+              expand: true,
+              selected: 0,
+              minSegmentHeight: 44,
+              onSelected: (_) {},
+              segments: const [
+                RestoflowSegment(
+                  value: 0,
+                  label: 'A deliberately long wrapping label',
+                  key: Key('seg-tall'),
+                ),
+                RestoflowSegment(value: 1, label: 'Short'),
+              ],
+            ),
+          ),
+          dir,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final height = tester
+          .getSize(
+            find.descendant(
+              of: find.byKey(const Key('seg-tall')),
+              matching: find.byType(InkWell),
+            ),
+          )
+          .height;
+      expect(height, greaterThan(44));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('RestoflowMetricCard kpi style keeps one height with and '
         'without a delta, and fabricates no trend ($tag)', (tester) async {
       await tester.pumpWidget(
