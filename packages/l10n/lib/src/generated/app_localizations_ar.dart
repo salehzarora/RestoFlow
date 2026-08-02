@@ -4733,6 +4733,10 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posPrepSnapshotStale =>
+      'تغيّرت إعدادات التحضير في القائمة. حدّث القائمة واختر خيارات الصنف من جديد.';
+
+  @override
   String get posSyncTableUnavailable =>
       'الطاولة المحددة لم تعد متاحة. اختر طاولة أخرى وأعد إدخال الطلب.';
 

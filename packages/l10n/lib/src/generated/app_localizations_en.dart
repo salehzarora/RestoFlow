@@ -4771,6 +4771,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get posPrepSnapshotStale =>
+      'The menu preparation settings changed. Refresh the menu and select the item options again.';
+
+  @override
   String get posSyncTableUnavailable =>
       'The selected table is no longer available. Pick another table and re-enter the order.';
 

@@ -512,14 +512,24 @@ Future<void> submitOrderFromCart({
     final result = await ref.read(additionControllerProvider.notifier).submit();
     // Finding 4: applied-but-not-refreshed is its own honest message — the
     // addition IS saved; only the authoritative view still needs a reload.
+    // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: a stale
+    // preparation snapshot is NOT "tap to retry" — the server refused this
+    // frozen round deterministically and the same operation can only be refused
+    // again. The pending lines are still in the cart (the controller clears them
+    // only on a reconciled success), so the honest instruction is to refresh the
+    // menu and re-pick the affected line, which sends a NEW operation.
+    final additionFailure = result.applied
+        ? null
+        : (result.error == 'modifier_prep_snapshot_stale'
+              ? l10n.posPrepSnapshotStale
+              : l10n.posAdditionFailedRetry);
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          result.applied
-              ? (result.refreshRequired
-                    ? l10n.posAdditionSavedRefreshNeeded
-                    : l10n.posAdditionApplied)
-              : l10n.posAdditionFailedRetry,
+          additionFailure ??
+              (result.refreshRequired
+                  ? l10n.posAdditionSavedRefreshNeeded
+                  : l10n.posAdditionApplied),
         ),
       ),
     );

@@ -4701,6 +4701,10 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posPrepSnapshotStale =>
+      'הגדרות ההכנה בתפריט השתנו. רענן את התפריט ובחר שוב את אפשרויות הפריט.';
+
+  @override
   String get posSyncTableUnavailable =>
       'השולחן שנבחר אינו זמין עוד. בחר שולחן אחר והזן את ההזמנה מחדש.';
 

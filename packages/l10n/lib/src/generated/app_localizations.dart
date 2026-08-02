@@ -8836,6 +8836,12 @@ abstract class AppLocalizations {
   /// **'Not available right now: {items}. Re-enter the order without these items.'**
   String posSyncItemUnavailable(String items);
 
+  /// Sync-status note and Add-items message when the server refused an operation because a modifier preparation snapshot no longer matches the menu (KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021).
+  ///
+  /// In en, this message translates to:
+  /// **'The menu preparation settings changed. Refresh the menu and select the item options again.'**
+  String get posPrepSnapshotStale;
+
   /// Sync-status note when the server refused an order because its table is no longer a live active table of this branch.
   ///
   /// In en, this message translates to:

@@ -95,6 +95,23 @@ const Set<String> kPermanentRejectionCodes = {
   // Deliberately NOT a cue to reprice or to drop the offending modifier and
   // send the rest — that would silently turn a paid option into a free one.
   'modifier_option_not_in_scope',
+  // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the frozen KITCHEN
+  // PREPARATION snapshot on a modifier (a 240g size option contributing 2 Meat
+  // pieces, split by Cheese) no longer matches the menu the server holds, so the
+  // server refused the operation rather than storing a different answer than the
+  // one this device confirmed and will print.
+  //
+  // TERMINAL, and for a stronger reason than the codes above: the refusal is a
+  // pure function of the FROZEN payload and the live menu. Re-sending the same
+  // operation cannot succeed unless the owner happens to edit the menu back, so
+  // a retry is a loop by construction. Printing would send the kitchen a
+  // preparation instruction the server never accepted.
+  //
+  // The recovery is deliberately a HUMAN one: refresh the menu, re-pick the
+  // affected line, and send a NEW operation with a freshly frozen snapshot. It
+  // is NOT a cue to re-derive the snapshot locally and resend the same identity
+  // — that would put back exactly the silent divergence this closes.
+  'modifier_prep_snapshot_stale',
   'rejected',
 };
 

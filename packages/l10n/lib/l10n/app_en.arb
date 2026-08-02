@@ -3300,6 +3300,8 @@
   "@posMenuItemPaused": {"description": "Overlay pill on a POS menu tile whose item is temporarily paused in this branch."},
   "posSyncItemUnavailable": "Not available right now: {items}. Re-enter the order without these items.",
   "@posSyncItemUnavailable": {"description": "Sync-status note when the server refused an order because items are unavailable in this branch; {items} is the joined item names.", "placeholders": {"items": {"type": "String"}}},
+  "posPrepSnapshotStale": "The menu preparation settings changed. Refresh the menu and select the item options again.",
+  "@posPrepSnapshotStale": {"description": "Sync-status note and Add-items message when the server refused an operation because a modifier preparation snapshot no longer matches the menu (KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021)."},
   "posSyncTableUnavailable": "The selected table is no longer available. Pick another table and re-enter the order.",
   "@posSyncTableUnavailable": {"description": "Sync-status note when the server refused an order because its table is no longer a live active table of this branch."},
   "posOrdersFilterTypeAll": "All types",

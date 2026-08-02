@@ -897,6 +897,14 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
         rejectedNote = l10n.posSyncItemUnavailable(errorDetail ?? '—');
       } else if (errorCode == 'table_not_available') {
         rejectedNote = l10n.posSyncTableUnavailable;
+      } else if (errorCode == 'modifier_prep_snapshot_stale') {
+        // KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the frozen
+        // kitchen-preparation snapshot no longer matches the menu, so the server
+        // refused rather than storing an answer this device would contradict.
+        // The generic "the backend rejected this order" line would leave the
+        // cashier tapping a Retry that is not there; this names the one action
+        // that resolves it.
+        rejectedNote = l10n.posPrepSnapshotStale;
       } else {
         rejectedNote = l10n.posSyncFailedReal;
       }

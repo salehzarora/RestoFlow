@@ -1490,6 +1490,7 @@
   "@posMenuItemConfigurationUnavailable": {"description": "MONEY-LOCAL-ATOMICITY-003A: the item's modifier configuration could not be read, so it cannot be sold."},
   "posMenuItemPaused": "לא זמין זמנית",
   "posSyncItemUnavailable": "לא זמין כרגע: {items}. הזן את ההזמנה מחדש ללא פריטים אלה.",
+  "posPrepSnapshotStale": "הגדרות ההכנה בתפריט השתנו. רענן את התפריט ובחר שוב את אפשרויות הפריט.",
   "posSyncTableUnavailable": "השולחן שנבחר אינו זמין עוד. בחר שולחן אחר והזן את ההזמנה מחדש.",
   "posOrdersFilterTypeAll": "כל הסוגים",
   "posMoveTableAction": "העברת שולחן",
