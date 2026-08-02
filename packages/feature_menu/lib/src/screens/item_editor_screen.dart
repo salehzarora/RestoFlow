@@ -729,18 +729,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: state the one rule that is
-          // easy to get wrong — the classifying option re-buckets the quantity
-          // above, it never adds meat of its own.
-          if (_classifierOptions.isNotEmpty) ...[
-            const SizedBox(height: RestoflowSpacing.xs),
-            Text(
-              l10n.menuPrepClassifierHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
           const SizedBox(height: RestoflowSpacing.sm),
           for (var i = 0; i < _prepRows.length; i++) _prepRowField(i, l10n),
           Align(
@@ -757,20 +745,17 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// One editable prep-component row: name / quantity / unit + a remove button,
-  /// and — KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the optional picker that
-  /// splits this resource by one of the item's modifier options.
+  /// One editable prep-component row: name / quantity / unit + a remove button.
+  ///
+  /// KITCHEN-MODIFIER-PREP-CLASSIFIER-019: the 016 "Split by option" picker was
+  /// REMOVED from here. Saleh's meat quantity is not a fixed product resource —
+  /// it comes from the selected SIZE option — so the classifier now lives beside
+  /// the modifier option's own preparation contribution. A legacy 016 link
+  /// already stored on a product resource keeps decoding and printing (and is
+  /// carried through Save untouched); it is simply no longer offered here, so
+  /// nobody is encouraged to configure the relation in the wrong place.
   Widget _prepRowField(int index, AppLocalizations l10n) {
     final row = _prepRows[index];
-    final options = _classifierOptions;
-    // A link to a since-deleted option cannot be the picker's value; show the
-    // "not split" state plus the validation error instead of crashing.
-    final resolved = options.any((o) => o.id == row.classifierOptionId);
-    // 017 (Codex MEDIUM #5): a dangling link must be VISIBLE BEFORE Save, and
-    // visible even when the item now has NO options at all — the case where the
-    // picker itself is hidden and the problem would otherwise be silent. This is
-    // computed from the row's own state, so it does not wait for a save attempt.
-    final dangling = row.classifierOptionId.isNotEmpty && !resolved;
     return Padding(
       padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
       child: Column(
@@ -840,64 +825,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               ),
             ],
           ),
-          // 017 (Codex MEDIUM #5): the dangling-link warning stands on its OWN,
-          // outside the picker, so it is shown BEFORE any save attempt AND when
-          // the item has no options left to offer — the exact case where the
-          // picker is hidden and the stale link would otherwise be invisible.
-          if (dangling && options.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
-              child: Text(
-                l10n.menuPrepClassifierMissing,
-                key: ValueKey('menu-item-prep-classifier-dangling-$index'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ),
-          // 016: only offered once the item HAS modifier options — there is
-          // nothing to split by before that, and a not-yet-created item has no
-          // options at all. Existing rows default to "Not split", so no
-          // configured resource changes behaviour until an owner picks one.
-          if (options.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(
-                top: RestoflowSpacing.xs,
-                bottom: RestoflowSpacing.xs,
-              ),
-              child: DropdownButtonFormField<String>(
-                key: ValueKey('menu-item-prep-classifier-$index'),
-                initialValue: resolved ? row.classifierOptionId : '',
-                isDense: true,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: l10n.menuPrepClassifierLabel,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  // 017: `dangling` surfaces the problem the moment the editor
-                  // renders — the operator no longer has to press Save to
-                  // discover that the linked option is gone.
-                  errorText: (dangling || row.classifierMissing)
-                      ? l10n.menuPrepClassifierMissing
-                      : null,
-                ),
-                items: [
-                  DropdownMenuItem<String>(
-                    value: '',
-                    child: Text(l10n.menuPrepClassifierNone),
-                  ),
-                  for (final option in options)
-                    DropdownMenuItem<String>(
-                      value: option.id,
-                      child: Text(option.name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) => setState(() {
-                  row.classifierOptionId = value ?? '';
-                  row.classifierMissing = false;
-                }),
-              ),
-            ),
         ],
       ),
     );
@@ -1131,6 +1058,7 @@ class _PricedChildVm {
     this.kitchenMeatEnabled = false,
     this.kitchenMeatQuantity,
     this.kitchenMeatUnit = '',
+    this.kitchenMeatClassifierOptionId = '',
   });
 
   final String id;
@@ -1149,6 +1077,9 @@ class _PricedChildVm {
   final bool kitchenMeatEnabled;
   final num? kitchenMeatQuantity;
   final String kitchenMeatUnit;
+
+  /// 019: the stored classifier link on this option's own contribution.
+  final String kitchenMeatClassifierOptionId;
 }
 
 MenuEntityType _entityForKind(PricedChildKind kind) => switch (kind) {
@@ -1166,6 +1097,7 @@ class _PricedChildSection extends ConsumerWidget {
     required this.parentId,
     required this.currencyCode,
     required this.rows,
+    this.classifierOptions = const <({String id, String name})>[],
     this.embedded = false,
   });
 
@@ -1176,6 +1108,11 @@ class _PricedChildSection extends ConsumerWidget {
   final String parentId;
   final String currencyCode;
   final List<_PricedChildVm> rows;
+
+  /// 019: every option of the SAME menu item — the split-by candidates offered
+  /// inside a modifier option's edit dialog. Empty for size/variant sections,
+  /// which have no preparation contribution to classify.
+  final List<({String id, String name})> classifierOptions;
 
   /// When true the section renders WITHOUT its own card chrome (a plain
   /// header row + rows) — used inside the modifier tiles so options stop
@@ -1273,6 +1210,11 @@ class _PricedChildSection extends ConsumerWidget {
         initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
         initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
         initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
+        // 019: the option's own classifier link + the same-item candidates it
+        // may point at (the dialog excludes the option being edited).
+        initialKitchenMeatClassifierOptionId:
+            rows[i].kitchenMeatClassifierOptionId,
+        classifierOptions: classifierOptions,
       ),
       onDelete: () => _delete(context, ref, rows[i].id),
       reorderIndex: reorderIndex,
@@ -1555,6 +1497,11 @@ class _ModifiersSection extends ConsumerWidget {
     final reordering =
         modifiers.length > 1 &&
         ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
+    final itemClassifierOptions = <({String id, String name})>[
+      for (final group in modifiers)
+        for (final option in snapshot.optionsForModifier(group.id))
+          (id: option.id, name: option.name),
+    ];
     Widget cardFor(int index, {int? reorderIndex}) {
       final modifier = modifiers[index];
       return _ModifierCard(
@@ -1562,6 +1509,12 @@ class _ModifiersSection extends ConsumerWidget {
         item: item,
         currencyCode: currencyCode,
         options: snapshot.optionsForModifier(modifier.id),
+        // 019: every option of THIS item, across ALL of its modifier groups —
+        // the candidates a contribution may be split by (a size option in the
+        // Size group split by Cheese in the Extras group). Product-scoped by
+        // construction: `modifiers.menu_item_id` ties each group to one item,
+        // so another product's options are unreachable from here.
+        classifierOptions: itemClassifierOptions,
         onDelete: () => _deleteModifier(context, ref, modifier.id),
         reorderIndex: reorderIndex,
       );
@@ -1666,6 +1619,7 @@ class _ModifierCard extends StatelessWidget {
     required this.item,
     required this.currencyCode,
     required this.options,
+    required this.classifierOptions,
     required this.onDelete,
     this.reorderIndex,
   });
@@ -1674,6 +1628,10 @@ class _ModifierCard extends StatelessWidget {
   final MenuItem item;
   final String currencyCode;
   final List<ModifierOption> options;
+
+  /// 019: every option of the SAME menu item (all groups) — the split-by
+  /// candidates offered inside each option's edit dialog.
+  final List<({String id, String name})> classifierOptions;
   final VoidCallback onDelete;
 
   /// MENU-ORDER-001: when non-null this card is inside a reorderable group list
@@ -1766,6 +1724,11 @@ class _ModifierCard extends StatelessWidget {
             parentId: modifier.id,
             currencyCode: currencyCode,
             embedded: true,
+            // 019: every option of THIS menu item, across all of its modifier
+            // groups — the only ids a contribution on this item may be split
+            // by. Built from the item's own snapshot, so another product's
+            // options can never appear.
+            classifierOptions: classifierOptions,
             rows: options
                 .map(
                   (o) => _PricedChildVm(
@@ -1780,6 +1743,9 @@ class _ModifierCard extends StatelessWidget {
                     kitchenMeatEnabled: o.hasKitchenMeat,
                     kitchenMeatQuantity: o.kitchenMeatQuantity,
                     kitchenMeatUnit: o.kitchenMeatUnit,
+                    // 019: the option's own classifier link.
+                    kitchenMeatClassifierOptionId:
+                        o.kitchenMeatClassifierOptionId,
                   ),
                 )
                 .toList(),

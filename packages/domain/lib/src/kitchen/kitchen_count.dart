@@ -313,6 +313,15 @@ List<KitchenCount> aggregateOrderKitchenCounts(
           quantity: meat.quantity,
           label: meat.unit,
           factor: item.quantity,
+          // KITCHEN-MODIFIER-PREP-CLASSIFIER-019: a modifier option's own
+          // preparation contribution can now be classified by ANOTHER option on
+          // the same item (a 240g size contributes 2 Meat pieces; Cheese decides
+          // whether they are reported with or without it). The classification
+          // decides only WHICH BUCKET — quantity and factor are untouched, so a
+          // classified contribution totals exactly what it always did, merely
+          // split across two rows.
+          classifier: meat.isClassified ? meat.classifierOptionName : '',
+          classifierSelected: meat.classifierSelected ?? false,
         ),
       );
     }

@@ -49,6 +49,15 @@ class ModifierOption {
   /// The configured meat unit (e.g. "patties", "g"), or '' when unset.
   String get kitchenMeatUnit => (kitchenMeat?['unit'] ?? '').toString();
 
+  /// KITCHEN-MODIFIER-PREP-CLASSIFIER-019: the id of ANOTHER option on the SAME
+  /// menu item that classifies this option's preparation contribution (Cheese
+  /// splitting the size option's Meat pieces). '' when not configured. Read
+  /// strictly as a string — a non-string value is never treated as an id.
+  String get kitchenMeatClassifierOptionId {
+    final value = kitchenMeat?['classifier_option_id'];
+    return value is String ? value.trim() : '';
+  }
+
   factory ModifierOption.fromJson(Map<String, dynamic> json) => ModifierOption(
     id: requireString(json, 'id'),
     organizationId: requireString(json, 'organization_id'),
