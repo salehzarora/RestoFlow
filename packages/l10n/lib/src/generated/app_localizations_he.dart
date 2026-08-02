@@ -861,6 +861,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posSyncStateUnconfirmed => 'לא אושר';
 
   @override
+  String get posOrderPendingTitle => 'ההזמנה ממתינה לשליחה';
+
+  @override
   String get posOrderStatusSubmitted => 'נשלחה';
 
   @override

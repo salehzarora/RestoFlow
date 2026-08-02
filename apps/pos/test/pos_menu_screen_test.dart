@@ -103,8 +103,10 @@ void main() {
     await tester.tap(find.text('Send Order'));
     await tester.pumpAndSettle();
 
-    // Confirmation replaces the cart.
-    expect(find.text('Order sent'), findsOneWidget);
+    // Confirmation replaces the cart. 024: a locally-queued order reads
+    // "Order pending" — nothing has been accepted by a server yet, and the
+    // accepted wording is reserved for an order that actually was.
+    expect(find.text('Order pending'), findsOneWidget);
     expect(find.text('Submitted'), findsOneWidget);
     // POS-ORDERS-AND-PAYMENT-001: the unpaid-branch reset action is now the
     // explicit "Pay later" (leaves the order unpaid + starts the next order).
@@ -140,7 +142,7 @@ void main() {
     await tester.tap(find.byKey(const Key('pay-later-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Order sent'), findsNothing);
+    expect(find.text('Order pending'), findsNothing);
     expect(find.text('Your cart is empty'), findsOneWidget);
     expect(find.text('Send Order'), findsOneWidget);
   });
@@ -156,13 +158,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Send Order'));
     await tester.pumpAndSettle();
-    expect(find.text('Order sent'), findsOneWidget);
+    expect(find.text('Order pending'), findsOneWidget);
 
     // Tapping a menu item dismisses the confirmation and starts a new cart.
     await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Order sent'), findsNothing);
+    expect(find.text('Order pending'), findsNothing);
     expect(find.text('Subtotal'), findsOneWidget);
     expect(find.text('Send Order'), findsOneWidget);
   });

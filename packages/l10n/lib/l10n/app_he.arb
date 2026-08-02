@@ -264,6 +264,7 @@
   "posOrderDeliveryUnconfirmedTitle": "שליחת ההזמנה לא אושרה",
   "posSyncDeliveryUnconfirmed": "לא הצלחנו לאמת אם ההזמנה הגיעה לשרת. בדוק את החיבור ושלח שוב את אותה ההזמנה — הפעולה בטוחה וההזמנה לא תישלח פעמיים.",
   "posSyncStateUnconfirmed": "לא אושר",
+  "posOrderPendingTitle": "ההזמנה ממתינה לשליחה",
   "posOrderStatusSubmitted": "נשלחה",
   "posNewOrder": "הזמנה חדשה",
   "posOrderTypeLabel": "סוג הזמנה",

@@ -875,6 +875,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posSyncStateUnconfirmed => 'Not confirmed';
 
   @override
+  String get posOrderPendingTitle => 'Order pending';
+
+  @override
   String get posOrderStatusSubmitted => 'Submitted';
 
   @override

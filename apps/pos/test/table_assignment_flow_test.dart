@@ -231,7 +231,7 @@ void main() {
     await tester.tap(find.text(l10n.posSendOrder));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posOrderTypeDineIn), findsOneWidget); // the chip
     expect(find.text('${l10n.posTableLabel} T1'), findsOneWidget); // table chip
   });

@@ -264,6 +264,7 @@
   "posOrderDeliveryUnconfirmedTitle": "لم يتم تأكيد إرسال الطلب",
   "posSyncDeliveryUnconfirmed": "تعذّر التأكد مما إذا وصل الطلب إلى الخادم. افحص الاتصال وأعد إرسال الطلب نفسه — العملية آمنة ولن يتكرر الطلب.",
   "posSyncStateUnconfirmed": "غير مؤكد",
+  "posOrderPendingTitle": "الطلب قيد الإرسال",
   "posOrderStatusSubmitted": "تم الإرسال",
   "posNewOrder": "طلب جديد",
   "posOrderTypeLabel": "نوع الطلب",

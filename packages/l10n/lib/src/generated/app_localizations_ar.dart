@@ -867,6 +867,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posSyncStateUnconfirmed => 'غير مؤكد';
 
   @override
+  String get posOrderPendingTitle => 'الطلب قيد الإرسال';
+
+  @override
   String get posOrderStatusSubmitted => 'تم الإرسال';
 
   @override

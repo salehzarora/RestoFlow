@@ -85,7 +85,11 @@ class OrderConfirmation extends ConsumerWidget {
     // rejection of an `order.submit` — which app.sync_push guarantees is atomic
     // BEFORE order creation — regardless of which typed code carried it. Later
     // operations failing (a payment, a discount) are deliberately NOT included.
-    final isRejectedDraft = entry != null && entry.isNeverCreatedOrderSubmit;
+    // 024: the ONE authoritative question — did the server definitively create
+    // no order? Was `isNeverCreatedOrderSubmit`, which asked only whether the
+    // code was allowlisted, so an auth refusal or a structured refusal with an
+    // unrecognised code still offered Pay, Discount, printing and Retry.
+    final isRejectedDraft = entry != null && entry.isDefinitiveNoServerOrder;
     // 023: what is actually KNOWN about this order. With no outbox entry at all
     // (the RF-101 path) nothing was ever dispatched, so `pending` is the honest
     // reading and the existing presentation is unchanged.
@@ -240,8 +244,19 @@ class OrderConfirmation extends ConsumerWidget {
                     tone: RestoflowTone.warning,
                     icon: Icons.cloud_off_outlined,
                   ),
-                  PosOrderOutcome.accepted ||
+                  // 024: PENDING is not ACCEPTED. A queued or in-flight order
+                  // has had no answer from the server, so the green
+                  // check-circle and "Order sent" — which every other surface
+                  // reads as acceptance — were a claim nobody had made. It gets
+                  // its own informational header; the offline lifecycle,
+                  // actions and printing behind it are deliberately unchanged.
                   PosOrderOutcome.pending => _OutcomeHeader(
+                    key: const Key('confirmation-pending-header'),
+                    title: l10n.posOrderPendingTitle,
+                    tone: RestoflowTone.info,
+                    icon: Icons.cloud_upload_outlined,
+                  ),
+                  PosOrderOutcome.accepted => _OutcomeHeader(
                     key: const Key('confirmation-success-header'),
                     title: l10n.posOrderSubmittedTitle,
                     tone: RestoflowTone.success,
@@ -368,7 +383,7 @@ class OrderConfirmation extends ConsumerWidget {
                   onRetry:
                       entry != null &&
                           entry.syncState.isFailed &&
-                          !entry.isPermanentBusinessRejection
+                          !entry.hasDefinitiveVerdict
                       ? () => outbox.retryEntry(entry.id)
                       : null,
                 ),
@@ -382,6 +397,9 @@ class OrderConfirmation extends ConsumerWidget {
                 if (isOrderEligibleForKitchenPrint(
                   orderId: order.orderId,
                   isDemoMode: isDemo,
+                  // 024: the authoritative flag, so an auth refusal and an
+                  // unrecognised structured refusal suppress the button too.
+                  definitivelyRejected: isRejectedDraft,
                   rejectionCode: entry?.lastErrorCode,
                 )) ...[
                   _KitchenTicketPrintButton(order: order),

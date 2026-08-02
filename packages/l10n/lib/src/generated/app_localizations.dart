@@ -1684,6 +1684,12 @@ abstract class AppLocalizations {
   /// **'Not confirmed'**
   String get posSyncStateUnconfirmed;
 
+  /// Confirmation header for an order that is queued or in flight and has not yet received a final server answer (POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024). Distinct from the accepted title, which may only be shown once the server has accepted the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Order pending'**
+  String get posOrderPendingTitle;
+
   /// POS status chip label for a locally-submitted demo order.
   ///
   /// In en, this message translates to:

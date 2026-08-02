@@ -135,16 +135,24 @@ void main() {
     expect(numberText.data, matches(RegExp(r'^#[0-9A-F]{6}$')));
   });
 
-  testWidgets('a backend REJECT is an honest failure with Retry — never a '
-      'pretended send', (tester) async {
+  testWidgets('a backend REJECT is an honest failure — never a pretended '
+      'send, and never a Retry that cannot succeed', (tester) async {
+    // POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024 narrowed this. The fixture
+    // returns a STRUCTURED per-operation refusal (`invalid_payload`): the server
+    // read the operation and said no, so a verdict exists even though that code
+    // is not in kPermanentRejectionCodes. Re-pushing the same identity can only
+    // be refused again, so Retry is withdrawn — the original intent ("never a
+    // pretended send") is unchanged and strengthened.
     final l10n = await _en();
     await _pumpReal(tester, applied: false);
     await _addItemAndSend(tester, l10n);
 
     expect(find.text(l10n.posSyncStateFailed), findsOneWidget);
     expect(find.text(l10n.posSyncFailedReal), findsOneWidget);
-    expect(find.byKey(const Key('sync-retry-button')), findsOneWidget);
+    expect(find.byKey(const Key('sync-retry-button')), findsNothing);
+    expect(find.text(l10n.posOrderRejectedTitle), findsOneWidget);
     expect(find.text(l10n.posSyncSentReal), findsNothing);
+    expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
     expect(find.text(l10n.posSyncDemoNotice), findsNothing);
   });
 }
