@@ -6,7 +6,6 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/customer_phone.dart';
 import '../data/order_submission.dart' show kCustomerNameMaxLength;
-import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
 import 'table_picker_sheet.dart';
 
@@ -43,36 +42,40 @@ class OrderSetupSection extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: RestoflowSpacing.xs),
+          // POS-ORDER-TYPE-SELECTOR-UI-001: the Material 3 SegmentedButton read
+          // BACKWARDS — the unselected side carried the warm filled surface
+          // while the selected side turned white and dissolved into the white
+          // cart panel, with the icon on both sides and only a subtle
+          // foreground-colour difference to tell them apart. The shared RF-132
+          // control inverts that correctly: a solid brand-green fill with a
+          // white label, heavier weight, and the icon ONLY on the active
+          // option, so selection is carried by four independent signals rather
+          // than colour alone. minSegmentHeight keeps the 44dp touch target the
+          // old `minimumSize` provided (the control's own default is 38).
           SizedBox(
             width: double.infinity,
-            child: SegmentedButton<OrderType>(
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-                backgroundColor: kPosChipBg,
-                foregroundColor: kRestoflowInk2,
-                selectedBackgroundColor: Colors.white,
-                selectedForegroundColor: kRestoflowBrandDark,
-                side: const BorderSide(color: kRestoflowHairline),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
+            child: RestoflowSegmentedControl<OrderType>(
+              expand: true,
+              minSegmentHeight: 44,
               segments: [
-                ButtonSegment<OrderType>(
+                RestoflowSegment<OrderType>(
+                  key: const Key('order-type-dine-in'),
                   value: OrderType.dineIn,
-                  icon: const Icon(Icons.restaurant),
-                  label: Text(l10n.posOrderTypeDineIn),
+                  icon: Icons.restaurant,
+                  label: l10n.posOrderTypeDineIn,
                 ),
-                ButtonSegment<OrderType>(
+                RestoflowSegment<OrderType>(
+                  key: const Key('order-type-takeaway'),
                   value: OrderType.takeaway,
-                  icon: const Icon(Icons.takeout_dining),
-                  label: Text(l10n.posOrderTypeTakeaway),
+                  icon: Icons.takeout_dining,
+                  label: l10n.posOrderTypeTakeaway,
                 ),
               ],
-              selected: {setup.orderType},
-              onSelectionChanged: (selection) =>
-                  controller.setOrderType(selection.first),
+              selected: setup.orderType,
+              // Re-tapping the active option is already a no-op in the
+              // controller (setOrderType returns early on an equal value), so
+              // the table/name/phone state is untouched.
+              onSelected: controller.setOrderType,
             ),
           ),
           const SizedBox(height: RestoflowSpacing.sm),
