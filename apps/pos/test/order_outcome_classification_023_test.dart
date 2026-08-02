@@ -525,12 +525,21 @@ void main() {
       _expectNoContradiction();
     });
 
-    testWidgets('023-C7 a PENDING order is unchanged', (tester) async {
+    testWidgets('023-C7 a PENDING order claims neither outcome', (
+      tester,
+    ) async {
+      // 024: pending got its own header. It was sharing the ACCEPTED one, which
+      // claimed a server answer that had not arrived.
       await _pumpConfirmation(tester, _seed());
       expect(
-        find.byKey(const Key('confirmation-success-header')),
+        find.byKey(const Key('confirmation-pending-header')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('confirmation-success-header')),
+        findsNothing,
+      );
+      expect(find.text(_successTitle), findsNothing);
       expect(find.text(_unconfirmedTitle), findsNothing);
       _expectNoContradiction();
     });

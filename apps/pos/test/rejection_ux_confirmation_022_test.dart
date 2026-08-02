@@ -265,12 +265,23 @@ void main() {
       );
     });
 
-    testWidgets('022-B3 a PENDING order still shows the success header', (
+    testWidgets('022-B3 a PENDING order claims no outcome at all', (
       tester,
     ) async {
+      // SUPERSEDED BY POS-DEFINITIVE-REJECTION-ACTION-GATING-FIX-024. 022 kept
+      // the success header for a queued order because only two presentations
+      // existed; pending now has its own, because "Order sent" asserted a
+      // server answer that had not arrived.
       final l10n = await _en();
       await _pump(tester, state: OutboxSyncState.pending);
-      expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+      expect(
+        find.byKey(const Key('confirmation-pending-header')),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
+      expect(find.text(_rejectedTitle), findsNothing);
+      // The local queued-status chip is unchanged: it describes the LOCAL
+      // lifecycle, not a server verdict.
       expect(
         find.byKey(const Key('confirmation-local-status')),
         findsOneWidget,
