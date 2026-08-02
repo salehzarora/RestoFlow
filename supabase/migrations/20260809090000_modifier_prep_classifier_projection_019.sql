@@ -31,16 +31,41 @@
 --      projection of meat_snapshot for the durable dispatch payload, gated on a
 --      genuinely positive quantity AND a non-empty unit.
 --   2. NEW app.trusted_modifier_prep_snapshot(uuid, uuid, uuid, jsonb) — the
---      SERVER's own derivation of a stored snapshot, read from `modifier_options`
---      rather than from the payload.
+--      SERVER's own derivation of the snapshot, read from `modifier_options`
+--      rather than from the payload. 021: this is the COMPARISON BASIS, not a
+--      replacement value.
 --   3. app.kitchen_dispatch_payload_initial / _round — re-emitted from
 --      20260808090000, VERBATIM apart from ONE added key on each modifier object
 --      ('prep'), carrying the projection. The 017 canonical menu ordering is
 --      preserved byte for byte.
---   4. app.submit_order / app.add_order_items — re-emitted from 20260806090000,
---      VERBATIM apart from ONE changed expression each: the value stored in
---      order_item_modifiers.meat_snapshot is now the server's own trusted
---      derivation instead of the client's object.
+--   4. app.submit_order / app.add_order_items — re-emitted from 20260806090000
+--      with ONE added gate and ONE changed expression each.
+--
+-- (c) 021 (Codex HIGH, second review): SILENT REPLACEMENT WAS ITS OWN DEFECT.
+--     Storing the server's live re-derivation meant a frozen operation accepted
+--     LATE — after the owner edited the menu — was stored with the NEW answer
+--     while the POS confirmation, the direct kitchen print and every local
+--     reprint still showed the OLD one. One accepted order, two preparation
+--     answers. The server therefore no longer replaces the submitted snapshot:
+--
+--       * it CANONICALISES the client's frozen snapshot through the same strict
+--         allowlist projection (unknown keys stripped; semantic jsonb equality,
+--         so key order, whitespace and 2 vs 2.0 never matter);
+--       * it COMPARES that with app.trusted_modifier_prep_snapshot;
+--       * on any difference it refuses the whole operation atomically with
+--         `modifier_prep_snapshot_stale` — no order, no items, no modifiers, no
+--         round, no revision bump, no dispatch, no audit row;
+--       * on equality it stores the VALIDATED SUBMITTED value, never a second
+--         live re-read, so a menu edit racing the insert cannot store an
+--         unvalidated answer.
+--
+--     The gate sits AFTER the idempotency replay lookup, so an ALREADY-ACCEPTED
+--     operation keeps replaying its stored result however far the menu has moved
+--     since, and BEFORE every insert, so the refusal is atomic by construction.
+--     Nothing client-supplied became trusted: it is only ever CHECKED, and a
+--     client that invents a quantity, a unit, a classifier name, a foreign
+--     classifier id or a contradicted selected flag is now REFUSED rather than
+--     silently corrected.
 --
 -- ADDITIVE AND REVERSIBLE IN MEANING
 --   No table, column, constraint, policy, grant or signature changes. No money
@@ -133,7 +158,7 @@ as $$
 $$;
 
 comment on function app.kitchen_modifier_prep_projection(jsonb) is
-  'KITCHEN-MODIFIER-PREP-CLASSIFIER-019 (+020) INTERNAL: allowlisted kitchen projection of order_item_modifiers.meat_snapshot — the per-option preparation contribution that carries Saleh''s meat (a 240g size option contributes 2 Meat pieces). Returns NULL unless BOTH a strictly-positive JSON-number quantity AND a non-empty bounded string unit survive, so a missing/zero/negative/non-numeric quantity can never yield a unit-only phantom contribution (020, Codex HIGH #3). Five keys can survive: {quantity, unit (<=40)} and the OPTIONAL classifier triple {classifier_option_id (string<=64), classifier_option_name (string<=120), classifier_selected (boolean)} — forwarded ONLY when all three are present with those exact JSON types, so malformed or partial classifier metadata degrades to an ordinary unsplit contribution and never costs the valid quantity/unit. Unknown client keys are dropped; no money field is representable.';
+  'KITCHEN-MODIFIER-PREP-CLASSIFIER-019 (+020, +021) INTERNAL: allowlisted kitchen projection of a modifier preparation contribution — the per-option value that carries Saleh''s meat (a 240g size option contributes 2 Meat pieces). THREE call sites, one canonical form: the durable dispatch payload, the CANONICALISATION of a submitted frozen snapshot before app.submit_order / app.add_order_items compare it with app.trusted_modifier_prep_snapshot, and the value those RPCs then STORE once equality is proven (021). Because unknown keys are dropped here, a cosmetic payload difference can never be mistaken for a stale menu. Returns NULL unless BOTH a strictly-positive JSON-number quantity AND a non-empty bounded string unit survive, so a missing/zero/negative/non-numeric quantity can never yield a unit-only phantom contribution (020, Codex HIGH #3). Five keys can survive: {quantity, unit (<=40)} and the OPTIONAL classifier triple {classifier_option_id (string<=64), classifier_option_name (string<=120), classifier_selected (boolean)} — forwarded ONLY when all three are present with those exact JSON types, so malformed or partial classifier metadata degrades to an ordinary unsplit contribution and never costs the valid quantity/unit. Unknown client keys are dropped; no money field is representable.';
 
 revoke all on function app.kitchen_modifier_prep_projection(jsonb) from public;
 revoke all on function app.kitchen_modifier_prep_projection(jsonb) from anon;
@@ -247,7 +272,7 @@ as $$
 $$;
 
 comment on function app.trusted_modifier_prep_snapshot(uuid, uuid, uuid, jsonb) is
-  'KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020 INTERNAL: the SERVER''s own derivation of order_item_modifiers.meat_snapshot. Reads the contribution (quantity, unit) and the classifier link from modifier_options.kitchen_meat for an option proven to belong to (p_org, p_menu_item_id) through its modifier group — the 003D ownership chain, re-asserted here. A classifier survives only when it names a DIFFERENT option of the SAME menu item; its NAME comes from that option''s own row, and classifier_selected is DERIVED from this operation''s authoritative modifier array (presence-based). NOTHING client-supplied is trusted: not the name, not the selected flag, not a foreign or self-referencing id. An invalid classifier degrades to an unsplit contribution and never discards the valid quantity/unit; a missing/non-positive quantity or empty unit yields NULL (the option contributes nothing). Every lookup is scoped by organization + menu item + group ownership; money is never read or written.';
+  'KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020 (+021) INTERNAL: the SERVER''s own derivation of a modifier preparation snapshot. 021: this is the COMPARISON BASIS for app.submit_order / app.add_order_items, NOT the value they store — a submitted frozen snapshot that does not canonically equal this derivation makes the whole operation fail with modifier_prep_snapshot_stale, and one that does equal it is stored AS SUBMITTED, so the server, the POS confirmation, the KDS, the durable spool and every reprint keep one identical answer. Reads the contribution (quantity, unit) and the classifier link from modifier_options.kitchen_meat for an option proven to belong to (p_org, p_menu_item_id) through its modifier group — the 003D ownership chain, re-asserted here. A classifier survives only when it names a DIFFERENT option of the SAME menu item; its NAME comes from that option''s own row, and classifier_selected is DERIVED from this operation''s authoritative modifier array (presence-based). NOTHING client-supplied is trusted: not the name, not the selected flag, not a foreign or self-referencing id. An invalid classifier degrades to an unsplit contribution and never discards the valid quantity/unit; a missing/non-positive quantity or empty unit yields NULL (the option contributes nothing). Every lookup is scoped by organization + menu item + group ownership; money is never read or written.';
 
 revoke all on function app.trusted_modifier_prep_snapshot(uuid, uuid, uuid, jsonb) from public;
 revoke all on function app.trusted_modifier_prep_snapshot(uuid, uuid, uuid, jsonb) from anon;
@@ -387,18 +412,40 @@ revoke all on function app.kitchen_dispatch_payload_round(uuid, uuid, uuid) from
 -- 4. The two authoritative order RPCs — re-emitted from 20260806090000.
 -- ---------------------------------------------------------------------------
 -- FAITHFUL RE-CREATION. Both bodies are extracted verbatim from
--- 20260806090000_money_modifier_scope_003d_option_ownership.sql; the ONLY
--- difference in each is the value stored in order_item_modifiers.meat_snapshot:
+-- 20260806090000_money_modifier_scope_003d_option_ownership.sql. Each differs
+-- in exactly TWO places, both concerning order_item_modifiers.meat_snapshot:
 --
---   was:  v_modifier -> 'meat_snapshot'                        (client-supplied)
---   now:  app.trusted_modifier_prep_snapshot(v_org, menu_item, option, mods)
+--   1. A NEW GATE, immediately after the 003D ownership refusal and before the
+--      first insert — the canonical frozen client snapshot must equal the
+--      server's own derivation, or the operation is refused as
+--      `modifier_prep_snapshot_stale`.
+--
+--   2. The value stored:
+--        20260806090000:  v_modifier -> 'meat_snapshot'   (raw, unchecked)
+--        019/020:         app.trusted_modifier_prep_snapshot(...)  (replacement)
+--        021 (this file): app.kitchen_modifier_prep_projection(
+--                           v_modifier -> 'meat_snapshot')
+--                         — the VALIDATED submitted value, canonicalised.
+--
+-- WHY THE STORED VALUE IS THE SUBMITTED ONE. Equality was just proven, so at the
+-- moment of the gate both sides are the same answer; storing the submitted value
+-- is what keeps them the same afterwards. Re-deriving from the live menu at
+-- insert time would take a FRESH read (a read-committed function takes a new
+-- snapshot per statement), so a menu edit committing between the gate and the
+-- insert could store a value nothing validated — the very race this correction
+-- exists to close. The projection is IMMUTABLE over the payload and cannot move.
 --
 -- Everything else — money parsing and recomputation (D-007), the 002A per-unit
 -- line formula, idempotency on (device_id, local_operation_id) (D-022), the
 -- append-only audit row (D-013), the item_unavailable gate, the 003D modifier
--- ownership refusal, receipt numbering, round handling and every error code —
--- is byte-identical. Signatures are unchanged, so no ACL or PostgREST overload
--- changes. The client's meat_snapshot is now simply ignored.
+-- ownership refusal, receipt numbering, round handling and every existing error
+-- code — is byte-identical. Signatures are unchanged, so no ACL or PostgREST
+-- overload changes.
+--
+-- IDEMPOTENCY IS UNTOUCHED AND DELIBERATELY WINS. The gate is downstream of the
+-- replay lookup in both RPCs, so:
+--   accepted operation + menu edit + replay  -> the SAME stored success;
+--   delayed FIRST acceptance + menu edit     -> a stale refusal.
 
 create or replace function app.submit_order(
   p_pin_session_id              uuid,
@@ -456,6 +503,7 @@ declare
   v_mod_count     integer := 0;
   v_unavailable   jsonb;
   v_bad_modifiers jsonb;   -- 003D: out-of-scope modifier options
+  v_stale_modifiers jsonb; -- 021: frozen prep snapshots the menu has moved past
   v_item_ids      uuid[];
   -- KITCHEN-MODE-001A (all three used ONLY by the additive tail/replay below):
   v_kitchen_mode  text;
@@ -788,6 +836,70 @@ begin
                               'entity', 'order', 'modifiers', v_bad_modifiers);
   end if;
 
+  -- KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021 — THE FROZEN
+  -- PREPARATION SNAPSHOT MUST STILL MATCH THE MENU.
+  --
+  -- 020 made the server derive this snapshot itself and store its own answer,
+  -- DISCARDING the client's. That closed the trust hole but opened a
+  -- consistency one: the POS freezes the answer when the cashier confirms the
+  -- line, and the operation may not be accepted until much later. If the owner
+  -- edits the menu in between, the server stored the NEW answer while the POS
+  -- confirmation, the direct kitchen print and every local reprint still showed
+  -- the OLD one — one order, two preparation answers.
+  --
+  -- So the server no longer replaces. It COMPARES its own derivation with the
+  -- client's frozen snapshot, canonicalised through the SAME strict allowlist
+  -- projection, and refuses the whole operation when they differ. jsonb
+  -- equality is SEMANTIC: key order, whitespace and 2 vs 2.0 never matter, and
+  -- unknown client keys are stripped by the projection before the comparison,
+  -- so nothing cosmetic can cause a false refusal.
+  --
+  -- WHAT IS STILL PROVEN. The comparison basis is
+  -- app.trusted_modifier_prep_snapshot, which reads the contribution and the
+  -- classifier link from the server's own menu rows, takes the classifier NAME
+  -- from that option's row, and derives classifier_selected from THIS
+  -- operation's authoritative modifier array. So a client that invents a
+  -- quantity, a unit, a name, a foreign classifier id or a selected flag that
+  -- contradicts what it actually selected no longer gets its lie stored — it
+  -- gets the operation refused. Nothing client-supplied is trusted; it is only
+  -- ever CHECKED.
+  --
+  -- PLACEMENT. After the replay lookup (an ALREADY-ACCEPTED operation must keep
+  -- replaying its stored result forever, however the menu has moved since) and
+  -- before every insert (a refusal is atomic by construction: no order, no
+  -- items, no modifiers, no round, no dispatch, no audit row, no partial money).
+  --
+  -- DETERMINISTIC AND NON-TRANSIENT. Every stale modifier is collected in one
+  -- pass and echoed in a stable order, so the same payload always produces the
+  -- same refusal. The echo carries the CLIENT-SUPPLIED payload labels only —
+  -- never a DB name, never another tenant's data (R-003). The POS treats the
+  -- code as a terminal business refusal: no retry loop, no kitchen print, and
+  -- the cashier refreshes the menu and re-picks the affected line, which
+  -- produces a NEW operation with a fresh frozen snapshot.
+  select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'option_name_snapshot')
+    into v_stale_modifiers
+    from (
+      select distinct jsonb_build_object(
+               'menu_item_id',         e ->> 'menu_item_id',
+               'option_name_snapshot', m ->> 'option_name_snapshot') as bad
+        from jsonb_array_elements(p_order_items) e
+        cross join lateral jsonb_array_elements(
+          case when jsonb_typeof(e -> 'modifiers') = 'array'
+               then e -> 'modifiers' else '[]'::jsonb end) m
+       where (m ->> 'modifier_option_id') is not null
+         and app.kitchen_modifier_prep_projection(m -> 'meat_snapshot')
+             is distinct from
+             app.trusted_modifier_prep_snapshot(
+               v_org,
+               (e ->> 'menu_item_id')::uuid,
+               (m ->> 'modifier_option_id')::uuid,
+               e -> 'modifiers')
+    ) offenders;
+  if v_stale_modifiers is not null then
+    return jsonb_build_object('ok', false, 'error', 'modifier_prep_snapshot_stale',
+                              'entity', 'order', 'modifiers', v_stale_modifiers);
+  end if;
+
   -- (insert) order header at status 'submitted'
   insert into public.orders (
     id, organization_id, restaurant_id, branch_id, device_id, pin_session_id,
@@ -853,14 +965,18 @@ begin
         values (
           v_org, v_rest, v_branch, v_item_id, (v_modifier ->> 'modifier_option_id')::uuid,
           v_modifier ->> 'modifier_name_snapshot', v_modifier ->> 'option_name_snapshot', v_mod_price, v_mod_qty::int,
-          -- KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020: the SERVER
-          -- derives this snapshot from its OWN menu rows. The client's
-          -- meat_snapshot is no longer stored at all.
-          app.trusted_modifier_prep_snapshot(
-            v_org,
-            (v_item ->> 'menu_item_id')::uuid,
-            (v_modifier ->> 'modifier_option_id')::uuid,
-            v_item -> 'modifiers'));
+          -- KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the
+          -- VALIDATED FROZEN CLIENT SNAPSHOT, canonicalised through the strict
+          -- allowlist — the exact value the gate above proved equal to the
+          -- server's own derivation.
+          --
+          -- NOT a second call to app.trusted_modifier_prep_snapshot. That would
+          -- re-read the LIVE menu here, and a concurrent menu edit committing
+          -- between the gate and this insert would store a value nobody
+          -- validated (each statement of a read-committed function takes its own
+          -- snapshot). The projection is IMMUTABLE and reads only the payload,
+          -- so it cannot move: what is stored is exactly what was checked.
+          app.kitchen_modifier_prep_projection(v_modifier -> 'meat_snapshot'));
         v_mod_count := v_mod_count + 1;
       end loop;
     end if;
@@ -1018,6 +1134,7 @@ declare
   v_mod_count     integer := 0;
   v_unavailable   jsonb;
   v_bad_modifiers jsonb;   -- 003D: out-of-scope modifier options
+  v_stale_modifiers jsonb; -- 021: frozen prep snapshots the menu has moved past
   v_item_ids      uuid[];
   v_round_id      uuid;
   v_kitchen_mode  text;  -- KITCHEN-MODE-001C1: branch workflow mode (dispatch gate)
@@ -1377,6 +1494,77 @@ begin
                               'order_id', p_order_id, 'server_ts', now(), 'idempotency_replay', false);
   end if;
 
+  -- KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021 — THE FROZEN
+  -- PREPARATION SNAPSHOT MUST STILL MATCH THE MENU.
+  --
+  -- 020 made the server derive this snapshot itself and store its own answer,
+  -- DISCARDING the client's. That closed the trust hole but opened a
+  -- consistency one: the POS freezes the answer when the cashier confirms the
+  -- line, and the operation may not be accepted until much later. If the owner
+  -- edits the menu in between, the server stored the NEW answer while the POS
+  -- confirmation, the direct kitchen print and every local reprint still showed
+  -- the OLD one — one order, two preparation answers.
+  --
+  -- So the server no longer replaces. It COMPARES its own derivation with the
+  -- client's frozen snapshot, canonicalised through the SAME strict allowlist
+  -- projection, and refuses the whole operation when they differ. jsonb
+  -- equality is SEMANTIC: key order, whitespace and 2 vs 2.0 never matter, and
+  -- unknown client keys are stripped by the projection before the comparison,
+  -- so nothing cosmetic can cause a false refusal.
+  --
+  -- WHAT IS STILL PROVEN. The comparison basis is
+  -- app.trusted_modifier_prep_snapshot, which reads the contribution and the
+  -- classifier link from the server's own menu rows, takes the classifier NAME
+  -- from that option's row, and derives classifier_selected from THIS
+  -- operation's authoritative modifier array. So a client that invents a
+  -- quantity, a unit, a name, a foreign classifier id or a selected flag that
+  -- contradicts what it actually selected no longer gets its lie stored — it
+  -- gets the operation refused. Nothing client-supplied is trusted; it is only
+  -- ever CHECKED.
+  --
+  -- PLACEMENT. After the replay lookup (an ALREADY-ACCEPTED operation must keep
+  -- replaying its stored result forever, however the menu has moved since) and
+  -- before every insert (a refusal is atomic by construction: no order, no
+  -- items, no modifiers, no round, no dispatch, no audit row, no partial money).
+  --
+  -- DETERMINISTIC AND NON-TRANSIENT. Every stale modifier is collected in one
+  -- pass and echoed in a stable order, so the same payload always produces the
+  -- same refusal. The echo carries the CLIENT-SUPPLIED payload labels only —
+  -- never a DB name, never another tenant's data (R-003). The POS treats the
+  -- code as a terminal business refusal: no retry loop, no kitchen print, and
+  -- the cashier refreshes the menu and re-picks the affected line, which
+  -- produces a NEW operation with a fresh frozen snapshot.
+  --
+  -- NO AUDIT ROW, deliberately, unlike the eligibility refusals above. Those
+  -- record an authorization or state DENIAL worth keeping forever; a stale
+  -- preparation snapshot is a benign client-refresh condition that changes
+  -- nothing about the order, and a client re-sending it would otherwise flood
+  -- an append-only table with rows carrying no forensic value.
+  select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'option_name_snapshot')
+    into v_stale_modifiers
+    from (
+      select distinct jsonb_build_object(
+               'menu_item_id',         e ->> 'menu_item_id',
+               'option_name_snapshot', m ->> 'option_name_snapshot') as bad
+        from jsonb_array_elements(p_order_items) e
+        cross join lateral jsonb_array_elements(
+          case when jsonb_typeof(e -> 'modifiers') = 'array'
+               then e -> 'modifiers' else '[]'::jsonb end) m
+       where (m ->> 'modifier_option_id') is not null
+         and app.kitchen_modifier_prep_projection(m -> 'meat_snapshot')
+             is distinct from
+             app.trusted_modifier_prep_snapshot(
+               v_org,
+               (e ->> 'menu_item_id')::uuid,
+               (m ->> 'modifier_option_id')::uuid,
+               e -> 'modifiers')
+    ) offenders;
+  if v_stale_modifiers is not null then
+    return jsonb_build_object('ok', false, 'error', 'modifier_prep_snapshot_stale',
+                              'entity', 'order', 'modifiers', v_stale_modifiers,
+                              'order_id', p_order_id, 'server_ts', now(), 'idempotency_replay', false);
+  end if;
+
   -- (j) ALLOCATE the round number under the held parent lock: max(round_number)
   --     across ALL rows of this order (voided/deleted INCLUDED — a number is
   --     NEVER reused), +1; the very first addition is ROUND 2 (the original
@@ -1443,14 +1631,18 @@ begin
         values (
           v_org, v_rest, v_branch, v_item_id, (v_modifier ->> 'modifier_option_id')::uuid,
           v_modifier ->> 'modifier_name_snapshot', v_modifier ->> 'option_name_snapshot', v_mod_price, v_mod_qty::int,
-          -- KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020: the SERVER
-          -- derives this snapshot from its OWN menu rows. The client's
-          -- meat_snapshot is no longer stored at all.
-          app.trusted_modifier_prep_snapshot(
-            v_org,
-            (v_item ->> 'menu_item_id')::uuid,
-            (v_modifier ->> 'modifier_option_id')::uuid,
-            v_item -> 'modifiers'));
+          -- KITCHEN-MODIFIER-PREP-CLASSIFIER-STALE-SNAPSHOT-FIX-021: the
+          -- VALIDATED FROZEN CLIENT SNAPSHOT, canonicalised through the strict
+          -- allowlist — the exact value the gate above proved equal to the
+          -- server's own derivation.
+          --
+          -- NOT a second call to app.trusted_modifier_prep_snapshot. That would
+          -- re-read the LIVE menu here, and a concurrent menu edit committing
+          -- between the gate and this insert would store a value nobody
+          -- validated (each statement of a read-committed function takes its own
+          -- snapshot). The projection is IMMUTABLE and reads only the payload,
+          -- so it cannot move: what is stored is exactly what was checked.
+          app.kitchen_modifier_prep_projection(v_modifier -> 'meat_snapshot'));
         v_mod_count := v_mod_count + 1;
       end loop;
     end if;
