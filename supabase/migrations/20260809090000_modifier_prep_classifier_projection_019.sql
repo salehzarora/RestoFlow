@@ -54,7 +54,10 @@
 --       * it COMPARES that with app.trusted_modifier_prep_snapshot;
 --       * on any difference it refuses the whole operation atomically with
 --         `modifier_prep_snapshot_stale` — no order, no items, no modifiers, no
---         round, no revision bump, no dispatch, no audit row;
+--         round, no revision bump, no dispatch, and no SUCCESS audit row
+--         (022: Add-items additionally records the established
+--         `order.items_add_denied` business-denial event, exactly as its
+--         neighbouring typed refusals do);
 --       * on equality it stores the VALIDATED SUBMITTED value, never a second
 --         live re-read, so a menu edit racing the insert cannot store an
 --         unvalidated answer.
@@ -1525,7 +1528,9 @@ begin
   -- PLACEMENT. After the replay lookup (an ALREADY-ACCEPTED operation must keep
   -- replaying its stored result forever, however the menu has moved since) and
   -- before every insert (a refusal is atomic by construction: no order, no
-  -- items, no modifiers, no round, no dispatch, no audit row, no partial money).
+  -- items, no modifiers, no round, no dispatch, no partial money — and no
+  -- SUCCESS audit. The established business-DENIAL event is written, see
+  -- below.
   --
   -- DETERMINISTIC AND NON-TRANSIENT. Every stale modifier is collected in one
   -- pass and echoed in a stable order, so the same payload always produces the
@@ -1535,11 +1540,28 @@ begin
   -- the cashier refreshes the menu and re-picks the affected line, which
   -- produces a NEW operation with a fresh frozen snapshot.
   --
-  -- NO AUDIT ROW, deliberately, unlike the eligibility refusals above. Those
-  -- record an authorization or state DENIAL worth keeping forever; a stale
-  -- preparation snapshot is a benign client-refresh condition that changes
-  -- nothing about the order, and a client re-sending it would otherwise flood
-  -- an append-only table with rows carrying no forensic value.
+  -- 022 (Codex MEDIUM): THIS REFUSAL IS AUDITED, exactly like every other typed
+  -- Add-items denial. 021 wrote no row here, reasoning that a stale snapshot is
+  -- a benign client-refresh condition — but that broke ranks with
+  -- invalid_device_type, permission_denied, invalid_item_payload,
+  -- order_not_dine_in, order_not_eligible, order_already_settled,
+  -- item_unavailable and modifier_option_not_in_scope, each of which records
+  -- `order.items_add_denied`. A refusal absent from the activity trail is one
+  -- nobody can explain to the owner afterwards, and "the kitchen never got my
+  -- round" is precisely the question the trail exists to answer.
+  --
+  -- The row uses the NEIGHBOURING shape verbatim — same action, same fields, in
+  -- the same order — plus the caller's own affected-modifier summary, so the
+  -- owner can see WHICH line was refused. Money-free, scoped to this
+  -- organization/restaurant/branch/order, actor taken from the already-validated
+  -- PIN session (never a client claim), tied to the calling device, and built
+  -- only from labels the caller itself submitted: no DB name and no other
+  -- tenant's data can appear (R-003).
+  --
+  -- Like its neighbours it carries NO dedup key, so a client re-sending the same
+  -- refused operation writes one row per refused call. That is the established
+  -- contract and is deliberately matched rather than replaced: introducing an
+  -- audit uniqueness rule here would be a new model on an append-only table.
   select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'option_name_snapshot')
     into v_stale_modifiers
     from (
@@ -1560,6 +1582,12 @@ begin
                e -> 'modifiers')
     ) offenders;
   if v_stale_modifiers is not null then
+    insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+    values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'order.items_add_denied', null, null,
+            jsonb_build_object('attempted_action', 'add_order_items', 'order_id', p_order_id,
+                               'order_code', v_order_code, 'role', v_role, 'device_type', v_device_type,
+                               'order_status', v_o_status, 'denied_reason', 'modifier_prep_snapshot_stale',
+                               'modifiers', v_stale_modifiers));
     return jsonb_build_object('ok', false, 'error', 'modifier_prep_snapshot_stale',
                               'entity', 'order', 'modifiers', v_stale_modifiers,
                               'order_id', p_order_id, 'server_ts', now(), 'idempotency_replay', false);

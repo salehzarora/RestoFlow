@@ -40,7 +40,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(60);
+select plan(70);
 
 -- ------------------------------------------------------------------- scope
 insert into organizations (id, name, slug, default_currency) values
@@ -512,10 +512,104 @@ select is(
   (select dispatches from d_before),
   'D10 no kitchen dispatch was created');
 
+-- ---------------------------------------------------------------------------
+-- KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022 (Codex MEDIUM).
+-- ---------------------------------------------------------------------------
+-- 021 wrote NO audit row for this refusal, which broke ranks with every other
+-- typed Add-items denial (invalid_device_type, permission_denied,
+-- invalid_item_payload, order_not_dine_in, order_not_eligible,
+-- order_already_settled, item_unavailable, modifier_option_not_in_scope) —
+-- each of which records `order.items_add_denied`. A refusal an owner cannot see
+-- in the activity trail is a refusal nobody can explain after the fact.
+--
+-- The row follows the NEIGHBOURING shape exactly rather than inventing a
+-- parallel schema, plus the caller's own affected-modifier summary.
+create or replace function pg_temp.denials(p_order uuid)
+  returns setof jsonb language sql as $fn$
+  select a.new_values
+    from public.audit_events a
+   where a.organization_id = '00000000-0000-0000-0000-000000021a00'
+     and a.action          = 'order.items_add_denied'
+     and a.new_values ->> 'order_id' = p_order::text
+   order by a.created_at, a.id;
+$fn$;
+
 select is(
-  pg_temp.audits(),
-  (select audits from d_before),
-  'D11 NO audit event of any kind was written for the stale refusal');
+  (select count(*) from pg_temp.denials('00000000-0000-0000-0000-000000021920')),
+  1::bigint,
+  'D11 the stale refusal writes EXACTLY ONE order.items_add_denied event');
+
+select is(
+  (select d ->> 'denied_reason' from pg_temp.denials('00000000-0000-0000-0000-000000021920') d),
+  'modifier_prep_snapshot_stale',
+  'D11a the denied_reason names this refusal');
+
+select is(
+  (select d ->> 'order_id' from pg_temp.denials('00000000-0000-0000-0000-000000021920') d),
+  '00000000-0000-0000-0000-000000021920',
+  'D11b the event is attributed to the right order');
+
+select is(
+  (select jsonb_build_array(d ->> 'attempted_action', d ->> 'order_code',
+                            d ->> 'role', d ->> 'device_type', d ->> 'order_status')
+     from pg_temp.denials('00000000-0000-0000-0000-000000021920') d),
+  jsonb_build_array('add_order_items', '#021920', 'cashier', 'pos', 'submitted'),
+  'D11c it carries the ESTABLISHED neighbouring denial fields, unchanged');
+
+select is(
+  (select d -> 'modifiers' from pg_temp.denials('00000000-0000-0000-0000-000000021920') d),
+  jsonb_build_array(jsonb_build_object(
+    'menu_item_id', '00000000-0000-0000-0000-000000021101',
+    'option_name_snapshot', 'Size choice')),
+  'D11d the affected-modifier summary is the CALLER''s own submitted labels');
+
+select ok(
+  (select not exists (
+     select 1 from jsonb_object_keys(d) k where k like '%minor%')
+     from pg_temp.denials('00000000-0000-0000-0000-000000021920') d),
+  'D11e the denial event is MONEY-FREE (no *_minor key)');
+
+select is(
+  (select count(*) from public.audit_events
+    where organization_id = '00000000-0000-0000-0000-000000021a00'
+      and action = 'order.items_added'
+      and new_values ->> 'order_id' = '00000000-0000-0000-0000-000000021920'),
+  1::bigint,
+  'D11f NO success audit was added — only the one from the ACCEPTED round D1');
+
+select is(
+  (select actor_employee_profile_id from public.audit_events
+    where organization_id = '00000000-0000-0000-0000-000000021a00'
+      and action = 'order.items_add_denied'
+    order by created_at desc, id desc limit 1),
+  '00000000-0000-0000-0000-000000021701'::uuid,
+  'D11g the actor is the validated PIN-session employee, not a client claim');
+
+select is(
+  (select device_id from public.audit_events
+    where organization_id = '00000000-0000-0000-0000-000000021a00'
+      and action = 'order.items_add_denied'
+    order by created_at desc, id desc limit 1),
+  '00000000-0000-0000-0000-000000021d01'::uuid,
+  'D11h the event is tied to the calling device');
+
+-- REPEATED REFUSAL. The neighbouring typed denials carry no dedup key and emit
+-- one row per refused RPC call; this refusal matches that contract exactly
+-- rather than inventing an idempotency model for the audit trail.
+select is(
+  app.add_order_items(
+     '00000000-0000-0000-0000-000000021c01', '00000000-0000-0000-0000-000000021920',
+     '00000000-0000-0000-0000-000000021d01', 'op-D3-again',
+     pg_temp.body('00000000-0000-0000-0000-000000021301', true, pg_temp.frozen(true)),
+     now()) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'D11i a repeated stale attempt is refused again');
+
+select is(
+  (select count(*) from pg_temp.denials('00000000-0000-0000-0000-000000021920')),
+  2::bigint,
+  'D11j ...and writes a SECOND denial row — one per refused call, as the '
+  'neighbouring denials do');
 
 -- The already-accepted round still replays under the changed menu.
 select is(
