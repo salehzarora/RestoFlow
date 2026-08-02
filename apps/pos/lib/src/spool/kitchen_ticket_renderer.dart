@@ -264,7 +264,10 @@ final class KitchenTicketRenderer {
       // with the classifier worded through the SAME shared composer the direct
       // POS print and the KDS card use. An option with no contribution prints
       // nothing extra, so every existing ticket is byte-identical.
-      if (modifier.prep case final prep?)
+      // 020 (Codex HIGH #3): only a contribution with a positive quantity AND
+      // a unit is printable. A unit-only row would name a resource with no
+      // count — an instruction the kitchen cannot act on.
+      if (modifier.prep case final prep? when prep.isRenderable)
         pp.PrintTextLine(
           '  • ${_modifierPrepText(prep, modifier.qty)}',
           style: pp.PrintLineStyle.sub,

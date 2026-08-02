@@ -466,6 +466,25 @@ final class KitchenDispatchModifierPrep {
       unit: prep.unit,
     );
   }
+
+  /// 020 (Codex HIGH #3) — the DEFENSIVE client mirror of the server gate.
+  ///
+  /// A contribution is only real when it has BOTH a strictly-positive finite
+  /// quantity AND a usable unit. The server projection now refuses to emit
+  /// anything else, but a payload written by an older server (or a corrupted
+  /// row) could still carry a unit with no count — and the renderer would have
+  /// printed a bullet naming a resource with no number, which reads to the
+  /// kitchen as an instruction it cannot follow.
+  ///
+  /// A malformed CLASSIFIER never reaches this: it degrades to unsplit above,
+  /// and the contribution survives.
+  bool get isRenderable {
+    final q = quantity;
+    return q != null &&
+        q > 0 &&
+        q.isFinite &&
+        (unit?.trim().isNotEmpty ?? false);
+  }
 }
 
 /// The pinned printer destination — endpoint data lives ONLY here, inside

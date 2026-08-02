@@ -22,7 +22,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(49);
+select plan(59);
 
 -- ---------------------------------------------------------------------------
 -- 1. The new projection exists with the expected posture.
@@ -121,9 +121,9 @@ select is(
   'a LEGACY meat_snapshot projects unchanged (no classifier keys)');
 
 select is(
-  app.kitchen_modifier_prep_projection('{"quantity":1.5}'::jsonb),
-  '{"quantity":1.5}'::jsonb,
-  'a fractional contribution with no unit still projects');
+  app.kitchen_modifier_prep_projection('{"quantity":1.5,"unit":"kg"}'::jsonb),
+  '{"quantity":1.5,"unit":"kg"}'::jsonb,
+  'a fractional contribution projects');
 
 -- ---------------------------------------------------------------------------
 -- 3. FAIL SAFE: nothing to contribute -> NULL (the modifier omits the key).
@@ -141,6 +141,54 @@ select is(app.kitchen_modifier_prep_projection('{"quantity":-2}'::jsonb), null::
 select is(app.kitchen_modifier_prep_projection('{"quantity":"2"}'::jsonb), null::jsonb,
   'a STRING quantity is not a number -> NULL');
 
+-- 020 (Codex HIGH #3) — THE OUTER GATE. 019 emitted a phantom {"unit":"..."}
+-- whenever the quantity was absent or unusable: jsonb_strip_nulls removed the
+-- quantity and the unit alone survived, so a durable ticket could print a
+-- bullet with a resource and no count. Both parts are now required.
+select is(
+  app.kitchen_modifier_prep_projection('{"unit":"Meat pieces"}'::jsonb),
+  null::jsonb,
+  'GATE: a MISSING quantity yields NULL, never a unit-only contribution');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":0,"unit":"Meat pieces"}'::jsonb),
+  null::jsonb,
+  'GATE: a ZERO quantity with a valid unit yields NULL');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":-1,"unit":"Meat pieces"}'::jsonb),
+  null::jsonb,
+  'GATE: a NEGATIVE quantity with a valid unit yields NULL');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":"oops","unit":"Meat pieces"}'::jsonb),
+  null::jsonb,
+  'GATE: a NON-NUMERIC quantity with a valid unit yields NULL');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":null,"unit":"Meat pieces"}'::jsonb),
+  null::jsonb,
+  'GATE: an explicit NULL quantity yields NULL');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":2}'::jsonb),
+  null::jsonb,
+  'GATE: a MISSING unit yields NULL (nothing to name on the ticket)');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":2,"unit":"   "}'::jsonb),
+  null::jsonb,
+  'GATE: a BLANK unit yields NULL');
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":2,"unit":7}'::jsonb),
+  null::jsonb,
+  'GATE: a NON-STRING unit yields NULL');
+select ok(
+  app.kitchen_modifier_prep_projection('{"unit":"Meat pieces"}'::jsonb) is null
+  and app.kitchen_modifier_prep_projection('{"quantity":0,"unit":"X"}'::jsonb) is null,
+  'GATE: the projection can NEVER emit a contribution without a positive quantity');
+
+-- ...and a malformed CLASSIFIER still keeps the valid contribution.
+select is(
+  app.kitchen_modifier_prep_projection('{"quantity":2,"unit":"Meat pieces",
+    "classifier_option_id":{"x":1},"classifier_selected":"nope"}'::jsonb),
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
+  'GATE: malformed classifier metadata degrades to UNSPLIT, never to NULL');
+
 -- ---------------------------------------------------------------------------
 -- 4. FAIL SAFE: malformed / partial classifiers degrade to unsplit.
 -- ---------------------------------------------------------------------------
@@ -154,44 +202,44 @@ select is(
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":["a"],
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":["a"],
     "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'an ARRAY classifier id is dropped');
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":42,
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":42,
     "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'a NUMERIC classifier id is dropped');
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":"o",
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":"o",
     "classifier_option_name":7,"classifier_selected":true}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'a NUMERIC classifier name is dropped');
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":"o",
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":"o",
     "classifier_option_name":"Cheese","classifier_selected":"yes"}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'a STRING classifier_selected is dropped (booleans only)');
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":"o",
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":"o",
     "classifier_option_name":"Cheese"}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'a triple MISSING the answer is not a classification');
 
 select is(
   app.kitchen_modifier_prep_projection('{
-    "quantity":2,"classifier_option_id":"   ",
+    "quantity":2,"unit":"Meat pieces","classifier_option_id":"   ",
     "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb),
-  '{"quantity":2}'::jsonb,
+  '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'a BLANK classifier id is dropped');
 
 select is(
@@ -235,7 +283,7 @@ select ok(
 
 select is(
   length(app.kitchen_modifier_prep_projection(
-    jsonb_build_object('quantity', 1,
+    jsonb_build_object('quantity', 1, 'unit', 'u',
       'classifier_option_id', repeat('x', 200),
       'classifier_option_name', 'C',
       'classifier_selected', true)) ->> 'classifier_option_id'),
@@ -244,7 +292,7 @@ select is(
 
 select is(
   length(app.kitchen_modifier_prep_projection(
-    jsonb_build_object('quantity', 1,
+    jsonb_build_object('quantity', 1, 'unit', 'u',
       'classifier_option_id', 'o',
       'classifier_option_name', repeat('y', 300),
       'classifier_selected', true)) ->> 'classifier_option_name'),
