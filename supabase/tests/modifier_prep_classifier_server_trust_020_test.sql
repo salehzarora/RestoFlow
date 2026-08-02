@@ -14,6 +14,24 @@
 --   and the KDS, the printed ticket and the durable spool would all have
 --   believed it. A client-side resolver is necessary but not sufficient.
 --
+-- HOW IT IS ENFORCED NOW (021).
+--
+--   020 closed the hole by having the server DERIVE the snapshot and store its
+--   own answer, discarding whatever the client sent. That silently replaced a
+--   frozen operation's answer whenever the menu had moved on, so one accepted
+--   order could carry two different preparation answers (POS vs KDS/spool).
+--
+--   021 keeps the identical trust boundary and changes only the VERDICT: the
+--   server still derives its own snapshot from its own rows and still believes
+--   nothing the client says — but it now COMPARES, and REFUSES the whole
+--   operation (`modifier_prep_snapshot_stale`) instead of quietly overwriting.
+--   A lying client therefore gets LESS than before: not a corrected row, but no
+--   row at all.
+--
+--   These assertions are the same security cases, restated against that
+--   verdict. The stale/replay/atomicity contract itself lives in
+--   modifier_prep_stale_snapshot_021_test.sql.
+--
 -- These tests drive the REAL authoritative RPCs — not the projection helper —
 -- and read back what the server actually STORED in order_item_modifiers.
 --
@@ -25,7 +43,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(27);
+select plan(30);
 
 -- ------------------------------------------------------------------- scope
 insert into organizations (id, name, slug, default_currency) values
@@ -129,30 +147,40 @@ create or replace function pg_temp.stored(p_order uuid)
    limit 1;
 $fn$;
 
+-- The exact frozen snapshot a CURRENT POS produces for the 240g option.
+create or replace function pg_temp.frozen(p_selected boolean)
+  returns jsonb language sql immutable as $fn$
+  select jsonb_build_object(
+    'quantity', 2, 'unit', 'Meat pieces',
+    'classifier_option_id', '00000000-0000-0000-0000-000000020302',
+    'classifier_option_name', 'Cheese',
+    'classifier_selected', p_selected);
+$fn$;
+
 -- ============================================================================
--- A — the honest cases
+-- A — the honest cases: a frozen snapshot that matches is accepted AS SUBMITTED
 -- ============================================================================
 select is(
   (pg_temp.submit('00000000-0000-0000-0000-000000020901', 'op-A1',
-                  '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok')::boolean,
+                  '00000000-0000-0000-0000-000000020301', true,
+                  pg_temp.frozen(true)) ->> 'ok')::boolean,
   true, 'A1 a normal 240g + Cheese submit is accepted');
 
 select is(
   pg_temp.stored('00000000-0000-0000-0000-000000020901'),
-  '{"quantity":2,"unit":"Meat pieces",
-    "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-    "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb,
-  'A2 the server DERIVED the whole snapshot (client sent none at all)');
+  pg_temp.frozen(true),
+  'A2 the stored snapshot is the VALIDATED SUBMITTED value, unchanged');
 
 select is(
   (pg_temp.submit('00000000-0000-0000-0000-000000020902', 'op-A3',
-                  '00000000-0000-0000-0000-000000020301', false, null) -> 'ok')::text,
+                  '00000000-0000-0000-0000-000000020301', false,
+                  pg_temp.frozen(false)) -> 'ok')::text,
   'true', 'A3 the same order without Cheese is accepted');
 
 select is(
   pg_temp.stored('00000000-0000-0000-0000-000000020902') -> 'classifier_selected',
   'false'::jsonb,
-  'A4 without Cheese the server stores classifier_selected = false');
+  'A4 without Cheese the stored answer is classifier_selected = false');
 
 select is(
   pg_temp.stored('00000000-0000-0000-0000-000000020902') -> 'quantity',
@@ -160,59 +188,67 @@ select is(
   'A5 the PER-UNIT quantity is stored (modifier units stay in their own column)');
 
 -- ============================================================================
--- B — a lying client (the whole point of Codex MEDIUM #4)
+-- B — a lying client (the whole point of Codex MEDIUM #4) is now REFUSED
 -- ============================================================================
-select ok(
-  (pg_temp.submit('00000000-0000-0000-0000-000000020903', 'op-B1',
-     '00000000-0000-0000-0000-000000020301', false,
-     '{"quantity":2,"unit":"Meat pieces",
-       "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-       "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb) ->> 'ok')::boolean,
-  'B1 a submit claiming classifier_selected=true WITHOUT selecting Cheese is accepted');
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020903', 'op-B1',
+     '00000000-0000-0000-0000-000000020301', false, pg_temp.frozen(true)) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B1 claiming classifier_selected=true WITHOUT selecting Cheese is refused');
 
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020903') -> 'classifier_selected',
-  'false'::jsonb,
-  'B2 ...but the SERVER stores FALSE: Cheese was never selected');
+  (select count(*) from public.orders where id = '00000000-0000-0000-0000-000000020903'),
+  0::bigint, 'B2 ...and no order exists: the lie was not corrected, it was rejected');
 
-select ok(
-  (pg_temp.submit('00000000-0000-0000-0000-000000020904', 'op-B3',
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020904', 'op-B3',
+     '00000000-0000-0000-0000-000000020301', true, pg_temp.frozen(false)) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B3 claiming classifier_selected=false WHILE selecting Cheese is refused');
+
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020905', 'op-B4',
      '00000000-0000-0000-0000-000000020301', true,
      '{"quantity":2,"unit":"Meat pieces",
        "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-       "classifier_option_name":"Cheese","classifier_selected":false}'::jsonb) ->> 'ok')::boolean,
-  'B3 a submit claiming classifier_selected=false WHILE selecting Cheese is accepted');
-
-select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020904') -> 'classifier_selected',
-  'true'::jsonb,
-  'B4 ...but the SERVER stores TRUE: Cheese was selected');
-
-select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020904') ->> 'classifier_option_name',
-  'Cheese',
-  'B5 the stored NAME comes from the server row, not the payload');
-
--- A fake NAME on the wire is ignored entirely.
-select ok(
-  (pg_temp.submit('00000000-0000-0000-0000-000000020905', 'op-B6',
-     '00000000-0000-0000-0000-000000020301', true,
-     '{"quantity":99,"unit":"Free Beer",
-       "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-       "classifier_option_name":"TOTALLY FAKE","classifier_selected":true}'::jsonb) ->> 'ok')::boolean,
-  'B6 a submit with a fake name and a fake quantity is accepted');
+       "classifier_option_name":"TOTALLY FAKE","classifier_selected":true}'::jsonb) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B4 a FAKE classifier name is refused');
 
 select is(
   pg_temp.stored('00000000-0000-0000-0000-000000020905'),
-  '{"quantity":2,"unit":"Meat pieces",
-    "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-    "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb,
-  'B7 NOTHING client-supplied survives: quantity, unit and name are the server''s');
+  null::jsonb, 'B5 ...and nothing at all was stored under that order');
+
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020906', 'op-B6',
+     '00000000-0000-0000-0000-000000020301', true,
+     '{"quantity":99,"unit":"Free Beer",
+       "classifier_option_id":"00000000-0000-0000-0000-000000020302",
+       "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B6 an invented quantity and unit are refused');
+
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020907', 'op-B7',
+     '00000000-0000-0000-0000-000000020301', true,
+     '{"quantity":2,"unit":"Meat pieces",
+       "classifier_option_id":"00000000-0000-0000-0000-000000020304",
+       "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B7 a classifier id belonging to ANOTHER product is refused');
+
+select is(
+  pg_temp.submit('00000000-0000-0000-0000-000000020908', 'op-B8',
+     '00000000-0000-0000-0000-000000020301', true, null) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'B8 omitting the snapshot while the option IS configured is refused');
 
 -- ============================================================================
--- C — invalid classifier configuration degrades to unsplit, never to nothing
+-- C — invalid classifier configuration degrades to unsplit on BOTH sides
 -- ============================================================================
--- Point 240g at the CHICKEN's Cheese (a foreign product's option).
+-- The degradation rules are unchanged by 021; what changed is that the CLIENT
+-- must arrive at the same canonical answer. A POS reading the same live menu
+-- does, because it applies the same link rules to the same rows.
 update public.modifier_options
    set kitchen_meat = '{"quantity":2,"unit":"Meat pieces",
                         "classifier_option_id":"00000000-0000-0000-0000-000000020304",
@@ -220,16 +256,16 @@ update public.modifier_options
  where id = '00000000-0000-0000-0000-000000020301';
 
 select is(
-  pg_temp.submit('00000000-0000-0000-0000-000000020906', 'op-C1',
-                 '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok',
-  'true', 'C1 a foreign-product classifier does not break the submit');
+  pg_temp.submit('00000000-0000-0000-0000-000000020909', 'op-C1',
+                 '00000000-0000-0000-0000-000000020301', true,
+                 '{"quantity":2,"unit":"Meat pieces"}'::jsonb) ->> 'ok',
+  'true', 'C1 a foreign-product classifier config accepts an UNSPLIT snapshot');
 
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020906'),
+  pg_temp.stored('00000000-0000-0000-0000-000000020909'),
   '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'C2 a FOREIGN product classifier degrades to an UNSPLIT contribution');
 
--- Self-reference.
 update public.modifier_options
    set kitchen_meat = '{"quantity":2,"unit":"Meat pieces",
                         "classifier_option_id":"00000000-0000-0000-0000-000000020301",
@@ -237,107 +273,119 @@ update public.modifier_options
  where id = '00000000-0000-0000-0000-000000020301';
 
 select ok(
-  (pg_temp.submit('00000000-0000-0000-0000-000000020907', 'op-C3',
-                  '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok')::boolean,
-  'C3 a self-referencing classifier does not break the submit');
+  (pg_temp.submit('00000000-0000-0000-0000-00000002090a', 'op-C3',
+                  '00000000-0000-0000-0000-000000020301', true,
+                  '{"quantity":2,"unit":"Meat pieces"}'::jsonb) ->> 'ok')::boolean,
+  'C3 a self-referencing classifier config accepts an UNSPLIT snapshot');
 
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020907'),
+  pg_temp.stored('00000000-0000-0000-0000-00000002090a'),
   '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'C4 a SELF-REFERENCE degrades to an UNSPLIT contribution');
 
--- A nonexistent classifier id.
 update public.modifier_options
    set kitchen_meat = '{"quantity":2,"unit":"Meat pieces",
                         "classifier_option_id":"00000000-0000-0000-0000-0000deadbeef",
                         "classifier_option_name":"Ghost"}'::jsonb
  where id = '00000000-0000-0000-0000-000000020301';
 select is(
-  (select pg_temp.submit('00000000-0000-0000-0000-000000020908', 'op-C5',
-                         '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok'),
-  'true', 'C5 a deleted/nonexistent classifier does not break the submit');
+  (select pg_temp.submit('00000000-0000-0000-0000-00000002090b', 'op-C5',
+                         '00000000-0000-0000-0000-000000020301', true,
+                         '{"quantity":2,"unit":"Meat pieces"}'::jsonb) ->> 'ok'),
+  'true', 'C5 a deleted/nonexistent classifier config accepts an UNSPLIT snapshot');
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020908'),
+  pg_temp.stored('00000000-0000-0000-0000-00000002090b'),
   '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'C6 a NONEXISTENT classifier degrades to an UNSPLIT contribution');
 
--- A malformed (non-string) classifier id in the stored configuration.
 update public.modifier_options
    set kitchen_meat = '{"quantity":2,"unit":"Meat pieces",
                         "classifier_option_id":{"amount_minor":5}}'::jsonb
  where id = '00000000-0000-0000-0000-000000020301';
 select is(
-  (select pg_temp.submit('00000000-0000-0000-0000-000000020909', 'op-C7',
-                         '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok'),
-  'true', 'C7 malformed classifier configuration does not break the submit');
+  (select pg_temp.submit('00000000-0000-0000-0000-00000002090c', 'op-C7',
+                         '00000000-0000-0000-0000-000000020301', true,
+                         '{"quantity":2,"unit":"Meat pieces"}'::jsonb) ->> 'ok'),
+  'true', 'C7 malformed classifier configuration accepts an UNSPLIT snapshot');
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-000000020909'),
+  pg_temp.stored('00000000-0000-0000-0000-00000002090c'),
   '{"quantity":2,"unit":"Meat pieces"}'::jsonb,
   'C8 MALFORMED classifier metadata keeps the valid quantity/unit, unsplit');
 
--- A non-positive configured quantity contributes nothing at all.
 update public.modifier_options
    set kitchen_meat = '{"quantity":0,"unit":"Meat pieces"}'::jsonb
  where id = '00000000-0000-0000-0000-000000020301';
 select is(
-  (select pg_temp.submit('00000000-0000-0000-0000-00000002090a', 'op-C9',
+  (select pg_temp.submit('00000000-0000-0000-0000-00000002090d', 'op-C9',
                          '00000000-0000-0000-0000-000000020301', true, null) ->> 'ok'),
-  'true', 'C9 a zero-quantity configuration does not break the submit');
+  'true', 'C9 a zero-quantity configuration accepts a snapshot-less line');
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-00000002090a'),
+  pg_temp.stored('00000000-0000-0000-0000-00000002090d'),
   null::jsonb,
   'C10 a ZERO configured quantity stores NO contribution (never a unit-only row)');
 
--- An option with NO configuration at all stores nothing (the historical shape).
 select is(
-  (select pg_temp.submit('00000000-0000-0000-0000-00000002090b', 'op-C11',
-                         '00000000-0000-0000-0000-000000020303', false, null) ->> 'ok'),
+  (select pg_temp.submit('00000000-0000-0000-0000-00000002090e', 'op-C11',
+                         '00000000-0000-0000-0000-000000020303', false,
+                         '{"quantity":1,"unit":"Meat pieces"}'::jsonb) ->> 'ok'),
   'true', 'C11 an unclassified 120g submit is accepted');
 select is(
-  pg_temp.stored('00000000-0000-0000-0000-00000002090b'),
+  pg_temp.stored('00000000-0000-0000-0000-00000002090e'),
   '{"quantity":1,"unit":"Meat pieces"}'::jsonb,
   'C12 an UNCLASSIFIED option stores its plain contribution');
 
 -- ============================================================================
 -- D — Add-items enforces the identical contract
 -- ============================================================================
--- Restore the healthy 240g configuration first.
 update public.modifier_options
    set kitchen_meat = '{"quantity":2,"unit":"Meat pieces",
                         "classifier_option_id":"00000000-0000-0000-0000-000000020302",
                         "classifier_option_name":"Cheese"}'::jsonb
  where id = '00000000-0000-0000-0000-000000020301';
 
--- A live parent order to add to.
 select is(
-  (pg_temp.submit('00000000-0000-0000-0000-00000002090c', 'op-D0',
-                  '00000000-0000-0000-0000-000000020303', false, null) ->> 'ok')::text,
+  (pg_temp.submit('00000000-0000-0000-0000-00000002090f', 'op-D0',
+                  '00000000-0000-0000-0000-000000020303', false,
+                  '{"quantity":1,"unit":"Meat pieces"}'::jsonb) ->> 'ok')::text,
   'true', 'D0 the parent order for the Add-items round is accepted');
 
 select is(
-  (app.add_order_items(
+  app.add_order_items(
      '00000000-0000-0000-0000-000000020c01',
-     '00000000-0000-0000-0000-00000002090c',
+     '00000000-0000-0000-0000-00000002090f',
      '00000000-0000-0000-0000-000000020d01', 'op-D1',
      pg_temp.body('00000000-0000-0000-0000-000000020301', true,
        '{"quantity":2,"unit":"Meat pieces",
          "classifier_option_id":"00000000-0000-0000-0000-000000020302",
          "classifier_option_name":"LIES","classifier_selected":false}'::jsonb),
-     now()) ->> 'ok')::text,
-  'true', 'D1 Add-items with a lying snapshot is accepted');
+     now()) ->> 'error',
+  'modifier_prep_snapshot_stale',
+  'D1 Add-items with a lying snapshot is REFUSED');
+
+select is(
+  (select count(*) from public.order_service_rounds
+    where order_id = '00000000-0000-0000-0000-00000002090f'),
+  0::bigint, 'D2 ...and no service round was created');
+
+select is(
+  (app.add_order_items(
+     '00000000-0000-0000-0000-000000020c01',
+     '00000000-0000-0000-0000-00000002090f',
+     '00000000-0000-0000-0000-000000020d01', 'op-D3',
+     pg_temp.body('00000000-0000-0000-0000-000000020301', true, pg_temp.frozen(true)),
+     now()) ->> 'ok')::boolean,
+  true, 'D3 an HONEST Add-items round is accepted');
 
 select is(
   (select om.meat_snapshot
      from public.order_item_modifiers om
      join public.order_items oi
        on oi.organization_id = om.organization_id and oi.id = om.order_item_id
-    where oi.order_id = '00000000-0000-0000-0000-00000002090c'
+    where oi.order_id = '00000000-0000-0000-0000-00000002090f'
       and oi.service_round_id is not null
       and om.modifier_option_id = '00000000-0000-0000-0000-000000020301'),
-  '{"quantity":2,"unit":"Meat pieces",
-    "classifier_option_id":"00000000-0000-0000-0000-000000020302",
-    "classifier_option_name":"Cheese","classifier_selected":true}'::jsonb,
-  'D2 Add-items ALSO derives the trusted snapshot: name fixed, selected=true');
+  pg_temp.frozen(true),
+  'D4 Add-items stores the VALIDATED SUBMITTED snapshot');
 
 select * from finish();
 rollback;
