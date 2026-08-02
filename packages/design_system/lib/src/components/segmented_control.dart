@@ -26,6 +26,11 @@ class RestoflowSegment<T> {
   final Key? key;
 }
 
+/// The default minimum height of a segment's tappable surface (RF-132 dashboard
+/// density). Touch-first surfaces raise it via
+/// [RestoflowSegmentedControl.minSegmentHeight].
+const double kRestoflowSegmentMinHeight = 38;
+
 /// A cohesive single-choice segmented control (RF-132): one bordered white bar
 /// holding every option, thin hairline dividers between unselected neighbours,
 /// and a solid brand-green fill (white foreground, soft green shadow) on the
@@ -48,6 +53,7 @@ class RestoflowSegmentedControl<T> extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.expand = false,
+    this.minSegmentHeight = kRestoflowSegmentMinHeight,
     super.key,
   });
 
@@ -65,6 +71,13 @@ class RestoflowSegmentedControl<T> extends StatelessWidget {
   /// (narrow layouts); when false the bar hugs its content.
   final bool expand;
 
+  /// Minimum height of each segment's tappable surface, in logical pixels.
+  /// Defaults to [kRestoflowSegmentMinHeight] so existing consumers are
+  /// unchanged; touch-first surfaces (POS) raise it to a 44dp target. It is a
+  /// floor only — a segment whose wrapped label is already taller keeps its
+  /// natural height.
+  final double minSegmentHeight;
+
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[];
@@ -80,6 +93,7 @@ class RestoflowSegmentedControl<T> extends StatelessWidget {
         segment: segments[i],
         selected: isSelected,
         dense: expand,
+        minHeight: minSegmentHeight,
         onTap: () => onSelected(segments[i].value),
       );
       children.add(expand ? Expanded(child: segment) : segment);
@@ -129,11 +143,16 @@ class _SegmentButton<T> extends StatelessWidget {
     required this.segment,
     required this.selected,
     required this.dense,
+    required this.minHeight,
     required this.onTap,
   });
 
   final RestoflowSegment<T> segment;
   final bool selected;
+
+  /// Floor for the tappable surface's height (see
+  /// [RestoflowSegmentedControl.minSegmentHeight]).
+  final double minHeight;
 
   /// True in expand mode: tighter horizontal padding so flexed segments give
   /// their labels the most room on narrow layouts (word-boundary wrapping
@@ -150,7 +169,7 @@ class _SegmentButton<T> extends StatelessWidget {
     final icon = segment.icon;
 
     final content = Container(
-      constraints: const BoxConstraints(minHeight: 38),
+      constraints: BoxConstraints(minHeight: minHeight),
       padding: EdgeInsetsDirectional.symmetric(
         horizontal: dense ? RestoflowSpacing.sm : RestoflowSpacing.lg,
         vertical: RestoflowSpacing.sm,

@@ -525,6 +525,7 @@
   "posModifierSelectedCountOpen": "{selected}",
   "posModifierFree": "مجاني",
   "posModifierBasePrice": "السعر الأساسي · {price}",
+  "posModifierQuantityLabel": "الكمية",
   "posModifierItemNoteLabel": "ملاحظة للمنتج",
   "posModifierItemNoteHint": "مثال: بدون بصل، زيادة صوص",
   "posItemNoteLabel": "ملاحظة",

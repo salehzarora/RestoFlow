@@ -989,7 +989,7 @@ class CartController extends Notifier<CartViewState> {
   /// item already exists, its quantity is incremented instead of adding a
   /// duplicate line. Adding an item while a confirmation is showing dismisses
   /// it and starts a fresh order.
-  CartMutationResult addItem(DemoMenuItem item) {
+  CartMutationResult addItem(DemoMenuItem item, {int quantity = 1}) {
     if (_locked) return CartMutationResult.lockedByAddition;
     _submittedOrder = null;
     // An EMPTY cart re-binds to the active menu currency before its first line
@@ -1001,7 +1001,9 @@ class CartController extends Notifier<CartViewState> {
     if (existing != null &&
         !(_lineModifiers[existing.lineId]?.isNotEmpty ?? false) &&
         !_lineNotes.containsKey(existing.lineId)) {
-      _cart.changeQuantity(existing.lineId, existing.quantity + 1);
+      // POS-MODIFIER-SHEET-QUANTITY-003: merge by the requested N, not by one.
+      // The default of 1 keeps every existing caller byte-identical.
+      _cart.changeQuantity(existing.lineId, existing.quantity + quantity);
     } else {
       final lineId = 'line-${_lineSeq++}';
       _cart.addLine(
@@ -1011,6 +1013,10 @@ class CartController extends Notifier<CartViewState> {
           itemNameSnapshot: item.name,
           basePriceMinorSnapshot: item.priceMinor,
           currencyCodeSnapshot: _cart.currencyCode,
+          // Validation is the DOMAIN's (CartLine rejects a non-positive
+          // quantity); no second, divergent rule is invented here, and no
+          // arbitrary maximum is introduced because the cart has none.
+          quantity: quantity,
         ),
       );
       _lineDisplayOrders[lineId] = (
@@ -1035,11 +1041,14 @@ class CartController extends Notifier<CartViewState> {
     DemoMenuItem item,
     List<SelectedModifier> modifiers, {
     String? note,
+    int quantity = 1,
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
     final trimmedNote = note?.trim();
     final hasNote = trimmedNote != null && trimmedNote.isNotEmpty;
-    if (modifiers.isEmpty && !hasNote) return addItem(item);
+    if (modifiers.isEmpty && !hasNote) {
+      return addItem(item, quantity: quantity);
+    }
     _submittedOrder = null;
     if (_cart.lines.isEmpty && _cart.currencyCode != _activeCurrency()) {
       _cart = _freshCart();
@@ -1052,6 +1061,10 @@ class CartController extends Notifier<CartViewState> {
         itemNameSnapshot: item.name,
         basePriceMinorSnapshot: item.priceMinor,
         currencyCodeSnapshot: _cart.currencyCode,
+        // ONE configured line carrying N units — never N lines, and never N
+        // add-calls. The modifier snapshots below stay PER UNIT; the kitchen
+        // and the money engine both multiply by this quantity downstream.
+        quantity: quantity,
       ),
     );
     _lineModifiers[lineId] = List.unmodifiable(modifiers);
@@ -1075,6 +1088,7 @@ class CartController extends Notifier<CartViewState> {
     String lineId,
     List<SelectedModifier> modifiers, {
     String? note,
+    int? quantity,
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_lineById(lineId) == null) return CartMutationResult.applied;
@@ -1088,6 +1102,13 @@ class CartController extends Notifier<CartViewState> {
       _lineNotes[lineId] = trimmedNote;
     } else {
       _lineNotes.remove(lineId);
+    }
+    // POS-MODIFIER-SHEET-QUANTITY-003: the quantity moves inside this SAME
+    // bounded mutation — the line is never removed and re-added, so its id,
+    // its position and its frozen snapshots all survive, and the cart emits
+    // once below. Null leaves the quantity exactly as it was.
+    if (quantity != null) {
+      _cart.changeQuantity(lineId, quantity);
     }
     _emit();
     return CartMutationResult.applied;

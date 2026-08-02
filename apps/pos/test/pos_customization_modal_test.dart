@@ -119,7 +119,8 @@ Future<void> _pumpDirect(
   List<SelectedModifier> initialSelections = const <SelectedModifier>[],
   String? initialNote,
   bool isEdit = false,
-  void Function(List<SelectedModifier> selections, String? note)? onConfirm,
+  void Function(List<SelectedModifier> selections, String? note, int quantity)?
+  onConfirm,
   Key? widgetKey,
 }) async {
   tester.view.physicalSize = size;
@@ -143,7 +144,7 @@ Future<void> _pumpDirect(
             initialSelections: initialSelections,
             initialNote: initialNote,
             isEdit: isEdit,
-            onConfirm: onConfirm ?? (selections, note) {},
+            onConfirm: onConfirm ?? (selections, note, quantity) {},
           ),
         ),
       ),
@@ -414,7 +415,7 @@ void main() {
     await tester.drag(
       find.descendant(
         of: find.byType(ModifierSelectionSheet),
-        matching: find.byType(ListView),
+        matching: find.byType(SingleChildScrollView),
       ),
       const Offset(0, -250),
     );
@@ -529,7 +530,7 @@ void main() {
               ),
               groups: groups,
               currencyCode: 'ILS',
-              onConfirm: (selections, note) => confirmed++,
+              onConfirm: (selections, note, quantity) => confirmed++,
             ),
           ),
         ),
@@ -977,7 +978,7 @@ void main() {
         final headerBefore = tester.getRect(header);
         final body = find.descendant(
           of: find.byType(ModifierSelectionSheet),
-          matching: find.byType(ListView),
+          matching: find.byType(SingleChildScrollView),
         );
 
         // Scroll to the END of the body: the last option and the note come
@@ -1063,12 +1064,16 @@ void main() {
     // become reachable while header and footer hold their positions.
     final body = find.descendant(
       of: find.byType(ModifierSelectionSheet),
-      matching: find.byType(ListView),
+      matching: find.byType(SingleChildScrollView),
     );
     await tester.scrollUntilVisible(
       find.byKey(const Key('modifier-item-note')),
       200,
-      scrollable: find.descendant(of: body, matching: find.byType(Scrollable)),
+      // .first = the BODY's own scrollable (the non-lazy body always builds
+      // the note's EditableText Scrollable too).
+      scrollable: find
+          .descendant(of: body, matching: find.byType(Scrollable))
+          .first,
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -1135,7 +1140,7 @@ void main() {
                     ),
                   ],
                   currencyCode: 'ILS',
-                  onConfirm: (selections, note) => confirmed++,
+                  onConfirm: (selections, note, quantity) => confirmed++,
                 ),
                 child: const Text('open'),
               ),
@@ -1158,13 +1163,19 @@ void main() {
     await tester.scrollUntilVisible(
       noteField,
       200,
-      scrollable: find.descendant(
-        of: find.descendant(
-          of: find.byType(ModifierSelectionSheet),
-          matching: find.byType(ListView),
-        ),
-        matching: find.byType(Scrollable),
-      ),
+      // .first = the BODY's own scrollable. The body is non-lazy since
+      // POS-PRODUCT-NOTE-LANDSCAPE-KEYBOARD-002, so the note TextField (and its
+      // internal EditableText Scrollable) is always built and would otherwise
+      // make this finder ambiguous.
+      scrollable: find
+          .descendant(
+            of: find.descendant(
+              of: find.byType(ModifierSelectionSheet),
+              matching: find.byType(SingleChildScrollView),
+            ),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.pumpAndSettle();
     await tester.tap(noteField);
@@ -1265,7 +1276,7 @@ void main() {
                         ),
                       ],
                       currencyCode: 'ILS',
-                      onConfirm: (selections, note) => confirmed++,
+                      onConfirm: (selections, note, quantity) => confirmed++,
                     ),
                     child: const Text('open'),
                   ),
@@ -1295,13 +1306,17 @@ void main() {
         // The body is the only scrolling region: every option and the note the
         // cashier is typing into can be reached through it (the squeezed sheet
         // scrolls its header away rather than pinching the body shut).
-        final scrollable = find.descendant(
-          of: find.descendant(
-            of: find.byType(ModifierSelectionSheet),
-            matching: find.byType(ListView),
-          ),
-          matching: find.byType(Scrollable),
-        );
+        // .first = the BODY's own scrollable (see the note above: the
+        // non-lazy body always builds the note's EditableText Scrollable too).
+        final scrollable = find
+            .descendant(
+              of: find.descendant(
+                of: find.byType(ModifierSelectionSheet),
+                matching: find.byType(SingleChildScrollView),
+              ),
+              matching: find.byType(Scrollable),
+            )
+            .first;
 
         // Pick the required option (scrolled into view), with the keyboard up.
         const option = ValueKey('modifier-option-d-2');
@@ -1349,7 +1364,7 @@ void main() {
     await _openBurgerSheet(tester);
     final body = find.descendant(
       of: find.byType(ModifierSelectionSheet),
-      matching: find.byType(ListView),
+      matching: find.byType(SingleChildScrollView),
     );
     final headerText = find.descendant(
       of: find.byType(ModifierSelectionSheet),
@@ -1695,7 +1710,7 @@ void main() {
           ],
         ),
       ],
-      onConfirm: (selections, note) => confirmed = selections,
+      onConfirm: (selections, note, quantity) => confirmed = selections,
     );
 
     await tester.tap(find.byKey(const ValueKey('modifier-option-e-1')));

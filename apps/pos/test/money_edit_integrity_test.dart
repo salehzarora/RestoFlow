@@ -432,8 +432,9 @@ void main() {
       expect(viewOf(c).subtotalMinor, kFrozenBase + k240);
     });
 
-    testWidgets('E4 at item quantity 2 the sheet still shows the PER-UNIT '
-        '60.00 and the line stays 120.00 under the 002A rule', (tester) async {
+    testWidgets('E4 at item quantity 2 the sheet shows the LINE total 120.00 '
+        '(it carries the quantity) and the line stays 120.00 under the 002A '
+        'rule', (tester) async {
       final c = await pumpConfigured(
         tester,
         menu: menuWith(const [meatGroup], item: burgerToday),
@@ -445,9 +446,14 @@ void main() {
 
       await openEdit(tester, c);
       expect(
-        find.text(money(kFrozenBase + k240)),
+        find.text(money(2 * (kFrozenBase + k240))),
         findsWidgets,
-        reason: 'the sheet configures ONE unit; the cart applies the quantity',
+        // POS-MODIFIER-SHEET-QUANTITY-003: the sheet now carries the line's
+        // quantity, so it shows what will be saved rather than a per-unit
+        // amount the cashier would have to multiply mentally. The frozen base
+        // and the 002A line formula are unchanged and still asserted below.
+        reason:
+            'the edit sheet opens at the line quantity and shows qty x unit',
       );
       await save(tester);
       expect(

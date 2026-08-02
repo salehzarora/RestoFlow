@@ -489,11 +489,12 @@ class _MenuGrid extends ConsumerWidget {
                                   groups: groups,
                                   currencyCode: menu.currencyCode,
                                   category: menu.categoryOf(item.categoryId),
-                                  onConfirm: (selections, note) =>
+                                  onConfirm: (selections, note, quantity) =>
                                       controller.addItemWithModifiers(
                                         item,
                                         selections,
                                         note: note,
+                                        quantity: quantity,
                                       ),
                                 ),
                         );

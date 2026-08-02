@@ -36,6 +36,7 @@ import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import 'modifier_selection_sheet.dart';
 import 'order_confirmation.dart';
+import 'quantity_stepper.dart';
 import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
@@ -1115,6 +1116,9 @@ void _editLine(
     initialSelections: line.modifiers,
     initialNote: line.note,
     isEdit: true,
+    // POS-MODIFIER-SHEET-QUANTITY-003: reopen ON the line's current quantity so
+    // Save cannot silently reset a line of 4 back to 1.
+    initialQuantity: line.quantity,
     // MONEY-EDIT-INTEGRITY-002C (Codex Blocker 5): the sheet must price this
     // edit against the line's FROZEN base (D-008), not against whatever the
     // Dashboard charges for the product today. `updateLineModifiers` keeps the
@@ -1123,11 +1127,13 @@ void _editLine(
     // modifier deltas are carried separately and the sheet adds them itself.
     displayBasePriceMinor: line.unitPriceMinor,
     onConfirm: noteOnly
-        ? (selections, note) => controller.updateLineNote(line.lineId, note)
-        : (selections, note) => controller.updateLineModifiers(
+        ? (selections, note, quantity) =>
+              controller.updateLineNote(line.lineId, note)
+        : (selections, note, quantity) => controller.updateLineModifiers(
             line.lineId,
             selections,
             note: note,
+            quantity: quantity,
           ),
   );
 }
@@ -1393,7 +1399,7 @@ class _CartLineTile extends StatelessWidget {
           SizedBox(height: dense ? RestoflowSpacing.xxs : RestoflowSpacing.xs),
           Row(
             children: [
-              _QuantityStepper(
+              PosQuantityStepper(
                 quantity: line.quantity,
                 l10n: l10n,
                 dense: dense,
@@ -1463,114 +1469,6 @@ class _LineActionButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       constraints: BoxConstraints(minWidth: side, minHeight: side),
       padding: EdgeInsets.zero,
-    );
-  }
-}
-
-/// A minus (white/hairline) + qty + plus (filled green) stepper (DESIGN-004).
-class _QuantityStepper extends StatelessWidget {
-  const _QuantityStepper({
-    required this.quantity,
-    required this.l10n,
-    required this.onIncrease,
-    required this.onDecrease,
-    this.dense = false,
-  });
-
-  final int quantity;
-  final AppLocalizations l10n;
-  final VoidCallback? onIncrease;
-  final VoidCallback? onDecrease;
-  final bool dense;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _StepButton(
-          icon: Icons.remove,
-          tooltip: l10n.posDecreaseQuantity,
-          filled: false,
-          dense: dense,
-          onPressed: onDecrease,
-        ),
-        SizedBox(
-          width: dense ? 30 : 40,
-          child: Text(
-            quantity.toString(),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: kRestoflowInk,
-            ),
-          ),
-        ),
-        _StepButton(
-          icon: Icons.add,
-          tooltip: l10n.posIncreaseQuantity,
-          filled: true,
-          dense: dense,
-          onPressed: onIncrease,
-        ),
-      ],
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.tooltip,
-    required this.filled,
-    required this.onPressed,
-    this.dense = false,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final bool filled;
-  final VoidCallback? onPressed;
-  final bool dense;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // A control inside a >=40/44dp tap target (fast, gloved cashier fingers);
-    // dense trims it a touch so the landscape side cart packs more lines.
-    final tap = dense ? 40.0 : 44.0;
-    final inner = dense ? 34.0 : 38.0;
-    return Tooltip(
-      message: tooltip,
-      child: InkResponse(
-        onTap: onPressed,
-        radius: dense ? 24 : 26,
-        child: Opacity(
-          // A disabled stepper must LOOK disabled, not just refuse the tap.
-          opacity: onPressed == null ? 0.4 : 1.0,
-          child: Container(
-            width: tap,
-            height: tap,
-            alignment: Alignment.center,
-            child: Container(
-              width: inner,
-              height: inner,
-              decoration: BoxDecoration(
-                color: filled ? theme.colorScheme.primary : Colors.white,
-                borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),
-                border: filled ? null : Border.all(color: kRestoflowHairline),
-              ),
-              child: Icon(
-                icon,
-                size: RestoflowIconSizes.md,
-                color: filled ? theme.colorScheme.onPrimary : kRestoflowInk,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
