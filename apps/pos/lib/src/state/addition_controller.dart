@@ -1578,32 +1578,47 @@ class AdditionController extends Notifier<AdditionState> {
   ) {
     return [
       for (final l in lines)
-        OrderSubmissionItem(
-          menuItemId: l.menuItemId,
-          nameSnapshot: l.name,
-          quantity: l.quantity,
-          unitPriceMinorSnapshot: l.unitPriceMinor,
-          lineTotalMinor: l.lineTotalMinor,
-          notes: l.note,
-          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: an Add-items round resolves
-          // its classification exactly like the initial submission, so a round
-          // ticket splits its own new items correctly.
-          prepComponents: classifiedPrepForLine(
-            prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
-            l.modifiers,
-          ),
-          modifiers: [
-            for (final m in l.modifiers)
-              OrderSubmissionModifier(
-                modifierOptionId: m.optionId,
-                optionNameSnapshot: m.optionName,
-                modifierNameSnapshot: m.groupName,
-                priceMinorSnapshot: m.priceDeltaMinor,
-                quantity: m.quantity,
-                meatSnapshot: m.kitchenMeat,
-              ),
-          ],
-        ).toJson(),
+        // 020 (Codex BLOCKER #1): the complete, immutable set of option ids
+        // selected on THIS Add-items line, computed once and shared by every
+        // modifier snapshot below.
+        for (final lineSelectedOptionIds in [selectedOptionIdsOf(l.modifiers)])
+          OrderSubmissionItem(
+            menuItemId: l.menuItemId,
+            nameSnapshot: l.name,
+            quantity: l.quantity,
+            unitPriceMinorSnapshot: l.unitPriceMinor,
+            lineTotalMinor: l.lineTotalMinor,
+            notes: l.note,
+            // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: an Add-items round resolves
+            // its classification exactly like the initial submission, so a round
+            // ticket splits its own new items correctly.
+            prepComponents: classifiedPrepForLine(
+              prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+              l.modifiers,
+            ),
+            modifiers: [
+              for (final m in l.modifiers)
+                OrderSubmissionModifier(
+                  modifierOptionId: m.optionId,
+                  optionNameSnapshot: m.optionName,
+                  modifierNameSnapshot: m.groupName,
+                  priceMinorSnapshot: m.priceDeltaMinor,
+                  quantity: m.quantity,
+                  // 020 (Codex BLOCKER #1): the AUTHORITATIVE order-time snapshot
+                  // — the per-unit quantity/unit plus classifier_selected derived
+                  // from THIS line's complete selection — stored in the actual
+                  // Addition operation payload, exactly as the initial submit
+                  // does. Never raw menu config, never re-derived from modifier
+                  // text, and never re-read from the live menu after the
+                  // operation is accepted. The option's own units stay in the
+                  // adjacent quantity field and are applied downstream once.
+                  meatSnapshot: resolveOrderTimeMeatSnapshot(
+                    m.kitchenMeat,
+                    lineSelectedOptionIds,
+                  ),
+                ),
+            ],
+          ).toJson(),
     ];
   }
 

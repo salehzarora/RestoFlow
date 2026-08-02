@@ -339,8 +339,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         }();
 
     final items = lines
-        .map(
-          (l) => OrderSubmissionItem(
+        .map((l) {
+          // 020 (Codex BLOCKER #1): the complete, immutable set of option ids
+          // selected on THIS line — computed ONCE per line and shared by every
+          // modifier snapshot below, so each option's classifier is answered
+          // against the same authoritative selection.
+          final lineSelectedOptionIds = selectedOptionIdsOf(l.modifiers);
+          return OrderSubmissionItem(
             menuItemId: l.menuItemId,
             nameSnapshot: l.name,
             quantity: l.quantity,
@@ -370,11 +375,21 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
                   priceMinorSnapshot: m.priceDeltaMinor,
                   quantity: m.quantity,
                   // KITCHEN-MEAT-001: snapshot the option's meat contribution.
-                  meatSnapshot: m.kitchenMeat,
+                  // 020 (Codex BLOCKER #1): the AUTHORITATIVE order-time
+                  // snapshot, not raw menu configuration. It carries the
+                  // per-unit quantity/unit plus classifier_selected, resolved
+                  // from the complete set of options selected on THIS line, so
+                  // the server and the KDS receive a decided answer instead of
+                  // an unresolved config. The option units stay in the
+                  // adjacent quantity field and are applied downstream once.
+                  meatSnapshot: resolveOrderTimeMeatSnapshot(
+                    m.kitchenMeat,
+                    lineSelectedOptionIds,
+                  ),
                 ),
             ],
-          ),
-        )
+          );
+        })
         .toList(growable: false);
     final itemCount = lines.fold<int>(0, (sum, l) => sum + l.quantity);
 
