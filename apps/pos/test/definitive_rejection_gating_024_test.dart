@@ -223,6 +223,9 @@ Future<void> _pump(
   }
 }
 
+Future<AppLocalizations> _en() =>
+    AppLocalizations.delegate.load(const Locale('en'));
+
 /// Every action that asserts a server order exists.
 const _serverOrderActionKeys = <String>[
   'pay-cash-button',
@@ -260,7 +263,43 @@ const _titles = <PosOrderOutcome, String>{
   PosOrderOutcome.pending: _pendingTitle,
 };
 
-void expectExactlyOneOutcome(PosOrderOutcome expected) {
+/// POS-DEFINITIVE-REJECTION-PUSH-BOUNDARY-FIX-025 (Codex MEDIUM): the status
+/// card is part of the claim, not decoration.
+///
+/// The 024 helper checked the header key and the title only, so a page could
+/// still carry a status card belonging to a DIFFERENT outcome — the exact
+/// species of contradiction this whole series exists to remove — and pass. The
+/// markers below are the LOCALIZED strings the production card actually renders
+/// (via `_syncVisual`), so the assertion follows the app's own wording rather
+/// than a hard-coded English guess.
+///
+/// PENDING owns two card states — queued and in-flight — because the card
+/// describes the LOCAL lifecycle while the header describes what the server has
+/// said. Both belong to the same outcome, so both are listed here.
+List<String> _syncMarkers(PosOrderOutcome outcome, AppLocalizations l10n) =>
+    switch (outcome) {
+      PosOrderOutcome.accepted => [
+        l10n.posSyncStateSynced,
+        l10n.posSyncSentReal,
+      ],
+      PosOrderOutcome.rejected => [l10n.posSyncStateFailed],
+      PosOrderOutcome.deliveryUnconfirmed => [
+        l10n.posSyncStateUnconfirmed,
+        l10n.posSyncDeliveryUnconfirmed,
+      ],
+      PosOrderOutcome.pending => [
+        l10n.posSyncStatePending,
+        l10n.posSyncStoredLocally,
+        l10n.posSyncStateSending,
+        l10n.posSyncSendingReal,
+      ],
+    };
+
+bool _present(String text) => find.text(text).evaluate().isNotEmpty;
+
+/// Asserts the page makes EXACTLY ONE outcome claim, across all three surfaces
+/// that can make one: the header key, the outcome title, and the status card.
+void expectExactlyOneOutcome(PosOrderOutcome expected, AppLocalizations l10n) {
   for (final entry in _headerKeys.entries) {
     final matcher = entry.key == expected ? findsOneWidget : findsNothing;
     expect(
@@ -276,6 +315,25 @@ void expectExactlyOneOutcome(PosOrderOutcome expected) {
       matcher,
       reason: 'title "${entry.value}" for expected $expected',
     );
+  }
+  // The card must speak for THIS outcome...
+  expect(
+    _syncMarkers(expected, l10n).any(_present),
+    isTrue,
+    reason: 'no status-card text belongs to the expected outcome $expected',
+  );
+  // ...and must not carry any other outcome's claim.
+  for (final other in PosOrderOutcome.values) {
+    if (other == expected) continue;
+    for (final marker in _syncMarkers(other, l10n)) {
+      expect(
+        find.text(marker),
+        findsNothing,
+        reason:
+            'the status card carries "$marker", which claims $other, on a page '
+            'whose outcome is $expected',
+      );
+    }
   }
 }
 
@@ -343,9 +401,10 @@ void main() {
     testWidgets('024-B1 no Pay / Discount / print / receipt / Retry', (
       tester,
     ) async {
+      final l10n = await _en();
       final (entry, _) = await _pushOnce(const [_authFailure]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.rejected);
+      expectExactlyOneOutcome(PosOrderOutcome.rejected, l10n);
       _expectNoServerOrderActions();
     });
 
@@ -402,9 +461,10 @@ void main() {
     testWidgets('024-C1 no actions, without touching the allowlist', (
       tester,
     ) async {
+      final l10n = await _en();
       final (entry, _) = await _pushOnce([_futureRefusal]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.rejected);
+      expectExactlyOneOutcome(PosOrderOutcome.rejected, l10n);
       _expectNoServerOrderActions();
     });
 
@@ -433,19 +493,83 @@ void main() {
     testWidgets('024-D1 a queued order shows the pending header', (
       tester,
     ) async {
+      final l10n = await _en();
       await _pump(tester, _seed());
-      expectExactlyOneOutcome(PosOrderOutcome.pending);
+      expectExactlyOneOutcome(PosOrderOutcome.pending, l10n);
     });
 
     testWidgets('024-D2 an IN-FLIGHT order shows the pending header', (
       tester,
     ) async {
+      final l10n = await _en();
       await _pump(
         tester,
         _seed().copyWith(syncState: OutboxSyncState.inFlight),
         settle: false,
       );
-      expectExactlyOneOutcome(PosOrderOutcome.pending);
+      expectExactlyOneOutcome(PosOrderOutcome.pending, l10n);
+    });
+  });
+
+  group('F. the invariant itself catches a status-card contradiction', () {
+    testWidgets('025-F1 a right header over a WRONG status card fails', (
+      tester,
+    ) async {
+      // 025 (Codex MEDIUM). This page carries the ACCEPTED header AND the
+      // accepted title — so the 024 helper, which only compared header keys and
+      // titles, passed it — while its status card says the delivery was never
+      // confirmed. That is precisely the contradiction this series exists to
+      // remove, and it must be a test failure, not a pass.
+      final l10n = await _en();
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: Scaffold(
+            body: Column(
+              children: [
+                const SizedBox(key: Key('confirmation-success-header')),
+                const Text(_successTitle),
+                Text(l10n.posSyncStateSynced),
+                // ...and a card belonging to a different outcome.
+                Text(l10n.posSyncDeliveryUnconfirmed),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        () => expectExactlyOneOutcome(PosOrderOutcome.accepted, l10n),
+        throwsA(isA<TestFailure>()),
+        reason: 'the invariant must reject a second outcome claim',
+      );
+    });
+
+    testWidgets('025-F2 a coherent page still passes', (tester) async {
+      // The control: same shape, no foreign claim.
+      final l10n = await _en();
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: Scaffold(
+            body: Column(
+              children: [
+                const SizedBox(key: Key('confirmation-success-header')),
+                const Text(_successTitle),
+                Text(l10n.posSyncStateSynced),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expectExactlyOneOutcome(PosOrderOutcome.accepted, l10n);
     });
   });
 
@@ -453,9 +577,10 @@ void main() {
     testWidgets('024-E1 ACCEPTED keeps its header and its actions', (
       tester,
     ) async {
+      final l10n = await _en();
       final (entry, _) = await _pushOnce([_accepted]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.accepted);
+      expectExactlyOneOutcome(PosOrderOutcome.accepted, l10n);
       // Accepted is the one outcome that MAY act on a server order.
       expect(find.byKey(const Key('pay-cash-button')), findsOneWidget);
     });
@@ -463,9 +588,10 @@ void main() {
     testWidgets('024-E2 DELIVERY-UNCONFIRMED keeps Retry and its actions', (
       tester,
     ) async {
+      final l10n = await _en();
       final (entry, _) = await _pushOnce(const [_transientFailure]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.deliveryUnconfirmed);
+      expectExactlyOneOutcome(PosOrderOutcome.deliveryUnconfirmed, l10n);
       // The established offline contract: the order may well exist, so the
       // same-identity retry stays, and so do the offline actions.
       expect(find.byKey(const Key('sync-retry-button')), findsOneWidget);
@@ -507,7 +633,7 @@ void main() {
         },
       ]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.rejected);
+      expectExactlyOneOutcome(PosOrderOutcome.rejected, l10n);
       expect(find.text(l10n.posPrepSnapshotStale), findsOneWidget);
       expect(find.byKey(const Key('recovery-actions')), findsOneWidget);
       _expectNoServerOrderActions();
