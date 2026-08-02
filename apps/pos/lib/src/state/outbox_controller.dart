@@ -479,6 +479,31 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
   /// Demo-pushes [entryId]: shows "Sending…" then the delivered/failed result.
   Future<void> pushEntry(String entryId) async {
+    // POS-DEFINITIVE-REJECTION-PUSH-BOUNDARY-FIX-025 — THE PUSH BOUNDARY ITSELF.
+    //
+    // 024 closed `retryEntry`, `retryAllFailed` and the automatic sweep, but
+    // this is a PUBLIC controller method and stayed open. Anything reaching it
+    // directly — the "Sync now" callback captured while the entry was still
+    // retryable, a future call site, a sweep variant — could flip a
+    // definitively-refused entry back to `inFlight`, spend another transport
+    // attempt, and overwrite the recorded verdict with a fresh one.
+    //
+    // The guard re-reads the CURRENT entry by id rather than trusting anything
+    // the caller holds: the stale-callback case is precisely a caller carrying
+    // an entry object captured BEFORE the verdict landed. Current state wins.
+    //
+    // Failing closed means returning without a repository call, without a state
+    // transition and without a transport attempt — the rejected shell, its
+    // error code, its error kind, its attempt count and its operation identity
+    // are all left exactly as the verdict recorded them. Nothing throws: this
+    // controller uses typed refusals rather than exceptions for guarded
+    // commands, and a caller that has been overtaken by a server verdict has
+    // done nothing wrong.
+    //
+    // Everything uncertain still pushes — pending, in-flight, transient, server,
+    // unknown, an unreadable reply and a legacy row we cannot classify. Only a
+    // PROVEN verdict closes the door, so offline reconciliation is untouched.
+    if (entryById(entryId)?.hasDefinitiveVerdict ?? false) return;
     state = [
       for (final e in state)
         if (e.id == entryId)
