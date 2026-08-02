@@ -480,6 +480,142 @@ void main() {
     expect(find.text('Cheese'), findsNothing);
   });
 
+  // 020 (Codex MEDIUM #5): the CREATE path ------------------------------------
+  testWidgets('020-H7. a NEW size option can be split by Cheese in one save', (
+    tester,
+  ) async {
+    final store = _burgerStore();
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger');
+
+    // The real Add button of the Size group's options section.
+    final addButtons = find.text(l10n.menuAddOption);
+    await tester.ensureVisible(addButtons.first);
+    await tester.pumpAndSettle();
+    await tester.tap(addButtons.first);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-child-name')),
+      '360g',
+    );
+    // Enable the preparation contribution, then set it.
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-enabled')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-option-meat-quantity')),
+      '3',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-option-meat-unit')),
+      'Meat pieces',
+    );
+    await tester.pumpAndSettle();
+
+    // The classifier picker must be offered on CREATE too.
+    final picker = find.byKey(const ValueKey('menu-option-meat-classifier'));
+    expect(picker, findsOneWidget, reason: '020: create path gets the picker');
+    await tester.tap(picker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cheese').last);
+    await tester.pumpAndSettle();
+
+    await _saveDialog(tester, l10n);
+
+    // ONE save carried the contribution AND the classifier.
+    expect(store.lastKitchenMeat, {
+      'quantity': 3,
+      'unit': 'Meat pieces',
+      'classifier_option_id': 'opt-cheese',
+      'classifier_option_name': 'Cheese',
+    });
+  });
+
+  testWidgets('020-H8. the create picker offers the same-item options only', (
+    tester,
+  ) async {
+    final store = _RecordingStore(
+      categories: const [_category],
+      items: [
+        _item(id: 'item-1', name: 'Burger'),
+        _item(id: 'item-2', name: 'Chicken'),
+      ],
+      modifiers: [
+        _group(id: 'mod-size', menuItemId: 'item-1', name: 'Size'),
+        _group(
+          id: 'mod-extras',
+          menuItemId: 'item-1',
+          name: 'Extras',
+          displayOrder: 1,
+        ),
+        _group(id: 'mod-chicken', menuItemId: 'item-2', name: 'Extras'),
+      ],
+      modifierOptions: [
+        _option(id: 'opt-120', modifierId: 'mod-size', name: '120g'),
+        _option(id: 'opt-cheese', modifierId: 'mod-extras', name: 'Cheese'),
+        _option(
+          id: 'opt-chicken-cheese',
+          modifierId: 'mod-chicken',
+          name: 'ChickenCheese',
+        ),
+      ],
+    );
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger');
+
+    final addButtons = find.text(l10n.menuAddOption);
+    await tester.ensureVisible(addButtons.first);
+    await tester.pumpAndSettle();
+    await tester.tap(addButtons.first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-enabled')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-classifier')));
+    await tester.pumpAndSettle();
+
+    // This item's options are offered; the OTHER product's never appear.
+    expect(find.text('120g'), findsWidgets);
+    expect(find.text('Cheese'), findsWidgets);
+    expect(find.text('ChickenCheese'), findsNothing);
+  });
+
+  testWidgets('020-H9. disabling the contribution before Save clears it', (
+    tester,
+  ) async {
+    final store = _burgerStore();
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'Burger');
+
+    final addButtons = find.text(l10n.menuAddOption);
+    await tester.ensureVisible(addButtons.first);
+    await tester.pumpAndSettle();
+    await tester.tap(addButtons.first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-child-name')),
+      '480g',
+    );
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-enabled')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-option-meat-quantity')),
+      '4',
+    );
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-classifier')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cheese').last);
+    await tester.pumpAndSettle();
+    // ...then change the mind and turn the contribution back off.
+    await tester.tap(find.byKey(const ValueKey('menu-option-meat-enabled')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('menu-option-meat-classifier')),
+      findsNothing,
+    );
+    await _saveDialog(tester, l10n);
+    expect(store.lastKitchenMeat, isNull);
+  });
+
   test('the parsed option model exposes the stored link', () {
     const option = ModifierOption(
       id: 'opt-240',

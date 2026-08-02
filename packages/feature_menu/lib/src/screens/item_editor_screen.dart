@@ -1244,6 +1244,13 @@ class _PricedChildSection extends ConsumerWidget {
               kind: kind,
               parentId: parentId,
               currencyCode: currencyCode,
+              // 020 (Codex MEDIUM #5): the CREATE path gets the same same-item
+              // candidates as Edit, so an owner adding a new size option can
+              // set its preparation contribution AND its "Split by option" in
+              // ONE save instead of saving, reopening and editing. The option
+              // being created has no id yet, so it cannot appear in its own
+              // list — self-reference is impossible here by construction.
+              classifierOptions: classifierOptions,
             ),
       icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
       label: Text(addLabel),
