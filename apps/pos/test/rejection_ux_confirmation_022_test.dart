@@ -236,19 +236,33 @@ void main() {
       expect(find.text(_rejectedTitle), findsNothing);
     });
 
-    testWidgets('022-B2 a TRANSIENT failure still shows the success header', (
-      tester,
-    ) async {
-      // No server verdict was recorded, so the order may well exist. Claiming
-      // it was rejected would be its own lie, and Retry stays meaningful.
+    testWidgets('022-B2 a TRANSIENT failure shows NEITHER success NOR '
+        'rejection', (tester) async {
+      // SUPERSEDED BY POS-ORDER-OUTCOME-CLASSIFICATION-FIX-023, deliberately.
+      //
+      // 022 kept the success header here, reasoning that no server verdict was
+      // recorded so claiming rejection would be its own lie. That reasoning was
+      // right and the conclusion was wrong: with only two presentations
+      // available, "not a known rejection" defaulted to a success claim, and
+      // the status card below it said the backend had rejected the order. 023
+      // adds the third outcome, which is the honest answer to exactly this
+      // case — we do not know.
       final l10n = await _en();
       await _pump(tester, state: OutboxSyncState.dead, code: 'transport');
-      expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+      expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
       expect(
         find.byKey(const Key('confirmation-success-header')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.text(_rejectedTitle), findsNothing);
+      expect(
+        find.byKey(const Key('confirmation-rejected-header')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('confirmation-unconfirmed-header')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('022-B3 a PENDING order still shows the success header', (
