@@ -1282,6 +1282,10 @@
     "description": "Modifier-sheet header subtitle: the item's base price BEFORE option deltas (already currency-formatted), shown so the cashier can compare base vs the running total.",
     "placeholders": { "price": { "type": "String" } }
   },
+  "posModifierQuantityLabel": "Quantity",
+  "@posModifierQuantityLabel": {
+    "description": "POS-MODIFIER-SHEET-QUANTITY-003: label of the quantity row in the item customization sheet footer, next to the minus/plus stepper that chooses HOW MANY units of this configured product to add."
+  },
   "posModifierItemNoteLabel": "Item note",
   "@posModifierItemNoteLabel": {
     "description": "Label of the optional per-item special-instructions field on the POS modifier sheet (e.g. no onions)."

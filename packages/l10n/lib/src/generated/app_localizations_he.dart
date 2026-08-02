@@ -1694,6 +1694,9 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posModifierQuantityLabel => 'כמות';
+
+  @override
   String get posModifierItemNoteLabel => 'הערה לפריט';
 
   @override

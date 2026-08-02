@@ -119,7 +119,8 @@ Future<void> _pumpDirect(
   List<SelectedModifier> initialSelections = const <SelectedModifier>[],
   String? initialNote,
   bool isEdit = false,
-  void Function(List<SelectedModifier> selections, String? note)? onConfirm,
+  void Function(List<SelectedModifier> selections, String? note, int quantity)?
+  onConfirm,
   Key? widgetKey,
 }) async {
   tester.view.physicalSize = size;
@@ -143,7 +144,7 @@ Future<void> _pumpDirect(
             initialSelections: initialSelections,
             initialNote: initialNote,
             isEdit: isEdit,
-            onConfirm: onConfirm ?? (selections, note) {},
+            onConfirm: onConfirm ?? (selections, note, quantity) {},
           ),
         ),
       ),
@@ -529,7 +530,7 @@ void main() {
               ),
               groups: groups,
               currencyCode: 'ILS',
-              onConfirm: (selections, note) => confirmed++,
+              onConfirm: (selections, note, quantity) => confirmed++,
             ),
           ),
         ),
@@ -1139,7 +1140,7 @@ void main() {
                     ),
                   ],
                   currencyCode: 'ILS',
-                  onConfirm: (selections, note) => confirmed++,
+                  onConfirm: (selections, note, quantity) => confirmed++,
                 ),
                 child: const Text('open'),
               ),
@@ -1275,7 +1276,7 @@ void main() {
                         ),
                       ],
                       currencyCode: 'ILS',
-                      onConfirm: (selections, note) => confirmed++,
+                      onConfirm: (selections, note, quantity) => confirmed++,
                     ),
                     child: const Text('open'),
                   ),
@@ -1709,7 +1710,7 @@ void main() {
           ],
         ),
       ],
-      onConfirm: (selections, note) => confirmed = selections,
+      onConfirm: (selections, note, quantity) => confirmed = selections,
     );
 
     await tester.tap(find.byKey(const ValueKey('modifier-option-e-1')));

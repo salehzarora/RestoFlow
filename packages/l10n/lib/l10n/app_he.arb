@@ -525,6 +525,7 @@
   "posModifierSelectedCountOpen": "{selected}",
   "posModifierFree": "חינם",
   "posModifierBasePrice": "מחיר בסיס · {price}",
+  "posModifierQuantityLabel": "כמות",
   "posModifierItemNoteLabel": "הערה לפריט",
   "posModifierItemNoteHint": "לדוגמה: בלי בצל, תוספת רוטב",
   "posItemNoteLabel": "הערה",

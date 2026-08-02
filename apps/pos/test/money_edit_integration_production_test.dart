@@ -206,8 +206,13 @@ void main() {
     );
 
     await openEdit(tester, c);
-    // 002C: frozen 4500 base, stored 1500 surcharge -> 6000 per unit.
-    expect(find.text(money(kConfiguredUnit)), findsWidgets);
+    // 002C: frozen 4500 base, stored 1500 surcharge -> 6000 PER UNIT.
+    // POS-MODIFIER-SHEET-QUANTITY-003 changed what the sheet DISPLAYS: it now
+    // opens on the line's own quantity (2) and shows the amount that will
+    // actually be saved, 2 x 6000. The per-unit money rules below are
+    // untouched — frozen base, stored surcharge, and the 002A line formula are
+    // still asserted independently.
+    expect(find.text(money(kLineQty2)), findsWidgets);
     expect(
       find.text(money(kLiveBase + k240Live)),
       findsNothing,
@@ -238,8 +243,11 @@ void main() {
     await openEdit(tester, c);
     await tester.tap(find.text('360g'));
     await tester.pump();
-    // 2 x (4500 + 2500) = 14000 — displayed BEFORE saving.
-    expect(find.text(money(kFrozenBase + k360)), findsWidgets);
+    // 2 x (4500 + 2500) = 14000 — displayed BEFORE saving. Since
+    // POS-MODIFIER-SHEET-QUANTITY-003 the sheet shows that LINE total (it
+    // carries the line's quantity), not the 7000 per-unit amount; the comment
+    // above always described 14000, and now the assertion does too.
+    expect(find.text(money(2 * (kFrozenBase + k360))), findsWidgets);
     await tester.tap(confirm());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -341,8 +349,11 @@ void main() {
       await tester.pump();
 
       await openEdit(tester, c);
-      // The sheet always configures ONE unit.
-      expect(find.text(money(kConfiguredUnit)), findsWidgets);
+      // POS-MODIFIER-SHEET-QUANTITY-003: the sheet configures N units and shows
+      // qty x unit. The per-unit amount is unchanged (kConfiguredUnit); what
+      // moved is the DISPLAY, and the saved line total below still proves the
+      // 002A formula at every quantity.
+      expect(find.text(money(qty * kConfiguredUnit)), findsWidgets);
       await tester.tap(confirm());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));

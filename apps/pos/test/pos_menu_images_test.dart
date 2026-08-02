@@ -328,7 +328,7 @@ void main() {
                 item: item,
                 groups: const [],
                 currencyCode: 'ILS',
-                onConfirm: (selections, note) {},
+                onConfirm: (selections, note, quantity) {},
               ),
             ),
           ),

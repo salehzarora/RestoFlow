@@ -7,6 +7,7 @@ import '../format/money_format.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_menu_provider.dart';
+import 'quantity_stepper.dart';
 
 /// Wraps a formatted money run in Unicode LTR ISOLATES (LRI...PDI) so bidi
 /// reordering inside an RTL phrase can never split the sign, currency symbol
@@ -55,6 +56,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     this.initialSelections = const <SelectedModifier>[],
     this.initialNote,
     this.isEdit = false,
+    this.initialQuantity = 1,
     this.displayBasePriceMinor,
     super.key,
   });
@@ -87,7 +89,11 @@ class ModifierSelectionSheet extends StatefulWidget {
 
   /// Called with the selected modifier snapshots and the cashier's optional
   /// per-item note (null when left blank).
-  final void Function(List<SelectedModifier> selections, String? note)
+  final void Function(
+    List<SelectedModifier> selections,
+    String? note,
+    int quantity,
+  )
   onConfirm;
 
   /// The owning category of the ACTIVE menu — the header thumbnail's icon
@@ -102,6 +108,10 @@ class ModifierSelectionSheet extends StatefulWidget {
 
   /// TABLET-UX-001 (A): the cart line's current per-item note to prefill (edit).
   final String? initialNote;
+
+  /// POS-MODIFIER-SHEET-QUANTITY-003: how many units the sheet opens on. 1 for
+  /// the add flow; the edited cart line's quantity when reopened to edit.
+  final int initialQuantity;
 
   /// TABLET-UX-001 (A): true when reopened to EDIT a cart line — the confirm
   /// button reads "Save changes" (saving REPLACES the line, never duplicates it).
@@ -144,12 +154,17 @@ class ModifierSelectionSheet extends StatefulWidget {
     required DemoMenuItem item,
     required List<PosModifierGroup> groups,
     required String currencyCode,
-    required void Function(List<SelectedModifier> selections, String? note)
+    required void Function(
+      List<SelectedModifier> selections,
+      String? note,
+      int quantity,
+    )
     onConfirm,
     DemoCategory? category,
     List<SelectedModifier> initialSelections = const <SelectedModifier>[],
     String? initialNote,
     bool isEdit = false,
+    int initialQuantity = 1,
     int? displayBasePriceMinor,
   }) {
     return showModalBottomSheet<void>(
@@ -182,6 +197,7 @@ class ModifierSelectionSheet extends StatefulWidget {
         initialSelections: initialSelections,
         initialNote: initialNote,
         isEdit: isEdit,
+        initialQuantity: initialQuantity,
         displayBasePriceMinor: displayBasePriceMinor,
       ),
     );
@@ -227,6 +243,12 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 
   /// The optional per-item cashier note ("بدون بصل").
   final TextEditingController _noteController = TextEditingController();
+
+  /// POS-MODIFIER-SHEET-QUANTITY-003 — how many units of THIS configuration the
+  /// cashier is adding. Always >= 1. Reset through [_applyInitialState] with the
+  /// selections and the note, so a reused widget position can never inherit
+  /// another line's in-progress quantity.
+  int _quantity = 1;
 
   @override
   void initState() {
@@ -279,7 +301,12 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   static String _configSignature(ModifierSelectionSheet w) {
     final buffer = StringBuffer(w.item.id)
       ..write('|b:')
-      ..write(w.displayBasePriceMinor);
+      ..write(w.displayBasePriceMinor)
+      // POS-MODIFIER-SHEET-QUANTITY-003: the edited line's quantity is part of
+      // its identity, so reusing this widget position for a DIFFERENT line of
+      // the same product cannot carry the previous line's quantity into it.
+      ..write('|q:')
+      ..write(w.initialQuantity);
     for (final selection in w.initialSelections) {
       buffer
         ..write('|s:')
@@ -341,6 +368,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       _pristine['${group.id}|${selection.optionId}'] = selection;
     }
     _noteController.text = widget.initialNote ?? '';
+    _quantity = widget.initialQuantity < 1 ? 1 : widget.initialQuantity;
   }
 
   /// MONEY-EDIT-INTEGRITY-002C — how one stored selection matches the LIVE
@@ -675,7 +703,13 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       baseMinor,
       widget.currencyCode,
     );
-    final totalMinor = baseMinor + _deltaTotal;
+    // MONEY-PRICING-FORMULA-002A: the surcharge belongs to each UNIT, so the
+    // per-unit amount is formed FIRST and multiplied by the quantity exactly
+    // once. `totalDeltaMinor` already folds in each option's own modifier
+    // quantity, so multiplying here cannot double-count it. Integer minor units
+    // throughout (D-007).
+    final unitTotalMinor = baseMinor + _deltaTotal;
+    final totalMinor = unitTotalMinor * _quantity;
     final totalText = MoneyFormatter.formatMinor(
       totalMinor,
       widget.currencyCode,
@@ -833,6 +867,26 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     // padding tightens when the sheet is squeezed (keyboard on a short
     // landscape tablet); the total and the confirm button themselves never
     // shrink — a cashier must still read the price and hit a full-size target.
+    // POS-MODIFIER-SHEET-QUANTITY-003: HOW MANY units of this exact
+    // configuration to add, chosen before Add. It rides the STICKY footer, so
+    // it stays reachable while the body scrolls, with the keyboard up, and in
+    // RTL — and the price consequence of a change is read on the same or the
+    // very next line. Hidden in the note-only degraded edit, where the sheet is
+    // deliberately not entitled to re-price the line at all; the cart-line
+    // stepper still changes that line's quantity.
+    Widget quantityStepper({required bool dense}) => PosQuantityStepper(
+      quantity: _quantity,
+      l10n: l10n,
+      dense: dense,
+      decreaseKey: const Key('modifier-item-quantity-decrease'),
+      valueKey: const Key('modifier-item-quantity-value'),
+      increaseKey: const Key('modifier-item-quantity-increase'),
+      // At one, minus is DISABLED — it must never remove anything from here
+      // (that is the cart line's rule, not the sheet's).
+      onDecrease: _quantity > 1 ? () => setState(() => _quantity -= 1) : null,
+      onIncrease: () => setState(() => _quantity += 1),
+    );
+
     Widget footer({required bool compact}) {
       final gap = compact ? RestoflowSpacing.sm : RestoflowSpacing.md;
       return Container(
@@ -845,21 +899,57 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Roomy: the quantity gets its own labelled row above the total.
+            if (!_noteOnlyEdit && !compact) ...[
+              Row(
+                key: const Key('modifier-item-quantity-row'),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      l10n.posModifierQuantityLabel,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  quantityStepper(dense: false),
+                ],
+              ),
+              SizedBox(height: gap),
+            ],
             // Design-polish: a visible running total ABOVE the confirm
             // button, so the price consequence of each pick is readable
             // without parsing the button label.
+            //
+            // SQUEEZED (keyboard up on a short landscape tablet): the quantity
+            // control JOINS this row instead of taking one of its own. A
+            // separate row costs ~48dp, which at 1024x600 with a 380dp keyboard
+            // is most of what is left for the scrolling body — the options
+            // became unreachable. Sharing the row keeps the label, the stepper
+            // and the total all visible while the body keeps its height.
             Row(
+              key: compact && !_noteOnlyEdit
+                  ? const Key('modifier-item-quantity-row')
+                  : null,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Flexible(
                   child: Text(
-                    l10n.posReceiptTotal,
-                    maxLines: 2,
+                    compact && !_noteOnlyEdit
+                        ? l10n.posModifierQuantityLabel
+                        : l10n.posReceiptTotal,
+                    maxLines: compact ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
+                if (compact && !_noteOnlyEdit) ...[
+                  quantityStepper(dense: true),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                ],
                 Flexible(
                   child: Text(
                     totalText,
@@ -914,7 +1004,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 // while any stored selection cannot be represented.
                 onPressed: _satisfied
                     ? () {
-                        widget.onConfirm(_selections(), _note);
+                        widget.onConfirm(_selections(), _note, _quantity);
                         Navigator.of(context).pop();
                       }
                     : null,

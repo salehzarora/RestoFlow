@@ -1712,6 +1712,9 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posModifierQuantityLabel => 'الكمية';
+
+  @override
   String get posModifierItemNoteLabel => 'ملاحظة للمنتج';
 
   @override

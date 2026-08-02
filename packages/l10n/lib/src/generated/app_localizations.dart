@@ -3244,6 +3244,12 @@ abstract class AppLocalizations {
   /// **'Base price · {price}'**
   String posModifierBasePrice(String price);
 
+  /// POS-MODIFIER-SHEET-QUANTITY-003: label of the quantity row in the item customization sheet footer, next to the minus/plus stepper that chooses HOW MANY units of this configured product to add.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity'**
+  String get posModifierQuantityLabel;
+
   /// Label of the optional per-item special-instructions field on the POS modifier sheet (e.g. no onions).
   ///
   /// In en, this message translates to:

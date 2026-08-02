@@ -118,7 +118,8 @@ Future<void> _openSheet(
   Locale locale = const Locale('en'),
   String? initialNote,
   bool isEdit = false,
-  void Function(List<SelectedModifier> selections, String? note)? onConfirm,
+  void Function(List<SelectedModifier> selections, String? note, int quantity)?
+  onConfirm,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -143,7 +144,7 @@ Future<void> _openSheet(
                 currencyCode: 'ILS',
                 initialNote: initialNote,
                 isEdit: isEdit,
-                onConfirm: onConfirm ?? (_, _) {},
+                onConfirm: onConfirm ?? (_, _, _) {},
               ),
               child: const Text('open'),
             ),
@@ -250,7 +251,7 @@ void main() {
       String? gotNote;
       await _openSheet(
         tester,
-        onConfirm: (s, n) {
+        onConfirm: (s, n, _) {
           gotSelections = s;
           gotNote = n;
         },
@@ -312,7 +313,7 @@ void main() {
         'note and no disposal error', (tester) async {
       final notes = <String?>[];
       for (var round = 1; round <= 3; round++) {
-        await _openSheet(tester, onConfirm: (_, n) => notes.add(n));
+        await _openSheet(tester, onConfirm: (_, n, _) => notes.add(n));
         // Every round starts from a clean note — no leakage from the last one.
         expect(
           _noteEditable(tester).controller.text,
@@ -347,7 +348,7 @@ void main() {
         tester,
         initialNote: 'بدون بصل',
         isEdit: true,
-        onConfirm: (_, n) => saved = n,
+        onConfirm: (_, n, _) => saved = n,
       );
       expect(_noteEditable(tester).controller.text, 'بدون بصل');
 
@@ -374,7 +375,7 @@ void main() {
     testWidgets('002-G1. hiding the keyboard leaves the sheet open; the close '
         'button still dismisses it', (tester) async {
       var confirmed = false;
-      await _openSheet(tester, onConfirm: (_, _) => confirmed = true);
+      await _openSheet(tester, onConfirm: (_, _, _) => confirmed = true);
       await _focusNote(tester);
       await _showKeyboard(tester);
       expect(find.byType(ModifierSelectionSheet), findsOneWidget);
