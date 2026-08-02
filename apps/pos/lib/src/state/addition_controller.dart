@@ -1338,6 +1338,19 @@ class AdditionController extends Notifier<AdditionState> {
         // what re-opens `canCancel` and lets `exit()` release an identity. It is
         // therefore fenced on the attempt AND on disposal, not left to an
         // invariant enforced elsewhere by accident.
+        //
+        // 022 (Codex MEDIUM): when the refusal says OUR MENU IS STALE, reload it
+        // through the SAME central policy the initial submit uses. Without this
+        // the message we show ("refresh the menu and select the item options
+        // again") is advice the app makes impossible to follow: the cashier
+        // re-picks the same stale option from the same cached menu and is
+        // refused again. Invalidation only marks the provider dirty, so the
+        // refetch happens on the next read — not eagerly, and not in a loop.
+        // Deliberately BEFORE the disposal fence: the menu is container state,
+        // not this attempt's state, and a stale menu outlives the widget.
+        if (shouldRefreshMenuForSubmissionError(outcome.reason)) {
+          ref.invalidate(posMenuProvider);
+        }
         if (_disposed) {
           return AdditionResult(applied: false, error: outcome.reason);
         }

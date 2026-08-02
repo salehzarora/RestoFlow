@@ -488,9 +488,16 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // load. Reload it so the grid greys the item out before the cashier
     // re-enters the corrected order. Availability only travels with the menu
     // (there is no realtime push), so this is the honest refresh point.
+    //
+    // 022 (Codex MEDIUM): the same is true of a stale PREPARATION snapshot, and
+    // the test for it is now the ONE shared policy rather than a code compared
+    // here — the initial push and the Add-items refusal must not be able to
+    // disagree about what "our menu is stale" means. Invalidated exactly once,
+    // for the one entry whose verdict we just recorded: the provider refetches
+    // on the next read, so there is no loop and no eager round trip.
     for (final e in state) {
       if (e.id == entryId && e.isPermanentBusinessRejection) {
-        if (e.lastErrorCode == 'item_unavailable') {
+        if (shouldRefreshMenuForSubmissionError(e.lastErrorCode)) {
           ref.invalidate(posMenuProvider);
         }
         // PILOT-OPERATIONS-CORRECTIONS-001 (A3): the submit created NO server order.

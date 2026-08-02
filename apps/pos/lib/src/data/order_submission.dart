@@ -115,6 +115,38 @@ const Set<String> kPermanentRejectionCodes = {
   'rejected',
 };
 
+/// KITCHEN-MODIFIER-PREP-CLASSIFIER-REJECTION-UX-AUDIT-FIX-022 — THE ONE menu
+/// staleness policy, for every submission surface.
+///
+/// A refusal belongs here when the server's reason IS that our cached menu no
+/// longer matches its own, so the recovery instruction we show ("re-enter the
+/// order without these items" / "refresh the menu and select the item options
+/// again") is only actionable once the menu has actually been reloaded.
+/// Availability and preparation configuration travel ONLY with the menu — there
+/// is no realtime push — so this refusal is the honest refresh point.
+///
+///   * `item_unavailable` (RESTAURANT-OPERATIONS-V1-001) — a manager flipped
+///     availability after our last load; reload so the grid greys the item out.
+///   * `modifier_prep_snapshot_stale` (021) — the owner changed a modifier's
+///     preparation contribution or its classifier after the line was frozen.
+///     Without a reload the cashier re-picks the SAME stale option from the
+///     SAME cached menu and is refused again, forever: the message would be
+///     advice the app itself makes impossible to follow.
+///
+/// Deliberately NOT here: transport failures and timeouts (nothing says the
+/// menu moved), `table_*` refusals (table state is not menu data),
+/// `dispatch_mode_not_allowed` (branch configuration), `modifier_option_not_in_scope`
+/// (an ownership violation, not a stale copy), payment/printer failures, and an
+/// accepted idempotency replay (nothing was refused at all). Reloading on those
+/// would spend a round trip and reset the grid for no reason.
+///
+/// One predicate rather than a condition per widget: the two surfaces that can
+/// receive these codes (the initial outbox push and the Add-items terminal
+/// refusal) must not be able to disagree about what "stale menu" means.
+bool shouldRefreshMenuForSubmissionError(String? errorCode) =>
+    errorCode == 'item_unavailable' ||
+    errorCode == 'modifier_prep_snapshot_stale';
+
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
 /// into `order_item_modifiers` (RF-052, D-008). [priceMinorSnapshot] is a
