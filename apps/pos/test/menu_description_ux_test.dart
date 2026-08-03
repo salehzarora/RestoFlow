@@ -8,6 +8,7 @@ import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
+import 'package:restoflow_pos/src/pos_palette.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
@@ -72,9 +73,13 @@ Widget _card(
   ),
 );
 
-SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(WidgetTester tester) =>
+/// POS-VISUAL-REDESIGN-PHASE-1-007: the product grid takes a FIXED column
+/// count per layout mode. A single max-cross-axis-extent could not express the
+/// approved layout (it yields 4 columns at both 1440 and 1280), so the delegate
+/// type changed. The skeleton-parity contract these tests own is unchanged.
+SliverGridDelegateWithFixedCrossAxisCount _gridDelegate(WidgetTester tester) =>
     tester.widget<GridView>(find.byType(GridView).last).gridDelegate
-        as SliverGridDelegateWithMaxCrossAxisExtent;
+        as SliverGridDelegateWithFixedCrossAxisCount;
 
 /// FINAL-NEW-MODIFICATIONS-COMBINED-001 replaced the former
 /// `_drainPreExistingOverflow` helper: the screen-level horizontal overflow it
@@ -194,6 +199,7 @@ void main() {
           greaterThan(0),
         );
 
+        final mode = posLayoutModeFor(width: width, height: 1200);
         // The SKELETON grid at the SAME width, with the menu still loading.
         await _pumpMenu(tester, size: Size(width, 1200), loading: true);
         _expectCleanFrame(tester);
@@ -204,8 +210,8 @@ void main() {
           loaded.mainAxisExtent,
           reason: 'a skeleton of a different height makes the grid jump',
         );
-        expect(skeleton.maxCrossAxisExtent, loaded.maxCrossAxisExtent);
-        expect(loaded.maxCrossAxisExtent, kPosMenuCardMaxExtent);
+        expect(skeleton.crossAxisCount, loaded.crossAxisCount);
+        expect(loaded.crossAxisCount, posMenuColumnsFor(mode));
         // The extent really is image band + the shared body height.
         final cellWidth =
             (loaded.mainAxisExtent! - kPosMenuCardBodyHeight) * 4 / 3;
@@ -416,8 +422,10 @@ void main() {
           supportedLocales: kSupportedLocales,
           home: Scaffold(
             body: GridView.builder(
+              // An isolated cost harness — it only needs 173px cells of the
+              // approved extent, not the screen's per-mode column count.
               gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: kPosMenuCardMaxExtent,
+                maxCrossAxisExtent: 173,
                 mainAxisExtent: posMenuCardExtent(173),
               ),
               itemCount: items.length,

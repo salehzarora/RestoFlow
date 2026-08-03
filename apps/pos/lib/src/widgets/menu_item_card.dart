@@ -158,121 +158,191 @@ class MenuItemCard extends StatelessWidget {
     String? description,
   ) {
     final hasDescription = description != null;
-    return Card(
-      elevation: 1.5,
-      color: theme.colorScheme.surface,
-      shadowColor: const Color(0x1410201A),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-        side: const BorderSide(color: kRestoflowHairline),
+    // POS-VISUAL-REDESIGN-PHASE-1-007: a WHITE card, not `colorScheme.surface`
+    // — the green-tinted surface sat within three values of the hairline and
+    // dissolved the card's own edge. r14 (the biggest object on screen) and the
+    // single-layer e1 shadow; the second layer of the old two-layer shadow was
+    // invisible at card size and doubled the paint cost across ~19 cards.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(kPosCardRadius),
+        boxShadow: kPosCardShadow,
       ),
-      child: InkWell(
-        key: Key('menu-item-${item.id}'),
-        onTap: unavailable ? null : onAdd,
-        // Deliberate management gesture — capability-gated by the caller (null =
-        // hidden). Independent of the disabled add tap, so an unavailable item can
-        // still be reopened to make it Available.
-        onLongPress: onManageAvailability,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The fixed 4:3 image band: cover-fit photo (with cacheWidth) that
-            // never stretches, or the tinted category band on null/error.
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: _ImageBand(
-                item: item,
-                category: category,
-                l10n: l10n,
-                bandTags: bandTags,
-                inCartQuantity: inCartQuantity,
-                unavailable: unavailable,
+      child: Card(
+        elevation: 0,
+        color: Colors.white,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kPosCardRadius),
+          side: const BorderSide(color: kRestoflowHairline),
+        ),
+        child: InkWell(
+          key: Key('menu-item-${item.id}'),
+          onTap: unavailable ? null : onAdd,
+          // Deliberate management gesture — capability-gated by the caller (null =
+          // hidden). Independent of the disabled add tap, so an unavailable item can
+          // still be reopened to make it Available.
+          onLongPress: onManageAvailability,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The fixed 4:3 image band: cover-fit photo (with cacheWidth) that
+              // never stretches, or the tinted category band on null/error.
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: _ImageBand(
+                  item: item,
+                  category: category,
+                  l10n: l10n,
+                  bandTags: bandTags,
+                  inCartQuantity: inCartQuantity,
+                  optionGroupCount: optionGroupCount,
+                  unavailable: unavailable,
+                ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(RestoflowSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item.name,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: kRestoflowInk,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        // POS-PRODUCT-DESCRIPTIONS-001: the description sits
-                        // directly under the name, in the secondary ink, and is
-                        // purely presentational — no tap target, no tooltip, no
-                        // placeholder when absent. `letterSpacing` is
-                        // deliberately left alone: forcing one breaks
-                        // Arabic/Hebrew shaping. Ambient Directionality and the
-                        // directional start alignment handle RTL.
-                        if (hasDescription) ...[
-                          const SizedBox(height: RestoflowSpacing.xxs),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(10, 10, 10, 9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Text(
-                            description,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: kRestoflowInk2,
-                              height: 1.25,
-                              // EXPLICITLY zero: the ambient bodySmall carries
-                              // a 0.4 tracking that pulls Arabic and Hebrew
-                              // glyphs apart and breaks their shaping.
-                              letterSpacing: 0,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        if (optionGroupCount > 0) ...[
-                          _OptionsIndicator(
-                            count: optionGroupCount,
-                            tooltip: l10n.menuModifierGroupCount(
-                              optionGroupCount,
-                            ),
-                          ),
-                          const SizedBox(width: RestoflowSpacing.sm),
-                        ],
-                        Expanded(
-                          child: Text(
-                            priceText,
-                            textAlign: TextAlign.end,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: kRestoflowBrandDark,
-                              fontWeight: FontWeight.w800,
+                            item.name,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: kRestoflowInk,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (!unavailable) ...[
-                          const SizedBox(width: RestoflowSpacing.sm),
-                          // The canonical add gesture: a 44px filled green
-                          // button (disabled while the cart is locked).
-                          _AddButton(onAdd: onAdd, tooltip: l10n.posAddToCart),
+                          // POS-PRODUCT-DESCRIPTIONS-001: the description sits
+                          // directly under the name, in the secondary ink, and is
+                          // purely presentational — no tap target, no tooltip, no
+                          // placeholder when absent. `letterSpacing` is
+                          // deliberately left alone: forcing one breaks
+                          // Arabic/Hebrew shaping. Ambient Directionality and the
+                          // directional start alignment handle RTL.
+                          if (hasDescription) ...[
+                            const SizedBox(height: RestoflowSpacing.xxs),
+                            Text(
+                              description,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: kPosMutedBodyInk,
+                                height: 1.25,
+                                // EXPLICITLY zero: the ambient bodySmall carries
+                                // a 0.4 tracking that pulls Arabic and Hebrew
+                                // glyphs apart and breaks their shaping.
+                                letterSpacing: 0,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                      Row(
+                        children: [
+                          // The options chip and the in-cart badge moved ONTO the
+                          // band: they are facts about the product, and clearing
+                          // them out leaves the body row to price + add alone.
+                          Expanded(
+                            child: _PriceText(
+                              priceKey: Key('menu-item-price-${item.id}'),
+                              formatted: priceText,
+                            ),
+                          ),
+                          if (!unavailable) ...[
+                            const SizedBox(width: RestoflowSpacing.sm),
+                            // The canonical add gesture: a 44px filled green
+                            // button (disabled while the cart is locked).
+                            _AddButton(
+                              onAdd: onAdd,
+                              tooltip: l10n.posAddToCart,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the price with the SYMBOL demoted and the
+/// DIGITS promoted (spec §9.3).
+///
+/// The formatted string is NOT altered: [MoneyFormatter]'s output is split into
+/// its leading/trailing non-digit runs and its numeric core, rendered as spans
+/// of one `Text.rich` whose plain text is byte-identical to the input. The money
+/// value, its formatting and every `find.text(price)` contract therefore
+/// survive — only the rendering changes. Forced LTR so a price never re-orders
+/// inside Arabic or Hebrew.
+class _PriceText extends StatelessWidget {
+  const _PriceText({required this.priceKey, required this.formatted});
+
+  final Key priceKey;
+  final String formatted;
+
+  static bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
+
+  /// (lead, core, trail) where lead + core + trail == [formatted] exactly.
+  static (String, String, String) splitParts(String formatted) {
+    var start = 0;
+    while (start < formatted.length && !_isDigit(formatted.codeUnitAt(start))) {
+      start++;
+    }
+    if (start == formatted.length) return ('', formatted, '');
+    var end = formatted.length;
+    while (end > start && !_isDigit(formatted.codeUnitAt(end - 1))) {
+      end--;
+    }
+    return (
+      formatted.substring(0, start),
+      formatted.substring(start, end),
+      formatted.substring(end),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (lead, core, trail) = splitParts(formatted);
+    const symbolStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      color: kRestoflowInk3,
+      letterSpacing: 0,
+    );
+    const digitStyle = TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.w800,
+      color: kRestoflowInk,
+      letterSpacing: -0.2,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (lead.isNotEmpty) TextSpan(text: lead, style: symbolStyle),
+          TextSpan(text: core, style: digitStyle),
+          if (trail.isNotEmpty) TextSpan(text: trail, style: symbolStyle),
+        ],
+      ),
+      key: priceKey,
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.start,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -287,6 +357,7 @@ class _ImageBand extends StatelessWidget {
     required this.l10n,
     required this.bandTags,
     required this.inCartQuantity,
+    required this.optionGroupCount,
     required this.unavailable,
   });
 
@@ -295,6 +366,7 @@ class _ImageBand extends StatelessWidget {
   final AppLocalizations l10n;
   final List<String> bandTags;
   final int inCartQuantity;
+  final int optionGroupCount;
   final bool unavailable;
 
   @override
@@ -319,28 +391,52 @@ class _ImageBand extends StatelessWidget {
               );
             },
           ),
-        if (bandTags.isNotEmpty)
+        // Spec §12/§16.4: tag pills at the band's inline-START, the in-cart
+        // badge at the inline-END, the options chip at the bottom inline-END.
+        // The tags and the badge share ONE top row rather than being placed
+        // independently, so on a narrow cell the tags yield width instead of
+        // running under the badge — no magic reservation, no overlap.
+        if (bandTags.isNotEmpty || inCartQuantity > 0)
           PositionedDirectional(
             top: RestoflowSpacing.sm,
             start: RestoflowSpacing.sm,
             end: RestoflowSpacing.sm,
-            child: Wrap(
-              spacing: RestoflowSpacing.xs,
-              runSpacing: RestoflowSpacing.xs,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final tag in bandTags)
-                  RestoflowStatusPill(
-                    label: _tagLabel(l10n, tag),
-                    tone: _tagTone(tag),
+                Expanded(
+                  child: Wrap(
+                    spacing: RestoflowSpacing.xs,
+                    runSpacing: RestoflowSpacing.xs,
+                    children: [
+                      // A pill cannot shrink below its own label, so when the
+                      // in-cart badge shares this row the band shows the single
+                      // highest-priority tag instead of squeezing two. Priority
+                      // order and the unknown-tag skip are unchanged.
+                      for (final tag
+                          in inCartQuantity > 0 ? bandTags.take(1) : bandTags)
+                        RestoflowStatusPill(
+                          label: _tagLabel(l10n, tag),
+                          tone: _tagTone(tag),
+                        ),
+                    ],
                   ),
+                ),
+                if (inCartQuantity > 0) ...[
+                  const SizedBox(width: RestoflowSpacing.xs),
+                  _InCartBadge(quantity: inCartQuantity),
+                ],
               ],
             ),
           ),
-        if (inCartQuantity > 0)
+        if (optionGroupCount > 0)
           PositionedDirectional(
             bottom: RestoflowSpacing.sm,
-            start: RestoflowSpacing.sm,
-            child: _InCartBadge(quantity: inCartQuantity),
+            end: RestoflowSpacing.sm,
+            child: _OptionsIndicator(
+              count: optionGroupCount,
+              tooltip: l10n.menuModifierGroupCount(optionGroupCount),
+            ),
           ),
         // RESTAURANT-OPERATIONS-V1-001: the not-sellable treatment — a dimming
         // scrim + a centred reason pill (Sold out / Temporarily unavailable).
@@ -387,8 +483,15 @@ class _InCartBadge extends StatelessWidget {
         RestoflowSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: kRestoflowInk,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+        color: kRestoflowBrandDark,
+        borderRadius: BorderRadius.circular(7),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x4710201A),
+            offset: Offset(0, 2),
+            blurRadius: 6,
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -431,23 +534,25 @@ class _OptionsIndicator extends StatelessWidget {
           horizontal: RestoflowSpacing.sm,
           vertical: RestoflowSpacing.xxs,
         ),
+        // Flat translucent ink over the photo — the spec's one backdrop-blur is
+        // deliberately NOT ported: it reads the same and costs a layer.
         decoration: BoxDecoration(
-          color: kPosChipBg,
-          borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+          color: const Color(0xB8101A15),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.tune,
               size: RestoflowIconSizes.xs,
-              color: kRestoflowInk2,
+              color: Colors.white,
             ),
             const SizedBox(width: RestoflowSpacing.xxs),
             Text(
               count.toString(),
               style: theme.textTheme.labelMedium?.copyWith(
-                color: kRestoflowInk2,
+                color: Colors.white,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -468,26 +573,28 @@ class _AddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(13)),
-        boxShadow: kPosGreenGlow,
-      ),
-      child: IconButton.filled(
-        onPressed: onAdd,
-        tooltip: tooltip,
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-        style: IconButton.styleFrom(
-          backgroundColor: theme.colorScheme.primary,
-          foregroundColor: theme.colorScheme.onPrimary,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(13)),
-          ),
+    // POS-VISUAL-REDESIGN-PHASE-1-007: NO glow. Nineteen glowing green add
+    // buttons made green mean nothing; the glow now marks Send alone. The
+    // canonical add gesture, its 44px target and its disabled gate are
+    // unchanged.
+    return IconButton.filled(
+      onPressed: onAdd,
+      tooltip: tooltip,
+      // STANDARD, not compact: a compact density subtracts 8px from the
+      // constraint below, which quietly rendered this 44px target at 36.
+      visualDensity: VisualDensity.standard,
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+      style: IconButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
+        disabledBackgroundColor: const Color(0xFFEFE9DC),
+        disabledForegroundColor: const Color(0xFFBDB4A2),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(RestoflowRadii.md)),
         ),
-        icon: const Icon(Icons.add_shopping_cart, size: RestoflowIconSizes.md),
       ),
+      icon: const Icon(Icons.add_shopping_cart, size: RestoflowIconSizes.md),
     );
   }
 }

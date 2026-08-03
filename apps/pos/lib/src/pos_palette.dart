@@ -33,6 +33,41 @@ const Color kPosTerracotta = Color(0xFFC2410C);
 const Color kPosTerracottaContainer = Color(0xFFFFEDD5);
 const Color kPosTerracottaText = Color(0xFF7C2D12);
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the three warm surface values and the
+/// muted body ink the Phase-1 spec adds (§10). POS-local by design: Step 1 must
+/// not touch `packages/design_system`.
+
+/// Input / search-field border — a hair darker than the hairline so a FILLED
+/// field still reads as interactive on a warm fill.
+const Color kPosInputBorder = Color(0xFFEAE2D3);
+
+/// The quiet count-badge fill behind a category chip's number.
+const Color kPosCountBadgeBg = Color(0xFFE7DFCE);
+
+/// Body ink between ink2 and ink3 — product descriptions.
+const Color kPosMutedBodyInk = Color(0xFF7A8479);
+
+/// Card / cart-line rest elevation (spec §7 "e1"). One layer, not two: the
+/// second layer of `RestoflowShadows.sm` was invisible at card size and doubled
+/// the paint cost across ~19 cards.
+const List<BoxShadow> kPosCardShadow = [
+  BoxShadow(color: Color(0x0D10201A), offset: Offset(0, 1), blurRadius: 2),
+];
+
+/// The menu deck's downward shadow (spec §7 "deck").
+const List<BoxShadow> kPosDeckShadow = [
+  BoxShadow(color: Color(0x0A10201A), offset: Offset(0, 2), blurRadius: 6),
+];
+
+/// The SELECTED category chip's brand shadow (spec §7 "brand-s") — softer than
+/// [kPosGreenGlow]; the selected chip is the only chip carrying elevation.
+const List<BoxShadow> kPosChipSelectedShadow = [
+  BoxShadow(color: Color(0x471B7A52), offset: Offset(0, 3), blurRadius: 10),
+];
+
+/// Product-card corner radius (spec §5 — the biggest object on screen).
+const double kPosCardRadius = 14;
+
 /// The green-CTA glow used on the primary add / send buttons.
 const List<BoxShadow> kPosGreenGlow = [
   BoxShadow(color: Color(0x591B7A52), offset: Offset(0, 6), blurRadius: 16),
@@ -43,44 +78,90 @@ const List<BoxShadow> kPosGreenGlow = [
 /// the platform. Keeps `RestoflowBreakpoints.posTwoPane` (820) as the phone
 /// cutoff so the existing wide-viewport widget tests still see two panes.
 enum PosLayoutMode {
-  /// Menu pane + fixed side cart 380px.
+  /// >= 1360: menu pane + 400px side cart, 5 product columns.
   desktop,
 
-  /// Menu pane + fixed side cart 340px.
+  /// 1100-1359: menu pane + 360px side cart, 4 product columns.
   tablet,
 
-  /// Landscape phone / small tablet: menu pane + compact side cart ~304px.
+  /// 900-1099: menu pane + 340px side cart, 3 product columns.
+  smallTablet,
+
+  /// 820-899: menu pane + 320px side cart, 3 product columns.
+  narrowTablet,
+
+  /// Short or narrow LANDSCAPE (1024x600): 320px side cart, 3 columns and the
+  /// tighter grid paddings.
   compactLandscape,
 
   /// Menu full-width + a dark bottom bar and a slide-up cart sheet.
   phone,
 }
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the approved product-column count per
+/// mode (spec §3).
+///
+/// This replaces a max-cross-axis-extent formula that could not express the
+/// approved layout at all: a single 230px extent yields 4 columns at BOTH 1440
+/// and 1280, so desktop could never reach 5 while the tablet stayed at 4.
+/// 5 columns are deliberately NOT forced at 1280 — a 213px cell keeps the photo
+/// band 160px tall, and five 168px cells would cost more legibility than the
+/// extra column buys.
+int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
+  PosLayoutMode.desktop => 5,
+  PosLayoutMode.tablet => 4,
+  PosLayoutMode.smallTablet => 3,
+  PosLayoutMode.narrowTablet => 3,
+  PosLayoutMode.compactLandscape => 3,
+  PosLayoutMode.phone => 2,
+};
+
+/// At or below this height a LANDSCAPE viewport is compact however wide it is —
+/// this is what puts 1024x600 in [PosLayoutMode.compactLandscape] while
+/// 1024x768 stays [PosLayoutMode.smallTablet].
+const double kPosCompactHeight = 640;
+
 /// Side-cart width for a two-pane [mode]; 0 for [PosLayoutMode.phone].
 double posCartWidthFor(PosLayoutMode mode) => switch (mode) {
-  PosLayoutMode.desktop => 380,
-  PosLayoutMode.tablet => 340,
-  PosLayoutMode.compactLandscape => 304,
+  PosLayoutMode.desktop => 400,
+  PosLayoutMode.tablet => 360,
+  PosLayoutMode.smallTablet => 340,
+  PosLayoutMode.narrowTablet => 320,
+  PosLayoutMode.compactLandscape => 320,
   PosLayoutMode.phone => 0,
 };
 
-/// Chooses the [PosLayoutMode] from the available [width]/[height].
+/// Chooses the [PosLayoutMode] from the available [width]/[height]
+/// (POS-VISUAL-REDESIGN-PHASE-1-007, spec §3).
 ///
-/// - `>= 1100` → desktop (side cart 380)
-/// - `820 .. 1099` → tablet (side cart 340)
-/// - `700 .. 819` AND landscape (`width > height`) → compact landscape split
-///   (a compact ~304px side cart fits without a bottom bar)
+/// - landscape AND `>= 700` wide AND (narrower than 820 OR no taller than
+///   [kPosCompactHeight]) → compact landscape (side cart 320)
+/// - `>= 1360` → desktop (400) · `1100..1359` → tablet (360)
+/// - `900..1099` → small tablet (340) · `820..899` → narrow tablet (320)
 /// - otherwise → phone (bottom bar + slide-up sheet)
 ///
-/// The 820 phone cutoff for portrait is unchanged, so a rotated phone/tablet
-/// widens into a side-cart layout instead of staying cramped like portrait.
+/// The compact test runs FIRST and on height as well as width, because a short
+/// landscape tablet (1024x600) needs the compact paddings even though its width
+/// alone would read as a small tablet. It keeps the existing **700** floor, so a
+/// small landscape phone still gets the bottom bar rather than a 320px cart
+/// eating half its screen. The 820 portrait cutoff is unchanged.
 PosLayoutMode posLayoutModeFor({
   required double width,
   required double height,
 }) {
-  if (width >= 1100) return PosLayoutMode.desktop;
-  if (width >= RestoflowBreakpoints.posTwoPane) return PosLayoutMode.tablet;
-  if (width >= 700 && width > height) return PosLayoutMode.compactLandscape;
+  final landscape = width > height;
+  if (landscape &&
+      width >= 700 &&
+      (width < RestoflowBreakpoints.posTwoPane ||
+          height <= kPosCompactHeight)) {
+    return PosLayoutMode.compactLandscape;
+  }
+  if (width >= 1360) return PosLayoutMode.desktop;
+  if (width >= 1100) return PosLayoutMode.tablet;
+  if (width >= 900) return PosLayoutMode.smallTablet;
+  if (width >= RestoflowBreakpoints.posTwoPane) {
+    return PosLayoutMode.narrowTablet;
+  }
   return PosLayoutMode.phone;
 }
 

@@ -137,10 +137,26 @@ class _MenuPane extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final menuAsync = ref.watch(posMenuProvider);
 
+    final menu = menuAsync.valueOrNull;
+    // POS-VISUAL-REDESIGN-PHASE-1-007: the category rail is built HERE, beside
+    // the heading and the search, so one deck can contain the whole menu
+    // navigation. It used to be built inside `_MenuGrid`, which put a control
+    // on the same plane as the merchandise. It stays in this same high-level
+    // menu Column and the grid keeps owning its own scroll.
+    final Widget? rail = menu == null || menu.items.isEmpty
+        ? null
+        : CategoryChips(
+            categories: menu.categories,
+            itemCounts: _categoryCounts(menu),
+          );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _MenuHeader(itemCount: menuAsync.valueOrNull?.items.length),
+        _MenuDeck(
+          itemCount: menu?.items.length,
+          rail: menuAsync.isLoading ? const _CategoryRailSkeleton() : rail,
+        ),
         Expanded(
           child: menuAsync.when(
             loading: () => const _MenuSkeleton(),
@@ -152,43 +168,96 @@ class _MenuPane extends ConsumerWidget {
       ],
     );
   }
+
+  /// Per-category counts for the chip badges (All = total) — unchanged rule,
+  /// lifted with the rail so the deck can render the same numbers.
+  static Map<String, int> _categoryCounts(PosMenuData menu) {
+    final counts = <String, int>{kAllCategoriesId: menu.items.length};
+    for (final category in menu.categories) {
+      counts[category.id] = menu.items
+          .where((i) => i.categoryId == category.id)
+          .length;
+    }
+    return counts;
+  }
 }
 
-/// The menu header: "Menu" + live item count + the search field (§6.2).
-class _MenuHeader extends StatelessWidget {
-  const _MenuHeader({required this.itemCount});
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the coordinated menu deck: ONE elevated
+/// white plane carrying the heading, the live item count, the search field and
+/// the category rail, with the product grid left on the warm canvas below it.
+///
+/// The point is plane separation. Before this, search, chips and product cards
+/// were all white rounded boxes with the same hairline on the same canvas, so
+/// the cashier had to READ the screen to find its structure. Two planes and a
+/// single downward shadow replace a pile of extra borders.
+class _MenuDeck extends StatelessWidget {
+  const _MenuDeck({required this.itemCount, required this.rail});
 
   final int? itemCount;
+
+  /// The category rail (or its loading placeholder). Null while the menu is
+  /// empty or failed — exactly as no chips rendered before.
+  final Widget? rail;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.lg,
-        RestoflowSpacing.md,
-        RestoflowSpacing.lg,
-        RestoflowSpacing.sm,
+    return DecoratedBox(
+      key: const Key('pos-menu-deck'),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: BorderDirectional(
+          bottom: BorderSide(color: kRestoflowHairline),
+        ),
+        boxShadow: kPosDeckShadow,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            l10n.posMenuHeading,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: kRestoflowInk,
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.md,
+              RestoflowSpacing.lg,
+              0,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  l10n.posMenuHeading,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: kRestoflowInk,
+                  ),
+                ),
+                if (itemCount != null) ...[
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Text(
+                    l10n.posMenuItemCount(itemCount!),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: kRestoflowInk3,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: RestoflowSpacing.md),
+                // The search never stretches the full deck on a wide screen —
+                // a 900px-wide input reads as a banner, not a field.
+                Expanded(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: const _MenuSearchField(),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (itemCount != null) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
-            Text(
-              l10n.posMenuItemCount(itemCount!),
-              style: theme.textTheme.bodySmall?.copyWith(color: kRestoflowInk3),
-            ),
-          ],
-          const SizedBox(width: RestoflowSpacing.md),
-          const Expanded(child: _MenuSearchField()),
+          if (rail != null) rail!,
         ],
       ),
     );
@@ -242,18 +311,20 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
                   },
                 )
               : null,
+          // FILLED, not white: inside a white deck a white field has no edge
+          // of its own, so it stops reading as an input.
           filled: true,
-          fillColor: Colors.white,
+          fillColor: kPosChipBg,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: RestoflowSpacing.md,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            borderSide: const BorderSide(color: kRestoflowHairline),
+            borderSide: const BorderSide(color: kPosInputBorder),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            borderSide: const BorderSide(color: kRestoflowHairline),
+            borderSide: const BorderSide(color: kPosInputBorder),
           ),
         ),
       ),
@@ -289,72 +360,136 @@ const double kPosMenuCardBodyHeight = 140;
 double posMenuCardExtent(double cellWidth) =>
     cellWidth * 3 / 4 + kPosMenuCardBodyHeight;
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the ONE resolved grid geometry, derived
+/// from the layout mode rather than from a max-extent formula, and shared
+/// verbatim by the loaded grid and the loading skeleton so the two can never
+/// drift and the menu's arrival cannot make the grid jump.
+class PosMenuGridGeometry {
+  const PosMenuGridGeometry({
+    required this.columns,
+    required this.padding,
+    required this.spacing,
+    required this.cellWidth,
+  });
+
+  /// Resolves the geometry for the [availableWidth] the grid is given.
+  factory PosMenuGridGeometry.of(
+    double availableWidth,
+    double availableHeight,
+  ) {
+    final mode = posLayoutModeFor(
+      width: availableWidth,
+      height: availableHeight,
+    );
+    final compact = mode == PosLayoutMode.compactLandscape;
+    final padding = compact ? 12.0 : RestoflowSpacing.lg;
+    final spacing = compact ? 10.0 : RestoflowSpacing.md;
+    final columns = posMenuColumnsFor(mode);
+    final content = availableWidth - 2 * padding;
+    final cellWidth = (content - (columns - 1) * spacing) / columns;
+    return PosMenuGridGeometry(
+      columns: columns,
+      padding: padding,
+      spacing: spacing,
+      cellWidth: cellWidth,
+    );
+  }
+
+  final int columns;
+  final double padding;
+  final double spacing;
+  final double cellWidth;
+
+  double get mainAxisExtent => posMenuCardExtent(cellWidth);
+
+  SliverGridDelegateWithFixedCrossAxisCount get delegate =>
+      SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        mainAxisExtent: mainAxisExtent,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+      );
+}
+
+/// The menu pane's own width is the SCREEN width minus the side cart, so the
+/// grid must resolve its mode from the whole viewport rather than from the
+/// width it was handed — otherwise a 1440px desktop, whose menu pane is only
+/// 1040px wide, would resolve as a small tablet.
+PosMenuGridGeometry posMenuGridGeometryOf(
+  BuildContext context,
+  double availableWidth,
+) {
+  final size = MediaQuery.sizeOf(context);
+  final mode = posLayoutModeFor(width: size.width, height: size.height);
+  final compact = mode == PosLayoutMode.compactLandscape;
+  final padding = compact ? 12.0 : RestoflowSpacing.lg;
+  final spacing = compact ? 10.0 : RestoflowSpacing.md;
+  final columns = posMenuColumnsFor(mode);
+  final content = availableWidth - 2 * padding;
+  return PosMenuGridGeometry(
+    columns: columns,
+    padding: padding,
+    spacing: spacing,
+    cellWidth: (content - (columns - 1) * spacing) / columns,
+  );
+}
+
+/// The deck's category-rail placeholder while the menu loads — the same 56px
+/// band the real rail occupies, so the deck does not change height when the
+/// categories arrive.
+class _CategoryRailSkeleton extends StatelessWidget {
+  const _CategoryRailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: RestoflowSpacing.lg,
+          vertical: RestoflowSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < 4; i++) ...[
+              const RestoflowSkeleton(
+                width: 96,
+                height: 40,
+                radius: RestoflowRadii.md,
+              ),
+              const SizedBox(width: 6),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A static skeleton of the chips strip + item grid while the menu loads.
 class _MenuSkeleton extends StatelessWidget {
   const _MenuSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Scrolls like the REAL CategoryChips strip it stands in for — a
-        // fixed 4×96 row overflowed narrow phones during the load frame.
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsetsDirectional.fromSTEB(
-            RestoflowSpacing.lg,
-            RestoflowSpacing.sm,
-            RestoflowSpacing.lg,
-            RestoflowSpacing.sm,
+    // The chips placeholder now lives in the DECK, so the skeleton is purely
+    // the grid — and it computes its cells with the SAME resolved geometry the
+    // loaded grid uses, so the placeholders occupy exactly the space the real
+    // cards will and nothing shifts when the menu resolves.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final geometry = posMenuGridGeometryOf(context, constraints.maxWidth);
+        return GridView.builder(
+          padding: EdgeInsets.all(geometry.padding),
+          gridDelegate: geometry.delegate,
+          itemCount: 8,
+          itemBuilder: (_, _) => RestoflowSkeleton(
+            height: geometry.mainAxisExtent,
+            radius: kPosCardRadius,
           ),
-          child: Row(
-            children: [
-              for (var i = 0; i < 4; i++) ...[
-                const RestoflowSkeleton(
-                  width: 96,
-                  height: 44,
-                  radius: RestoflowRadii.md,
-                ),
-                const SizedBox(width: RestoflowSpacing.sm),
-              ],
-            ],
-          ),
-        ),
-        Expanded(
-          // The skeleton computes its cell height with the SAME geometry the
-          // loaded grid uses, so the placeholders occupy exactly the space the
-          // real cards will and nothing shifts when the menu resolves.
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              const maxExtent = kPosMenuCardMaxExtent;
-              const spacing = RestoflowSpacing.md;
-              final contentWidth =
-                  constraints.maxWidth - 2 * RestoflowSpacing.lg;
-              final cols = (contentWidth / (maxExtent + spacing)).ceil().clamp(
-                1,
-                999,
-              );
-              final cellWidth = (contentWidth - (cols - 1) * spacing) / cols;
-              final extent = posMenuCardExtent(cellWidth);
-              return GridView.builder(
-                padding: const EdgeInsets.all(RestoflowSpacing.lg),
-                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: maxExtent,
-                  mainAxisExtent: extent,
-                  crossAxisSpacing: spacing,
-                  mainAxisSpacing: spacing,
-                ),
-                itemCount: 8,
-                itemBuilder: (_, _) => RestoflowSkeleton(
-                  height: extent,
-                  radius: RestoflowRadii.lg,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -415,14 +550,6 @@ class _MenuGrid extends ConsumerWidget {
     // regardless; the cart banner explains the pending/refresh state).
     final cartLocked = cart.lockedByAddition;
 
-    // Per-category counts for the chip badges (All = total).
-    final counts = <String, int>{kAllCategoriesId: menu.items.length};
-    for (final category in menu.categories) {
-      counts[category.id] = menu.items
-          .where((i) => i.categoryId == category.id)
-          .length;
-    }
-
     if (menu.items.isEmpty) {
       return RestoflowStateView(
         icon: Icons.restaurant_menu_outlined,
@@ -430,80 +557,59 @@ class _MenuGrid extends ConsumerWidget {
         message: l10n.posMenuEmptyBody,
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CategoryChips(categories: menu.categories, itemCounts: counts),
-        const SizedBox(height: RestoflowSpacing.xs),
-        Expanded(
-          child: items.isEmpty
-              ? RestoflowStateView(
-                  icon: Icons.search_off_outlined,
-                  title: l10n.posSearchNoResults,
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Size the grid cell so a fixed 4:3 image band + the card
-                    // body fit exactly (no overflow, no gap) at every width.
-                    const maxExtent = kPosMenuCardMaxExtent;
-                    const spacing = RestoflowSpacing.md;
-                    final contentWidth =
-                        constraints.maxWidth - 2 * RestoflowSpacing.lg;
-                    final cols = (contentWidth / (maxExtent + spacing))
-                        .ceil()
-                        .clamp(1, 999);
-                    final cellWidth =
-                        (contentWidth - (cols - 1) * spacing) / cols;
-                    final mainAxisExtent = posMenuCardExtent(cellWidth);
-                    return GridView.builder(
-                      padding: const EdgeInsets.all(RestoflowSpacing.lg),
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: maxExtent,
-                        mainAxisExtent: mainAxisExtent,
-                        crossAxisSpacing: spacing,
-                        mainAxisSpacing: spacing,
-                      ),
-                      itemCount: items.length,
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        final groups = menu.groupsForItem(item.id);
-                        return MenuItemCard(
-                          item: item,
-                          category: menu.categoryOf(item.categoryId),
-                          currencyCode: menu.currencyCode,
-                          optionGroupCount: groups.length,
-                          inCartQuantity: inCart[item.id] ?? 0,
-                          onManageAvailability: canManageAvailability
-                              ? () => MenuAvailabilitySheet.show(
-                                  context,
-                                  item: item,
-                                )
-                              : null,
-                          onAdd: cartLocked
-                              ? null
-                              : groups.isEmpty
-                              ? () => controller.addItem(item)
-                              : () => ModifierSelectionSheet.show(
-                                  context,
-                                  item: item,
-                                  groups: groups,
-                                  currencyCode: menu.currencyCode,
-                                  category: menu.categoryOf(item.categoryId),
-                                  onConfirm: (selections, note, quantity) =>
-                                      controller.addItemWithModifiers(
-                                        item,
-                                        selections,
-                                        note: note,
-                                        quantity: quantity,
-                                      ),
+    // The category rail now lives in the deck (`_MenuPane`); the grid is only
+    // the merchandise plane.
+    return items.isEmpty
+        ? RestoflowStateView(
+            icon: Icons.search_off_outlined,
+            title: l10n.posSearchNoResults,
+          )
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              // The approved column count for the resolved layout mode —
+              // a fixed 4:3 image band + the fixed card body fit exactly.
+              final geometry = posMenuGridGeometryOf(
+                context,
+                constraints.maxWidth,
+              );
+              return GridView.builder(
+                padding: EdgeInsets.all(geometry.padding),
+                gridDelegate: geometry.delegate,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final groups = menu.groupsForItem(item.id);
+                  return MenuItemCard(
+                    item: item,
+                    category: menu.categoryOf(item.categoryId),
+                    currencyCode: menu.currencyCode,
+                    optionGroupCount: groups.length,
+                    inCartQuantity: inCart[item.id] ?? 0,
+                    onManageAvailability: canManageAvailability
+                        ? () => MenuAvailabilitySheet.show(context, item: item)
+                        : null,
+                    onAdd: cartLocked
+                        ? null
+                        : groups.isEmpty
+                        ? () => controller.addItem(item)
+                        : () => ModifierSelectionSheet.show(
+                            context,
+                            item: item,
+                            groups: groups,
+                            currencyCode: menu.currencyCode,
+                            category: menu.categoryOf(item.categoryId),
+                            onConfirm: (selections, note, quantity) =>
+                                controller.addItemWithModifiers(
+                                  item,
+                                  selections,
+                                  note: note,
+                                  quantity: quantity,
                                 ),
-                        );
-                      },
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
+                          ),
+                  );
+                },
+              );
+            },
+          );
   }
 }
