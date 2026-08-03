@@ -27,9 +27,24 @@ const double kPosIdentityMinWidth = 104;
 /// even when the free space is wide.
 const double kPosIdentityMaxWidth = 340;
 
-/// The logo box. Smaller than the 38dp brand tile: this is a companion mark,
-/// not a second brand.
-const double kPosIdentityLogoSize = 26;
+/// The logo box. POS-TOPBAR-QUICK-TWEAK-010 doubled this from 26dp so the
+/// restaurant's own mark is readable across the counter. It stays under the
+/// 56dp toolbar height, so the bar does not grow.
+const double kPosIdentityLogoSize = 52;
+
+/// POS-TOPBAR-QUICK-TWEAK-010: in RTL the block sits left of centre.
+///
+/// [Alignment] is used rather than a translation or end-padding on purpose. It
+/// shifts by `|x|/2` of the FREE width, which means it can never push the block
+/// outside its own box and never steals width from the name — so both the
+/// no-overlap guarantee and the ellipsis behaviour survive the tweak at every
+/// width. On a typical 1280 landscape bar this lands the block ~15% of the
+/// middle region to the left (~74dp); for a long name, where there is little
+/// free width, it self-clamps to whatever is safely available.
+const double kPosIdentityRtlAlignX = -0.6;
+
+/// The name is 10% larger than the base title style (010).
+const double kPosIdentityNameScale = 1.1;
 
 class PosIdentityTitle extends ConsumerWidget {
   const PosIdentityTitle({super.key});
@@ -54,7 +69,12 @@ class PosIdentityTitle extends ConsumerWidget {
         if (constraints.maxWidth < kPosIdentityMinWidth) {
           return const SizedBox.shrink();
         }
-        return Center(
+        // POS-TOPBAR-QUICK-TWEAK-010: centred in LTR, nudged left in RTL.
+        final rtl = Directionality.of(context) == TextDirection.rtl;
+        return Align(
+          alignment: rtl
+              ? const Alignment(kPosIdentityRtlAlignX, 0)
+              : Alignment.center,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
             child: Row(
@@ -77,6 +97,11 @@ class PosIdentityTitle extends ConsumerWidget {
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: kRestoflowInk,
+                      // 010: +10% on whatever the theme resolves to, so the
+                      // tweak rides the theme instead of pinning a literal.
+                      fontSize:
+                          (theme.textTheme.titleSmall?.fontSize ?? 14) *
+                          kPosIdentityNameScale,
                     ),
                   ),
                 ),
