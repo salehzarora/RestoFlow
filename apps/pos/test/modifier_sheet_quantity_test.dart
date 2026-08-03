@@ -720,19 +720,21 @@ void main() {
       );
       expect(editable.focusNode.hasFocus, isTrue);
 
-      // The quantity row rides the STICKY footer, so it is still there and
-      // still usable with the keyboard up.
+      // POS-PHASE1-FOLLOWUP-FIXES-008 moved the quantity band OUT of the
+      // sticky footer and into the configuration area under the product
+      // header, because a cashier deciding how many to add was having to look
+      // to the very bottom of the sheet. It is therefore no longer pinned while
+      // the keyboard is up — it is REACHABLE by scrolling the body, which is
+      // what this test now proves. Confirm stays pinned and above the keyboard.
       expect(find.byKey(kQtyRow), findsOneWidget);
+      await tester.ensureVisible(find.byKey(kQtyPlus));
+      await tester.pumpAndSettle();
       await _tapPlus(tester);
       expect(_qtyShown(tester), 2);
 
-      // Nothing overflowed, and everything stays above the keyboard.
+      // Nothing overflowed, and the confirm action stays above the keyboard.
       expect(tester.takeException(), isNull);
       const keyboardTop = 800.0 - 460.0;
-      expect(
-        tester.getRect(find.byKey(kQtyRow)).bottom,
-        lessThanOrEqualTo(keyboardTop),
-      );
       expect(
         tester.getRect(find.byKey(kConfirmKey)).bottom,
         lessThanOrEqualTo(keyboardTop),

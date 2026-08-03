@@ -95,9 +95,25 @@ class PosMenuScreen extends StatelessWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              // POS-PHASE1-FOLLOWUP-FIXES-008: the mode comes from the DEVICE
+              // viewport, not from the body constraints.
+              //
+              // The body shrinks while the on-screen keyboard is up, and on an
+              // 11" landscape tablet (1280x800) a ~400dp keyboard pushed the
+              // remaining height under `kPosCompactHeight`. The mode then
+              // flipped tablet -> compactLandscape MID-TYPING, the cart went
+              // 360 -> 320, that crossed the paired-fields threshold, and the
+              // customer field the cashier was typing into was rebuilt into a
+              // different parent — losing its controller, its focus and the
+              // keyboard. A transient keyboard is not a change of form factor.
+              //
+              // `posMenuGridGeometryOf` already resolved from `MediaQuery`, so
+              // this also stops the cart width and the column count disagreeing
+              // while the keyboard is open.
+              final viewport = MediaQuery.sizeOf(context);
               final mode = posLayoutModeFor(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
+                width: viewport.width,
+                height: viewport.height,
               );
 
               if (mode == PosLayoutMode.phone) {

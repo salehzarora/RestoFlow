@@ -77,20 +77,29 @@ const double kPosCardRadius = 14;
 /// amber 11.6:1, Clear at white-68% 7.6:1 — nothing operational below 4.5:1.
 
 /// The cart's dark operational surface.
-const Color kPosCartHeaderInk = kRestoflowInk;
+///
+/// POS-PHASE1-FOLLOWUP-FIXES-008: this was `kRestoflowInk` (#17201B), which
+/// read as near-black beside the warm menu canvas — harsher than the rest of
+/// the Phase-1 palette. It is now a lighter, muted deep GREEN drawn from the
+/// same brand family: still unmistakably the operational plane, still far
+/// darker than the canvas, but no longer a black slab. Every on-dark pair below
+/// is re-checked against THIS value (see the 008 contrast test), and the muted
+/// tone was lightened to keep its 4.5:1.
+const Color kPosCartHeaderInk = Color(0xFF24332B);
 
 /// Primary on-dark body text (shift name, drawer figures).
 const Color kPosOnDarkPrimary = Color(0xFFBFD6C9);
 
-/// Secondary on-dark text (the shift note, which ellipsises first).
-const Color kPosOnDarkMuted = Color(0xFF7E9A8C);
+/// Secondary on-dark text (the shift note, which ellipsises first). Lightened
+/// with the 008 surface change so it keeps >=4.5:1 on the new green ink.
+const Color kPosOnDarkMuted = Color(0xFF9CB5A7);
 
 /// The on-dark accent glyph (cart icon, status dot).
 const Color kPosOnDarkAccent = Color(0xFF7FCBA6);
 
 /// Clear-cart at rest on the dark header; it is destructive but rank 4, so it
 /// is never filled and never louder than the title.
-const Color kPosOnDarkGhost = Color(0xAEFFFFFF);
+const Color kPosOnDarkGhost = Color(0xC7FFFFFF);
 const Color kPosOnDarkGhostDisabled = Color(0x42FFFFFF);
 
 /// Operational sync states ON THE DARK header (background / foreground). These
