@@ -16,6 +16,7 @@ import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/outbox_status_indicator.dart';
+import 'widgets/pos_identity_title.dart';
 import 'widgets/pos_bottom_bar.dart';
 import 'widgets/ready_alert_overlay.dart';
 import 'widgets/ready_notification_bell.dart';
@@ -44,7 +45,6 @@ class PosMenuScreen extends StatelessWidget {
         shape: const Border(bottom: BorderSide(color: kRestoflowHairline)),
         titleSpacing: RestoflowSpacing.lg,
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             // The gradient brand tile (§6.1) — always visible, every width.
             Container(
@@ -78,6 +78,13 @@ class PosMenuScreen extends StatelessWidget {
                 ),
               ),
             ],
+            // POS-TOPBAR-RESTAURANT-IDENTITY-009: the connected restaurant's
+            // identity fills the empty middle. `Expanded` is what makes this
+            // safe — the identity can only ever use the space the left block
+            // and the actions did NOT take, so it cannot overlap either, at
+            // any width or in either text direction. The left block above is
+            // unchanged and keeps its natural size.
+            const Expanded(child: PosIdentityTitle()),
           ],
         ),
         actions: const [
