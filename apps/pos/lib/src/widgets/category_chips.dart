@@ -29,6 +29,8 @@ class CategoryChips extends ConsumerWidget {
     void select(String id) =>
         ref.read(selectedCategoryProvider.notifier).state = id;
 
+    // The 56px rail keeps 40px chips centred, so the effective touch target
+    // stays >= 44 while the chip itself reads lighter (spec §14).
     return SizedBox(
       height: 56,
       child: ListView(
@@ -78,16 +80,18 @@ class _CategoryChip extends StatelessWidget {
     final foreground = selected ? scheme.onPrimary : kRestoflowInk2;
 
     return Padding(
-      padding: const EdgeInsetsDirectional.only(end: RestoflowSpacing.sm),
+      // 6px between chips (spec §14) — the rail is a set, not a row of cards.
+      padding: const EdgeInsetsDirectional.only(end: 6),
       child: Center(
         child: DecoratedBox(
+          // POS-VISUAL-REDESIGN-PHASE-1-007: an UNSELECTED chip carries no
+          // border and no shadow — it is a filter, not a card. The selected
+          // chip is then the only chip on the rail with any elevation, which
+          // is what makes the active filter unmistakable at a glance.
           decoration: BoxDecoration(
-            color: selected ? scheme.primary : scheme.surface,
+            color: selected ? scheme.primary : kPosChipBg,
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            border: Border.all(
-              color: selected ? scheme.primary : kRestoflowHairline,
-            ),
-            boxShadow: selected ? kPosGreenGlow : RestoflowShadows.xs,
+            boxShadow: selected ? kPosChipSelectedShadow : null,
           ),
           child: Material(
             type: MaterialType.transparency,
@@ -95,7 +99,7 @@ class _CategoryChip extends StatelessWidget {
               onTap: onSelected,
               borderRadius: BorderRadius.circular(RestoflowRadii.md),
               child: Container(
-                height: 44,
+                height: 40,
                 constraints: const BoxConstraints(minWidth: 44),
                 padding: const EdgeInsets.symmetric(
                   horizontal: RestoflowSpacing.md,
@@ -104,7 +108,7 @@ class _CategoryChip extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(icon, size: RestoflowIconSizes.sm, color: foreground),
-                    const SizedBox(width: RestoflowSpacing.sm),
+                    const SizedBox(width: 6),
                     // The label Text stays the tap target the tests use
                     // (find.text(<category name>)).
                     Text(
@@ -115,7 +119,7 @@ class _CategoryChip extends StatelessWidget {
                       ),
                     ),
                     if (count != null) ...[
-                      const SizedBox(width: RestoflowSpacing.sm),
+                      const SizedBox(width: 6),
                       _CountBadge(count: count!, selected: selected),
                     ],
                   ],
@@ -138,7 +142,9 @@ class _CountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = selected ? Colors.white.withValues(alpha: 0.22) : kPosChipBg;
+    final bg = selected
+        ? Colors.white.withValues(alpha: 0.24)
+        : kPosCountBadgeBg;
     final fg = selected ? theme.colorScheme.onPrimary : kRestoflowInk3;
     return Container(
       constraints: const BoxConstraints(minWidth: 20),
@@ -148,7 +154,8 @@ class _CountBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+        // 7px, not a full pill — the spec's "excessive rounded pills" note.
+        borderRadius: BorderRadius.circular(7),
       ),
       child: Text(
         count.toString(),

@@ -20,6 +20,11 @@ void _useWideSurface(WidgetTester tester) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 renders the cart's LOUD figure as a
+/// `Text.rich` (digits promoted, currency symbol demoted). The formatted money
+/// STRING is unchanged, so this reads whichever representation the row uses.
+String _plain(Text t) => t.data ?? t.textSpan!.toPlainText();
+
 void main() {
   testWidgets('renders the demo menu grid and an empty cart', (tester) async {
     _useWideSurface(tester);
@@ -51,7 +56,7 @@ void main() {
     final subtotal = tester.widget<Text>(
       find.byKey(const Key('cart-subtotal')),
     );
-    expect(subtotal.data, '₪42.00');
+    expect(_plain(subtotal), '₪42.00');
   });
 
   testWidgets('quantity stepper and clear update the cart', (tester) async {
@@ -68,7 +73,7 @@ void main() {
     final subtotal = tester.widget<Text>(
       find.byKey(const Key('cart-subtotal')),
     );
-    expect(subtotal.data, '₪84.00');
+    expect(_plain(subtotal), '₪84.00');
 
     await tester.tap(find.text('Clear'));
     await tester.pumpAndSettle();
@@ -121,7 +126,7 @@ void main() {
     final subtotal = tester.widget<Text>(
       find.byKey(const Key('confirmation-subtotal')),
     );
-    expect(subtotal.data, '₪42.00');
+    expect(_plain(subtotal), '₪42.00');
 
     expect(
       find.text('Demo order — not sent to a backend, kitchen, or printer.'),

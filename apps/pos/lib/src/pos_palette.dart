@@ -33,6 +33,139 @@ const Color kPosTerracotta = Color(0xFFC2410C);
 const Color kPosTerracottaContainer = Color(0xFFFFEDD5);
 const Color kPosTerracottaText = Color(0xFF7C2D12);
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the three warm surface values and the
+/// muted body ink the Phase-1 spec adds (§10). POS-local by design: Step 1 must
+/// not touch `packages/design_system`.
+
+/// Input / search-field border — a hair darker than the hairline so a FILLED
+/// field still reads as interactive on a warm fill.
+const Color kPosInputBorder = Color(0xFFEAE2D3);
+
+/// The quiet count-badge fill behind a category chip's number.
+const Color kPosCountBadgeBg = Color(0xFFE7DFCE);
+
+/// Body ink between ink2 and ink3 — product descriptions.
+const Color kPosMutedBodyInk = Color(0xFF7A8479);
+
+/// Card / cart-line rest elevation (spec §7 "e1"). One layer, not two: the
+/// second layer of `RestoflowShadows.sm` was invisible at card size and doubled
+/// the paint cost across ~19 cards.
+const List<BoxShadow> kPosCardShadow = [
+  BoxShadow(color: Color(0x0D10201A), offset: Offset(0, 1), blurRadius: 2),
+];
+
+/// The menu deck's downward shadow (spec §7 "deck").
+const List<BoxShadow> kPosDeckShadow = [
+  BoxShadow(color: Color(0x0A10201A), offset: Offset(0, 2), blurRadius: 6),
+];
+
+/// The SELECTED category chip's brand shadow (spec §7 "brand-s") — softer than
+/// [kPosGreenGlow]; the selected chip is the only chip carrying elevation.
+const List<BoxShadow> kPosChipSelectedShadow = [
+  BoxShadow(color: Color(0x471B7A52), offset: Offset(0, 3), blurRadius: 10),
+];
+
+/// Product-card corner radius (spec §5 — the biggest object on screen).
+const double kPosCardRadius = 14;
+
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
+///
+/// One dark ink block heads the cart and replaces four full-width dividers as
+/// the separator, so the white body below it reads as the live order. Every
+/// on-dark pair below is contrast-checked against the ink surface (spec §6b):
+/// white title 16.9:1, [kPosOnDarkPrimary] 9.4:1, [kPosOnDarkMuted] 4.9:1,
+/// amber 11.6:1, Clear at white-68% 7.6:1 — nothing operational below 4.5:1.
+
+/// The cart's dark operational surface.
+///
+/// POS-PHASE1-FOLLOWUP-FIXES-008: this was `kRestoflowInk` (#17201B), which
+/// read as near-black beside the warm menu canvas — harsher than the rest of
+/// the Phase-1 palette. It is now a lighter, muted deep GREEN drawn from the
+/// same brand family: still unmistakably the operational plane, still far
+/// darker than the canvas, but no longer a black slab. Every on-dark pair below
+/// is re-checked against THIS value (see the 008 contrast test), and the muted
+/// tone was lightened to keep its 4.5:1.
+const Color kPosCartHeaderInk = Color(0xFF24332B);
+
+/// Primary on-dark body text (shift name, drawer figures).
+const Color kPosOnDarkPrimary = Color(0xFFBFD6C9);
+
+/// Secondary on-dark text (the shift note, which ellipsises first). Lightened
+/// with the 008 surface change so it keeps >=4.5:1 on the new green ink.
+const Color kPosOnDarkMuted = Color(0xFF9CB5A7);
+
+/// The on-dark accent glyph (cart icon, status dot).
+const Color kPosOnDarkAccent = Color(0xFF7FCBA6);
+
+/// Clear-cart at rest on the dark header; it is destructive but rank 4, so it
+/// is never filled and never louder than the title.
+const Color kPosOnDarkGhost = Color(0xC7FFFFFF);
+const Color kPosOnDarkGhostDisabled = Color(0x42FFFFFF);
+
+/// Operational sync states ON THE DARK header (background / foreground). These
+/// are POS-local pairs around the EXISTING sync presentation — no shared status
+/// component is modified, and the failure state is never hidden.
+const Color kPosSyncPendingBg = Color(0x2EFBBF24);
+const Color kPosSyncPendingFg = Color(0xFFFCD34D);
+const Color kPosSyncFailedBg = Color(0x29F87171);
+const Color kPosSyncFailedFg = Color(0xFFFCA5A5);
+const Color kPosSyncSyncedBg = Color(0x297FCBA6);
+const Color kPosSyncSyncedFg = kPosOnDarkAccent;
+const Color kPosSyncOfflineBg = Color(0x1AFFFFFF);
+const Color kPosSyncOfflineFg = Color(0xB3FFFFFF);
+
+/// The order-setup block's soft bottom edge — the dark header above already
+/// does the separating, so this is quieter than a full hairline.
+const Color kPosSetupEdge = Color(0xFFF0EADD);
+
+/// The warm track the white cart lines sit on, and the line's own edge.
+const Color kPosCartTrack = kPosInnerSurface;
+
+/// The quantity stepper's own track, so minus/plus read as ONE control.
+const Color kPosStepperTrack = Color(0xFFF8F6EF);
+const Color kPosStepperTrackEdge = Color(0xFFEDE6D9);
+
+/// Neutral ghost icons on a cart line — destructive intent is revealed on
+/// approach, not advertised at rest.
+const Color kPosGhostIcon = kPosMutedBodyInk;
+const Color kPosGhostIconQuiet = kRestoflowInk3;
+
+/// Below this cart-section width the paired customer fields stack, the footer's
+/// duplicated summary chips hide, and the setup stacks its label. At 320 the
+/// difference is a table row fitting instead of truncating.
+const double kPosCartPairedFieldsMinWidth = 352;
+
+/// Send is the only control on screen with a glow, a 54px height and an 800
+/// weight (spec §15). POS-local — `RestoflowButtonStyles.big` is untouched.
+const double kPosSendHeight = 54;
+const double kPosSendRadius = 13;
+
+/// Splits a formatted money string into (lead, core, trail) where
+/// lead + core + trail == the input EXACTLY, so the digits can be promoted and
+/// the currency symbol demoted without altering a single character of
+/// `MoneyFormatter` output.
+///
+/// NOTE: `menu_item_card.dart` carries an identical private split from Step 1.
+/// It is deliberately NOT refactored here — that file is out of Step-2 scope —
+/// and unifying the two belongs to Step 3.
+(String, String, String) posSplitFormattedMoney(String formatted) {
+  bool isDigit(int c) => c >= 0x30 && c <= 0x39;
+  var start = 0;
+  while (start < formatted.length && !isDigit(formatted.codeUnitAt(start))) {
+    start++;
+  }
+  if (start == formatted.length) return ('', formatted, '');
+  var end = formatted.length;
+  while (end > start && !isDigit(formatted.codeUnitAt(end - 1))) {
+    end--;
+  }
+  return (
+    formatted.substring(0, start),
+    formatted.substring(start, end),
+    formatted.substring(end),
+  );
+}
+
 /// The green-CTA glow used on the primary add / send buttons.
 const List<BoxShadow> kPosGreenGlow = [
   BoxShadow(color: Color(0x591B7A52), offset: Offset(0, 6), blurRadius: 16),
@@ -43,44 +176,90 @@ const List<BoxShadow> kPosGreenGlow = [
 /// the platform. Keeps `RestoflowBreakpoints.posTwoPane` (820) as the phone
 /// cutoff so the existing wide-viewport widget tests still see two panes.
 enum PosLayoutMode {
-  /// Menu pane + fixed side cart 380px.
+  /// >= 1360: menu pane + 400px side cart, 5 product columns.
   desktop,
 
-  /// Menu pane + fixed side cart 340px.
+  /// 1100-1359: menu pane + 360px side cart, 4 product columns.
   tablet,
 
-  /// Landscape phone / small tablet: menu pane + compact side cart ~304px.
+  /// 900-1099: menu pane + 340px side cart, 3 product columns.
+  smallTablet,
+
+  /// 820-899: menu pane + 320px side cart, 3 product columns.
+  narrowTablet,
+
+  /// Short or narrow LANDSCAPE (1024x600): 320px side cart, 3 columns and the
+  /// tighter grid paddings.
   compactLandscape,
 
   /// Menu full-width + a dark bottom bar and a slide-up cart sheet.
   phone,
 }
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 — the approved product-column count per
+/// mode (spec §3).
+///
+/// This replaces a max-cross-axis-extent formula that could not express the
+/// approved layout at all: a single 230px extent yields 4 columns at BOTH 1440
+/// and 1280, so desktop could never reach 5 while the tablet stayed at 4.
+/// 5 columns are deliberately NOT forced at 1280 — a 213px cell keeps the photo
+/// band 160px tall, and five 168px cells would cost more legibility than the
+/// extra column buys.
+int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
+  PosLayoutMode.desktop => 5,
+  PosLayoutMode.tablet => 4,
+  PosLayoutMode.smallTablet => 3,
+  PosLayoutMode.narrowTablet => 3,
+  PosLayoutMode.compactLandscape => 3,
+  PosLayoutMode.phone => 2,
+};
+
+/// At or below this height a LANDSCAPE viewport is compact however wide it is —
+/// this is what puts 1024x600 in [PosLayoutMode.compactLandscape] while
+/// 1024x768 stays [PosLayoutMode.smallTablet].
+const double kPosCompactHeight = 640;
+
 /// Side-cart width for a two-pane [mode]; 0 for [PosLayoutMode.phone].
 double posCartWidthFor(PosLayoutMode mode) => switch (mode) {
-  PosLayoutMode.desktop => 380,
-  PosLayoutMode.tablet => 340,
-  PosLayoutMode.compactLandscape => 304,
+  PosLayoutMode.desktop => 400,
+  PosLayoutMode.tablet => 360,
+  PosLayoutMode.smallTablet => 340,
+  PosLayoutMode.narrowTablet => 320,
+  PosLayoutMode.compactLandscape => 320,
   PosLayoutMode.phone => 0,
 };
 
-/// Chooses the [PosLayoutMode] from the available [width]/[height].
+/// Chooses the [PosLayoutMode] from the available [width]/[height]
+/// (POS-VISUAL-REDESIGN-PHASE-1-007, spec §3).
 ///
-/// - `>= 1100` → desktop (side cart 380)
-/// - `820 .. 1099` → tablet (side cart 340)
-/// - `700 .. 819` AND landscape (`width > height`) → compact landscape split
-///   (a compact ~304px side cart fits without a bottom bar)
+/// - landscape AND `>= 700` wide AND (narrower than 820 OR no taller than
+///   [kPosCompactHeight]) → compact landscape (side cart 320)
+/// - `>= 1360` → desktop (400) · `1100..1359` → tablet (360)
+/// - `900..1099` → small tablet (340) · `820..899` → narrow tablet (320)
 /// - otherwise → phone (bottom bar + slide-up sheet)
 ///
-/// The 820 phone cutoff for portrait is unchanged, so a rotated phone/tablet
-/// widens into a side-cart layout instead of staying cramped like portrait.
+/// The compact test runs FIRST and on height as well as width, because a short
+/// landscape tablet (1024x600) needs the compact paddings even though its width
+/// alone would read as a small tablet. It keeps the existing **700** floor, so a
+/// small landscape phone still gets the bottom bar rather than a 320px cart
+/// eating half its screen. The 820 portrait cutoff is unchanged.
 PosLayoutMode posLayoutModeFor({
   required double width,
   required double height,
 }) {
-  if (width >= 1100) return PosLayoutMode.desktop;
-  if (width >= RestoflowBreakpoints.posTwoPane) return PosLayoutMode.tablet;
-  if (width >= 700 && width > height) return PosLayoutMode.compactLandscape;
+  final landscape = width > height;
+  if (landscape &&
+      width >= 700 &&
+      (width < RestoflowBreakpoints.posTwoPane ||
+          height <= kPosCompactHeight)) {
+    return PosLayoutMode.compactLandscape;
+  }
+  if (width >= 1360) return PosLayoutMode.desktop;
+  if (width >= 1100) return PosLayoutMode.tablet;
+  if (width >= 900) return PosLayoutMode.smallTablet;
+  if (width >= RestoflowBreakpoints.posTwoPane) {
+    return PosLayoutMode.narrowTablet;
+  }
   return PosLayoutMode.phone;
 }
 

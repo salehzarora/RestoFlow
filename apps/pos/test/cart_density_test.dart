@@ -95,10 +95,25 @@ void main() {
     await _addPlain(tester, 'Veggie Burger');
     await _addPlain(tester, 'Grilled Chicken');
 
-    // No layout overflow, and the key controls remain on screen.
+    // No layout overflow, and the key controls remain reachable.
     expect(tester.takeException(), isNull);
     expect(find.byIcon(Icons.edit_outlined), findsWidgets); // Edit
     expect(find.byIcon(Icons.delete_outline), findsWidgets); // Remove
+    // POS-VISUAL-REDESIGN-PHASE-1-007 narrowed the 1100-1359 cart from 380 to
+    // the approved 360, so four lines now push Send just past the fold at this
+    // 800px-tall viewport: it is REACHABLE by scrolling the cart, not lost.
+    // Step 2 pins the footer (setup + lines become one scroll region), after
+    // which Send stops moving at all and this scroll becomes unnecessary.
+    await tester.scrollUntilVisible(
+      find.text(l10n.posSendOrder),
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byType(CartPanel),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text(l10n.posSendOrder), findsOneWidget); // Submit
   });
 

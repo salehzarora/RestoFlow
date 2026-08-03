@@ -38,3 +38,25 @@ final posRestaurantNameProvider = Provider<String?>((ref) {
   final name = snapshot?.restaurantName?.trim();
   return (name == null || name.isEmpty) ? null : name;
 });
+
+/// POS-TOPBAR-RESTAURANT-IDENTITY-009: the label that names the connected
+/// station in the UI — the RESTAURANT name, falling back to the BRANCH name
+/// when the server did not send a restaurant name.
+///
+/// Null when neither is known (demo / unconfigured / still loading / load
+/// failed). Callers must render nothing rather than invent placeholder copy:
+/// a wrong restaurant name on a cashier's screen is worse than no name.
+/// Offline-safe for the same reason as [posRestaurantNameProvider] — it reads
+/// the already-loaded snapshot and never triggers a fetch.
+final posStationIdentityLabelProvider = Provider<String?>((ref) {
+  final restaurant = ref.watch(posRestaurantNameProvider);
+  if (restaurant != null) return restaurant;
+  final snapshot = switch (ref
+      .watch(posPrinterAssignmentsProvider)
+      .valueOrNull) {
+    Success(:final value) => value,
+    _ => null,
+  };
+  final branch = snapshot?.branchName?.trim();
+  return (branch == null || branch.isEmpty) ? null : branch;
+});

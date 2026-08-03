@@ -777,6 +777,63 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 
     // The one scrolling region: every modifier group, then the item note.
     final bodyChildren = <Widget>[
+      // POS-PHASE1-FOLLOWUP-FIXES-008: HOW MANY units of this configuration to
+      // add, in a CENTRAL band directly under the product header.
+      //
+      // It used to ride the sticky footer beside the total, where a cashier
+      // configuring a product had to look to the very bottom of the sheet to
+      // find it — it read as part of the checkout row rather than part of the
+      // configuration. Sitting under the header it is seen before the modifier
+      // groups are worked through, which is when the quantity is actually
+      // decided. Hidden in the note-only degraded edit, where the sheet is
+      // deliberately not entitled to re-price the line; the cart-line stepper
+      // still changes that line's quantity.
+      if (!_noteOnlyEdit)
+        Padding(
+          padding: const EdgeInsets.only(top: RestoflowSpacing.md),
+          child: Container(
+            key: const Key('modifier-item-quantity-row'),
+            padding: const EdgeInsets.symmetric(
+              horizontal: RestoflowSpacing.md,
+              vertical: RestoflowSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: kPosInnerSurface,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(color: kRestoflowHairline),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    l10n.posModifierQuantityLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.md),
+                PosQuantityStepper(
+                  quantity: _quantity,
+                  l10n: l10n,
+                  onTrack: true,
+                  decreaseKey: const Key('modifier-item-quantity-decrease'),
+                  valueKey: const Key('modifier-item-quantity-value'),
+                  increaseKey: const Key('modifier-item-quantity-increase'),
+                  // At one, minus is DISABLED — it must never remove anything
+                  // from here (that is the cart line's rule, not the sheet's).
+                  onDecrease: _quantity > 1
+                      ? () => setState(() => _quantity -= 1)
+                      : null,
+                  onIncrease: () => setState(() => _quantity += 1),
+                ),
+              ],
+            ),
+          ),
+        ),
       for (final group in widget.groups) ...[
         Padding(
           key: ValueKey('modifier-group-header-${group.id}'),
@@ -867,26 +924,6 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     // padding tightens when the sheet is squeezed (keyboard on a short
     // landscape tablet); the total and the confirm button themselves never
     // shrink — a cashier must still read the price and hit a full-size target.
-    // POS-MODIFIER-SHEET-QUANTITY-003: HOW MANY units of this exact
-    // configuration to add, chosen before Add. It rides the STICKY footer, so
-    // it stays reachable while the body scrolls, with the keyboard up, and in
-    // RTL — and the price consequence of a change is read on the same or the
-    // very next line. Hidden in the note-only degraded edit, where the sheet is
-    // deliberately not entitled to re-price the line at all; the cart-line
-    // stepper still changes that line's quantity.
-    Widget quantityStepper({required bool dense}) => PosQuantityStepper(
-      quantity: _quantity,
-      l10n: l10n,
-      dense: dense,
-      decreaseKey: const Key('modifier-item-quantity-decrease'),
-      valueKey: const Key('modifier-item-quantity-value'),
-      increaseKey: const Key('modifier-item-quantity-increase'),
-      // At one, minus is DISABLED — it must never remove anything from here
-      // (that is the cart line's rule, not the sheet's).
-      onDecrease: _quantity > 1 ? () => setState(() => _quantity -= 1) : null,
-      onIncrease: () => setState(() => _quantity += 1),
-    );
-
     Widget footer({required bool compact}) {
       final gap = compact ? RestoflowSpacing.sm : RestoflowSpacing.md;
       return Container(
@@ -899,57 +936,24 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Roomy: the quantity gets its own labelled row above the total.
-            if (!_noteOnlyEdit && !compact) ...[
-              Row(
-                key: const Key('modifier-item-quantity-row'),
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      l10n.posModifierQuantityLabel,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  quantityStepper(dense: false),
-                ],
-              ),
-              SizedBox(height: gap),
-            ],
             // Design-polish: a visible running total ABOVE the confirm
             // button, so the price consequence of each pick is readable
-            // without parsing the button label.
-            //
-            // SQUEEZED (keyboard up on a short landscape tablet): the quantity
-            // control JOINS this row instead of taking one of its own. A
-            // separate row costs ~48dp, which at 1024x600 with a 380dp keyboard
-            // is most of what is left for the scrolling body — the options
-            // became unreachable. Sharing the row keeps the label, the stepper
-            // and the total all visible while the body keeps its height.
+            // without parsing the button label. The quantity control moved to
+            // the body's upper band (008), so this row is the total alone
+            // again — which also gives the compact layout back the ~48dp it
+            // used to reclaim by merging the two.
             Row(
-              key: compact && !_noteOnlyEdit
-                  ? const Key('modifier-item-quantity-row')
-                  : null,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Flexible(
                   child: Text(
-                    compact && !_noteOnlyEdit
-                        ? l10n.posModifierQuantityLabel
-                        : l10n.posReceiptTotal,
+                    l10n.posReceiptTotal,
                     maxLines: compact ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
-                if (compact && !_noteOnlyEdit) ...[
-                  quantityStepper(dense: true),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                ],
                 Flexible(
                   child: Text(
                     totalText,

@@ -28,6 +28,8 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
     show posRecentOrdersStoreProvider;
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 
+import 'support/fixed_pos_clock.dart';
+
 /// KITCHEN-PRINT-DUAL-001D (case D) — the bulk "Finish all kitchen orders" header
 /// button is VISIBLE only in real mode with the auto-print toggle ON and a role
 /// authorized to change order kitchen statuses; hidden otherwise. Pressing it with
@@ -167,6 +169,10 @@ Future<void> _pump(
         posRecentOrdersStoreProvider.overrideWithValue(store),
         posSyncCursorStoreProvider.overrideWithValue(InMemorySyncCursorStore()),
         posSyncPollIntervalProvider.overrideWithValue(null),
+        // POS-CI-TIME-TEST-STABILITY-011: pin the recent-orders window's
+        // clock. Left on DateTime.now these fixtures aged out of the
+        // 1-day window and every list rendered empty.
+        pinnedPosSyncClock(),
         orderSnapshotRepositoryProvider.overrideWithValue(
           DemoOrderSnapshotRepository(),
         ),

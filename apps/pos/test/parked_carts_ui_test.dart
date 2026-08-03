@@ -137,7 +137,10 @@ void main() {
       );
       // Send keeps the primary FILLED treatment; Park is the secondary outline,
       // so the primary path is never diluted.
-      expect(tester.widget(park), isA<OutlinedButton>());
+      // Step 2 made Park a GHOST: a full-width outlined button directly under
+      // Send read as a second primary action. It is still secondary, still
+      // below Send, still the same callback and applicability.
+      expect(tester.widget(park), isA<TextButton>());
       expect(tester.widget(send), isA<FilledButton>());
       // Send stays full width and at least as tall as the secondary action.
       expect(

@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/customer_phone.dart';
 import '../data/order_submission.dart' show kCustomerNameMaxLength;
+import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
 import 'table_picker_sheet.dart';
 
@@ -84,15 +85,47 @@ class OrderSetupSection extends ConsumerWidget {
           else
             _TakeawayHint(message: l10n.posTableNotNeeded),
           const SizedBox(height: RestoflowSpacing.sm),
-          // ORDER-CUSTOMER-001: an OPTIONAL customer name for this order. Shown
-          // for both order types; never gates submit.
-          _CustomerNameField(setup: setup, controller: controller),
-          // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: an OPTIONAL customer phone,
-          // directly below the name. Never gates submit unless a non-empty value
-          // is malformed (then an inline error + a blocked send). The field's own
-          // dense decoration provides the gap, so no extra spacer is added (which
-          // would overflow a tight short-viewport cart).
-          _CustomerPhoneField(setup: setup, controller: controller),
+          // ORDER-CUSTOMER-001 / POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the two
+          // OPTIONAL customer fields. Neither gates submit, except that a
+          // non-empty MALFORMED phone still blocks Send exactly as before.
+          //
+          // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: they were the two tallest,
+          // loudest elements in the cart despite being optional and rarely
+          // used, pushing the actual order below the fold. They now SHARE one
+          // row wherever the cart is at least kPosCartPairedFieldsMinWidth
+          // wide, and stack below it — each keeping its full height, its key,
+          // its onChanged, its maxLength and its errorText.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final name = _CustomerNameField(
+                setup: setup,
+                controller: controller,
+              );
+              final phone = _CustomerPhoneField(
+                setup: setup,
+                controller: controller,
+              );
+              // The threshold is the SECTION's width, so add back the
+              // horizontal padding this LayoutBuilder sits inside.
+              final sectionWidth =
+                  constraints.maxWidth + 2 * RestoflowSpacing.lg;
+              if (sectionWidth < kPosCartPairedFieldsMinWidth) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [name, phone],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: name),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Expanded(child: phone),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -266,10 +299,12 @@ class _TableRow extends StatelessWidget {
     final success = RestoflowTone.success.styleOf(theme);
     return Container(
       key: const Key('assigned-table-card'),
+      // Step 3: the horizontal padding gives up 8px so BOTH actions can keep a
+      // real 40px touch target at the 320px compact cart without overflowing.
       padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.md,
         RestoflowSpacing.sm,
         RestoflowSpacing.sm,
+        RestoflowSpacing.xs,
         RestoflowSpacing.sm,
       ),
       decoration: BoxDecoration(
@@ -279,8 +314,12 @@ class _TableRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.event_seat, color: success.onContainer),
-          const SizedBox(width: RestoflowSpacing.sm),
+          Icon(
+            Icons.event_seat,
+            size: RestoflowIconSizes.md,
+            color: success.onContainer,
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,15 +347,37 @@ class _TableRow extends StatelessWidget {
               ],
             ),
           ),
+          // POS-VISUAL-REDESIGN-PHASE-1-007 Step 3: the final matrix caught this
+          // row overflowing by 20px in the 320px COMPACT cart (ar, assigned
+          // table). The stock TextButton/IconButton paddings are what did not
+          // fit; both actions are kept, both stay >=40px tall, and the label
+          // ellipsises rather than forcing the row wider.
           TextButton(
             onPressed: () => TablePickerSheet.show(context),
-            child: Text(l10n.posChangeTable),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.sm,
+              ),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text(
+              l10n.posChangeTable,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           IconButton(
             onPressed: controller.clearTable,
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, size: RestoflowIconSizes.md),
             tooltip: l10n.posClearTableAssignment,
             color: success.onContainer,
+            // STANDARD, not compact: a compact density silently subtracts 8px
+            // from the constraint below and rendered this target at 32.
+            visualDensity: VisualDensity.standard,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
           ),
         ],
       ),

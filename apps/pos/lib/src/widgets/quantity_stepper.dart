@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../pos_palette.dart';
+
 /// A minus (white/hairline) + qty + plus (filled green) stepper (DESIGN-004).
 ///
 /// POS-MODIFIER-SHEET-QUANTITY-003 lifted this out of `cart_panel.dart` so the
@@ -22,6 +24,7 @@ class PosQuantityStepper extends StatelessWidget {
     required this.onIncrease,
     required this.onDecrease,
     this.dense = false,
+    this.onTrack = false,
     this.decreaseKey,
     this.valueKey,
     this.increaseKey,
@@ -39,6 +42,12 @@ class PosQuantityStepper extends StatelessWidget {
   /// lines. The modifier sheet uses the roomy 44dp default.
   final bool dense;
 
+  /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: wrap minus/value/plus in their own
+  /// warm track so they read as ONE control on a cart line. OPT-IN and default
+  /// false, so the modifier sheet (Phase 3's scope) keeps its appearance
+  /// exactly as it is today.
+  final bool onTrack;
+
   /// Optional stable keys for locale-independent testing.
   final Key? decreaseKey;
   final Key? valueKey;
@@ -48,7 +57,7 @@ class PosQuantityStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Row(
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _StepButton(
@@ -80,6 +89,15 @@ class PosQuantityStepper extends StatelessWidget {
           onPressed: onIncrease,
         ),
       ],
+    );
+    if (!onTrack) return row;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: kPosStepperTrack,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),
+        border: Border.all(color: kPosStepperTrackEdge),
+      ),
+      child: Padding(padding: const EdgeInsets.all(2), child: row),
     );
   }
 }

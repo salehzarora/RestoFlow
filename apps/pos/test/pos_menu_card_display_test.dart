@@ -35,6 +35,11 @@ Widget _wrapCard(Widget card) => MaterialApp(
   home: Scaffold(body: SizedBox(width: 220, height: 264, child: card)),
 );
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 renders the cart's LOUD figure as a
+/// `Text.rich` (digits promoted, currency symbol demoted). The formatted money
+/// STRING is unchanged, so this reads whichever representation the row uses.
+String _plain(Text t) => t.data ?? t.textSpan!.toPlainText();
+
 void main() {
   testWidgets('demo grid: Cheeseburger shows a localized tag pill + the '
       'has-options indicator; Classic Burger stays first and plain', (
@@ -103,7 +108,7 @@ void main() {
     final subtotal = tester.widget<Text>(
       find.byKey(const Key('cart-subtotal')),
     );
-    expect(subtotal.data, '₪42.00');
+    expect(_plain(subtotal), '₪42.00');
   });
 
   testWidgets('tag pills cap at TWO with spicy/popular prioritized', (

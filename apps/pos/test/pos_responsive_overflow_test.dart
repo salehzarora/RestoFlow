@@ -199,14 +199,19 @@ void main() {
   });
 
   group('B. the cart pane stays usable and reachable', () {
-    testWidgets('B1 at 1024 the cart keeps its tablet width and the primary '
-        'send control is present and hit-testable', (tester) async {
+    testWidgets('B1 at 1024 the cart keeps its small-tablet width and the '
+        'primary send control is present and hit-testable', (tester) async {
       await _pumpPos(tester, width: 1024);
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
 
+      // POS-VISUAL-REDESIGN-PHASE-1-007 split the old 820-1099 "tablet" band
+      // into tablet (1100-1359) / smallTablet (900-1099) / narrowTablet
+      // (820-899), so 1024 now resolves to smallTablet. Its cart is still 340 —
+      // the width this test has always pinned — and the reachability contract
+      // below is unchanged.
       final cart = tester.getSize(find.byType(CartPanel));
-      expect(cart.width, posCartWidthFor(PosLayoutMode.tablet));
-      expect(cart.width, 340, reason: 'tablet cart width is unchanged');
+      expect(cart.width, posCartWidthFor(PosLayoutMode.smallTablet));
+      expect(cart.width, 340, reason: 'small-tablet cart width is 340');
 
       // The menu pane keeps the remaining width — nothing scrolls sideways.
       expect(tester.getSize(find.byType(GridView).last).width, 1024 - 340);
@@ -300,17 +305,28 @@ void main() {
   group('E. the fix is structural, not a 1024-only conditional', () {
     testWidgets('E1 the layout mode and cart width at 1023/1024/1025 are '
         'IDENTICAL — no width is special-cased', (tester) async {
+      // The CONTRACT is that no single width is special-cased — 1024 must be
+      // an ordinary member of whichever band contains it, exactly like its
+      // neighbours. 007 renamed that band (tablet -> smallTablet) but the
+      // contract is unchanged, so this asserts the three are IDENTICAL rather
+      // than naming one band.
       for (final w in <double>[1023, 1024, 1025]) {
         expect(
           posLayoutModeFor(width: w, height: 1200),
-          PosLayoutMode.tablet,
-          reason: '$w must stay in the ordinary tablet band',
+          posLayoutModeFor(width: 1024, height: 1200),
+          reason: '$w must resolve exactly like its neighbours',
         );
       }
-      // And the two-pane widths themselves are untouched by the fix.
-      expect(posCartWidthFor(PosLayoutMode.desktop), 380);
-      expect(posCartWidthFor(PosLayoutMode.tablet), 340);
-      expect(posCartWidthFor(PosLayoutMode.compactLandscape), 304);
+      expect(
+        posLayoutModeFor(width: 1024, height: 1200),
+        PosLayoutMode.smallTablet,
+      );
+      // The approved 007 two-pane widths.
+      expect(posCartWidthFor(PosLayoutMode.desktop), 400);
+      expect(posCartWidthFor(PosLayoutMode.tablet), 360);
+      expect(posCartWidthFor(PosLayoutMode.smallTablet), 340);
+      expect(posCartWidthFor(PosLayoutMode.narrowTablet), 320);
+      expect(posCartWidthFor(PosLayoutMode.compactLandscape), 320);
       expect(posCartWidthFor(PosLayoutMode.phone), 0);
     });
 
