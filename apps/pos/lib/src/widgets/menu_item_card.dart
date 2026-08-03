@@ -294,29 +294,13 @@ class _PriceText extends StatelessWidget {
   final Key priceKey;
   final String formatted;
 
-  static bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
-
-  /// (lead, core, trail) where lead + core + trail == [formatted] exactly.
-  static (String, String, String) splitParts(String formatted) {
-    var start = 0;
-    while (start < formatted.length && !_isDigit(formatted.codeUnitAt(start))) {
-      start++;
-    }
-    if (start == formatted.length) return ('', formatted, '');
-    var end = formatted.length;
-    while (end > start && !_isDigit(formatted.codeUnitAt(end - 1))) {
-      end--;
-    }
-    return (
-      formatted.substring(0, start),
-      formatted.substring(start, end),
-      formatted.substring(end),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final (lead, core, trail) = splitParts(formatted);
+    // POS-VISUAL-REDESIGN-PHASE-1-007 Step 3: this carried a private copy of
+    // the split. Step 2 added the identical POS-local helper for the cart, so
+    // both surfaces now share ONE implementation. The output is unchanged —
+    // lead + core + trail still reconstruct the MoneyFormatter string exactly.
+    final (lead, core, trail) = posSplitFormattedMoney(formatted);
     const symbolStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w700,
@@ -405,21 +389,31 @@ class _ImageBand extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Wrap(
-                    spacing: RestoflowSpacing.xs,
-                    runSpacing: RestoflowSpacing.xs,
-                    children: [
-                      // A pill cannot shrink below its own label, so when the
-                      // in-cart badge shares this row the band shows the single
-                      // highest-priority tag instead of squeezing two. Priority
-                      // order and the unknown-tag skip are unchanged.
-                      for (final tag
-                          in inCartQuantity > 0 ? bandTags.take(1) : bandTags)
-                        RestoflowStatusPill(
-                          label: _tagLabel(l10n, tag),
-                          tone: _tagTone(tag),
-                        ),
-                    ],
+                  // A pill cannot shrink below its own label, so on the very
+                  // narrowest approved cell (148px) a long tag beside the
+                  // in-cart badge could still overrun the band by a fraction of
+                  // a pixel. scaleDown is self-limiting — it does nothing while
+                  // the pill fits, and shrinks it only by the margin actually
+                  // missing, so the label never wraps, clips or overflows.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Wrap(
+                      spacing: RestoflowSpacing.xs,
+                      runSpacing: RestoflowSpacing.xs,
+                      children: [
+                        // When the in-cart badge shares this row the band shows
+                        // the single highest-priority tag instead of squeezing
+                        // two. Priority order and the unknown-tag skip are
+                        // unchanged.
+                        for (final tag
+                            in inCartQuantity > 0 ? bandTags.take(1) : bandTags)
+                          RestoflowStatusPill(
+                            label: _tagLabel(l10n, tag),
+                            tone: _tagTone(tag),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 if (inCartQuantity > 0) ...[

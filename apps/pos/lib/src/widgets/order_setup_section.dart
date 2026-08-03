@@ -299,10 +299,12 @@ class _TableRow extends StatelessWidget {
     final success = RestoflowTone.success.styleOf(theme);
     return Container(
       key: const Key('assigned-table-card'),
+      // Step 3: the horizontal padding gives up 8px so BOTH actions can keep a
+      // real 40px touch target at the 320px compact cart without overflowing.
       padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.md,
         RestoflowSpacing.sm,
         RestoflowSpacing.sm,
+        RestoflowSpacing.xs,
         RestoflowSpacing.sm,
       ),
       decoration: BoxDecoration(
@@ -312,8 +314,12 @@ class _TableRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.event_seat, color: success.onContainer),
-          const SizedBox(width: RestoflowSpacing.sm),
+          Icon(
+            Icons.event_seat,
+            size: RestoflowIconSizes.md,
+            color: success.onContainer,
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,15 +347,37 @@ class _TableRow extends StatelessWidget {
               ],
             ),
           ),
+          // POS-VISUAL-REDESIGN-PHASE-1-007 Step 3: the final matrix caught this
+          // row overflowing by 20px in the 320px COMPACT cart (ar, assigned
+          // table). The stock TextButton/IconButton paddings are what did not
+          // fit; both actions are kept, both stay >=40px tall, and the label
+          // ellipsises rather than forcing the row wider.
           TextButton(
             onPressed: () => TablePickerSheet.show(context),
-            child: Text(l10n.posChangeTable),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.sm,
+              ),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text(
+              l10n.posChangeTable,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           IconButton(
             onPressed: controller.clearTable,
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, size: RestoflowIconSizes.md),
             tooltip: l10n.posClearTableAssignment,
             color: success.onContainer,
+            // STANDARD, not compact: a compact density silently subtracts 8px
+            // from the constraint below and rendered this target at 32.
+            visualDensity: VisualDensity.standard,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
           ),
         ],
       ),
