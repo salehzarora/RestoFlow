@@ -32,6 +32,8 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
     show posRecentOrdersStoreProvider;
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 
+import 'support/fixed_pos_clock.dart';
+
 /// PRINTER-ONLY-CLOSE-ALL-ROUNDS-AND-RELEASE-TABLE-008 — the CLIENT half.
 ///
 /// The authoritative work is the server's: completing the order closes every
@@ -192,6 +194,10 @@ Future<void> _pump(
         posRecentOrdersStoreProvider.overrideWithValue(store),
         posSyncCursorStoreProvider.overrideWithValue(InMemorySyncCursorStore()),
         posSyncPollIntervalProvider.overrideWithValue(null),
+        // POS-CI-TIME-TEST-STABILITY-011: pin the recent-orders window's
+        // clock. Left on DateTime.now these fixtures aged out of the
+        // 1-day window and every list rendered empty.
+        pinnedPosSyncClock(),
         orderSnapshotRepositoryProvider.overrideWithValue(
           DemoOrderSnapshotRepository(),
         ),
