@@ -76,6 +76,15 @@ Finder _sheetText(String text) => find.descendant(
   matching: find.textContaining(text),
 );
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 joined the cart line's per-modifier
+/// rows into ONE summary line (`a \u00b7 b \u00b7 c`) with each paid delta inline.
+/// The DATA contract is unchanged — order, quantities and deltas are all still
+/// present — so these tests read the joined string instead of one Text per
+/// modifier. The full untruncated string is also the line's Semantics label.
+String _cartSummary(WidgetTester tester) => tester
+    .widget<Text>(find.byKey(const Key('cart-line-modifiers-line-0')))
+    .data!;
+
 void main() {
   testWidgets('a modifier item opens the picker; the REQUIRED single-select '
       'group gates Add; a paid topping raises the total', (tester) async {
@@ -110,8 +119,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // The cart line carries the selections and the modifier-inclusive total.
-    expect(find.text('+ Cheese'), findsOneWidget);
-    expect(find.text('+ Medium'), findsOneWidget);
+    final summary = _cartSummary(tester);
+    expect(summary, contains('Cheese'));
+    expect(summary, contains('Medium'));
     expect(find.text('₪51.00'), findsWidgets);
   });
 
@@ -336,12 +346,13 @@ void main() {
     await tester.tap(_addButton());
     await tester.pumpAndSettle();
 
-    // The exact '+ name' strings stay findable (frozen contract) — the delta
-    // rides a separate Text on the same row.
-    expect(find.text('+ Cheese'), findsOneWidget);
-    expect(find.text('+₪3.00'), findsOneWidget);
-    expect(find.text('+ Medium'), findsOneWidget);
-    expect(find.text('+₪0.00'), findsNothing);
+    // The PAID option keeps its delta inline; the FREE one carries none, and a
+    // zero delta is never rendered.
+    final summary = _cartSummary(tester);
+    expect(summary, contains('Cheese +₪3.00'));
+    expect(summary, contains('Medium'));
+    expect(summary, isNot(contains('Medium +')));
+    expect(summary, isNot(contains('₪0.00')));
   });
 
   // ---- Modifier-quantity sprint: per-option quantities + item notes. ----
@@ -445,11 +456,13 @@ void main() {
     await tester.tap(_addButton());
     await tester.pumpAndSettle();
 
-    // ×2 rides the '+ name' string; the delta text is the unit×qty total.
-    expect(find.text('+ Extra cheese ×2'), findsOneWidget);
-    expect(find.text('+₪6.00'), findsOneWidget);
-    // The single-unit doneness stays the frozen bare '+ name' form.
-    expect(find.text('+ Medium'), findsOneWidget);
+    // ×2 rides the option name; the delta is the unit×qty total. Both survive
+    // the join, in the configured order.
+    final summary = _cartSummary(tester);
+    expect(summary, contains('Extra cheese ×2 +₪6.00'));
+    // The single-unit doneness keeps its bare name (no ×1 suffix).
+    expect(summary, contains('Medium'));
+    expect(summary, isNot(contains('Medium ×')));
     // The note under the cart line, labelled.
     expect(find.text('${l10n.posItemNoteLabel}: no onions'), findsOneWidget);
     // Line total includes the multiplied delta: 48 + 6 = 54.

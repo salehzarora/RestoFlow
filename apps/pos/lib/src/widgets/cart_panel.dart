@@ -48,6 +48,81 @@ import 'shift_context_bar.dart';
 ///
 /// Reads/mutates the in-memory [cartControllerProvider]. Chrome is localized;
 /// item names are data; amounts are formatted integer minor-unit money.
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart line's modifier summary as
+/// ONE string.
+///
+/// A four-modifier line used to be four separate rows and ~124px tall, with the
+/// important numbers the same size as the option names. Joining them costs
+/// nothing: this keeps the modifiers in their CONFIGURED ORDER, keeps each
+/// option quantity (`displayName` already carries `xN`), and keeps every paid
+/// delta inline through the same `MoneyFormatter` the rows used. Nothing is
+/// dropped to make the string shorter — the RENDERING is clamped to two lines,
+/// the DATA never is, and the full string stays reachable through the line's
+/// Semantics label and its Tooltip.
+String posCartModifierSummary(
+  Iterable<SelectedModifier> modifiers,
+  String currencyCode,
+) => [
+  for (final modifier in modifiers)
+    modifier.totalDeltaMinor == 0
+        ? modifier.displayName
+        : '${modifier.displayName} '
+              '${MoneyFormatter.formatSignedDeltaMinor(modifier.totalDeltaMinor, currencyCode)}',
+].join(' \u00b7 ');
+
+/// A formatted amount with the DIGITS promoted and the currency symbol demoted
+/// (spec §9.3). The plain text is byte-identical to [formatted], so the money
+/// value, its formatting and every `find.text(amount)` contract survive.
+class PosAmountText extends StatelessWidget {
+  const PosAmountText({
+    required this.formatted,
+    required this.digitSize,
+    required this.symbolSize,
+    this.color = kRestoflowInk,
+    this.letterSpacing,
+    this.amountKey,
+    super.key,
+  });
+
+  final String formatted;
+  final double digitSize;
+  final double symbolSize;
+  final Color color;
+  final double? letterSpacing;
+  final Key? amountKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final (lead, core, trail) = posSplitFormattedMoney(formatted);
+    final symbolStyle = TextStyle(
+      fontSize: symbolSize,
+      fontWeight: FontWeight.w700,
+      color: kRestoflowInk3,
+      letterSpacing: 0,
+    );
+    final digitStyle = TextStyle(
+      fontSize: digitSize,
+      fontWeight: FontWeight.w800,
+      color: color,
+      letterSpacing: letterSpacing,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (lead.isNotEmpty) TextSpan(text: lead, style: symbolStyle),
+          TextSpan(text: core, style: digitStyle),
+          if (trail.isNotEmpty) TextSpan(text: trail, style: symbolStyle),
+        ],
+      ),
+      key: amountKey,
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
 class CartPanel extends StatelessWidget {
   const CartPanel({this.compact = false, super.key});
 
@@ -61,13 +136,11 @@ class CartPanel extends StatelessWidget {
         color: Colors.white,
         border: BorderDirectional(start: BorderSide(color: kRestoflowHairline)),
       ),
-      child: Column(
-        children: [
-          const ShiftContextBar(),
-          const Divider(height: 1),
-          Expanded(child: CartPanelContent(compact: compact)),
-        ],
-      ),
+      // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: the shift/drawer strip is no
+      // longer a separate slab above a divider — it rides INSIDE the cart's one
+      // dark operational block, which the content builds. It is still a real
+      // ShiftContextBar with its own provider reads, still inside CartPanel.
+      child: CartPanelContent(compact: compact, withShiftContext: true),
     );
   }
 }
@@ -79,9 +152,15 @@ class CartPanelContent extends ConsumerStatefulWidget {
   const CartPanelContent({
     this.isSheet = false,
     this.compact = false,
+    this.withShiftContext = false,
     this.onClose,
     super.key,
   });
+
+  /// Include the shift/drawer strip in the dark operational block. Only the
+  /// side cart passes true — the phone sheet has never shown it, and Step 2
+  /// does not add it there.
+  final bool withShiftContext;
 
   /// Rendered inside the phone slide-up sheet: adds a drag handle + close row.
   final bool isSheet;
@@ -123,7 +202,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     final submittedOrder = cart.submittedOrder;
     final Widget body;
     if (submittedOrder != null) {
-      body = OrderConfirmation(
+      final confirmation = OrderConfirmation(
         key: const ValueKey('order-confirmation-view'),
         order: submittedOrder,
         onNewOrder: () {
@@ -131,6 +210,28 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           setupController.reset();
         },
       );
+      // The shift / drawer strip stays visible on the confirmation too — it was
+      // always visible before Step 2 moved it into the cart's dark block, and
+      // the drawer figure is exactly what a cashier checks straight after
+      // taking payment. Same widget, same provider reads, same key.
+      body = widget.withShiftContext
+          ? Column(
+              key: const ValueKey('order-confirmation-view-wrapper'),
+              children: [
+                const DecoratedBox(
+                  decoration: BoxDecoration(color: kPosCartHeaderInk),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: RestoflowSpacing.sm),
+                      child: ShiftContextBar(onDark: true),
+                    ),
+                  ),
+                ),
+                Expanded(child: confirmation),
+              ],
+            )
+          : confirmation;
     } else {
       // PSC-001C: ADDITION MODE — the cart's lines are a pending addition to
       // an EXISTING order. The parent already owns its type/table, so the
@@ -261,18 +362,32 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _CartHeader(
-                    l10n: l10n,
-                    itemCount: cart.itemCount,
-                    pendingSync: pendingSync,
-                    // Cart-safety: a frozen addition attempt owns the cart —
-                    // the Clear control is disabled (the controller refuses
-                    // regardless).
-                    onClear: cart.isEmpty || cart.lockedByAddition
-                        ? null
-                        : controller.clear,
+                  // ONE dark ink block heads the cart: title, live count, the
+                  // operational sync chip, Clear and the shift/drawer strip.
+                  // It replaces the old grey-slab + divider stack as the
+                  // separator, so the white body below reads as the order.
+                  DecoratedBox(
+                    key: const Key('pos-cart-operational-header'),
+                    decoration: const BoxDecoration(color: kPosCartHeaderInk),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _CartHeader(
+                          l10n: l10n,
+                          itemCount: cart.itemCount,
+                          pendingSync: pendingSync,
+                          // Cart-safety: a frozen addition attempt owns the
+                          // cart — the Clear control is disabled (the
+                          // controller refuses regardless).
+                          onClear: cart.isEmpty || cart.lockedByAddition
+                              ? null
+                              : controller.clear,
+                        ),
+                        if (widget.withShiftContext)
+                          const ShiftContextBar(onDark: true),
+                      ],
+                    ),
                   ),
-                  const Divider(height: 1),
                   // PSC-001C: while ADDING to an existing order the setup
                   // section (type/table) is replaced by the target banner — the
                   // parent order's context is fixed and must stay visible.
@@ -298,7 +413,9 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                     )
                   else
                     const OrderSetupSection(),
-                  const Divider(height: 1),
+                  // A softer edge than a full-width divider — the dark header
+                  // above already does the separating (spec §6).
+                  const Divider(height: 1, color: kPosSetupEdge),
                 ],
               ),
             ),
@@ -316,40 +433,43 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                 ),
               )
             else ...[
-              SliverPadding(
-                padding: EdgeInsets.symmetric(
-                  vertical: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
-                  horizontal: RestoflowSpacing.sm,
-                ),
-                sliver: SliverList.separated(
-                  itemCount: cart.lines.length,
-                  separatorBuilder: (_, _) => SizedBox(
-                    height: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+              DecoratedSliver(
+                decoration: const BoxDecoration(color: kPosCartTrack),
+                sliver: SliverPadding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: dense ? RestoflowSpacing.sm : RestoflowSpacing.md,
+                    horizontal: dense ? 10 : RestoflowSpacing.md,
                   ),
-                  itemBuilder: (context, index) {
-                    final line = cart.lines[index];
-                    // Cart-safety: while a frozen addition attempt owns the
-                    // cart, every line control is disabled — the visible lines
-                    // ARE the frozen payload.
-                    final locked = cart.lockedByAddition;
-                    return _CartLineTile(
-                      line: line,
-                      l10n: l10n,
-                      dense: dense,
-                      onIncrease: locked
-                          ? null
-                          : () => controller.increaseQuantity(line.lineId),
-                      onDecrease: locked
-                          ? null
-                          : () => controller.decreaseQuantity(line.lineId),
-                      onRemove: locked
-                          ? null
-                          : () => controller.removeLine(line.lineId),
-                      onEdit: locked
-                          ? null
-                          : () => _editLine(context, menu, line, controller),
-                    );
-                  },
+                  sliver: SliverList.separated(
+                    itemCount: cart.lines.length,
+                    separatorBuilder: (_, _) => SizedBox(
+                      height: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+                    ),
+                    itemBuilder: (context, index) {
+                      final line = cart.lines[index];
+                      // Cart-safety: while a frozen addition attempt owns the
+                      // cart, every line control is disabled — the visible lines
+                      // ARE the frozen payload.
+                      final locked = cart.lockedByAddition;
+                      return _CartLineTile(
+                        line: line,
+                        l10n: l10n,
+                        dense: dense,
+                        onIncrease: locked
+                            ? null
+                            : () => controller.increaseQuantity(line.lineId),
+                        onDecrease: locked
+                            ? null
+                            : () => controller.decreaseQuantity(line.lineId),
+                        onRemove: locked
+                            ? null
+                            : () => controller.removeLine(line.lineId),
+                        onEdit: locked
+                            ? null
+                            : () => _editLine(context, menu, line, controller),
+                      );
+                    },
+                  ),
                 ),
               ),
               SliverFillRemaining(
@@ -1155,67 +1275,96 @@ class _CartHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.lg,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.shopping_cart_outlined, color: theme.colorScheme.primary),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Flexible(
-            child: Text(
-              l10n.posCartTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: kRestoflowInk,
-              ),
-            ),
-          ),
-          if (itemCount > 0) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: RestoflowSpacing.sm,
-                vertical: RestoflowSpacing.xxs,
-              ),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-              ),
+    return SizedBox(
+      height: 56,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          14,
+          0,
+          RestoflowSpacing.xs,
+          0,
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.shopping_cart, color: kPosOnDarkAccent, size: 20),
+            const SizedBox(width: 6),
+            Flexible(
               child: Text(
-                itemCount.toString(),
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.w700,
+                l10n.posCartTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
                 ),
               ),
             ),
+            if (itemCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                key: const Key('cart-item-count'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: RestoflowSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  itemCount.toString(),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+            if (pendingSync > 0) ...[
+              const SizedBox(width: 6),
+              _PendingSyncChip(
+                count: pendingSync,
+                tooltip: l10n.posSyncPendingCount(pendingSync),
+              ),
+            ],
+            const Spacer(),
+            // PARKED-CARTS-001: the parked-orders list lives BESIDE Clear in
+            // the cart header rather than as another global app-bar action. It
+            // hides itself at zero, so a till that never parks sees no new
+            // chrome.
+            const ParkedOrdersButton(compact: true),
+            // Destructive, so rank 4: a ghost at white-68%, never filled and
+            // never louder than the title.
+            //
+            // ABSENT, not disabled, when it does not apply (empty cart, or a
+            // frozen addition owning the cart) — that is the existing gating
+            // and it is deliberately preserved over the mockup's disabled
+            // depiction, because Clear's VISIBILITY is behaviour that other
+            // suites pin.
+            if (onClear != null)
+              TextButton.icon(
+                onPressed: onClear,
+                style: TextButton.styleFrom(
+                  foregroundColor: kPosOnDarkGhost,
+                  disabledForegroundColor: kPosOnDarkGhostDisabled,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: RestoflowSpacing.sm,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.delete_sweep_outlined, size: 17),
+                label: Text(
+                  l10n.posClearCart,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
           ],
-          if (pendingSync > 0) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
-            _PendingSyncChip(
-              count: pendingSync,
-              tooltip: l10n.posSyncPendingCount(pendingSync),
-            ),
-          ],
-          const Spacer(),
-          // PARKED-CARTS-001: the parked-orders list lives BESIDE Clear in the
-          // cart header rather than as another global app-bar action. It hides
-          // itself at zero, so a till that never parks sees no new chrome.
-          const ParkedOrdersButton(compact: true),
-          if (onClear != null)
-            TextButton.icon(
-              onPressed: onClear,
-              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-              label: Text(l10n.posClearCart),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -1230,12 +1379,42 @@ class _PendingSyncChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // POS-LOCAL on-dark styling AROUND the existing pending-sync presentation —
+    // no shared status component is modified. It is never hidden while work is
+    // outstanding, and it keeps its localized tooltip + semantic label.
     return Tooltip(
       message: tooltip,
-      child: RestoflowStatusPill(
-        label: count.toString(),
-        tone: RestoflowTone.warning,
-        icon: Icons.cloud_queue,
+      child: Semantics(
+        label: tooltip,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: RestoflowSpacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            color: kPosSyncPendingBg,
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_queue,
+                size: RestoflowIconSizes.xs,
+                color: kPosSyncPendingFg,
+              ),
+              const SizedBox(width: RestoflowSpacing.xxs),
+              Text(
+                count.toString(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: kPosSyncPendingFg,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1248,11 +1427,44 @@ class _EmptyCart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The shared state view (l10n message rendered verbatim — tests find it by
-    // text).
-    return RestoflowStateView(
-      icon: Icons.remove_shopping_cart_outlined,
-      title: message,
+    // POS-LOCAL restyle of the empty cart — a quiet 68px warm circle instead of
+    // the shared view's default treatment. `RestoflowStateView` defaults are
+    // NOT modified. The l10n message is still rendered verbatim so the existing
+    // text finders keep working, and the business condition is untouched.
+    final theme = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1EADC),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.remove_shopping_cart_outlined,
+              size: 32,
+              color: Color(0xFFB7AE9B),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: RestoflowSpacing.lg,
+            ),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: kRestoflowInk2,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1308,11 +1520,16 @@ class _CartLineTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
     );
 
+    // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: a WHITE line card on the warm
+    // track (the track is the sliver behind it), r12 with the one hairline
+    // weight and the single-layer e1 rest shadow.
+    final summary = posCartModifierSummary(line.modifiers, line.currencyCode);
     return Container(
       decoration: BoxDecoration(
-        color: kPosInnerSurface,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md + 2),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
         border: Border.all(color: kRestoflowHairline),
+        boxShadow: kPosCardShadow,
       ),
       padding: dense
           ? const EdgeInsetsDirectional.fromSTEB(
@@ -1344,47 +1561,41 @@ class _CartLineTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: RestoflowSpacing.sm),
-              Text(
-                lineTotalText,
-                textAlign: TextAlign.end,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: kRestoflowInk,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              // Prominent, but a step below the subtotal's 26px so the line
+              // total never competes with the figure the cashier says aloud.
+              PosAmountText(
+                formatted: lineTotalText,
+                digitSize: 15,
+                symbolSize: 11,
               ),
             ],
           ),
           // Roomy: the meta on its own line. Dense: folded into the controls row.
           if (!dense) qtyUnit,
-          // Selected modifiers (order-time snapshots) as compact sub-lines.
-          for (final modifier in line.modifiers)
-            Row(
-              children: [
-                Flexible(
+          // The selected modifiers (order-time snapshots) as ONE wrapped line
+          // instead of one row each. The RENDERING clamps at two lines; the
+          // DATA never does — the full string is the line's Semantics label and
+          // its Tooltip, and Edit reopens the sheet listing every option.
+          if (summary.isNotEmpty)
+            Tooltip(
+              message: summary,
+              child: Semantics(
+                container: true,
+                label: summary,
+                child: ExcludeSemantics(
                   child: Text(
-                    '+ ${modifier.displayName}',
+                    summary,
+                    key: Key('cart-line-modifiers-${line.lineId}'),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: kRestoflowInk2,
+                      color: kPosMutedBodyInk,
+                      height: 1.35,
+                      letterSpacing: 0,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (modifier.totalDeltaMinor != 0) ...[
-                  const SizedBox(width: RestoflowSpacing.xs),
-                  Text(
-                    MoneyFormatter.formatSignedDeltaMinor(
-                      modifier.totalDeltaMinor,
-                      line.currencyCode,
-                    ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: kRestoflowInk2,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
           if (line.note != null)
             Text(
@@ -1403,6 +1614,9 @@ class _CartLineTile extends StatelessWidget {
                 quantity: line.quantity,
                 l10n: l10n,
                 dense: dense,
+                // Cart-only: the minus and plus read as ONE control here. The
+                // modifier sheet keeps its current appearance (Phase 3).
+                onTrack: true,
                 onIncrease: onIncrease,
                 onDecrease: onDecrease,
               ),
@@ -1414,11 +1628,14 @@ class _CartLineTile extends StatelessWidget {
                 Expanded(child: qtyUnit),
               ] else
                 const Spacer(),
+              // Neutral at rest: destructive intent is revealed on approach,
+              // not advertised. Both stay visible and tappable — they simply
+              // stop dominating the line.
               _LineActionButton(
                 buttonKey: Key('cart-edit-${line.lineId}'),
                 icon: Icons.edit_outlined,
                 tooltip: l10n.posCartEditItem,
-                color: theme.colorScheme.primary,
+                color: kPosGhostIcon,
                 dense: dense,
                 onPressed: onEdit,
               ),
@@ -1426,7 +1643,7 @@ class _CartLineTile extends StatelessWidget {
                 buttonKey: Key('cart-remove-${line.lineId}'),
                 icon: Icons.delete_outline,
                 tooltip: l10n.posRemoveItem,
-                color: RestoflowTone.danger.styleOf(theme).accent,
+                color: kPosGhostIconQuiet,
                 dense: dense,
                 onPressed: onRemove,
               ),
@@ -1762,7 +1979,7 @@ class _CartFooter extends StatelessWidget {
               width: double.infinity,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(kPosSendRadius),
                   boxShadow: onSend == null ? null : kPosGreenGlow,
                 ),
                 child: FilledButton.icon(
@@ -1774,7 +1991,36 @@ class _CartFooter extends StatelessWidget {
                       ? RestoflowInlineSpinner(color: theme.colorScheme.primary)
                       : const Icon(Icons.send),
                   label: Text(sendLabelOverride ?? l10n.posSendOrder),
-                  style: RestoflowButtonStyles.big(context),
+                  // POS-LOCAL: the shared `RestoflowButtonStyles.big` is NOT
+                  // modified — Send is simply the one control on this screen
+                  // with a 54px height, an 800 weight and a glow, so it reads
+                  // as the primary path without diluting the shared style.
+                  style: RestoflowButtonStyles.big(context).copyWith(
+                    minimumSize: WidgetStateProperty.all(
+                      const Size.fromHeight(kPosSendHeight),
+                    ),
+                    textStyle: WidgetStateProperty.all(
+                      const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kPosSendRadius),
+                      ),
+                    ),
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? kPosDisabledBg
+                          : null,
+                    ),
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? const Color(0xFFA79E8C)
+                          : null,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1787,11 +2033,28 @@ class _CartFooter extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               SizedBox(
                 width: double.infinity,
-                child: OutlinedButton.icon(
+                // Ghost, not outlined: a full-width outlined button directly
+                // under Send read as a second primary action. Applicability and
+                // the callback are unchanged — it is still ABSENT, never
+                // disabled, when parking does not apply.
+                child: TextButton.icon(
                   key: const Key('park-cart-button'),
                   onPressed: onPark,
-                  icon: const Icon(Icons.inventory_2_outlined),
-                  label: Text(l10n.posParkOrder),
+                  style: TextButton.styleFrom(
+                    foregroundColor: kRestoflowInk2,
+                    minimumSize: const Size.fromHeight(40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                  ),
+                  icon: const Icon(Icons.inventory_2_outlined, size: 17),
+                  label: Text(
+                    l10n.posParkOrder,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1831,13 +2094,16 @@ class _TotalRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: RestoflowSpacing.sm),
-        Text(
-          value,
-          key: valueKey,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: theme.colorScheme.primary,
-          ),
+        // Ink, not brand green: green now marks exactly four things, and the
+        // amount the cashier says aloud is not one of them. The digits carry
+        // the size; the currency symbol is demoted. The formatted string itself
+        // is unchanged.
+        PosAmountText(
+          formatted: value,
+          amountKey: valueKey,
+          digitSize: 26,
+          symbolSize: 15,
+          letterSpacing: -0.5,
         ),
       ],
     );

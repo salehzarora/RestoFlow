@@ -116,7 +116,11 @@ void main() {
     final l10n = await _en();
     await _pump(tester);
     await _addConfiguredBurger(tester);
-    expect(find.text('+ Cheese'), findsOneWidget);
+    // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 joined the per-modifier rows
+    // into ONE summary line, so the modifier is asserted by CONTENT rather
+    // than as its own '+ X' Text. The behaviour — that this line carries
+    // Cheese — is unchanged.
+    expect(find.textContaining('Cheese'), findsWidgets);
 
     await tester.tap(find.byTooltip(l10n.posCartEditItem));
     await tester.pumpAndSettle();
@@ -132,7 +136,14 @@ void main() {
     // Still ONE cart line (one Edit button), the Cheese sub-line is gone, and
     // the total dropped to ₪48.
     expect(find.byTooltip(l10n.posCartEditItem), findsOneWidget);
-    expect(find.text('+ Cheese'), findsNothing);
+    // Cheese specifically is gone from the joined summary; the line's other
+    // modifier (Medium) is untouched.
+    expect(
+      (tester.widget<Text>(
+        find.byKey(const Key('cart-line-modifiers-line-0')),
+      )).data,
+      isNot(contains('Cheese')),
+    );
     expect(find.text('₪48.00'), findsWidgets);
   });
 
@@ -157,7 +168,11 @@ void main() {
 
     // The cart line is unchanged: Cheese still there, total still ₪51.
     expect(find.byType(ModifierSelectionSheet), findsNothing);
-    expect(find.text('+ Cheese'), findsOneWidget);
+    // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 joined the per-modifier rows
+    // into ONE summary line, so the modifier is asserted by CONTENT rather
+    // than as its own '+ X' Text. The behaviour — that this line carries
+    // Cheese — is unchanged.
+    expect(find.textContaining('Cheese'), findsWidgets);
     expect(find.text('₪51.00'), findsWidgets);
   });
 

@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../format/money_format.dart';
+import '../pos_palette.dart';
 import '../state/payment_controller.dart';
 
 /// A slim, persistent shift / cash-drawer context bar at the top of the cart
@@ -15,7 +16,14 @@ import '../state/payment_controller.dart';
 /// cash totals live THERE — this bar never invents local drawer figures for a
 /// real shift (the reconciliation UI is a later ticket).
 class ShiftContextBar extends ConsumerWidget {
-  const ShiftContextBar({super.key});
+  const ShiftContextBar({this.onDark = false, super.key});
+
+  /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: render for the cart's dark
+  /// operational block — transparent container, on-dark foregrounds, tighter
+  /// vertical padding. PRESENTATION ONLY: the provider reads, the demo/real
+  /// split, the `cash-in-drawer` key and the single-Text label are untouched,
+  /// and the default keeps every other placement byte-identical.
+  final bool onDark;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,13 +33,22 @@ class ShiftContextBar extends ConsumerWidget {
     if (!isDemo) {
       return Container(
         width: double.infinity,
-        color: theme.colorScheme.surfaceContainerHigh,
-        padding: const EdgeInsetsDirectional.fromSTEB(
-          RestoflowSpacing.lg,
-          RestoflowSpacing.sm,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.sm,
-        ),
+        color: onDark
+            ? Colors.transparent
+            : theme.colorScheme.surfaceContainerHigh,
+        padding: onDark
+            ? const EdgeInsetsDirectional.fromSTEB(
+                14,
+                0,
+                14,
+                RestoflowSpacing.sm,
+              )
+            : const EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.sm,
+                RestoflowSpacing.lg,
+                RestoflowSpacing.sm,
+              ),
         child: Wrap(
           spacing: RestoflowSpacing.md,
           runSpacing: RestoflowSpacing.xs,
@@ -41,11 +58,14 @@ class ShiftContextBar extends ConsumerWidget {
               icon: Icons.badge_outlined,
               label: l10n.posShiftRealName,
               strong: true,
+              onDark: onDark,
             ),
             Text(
               l10n.posShiftRealNote,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                color: onDark
+                    ? kPosOnDarkMuted
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -69,20 +89,32 @@ class ShiftContextBar extends ConsumerWidget {
 
     return Container(
       width: double.infinity,
-      color: theme.colorScheme.surfaceContainerHigh,
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.lg,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.lg,
-        RestoflowSpacing.sm,
-      ),
+      color: onDark
+          ? Colors.transparent
+          : theme.colorScheme.surfaceContainerHigh,
+      padding: onDark
+          ? const EdgeInsetsDirectional.fromSTEB(14, 0, 14, RestoflowSpacing.sm)
+          : const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
+            ),
       child: Wrap(
         spacing: RestoflowSpacing.md,
         runSpacing: RestoflowSpacing.xs,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _ShiftItem(icon: Icons.badge_outlined, label: l10n.posShiftDemoName),
-          _ShiftItem(icon: Icons.point_of_sale, label: drawerLine),
+          _ShiftItem(
+            icon: Icons.badge_outlined,
+            label: l10n.posShiftDemoName,
+            onDark: onDark,
+          ),
+          _ShiftItem(
+            icon: Icons.point_of_sale,
+            label: drawerLine,
+            onDark: onDark,
+          ),
           // Design-polish: the figure a cashier actually checks reads at a
           // glance (larger, heavier type) instead of matching the meta rows.
           _ShiftItem(
@@ -91,13 +123,20 @@ class ShiftContextBar extends ConsumerWidget {
             label: cashLine,
             strong: true,
             prominent: true,
+            onDark: onDark,
           ),
           if (lastLine != null)
-            _ShiftItem(icon: Icons.payments_outlined, label: lastLine),
+            _ShiftItem(
+              icon: Icons.payments_outlined,
+              label: lastLine,
+              onDark: onDark,
+            ),
           Text(
             l10n.posShiftDemoNote,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: onDark
+                  ? kPosOnDarkMuted
+                  : theme.colorScheme.onSurfaceVariant,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -113,12 +152,14 @@ class _ShiftItem extends StatelessWidget {
     required this.label,
     this.strong = false,
     this.prominent = false,
+    this.onDark = false,
     super.key,
   });
 
   final IconData icon;
   final String label;
   final bool strong;
+  final bool onDark;
 
   /// Larger at-a-glance type for the figure the cashier actually reads
   /// (cash in drawer); the label stays a single Text so descendant
@@ -128,9 +169,11 @@ class _ShiftItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = strong
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
+    final color = onDark
+        ? (strong ? kPosOnDarkPrimary : kPosOnDarkMuted)
+        : (strong
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurfaceVariant);
     final textStyle = prominent
         ? theme.textTheme.titleSmall?.copyWith(
             color: color,

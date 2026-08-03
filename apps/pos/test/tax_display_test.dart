@@ -47,6 +47,16 @@ Future<void> _addBurger(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 renders the LOUD figure (the amount
+/// the cashier says aloud) as a `Text.rich` so the digits can be promoted and
+/// the currency symbol demoted, while the quieter breakdown rows stay a plain
+/// `Text`. The formatted money STRING is identical either way, so these tests
+/// read whichever representation the row uses.
+String _money(WidgetTester tester, Key key) {
+  final t = tester.widget<Text>(find.byKey(key));
+  return t.data ?? t.textSpan!.toPlainText();
+}
+
 void main() {
   testWidgets(
     'tax OFF (default): only the subtotal shows, no tax/grand lines',
@@ -69,14 +79,8 @@ void main() {
     await _addBurger(tester);
 
     // 4200 @ 17% = 714 (half-away). Grand = 4914.
-    expect(
-      tester.widget<Text>(find.byKey(const Key('cart-tax'))).data,
-      '₪7.14',
-    );
-    expect(
-      tester.widget<Text>(find.byKey(const Key('cart-grand-total'))).data,
-      '₪49.14',
-    );
+    expect(_money(tester, const Key('cart-tax')), '₪7.14');
+    expect(_money(tester, const Key('cart-grand-total')), '₪49.14');
   });
 
   testWidgets('tax ON: the confirmation + payment sheet use the GRAND total', (
@@ -92,16 +96,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Confirmation shows the tax + grand breakdown.
-    expect(
-      tester.widget<Text>(find.byKey(const Key('confirmation-tax'))).data,
-      '₪7.14',
-    );
-    expect(
-      tester
-          .widget<Text>(find.byKey(const Key('confirmation-grand-total')))
-          .data,
-      '₪49.14',
-    );
+    expect(_money(tester, const Key('confirmation-tax')), '₪7.14');
+    expect(_money(tester, const Key('confirmation-grand-total')), '₪49.14');
 
     // The payment sheet asks for the grand total, not the bare subtotal.
     await tester.tap(find.byKey(const Key('pay-cash-button')));

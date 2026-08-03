@@ -68,6 +68,95 @@ const List<BoxShadow> kPosChipSelectedShadow = [
 /// Product-card corner radius (spec §5 — the biggest object on screen).
 const double kPosCardRadius = 14;
 
+/// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
+///
+/// One dark ink block heads the cart and replaces four full-width dividers as
+/// the separator, so the white body below it reads as the live order. Every
+/// on-dark pair below is contrast-checked against the ink surface (spec §6b):
+/// white title 16.9:1, [kPosOnDarkPrimary] 9.4:1, [kPosOnDarkMuted] 4.9:1,
+/// amber 11.6:1, Clear at white-68% 7.6:1 — nothing operational below 4.5:1.
+
+/// The cart's dark operational surface.
+const Color kPosCartHeaderInk = kRestoflowInk;
+
+/// Primary on-dark body text (shift name, drawer figures).
+const Color kPosOnDarkPrimary = Color(0xFFBFD6C9);
+
+/// Secondary on-dark text (the shift note, which ellipsises first).
+const Color kPosOnDarkMuted = Color(0xFF7E9A8C);
+
+/// The on-dark accent glyph (cart icon, status dot).
+const Color kPosOnDarkAccent = Color(0xFF7FCBA6);
+
+/// Clear-cart at rest on the dark header; it is destructive but rank 4, so it
+/// is never filled and never louder than the title.
+const Color kPosOnDarkGhost = Color(0xAEFFFFFF);
+const Color kPosOnDarkGhostDisabled = Color(0x42FFFFFF);
+
+/// Operational sync states ON THE DARK header (background / foreground). These
+/// are POS-local pairs around the EXISTING sync presentation — no shared status
+/// component is modified, and the failure state is never hidden.
+const Color kPosSyncPendingBg = Color(0x2EFBBF24);
+const Color kPosSyncPendingFg = Color(0xFFFCD34D);
+const Color kPosSyncFailedBg = Color(0x29F87171);
+const Color kPosSyncFailedFg = Color(0xFFFCA5A5);
+const Color kPosSyncSyncedBg = Color(0x297FCBA6);
+const Color kPosSyncSyncedFg = kPosOnDarkAccent;
+const Color kPosSyncOfflineBg = Color(0x1AFFFFFF);
+const Color kPosSyncOfflineFg = Color(0xB3FFFFFF);
+
+/// The order-setup block's soft bottom edge — the dark header above already
+/// does the separating, so this is quieter than a full hairline.
+const Color kPosSetupEdge = Color(0xFFF0EADD);
+
+/// The warm track the white cart lines sit on, and the line's own edge.
+const Color kPosCartTrack = kPosInnerSurface;
+
+/// The quantity stepper's own track, so minus/plus read as ONE control.
+const Color kPosStepperTrack = Color(0xFFF8F6EF);
+const Color kPosStepperTrackEdge = Color(0xFFEDE6D9);
+
+/// Neutral ghost icons on a cart line — destructive intent is revealed on
+/// approach, not advertised at rest.
+const Color kPosGhostIcon = kPosMutedBodyInk;
+const Color kPosGhostIconQuiet = kRestoflowInk3;
+
+/// Below this cart-section width the paired customer fields stack, the footer's
+/// duplicated summary chips hide, and the setup stacks its label. At 320 the
+/// difference is a table row fitting instead of truncating.
+const double kPosCartPairedFieldsMinWidth = 352;
+
+/// Send is the only control on screen with a glow, a 54px height and an 800
+/// weight (spec §15). POS-local — `RestoflowButtonStyles.big` is untouched.
+const double kPosSendHeight = 54;
+const double kPosSendRadius = 13;
+
+/// Splits a formatted money string into (lead, core, trail) where
+/// lead + core + trail == the input EXACTLY, so the digits can be promoted and
+/// the currency symbol demoted without altering a single character of
+/// `MoneyFormatter` output.
+///
+/// NOTE: `menu_item_card.dart` carries an identical private split from Step 1.
+/// It is deliberately NOT refactored here — that file is out of Step-2 scope —
+/// and unifying the two belongs to Step 3.
+(String, String, String) posSplitFormattedMoney(String formatted) {
+  bool isDigit(int c) => c >= 0x30 && c <= 0x39;
+  var start = 0;
+  while (start < formatted.length && !isDigit(formatted.codeUnitAt(start))) {
+    start++;
+  }
+  if (start == formatted.length) return ('', formatted, '');
+  var end = formatted.length;
+  while (end > start && !isDigit(formatted.codeUnitAt(end - 1))) {
+    end--;
+  }
+  return (
+    formatted.substring(0, start),
+    formatted.substring(start, end),
+    formatted.substring(end),
+  );
+}
+
 /// The green-CTA glow used on the primary add / send buttons.
 const List<BoxShadow> kPosGreenGlow = [
   BoxShadow(color: Color(0x591B7A52), offset: Offset(0, 6), blurRadius: 16),
