@@ -100,9 +100,8 @@ The template is [`tools/android_release/signing.properties.example`](../tools/an
 > - POS and KDS both resolve their release variant to **that same certificate**,
 >   while debug variants remain debug-signed.
 >
-> **No APK or app bundle has been built with this key.** v21 is still planned
-> only. The procedure below is retained verbatim as the recovery and re-issue
-> reference.
+> **Official v21 has since been built with this key** — see §8. The procedure
+> below is retained verbatim as the recovery and re-issue reference.
 
 It must be run interactively, on the machine that will hold the key. It is
 written to be run by a human because the passwords must be typed into a hidden
@@ -228,7 +227,49 @@ never installs, uploads, pushes, releases or deploys.
 
 ---
 
-## 7. If the key is lost
+## 7. Release history
+
+| Version | Signing | Source | Status |
+|---|---|---|---|
+| 0.0.20 / 20 | Android **debug** key | `279c4fc` | pilot, manual tablet testing only, never distributed |
+| **0.0.21 / 21** | **`restoflow-production`** | `ed803bb` | **built 2026-08-04 and verified — NOT installed, NOT uploaded, no GitHub Release** |
+| 0.0.22 / 22 | `restoflow-production` | — | planned, not built |
+
+**v21 is the first RestoFlow artifact ever signed with the production identity.**
+Both APKs were verified as production-signed (not Android Debug), `0.0.21 / 21`,
+non-debuggable, `demo=false`, AOT, zipaligned, `apksigner`-verified, on the
+correct hosted Supabase project with the forbidden reference absent. Their
+public SHA-256 values are recorded in
+[`version.json`](../tools/android_release/version.json); the artifact files
+themselves stay local and git-ignored.
+
+**The one-time pilot → production migration is still pending.** Because the
+certificate differs from the debug-signed pilot, v21 **cannot** update the
+installed apps in place — follow
+[ANDROID_FLEET_UPDATE_AND_ROLLBACK.md](ANDROID_FLEET_UPDATE_AND_ROLLBACK.md) §1
+before installing anything.
+
+### Two runner defects fixed after the first official build
+
+The v21 build was the first real exercise of the pipeline and exposed two bugs,
+both fixed in `build_official_pair.ps1` (OFFICIAL-RELEASE-RUNNER-V21-002):
+
+1. **`SHA256SUMS.txt` was unverifiable.** `WriteAllLines` uses
+   `Environment.NewLine`, so the file was CRLF and `sha256sum -c` treated the
+   trailing `\r` as part of each filename — both checks failed. A checksum file
+   that cannot be verified is worse than none: it looks like provenance while
+   providing none.
+2. **`BUILD-METADATA.txt` was incomplete**, omitting toolchain versions,
+   timestamps, per-artifact package/ABI/SDK/zipalign/signature/certificate
+   detail and any comparison.
+
+Both outputs now go through `release_output.ps1` (UTF-8 without BOM, LF-only,
+deterministic field order, `NOT DETECTED` instead of silent omission, and a
+hard refusal to emit signing material), covered by
+`test_release_output.ps1`. The v21 directory's own metadata was corrected by
+hand at the time and is left untouched as historical evidence.
+
+## 8. If the key is lost
 
 Losing the private key means **no existing installation can ever be updated in
 place again**. Recovery requires a new key and a full uninstall/reinstall of

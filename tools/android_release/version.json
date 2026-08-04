@@ -1,9 +1,11 @@
 {
   "_comment": [
-    "RELEASE-KEY-AND-PIPELINE-001 - the RestoFlow Android version ledger.",
+    "RELEASE-KEY-AND-PIPELINE-001 / OFFICIAL-RELEASE-RUNNER-V21-002 - the",
+    "RestoFlow Android version ledger.",
+    "",
     "POS and KDS ship as a SYNCHRONIZED PAIR: identical versionName and",
     "versionCode, always built from one source commit. build_official_pair.ps1",
-    "reads this file and refuses to build anything else.",
+    "reads nextOfficialRelease and refuses to build anything else.",
     "",
     "expectedCertificateSha256 is the PUBLIC fingerprint of the production",
     "signing certificate. It is intentionally committed: it is not a secret, and",
@@ -16,7 +18,11 @@
     "against apksigner. Do not change the representation.",
     "",
     "NOTE: this is the CERTIFICATE fingerprint. It is a different value from the",
-    "SHA-256 of the keystore FILE (used only to prove the backups are identical)."
+    "SHA-256 of the keystore FILE. Keystore-file hashes, key paths, backup",
+    "locations and passwords are deliberately NOT recorded here.",
+    "",
+    "Artifact SHA-256 values below are of the released APK files and are safe to",
+    "publish - they are what a reviewer checks an artifact against."
   ],
 
   "expectedCertificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
@@ -28,20 +34,53 @@
   "latestPilotRelease": {
     "versionName": "0.0.20",
     "versionCode": 20,
-    "signing": "android-debug-key (pilot only, NOT production)",
-    "sourceSha": "279c4fc4337d72ad29c0d27ebb5f7f564c6c3bb2",
-    "status": "built, manual tablet testing only, never distributed"
+    "signing": "android-debug-key",
+    "status": "pilot / debug-signed - manual tablet testing only, never distributed",
+    "sourceSha": "279c4fc4337d72ad29c0d27ebb5f7f564c6c3bb2"
   },
 
-  "nextOfficialRelease": {
+  "currentOfficialRelease": {
     "versionName": "0.0.21",
     "versionCode": 21,
     "signing": "restoflow-production",
-    "status": "planned - NOT BUILT",
-    "intendedSource": "origin/main, after RELEASE-KEY-AND-PIPELINE-001 is merged",
+    "status": "built / Production-signed / not installed / not uploaded",
+    "sourceSha": "ed803bb1ae839d2b56d37f4f652ed00cd90e4442",
+    "buildDate": "2026-08-04",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v21-ed803bb.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "693e83df3a8b52de08f20eb3d627c2074d80eaa0b835f00f6969887500f66345"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v21-ed803bb.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "31b01b29f3442b01b3ef22f66f824f8057cbc326bbd82211500c1dcf381c6f19"
+      }
+    },
     "notes": [
-      "v21 does not exist yet. Nothing in this repository has been signed with",
-      "the production key.",
+      "First artifacts ever signed with the production identity.",
+      "Verified: not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
+      "correct hosted Supabase project, forbidden reference absent.",
+      "NOT installed on any device, NOT uploaded, NOT distributed, no GitHub Release.",
+      "The artifact files themselves are local and git-ignored; only their public",
+      "SHA-256 values are recorded here.",
+      "Because the certificate differs from the debug-signed pilot, v21 CANNOT",
+      "update the installed pilot apps in place - the one-time migration in",
+      "docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md is still pending."
+    ]
+  },
+
+  "nextOfficialRelease": {
+    "versionName": "0.0.22",
+    "versionCode": 22,
+    "signing": "restoflow-production",
+    "status": "planned - NOT BUILT",
+    "intendedSource": "origin/main at the time of the build",
+    "notes": [
+      "v22 does not exist yet.",
       "The official build must come from MERGED main, never from a feature",
       "branch, so the artifact matches reviewed history.",
       "versionCode must increase monotonically: Android refuses to install an",
