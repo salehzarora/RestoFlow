@@ -1,0 +1,23 @@
+# RELEASE-KEY-AND-PIPELINE-001 - EXAMPLE ONLY. Contains no real values.
+#
+# Copy this OUTSIDE the repository (never into it), fill in the real values, and
+# point RESTOFLOW_ANDROID_SIGNING_PROPERTIES at the copy:
+#
+#   setx RESTOFLOW_ANDROID_SIGNING_PROPERTIES "%USERPROFILE%\.restoflow\android-signing\signing.properties"
+#
+# The real file holds two passwords. It must never be committed, pasted into a
+# chat or ticket, attached to a build log, or stored beside the keystore in a
+# cloud folder that syncs the keystore too. tools/check_secrets.sh blocks a real
+# one; this .example is allowed precisely because every value is a placeholder.
+
+# Absolute path to the production keystore, OUTSIDE the repository.
+storeFile=<ABSOLUTE_PATH_TO_KEYSTORE_OUTSIDE_REPO>
+
+# Keystore password.
+storePassword=<CHANGE_ME>
+
+# Must match the alias created during the key ceremony.
+keyAlias=restoflow-production
+
+# Key password (may equal storePassword; keytool prompts for both).
+keyPassword=<CHANGE_ME>

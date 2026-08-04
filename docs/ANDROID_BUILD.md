@@ -94,8 +94,14 @@ Notes:
   Dashboard sign-in, org/branch data, and reports (ANDROID-001 / ANDROID-001B fix).
 - `RESTOFLOW_PRINT_BRIDGE_URL` is a per-device **local loopback** define only; it is
   never a hosted value and is not needed for a normal pilot build.
-- A `--release` APK is signed with the **debug** key by default (see §5) — fine for
-  sideloading in a pilot, not for the Play Store.
+- **Superseded by RELEASE-KEY-AND-PIPELINE-001.** A `--release` APK used to be
+  signed with the **debug** key. It is not any more: `apps/{pos,kds}` resolve the
+  release signing config from a keystore held outside this repository and **fail
+  the build** when it is unavailable — they never fall back to debug signing. The
+  commands in §3b therefore only produce a release APK on a machine with the
+  production signing configuration. See
+  [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md), and use
+  `tools/android_release/build_official_pair.ps1` for official artifacts.
 
 ### 3c. Output paths
 
@@ -122,11 +128,14 @@ apps/dashboard/build/app/outputs/flutter-apk/app-debug.apk   (or app-release.apk
 
 ## 5. Follow-ups (out of scope for ANDROID-001)
 
-- **Release signing (before Play Store or a signed pilot).** Generate a keystore,
-  add `android/key.properties` (git-ignored) and a `release` `signingConfig` in each
-  `android/app/build.gradle.kts`. **No keystore/keys were invented or committed** by
-  this ticket. `*.jks`, `*.keystore`, `key.properties`, and `local.properties` are
-  git-ignored; keep the keystore out of the repo.
+- ~~**Release signing.**~~ **DONE — RELEASE-KEY-AND-PIPELINE-001.** Both apps now
+  carry a fail-closed `release` `signingConfig` that reads a keystore held
+  **outside** this repository, and refuse to build a release without it. No
+  keystore, password or properties file is committed; `*.jks`, `*.keystore`,
+  `*.p12`, `key.properties` and `*signing.properties` are git-ignored and
+  `tools/check_secrets.sh` blocks them. Owner document:
+  [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md); fleet procedure:
+  [ANDROID_FLEET_UPDATE_AND_ROLLBACK.md](ANDROID_FLEET_UPDATE_AND_ROLLBACK.md).
 - **Play Store.** App bundle (`flutter build appbundle`), store listing, versioning
   (`versionCode`/`versionName` — currently Flutter defaults), privacy declarations,
   and a signed upload key. Not started.

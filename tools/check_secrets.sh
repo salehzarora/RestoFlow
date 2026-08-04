@@ -59,18 +59,61 @@ while IFS= read -r -d '' f; do
     |.mcp.json|*/.mcp.json)
       echo "BLOCK  un-ignored secret-bearing file: $f"; fail=1 ;;
   esac
+  # RELEASE-KEY-AND-PIPELINE-001: an Android signing-properties file holds the
+  # keystore AND key passwords in plain text. It must live outside the repo.
+  # `*.example` already returned above, so the placeholder template is allowed.
+  case "$base" in
+    key.properties|signing.properties|release-signing.properties|*-signing.properties)
+      echo "BLOCK  un-ignored Android signing-properties file: $f"; fail=1 ;;
+  esac
 done < <(scan_list)
 
+# ---- 1b) Android signing credentials inside file CONTENTS -----------------
+# A committed storePassword/keyPassword is a fleet-level compromise: it unlocks
+# the key that owns every installed RestoFlow app.
+#
+# Only a LITERAL value is a finding. Two things are deliberately NOT findings,
+# because flagging them would train people to ignore this guard:
+#   * CODE that reads the value at build time
+#     (`storePassword = props.getProperty("storePassword")`), and
+#   * obvious placeholders in templates and documentation (`<CHANGE_ME>`).
+SIGNING_KEYS='(storePassword|keyPassword)'
+SIGNING_PLACEHOLDER='=[[:space:]]*("?)(<[^>]*>|\{\{[^}]*\}\}|CHANGE_?ME|REPLACE_?ME|YOUR_[A-Za-z_]*|EXAMPLE[A-Za-z_]*|PLACEHOLDER|TODO|\.\.\.|xxx+)'
+# RHS that is an expression/lookup rather than a secret literal.
+SIGNING_CODE='getProperty|System\.|getenv|\$\{|\$env:|env\(|props|properties\[|Get-Content|Matches|\bparam\b|=[[:space:]]*[$"'"'"']?\$'
+SIGNING_EXEMPT='tools/test_check_secrets_signing.sh'  # holds this guard's own fixtures
+# ONE batched grep, not one per file. Spawning three greps per file cost ~5
+# minutes on this repo under Windows; `xargs` keeps it to a handful of
+# processes. -I skips binaries, -H forces the filename prefix even when a batch
+# happens to contain a single file.
+signing_hits="$(scan_list \
+  | xargs -0 grep -IHnEi "${SIGNING_KEYS}[[:space:]]*=" 2>/dev/null \
+  | grep -vE "^($SELF|$SIGNING_EXEMPT|[^:]*\.example):" \
+  | grep -vEi "$SIGNING_PLACEHOLDER" \
+  | grep -vEi "$SIGNING_CODE")"
+if [ -n "$signing_hits" ]; then
+  printf '%s\n' "$signing_hits" | cut -d: -f1,2 | sort -u | while IFS=: read -r sf sl; do
+    echo "BLOCK  Android signing password in $sf at line $sl (value redacted)"
+  done
+  fail=1
+fi
+
 # ---- 2) credential value patterns inside contents -------------------------
-while IFS= read -r -d '' f; do
-  [ "$f" = "$SELF" ] && continue          # don't scan this scanner's own regexes
-  grep -Iq . "$f" 2>/dev/null || continue # skip binary / empty
-  lines="$(grep -nE "$VALUE_PATTERNS" "$f" 2>/dev/null | cut -d: -f1 | tr '\n' ',' )"
-  if [ -n "$lines" ]; then
-    echo "BLOCK  possible credential value in $f at line(s): ${lines%,} (value redacted)"
-    fail=1
-  fi
-done < <(scan_list)
+# Batched deliberately. This used to spawn two greps PER FILE, which on Windows
+# cost ~5 minutes for ~1800 files and made the guard the slowest step in CI;
+# `xargs` does the same work in about a second. Same regex, same file set, same
+# output - only the process count changed. -I skips binaries (replacing the old
+# per-file `grep -Iq .` probe) and -H forces the filename prefix.
+value_hits="$(scan_list \
+  | xargs -0 grep -IHnE "$VALUE_PATTERNS" 2>/dev/null \
+  | grep -vE "^$SELF:")"
+if [ -n "$value_hits" ]; then
+  printf '%s\n' "$value_hits" | cut -d: -f1,2 | sort -t: -k1,1 -k2,2n -u | awk -F: '
+    { lines[$1] = (lines[$1] == "" ? $2 : lines[$1] "," $2) }
+    END { for (f in lines)
+            printf "BLOCK  possible credential value in %s at line(s): %s (value redacted)\n", f, lines[f] }'
+  fail=1
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo ""

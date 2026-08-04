@@ -1,0 +1,56 @@
+{
+  "_comment": [
+    "RELEASE-KEY-AND-PIPELINE-001 - the RestoFlow Android version ledger.",
+    "POS and KDS ship as a SYNCHRONIZED PAIR: identical versionName and",
+    "versionCode, always built from one source commit. build_official_pair.ps1",
+    "reads this file and refuses to build anything else.",
+    "",
+    "expectedCertificateSha256 is the PUBLIC fingerprint of the production",
+    "signing certificate. It is intentionally committed: it is not a secret, and",
+    "pinning it here is what lets a build prove it was signed by the real key",
+    "rather than by the Android debug key or an unknown replacement.",
+    "",
+    "Format: colon-separated UPPERCASE hex, exactly as keytool prints it.",
+    "check_signing_identity.ps1 compares this value directly against keytool;",
+    "verify_official_apk.ps1 strips the colons and lowercases before comparing",
+    "against apksigner. Do not change the representation.",
+    "",
+    "NOTE: this is the CERTIFICATE fingerprint. It is a different value from the",
+    "SHA-256 of the keystore FILE (used only to prove the backups are identical)."
+  ],
+
+  "expectedCertificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+  "signingKeyAlias": "restoflow-production",
+  "signingCertificateSubject": "CN=RestoFlow Android Production, OU=Mobile Release, O=RestoFlow, C=IL",
+  "signingAlgorithm": "SHA256withRSA, 4096-bit RSA",
+  "signingValidity": "2026-08-04 through 2053-12-20",
+
+  "latestPilotRelease": {
+    "versionName": "0.0.20",
+    "versionCode": 20,
+    "signing": "android-debug-key (pilot only, NOT production)",
+    "sourceSha": "279c4fc4337d72ad29c0d27ebb5f7f564c6c3bb2",
+    "status": "built, manual tablet testing only, never distributed"
+  },
+
+  "nextOfficialRelease": {
+    "versionName": "0.0.21",
+    "versionCode": 21,
+    "signing": "restoflow-production",
+    "status": "planned - NOT BUILT",
+    "intendedSource": "origin/main, after RELEASE-KEY-AND-PIPELINE-001 is merged",
+    "notes": [
+      "v21 does not exist yet. Nothing in this repository has been signed with",
+      "the production key.",
+      "The official build must come from MERGED main, never from a feature",
+      "branch, so the artifact matches reviewed history.",
+      "versionCode must increase monotonically: Android refuses to install an",
+      "APK whose versionCode is lower than the installed one."
+    ]
+  },
+
+  "versionSymmetry": {
+    "required": true,
+    "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
+  }
+}

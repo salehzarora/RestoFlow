@@ -202,6 +202,18 @@ android/local.properties
 **/android/.cxx/
 **/android/local.properties
 **/android/key.properties
+
+# RELEASE-KEY-AND-PIPELINE-001 — production signing material.
+# The real keystore and its properties file live OUTSIDE this repository; these
+# rules are the second line of defence for the case where someone copies one in
+# "just for a moment". *.jks / *.keystore / *.p12 / *.pfx are already ignored
+# above. Only the *.example template is allowed to be tracked.
+key.properties
+signing.properties
+release-signing.properties
+*-signing.properties
+signing.properties.local
+!tools/android_release/signing.properties.example
 **/android/**/GeneratedPluginRegistrant.java
 ios/Pods/
 ios/.symlinks/
