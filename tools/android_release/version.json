@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "RELEASE-KEY-AND-PIPELINE-001 - the RestoFlow Android version ledger.",
+    "POS and KDS ship as a SYNCHRONIZED PAIR: identical versionName and",
+    "versionCode, always built from one source commit. build_official_pair.ps1",
+    "reads this file and refuses to build anything else.",
+    "",
+    "expectedCertificateSha256 is the PUBLIC fingerprint of the production",
+    "signing certificate. It is intentionally committed: it is not a secret, and",
+    "pinning it here is what lets a build prove it was signed by the real key",
+    "rather than by the Android debug key or an unknown replacement. It is still",
+    "the placeholder below because the key ceremony has NOT been performed - the",
+    "runner fails closed while that is true."
+  ],
+
+  "expectedCertificateSha256": "PENDING_KEY_CEREMONY",
+  "signingKeyAlias": "restoflow-production",
+
+  "latestPilotRelease": {
+    "versionName": "0.0.20",
+    "versionCode": 20,
+    "signing": "android-debug-key (pilot only, NOT production)",
+    "sourceSha": "279c4fc4337d72ad29c0d27ebb5f7f564c6c3bb2",
+    "status": "built, manual tablet testing only, never distributed"
+  },
+
+  "nextOfficialRelease": {
+    "versionName": "0.0.21",
+    "versionCode": 21,
+    "signing": "restoflow-production",
+    "status": "planned - NOT BUILT",
+    "intendedSource": "origin/main, after RELEASE-KEY-AND-PIPELINE-001 is merged",
+    "notes": [
+      "v21 does not exist yet. Nothing in this repository has been signed with",
+      "the production key.",
+      "The official build must come from MERGED main, never from a feature",
+      "branch, so the artifact matches reviewed history.",
+      "versionCode must increase monotonically: Android refuses to install an",
+      "APK whose versionCode is lower than the installed one."
+    ]
+  },
+
+  "versionSymmetry": {
+    "required": true,
+    "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
+  }
+}
