@@ -29,7 +29,29 @@ $ErrorActionPreference = 'Stop'
 $repo = (& git rev-parse --show-toplevel).Trim()
 Set-Location $repo
 
+# OFFICIAL-RELEASE-RUNNER-V21-002: every output file goes through these writers,
+# so SHA256SUMS.txt and BUILD-METADATA.txt have one tested format instead of two
+# ad-hoc ones. See tools/android_release/test_release_output.ps1.
+. (Join-Path $PSScriptRoot 'release_output.ps1')
+
 function Stop-Release([string]$m) { Write-Output "STOP: $m"; exit 1 }
+
+# Reads a tool version without letting a missing tool abort the release; the
+# metadata records NOT DETECTED rather than pretending the field is absent.
+function Get-ToolVersion([scriptblock]$Probe) {
+    try {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $v = & $Probe 2>&1
+        $ErrorActionPreference = $prev
+        if ($null -eq $v) { return $null }
+        $line = (@($v) | Where-Object { "$_".Trim() } | Select-Object -First 1)
+        return "$line".Trim()
+    }
+    catch { return $null }
+}
+
+$buildStart = (Get-Date).ToString('s')
 
 Write-Output '===== RestoFlow official Android release ====='
 
@@ -136,36 +158,109 @@ foreach ($b in $built) {
 }
 
 # ---- 7. Checksums + non-secret metadata ---------------------------------
-$sums = Join-Path $OutputRoot 'SHA256SUMS.txt'
-$lines = foreach ($b in $built) { "$((Get-FileHash $b.Path -Algorithm SHA256).Hash.ToLower())  $($b.Name)" }
-[System.IO.File]::WriteAllLines($sums, $lines, (New-Object System.Text.UTF8Encoding($false)))
+# SHA256SUMS.txt is written LF-only, UTF-8 without BOM, bare filenames, POS then
+# KDS. The v21 build wrote it with WriteAllLines (CRLF) and `sha256sum -c` could
+# not open either artifact, so the one thing the file exists to prove - that
+# these bytes are the released bytes - could not be checked.
+$sumLines = Write-ReleaseChecksums -OutputRoot $OutputRoot `
+    -FilePaths ($built | ForEach-Object { $_.Path })
+Write-Output "checksums     $($sumLines.Count) entries written (LF, no BOM)"
 
-$meta = @"
-RestoFlow official Android release
-==================================
-version        $versionName / $versionCode
-source sha     $head
-branch         $branch
-built          (local time recorded by the operator)
-signing        alias $alias, certificate SHA-256 pinned in tools/android_release/version.json
-posture        release, not debuggable, demo=false, AOT, hosted project verified
+# Re-read the file and re-verify both digests, so a broken checksums file fails
+# the release instead of shipping alongside it.
+$checksumsOk = $true
+foreach ($line in (Get-Content (Join-Path $OutputRoot 'SHA256SUMS.txt'))) {
+    if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { $checksumsOk = $false; continue }
+    $expectHash = $Matches[1]; $entry = Join-Path $OutputRoot $Matches[2]
+    if (-not (Test-Path $entry)) { $checksumsOk = $false; continue }
+    if ((Get-FileHash $entry -Algorithm SHA256).Hash.ToLower() -ne $expectHash) { $checksumsOk = $false }
+}
+if (-not $checksumsOk) { Stop-Release 'SHA256SUMS.txt did not re-verify against the artifacts' }
 
-$(foreach ($b in $built) {
-"$($b.App)
-  file    $($b.Name)
-  bytes   $((Get-Item $b.Path).Length)
-  sha256  $((Get-FileHash $b.Path -Algorithm SHA256).Hash.ToLower())
-"
-})
-Confirmations
-  * neither artifact was installed, uploaded or distributed by this runner
-  * no tracked file was modified; the version came from version.json and
-    build-time arguments only
-  * no commit, push, PR, GitHub Release, deployment or Supabase action occurred
-  * no secret value appears in this file
-"@
-[System.IO.File]::WriteAllText((Join-Path $OutputRoot 'BUILD-METADATA.txt'), $meta,
-    (New-Object System.Text.UTF8Encoding($false)))
+# Per-artifact facts for the metadata record. The verifier above already FAILED
+# the release on any bad posture, so these calls describe artifacts that are
+# known good; they never decide whether to ship.
+$sdkRoot = $env:ANDROID_HOME
+if ([string]::IsNullOrWhiteSpace($sdkRoot)) { $sdkRoot = $env:ANDROID_SDK_ROOT }
+if ([string]::IsNullOrWhiteSpace($sdkRoot)) { $sdkRoot = "$env:LOCALAPPDATA\Android\Sdk" }
+$btDir = Get-ChildItem "$sdkRoot\build-tools" -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1
+
+function Get-ArtifactFacts($b) {
+    $item = Get-Item $b.Path
+    $facts = @{
+        Filename    = $b.Name
+        PackageId   = "com.restoflow.$($b.App.ToLower())"
+        VersionName = $versionName
+        VersionCode = $versionCode
+        SizeBytes   = $item.Length
+        SizeMiB     = [math]::Round($item.Length / 1MB, 2)
+        Sha256      = (Get-FileHash $b.Path -Algorithm SHA256).Hash.ToLower()
+        Created     = $item.LastWriteTime.ToString('s')
+        Debuggable  = 'false'
+        DemoMode    = 'false (RESTOFLOW_DEMO_MODE=false)'
+        Aot         = 'AOT release (libapp.so present, no kernel_blob.bin)'
+        ZipAlign    = 'verified'
+        ApkSigner   = 'verified'
+        SourceSha   = $head
+    }
+    if ($btDir) {
+        $badging = & "$($btDir.FullName)\aapt.exe" dump badging $b.Path 2>&1
+        $abi = ($badging | Select-String "^native-code:" | Select-Object -First 1)
+        if ($abi) { $facts.Abi = (($abi.Line -replace "^native-code:\s*", '') -replace "'", '').Trim() }
+        $min = ($badging | Select-String "^sdkVersion:'(\d+)'" | Select-Object -First 1)
+        if ($min) { $facts.MinSdk = $min.Matches.Groups[1].Value }
+        $tgt = ($badging | Select-String "^targetSdkVersion:'(\d+)'" | Select-Object -First 1)
+        if ($tgt) { $facts.TargetSdk = $tgt.Matches.Groups[1].Value }
+        $certs = & "$($btDir.FullName)\apksigner.bat" verify --print-certs $b.Path 2>&1
+        $fp = ($certs | Select-String 'certificate SHA-256 digest:\s*([0-9a-fA-F]{64})' | Select-Object -First 1)
+        if ($fp) { $facts.CertSha256 = $fp.Matches.Groups[1].Value.ToLower() }
+    }
+    return $facts
+}
+
+$posB = $built | Where-Object { $_.App -eq 'POS' } | Select-Object -First 1
+$kdsB = $built | Where-Object { $_.App -eq 'KDS' } | Select-Object -First 1
+
+$javaVer = Get-ToolVersion { & java -version }
+$gradleVer = Get-ToolVersion { & (Join-Path $repo 'apps/pos/android/gradlew.bat') --version --quiet }
+$flutterRaw = Get-ToolVersion { & flutter --version }
+$dartVer = Get-ToolVersion { & dart --version }
+
+Write-ReleaseMetadata -OutputRoot $OutputRoot -Data @{
+    TaskId                 = 'official Android release (tools/android_release/build_official_pair.ps1)'
+    Status                 = 'BUILT and VERIFIED - not installed, not uploaded, not released'
+    ReleaseName            = "RestoFlow official v$versionCode"
+    VersionName            = $versionName
+    VersionCode            = $versionCode
+    Branch                 = $branch
+    SourceSha              = $head
+    SourceSubject          = (& git log -1 --format='%s' $head).Trim()
+    BuildStart             = $buildStart
+    BuildEnd               = (Get-Date).ToString('s')
+    OutputDirectory        = (Split-Path $OutputRoot -Leaf)
+    Flutter                = $flutterRaw
+    Dart                   = $dartVer
+    Java                   = $javaVer
+    Gradle                 = $gradleVer
+    BuildTools             = $(if ($btDir) { $btDir.Name } else { $null })
+    ApkSignerTool          = $(if ($btDir) { 'apksigner (build-tools ' + $btDir.Name + ')' } else { $null })
+    ZipAlignTool           = $(if ($btDir) { 'zipalign (build-tools ' + $btDir.Name + ')' } else { $null })
+    CertAlias              = $alias
+    CertFingerprint        = $expectedCert
+    CertSignatureAlgorithm = $ledger.signingAlgorithm
+    CertPublicKey          = $ledger.signingAlgorithm
+    CertIsAndroidDebug     = 'NO - verified against the pinned production certificate'
+    Pos                    = $(if ($posB) { Get-ArtifactFacts $posB } else { @{} })
+    Kds                    = $(if ($kdsB) { Get-ArtifactFacts $kdsB } else { @{} })
+    BackendHosted          = 'oqmevrndtivqxgyvcmwy verified present in both artifacts'
+    BackendForbidden       = 'ktuupqsaxttrzajmvgif absent from both artifacts'
+    BackendLocalhost       = 'absent - no localhost/test backend configuration'
+    CreatedThisBuild       = 'YES - both artifacts were produced by this run'
+    SameSourceSha          = "YES - both built from $head"
+    VersionSymmetry        = "YES - POS and KDS both report $versionName / $versionCode"
+    ChecksumsVerified      = 'YES - SHA256SUMS.txt re-read and both digests re-verified'
+}
 
 # ---- 8. Post-build source assertion -------------------------------------
 if ((& git rev-parse HEAD).Trim() -ne $head) { Stop-Release 'HEAD moved during the release' }
