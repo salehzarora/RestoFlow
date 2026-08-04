@@ -5285,4 +5285,66 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get dashboardKitchenWorkflowSaveFailed =>
       'לא הצלחנו לשמור את תהליך העבודה במטבח. נסה שוב.';
+
+  @override
+  String get posSyncDetailsTitle => 'סנכרון';
+
+  @override
+  String get posSyncDetailsClose => 'סגירה';
+
+  @override
+  String get posSyncDetailsRowPending => 'ממתין לשליחה';
+
+  @override
+  String get posSyncDetailsRowSyncing => 'נשלח כעת';
+
+  @override
+  String get posSyncDetailsRowFailed => 'נכשל';
+
+  @override
+  String get posSyncDetailsRowResolved => 'כשלים סופיים';
+
+  @override
+  String get posSyncDetailsRowAttention => 'דורש בדיקה';
+
+  @override
+  String get posSyncDetailsExplainSynced =>
+      'אין דבר שממתין לשליחה, וכל הזמנה שהמכשיר הזה שלח אושרה בשרת. אפשר לסגור או להחליף את האפליקציה בבטחה.';
+
+  @override
+  String get posSyncDetailsExplainPending =>
+      'חלק מההזמנות עדיין שמורות במכשיר ולא נשלחו. השאירו את המכשיר מחובר עד לסיום.';
+
+  @override
+  String get posSyncDetailsExplainSyncing =>
+      'ההזמנות נשלחות כעת. השאירו את המכשיר מחובר.';
+
+  @override
+  String get posSyncDetailsExplainFailed =>
+      'לא ניתן היה לשלוח חלק מההזמנות. הן עדיין שמורות במכשיר וניתן לנסות שוב.';
+
+  @override
+  String get posSyncDetailsExplainResolved =>
+      'השרת דחה אותן לפני שנוצר משהו, ולכן לא אבדה אף הזמנה. אפשר לנקות אותן.';
+
+  @override
+  String get posSyncDetailsExplainAttention =>
+      'חלק מהפעולות הסתיימו במצב שהאפליקציה אינה יכולה לפתור לבד. אין להסיר את האפליקציה לפני בדיקת מנהל.';
+
+  @override
+  String get posSyncRetryConfirmTitle => 'לנסות לשלוח שוב הזמנות שנכשלו?';
+
+  @override
+  String get posSyncRetryConfirmBody =>
+      'ההזמנות השמורות יישלחו שוב. שליחה כפולה של אותה הזמנה בטוחה ולא תיצור כפילות.';
+
+  @override
+  String get posSyncRetryStarted => 'שולח שוב הזמנות שנכשלו';
+
+  @override
+  String get posSyncClearConfirmTitle => 'לנקות כשלים סופיים?';
+
+  @override
+  String get posSyncClearConfirmBody =>
+      'הם נדחו לפני שנוצר משהו, ולכן לא אבדה אף הזמנה. הם יוסרו מהרשימה הזו בלבד.';
 }

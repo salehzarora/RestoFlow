@@ -9861,6 +9861,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save the kitchen workflow. Please try again.'**
   String get dashboardKitchenWorkflowSaveFailed;
+
+  /// Title of the POS synchronization details sheet (POS-SYNC-VISIBILITY-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronization'**
+  String get posSyncDetailsTitle;
+
+  /// Button that dismisses the synchronization details sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get posSyncDetailsClose;
+
+  /// Row label for the count of operations queued locally and not yet sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to send'**
+  String get posSyncDetailsRowPending;
+
+  /// Row label for the count of operations currently being sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending now'**
+  String get posSyncDetailsRowSyncing;
+
+  /// Row label for the count of operations that failed and can be retried.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get posSyncDetailsRowFailed;
+
+  /// Row label for the count of terminal failures the server refused before creating anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved failures'**
+  String get posSyncDetailsRowResolved;
+
+  /// Row label for the count of operations in a non-final state needing human review.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get posSyncDetailsRowAttention;
+
+  /// Explanation shown when nothing is pending, failed or ambiguous; the evidence the pre-migration gate relies on.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is waiting to send, and every order this device sent was confirmed by the server. It is safe to close or replace the app.'**
+  String get posSyncDetailsExplainSynced;
+
+  /// Explanation shown when operations are queued locally.
+  ///
+  /// In en, this message translates to:
+  /// **'Some orders are still saved on this device and have not been sent yet. Keep the device online until they finish.'**
+  String get posSyncDetailsExplainPending;
+
+  /// Explanation shown while a push is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders are being sent right now. Keep the device online.'**
+  String get posSyncDetailsExplainSyncing;
+
+  /// Explanation shown when retryable failures exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Some orders could not be sent. They are still saved on this device and can be retried.'**
+  String get posSyncDetailsExplainFailed;
+
+  /// Explanation shown when terminal, never-created failures exist.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused these before creating anything, so nothing is missing. You can clear them.'**
+  String get posSyncDetailsExplainResolved;
+
+  /// Explanation shown for conflict/ambiguous operations that need review.
+  ///
+  /// In en, this message translates to:
+  /// **'Some operations ended in a state the app cannot resolve on its own. Do not remove the app until a manager has reviewed them.'**
+  String get posSyncDetailsExplainAttention;
+
+  /// Confirmation dialog title before retrying all failed operations.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry failed orders?'**
+  String get posSyncRetryConfirmTitle;
+
+  /// Confirmation dialog body explaining that retrying is idempotent.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved orders will be sent again. Sending the same order twice is safe and will not create a duplicate.'**
+  String get posSyncRetryConfirmBody;
+
+  /// Snackbar shown after a confirmed retry-all was started.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrying failed orders'**
+  String get posSyncRetryStarted;
+
+  /// Confirmation dialog title before clearing resolved failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear resolved failures?'**
+  String get posSyncClearConfirmTitle;
+
+  /// Confirmation dialog body explaining that clearing loses no order.
+  ///
+  /// In en, this message translates to:
+  /// **'These were refused before anything was created, so no order is lost. They will be removed from this list only.'**
+  String get posSyncClearConfirmBody;
 }
 
 class _AppLocalizationsDelegate

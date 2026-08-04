@@ -5366,4 +5366,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardKitchenWorkflowSaveFailed =>
       'Couldn\'t save the kitchen workflow. Please try again.';
+
+  @override
+  String get posSyncDetailsTitle => 'Synchronization';
+
+  @override
+  String get posSyncDetailsClose => 'Close';
+
+  @override
+  String get posSyncDetailsRowPending => 'Waiting to send';
+
+  @override
+  String get posSyncDetailsRowSyncing => 'Sending now';
+
+  @override
+  String get posSyncDetailsRowFailed => 'Failed';
+
+  @override
+  String get posSyncDetailsRowResolved => 'Resolved failures';
+
+  @override
+  String get posSyncDetailsRowAttention => 'Needs attention';
+
+  @override
+  String get posSyncDetailsExplainSynced =>
+      'Nothing is waiting to send, and every order this device sent was confirmed by the server. It is safe to close or replace the app.';
+
+  @override
+  String get posSyncDetailsExplainPending =>
+      'Some orders are still saved on this device and have not been sent yet. Keep the device online until they finish.';
+
+  @override
+  String get posSyncDetailsExplainSyncing =>
+      'Orders are being sent right now. Keep the device online.';
+
+  @override
+  String get posSyncDetailsExplainFailed =>
+      'Some orders could not be sent. They are still saved on this device and can be retried.';
+
+  @override
+  String get posSyncDetailsExplainResolved =>
+      'The server refused these before creating anything, so nothing is missing. You can clear them.';
+
+  @override
+  String get posSyncDetailsExplainAttention =>
+      'Some operations ended in a state the app cannot resolve on its own. Do not remove the app until a manager has reviewed them.';
+
+  @override
+  String get posSyncRetryConfirmTitle => 'Retry failed orders?';
+
+  @override
+  String get posSyncRetryConfirmBody =>
+      'The saved orders will be sent again. Sending the same order twice is safe and will not create a duplicate.';
+
+  @override
+  String get posSyncRetryStarted => 'Retrying failed orders';
+
+  @override
+  String get posSyncClearConfirmTitle => 'Clear resolved failures?';
+
+  @override
+  String get posSyncClearConfirmBody =>
+      'These were refused before anything was created, so no order is lost. They will be removed from this list only.';
 }

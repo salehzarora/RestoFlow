@@ -5319,4 +5319,66 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get dashboardKitchenWorkflowSaveFailed =>
       'تعذّر حفظ سير عمل المطبخ. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get posSyncDetailsTitle => 'المزامنة';
+
+  @override
+  String get posSyncDetailsClose => 'إغلاق';
+
+  @override
+  String get posSyncDetailsRowPending => 'بانتظار الإرسال';
+
+  @override
+  String get posSyncDetailsRowSyncing => 'قيد الإرسال الآن';
+
+  @override
+  String get posSyncDetailsRowFailed => 'فشل الإرسال';
+
+  @override
+  String get posSyncDetailsRowResolved => 'حالات فشل منتهية';
+
+  @override
+  String get posSyncDetailsRowAttention => 'تحتاج إلى مراجعة';
+
+  @override
+  String get posSyncDetailsExplainSynced =>
+      'لا يوجد شيء بانتظار الإرسال، وقد أكّد الخادم كل طلب أرسله هذا الجهاز. يمكن إغلاق التطبيق أو استبداله بأمان.';
+
+  @override
+  String get posSyncDetailsExplainPending =>
+      'ما زالت بعض الطلبات محفوظة على هذا الجهاز ولم تُرسل بعد. أبقِ الجهاز متصلاً حتى تنتهي.';
+
+  @override
+  String get posSyncDetailsExplainSyncing =>
+      'يجري إرسال الطلبات الآن. أبقِ الجهاز متصلاً.';
+
+  @override
+  String get posSyncDetailsExplainFailed =>
+      'تعذّر إرسال بعض الطلبات. ما زالت محفوظة على هذا الجهاز ويمكن إعادة المحاولة.';
+
+  @override
+  String get posSyncDetailsExplainResolved =>
+      'رفضها الخادم قبل إنشاء أي شيء، لذلك لم يُفقد أي طلب. يمكنك مسحها.';
+
+  @override
+  String get posSyncDetailsExplainAttention =>
+      'انتهت بعض العمليات إلى حالة لا يستطيع التطبيق حلّها بنفسه. لا تُزل التطبيق قبل أن يراجعها المدير.';
+
+  @override
+  String get posSyncRetryConfirmTitle => 'إعادة إرسال الطلبات الفاشلة؟';
+
+  @override
+  String get posSyncRetryConfirmBody =>
+      'سيُعاد إرسال الطلبات المحفوظة. إرسال الطلب نفسه مرتين آمن ولن يُنشئ نسخة مكررة.';
+
+  @override
+  String get posSyncRetryStarted => 'جارٍ إعادة إرسال الطلبات الفاشلة';
+
+  @override
+  String get posSyncClearConfirmTitle => 'مسح حالات الفشل المنتهية؟';
+
+  @override
+  String get posSyncClearConfirmBody =>
+      'رُفضت قبل إنشاء أي شيء، لذلك لن يُفقد أي طلب. ستُزال من هذه القائمة فقط.';
 }

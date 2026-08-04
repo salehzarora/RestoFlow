@@ -85,12 +85,30 @@ Future<_SeededOutbox> _pump(
   return controller;
 }
 
+/// POS-SYNC-VISIBILITY-001: the retry / clear affordances no longer live on
+/// the chip - reading a status must never act. They moved into the details
+/// sheet, behind a confirmation, so these helpers open it first.
+Future<void> _openDetails(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('outbox-status-indicator')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _confirm(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('sync-action-confirm-run')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('empty outbox renders nothing (no clutter)', (tester) async {
+  // POS-SYNC-VISIBILITY-001 - THE DEFECT this ticket fixed. The chip used to
+  // render SizedBox.shrink() on an empty queue ("no clutter"), so a tablet that
+  // had taken no orders showed NO sync state at all - precisely the state the
+  // pre-migration gate must read before the app is uninstalled.
+  testWidgets('empty outbox shows the EXPLICIT all-synced state', (
+    tester,
+  ) async {
     await _pump(tester, const []);
-    expect(find.byKey(const Key('outbox-status-indicator')), findsNothing);
-    expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
-    expect(find.byType(SizedBox), findsWidgets); // SizedBox.shrink
+    expect(find.byKey(const Key('outbox-status-indicator')), findsOneWidget);
+    expect(find.text('All orders synced'), findsOneWidget);
   });
 
   testWidgets('pending shows the queued count', (tester) async {
@@ -116,10 +134,25 @@ void main() {
       _e(OutboxSyncState.applied, op: 'b'),
     ]);
     expect(find.text('1 failed — retry'), findsOneWidget);
+    // The chip itself offers NO action.
+    expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
+
+    await _openDetails(tester);
+    expect(
+      controller.retryAllCalls,
+      0,
+      reason: 'opening details acts on nothing',
+    );
     expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('outbox-retry-all')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(
+      controller.retryAllCalls,
+      0,
+      reason: 'the confirmation must come first',
+    );
+    await _confirm(tester);
     expect(controller.retryAllCalls, 1);
   });
 
@@ -166,6 +199,7 @@ void main() {
     // failed (retryable) outranks conflict; never "all synced".
     expect(find.text('1 failed — retry'), findsOneWidget);
     expect(find.text('All orders synced'), findsNothing);
+    await _openDetails(tester);
     expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
   });
 
@@ -227,6 +261,7 @@ void main() {
       ], storage: const PosLocalStorageHealth(writeRefused: true));
       expect(find.text('This device could not save an order'), findsOneWidget);
       expect(find.text('1 failed — retry'), findsNothing);
+      await _openDetails(tester);
       expect(
         find.byKey(const Key('outbox-retry-all')),
         findsNothing,
@@ -255,11 +290,12 @@ void main() {
       );
     });
 
-    testWidgets('a healthy till with an empty queue still renders nothing', (
+    testWidgets('a healthy till with an empty queue shows all-synced', (
       tester,
     ) async {
       await _pump(tester, const []);
-      expect(find.byKey(const Key('outbox-status-indicator')), findsNothing);
+      expect(find.byKey(const Key('outbox-status-indicator')), findsOneWidget);
+      expect(find.text('All orders synced'), findsOneWidget);
     });
   });
 
@@ -273,6 +309,8 @@ void main() {
           _e(OutboxSyncState.rejected, op: 'old-$i', errorCode: 'rejected'),
       ]);
 
+      await _openDetails(tester);
+      expect(c.dismissCalls, 0, reason: 'opening details clears nothing');
       expect(
         find.byKey(const Key('outbox-retry-all')),
         findsNothing,
@@ -285,6 +323,8 @@ void main() {
 
       await tester.tap(clear);
       await tester.pumpAndSettle();
+      expect(c.dismissCalls, 0, reason: 'the confirmation must come first');
+      await _confirm(tester);
       expect(c.dismissCalls, 1);
       expect(c.retryAllCalls, 0, reason: 'nothing is re-sent');
     });
@@ -294,10 +334,12 @@ void main() {
       final c = await _pump(tester, [
         _e(OutboxSyncState.rejected, op: 'transient', errorCode: 'transport'),
       ]);
+      await _openDetails(tester);
       expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
       expect(find.byKey(const Key('outbox-clear-resolved')), findsNothing);
       await tester.tap(find.byKey(const Key('outbox-retry-all')));
       await tester.pumpAndSettle();
+      await _confirm(tester);
       expect(c.retryAllCalls, 1);
       expect(c.dismissCalls, 0);
     });
@@ -308,21 +350,20 @@ void main() {
         _e(OutboxSyncState.rejected, op: 'transient', errorCode: 'transport'),
         _e(OutboxSyncState.rejected, op: 'old-1', errorCode: 'rejected'),
       ]);
+      await _openDetails(tester);
+      // The chip could surface only ONE affordance, so the clear action used to
+      // be unreachable until the retryable failures were dealt with. The
+      // details sheet has room for both, and both genuinely apply here.
       expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
-      expect(
-        find.byKey(const Key('outbox-clear-resolved')),
-        findsNothing,
-        reason:
-            'documented limitation: the clear action becomes reachable once the '
-            'retryable failures are dealt with',
-      );
+      expect(find.byKey(const Key('outbox-clear-resolved')), findsOneWidget);
     });
 
     testWidgets('a conflict is neither retried nor cleared', (tester) async {
       await _pump(tester, [_e(OutboxSyncState.conflict, op: 'c1')]);
+      expect(find.byKey(const Key('outbox-status-indicator')), findsOneWidget);
+      await _openDetails(tester);
       expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
       expect(find.byKey(const Key('outbox-clear-resolved')), findsNothing);
-      expect(find.byKey(const Key('outbox-status-indicator')), findsOneWidget);
     });
   });
 }
