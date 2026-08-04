@@ -5,6 +5,16 @@
 > apps, normal updates afterwards, rollback, and the lost-key case. Signing
 > itself is owned by [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md).
 
+> **STATUS — the migration in §1 has NOT been performed yet.** Official
+> **v21 (0.0.21 / 21)** was built from `ed803bb` on 2026-08-04 and verified:
+> both APKs are production-signed (not Android Debug), non-debuggable,
+> `demo=false`, AOT, zipaligned and `apksigner`-verified. **Neither was
+> installed, uploaded or distributed**, and no GitHub Release exists. The
+> artifacts are local and git-ignored; their public SHA-256 values are in
+> [`version.json`](../tools/android_release/version.json). The tablets are still
+> running the debug-signed pilot, so §1 below is the next step and remains
+> outstanding.
+
 **The rule behind every procedure here:** the POS holds unsynced work in a local
 outbox. Uninstalling an app deletes that local data. **Never uninstall while the
 outbox is non-empty** — those orders and payments do not exist anywhere else yet.
@@ -127,4 +137,4 @@ Run on every tablet before it returns to service.
 - Nobody should generate an alternative production key casually — doing so
   splits the fleet permanently.
 
-See [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md) §7.
+See [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md) §8.
