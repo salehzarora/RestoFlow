@@ -8,13 +8,22 @@
     "expectedCertificateSha256 is the PUBLIC fingerprint of the production",
     "signing certificate. It is intentionally committed: it is not a secret, and",
     "pinning it here is what lets a build prove it was signed by the real key",
-    "rather than by the Android debug key or an unknown replacement. It is still",
-    "the placeholder below because the key ceremony has NOT been performed - the",
-    "runner fails closed while that is true."
+    "rather than by the Android debug key or an unknown replacement.",
+    "",
+    "Format: colon-separated UPPERCASE hex, exactly as keytool prints it.",
+    "check_signing_identity.ps1 compares this value directly against keytool;",
+    "verify_official_apk.ps1 strips the colons and lowercases before comparing",
+    "against apksigner. Do not change the representation.",
+    "",
+    "NOTE: this is the CERTIFICATE fingerprint. It is a different value from the",
+    "SHA-256 of the keystore FILE (used only to prove the backups are identical)."
   ],
 
-  "expectedCertificateSha256": "PENDING_KEY_CEREMONY",
+  "expectedCertificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
   "signingKeyAlias": "restoflow-production",
+  "signingCertificateSubject": "CN=RestoFlow Android Production, OU=Mobile Release, O=RestoFlow, C=IL",
+  "signingAlgorithm": "SHA256withRSA, 4096-bit RSA",
+  "signingValidity": "2026-08-04 through 2053-12-20",
 
   "latestPilotRelease": {
     "versionName": "0.0.20",

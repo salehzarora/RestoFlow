@@ -84,10 +84,30 @@ The template is [`tools/android_release/signing.properties.example`](../tools/an
 
 ## 4. The key ceremony
 
-**This has not been performed yet.** It must be run by Saleh, interactively, on
-the machine that will hold the key. It is written to be run by a human because
-the passwords must be typed into a hidden prompt — never passed as a command
-argument, where they would land in process listings and shell history.
+> **STATUS: COMPLETE — 2026-08-04.** Saleh performed this ceremony manually in a
+> secure local PowerShell session. Verified since:
+>
+> - the production identity exists under alias `restoflow-production` with the
+>   expected subject, `SHA256withRSA`, a 4096-bit RSA key, and validity
+>   **2026-08-04 → 2053-12-20**;
+> - the primary keystore and **two independent backups** (Backup A and Backup B,
+>   on separate removable volumes) are **byte-identical** — all three file
+>   SHA-256 values match;
+> - all three copies live **outside** the repository, and no keystore or
+>   signing-properties file is tracked or visible to Git;
+> - the public certificate fingerprint is pinned in
+>   [`version.json`](../tools/android_release/version.json);
+> - POS and KDS both resolve their release variant to **that same certificate**,
+>   while debug variants remain debug-signed.
+>
+> **No APK or app bundle has been built with this key.** v21 is still planned
+> only. The procedure below is retained verbatim as the recovery and re-issue
+> reference.
+
+It must be run interactively, on the machine that will hold the key. It is
+written to be run by a human because the passwords must be typed into a hidden
+prompt — never passed as a command argument, where they would land in process
+listings and shell history.
 
 ### 4.1 Create the key
 
@@ -145,8 +165,19 @@ pwsh tools/android_release/check_signing_identity.ps1 -RequireKey
 ```
 
 Copy the printed SHA-256 into `expectedCertificateSha256` in
-`tools/android_release/version.json`, replacing `PENDING_KEY_CEREMONY`, and
-commit that one-line change. Until then the official runner refuses to build.
+`tools/android_release/version.json` and commit it. Until a real fingerprint is
+pinned there, the official runner refuses to build.
+
+**Format matters.** Use the colon-separated UPPERCASE form exactly as `keytool`
+prints it: `check_signing_identity.ps1` compares the ledger value directly
+against `keytool`, while `verify_official_apk.ps1` strips the colons and
+lowercases before comparing against `apksigner`. Only that one form satisfies
+both.
+
+> Do not confuse the two SHA-256 values in play. The **certificate fingerprint**
+> (pinned in `version.json`, public) identifies the signing identity. The
+> **keystore file hash** is only used to prove the backups are byte-identical
+> and is not an identity.
 
 ---
 

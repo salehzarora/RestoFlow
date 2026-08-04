@@ -88,14 +88,32 @@ if ($storeFull.StartsWith($repo.Replace('/', '\'), [StringComparison]::OrdinalIg
 }
 else { Ok 'keystore is stored outside the repository' }
 
-# keytool reads the password from stdin, so it never appears in process args.
+# The password goes to keytool through a PRIVATE ENV VAR (`-storepass:env`), so
+# it never appears in the command line, a process listing, or shell history, and
+# no password-bearing temp file is written. The variable is removed immediately.
+#
+# Piping the password to keytool's stdin prompt was tried first and is wrong on
+# Windows PowerShell 5.1: keytool writes "Enter keystore password:" to STDERR,
+# which 5.1 wraps in a NativeCommandError, and with $ErrorActionPreference='Stop'
+# that aborts the script before it can read a single certificate field.
+# $ErrorActionPreference is relaxed around the native call for the same reason.
 $jbr = 'C:\Program Files\Android\Android Studio\jbr'
 if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME) -and (Test-Path "$jbr\bin\keytool.exe")) {
     $env:JAVA_HOME = $jbr; $env:PATH = "$jbr\bin;$env:PATH"
 }
-$listing = $props['storePassword'] | & keytool -list -v `
-    -keystore $props['storeFile'] -alias $props['keyAlias'] 2>&1
-if ($LASTEXITCODE -ne 0) { Fail 'keystore could not be opened with the supplied credentials' }
+$keytoolExit = 1
+$env:RESTOFLOW_KS_PW = $props['storePassword']
+try {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $listing = & keytool -list -v `
+        -keystore $props['storeFile'] -alias $props['keyAlias'] `
+        -storepass:env RESTOFLOW_KS_PW 2>&1
+    $keytoolExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+}
+finally { Remove-Item Env:\RESTOFLOW_KS_PW -ErrorAction SilentlyContinue }
+if ($keytoolExit -ne 0) { Fail 'keystore could not be opened with the supplied credentials' }
 else {
     $fp = ($listing | Select-String -Pattern 'SHA256:\s*([0-9A-F:]{95})' |
         Select-Object -First 1).Matches.Groups[1].Value
