@@ -77,7 +77,36 @@
     "versionName": "0.0.25",
     "versionCode": 25,
     "signing": "restoflow-production",
-    "status": "planned - NOT BUILT",
+    "status": "built - pre-merge candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "f89c8c4f8e6924481d8152b6e645180ad03f2949",
+    "sourceSha": "f76b67cb954a589725a5c18f116621a6c8a8d893",
+    "buildDate": "2026-08-06",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v25-f76b67c.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "7988cc7f2697bc688d8de7d913c3e505780a5cdbba93a8e4e3fcb51fe07906fe"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v25-f76b67c.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "2dbdb51f3fe35cbc2a2a9666de15925d429a869893de92aab89b6b1b6bb4e373"
+      }
+    },
+    "candidateNotes": [
+      "Built by tools/android_release/build_official_pair.ps1 with",
+      "-SourceSha f76b67c... -AllowNonMain (the script's audited exception):",
+      "the build HEAD is the release/RESTOFLOW-OFFICIAL-V25 ledger commit,",
+      "whose only delta from application source f89c8c4 is this ledger and",
+      "its documentation. PR #199 is open and UNMERGED; these artifacts are",
+      "pre-merge candidates, verified by verify_official_apk.ps1 (both PASS):",
+      "not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
+      "production certificate matches the pin, hosted project ref present,",
+      "forbidden ref absent. NOT installed, NOT uploaded, NOT distributed,",
+      "no GitHub Release. official-v21 and transitional vc24 unchanged."
+    ],
     "intendedSource": "main at f89c8c4f8e6924481d8152b6e645180ad03f2949 (application source; the release branch may add ledger/documentation commits only)",
     "notes": [
       "v25 supersedes the never-built v22 plan (see skippedOfficialReleases).",
