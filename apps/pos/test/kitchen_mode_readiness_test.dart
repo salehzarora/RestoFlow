@@ -205,10 +205,12 @@ void main() {
       final c = make(demo: false);
       addTearDown(c.dispose);
       final n = c.read(posKitchenModeReadinessProvider.notifier);
-      // Nothing bound yet: a retry must be a safe no-op (never clears the block).
+      // POS-RUNTIME-RECOVERY-002 (R4): with nothing bound a retry is no longer
+      // a dead button — it visibly re-opens the gate to Loading, whose own
+      // watchdog keeps the episode bounded. It still never fabricates a mode.
       n.bindScope(scopeA).markUnavailable();
       n.requestResolution();
-      expect(stateOf(c), isA<KitchenModeReadinessUnavailable>());
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
       // The native composition binds the heartbeat's re-verify entrypoint; a
       // retry then reopens the gate to Loading and asks for a fresh check.
       var calls = 0;
@@ -239,13 +241,16 @@ void main() {
         c.read(posKitchenModeReadinessProvider);
 
     test('delayed printer_only fetch for A completes after switching to B -> B '
-        'stays Loading; NO direct_print leak', () {
+        'stays Loading; NO direct_print leak', () async {
       final c = real();
       addTearDown(c.dispose);
       final n = c.read(posKitchenModeReadinessProvider.notifier);
       final a = n.bindScope(scopeA); // heartbeat A
       a.unbind(); // scope change: A's heartbeat disposed
       n.bindScope(scopeB); // heartbeat B installs, fresh Loading for B
+      // The scope-change transition is deferred a microtask (it may not be
+      // written synchronously from a provider build — POS-RUNTIME-RECOVERY-002).
+      await Future<void>.delayed(Duration.zero);
       a.publish(printerOnly()); // A's delayed fetch lands LATE
       final s = stateOf(c);
       expect(s, isA<KitchenModeReadinessLoading>());
@@ -315,26 +320,30 @@ void main() {
 
     test(
       'a device change inside the same restaurant invalidates readiness',
-      () {
+      () async {
         final c = real();
         addTearDown(c.dispose);
         final n = c.read(posKitchenModeReadinessProvider.notifier);
         n.bindScope(scopeA).publish(printerOnly());
         expect(stateOf(c), isA<KitchenModeReadinessResolved>());
         n.bindScope(scopeADeviceB); // same branch, different device
+        // Deferred transition (POS-RUNTIME-RECOVERY-002 legal-write fix).
+        await Future<void>.delayed(Duration.zero);
         final s = stateOf(c);
         expect(s, isA<KitchenModeReadinessLoading>());
         expect(s.scope, scopeADeviceB);
       },
     );
 
-    test('a branch change invalidates readiness', () {
+    test('a branch change invalidates readiness', () async {
       final c = real();
       addTearDown(c.dispose);
       final n = c.read(posKitchenModeReadinessProvider.notifier);
       n.bindScope(scopeA).publish(kds());
       expect(stateOf(c), isA<KitchenModeReadinessResolved>());
       n.bindScope(scopeB);
+      // Deferred transition (POS-RUNTIME-RECOVERY-002 legal-write fix).
+      await Future<void>.delayed(Duration.zero);
       expect(stateOf(c), isA<KitchenModeReadinessLoading>());
     });
 
@@ -354,7 +363,7 @@ void main() {
 
     test(
       'a transient failure preserves a verified mode ONLY for the same scope',
-      () {
+      () async {
         final c = real();
         addTearDown(c.dispose);
         final n = c.read(posKitchenModeReadinessProvider.notifier);
@@ -363,6 +372,8 @@ void main() {
         expect(stateOf(c), isA<KitchenModeReadinessResolved>());
         // A scope change does NOT keep A's verified mode alive for B.
         n.bindScope(scopeB);
+        // Deferred transition (POS-RUNTIME-RECOVERY-002 legal-write fix).
+        await Future<void>.delayed(Duration.zero);
         expect(stateOf(c), isA<KitchenModeReadinessLoading>());
       },
     );

@@ -1,4 +1,4 @@
-import 'dart:async' show Timer;
+import 'dart:async' show Timer, scheduleMicrotask;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
@@ -185,33 +185,42 @@ class PosKitchenModeReadinessController
   /// POS-KITCHEN-WORKFLOW-REGRESSION-001 — the ONE place readiness state is
   /// written, so the loading watchdog can never be forgotten at a call site.
   ///
-  /// A SCOPED loading state arms a one-shot watchdog; every other state cancels
-  /// it. When the watchdog fires while still loading the gate moves to
-  /// [KitchenModeReadinessUnavailable] — which the cart already renders with a
-  /// localized reason AND a Retry button. Loading therefore stops being a
-  /// terminal state no matter which upstream path failed to report.
-  ///
-  /// An UNSCOPED loading state (no paired device yet) is not watched: it is a
-  /// normal transient before the pairing gate publishes, and the composition
-  /// resolves it through the unscoped-KDS path.
+  /// POS-RUNTIME-RECOVERY-002: EVERY loading state — scoped or unscoped — arms
+  /// a one-shot watchdog; every other state cancels it. When the watchdog fires
+  /// while still loading the gate moves to [KitchenModeReadinessUnavailable] —
+  /// which the cart renders with a localized reason AND a Retry button. Loading
+  /// therefore has a bounded exit no matter which upstream path failed to
+  /// report. The unscoped exemption was the tablet's permanent
+  /// «جارٍ التحقق من إعداد المطبخ…»: when the startup callback died before the
+  /// heartbeat/seed lines ran, the INITIAL unscoped Loading had no owner, no
+  /// watchdog, and no Retry affordance.
   void _apply(PosKitchenModeReadiness next) {
     _watchdog?.cancel();
     _watchdog = null;
     state = next;
-    if (next is KitchenModeReadinessLoading && next.scope != null) {
-      final generation = _generation;
-      final scope = next.scope;
-      _watchdog = Timer(
-        ref.read(posKitchenModeVerificationTimeoutProvider),
-        () {
-          _markUnavailable(generation, scope);
-        },
-      );
-    }
+    if (next is KitchenModeReadinessLoading) _armWatchdog();
+  }
+
+  /// Arms the loading watchdog for the CURRENT generation + scope. The captured
+  /// generation makes a stale timer's fire a no-op; conversely, every path that
+  /// bumps the generation while Loading must re-arm through here or the episode
+  /// loses its bounded exit (POS-RUNTIME-RECOVERY-002 finding R2).
+  void _armWatchdog() {
+    _watchdog?.cancel();
+    final generation = _generation;
+    final scope = _scope;
+    _watchdog = Timer(ref.read(posKitchenModeVerificationTimeoutProvider), () {
+      _markUnavailable(generation, scope);
+    });
   }
 
   @override
   PosKitchenModeReadiness build() {
+    // POS-RUNTIME-RECOVERY-002: a provider rebuild runs the PREVIOUS build's
+    // onDispose (which latched `_disposed = true`) and then this build on the
+    // SAME notifier instance. Without this reset every later transition would
+    // silently no-op — a zombie controller frozen on its initial state.
+    _disposed = false;
     ref.onDispose(() {
       _disposed = true;
       _watchdog?.cancel();
@@ -233,6 +242,24 @@ class PosKitchenModeReadinessController
     return KitchenModeReadinessLoading(_scope);
   }
 
+  /// POS-RUNTIME-RECOVERY-002 (finding R1) — the LAST-RESORT bound for the
+  /// initial Loading. If the state is (still) a Loading with NO armed watchdog
+  /// — the frozen shape the vc23 tablet was stuck in — arm one now, so the
+  /// episode ends in the retryable Unavailable state even when every normal
+  /// startup path (seed, heartbeat, scope bind) failed to reach this
+  /// controller. Idempotent: an already-armed episode is left untouched (its
+  /// clock is never reset), and non-Loading states need no bound. Called from
+  /// the lifecycle's startup hook as its final, individually-guarded step, and
+  /// from the heartbeat subscription's error path; deliberately NOT armed in
+  /// build() — a Timer created by mere provider materialization would leak
+  /// into every widget test that touches real mode without pumping time.
+  void ensureBoundedVerification() {
+    if (_disposed) return;
+    if (state is! KitchenModeReadinessLoading) return;
+    if (_watchdog != null) return;
+    _armWatchdog();
+  }
+
   /// The active generation token (monotonic; bumped by every bind/unbind).
   int get generation => _generation;
 
@@ -251,7 +278,35 @@ class PosKitchenModeReadinessController
     if (scope != _scope) {
       _scope = scope;
       _resolver = null;
-      _apply(KitchenModeReadinessLoading(scope));
+      // POS-RUNTIME-RECOVERY-002 — THE vc23 TABLET ROOT CAUSE. bindScope is
+      // called from the heartbeat provider's BUILD, and a synchronous `state=`
+      // write on another provider during a build is illegal in Riverpod: in
+      // DEBUG builds the framework assertion throws mid-build, so the very
+      // first real-scope bind died before arming any watchdog — the gate froze
+      // on its initial Loading and the cashier was stranded on
+      // «جارٍ التحقق من إعداد المطبخ…» (Release compiled the assert out, which
+      // is why v20 worked). The scope/generation bookkeeping above is plain
+      // field state and stays synchronous; only the OBSERVABLE transition is
+      // deferred one microtask, generation-guarded so a superseded bind can
+      // never apply. Until it lands, the submit path is protected by its
+      // scope re-check (Finding 1E) — a stale decision can never dispatch.
+      final generation = _generation;
+      scheduleMicrotask(() {
+        if (!_isCurrent(generation, scope)) return;
+        // The binding may already have decided this generation (a fast cache
+        // seed / fetch). Never downgrade a same-scope decision back to Loading.
+        if (state.scope == scope && state is! KitchenModeReadinessLoading) {
+          return;
+        }
+        _apply(KitchenModeReadinessLoading(scope));
+      });
+    } else if (state is KitchenModeReadinessLoading) {
+      // POS-RUNTIME-RECOVERY-002 (finding R2): a SAME-scope rebind preserves
+      // the state but just advanced the generation, so an already-armed
+      // watchdog's captured generation went stale — its fire would no-op and
+      // the loading episode would lose its bounded exit. Re-arm for the new
+      // generation so exactly one live watchdog always guards a Loading state.
+      _armWatchdog();
     }
     return PosKitchenModeBinding._(this, _generation, scope);
   }
@@ -282,15 +337,21 @@ class PosKitchenModeReadinessController
   }
 
   /// User-initiated retry after an unavailable mode: reopen the gate to loading
-  /// and ask the bound resolver (the heartbeat) to re-verify. A no-op when no
-  /// resolver is bound (web/demo), where there is nothing to re-verify.
+  /// and ask the bound resolver (the heartbeat) to re-verify.
+  ///
+  /// POS-RUNTIME-RECOVERY-002 (finding R4): with NO bound resolver (web/demo,
+  /// or a heartbeat that failed to compose at all) the retry still visibly
+  /// re-opens the gate — the re-applied Loading arms its own watchdog, so the
+  /// episode stays bounded and honest instead of a dead button. An
+  /// already-resolved gate with no resolver has nothing to re-verify.
   void requestResolution() {
+    if (_disposed) return;
     final resolver = _resolver;
-    if (resolver == null) return;
+    if (resolver == null && state is KitchenModeReadinessResolved) return;
     if (state is! KitchenModeReadinessResolved) {
       _apply(KitchenModeReadinessLoading(_scope));
     }
-    resolver();
+    resolver?.call();
   }
 
   bool _isCurrent(int generation, PosKitchenModeScopeKey? scope) =>
