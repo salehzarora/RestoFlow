@@ -5056,7 +5056,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.';
+      'Automatic kitchen-ticket printing follows the kitchen workflow set for this branch in Dashboard, and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

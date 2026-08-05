@@ -9328,10 +9328,10 @@ abstract class AppLocalizations {
   /// **'Automatic kitchen printing'**
   String get posKitchenPrinterPreparationTitle;
 
-  /// Body of the POS kitchen-printer settings notice — the toggle controls automatic kitchen-ticket printing, a kitchen printer is required, and manual printing stays available.
+  /// Body of the POS kitchen-printer settings notice — the branch kitchen workflow in Dashboard controls automatic kitchen-ticket printing, a kitchen printer is required, and manual printing stays available.
   ///
   /// In en, this message translates to:
-  /// **'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.'**
+  /// **'Automatic kitchen-ticket printing follows the kitchen workflow set for this branch in Dashboard, and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.'**
   String get posKitchenPrinterPreparationBody;
 
   /// Button: copy the customer slot's endpoint into the kitchen slot (explicit one-time copy).
@@ -9892,19 +9892,19 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get posSyncDetailsRowFailed;
 
-  /// Row label for the count of terminal failures the server refused before creating anything.
+  /// Row label for terminal failures the server refused before creating anything.
   ///
   /// In en, this message translates to:
   /// **'Resolved failures'**
   String get posSyncDetailsRowResolved;
 
-  /// Row label for the count of operations in a non-final state needing human review.
+  /// Row label for operations in a non-final state needing human review.
   ///
   /// In en, this message translates to:
   /// **'Needs attention'**
   String get posSyncDetailsRowAttention;
 
-  /// Explanation shown when nothing is pending, failed or ambiguous; the evidence the pre-migration gate relies on.
+  /// Explanation when nothing is pending, failed or ambiguous; the evidence the pre-migration gate relies on.
   ///
   /// In en, this message translates to:
   /// **'Nothing is waiting to send, and every order this device sent was confirmed by the server. It is safe to close or replace the app.'**

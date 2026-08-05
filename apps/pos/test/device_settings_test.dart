@@ -272,15 +272,17 @@ void main() {
     // KITCHEN-PRINT-DUAL-001 (F6): the disabled-why notes are SCOPED per toggle,
     // not one ambiguous warning repeated twice.
     expect(find.text(l10n.autoPrintReceiptNoPrinterNote), findsOneWidget);
-    expect(find.text(l10n.autoPrintKitchenNoPrinterNote), findsOneWidget);
     expect(find.text(l10n.autoPrintNoPrinterNote), findsNothing);
-    // The KITCHEN toggle is present and, with no kitchen printer, disabled + off.
-    final kitchenToggle = find.byKey(
-      const Key('auto-print-kitchen-ticket-toggle'),
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the KITCHEN toggle is gone from this
+    // native surface entirely — the Dashboard workflow decides kitchen
+    // printing, so a local switch (disabled or not) would misdescribe who is in
+    // charge. Its scoped "no kitchen printer" note goes with it. The RECEIPT
+    // toggle above keeps its disabled-with-a-reason behaviour unchanged.
+    expect(
+      find.byKey(const Key('auto-print-kitchen-ticket-toggle')),
+      findsNothing,
     );
-    expect(kitchenToggle, findsOneWidget);
-    expect(tester.widget<SwitchListTile>(kitchenToggle).onChanged, isNull);
-    expect(tester.widget<SwitchListTile>(kitchenToggle).value, isFalse);
+    expect(find.text(l10n.autoPrintKitchenNoPrinterNote), findsNothing);
   });
 
   Future<ProviderContainer> pumpWithManager(

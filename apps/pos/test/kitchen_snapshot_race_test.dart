@@ -162,6 +162,15 @@ ProviderContainer _harness(
       posNativePrintingAvailableProvider.overrideWithValue(true),
       posHasKitchenNativePrinterProvider.overrideWithValue(true),
       posAutoPrintKitchenTicketProvider.overrideWith(_StubAutoKitchen.new),
+      // POS-KITCHEN-WORKFLOW-REGRESSION-001: this test's subject is SNAPSHOT
+      // ISOLATION — that an in-flight menu edit reaches neither the payload nor
+      // the rendered ticket. It needs a POS-side kitchen send to exist at all
+      // in order to inspect its bytes, and it drives one through the stored
+      // preference above. Where the Dashboard workflow governs, that preference
+      // is deliberately ignored on a KDS branch, so this surface is declared
+      // NOT centrally governed — keeping the race coverage exercising the code
+      // path it was written for rather than silently asserting "no print".
+      posCentralKitchenWorkflowProvider.overrideWithValue(false),
       // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): submitOrderFromCart is
       // gated on the verified kitchen mode; this KDS-branch snapshot-race test
       // drives submit directly, so simulate the startup-verified mode (else the

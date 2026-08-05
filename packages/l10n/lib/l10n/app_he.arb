@@ -1572,7 +1572,7 @@
   "posPrinterPurposeCustomer": "קבלות ללקוחות",
   "posPrinterPurposeKitchen": "כרטיסי מטבח",
   "posKitchenPrinterPreparationTitle": "הדפסה אוטומטית למטבח",
-  "posKitchenPrinterPreparationBody": "הדפסה אוטומטית של כרטיס מטבח נשלטת על ידי ההגדרה «הדפסה אוטומטית של כרטיס מטבח» ודורשת מדפסת מטבח מוגדרת. אפשר גם להדפיס כרטיס מטבח ידנית מתוך הזמנה שנוצרה.",
+  "posKitchenPrinterPreparationBody": "הדפסה אוטומטית של כרטיס מטבח פועלת לפי תהליך המטבח שנקבע לסניף זה בלוח הבקרה, ודורשת מדפסת מטבח מוגדרת. אפשר גם להדפיס כרטיס מטבח ידנית מתוך הזמנה שנוצרה.",
   "posKitchenPrinterUseCustomerAction": "השתמש במדפסת הלקוחות לכרטיסי מטבח",
   "posKitchenPrinterCopiedSnack": "מדפסת הלקוחות הועתקה למשבצת המטבח",
   "posKitchenPrinterNothingToCopySnack": "טרם הוגדרה מדפסת לקוחות",
