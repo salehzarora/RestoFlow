@@ -114,6 +114,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     required Future<void> Function() invalidateModeCache,
     void Function(KitchenModeResult)? onMode,
     void Function()? onModeUnavailable,
+    void Function()? onNoScope,
     String appBuild = kPosKitchenReadinessAppBuild,
     Duration interval = kKitchenReadinessHeartbeatInterval,
     Duration callTimeout = kKitchenReadinessCallTimeout,
@@ -127,6 +128,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
        _invalidateModeCache = invalidateModeCache,
        _onMode = onMode,
        _onModeUnavailable = onModeUnavailable,
+       _onNoScope = onNoScope,
        _appBuild = appBuild,
        _interval = interval,
        _callTimeout = callTimeout,
@@ -146,6 +148,12 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
   /// definitively (throw/timeout) so the submission readiness can block with a
   /// retryable "unavailable" reason instead of guessing KDS. Optional.
   final void Function()? _onModeUnavailable;
+
+  /// POS-KITCHEN-WORKFLOW-REGRESSION-001: fired when a run finds NO paired
+  /// scope. Without a scope there is nothing to verify, so the readiness must
+  /// settle on the unscoped normal-KDS workflow rather than stay on Loading
+  /// forever. Optional; null in tests that don't observe it.
+  final void Function()? _onNoScope;
   final Future<KitchenReadinessPrinterEvidence> Function() _printerEvidence;
   final Future<KitchenSpoolReadinessProbeResult> Function({
     required String deviceId,
@@ -245,6 +253,17 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     final deviceId = context?.deviceId;
     final branchId = context?.branchId;
     if (context == null || deviceId == null || branchId == null) {
+      // POS-KITCHEN-WORKFLOW-REGRESSION-001: this used to return WITHOUT
+      // touching the readiness at all — no mode published, no unavailable mark.
+      // A run that reached here therefore left the submission gate on
+      // `Loading` with nothing scheduled to ever move it, and the cart's
+      // Retry affordance only exists for `Unavailable`, so the operator was
+      // stranded on the kitchen-check spinner with no way out.
+      //
+      // Without a paired scope there is no printer_only machinery to verify,
+      // which is exactly the condition `resolveUnscopedKds` documents: the
+      // workflow is the normal KDS. Announce that instead of going silent.
+      if (!_disposed) _onNoScope?.call();
       return KitchenReadinessRunReport(
         trigger: trigger,
         outcome: KitchenReadinessRunOutcome.skippedNoScope,

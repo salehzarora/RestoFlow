@@ -277,6 +277,10 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     // Scope-bound: the binding drops a result that arrives after a scope change.
     onMode: binding.publish,
     onModeUnavailable: binding.markUnavailable,
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: a run with no paired scope settles
+    // on the unscoped normal-KDS workflow instead of leaving the gate Loading.
+    onNoScope: () =>
+        ref.read(posKitchenModeReadinessProvider.notifier).resolveUnscopedKds(),
     printerEvidence: () async {
       final assignments = await SupabaseDevicePrinterAssignmentsRepository(
         transport: transport,
@@ -359,6 +363,32 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     binding.unbind();
     heartbeat.dispose();
   });
+  // POS-KITCHEN-WORKFLOW-REGRESSION-001 — THE REGRESSION FIX.
+  //
+  // This provider WATCHES posDeviceContextProvider, which starts null and is
+  // published asynchronously by the pairing gate. So on a real paired device
+  // the sequence was:
+  //
+  //   1. PosSyncLifecycle's post-frame callback reads this provider. The device
+  //      context has not been restored yet, so the heartbeat binds a NULL scope
+  //      and the lifecycle calls onStartup() on THAT instance.
+  //   2. The gate publishes the real DeviceContext. The watch above rebuilds
+  //      this provider, disposing that first heartbeat (timer cancelled).
+  //   3. The NEW heartbeat binds the real scope, which — being a scope CHANGE —
+  //      resets the readiness to Loading.
+  //   4. Nothing ever calls onStartup() on the new instance: it is only called
+  //      from initState's post-frame callback and from app resume. So no timer
+  //      was armed and no mode was ever fetched.
+  //
+  // The gate therefore sat on Loading forever, and because the cart only offers
+  // Retry for `Unavailable`, the operator had no escape from
+  // `جارٍ التحقق من إعداد المطبخ…`.
+  //
+  // A heartbeat now starts with the instance that owns the scope, not with the
+  // widget that happened to be mounted first. This is idempotent: _armTimer
+  // no-ops when a timer exists and reportNow is single-flight, so the
+  // lifecycle's own onStartup()/onResume() calls remain harmless.
+  heartbeat.onStartup();
   return heartbeat;
 }
 

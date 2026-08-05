@@ -1,3 +1,5 @@
+import 'dart:async' show Timer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DeviceContext;
@@ -152,6 +154,20 @@ PosSubmissionDecision resolvePosSubmissionDecision(
     ),
 };
 
+/// POS-KITCHEN-WORKFLOW-REGRESSION-001 — how long a SCOPED verification may sit
+/// on [KitchenModeReadinessLoading] before the gate gives the operator an
+/// actionable, retryable state instead of an endless spinner.
+///
+/// Generous on purpose: the heartbeat's own call timeout is 20s, so this only
+/// fires when something upstream never reported at all. It is NOT a polling
+/// interval — it is a one-shot watchdog per loading episode.
+const Duration kPosKitchenModeVerificationTimeout = Duration(seconds: 30);
+
+/// Injectable so widget tests can drive the watchdog without waiting 30s.
+final posKitchenModeVerificationTimeoutProvider = Provider<Duration>(
+  (_) => kPosKitchenModeVerificationTimeout,
+);
+
 /// The authoritative readiness state. Starts [KitchenModeReadinessLoading]; the
 /// native spool composition binds a scope and publishes the verified mode through
 /// a generation-stamped [PosKitchenModeBinding]. A delayed result from an old
@@ -164,10 +180,43 @@ class PosKitchenModeReadinessController
   PosKitchenModeScopeKey? _scope;
   bool _disposed = false;
   void Function()? _resolver;
+  Timer? _watchdog;
+
+  /// POS-KITCHEN-WORKFLOW-REGRESSION-001 — the ONE place readiness state is
+  /// written, so the loading watchdog can never be forgotten at a call site.
+  ///
+  /// A SCOPED loading state arms a one-shot watchdog; every other state cancels
+  /// it. When the watchdog fires while still loading the gate moves to
+  /// [KitchenModeReadinessUnavailable] — which the cart already renders with a
+  /// localized reason AND a Retry button. Loading therefore stops being a
+  /// terminal state no matter which upstream path failed to report.
+  ///
+  /// An UNSCOPED loading state (no paired device yet) is not watched: it is a
+  /// normal transient before the pairing gate publishes, and the composition
+  /// resolves it through the unscoped-KDS path.
+  void _apply(PosKitchenModeReadiness next) {
+    _watchdog?.cancel();
+    _watchdog = null;
+    state = next;
+    if (next is KitchenModeReadinessLoading && next.scope != null) {
+      final generation = _generation;
+      final scope = next.scope;
+      _watchdog = Timer(
+        ref.read(posKitchenModeVerificationTimeoutProvider),
+        () {
+          _markUnavailable(generation, scope);
+        },
+      );
+    }
+  }
 
   @override
   PosKitchenModeReadiness build() {
-    ref.onDispose(() => _disposed = true);
+    ref.onDispose(() {
+      _disposed = true;
+      _watchdog?.cancel();
+      _watchdog = null;
+    });
     // DEMO mode has no verified backend workflow and NO stuck-order risk (orders
     // are local), so it resolves to the NORMAL kds workflow immediately — Send is
     // never blocked (byte-identical to the pre-feature demo behavior). REAL mode
@@ -202,7 +251,7 @@ class PosKitchenModeReadinessController
     if (scope != _scope) {
       _scope = scope;
       _resolver = null;
-      state = KitchenModeReadinessLoading(scope);
+      _apply(KitchenModeReadinessLoading(scope));
     }
     return PosKitchenModeBinding._(this, _generation, scope);
   }
@@ -215,9 +264,11 @@ class PosKitchenModeReadinessController
     if (_disposed) return;
     if (_scope != null) return;
     if (state is KitchenModeReadinessResolved) return;
-    state = KitchenModeReadinessResolved(
-      KitchenModeVerifiedKds(verifiedAt: DateTime.now()),
-      null,
+    _apply(
+      KitchenModeReadinessResolved(
+        KitchenModeVerifiedKds(verifiedAt: DateTime.now()),
+        null,
+      ),
     );
   }
 
@@ -227,7 +278,7 @@ class PosKitchenModeReadinessController
   /// on retry.
   void reset() {
     if (_disposed) return;
-    state = KitchenModeReadinessLoading(_scope);
+    _apply(KitchenModeReadinessLoading(_scope));
   }
 
   /// User-initiated retry after an unavailable mode: reopen the gate to loading
@@ -237,7 +288,7 @@ class PosKitchenModeReadinessController
     final resolver = _resolver;
     if (resolver == null) return;
     if (state is! KitchenModeReadinessResolved) {
-      state = KitchenModeReadinessLoading(_scope);
+      _apply(KitchenModeReadinessLoading(_scope));
     }
     resolver();
   }
@@ -257,7 +308,7 @@ class PosKitchenModeReadinessController
     // transient blip never downgrades an already verified mode for the SAME scope.
     if (mode is KitchenModePrinterOnlyWithRevision ||
         mode is KitchenModeVerifiedKds) {
-      state = KitchenModeReadinessResolved(mode, _scope);
+      _apply(KitchenModeReadinessResolved(mode, _scope));
     } else {
       _markUnavailable(generation, scope);
     }
@@ -266,7 +317,7 @@ class PosKitchenModeReadinessController
   void _markUnavailable(int generation, PosKitchenModeScopeKey? scope) {
     if (!_isCurrent(generation, scope)) return;
     if (state is KitchenModeReadinessLoading) {
-      state = KitchenModeReadinessUnavailable(_scope);
+      _apply(KitchenModeReadinessUnavailable(_scope));
     }
   }
 
