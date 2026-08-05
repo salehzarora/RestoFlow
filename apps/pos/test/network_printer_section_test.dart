@@ -315,7 +315,12 @@ void main() {
     // ...and the assigned printer no longer claims a bridge is required.
     expect(find.text(l10n.deviceSettingsBridgeRequired), findsNothing);
     expect(find.text(l10n.deviceSettingsPrinterConfigured), findsOneWidget);
-    expect(find.text(l10n.deviceSettingsNativeNetworkNote), findsOneWidget);
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the standing "…no print bridge
+    // needed" note is gone too. Its job was to correct the bridge-required
+    // wording, and with printers managed on the device there is no longer a
+    // bridge claim to correct — only the per-printer status pill remains.
+    expect(find.text(l10n.deviceSettingsNativeNetworkNote), findsNothing);
+    expect(find.byKey(const Key('printer-capability-note')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
