@@ -22,6 +22,7 @@ class PrinterAssignmentsSection extends StatelessWidget {
     this.stationNames = false,
     this.bridgeStatus,
     this.nativeNetworkAvailable = false,
+    this.localPrinterSetupOnDevice = false,
     super.key,
   });
 
@@ -43,6 +44,23 @@ class PrinterAssignmentsSection extends StatelessWidget {
   /// print bridge" wording (a bridge is no longer the only physical path).
   /// Default false keeps the web / KDS / dashboard behaviour unchanged.
   final bool nativeNetworkAvailable;
+
+  /// POS-KITCHEN-WORKFLOW-REGRESSION-001: true for a surface whose printers are
+  /// discovered, saved and assigned LOCALLY on the device (the POS).
+  ///
+  /// Not a cosmetic flag — it states which source of truth owns printers here,
+  /// and two pieces of guidance become factually WRONG once it is true:
+  ///
+  ///  * "No printer assigned. Ask a manager to configure it in Dashboard →
+  ///    Printers." — nobody configures this device's printer in the Dashboard.
+  ///    A cashier who followed it would ask for something that cannot help,
+  ///    while a working printer sat configured on the device.
+  ///  * "…print bridge…" — the local direct transports ARE the supported path,
+  ///    so a standing note about bridges describes a model this app left.
+  ///
+  /// Defaults to false so the KDS/web surfaces, which still read the Dashboard
+  /// assignment model, keep their existing wording unchanged.
+  final bool localPrinterSetupOnDevice;
 
   static String _formatTime(DateTime dt) {
     String two(int v) => v.toString().padLeft(2, '0');
@@ -76,6 +94,11 @@ class PrinterAssignmentsSection extends StatelessWidget {
                   >)
               .value;
       if (assignments.printers.isEmpty) {
+        // POS-KITCHEN-WORKFLOW-REGRESSION-001: where printers are managed on
+        // the device, an empty Dashboard assignment list is the NORMAL, correct
+        // state — not something to send the cashier to a manager about. The
+        // whole obsolete section drops out rather than leaving a bare heading.
+        if (localPrinterSetupOnDevice) return const SizedBox.shrink();
         body = RestoflowNoticeBanner(
           key: const Key('no-printer-banner'),
           body: l10n.deviceSettingsNoPrinter,
@@ -117,12 +140,19 @@ class PrinterAssignmentsSection extends StatelessWidget {
         // network printer set up, it says printing is available here with no
         // bridge (ANDROID-002); otherwise it keeps the honest "needs a
         // bridge/native transport" note.
-        RestoflowNoticeBanner(
-          body: nativeNetworkAvailable
-              ? l10n.deviceSettingsNativeNetworkNote
-              : l10n.deviceSettingsCapabilityNote,
-          tone: RestoflowTone.info,
-        ),
+        //
+        // POS-KITCHEN-WORKFLOW-REGRESSION-001: omitted entirely where printers
+        // are managed on the device. Both wordings are framed around the print
+        // bridge, and a permanent notice about a transport this surface no
+        // longer uses is noise sitting above the controls that actually matter.
+        if (!localPrinterSetupOnDevice)
+          RestoflowNoticeBanner(
+            key: const Key('printer-capability-note'),
+            body: nativeNetworkAvailable
+                ? l10n.deviceSettingsNativeNetworkNote
+                : l10n.deviceSettingsCapabilityNote,
+            tone: RestoflowTone.info,
+          ),
         // RF-115: the global LOCAL print-bridge row (only when a bridge is
         // configured) — connected / unavailable + the last submitted job time.
         if (bridgeStatus case final status?) ...[

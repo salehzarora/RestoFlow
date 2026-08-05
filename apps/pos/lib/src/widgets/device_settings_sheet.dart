@@ -152,6 +152,16 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       PrinterAssignmentsSection(
                         l10n: l10n,
                         assignmentsAsync: assignmentsAsync,
+                        // POS-KITCHEN-WORKFLOW-REGRESSION-001: on the native
+                        // app this station discovers, saves and assigns its own
+                        // printers in the sections above, so the
+                        // Dashboard-assignment guidance and the print-bridge
+                        // capability note no longer describe how printing works
+                        // here. Tied to `nativeAvailable` because that is
+                        // exactly the condition under which those local
+                        // sections exist — web POS has no on-device printer
+                        // setup, so its Dashboard/bridge wording stays true.
+                        localPrinterSetupOnDevice: nativeAvailable,
                         // RF-115: the LOCAL print-bridge status row (only when a
                         // bridge is configured — null hides it).
                         bridgeStatus: ref
