@@ -82,3 +82,17 @@ builds that must update the currently-installed debug-signed apps should be:
 * The release/version ledger (`tools/android_release/version.json`) remains the
   authority for official pair numbering; transitional versionCodes must keep
   ascending through it, never fork it.
+
+## 5. Outcome — v22 skipped, official lane resumes at v25
+
+The transitional lane completed its purpose: vc24 (Release/AOT, debug
+certificate, source `f89c8c4`) passed the controlled field test on
+SALEH-POS-TEST-01. Because this lane consumed versionCodes 23 and 24 on
+`com.restoflow.pos`, the official release that was provisionally ledgered as
+0.0.22 / 22 was **never built and is permanently skipped**: an official build
+numbered below 25 would sit beneath already-installed transitional codes. The
+ledger's `nextOfficialRelease` is therefore **0.0.25 / versionCode 25**
+(`official-v25`, POS + KDS synchronized pair, production-signed). The
+production signer differs from the transitional debug certificate, so v25
+installs on the pilot tablet only through the separately authorized
+uninstall + fresh-install migration — never as an in-place update over vc24.

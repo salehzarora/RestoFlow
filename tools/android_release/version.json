@@ -74,19 +74,71 @@
   },
 
   "nextOfficialRelease": {
-    "versionName": "0.0.22",
-    "versionCode": 22,
+    "versionName": "0.0.25",
+    "versionCode": 25,
     "signing": "restoflow-production",
-    "status": "planned - NOT BUILT",
-    "intendedSource": "origin/main at the time of the build",
+    "status": "built - pre-merge candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "f89c8c4f8e6924481d8152b6e645180ad03f2949",
+    "sourceSha": "f76b67cb954a589725a5c18f116621a6c8a8d893",
+    "buildDate": "2026-08-06",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v25-f76b67c.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "7988cc7f2697bc688d8de7d913c3e505780a5cdbba93a8e4e3fcb51fe07906fe"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v25-f76b67c.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "2dbdb51f3fe35cbc2a2a9666de15925d429a869893de92aab89b6b1b6bb4e373"
+      }
+    },
+    "candidateNotes": [
+      "Built by tools/android_release/build_official_pair.ps1 with",
+      "-SourceSha f76b67c... -AllowNonMain (the script's audited exception):",
+      "the build HEAD is the release/RESTOFLOW-OFFICIAL-V25 ledger commit,",
+      "whose only delta from application source f89c8c4 is this ledger and",
+      "its documentation. PR #199 is open and UNMERGED; these artifacts are",
+      "pre-merge candidates, verified by verify_official_apk.ps1 (both PASS):",
+      "not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
+      "production certificate matches the pin, hosted project ref present,",
+      "forbidden ref absent. NOT installed, NOT uploaded, NOT distributed,",
+      "no GitHub Release. official-v21 and transitional vc24 unchanged."
+    ],
+    "intendedSource": "main at f89c8c4f8e6924481d8152b6e645180ad03f2949 (application source; the release branch may add ledger/documentation commits only)",
     "notes": [
-      "v22 does not exist yet.",
-      "The official build must come from MERGED main, never from a feature",
-      "branch, so the artifact matches reviewed history.",
+      "v25 supersedes the never-built v22 plan (see skippedOfficialReleases).",
+      "25 is the smallest versionCode strictly greater than every code ever",
+      "used on com.restoflow.pos: official v21, transitional vc23 (Debug/JIT)",
+      "and transitional vc24 (Release/AOT, field-tested on SALEH-POS-TEST-01).",
+      "Keeping the whole package lineage monotonic removes downgrade traps",
+      "even though the production signer requires a fresh install anyway.",
+      "POS and KDS ship as the synchronized pair 0.0.25/25 per versionSymmetry.",
       "versionCode must increase monotonically: Android refuses to install an",
       "APK whose versionCode is lower than the installed one."
     ]
   },
+
+  "skippedOfficialReleases": [
+    {
+      "versionName": "0.0.22",
+      "versionCode": 22,
+      "status": "SKIPPED - NEVER BUILT",
+      "reason": [
+        "v22 was reserved here while the POS runtime-recovery work was",
+        "validated through the POS-only transitional lane. That lane",
+        "(governed by docs/POS_TRANSITIONAL_RELEASE_PLAN.md) consumed",
+        "versionCode 23 (vc23, Debug/JIT, debug certificate, source a243fd6)",
+        "and versionCode 24 (vc24, Release/AOT, debug certificate, source",
+        "f89c8c4, field test passed on SALEH-POS-TEST-01) on the SAME package",
+        "id com.restoflow.pos. Any official build numbered below 25 would sit",
+        "beneath already-installed transitional codes, so 22 was skipped",
+        "without ever being built. No artifact named v22 exists anywhere."
+      ]
+    }
+  ],
 
   "versionSymmetry": {
     "required": true,
