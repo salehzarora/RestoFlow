@@ -4981,7 +4981,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'הדפסה אוטומטית של כרטיס מטבח נשלטת על ידי ההגדרה «הדפסה אוטומטית של כרטיס מטבח» ודורשת מדפסת מטבח מוגדרת. אפשר גם להדפיס כרטיס מטבח ידנית מתוך הזמנה שנוצרה.';
+      'הדפסה אוטומטית של כרטיס מטבח פועלת לפי תהליך המטבח שנקבע לסניף זה בלוח הבקרה, ודורשת מדפסת מטבח מוגדרת. אפשר גם להדפיס כרטיס מטבח ידנית מתוך הזמנה שנוצרה.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

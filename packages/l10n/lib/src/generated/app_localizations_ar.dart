@@ -5018,7 +5018,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'تُتحكَّم الطباعة التلقائية لتذكرة المطبخ عبر إعداد «طباعة تذكرة المطبخ تلقائيًا» وتتطلب طابعة مطبخ مُعدّة. ويمكنك أيضًا طباعة تذكرة المطبخ يدويًا من طلب مُنشأ.';
+      'تتبع الطباعة التلقائية لتذكرة المطبخ سير عمل المطبخ المُحدَّد لهذا الفرع في لوحة التحكم، وتتطلب طابعة مطبخ مُعدّة. ويمكنك أيضًا طباعة تذكرة المطبخ يدويًا من طلب مُنشأ.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

@@ -20,15 +20,10 @@ import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
-import '../print/pos_kitchen_ticket_printer.dart'
-    show posHasKitchenNativePrinterProvider;
 import '../state/discount_controller.dart';
 import '../state/kitchen_finish_controller.dart';
 import '../state/pos_auto_print_prefs.dart'
-    show
-        posAutoPrintKitchenTicketEnabled,
-        posAutoPrintKitchenTicketProvider,
-        posPrinterOnlyAutoPrintProvider;
+    show posKitchenTicketAutoPrintProvider, posPrinterOnlyAutoPrintProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -513,13 +508,10 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     if (!ref.watch(posPrinterOnlyAutoPrintProvider)) {
       return const SizedBox.shrink();
     }
-    final autoPrintOn = posAutoPrintKitchenTicketEnabled(
-      stored: ref.watch(posAutoPrintKitchenTicketProvider).valueOrNull,
-      hasKitchenPrinter: ref.watch(posHasKitchenNativePrinterProvider),
-      // 014: in printer_only the automatic kitchen print is mandatory, so this
-      // action follows the same shared decision rather than a stale toggle.
-      printerOnly: ref.watch(posPrinterOnlyAutoPrintProvider),
-    );
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the ONE shared decision, so this
+    // action, the settings UI and the submit path can never disagree. Where the
+    // Dashboard workflow governs, the stored toggle is not consulted at all.
+    final autoPrintOn = ref.watch(posKitchenTicketAutoPrintProvider);
     final authorized =
         ref
             .watch(staffCapabilitiesProvider)

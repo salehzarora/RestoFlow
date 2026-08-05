@@ -497,6 +497,14 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
     // unreadable preference can stop the kitchen seeing the food. The stored
     // value is untouched and governs again under `kds`.
     effectiveEnabled = true;
+  } else if (container.read(posCentralKitchenWorkflowProvider)) {
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the Dashboard workflow governs this
+    // station, and it is NOT direct-print (the branch above already handled
+    // that). So the answer is no — the KDS owns the ticket, or the workflow is
+    // not yet known and printing on a guess is exactly what must not happen.
+    // The stored preference is not consulted, so a stale `true` left over from
+    // a branch that has since moved to a KDS cannot produce a rogue ticket.
+    effectiveEnabled = false;
   } else {
     try {
       effectiveEnabled =

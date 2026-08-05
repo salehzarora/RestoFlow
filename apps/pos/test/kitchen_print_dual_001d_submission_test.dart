@@ -226,16 +226,24 @@ void main() {
     expect(h.print.sent, isEmpty);
   });
 
-  testWidgets('B: toggle ON — the SAME normal submit (no dispatch_mode) + one '
-      'automatic kitchen print', (tester) async {
+  testWidgets('B: a stale local toggle ON does NOT print on a KDS branch — the '
+      'submit is unchanged and the KDS owns the ticket', (tester) async {
     final h = await _submit(tester, toggleOn: true, printerConfigured: true);
+    // The ORDER path is untouched: same normal submit, no dispatch_mode.
     expect(h.outbox.enqueued, hasLength(1));
     expect(
       h.outbox.enqueued.single.payloadJson.contains('dispatch_mode'),
       isFalse,
       reason: 'no direct_print workflow — always normal KDS',
     );
-    expect(h.print.sent, hasLength(1));
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001 — DELIBERATE BEHAVIOUR CHANGE.
+    // KITCHEN-PRINT-DUAL-001 let a device toggle add a POS-side kitchen print
+    // on top of a KDS branch. Where the Dashboard workflow governs, that is no
+    // longer the device's call: a branch that moved from printer_only to a KDS
+    // would otherwise keep printing tickets from the till forever, because the
+    // stale local `true` was never revisited. The stored value is untouched and
+    // still governs on surfaces the central workflow does not reach.
+    expect(h.print.sent, isEmpty);
   });
 
   testWidgets('C: ON but no configured printer — the order STILL submits '

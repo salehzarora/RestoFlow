@@ -1070,12 +1070,17 @@ void main() {
           en.posKitchenPrinterPreparationBody,
           isNot(contains('not printed automatically')),
         );
-        // …replaced by: the toggle controls it, a kitchen printer is required,
-        // and manual printing stays available.
+        // POS-KITCHEN-WORKFLOW-REGRESSION-001: it used to name the local
+        // "Automatically print kitchen ticket" switch. That switch no longer
+        // exists on this surface, so pointing a cashier at it would be a
+        // dead end — the notice now names the real authority instead. A
+        // kitchen printer is still required and manual printing still stays
+        // available.
         expect(
           en.posKitchenPrinterPreparationBody,
-          contains('Automatically print kitchen ticket'),
+          isNot(contains('Automatically print kitchen ticket')),
         );
+        expect(en.posKitchenPrinterPreparationBody, contains('Dashboard'));
         expect(
           en.posKitchenPrinterPreparationBody,
           contains('kitchen printer'),

@@ -199,24 +199,38 @@ void main() {
     expect(find.byKey(const Key('printer-prn-1')), findsOneWidget);
     expect(find.text('Counter receipt'), findsOneWidget);
     expect(find.text(l10n.deviceSettingsBridgeRequired), findsOneWidget);
-    expect(find.text(l10n.deviceSettingsCapabilityNote), findsOneWidget);
     expect(find.text(l10n.deviceSettingsLastRefresh('12:30')), findsOneWidget);
     expect(find.text(l10n.printStatusPrinted), findsNothing);
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the standing print-bridge capability
+    // note is gone from the POS sheet — this station prints through its own
+    // locally configured printer, so a permanent note about bridges described a
+    // model this app has left. The assigned-printer ROW above is untouched.
+    expect(find.byKey(const Key('printer-capability-note')), findsNothing);
+    expect(find.text(l10n.deviceSettingsCapabilityNote), findsNothing);
+    expect(find.text(l10n.deviceSettingsNativeNetworkNote), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Part B: no assigned printer -> the ask-a-manager empty state', (
-    tester,
-  ) async {
-    final l10n = await _en();
-    await pumpSheetWith(
-      tester,
-      _FakeAssignmentsReader(_assignments(printers: const [])),
-    );
+  testWidgets(
+    'POS-KITCHEN-WORKFLOW-REGRESSION-001: no Dashboard-assigned printer is the '
+    'NORMAL state on a locally-managed station — no ask-a-manager banner',
+    (tester) async {
+      final l10n = await _en();
+      await pumpSheetWith(
+        tester,
+        _FakeAssignmentsReader(_assignments(printers: const [])),
+      );
 
-    expect(find.byKey(const Key('no-printer-banner')), findsOneWidget);
-    expect(find.text(l10n.deviceSettingsNoPrinter), findsOneWidget);
-  });
+      // The banner sent the cashier to a manager for something no manager can
+      // do: this device's printer is configured ON the device. With nothing
+      // assigned in the Dashboard the obsolete section drops out entirely
+      // rather than leaving a bare "Printers" heading behind.
+      expect(find.byKey(const Key('no-printer-banner')), findsNothing);
+      expect(find.text(l10n.deviceSettingsNoPrinter), findsNothing);
+      expect(find.byKey(const Key('device-settings-printers')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Part C: the auto-print toggle defaults ON with a printer, '
       'persists a flip PER DEVICE, and stores only a plain bool', (
@@ -258,15 +272,17 @@ void main() {
     // KITCHEN-PRINT-DUAL-001 (F6): the disabled-why notes are SCOPED per toggle,
     // not one ambiguous warning repeated twice.
     expect(find.text(l10n.autoPrintReceiptNoPrinterNote), findsOneWidget);
-    expect(find.text(l10n.autoPrintKitchenNoPrinterNote), findsOneWidget);
     expect(find.text(l10n.autoPrintNoPrinterNote), findsNothing);
-    // The KITCHEN toggle is present and, with no kitchen printer, disabled + off.
-    final kitchenToggle = find.byKey(
-      const Key('auto-print-kitchen-ticket-toggle'),
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: the KITCHEN toggle is gone from this
+    // native surface entirely — the Dashboard workflow decides kitchen
+    // printing, so a local switch (disabled or not) would misdescribe who is in
+    // charge. Its scoped "no kitchen printer" note goes with it. The RECEIPT
+    // toggle above keeps its disabled-with-a-reason behaviour unchanged.
+    expect(
+      find.byKey(const Key('auto-print-kitchen-ticket-toggle')),
+      findsNothing,
     );
-    expect(kitchenToggle, findsOneWidget);
-    expect(tester.widget<SwitchListTile>(kitchenToggle).onChanged, isNull);
-    expect(tester.widget<SwitchListTile>(kitchenToggle).value, isFalse);
+    expect(find.text(l10n.autoPrintKitchenNoPrinterNote), findsNothing);
   });
 
   Future<ProviderContainer> pumpWithManager(

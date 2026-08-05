@@ -140,15 +140,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('kds keeps BOTH controls exactly as today', (tester) async {
+    testWidgets('kds keeps the RECEIPT control; the kitchen control is gone', (
+      tester,
+    ) async {
       SharedPreferences.setMockInitialValues({});
       final l10n = await _en();
       await _pumpSheet(tester, mode: _kds);
 
       expect(find.byKey(_receiptKey), findsOneWidget);
-      expect(find.byKey(_kitchenKey), findsOneWidget);
       expect(find.text(l10n.deviceSettingsAutoPrintHeading), findsOneWidget);
-      // Editable, with the shipped defaults: receipt ON, kitchen OFF.
+      // Editable, with the shipped default: receipt ON.
       expect(
         tester.widget<SwitchListTile>(find.byKey(_receiptKey)).onChanged,
         isNotNull,
@@ -157,10 +158,11 @@ void main() {
         tester.widget<SwitchListTile>(find.byKey(_receiptKey)).value,
         isTrue,
       );
-      expect(
-        tester.widget<SwitchListTile>(find.byKey(_kitchenKey)).value,
-        isFalse,
-      );
+      // POS-KITCHEN-WORKFLOW-REGRESSION-001: 014 hid the kitchen switch only for
+      // a resolved printer_only branch, so a Separate-KDS branch still offered
+      // it. On a KDS branch the KDS owns the ticket, so a local switch could
+      // only ever contradict the Dashboard — it is now absent here too.
+      expect(find.byKey(_kitchenKey), findsNothing);
     });
 
     testWidgets('8. unrelated printer settings are untouched in printer_only', (
@@ -261,17 +263,20 @@ void main() {
       expect(prefs.getBool(rk), isFalse);
       expect(prefs.getBool(kk), isFalse);
 
-      // Back on kds the stored values govern again, and the switches return.
+      // Back on kds the stored RECEIPT value governs again and its switch
+      // returns. The kitchen switch does NOT return — POS-KITCHEN-WORKFLOW-
+      // REGRESSION-001 made the Dashboard workflow the sole authority there.
       await _pumpSheet(tester, mode: _kds);
       expect(find.byKey(_receiptKey), findsOneWidget);
       expect(
         tester.widget<SwitchListTile>(find.byKey(_receiptKey)).value,
         isFalse,
       );
-      expect(
-        tester.widget<SwitchListTile>(find.byKey(_kitchenKey)).value,
-        isFalse,
-      );
+      expect(find.byKey(_kitchenKey), findsNothing);
+
+      // The non-destructive guarantee is unchanged and is the point of this
+      // test: the stored kitchen value is still on disk, byte-for-byte. It is
+      // ignored where the central workflow applies, never deleted.
       expect(prefs.getBool(rk), isFalse);
       expect(prefs.getBool(kk), isFalse);
     });

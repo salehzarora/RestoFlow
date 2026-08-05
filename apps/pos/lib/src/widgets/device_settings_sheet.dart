@@ -139,6 +139,12 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       // The section holds nothing else, so nothing is left
                       // behind; manual printing, printer setup and test print
                       // are separate sections and are untouched.
+                      //
+                      // POS-KITCHEN-WORKFLOW-REGRESSION-001: the KITCHEN-ticket
+                      // switch is additionally omitted whenever the Dashboard
+                      // workflow governs this surface — see [_AutoPrintSection].
+                      // The RECEIPT switch is unaffected and keeps the 014
+                      // behaviour above exactly.
                       if (!ref.watch(posPrinterOnlyAutoPrintProvider)) ...[
                         _AutoPrintSection(
                           l10n: l10n,
@@ -152,6 +158,16 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       PrinterAssignmentsSection(
                         l10n: l10n,
                         assignmentsAsync: assignmentsAsync,
+                        // POS-KITCHEN-WORKFLOW-REGRESSION-001: on the native
+                        // app this station discovers, saves and assigns its own
+                        // printers in the sections above, so the
+                        // Dashboard-assignment guidance and the print-bridge
+                        // capability note no longer describe how printing works
+                        // here. Tied to `nativeAvailable` because that is
+                        // exactly the condition under which those local
+                        // sections exist — web POS has no on-device printer
+                        // setup, so its Dashboard/bridge wording stays true.
+                        localPrinterSetupOnDevice: nativeAvailable,
                         // RF-115: the LOCAL print-bridge status row (only when a
                         // bridge is configured — null hides it).
                         bridgeStatus: ref
@@ -282,6 +298,20 @@ class _AutoPrintSection extends ConsumerWidget {
     );
     // KITCHEN-PRINT-DUAL-001: the INDEPENDENT kitchen-ticket auto-print choice,
     // gated on a locally-configured KITCHEN printer (default OFF).
+    //
+    // POS-KITCHEN-WORKFLOW-REGRESSION-001: offered ONLY where the Dashboard
+    // kitchen workflow does not govern this surface. It used to be hidden only
+    // for a resolved printer_only branch, which meant a Separate-KDS branch and,
+    // worse, a branch whose workflow was merely LOADING or had failed to
+    // verify — presented an editable local switch that appeared to decide
+    // whether the kitchen sees food. It never could: the submit path and the
+    // recent-orders action both read the central decision. A control that
+    // cannot change the outcome is worse than no control, because a cashier who
+    // flips it believes something happened.
+    //
+    // Keyed on the CAPABILITY, not on the current readiness value, so an
+    // unresolved workflow can never be mistaken for "no central workflow".
+    final centralWorkflow = ref.watch(posCentralKitchenWorkflowProvider);
     final hasKitchenPrinter = ref.watch(posHasKitchenNativePrinterProvider);
     final storedKitchen = ref
         .watch(posAutoPrintKitchenTicketProvider)
@@ -313,23 +343,24 @@ class _AutoPrintSection extends ConsumerWidget {
                     .setEnabled(value)
               : null,
         ),
-        SwitchListTile(
-          key: const Key('auto-print-kitchen-ticket-toggle'),
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.posAutoPrintKitchenTicketToggle),
-          // KITCHEN-PRINT-DUAL-001C: with a kitchen printer configured, explain the
-          // TWO workflows (on = print here + close directly, off = normal KDS);
-          // without a printer, the existing "needs a printer" note.
-          subtitle: hasKitchenPrinter
-              ? Text(l10n.posAutoPrintKitchenTicketToggleExplanation)
-              : Text(l10n.autoPrintKitchenNoPrinterNote),
-          value: effectiveKitchen,
-          onChanged: hasKitchenPrinter
-              ? (value) => ref
-                    .read(posAutoPrintKitchenTicketProvider.notifier)
-                    .setEnabled(value)
-              : null,
-        ),
+        if (!centralWorkflow)
+          SwitchListTile(
+            key: const Key('auto-print-kitchen-ticket-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.posAutoPrintKitchenTicketToggle),
+            // KITCHEN-PRINT-DUAL-001C: with a kitchen printer configured, explain the
+            // TWO workflows (on = print here + close directly, off = normal KDS);
+            // without a printer, the existing "needs a printer" note.
+            subtitle: hasKitchenPrinter
+                ? Text(l10n.posAutoPrintKitchenTicketToggleExplanation)
+                : Text(l10n.autoPrintKitchenNoPrinterNote),
+            value: effectiveKitchen,
+            onChanged: hasKitchenPrinter
+                ? (value) => ref
+                      .read(posAutoPrintKitchenTicketProvider.notifier)
+                      .setEnabled(value)
+                : null,
+          ),
       ],
     );
   }

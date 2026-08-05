@@ -1,11 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
 import '../data/order_dispatch.dart' show resolveOrderDispatchMode;
 import '../data/order_submission.dart' show OrderDispatchMode;
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posHasKitchenNativePrinterProvider;
 import 'pos_device_context.dart';
+import 'pos_printer_transport.dart' show posNativePrintingAvailableProvider;
 
 /// HIDE-REDUNDANT-AUTO-PRINT-SETTINGS-014 — the ONE place that decides whether
 /// the branch's AUTHORITATIVE workflow makes both automatic prints mandatory.
@@ -28,6 +33,53 @@ final posPrinterOnlyAutoPrintProvider = Provider<bool>(
       resolveOrderDispatchMode(ref.watch(posVerifiedKitchenModeProvider)) ==
       OrderDispatchMode.directPrint,
 );
+
+/// POS-KITCHEN-WORKFLOW-REGRESSION-001 — does THIS surface take its
+/// kitchen-ticket decision from the Dashboard kitchen workflow?
+///
+/// A CAPABILITY question, deliberately independent of the current readiness
+/// VALUE. [posPrinterOnlyAutoPrintProvider] answers "is the branch printer_only
+/// right now", which is false while loading, false when verification failed and
+/// false on a Separate-KDS branch — three different situations that all used to
+/// collapse into "fall back to the device toggle". Asking whether the central
+/// workflow GOVERNS this surface separates "the answer is not known yet" from
+/// "there is no central answer here", so an unresolved workflow can never be
+/// mistaken for permission to let a local switch decide.
+///
+/// True on the real native POS: that is the build that pairs to a branch, runs
+/// the kitchen-mode readiness gate and prints through locally configured
+/// printers. False in demo (no backend workflow exists) and on web POS (no
+/// on-device printing), which keep their historical local behaviour.
+final posCentralKitchenWorkflowProvider = Provider<bool>(
+  (ref) =>
+      !ref.watch(runtimeConfigProvider).isDemoMode &&
+      ref.watch(posNativePrintingAvailableProvider),
+);
+
+/// The ONE effective answer to "should this station print a kitchen ticket
+/// automatically?" — read by the settings UI, the submit path and the
+/// recent-orders action, so a control can never imply something the printer
+/// will not do.
+///
+/// Where the central workflow governs, the stored device preference is NOT
+/// consulted at all:
+///   * direct-print  -> true  (the station IS the kitchen; mandatory)
+///   * Separate KDS  -> false (the KDS owns the ticket)
+///   * loading/failed-> false (fail safe: never print on a guess)
+/// A stale `true` from a branch that has since moved to a KDS therefore cannot
+/// produce a rogue ticket, and a stale `false` cannot suppress a mandatory one.
+/// The stored value is left on disk, untouched, and governs again on any
+/// surface where the central workflow does not apply.
+final posKitchenTicketAutoPrintProvider = Provider<bool>((ref) {
+  if (ref.watch(posCentralKitchenWorkflowProvider)) {
+    return ref.watch(posPrinterOnlyAutoPrintProvider);
+  }
+  return posAutoPrintKitchenTicketEnabled(
+    stored: ref.watch(posAutoPrintKitchenTicketProvider).valueOrNull,
+    hasKitchenPrinter: ref.watch(posHasKitchenNativePrinterProvider),
+    printerOnly: ref.watch(posPrinterOnlyAutoPrintProvider),
+  );
+});
 
 /// Per-DEVICE auto-print preference (device settings sprint, Part C): should
 /// THIS POS station prepare a customer-receipt print job automatically after
