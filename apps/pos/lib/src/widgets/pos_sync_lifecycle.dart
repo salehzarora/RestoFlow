@@ -18,6 +18,20 @@ import '../state/ready_notifications_controller.dart';
 /// The business logic lives in [PosOrderSyncController] precisely so it is testable
 /// without pumping a widget tree, and so a second lifecycle callback can never
 /// become a second, competing sync implementation.
+///
+/// POS-RUNTIME-RECOVERY-002 hardening:
+///
+///  1. Every startup/resume seam below is individually contained. These calls
+///     were one unprotected sequence, so a synchronous throw while
+///     materializing ANY earlier provider silently skipped the kitchen-mode
+///     readiness startup — stranding the cashier on the kitchen-check spinner
+///     with no watchdog and no Retry (the vc23 tablet failure).
+///  2. The readiness heartbeat is kept LIVE through a manual listener instead
+///     of one-shot reads. The provider watches the device context, but a lazy
+///     provider with no listeners is only re-computed on the next read — so the
+///     scope restored after startup never started its own verification. The
+///     subscription makes every pairing/scope change rebuild the heartbeat
+///     immediately, and the rebuilt composition starts itself (PR #197).
 class PosSyncLifecycle extends ConsumerStatefulWidget {
   const PosSyncLifecycle({required this.child, super.key});
 
@@ -29,31 +43,87 @@ class PosSyncLifecycle extends ConsumerStatefulWidget {
 
 class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     with WidgetsBindingObserver {
+  ProviderSubscription<Object?>? _heartbeatSubscription;
+
+  /// Runs one startup/resume seam, containing any synchronous failure so a
+  /// broken seam can never cancel the seams after it. The readiness controller
+  /// owns its own bounded exit (watchdog), so containment is safe: the worst a
+  /// swallowed failure can produce is the RETRYABLE unavailable state, never a
+  /// silent permanent spinner.
+  void _guarded(void Function() step) {
+    try {
+      step();
+    } catch (_) {
+      // Contained by design — see the class doc. The failing subsystem keeps
+      // its own typed error surfaces; this seam only refuses to let one
+      // subsystem's failure take its siblings down.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // POS-RUNTIME-RECOVERY-002 (2): materialize the readiness heartbeat EAGERLY
+    // and keep it live. The listener body is empty on purpose — the rebuilt
+    // provider's own composition binds the new scope and starts itself; this
+    // subscription exists so invalidation (a device-context/pairing change)
+    // recomputes it IMMEDIATELY instead of at the next lifecycle read.
+    _guarded(() {
+      _heartbeatSubscription = ref.listenManual<Object?>(
+        posKitchenReadinessHeartbeatProvider,
+        (_, _) {},
+        onError: (_, _) {
+          // A failed composition must never take the surface down — and must
+          // never leave the gate an unbounded spinner: arm the last-resort
+          // watchdog so the episode ends in the retryable Unavailable state.
+          _guarded(
+            () => ref
+                .read(posKitchenModeReadinessProvider.notifier)
+                .ensureBoundedVerification(),
+          );
+        },
+      );
+    });
     // STARTUP. Deferred a frame so the device/PIN context providers have settled;
     // the coordinator itself no-ops when there is no scope yet, so an early call is
     // harmless rather than an error banner at boot.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(posOrderSyncControllerProvider.notifier).syncNow();
+      _guarded(
+        () => ref.read(posOrderSyncControllerProvider.notifier).syncNow(),
+      );
       // PSC-001A: the ready-notification poller starts with the surface too —
       // same deferred frame, same no-scope no-op safety.
-      ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
+      _guarded(
+        () => ref
+            .read(posReadyNotificationsControllerProvider.notifier)
+            .onResume(),
+      );
       // KITCHEN-MODE-001C2B (LOCKED D4): the kitchen-spool reconciliation
       // hook — startup/resume only, never a timer. Inert on web/demo (the
       // provider is null) and a typed no-op without device scope; production
       // dispatch importing stays impossible until 001C3. Explicitly
       // fire-and-forget: the runtime converts EVERY failure into a typed
       // redacted report, so no unhandled async error can escape this hook.
-      unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onStartup());
+      _guarded(
+        () => unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onStartup()),
+      );
       // KITCHEN-MODE-001C3A: the READINESS-ONLY heartbeat (the one sanctioned
       // spool-layer timer — it files kitchen readiness reports and can never
       // reach the worker/drain/transport). Null on web/demo/unpaired.
-      ref.read(posKitchenReadinessHeartbeatProvider)?.onStartup();
-      _seedKitchenModeReadiness();
+      _guarded(
+        () => ref.read(posKitchenReadinessHeartbeatProvider)?.onStartup(),
+      );
+      _guarded(_seedKitchenModeReadiness);
+      // POS-RUNTIME-RECOVERY-002 (R1): the FINAL startup step, individually
+      // guarded like the rest — whatever failed above, a still-unowned Loading
+      // now gets its bounded exit instead of becoming a terminal spinner.
+      _guarded(
+        () => ref
+            .read(posKitchenModeReadinessProvider.notifier)
+            .ensureBoundedVerification(),
+      );
     });
   }
 
@@ -77,6 +147,7 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
 
   @override
   void dispose() {
+    _heartbeatSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -90,33 +161,46 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // foreground (hidden browser tab, backgrounded app) — a ~7s tick against
     // an invisible surface is pure waste — and resumes with an immediate poll.
     if (state != AppLifecycleState.resumed) {
-      ref.read(posReadyNotificationsControllerProvider.notifier).onPaused();
+      _guarded(
+        () => ref
+            .read(posReadyNotificationsControllerProvider.notifier)
+            .onPaused(),
+      );
       // KITCHEN-MODE-001C3A: the readiness heartbeat pauses with the surface
       // too — a report against a backgrounded app is waste; the server row
       // simply expires (read-side, ~10 minutes).
-      ref.read(posKitchenReadinessHeartbeatProvider)?.onPaused();
+      _guarded(
+        () => ref.read(posKitchenReadinessHeartbeatProvider)?.onPaused(),
+      );
       return;
     }
     // RESUME. The coordinator collapses concurrent callers onto the ONE in-flight
     // sync, so a platform that fires `resumed` more than once cannot start three
     // racing pulls whose losers overwrite the winner.
-    ref.read(posOrderSyncControllerProvider.notifier).onResume();
-    ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
+    _guarded(
+      () => ref.read(posOrderSyncControllerProvider.notifier).onResume(),
+    );
+    _guarded(
+      () =>
+          ref.read(posReadyNotificationsControllerProvider.notifier).onResume(),
+    );
     // KITCHEN-MODE-001C2B (D4): resume-time spool reconciliation (see the
     // startup hook above; same inert/no-op + typed-failure guarantees).
-    unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onResume());
+    _guarded(
+      () => unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onResume()),
+    );
     // KITCHEN-MODE-001C3A: re-arm the readiness heartbeat + report now.
-    ref.read(posKitchenReadinessHeartbeatProvider)?.onResume();
+    _guarded(() => ref.read(posKitchenReadinessHeartbeatProvider)?.onResume());
     // Re-resolve the kitchen-mode readiness on resume (web/demo re-confirm kds
     // idempotently; a native device re-verifies through the heartbeat above).
-    _seedKitchenModeReadiness();
+    _guarded(_seedKitchenModeReadiness);
     // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
     // availability) on resume — a Dashboard availability change made while the POS
     // was backgrounded would otherwise stay invisible until the session changed.
     // posMenuProvider is scope-derived (it watches the PIN/device session), so the
     // re-fetch always targets the CURRENT scope and a stale old-scope result can
     // never apply. One bounded invalidation per resume (no polling loop).
-    ref.invalidate(posMenuProvider);
+    _guarded(() => ref.invalidate(posMenuProvider));
   }
 
   @override
