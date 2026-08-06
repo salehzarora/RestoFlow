@@ -25,6 +25,7 @@ import '../print/pos_kitchen_ticket_printer.dart'
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
         posAdditionKitchenPrintGuardKey,
+        posAutoKitchenPrintGuardProvider,
         posRoundPrintClaimStoreProvider,
         runAutoKitchenTicketPrintOnSubmit,
         runOfflineDirectPrintKitchenTicket;
@@ -947,9 +948,8 @@ Future<void> submitOrderFromCart({
     // the LOCAL dispatch identity `local:v1:<deviceId>:<localOperationId>:kitchen`
     // (D-022 — globally unique, collision-free with server dispatch UUIDs),
     // so a crash/restart in any window reads the durable claim and can never
-    // re-print the ticket, while a refused claim write withholds ONLY the
-    // automatic print (fail toward not printing — the deliberate manual
-    // reprint remains) and never the already-committed order.
+    // re-print the ticket. Pass C (B1): a REFUSED claim write no longer
+    // withholds the physical attempt — see the policy at the catch below.
     // Applies ONLY when the submit did not reach the server (not applied) and
     // was not definitively refused; an ONLINE direct_print submit keeps the
     // existing post-confirmation auto-print path byte-identically.
@@ -976,11 +976,24 @@ Future<void> submitOrderFromCart({
             PosRoundPrintClaimState.claimed,
           );
         } on Object {
-          // The durable commit was refused: a claim that was not stored cannot
-          // prevent tomorrow's duplicate, so the AUTOMATIC print is withheld
-          // (never the order). The cashier's manual "Print kitchen ticket"
-          // stays available and never consults this claim.
-          offlineDirectPrintClaimKey = null;
+          // [POS-OFFLINE-OPERATIONS-002] Pass C (B1) — POLICY: the durable
+          // commit was REFUSED, and the physical print still runs, guarded
+          // IN-MEMORY only. Withholding it looked safe ("fail toward not
+          // printing") and was in fact silent kitchen loss: the order is
+          // committed, the auto print fires ONLY on a fresh submit (a restart
+          // cannot re-attempt it), and with no claim recorded the confirmation
+          // showed no pending line either — food nobody would ever cook, told
+          // to nobody. The duplicate direction stays covered without the
+          // durable record: the in-memory guard dedupes this session, and the
+          // drain-side defence is the mirror-claim consult (C1) — whose
+          // absence when the store is broken is the DOCUMENTED residual,
+          // while the claim store is already screaming storage-unhealthy at
+          // indicator priority 1. The session-only overlay below keeps the
+          // pending/failed outcome visible on the confirmation exactly like
+          // the durable claim would have (B3).
+          container
+              .read(posAutoKitchenPrintGuardProvider)
+              .noteDurableClaimRefused(offlineDirectPrintClaimKey);
         }
       }
     }
@@ -1076,35 +1089,39 @@ Future<void> submitOrderFromCart({
     // provider after the await, so the printed ticket cannot diverge from what the
     // KDS receives.
     // [POS-OFFLINE-OPERATIONS-002] C9: the OFFLINE direct_print order takes the
-    // pre-claimed path — its durable print-job commit already landed BEFORE the
-    // cart cleared, so the physical attempt runs under THAT claim (settled
-    // truthfully to sent/failed). With the commit refused (null key) there is
-    // deliberately NO automatic print at all — never the ordinary unclaimed
-    // path, which would re-open the exact crash-window duplicate this closes.
+    // pre-claimed path — its durable print-job commit landed BEFORE the cart
+    // cleared (or, B1, its REFUSED commit was noted on the in-memory guard),
+    // so the physical attempt runs under THAT claim, settled truthfully to
+    // sent/failed. The guarantee this seam actually makes is stated on
+    // [runOfflineDirectPrintKitchenTicket]: at-most-once AUTOMATIC physical
+    // send per submit; `sent` is transport acceptance, never paper (ESC/POS
+    // gives no reliable acknowledgement, so a deliberate manual reprint after
+    // an ambiguous acknowledgement can duplicate); an owed ticket stays
+    // recoverable from the confirmation AND the recent-orders surfaces,
+    // surviving restart via the durable claim + durable outbox entry.
     // Everything else (online direct_print, kds, demo) keeps the existing call
     // byte-identically.
     if (offlineDirectPrint) {
-      final claimKey = offlineDirectPrintClaimKey;
-      if (claimKey != null) {
-        unawaited(
-          runOfflineDirectPrintKitchenTicket(
-            container: container,
-            orderId: result.entry.targetId,
-            localDispatchClaimKey: claimKey,
-            isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
-            ticket: kdsTicketViewFromCartLines(
-              orderCode: result.orderNumber,
-              orderType: orderTypeBefore,
-              lines: cart.lines,
-              prepByItemId: kitchenPrepByItemId,
-              tableLabel: tableBefore?.label,
-              customerName: customerNameBefore,
-              customerPhone: customerPhoneBefore,
-            ),
-            labels: kitchenTicketPrintLabelsFromL10n(l10n),
+      unawaited(
+        runOfflineDirectPrintKitchenTicket(
+          container: container,
+          orderId: result.entry.targetId,
+          // Non-null by construction: assigned unconditionally above whenever
+          // offlineDirectPrint holds.
+          localDispatchClaimKey: offlineDirectPrintClaimKey!,
+          isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+          ticket: kdsTicketViewFromCartLines(
+            orderCode: result.orderNumber,
+            orderType: orderTypeBefore,
+            lines: cart.lines,
+            prepByItemId: kitchenPrepByItemId,
+            tableLabel: tableBefore?.label,
+            customerName: customerNameBefore,
+            customerPhone: customerPhoneBefore,
           ),
-        );
-      }
+          labels: kitchenTicketPrintLabelsFromL10n(l10n),
+        ),
+      );
     } else {
       unawaited(
         runAutoKitchenTicketPrintOnSubmit(

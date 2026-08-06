@@ -19,7 +19,16 @@ import '../data/kitchen_finish_repository.dart' show kActiveKitchenStatuses;
 import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/recent_order.dart';
+import '../data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState, posLocalKitchenDispatchClaimKey;
 import '../format/money_format.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        kitchenTicketPrintLabelsFromL10n,
+        posAutoKitchenPrintGuardProvider,
+        posOfflineKitchenPrintRevisionProvider,
+        printKitchenTicketAndSettleOwedClaims;
 import '../state/discount_controller.dart';
 import '../state/kitchen_finish_controller.dart';
 import '../state/pos_auto_print_prefs.dart'
@@ -33,6 +42,7 @@ import '../state/outbox_controller.dart';
 import '../state/pos_offline_state.dart';
 import '../state/pos_order_complete_controller.dart';
 import '../state/recent_orders_controller.dart';
+import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'order_action_row.dart';
 import 'order_detail_preview.dart';
 import 'order_status_pills.dart';
@@ -245,6 +255,48 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       }
     }
 
+    // [POS-OFFLINE-OPERATIONS-002] Pass C (B2) — the OWED kitchen ticket per
+    // row. A direct_print `order.submit` whose LOCAL dispatch claim still
+    // reads claimed/failed is an order the kitchen has NEVER been told about:
+    // the confirmation (the only manual print surface before this) lives on
+    // the in-memory cart and dies with a crash or "New order". Both inputs
+    // here are DURABLE — the outbox entry and the claim — so this action
+    // survives a restart and works in any connectivity phase. The revision
+    // watch re-reads the claim when a print attempt settles it; the action
+    // disappears the moment the claim reads `sent`.
+    ref.watch(posOfflineKitchenPrintRevisionProvider);
+    final printGuard = ref.watch(posAutoKitchenPrintGuardProvider);
+    OutboxEntry? owedKitchenTicketEntryFor(PosRecentOrder o) {
+      final view = o.order;
+      // Needs the device-owned order-time lines to print, a live (not voided,
+      // not never-created) order, and this device's own outbox entry.
+      if (view == null || o.isNeverCreated || o.isVoided) return null;
+      final entryId = view.outboxEntryId;
+      if (entryId == null) return null;
+      OutboxEntry? entry;
+      for (final e in entries) {
+        if (e.id == entryId) {
+          entry = e;
+          break;
+        }
+      }
+      if (entry == null ||
+          !entry.isDirectPrintOrderSubmit ||
+          entry.isDefinitiveNoServerOrder) {
+        return null;
+      }
+      final claim = printGuard.effectiveClaimOf(
+        posLocalKitchenDispatchClaimKey(
+          deviceId: entry.deviceId,
+          localOperationId: entry.localOperationId,
+        ),
+      );
+      final owed =
+          claim == PosRoundPrintClaimState.claimed ||
+          claim == PosRoundPrintClaimState.failed;
+      return owed ? entry : null;
+    }
+
     final counts = sectionCounts(orders);
     final visible = _withFocusPinned(
       viewOrders(
@@ -366,6 +418,7 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                               PosOrderCloseEligibility.allowed,
                         ),
                         outboxState: _outboxStateFor(entries, o.identity),
+                        owedPrintEntry: owedKitchenTicketEntryFor(o),
                       );
                     },
                   ),
@@ -959,6 +1012,7 @@ class _OrderCard extends ConsumerWidget {
     required this.actions,
     required this.isWide,
     required this.outboxState,
+    required this.owedPrintEntry,
   });
 
   final PosRecentOrder order;
@@ -966,6 +1020,13 @@ class _OrderCard extends ConsumerWidget {
   final PosOrderActions actions;
   final bool isWide;
   final OutboxSyncState? outboxState;
+
+  /// Pass C (B2): non-null when this row's direct-print `order.submit` still
+  /// OWES its kitchen ticket (local dispatch claim claimed/failed) — the
+  /// sheet resolved it from the durable outbox + claim store, so the row
+  /// offers the kitchen-ticket print action independently of the central
+  /// order-actions policy (the debt is a PRINT fact, not a lifecycle one).
+  final OutboxEntry? owedPrintEntry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1173,10 +1234,105 @@ class _OrderCard extends ConsumerWidget {
             const SizedBox(height: RestoflowSpacing.sm),
             OrderActionRow(order: order, l10n: l10n, actions: actions),
           ],
+          // Pass C (B2): the owed-kitchen-ticket recovery action — rendered
+          // whenever the durable claim says this direct-print order's ticket
+          // never confirmably went out, whatever the policy row above offers.
+          if (owedPrintEntry != null && order.order != null) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            _PrintOwedKitchenTicketAction(
+              order: order.order!,
+              orderNumber: order.orderNumber,
+              l10n: l10n,
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// Pass C (B2) — the recent-orders "Print kitchen ticket" recovery action for
+/// an order whose direct-print dispatch is still OWED (see
+/// [_OrderCard.owedPrintEntry]).
+///
+/// Prints through the ONE shared print-and-settle seam the confirmation
+/// button uses ([printKitchenTicketAndSettleOwedClaims]): a confirmed send
+/// settles the local + initial-mirror claims to `sent` (so the action — and
+/// the confirmation's pending line — disappear, and no automatic path ever
+/// re-prints), while any failure leaves the debt standing for another
+/// deliberate attempt. Exactly-once per press under the [_printing]
+/// re-entrancy latch; works after a process restart (order view, outbox
+/// entry and claim are all durable) and in any connectivity phase.
+class _PrintOwedKitchenTicketAction extends ConsumerStatefulWidget {
+  const _PrintOwedKitchenTicketAction({
+    required this.order,
+    required this.orderNumber,
+    required this.l10n,
+  });
+
+  final SubmittedOrderView order;
+  final String orderNumber;
+  final AppLocalizations l10n;
+
+  @override
+  ConsumerState<_PrintOwedKitchenTicketAction> createState() =>
+      _PrintOwedKitchenTicketActionState();
+}
+
+class _PrintOwedKitchenTicketActionState
+    extends ConsumerState<_PrintOwedKitchenTicketAction> {
+  bool _printing = false;
+
+  Future<void> _print() async {
+    if (_printing) return;
+    setState(() => _printing = true);
+    final l10n = widget.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final outcome = await printKitchenTicketAndSettleOwedClaims(
+      container: container,
+      order: widget.order,
+      labels: kitchenTicketPrintLabelsFromL10n(l10n),
+    );
+    if (!mounted) return;
+    setState(() => _printing = false);
+    // The same honest outcome copy the confirmation's button shows: while
+    // operating from the offline snapshot a failed send names the true cause
+    // (the printer is unreachable) instead of the generic failure line.
+    final offline =
+        container.read(posOfflineModeProvider).phase ==
+        PosOfflinePhase.offlineCached;
+    final message = switch (outcome) {
+      PosKitchenPrintOutcome.printed => l10n.posKitchenTicketPrintedSnack,
+      PosKitchenPrintOutcome.noPrinterConfigured ||
+      PosKitchenPrintOutcome.unavailable =>
+        l10n.posKitchenPrinterNotConfiguredSnack,
+      PosKitchenPrintOutcome.failed || PosKitchenPrintOutcome.ineligibleOrder =>
+        offline
+            ? l10n.posOfflinePrinterUnreachable
+            : l10n.posKitchenTicketPrintFailedSnack,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: OrderActionButton(
+      child: OutlinedButton.icon(
+        key: Key('recent-print-kitchen-${widget.orderNumber}'),
+        onPressed: _printing ? null : _print,
+        icon: _printing
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.restaurant_outlined, size: 18),
+        label: Text(widget.l10n.posPrintKitchenTicketAction),
+      ),
+    ),
+  );
 }
 
 /// Finding 1A: the recovery actions for a permanently-rejected shell in Recent Orders.

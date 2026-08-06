@@ -34,6 +34,10 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import '../data/customer_phone.dart' show normalizeCustomerPhone;
 import '../data/ids.dart' show clientIdGeneratorProvider;
+import '../data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState, posInitialKitchenPrintClaimKey;
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posRoundPrintClaimStoreProvider;
 import '../data/kitchen_mode_readiness.dart'
     show
         KitchenModeReadinessResolved,
@@ -111,10 +115,14 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
       documentsDirectoryProvider: getApplicationDocumentsDirectory,
     ),
-    // CORRECTION-001: the dormant drain seam is FULLY wired — but it can
-    // only ever run for a trusted printer-only-with-revision mode result,
-    // which the production mode repository can never construct (D1), and
-    // the server independently refuses pulls without a readiness report.
+    // CORRECTION-001 / Pass C: the drain is FULLY wired AND production-
+    // reachable. It runs for a trusted printer-only-with-revision mode
+    // result — which `SupabaseDeviceKitchenModeRepository.fetchMode` DOES
+    // construct — behind the server's real gate: a filed readiness report
+    // (`readiness_required` otherwise) + the branch's printer_only revision,
+    // both satisfied by this POS's own production heartbeat. The duplicate-
+    // print defence for initial tickets this POS already printed locally is
+    // the mirror-claim consult wired below (readInitialKitchenPrintClaim).
     pullRepository: SupabaseKitchenDispatchPullRepository(
       transport: transport,
       secretStore: secretStore,
@@ -160,8 +168,11 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     // the operator's language); the rasterizer is the SAME app-injected
     // seam the receipt path uses; both transports are the kitchen-safe
     // single-attempt seams; the gate is THE shared receipt/kitchen
-    // instance. All of it stays unreachable in production until a trusted
-    // printer-only revision exists (D1 + server readiness gate).
+    // instance. Pass C comment correction: this worker set IS production-
+    // reachable — the trusted printer-only revision exists once the server
+    // has a filed readiness report (which this POS's heartbeat files), so
+    // every safety property here must hold on its own, never by presumed
+    // dormancy.
     renderer: KitchenTicketRenderer(
       labels: KitchenTicketLabels.forLanguageCode(
         ui.PlatformDispatcher.instance.locale.languageCode,
@@ -208,6 +219,24 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
         }
       }
       return null;
+    },
+    // [POS-OFFLINE-OPERATIONS-002] Pass C (C1): the mirror-claim reader —
+    // this device's DURABLE order-scoped record that the initial kitchen
+    // ticket already went out locally at submit (offline direct-print). A
+    // plain store read through the sanctioned provider: no timer, no
+    // transport, no spool identifier outside this boundary. The dormancy
+    // guard forbids TIMERS in lib/src/spool — not store reads.
+    readInitialKitchenPrintClaim: (orderId) {
+      try {
+        return ref
+            .read(posRoundPrintClaimStoreProvider)
+            ?.claimOf(posInitialKitchenPrintClaimKey(orderId));
+      } catch (_) {
+        // A torn-down container mid-drain: answer "may already be printed"
+        // so the import can never freeze a duplicate print job on a guess —
+        // the dispatch is re-served and re-consulted on the next run.
+        return PosRoundPrintClaimState.claimed;
+      }
     },
   );
   // REAL disposal: logout/unpair/scope change (the device-context watch) or

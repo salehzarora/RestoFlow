@@ -4,6 +4,7 @@ library;
 import 'dart:convert' show json, utf8;
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -18,7 +19,10 @@ import 'package:restoflow_pos/src/data/order_submission.dart'
     show OrderSummary, OutboxEntry, OutboxSyncState;
 import 'package:restoflow_pos/src/data/outbox_repository.dart'
     show OrderSubmitPhoneLookupKey, customerPhoneFromOrderSubmitEntries;
+import 'package:restoflow_pos/src/data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState;
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
+import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
 import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
@@ -195,6 +199,7 @@ void main() {
   KitchenDispatchImportCoordinator coordinator({
     KitchenDestinationResolution destination = _resolved,
     Future<String?> Function(OrderSubmitPhoneLookupKey key)? resolvePhone,
+    PosRoundPrintClaimState? Function(String orderId)? readInitialPrintClaim,
   }) => KitchenDispatchImportCoordinator(
     store: store,
     cipher: cipher,
@@ -205,6 +210,7 @@ void main() {
     localJobIdGenerator: () => 'job-${++idCounter}',
     now: () => now,
     resolveCustomerPhone: resolvePhone,
+    readInitialPrintClaim: readInitialPrintClaim,
   );
 
   KitchenSpoolAad aad(String dispatchId) => KitchenSpoolAad(
@@ -730,5 +736,160 @@ void main() {
         expect(await storedPhone('d-1'), isNull);
       },
     );
+  });
+
+  // [POS-OFFLINE-OPERATIONS-002] Pass C (C1) — the mirror-claim consult: the
+  // drain-side defence against re-printing an initial ticket the POS already
+  // printed locally at submit (offline direct-print). Pinned in BOTH
+  // directions: with a claim the dispatch is acknowledged and NEVER becomes a
+  // print job (zero print bytes even with a live worker); without one the
+  // import + worker path prints exactly as before.
+  group('Pass C (C1) — the mirror-claim consult before import', () {
+    final networkCalls = <(String, int)>[];
+
+    // The worker revalidates the row's destination fingerprint against the
+    // decrypted destination before sending, so the print-through test needs
+    // the CANONICAL fingerprint (the resolver's own format), not a token.
+    final printableDestination = ResolvedKitchenDestination(
+      destination: const NetworkKitchenDestination(
+        host: '10.0.0.5',
+        port: 9100,
+      ),
+      fingerprint: sha256
+          .convert(utf8.encode('network|10.0.0.5|9100'))
+          .toString(),
+      displayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+    );
+
+    KitchenPrintWorker liveWorker() => KitchenPrintWorker(
+      store: store,
+      cipher: cipher,
+      key: key,
+      renderer: const KitchenTicketRenderer(),
+      networkSend: ({required host, required port, required bytes}) async {
+        networkCalls.add((host, port));
+        return const pp.KitchenTransportOutcome(
+          pp.KitchenTransportOutcomeKind.accepted,
+          'flushed',
+        );
+      },
+      bluetoothSend: ({required address, required bytes}) async =>
+          const pp.KitchenTransportOutcome(
+            pp.KitchenTransportOutcomeKind.unsupported,
+            'not_in_this_test',
+          ),
+      sendGate: pp.PrinterDestinationSendGate(),
+      ackRepository: ackRepo,
+      scope: _scope,
+      now: () => now,
+    );
+
+    setUp(networkCalls.clear);
+
+    test('mirror claim `sent` => acknowledged transport_accepted, NO local '
+        'row, ZERO print bytes through a live worker', () async {
+      transport.enqueue({'ok': true}); // the skip acknowledgement
+      final summary = await coordinator(
+        readInitialPrintClaim: (orderId) =>
+            orderId == 'order-1' ? PosRoundPrintClaimState.sent : null,
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+
+      expect(summary.alreadyPrintedLocally, 1);
+      expect(summary.imported, 0);
+      expect(summary.acked, 1);
+      expect(await store.findByDispatchId('d-1'), isNull);
+      final (fn, params) = transport.calls.single;
+      expect(fn, 'acknowledge_kitchen_print_dispatch');
+      expect(params['p_client_status'], 'transport_accepted');
+
+      // Zero print bytes, proven at the transport: nothing exists to run.
+      final report = await liveWorker().run();
+      expect(report.claimed, 0);
+      expect(networkCalls, isEmpty);
+    });
+
+    test('mirror claim `claimed` (crash window / unreadable) => acknowledged '
+        'possibly_printed, NO local row', () async {
+      transport.enqueue({'ok': true});
+      final summary = await coordinator(
+        readInitialPrintClaim: (_) => PosRoundPrintClaimState.claimed,
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+      expect(summary.alreadyPrintedLocally, 1);
+      expect(summary.imported, 0);
+      expect(await store.findByDispatchId('d-1'), isNull);
+      expect(transport.calls.single.$2['p_client_status'], 'possibly_printed');
+      final report = await liveWorker().run();
+      expect(report.claimed, 0);
+      expect(networkCalls, isEmpty);
+    });
+
+    test(
+      'a THROWING reader reads as `claimed` (fail toward not printing)',
+      () async {
+        transport.enqueue({'ok': true});
+        final summary = await coordinator(
+          readInitialPrintClaim: (_) => throw StateError('torn down'),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(summary.alreadyPrintedLocally, 1);
+        expect(await store.findByDispatchId('d-1'), isNull);
+        expect(
+          transport.calls.single.$2['p_client_status'],
+          'possibly_printed',
+        );
+      },
+    );
+
+    test('NO claim => imports and prints exactly as before (the other-till '
+        'order the drain exists for)', () async {
+      transport.enqueue({'ok': true}); // import ack
+      final summary = await coordinator(
+        destination: printableDestination,
+        readInitialPrintClaim: (_) => null,
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+      expect(summary.alreadyPrintedLocally, 0);
+      expect(summary.imported, 1);
+      final row = (await store.findByDispatchId('d-1'))!;
+      expect(row.status, KitchenSpoolJobStatus.imported);
+
+      transport.enqueue({'ok': true, 'completed': true}); // worker ack
+      final report = await liveWorker().run();
+      expect(report.claimed, 1);
+      expect(report.accepted, 1);
+      expect(networkCalls.single, ('10.0.0.5', 9100));
+    });
+
+    test(
+      'a `failed` claim was RELEASED => imports normally (the local '
+      'attempt failed; the drain printing it is the desired outcome)',
+      () async {
+        transport.enqueue({'ok': true});
+        final summary = await coordinator(
+          readInitialPrintClaim: (_) => PosRoundPrintClaimState.failed,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(summary.alreadyPrintedLocally, 0);
+        expect(summary.imported, 1);
+        expect(await store.findByDispatchId('d-1'), isNotNull);
+      },
+    );
+
+    test('the gate is INITIAL-only: a void dispatch imports untouched even '
+        'with a `sent` mirror claim', () async {
+      transport.enqueue({'ok': true});
+      final summary =
+          await coordinator(
+            readInitialPrintClaim: (_) => PosRoundPrintClaimState.sent,
+          ).importDispatches([
+            _dispatch(
+              dispatchId: 'd-void',
+              dispatchType: 'void',
+              payload: _voidPayload(),
+            ),
+          ]);
+      expect(summary.alreadyPrintedLocally, 0);
+      expect(summary.imported, 1);
+      expect(await store.findByDispatchId('d-void'), isNotNull);
+    });
   });
 }

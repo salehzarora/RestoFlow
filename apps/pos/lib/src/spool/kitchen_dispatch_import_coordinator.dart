@@ -5,6 +5,7 @@ import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
+import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import 'kitchen_destination_resolver.dart';
 
 /// KITCHEN-MODE-001C2B — the durable import transaction (steps 3–14 of the
@@ -27,6 +28,12 @@ import 'kitchen_destination_resolver.dart';
 /// `blocked_configuration`), never from freshly recomputed destination
 /// state. Any other durable state yields a typed local-state conflict count:
 /// no acknowledgement is invented and the row is left untouched.
+///
+/// [POS-OFFLINE-OPERATIONS-002] Pass C (C1): BEFORE a NEW `initial_order`
+/// dispatch is imported, the injected mirror-claim reader is consulted — a
+/// `sent`/`claimed` claim means this POS already printed that order's initial
+/// ticket locally at submit, so the dispatch is acknowledged and skipped
+/// without ever becoming a print job (see `_readInitialPrintClaim`).
 final class KitchenImportScope {
   const KitchenImportScope({
     required this.organizationId,
@@ -53,6 +60,7 @@ final class KitchenImportSummary {
     required this.superseded,
     required this.supersessionLinks,
     required this.localStateConflicts,
+    required this.alreadyPrintedLocally,
   });
 
   final int imported;
@@ -64,6 +72,16 @@ final class KitchenImportSummary {
   final int ackTerminal;
   final int superseded;
   final int supersessionLinks;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass C (C1): `initial_order` dispatches
+  /// SKIPPED because the order-scoped mirror claim
+  /// (`posInitialKitchenPrintClaimKey`) says this POS already printed the
+  /// initial ticket locally at submit (offline direct-print). No local job
+  /// row is created — there is nothing for any worker to ever print — and
+  /// the server is acknowledged with the honest non-physical status
+  /// (`transport_accepted` for a `sent` claim, `possibly_printed` for a
+  /// crash-window `claimed`). Safe scalar count only.
+  final int alreadyPrintedLocally;
 
   /// CORRECTION-001: re-driven dispatches whose durable row is OUTSIDE this
   /// coordinator's acknowledgement authority (later print states, or an
@@ -85,6 +103,7 @@ final class KitchenDispatchImportCoordinator {
     DateTime Function()? now,
     Future<String?> Function(OrderSubmitPhoneLookupKey key)?
     resolveCustomerPhone,
+    PosRoundPrintClaimState? Function(String orderId)? readInitialPrintClaim,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -93,7 +112,8 @@ final class KitchenDispatchImportCoordinator {
        _ackRepository = ackRepository,
        _newLocalJobId = localJobIdGenerator,
        _now = now ?? DateTime.now,
-       _resolveCustomerPhone = resolveCustomerPhone;
+       _resolveCustomerPhone = resolveCustomerPhone,
+       _readInitialPrintClaim = readInitialPrintClaim;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
   static const Duration _ackBackoffCap = Duration(minutes: 5);
@@ -115,6 +135,21 @@ final class KitchenDispatchImportCoordinator {
   /// Optional + best-effort: a miss/failure/absence yields null (name-only).
   final Future<String?> Function(OrderSubmitPhoneLookupKey key)?
   _resolveCustomerPhone;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass C (C1) — THE DUPLICATE-PRINT DEFENCE
+  /// for locally-printed initial tickets: reads this device's ORDER-scoped
+  /// mirror claim (`posInitialKitchenPrintClaimKey(orderId)`, recorded when
+  /// the POS printed the offline direct-print ticket itself at submit).
+  /// Consulted BEFORE an `initial_order` dispatch becomes a local print job:
+  /// every accepted submit on a printer_only branch creates an
+  /// `initial:<order_id>` dispatch row server-side — INCLUDING an offline
+  /// order once it syncs — so without this consult the drain would re-print
+  /// tickets the POS already printed. `sent`/`claimed` skip + acknowledge;
+  /// `failed`/absent import normally (the local attempt failed or another
+  /// till took the order — the drain printing it is the desired outcome).
+  /// Null (not wired: tests, web) keeps the pre-Pass-C behaviour.
+  final PosRoundPrintClaimState? Function(String orderId)?
+  _readInitialPrintClaim;
 
   /// The fully-scoped durable-phone lookup identity for [dispatch] in THIS run's
   /// import scope (organization/restaurant/branch/device from [_scope]). The
@@ -193,6 +228,7 @@ final class KitchenDispatchImportCoordinator {
     var imported = 0, duplicates = 0, blocked = 0, rejected = 0;
     var acked = 0, retries = 0, terminal = 0;
     var superseded = 0, links = 0, conflicts = 0;
+    var alreadyPrinted = 0;
     for (final dispatch in dispatches) {
       final now = _now();
 
@@ -201,6 +237,56 @@ final class KitchenDispatchImportCoordinator {
       if (dispatch.payloadVersion != 1) {
         rejected++;
         continue;
+      }
+
+      // Pass C (C1): the mirror-claim consult, BEFORE any local job exists.
+      // Scoped to NEW `initial_order` dispatches only: a row that already
+      // exists keeps the durable-row-is-authority contract untouched, and
+      // service rounds / voids have their own identities. A skipped dispatch
+      // creates NO local row — there is nothing for any worker to ever print
+      // — and the server is told the honest non-physical status. A refused
+      // acknowledgement schedules nothing: the un-acknowledged dispatch is
+      // simply re-served after its claim window and this consult runs again,
+      // converging on the acknowledgement without ever printing.
+      if (dispatch.dispatchType ==
+              KitchenSpoolDispatchType.initialOrder.wireName &&
+          _readInitialPrintClaim != null &&
+          await _store.findByDispatchId(dispatch.dispatchId) == null) {
+        PosRoundPrintClaimState? claim;
+        try {
+          claim = _readInitialPrintClaim(dispatch.orderId);
+        } on Object {
+          // An unreadable claim answers "this POS MAY already have printed
+          // it" — fail toward not printing (the claim store's own unreadable
+          // envelope reads the same way).
+          claim = PosRoundPrintClaimState.claimed;
+        }
+        if (claim == PosRoundPrintClaimState.sent ||
+            claim == PosRoundPrintClaimState.claimed) {
+          alreadyPrinted++;
+          final result = await _ackRepository.acknowledge(
+            dispatchId: dispatch.dispatchId,
+            // `sent` = the transport accepted the bytes at submit;
+            // `claimed` = a crash window where paper MAY exist — the
+            // server's own vocabulary for exactly those two facts.
+            status: claim == PosRoundPrintClaimState.sent
+                ? KitchenImportAckStatus.transportAccepted
+                : KitchenImportAckStatus.possiblyPrinted,
+          );
+          switch (result) {
+            case KitchenAckAccepted():
+              acked++;
+            case KitchenAckTerminal():
+              terminal++;
+            case KitchenAckInvalidSession():
+            case KitchenAckInvalidRequest():
+            case KitchenAckTransientFailure():
+            case KitchenAckServerFailure():
+            case KitchenAckMalformedResponse():
+              break; // re-served later; never printed meanwhile.
+          }
+          continue;
+        }
       }
 
       // CORRECTION-001: the durable row is looked up FIRST. A re-drive of an
@@ -431,6 +517,7 @@ final class KitchenDispatchImportCoordinator {
       superseded: superseded,
       supersessionLinks: links,
       localStateConflicts: conflicts,
+      alreadyPrintedLocally: alreadyPrinted,
     );
   }
 }

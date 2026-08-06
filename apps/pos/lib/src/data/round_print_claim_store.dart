@@ -59,11 +59,19 @@ String posLocalKitchenDispatchClaimKey({
 /// offline direct-print ticket is confirmed sent. Mirrors the round-claim
 /// naming (`orderId|round:<roundId>`, see `posAdditionKitchenPrintGuardKey`)
 /// and the server dispatch ledger's own `initial:<orderId>` idempotency key,
-/// so any FUTURE surface keyed by the server order (the client-minted order id
-/// is stable across sync — the server stores it verbatim) can see the ticket
-/// already exists and never re-print it. Today no production server-driven
-/// reprint path exists for `direct_print` (the spool dispatch drain is a
-/// dormant seam); this claim is the defence in depth for when one does.
+/// so a surface keyed by the server order (the client-minted order id is
+/// stable across sync — the server stores it verbatim) can see the ticket
+/// already exists and never re-print it.
+///
+/// Pass C (C1): this claim is CONSULTED, not merely written. Every accepted
+/// submit on a printer_only branch creates an `initial:<orderId>` dispatch
+/// row server-side — including an offline order once it syncs — and the spool
+/// dispatch drain is production-reachable (the server gates pulls on a filed
+/// readiness report + the branch's printer_only revision, both of which the
+/// POS's own heartbeat satisfies). The dispatch-import coordinator therefore
+/// reads this key BEFORE creating a local print job for an initial dispatch:
+/// `sent`/`claimed` acknowledges the dispatch without printing, so the drain
+/// can never re-print a ticket this POS already printed at submit.
 String posInitialKitchenPrintClaimKey(String orderId) => '$orderId|initial';
 
 /// Durable per-round automatic-print claims.

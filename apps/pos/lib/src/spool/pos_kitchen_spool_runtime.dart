@@ -19,6 +19,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
     show PrinterDestinationSendGate;
 
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
+import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
@@ -45,11 +46,17 @@ import 'pos_secure_kitchen_mode_cache.dart';
 ///    directory, no database, no key);
 ///  * verified KDS with an existing spool file → open for SAFE
 ///    RECONCILIATION only (flush pending acks; never pull);
-///  * printer_only → [KitchenModeRevisionUnavailable] under the current
-///    server getter (D1) → fail closed, no pull;
-///  * a trusted printer-only-with-revision state cannot arise in production
-///    until 001C3 — and the server independently refuses pulls without a
-///    readiness report, which nothing files until 001C3.
+///  * printer_only WITHOUT a server revision
+///    ([KitchenModeRevisionUnavailable], e.g. an old server) → fail closed,
+///    no pull;
+///  * printer_only WITH a revision ([KitchenModePrinterOnlyWithRevision] —
+///    which `fetchMode` DOES construct in production) → the full trusted
+///    drain. The REAL gate is the SERVER's: pulls are refused without a
+///    filed readiness report (`readiness_required`) + the branch's
+///    printer_only revision, and the POS's own production heartbeat files
+///    exactly that report — so this path must be treated as reachable. The
+///    duplicate-print defence for initial tickets the POS already printed
+///    locally is the import coordinator's mirror-claim consult (Pass C, C1).
 sealed class PosKitchenSpoolRunReport {
   const PosKitchenSpoolRunReport(this.detail);
 
@@ -157,6 +164,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     DateTime Function()? now,
     Future<String?> Function(OrderSubmitPhoneLookupKey key)?
     resolveCustomerPhone,
+    PosRoundPrintClaimState? Function(String orderId)?
+    readInitialKitchenPrintClaim,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -175,7 +184,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _modeCache = modeCache,
        _keyStore = keyStore,
        _now = now ?? DateTime.now,
-       _resolveCustomerPhone = resolveCustomerPhone;
+       _resolveCustomerPhone = resolveCustomerPhone,
+       _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim;
 
   final PosKitchenSpoolPlatform _platform;
   final DeviceContext? Function() _deviceContext;
@@ -186,8 +196,14 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final SupabaseKitchenDispatchPullRepository? _pullRepository;
 
   /// Test seam ONLY for the mode decision: production wiring never sets it,
-  /// so the mode always comes from the typed device-token repository — which
-  /// can never construct a trusted printer-only-with-revision state (D1).
+  /// so the mode always comes from the typed device-token repository. Pass C
+  /// comment correction: that repository DOES construct a trusted
+  /// [KitchenModePrinterOnlyWithRevision] in production (the server getter
+  /// returns the revision), so the trusted drain below is REACHABLE — the
+  /// real gate is server-side (a filed readiness report + the printer_only
+  /// revision, both satisfied by the POS's own heartbeat), and the
+  /// duplicate-print defence is the import coordinator's mirror-claim
+  /// consult, not unreachability.
   final Future<KitchenModeResult> Function()? _fetchModeOverride;
   final Future<KitchenDestinationResolution> Function()? _destinationResolver;
   final String Function()? _localJobIdGenerator;
@@ -204,6 +220,13 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   /// locally at import so it is preserved in the encrypted spool for crash replay.
   final Future<String?> Function(OrderSubmitPhoneLookupKey key)?
   _resolveCustomerPhone;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass C (C1): reads this device's
+  /// order-scoped initial-ticket mirror claim, handed to the import
+  /// coordinator so the drain can never re-print a ticket the POS already
+  /// printed locally at submit. Null (tests / web) keeps prior behaviour.
+  final PosRoundPrintClaimState? Function(String orderId)?
+  _readInitialKitchenPrintClaim;
 
   KitchenSpoolDatabase? _db;
   bool _running = false;
@@ -260,10 +283,15 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         await (_fetchModeOverride ?? modeRepository.fetchMode)();
     await _cacheMode(mode, context, restaurantId, deviceId, secretStore);
 
-    // CORRECTION-001: the TRUSTED printer-only path — the complete dormant
-    // drain seam. Unreachable in production today (the mode repository can
-    // never construct this state under D1, and the server independently
-    // refuses pulls without a readiness report); tests inject it.
+    // CORRECTION-001 / Pass C: the TRUSTED printer-only path — the complete
+    // drain. REACHABLE in production: `fetchMode` constructs this state from
+    // the server's revision, and the server's own pull gate (a filed
+    // readiness report + that revision — `readiness_required` otherwise) is
+    // satisfied by the POS's production heartbeat. Every accepted submit on
+    // a printer_only branch creates an `initial:<order_id>` dispatch row —
+    // including an offline order once it syncs — so the drain relies on the
+    // import coordinator's mirror-claim consult (C1) to never re-print a
+    // ticket this POS already printed locally.
     if (mode is KitchenModePrinterOnlyWithRevision) {
       return _drainTrusted(context, restaurantId, deviceId, ackRepository);
     }
@@ -283,9 +311,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       }
     }
 
-    // 5–7: an EXISTING spool reconciles safely (pending acks only). Pull is
-    // impossible here in production: D1 blocks a trusted printer-only state
-    // and the server additionally requires a readiness report (001C3).
+    // 5–7: an EXISTING spool reconciles safely (pending acks only). No pull
+    // happens on THIS branch by construction: the trusted printer-only state
+    // already returned through _drainTrusted above, so reaching here means
+    // the mode is KDS, revision-less printer_only, or unknown — none of
+    // which may import dispatches.
     if (!spoolExists) {
       return const KitchenSpoolRunSkipped('printer_only_unavailable');
     }
@@ -454,6 +484,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         localJobIdGenerator: newLocalJobId,
         now: _now,
         resolveCustomerPhone: _resolveCustomerPhone,
+        // Pass C (C1): the mirror-claim consult — an initial dispatch whose
+        // order this POS already printed locally is acknowledged, not
+        // re-printed.
+        readInitialPrintClaim: _readInitialKitchenPrintClaim,
       ),
     ).drain();
 

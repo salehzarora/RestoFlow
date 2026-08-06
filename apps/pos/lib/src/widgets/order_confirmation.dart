@@ -15,10 +15,7 @@ import '../data/order_submission.dart';
 import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../data/round_print_claim_store.dart'
-    show
-        PosRoundPrintClaimState,
-        posInitialKitchenPrintClaimKey,
-        posLocalKitchenDispatchClaimKey;
+    show PosRoundPrintClaimState, posLocalKitchenDispatchClaimKey;
 import '../format/money_format.dart';
 import '../state/cart_controller.dart' show cartControllerProvider;
 import '../format/payment_method_label.dart';
@@ -27,11 +24,10 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         PosKitchenPrintOutcome,
         isOrderEligibleForKitchenPrint,
-        kdsTicketViewFromSubmittedOrder,
         kitchenTicketPrintLabelsFromL10n,
+        posAutoKitchenPrintGuardProvider,
         posOfflineKitchenPrintRevisionProvider,
-        posRoundPrintClaimStoreProvider,
-        printKitchenTicketForOrder;
+        printKitchenTicketAndSettleOwedClaims;
 import '../state/pos_offline_state.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/draft_recovery_controller.dart';
@@ -274,17 +270,16 @@ class OrderConfirmation extends ConsumerWidget {
                 // [POS-OFFLINE-OPERATIONS-002] C11 — the queued-OFFLINE order
                 // status, rendered ONLY while the POS is provably operating
                 // from the offline snapshot. Two honest lines (saved locally /
-                // awaiting sync) plus the dispatch-specific third: the KDS
-                // sees a kds order only after sync; a direct_print order's
-                // unconfirmed kitchen ticket shows its pending-print copy.
-                // Covers PENDING and DELIVERY-UNCONFIRMED alike: an offline
-                // push lands as a transient transport failure (unconfirmed),
-                // and both statements stay true for it — the entry IS durably
-                // stored and the sweep DOES resubmit the same identity, which
-                // the server replays idempotently. Every other phase keeps the
-                // existing copy byte-identically. Nothing here invents a
-                // server receipt number — the order code shown above stays the
-                // local display code derived from the client-minted id.
+                // awaiting sync) plus, for a kds order, the KDS-sees-it-after-
+                // sync line. Covers PENDING and DELIVERY-UNCONFIRMED alike: an
+                // offline push lands as a transient transport failure
+                // (unconfirmed), and both statements stay true for it — the
+                // entry IS durably stored and the sweep DOES resubmit the same
+                // identity, which the server replays idempotently. Every other
+                // phase keeps the existing copy byte-identically. Nothing here
+                // invents a server receipt number — the order code shown above
+                // stays the local display code derived from the client-minted
+                // id.
                 if (!isDemo &&
                     (outcome == PosOrderOutcome.pending ||
                         outcome == PosOrderOutcome.deliveryUnconfirmed) &&
@@ -293,6 +288,17 @@ class OrderConfirmation extends ConsumerWidget {
                   const SizedBox(height: RestoflowSpacing.sm),
                   _OfflinePendingNotice(entry: entry, l10n: l10n),
                 ],
+                // Pass C (B3) — the PRINT-pending notice is CLAIM-driven, not
+                // phase-driven. A direct_print order whose automatic kitchen
+                // ticket has not been confirmed sent owes the kitchen paper
+                // regardless of what the connectivity phase says: a print that
+                // failed while the phase read `online` used to produce ZERO
+                // signal here. The claim (durable, or the B1 session-only
+                // overlay when the durable commit was refused) is the one
+                // honest record of that debt, so this line renders whenever it
+                // reads claimed/failed — and disappears the moment a manual or
+                // automatic send settles it to `sent`.
+                if (!isDemo) _KitchenPrintPendingNotice(entry: entry),
                 const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
@@ -729,46 +735,27 @@ class _OutcomeHeader extends StatelessWidget {
 }
 
 /// [POS-OFFLINE-OPERATIONS-002] C11 — the queued-offline order status under the
-/// pending header: "saved on this device" / "waiting to sync", plus the
-/// dispatch-specific third line.
+/// pending header: "saved on this device" / "waiting to sync", plus — for a
+/// kds order — the KDS-sees-it-after-sync line.
 ///
 /// The dispatch mode is read from the entry's FROZEN payload
 /// ([OutboxEntry.isDirectPrintOrderSubmit]) — never re-derived from the live
 /// readiness, which may have changed since this order was frozen. For a kds
 /// order the kitchen display genuinely cannot see the order until it syncs,
-/// so that is said plainly. For a direct_print order the durable local
-/// dispatch claim is consulted: `claimed`/`failed` mean the automatic kitchen
-/// ticket has NOT been confirmed sent, so the pending-print copy names the
-/// manual "Print kitchen ticket" button as the retry (the claim releases a
-/// failed send for exactly that). `sent` — or no wired claim store — shows no
-/// print line: nothing is known to be owed.
-class _OfflinePendingNotice extends ConsumerWidget {
+/// so that is said plainly. Pass C (B3): a direct_print order's pending-PRINT
+/// line no longer lives here — it is claim-driven, not phase-driven, and is
+/// rendered by [_KitchenPrintPendingNotice] regardless of the offline phase.
+class _OfflinePendingNotice extends StatelessWidget {
   const _OfflinePendingNotice({required this.entry, required this.l10n});
 
   final OutboxEntry? entry;
   final AppLocalizations l10n;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Claim writes notify nobody; the revision bumps when an offline print
-    // attempt (or a manual reprint) settles, so this re-reads the claim then.
-    ref.watch(posOfflineKitchenPrintRevisionProvider);
     final e = entry;
     final directPrint = e != null && e.isDirectPrintOrderSubmit;
-    var printPending = false;
-    if (directPrint) {
-      final claims = ref.watch(posRoundPrintClaimStoreProvider);
-      final claim = claims?.claimOf(
-        posLocalKitchenDispatchClaimKey(
-          deviceId: e.deviceId,
-          localOperationId: e.localOperationId,
-        ),
-      );
-      printPending =
-          claim == PosRoundPrintClaimState.claimed ||
-          claim == PosRoundPrintClaimState.failed;
-    }
     final detailStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -799,16 +786,62 @@ class _OfflinePendingNotice extends ConsumerWidget {
             style: detailStyle,
           ),
         ],
-        if (printPending) ...[
-          const SizedBox(height: RestoflowSpacing.xs),
-          Text(
-            l10n.posOfflinePrintPending,
-            key: const Key('confirmation-offline-print-pending'),
-            textAlign: TextAlign.center,
-            style: detailStyle,
-          ),
-        ],
       ],
+    );
+  }
+}
+
+/// Pass C (B3) — the CLAIM-driven pending-print line for a direct_print order
+/// whose automatic kitchen ticket has not been confirmed sent.
+///
+/// `claimed`/`failed` (durable claim, or the B1 session-only overlay when the
+/// durable commit was refused) mean the kitchen is still owed this ticket, so
+/// the pending-print copy names the manual "Print kitchen ticket" button as
+/// the retry — in ANY connectivity phase: a print that failed while the phase
+/// read `online` is exactly as owed as one that failed offline. `sent` — or
+/// no claim at all (the ordinary online submit, which never writes one) —
+/// renders nothing: nothing is known to be owed. A definitively-refused
+/// submit renders nothing either — no server order exists to cook.
+class _KitchenPrintPendingNotice extends ConsumerWidget {
+  const _KitchenPrintPendingNotice({required this.entry});
+
+  final OutboxEntry? entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    // Claim writes notify nobody; the revision bumps when an offline print
+    // attempt (or a manual reprint) settles, so this re-reads the claim then.
+    ref.watch(posOfflineKitchenPrintRevisionProvider);
+    final e = entry;
+    if (e == null ||
+        !e.isDirectPrintOrderSubmit ||
+        e.isDefinitiveNoServerOrder) {
+      return const SizedBox.shrink();
+    }
+    final claim = ref
+        .watch(posAutoKitchenPrintGuardProvider)
+        .effectiveClaimOf(
+          posLocalKitchenDispatchClaimKey(
+            deviceId: e.deviceId,
+            localOperationId: e.localOperationId,
+          ),
+        );
+    final owed =
+        claim == PosRoundPrintClaimState.claimed ||
+        claim == PosRoundPrintClaimState.failed;
+    if (!owed) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+      child: Text(
+        l10n.posOfflinePrintPending,
+        key: const Key('confirmation-offline-print-pending'),
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }
@@ -1491,24 +1524,15 @@ class _KitchenTicketPrintButtonState
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
-    PosKitchenPrintOutcome outcome;
-    try {
-      outcome = await printKitchenTicketForOrder(
-        container: container,
-        ticket: kdsTicketViewFromSubmittedOrder(widget.order),
-        labels: kitchenTicketPrintLabelsFromL10n(l10n),
-      );
-    } catch (_) {
-      outcome = PosKitchenPrintOutcome.failed;
-    }
-    // [POS-OFFLINE-OPERATIONS-002] C9(d): a manual print that SUCCEEDS while
-    // this queued direct_print order's local dispatch claim is still owed
-    // (claimed/failed) settles the claim — the ticket physically went out, so
-    // the pending-print copy stops claiming otherwise and no future automatic
-    // path re-prints it. Best-effort; never blocks the snackbar.
-    if (outcome == PosKitchenPrintOutcome.printed) {
-      await _settleOfflinePendingClaim(container);
-    }
+    // Pass C (B2): the ONE shared print-and-settle seam — the recent-orders
+    // recovery action runs this identical code, so a successful manual print
+    // settles the owed direct-print claims (local + initial mirror) the same
+    // way from either surface. Best-effort; never blocks the snackbar.
+    final outcome = await printKitchenTicketAndSettleOwedClaims(
+      container: container,
+      order: widget.order,
+      labels: kitchenTicketPrintLabelsFromL10n(l10n),
+    );
     if (!mounted) return;
     setState(() => _printing = false);
     // C9(c): while operating from the offline snapshot a failed send names the
@@ -1527,45 +1551,6 @@ class _KitchenTicketPrintButtonState
         ),
       ),
     );
-  }
-
-  /// Settles the queued direct_print order's durable local dispatch claim to
-  /// `sent` (plus the order-scoped `orderId|initial` mirror) after a manual
-  /// print succeeded. Scoped to EXACTLY the offline-pending case: only when a
-  /// local claim exists and is not already `sent` — an ordinary reprint of an
-  /// online order records nothing, keeping the manual path's "never consults
-  /// the guard" contract otherwise untouched.
-  Future<void> _settleOfflinePendingClaim(ProviderContainer container) async {
-    final entry = container
-        .read(outboxControllerProvider.notifier)
-        .entryById(widget.order.outboxEntryId);
-    if (entry == null || !entry.isDirectPrintOrderSubmit) return;
-    final claims = container.read(posRoundPrintClaimStoreProvider);
-    if (claims == null) return;
-    final key = posLocalKitchenDispatchClaimKey(
-      deviceId: entry.deviceId,
-      localOperationId: entry.localOperationId,
-    );
-    final claim = claims.claimOf(key);
-    if (claim != PosRoundPrintClaimState.claimed &&
-        claim != PosRoundPrintClaimState.failed) {
-      return;
-    }
-    try {
-      await claims.record(key, PosRoundPrintClaimState.sent);
-      await claims.record(
-        posInitialKitchenPrintClaimKey(entry.targetId),
-        PosRoundPrintClaimState.sent,
-      );
-    } catch (_) {
-      // A refused settle leaves the pending copy standing — honest, and the
-      // deliberate manual reprint remains available.
-    }
-    try {
-      container.read(posOfflineKitchenPrintRevisionProvider.notifier).state++;
-    } catch (_) {
-      // Torn-down container — nothing left to repaint.
-    }
   }
 
   String _messageFor(AppLocalizations l10n, PosKitchenPrintOutcome outcome) =>
