@@ -3706,5 +3706,17 @@
   "posOfflineReconnecting": "Checking the connection…",
   "@posOfflineReconnecting": {"description": "POS notice while the PIN gate probes whether the backend is reachable before offering the offline session restore."},
   "posOfflineSyncRestored": "Signed in - saved orders are syncing now.",
-  "@posOfflineSyncRestored": {"description": "POS confirmation after a fresh online sign-in released the held offline orders back into normal syncing."}
+  "@posOfflineSyncRestored": {"description": "POS confirmation after a fresh online sign-in released the held offline orders back into normal syncing."},
+  "posOfflineOrderSavedLocally": "Saved on this device",
+  "@posOfflineOrderSavedLocally": {"description": "POS first line of the queued-offline order status: the order is durably stored on this till (nothing is claimed about the server)."},
+  "posOfflineAwaitingSync": "Waiting to sync",
+  "@posOfflineAwaitingSync": {"description": "POS second line of the queued-offline order status: the stored order is sent automatically once the connection returns."},
+  "posOfflinePrinterUnreachable": "Printer unreachable - check the printer connection.",
+  "@posOfflinePrinterUnreachable": {"description": "POS snackbar when a kitchen-ticket print attempt failed while the POS is operating offline (a LAN printer needs the network; Bluetooth may still work)."},
+  "posOfflinePrintPending": "Kitchen ticket not printed yet - use Print kitchen ticket when the printer is reachable.",
+  "@posOfflinePrintPending": {"description": "POS status line on a queued offline direct-print order whose automatic kitchen ticket has not been confirmed sent; the manual print button is the retry."},
+  "posOfflineActionUnavailable": "Not available offline - reconnect to use this action.",
+  "@posOfflineActionUnavailable": {"description": "POS snackbar shown when a server-backed action (payment, discount, void, shift close) is tapped while the POS is operating from the offline snapshot."},
+  "posOfflineKdsPending": "The kitchen display receives this order once the connection returns.",
+  "@posOfflineKdsPending": {"description": "POS status line on a queued offline order in the normal KDS workflow: the kitchen sees it only after the order syncs."}
 }

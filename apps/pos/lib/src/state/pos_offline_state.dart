@@ -14,7 +14,9 @@
 /// the phase stays [PosOfflinePhase.online] and no offline chrome ever shows.
 library;
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// Which world the POS is currently operating in. See the library doc for the
 /// exact meaning of each phase.
@@ -76,3 +78,29 @@ final posOfflineModeProvider =
     NotifierProvider<PosOfflineController, PosOfflineState>(
       PosOfflineController.new,
     );
+
+/// [POS-OFFLINE-OPERATIONS-002] C11 — the ONE gate for server-backed actions
+/// while the POS operates from the offline snapshot.
+///
+/// Payment, discount, void/cancel and shift close are server-authorized,
+/// server-audited mutations (D-011); opening their sheets offline hands the
+/// cashier a Confirm that can only fail. Each entry point calls this FIRST:
+/// when the phase is [PosOfflinePhase.offlineCached] it shows the one honest
+/// localized snackbar and answers true (the caller returns without opening
+/// anything); every other phase answers false and changes nothing. It gates
+/// ONLY at the UI entry — no payment/void/shift logic is touched — and demo
+/// mode never reaches it (the demo menu cannot fail, so the phase stays
+/// online).
+bool blockPosActionWhileOffline(BuildContext context) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  if (container.read(posOfflineModeProvider).phase !=
+      PosOfflinePhase.offlineCached) {
+    return false;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(AppLocalizations.of(context).posOfflineActionUnavailable),
+    ),
+  );
+  return true;
+}

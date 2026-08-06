@@ -5392,4 +5392,26 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posOfflineSyncRestored => 'נכנסת — ההזמנות השמורות מסתנכרנות כעת.';
+
+  @override
+  String get posOfflineOrderSavedLocally => 'נשמר במכשיר הזה';
+
+  @override
+  String get posOfflineAwaitingSync => 'ממתין לסנכרון';
+
+  @override
+  String get posOfflinePrinterUnreachable =>
+      'אין גישה למדפסת — בדקו את חיבור המדפסת.';
+
+  @override
+  String get posOfflinePrintPending =>
+      'כרטיס המטבח עדיין לא הודפס — השתמשו ב\"הדפסת כרטיס מטבח\" כשהמדפסת זמינה.';
+
+  @override
+  String get posOfflineActionUnavailable =>
+      'לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.';
+
+  @override
+  String get posOfflineKdsPending =>
+      'ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.';
 }

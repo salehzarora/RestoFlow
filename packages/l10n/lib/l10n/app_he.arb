@@ -1690,5 +1690,11 @@
   "posOutboxAuthHold": "{count} ממתינות לכניסה מחדש",
   "posOutboxAuthHoldTooltip": "ההזמנות האלה שמורות במכשיר הזה. היכנסו מחדש והן יסתנכרנו אוטומטית.",
   "posOfflineReconnecting": "בודק את החיבור…",
-  "posOfflineSyncRestored": "נכנסת — ההזמנות השמורות מסתנכרנות כעת."
+  "posOfflineSyncRestored": "נכנסת — ההזמנות השמורות מסתנכרנות כעת.",
+  "posOfflineOrderSavedLocally": "נשמר במכשיר הזה",
+  "posOfflineAwaitingSync": "ממתין לסנכרון",
+  "posOfflinePrinterUnreachable": "אין גישה למדפסת — בדקו את חיבור המדפסת.",
+  "posOfflinePrintPending": "כרטיס המטבח עדיין לא הודפס — השתמשו ב\"הדפסת כרטיס מטבח\" כשהמדפסת זמינה.",
+  "posOfflineActionUnavailable": "לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.",
+  "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור."
 }

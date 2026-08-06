@@ -5427,4 +5427,26 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posOfflineSyncRestored =>
       'تم تسجيل الدخول — تجري الآن مزامنة الطلبات المحفوظة.';
+
+  @override
+  String get posOfflineOrderSavedLocally => 'محفوظ على هذا الجهاز';
+
+  @override
+  String get posOfflineAwaitingSync => 'بانتظار المزامنة';
+
+  @override
+  String get posOfflinePrinterUnreachable =>
+      'تعذّر الوصول إلى الطابعة — تحقّق من اتصال الطابعة.';
+
+  @override
+  String get posOfflinePrintPending =>
+      'لم تُطبع تذكرة المطبخ بعد — استخدم «طباعة تذكرة المطبخ» عندما تصبح الطابعة متاحة.';
+
+  @override
+  String get posOfflineActionUnavailable =>
+      'غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.';
+
+  @override
+  String get posOfflineKdsPending =>
+      'تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.';
 }

@@ -269,11 +269,36 @@ final class PosAutoKitchenPrintGuard {
     return completer.future;
   }
 
+  /// [POS-OFFLINE-OPERATIONS-002] C9 — runs [attempt] for a key whose durable
+  /// `claimed` record the CALLER already committed (the offline direct-print
+  /// commit that lands BEFORE the cart clears). Identical to [runGuarded]
+  /// except that the durable pre-consult and the claimed-write are skipped —
+  /// consulting them here would read OUR OWN just-written claim and suppress
+  /// the very send it protects. The in-memory in-flight/succeeded sharing and
+  /// the truthful `sent`/`failed` settle are the SAME code path, so a
+  /// double-invocation still produces exactly one physical send and a failure
+  /// still releases the key for a legitimate retry.
+  Future<PosKitchenPrintOutcome> runPreclaimed(
+    String key,
+    Future<PosKitchenPrintOutcome> Function() attempt,
+  ) {
+    if (_succeeded.contains(key)) {
+      return Future.value(PosKitchenPrintOutcome.printed);
+    }
+    final active = _inFlight[key];
+    if (active != null) return active;
+    final completer = Completer<PosKitchenPrintOutcome>();
+    _inFlight[key] = completer.future;
+    unawaited(_drive(key, attempt, completer, claimBeforeSend: false));
+    return completer.future;
+  }
+
   Future<void> _drive(
     String orderId,
     Future<PosKitchenPrintOutcome> Function() attempt,
-    Completer<PosKitchenPrintOutcome> completer,
-  ) async {
+    Completer<PosKitchenPrintOutcome> completer, {
+    bool claimBeforeSend = true,
+  }) async {
     PosKitchenPrintOutcome outcome;
     try {
       // 003C: CLAIM BEFORE SENDING. The window between "bytes went out" and
@@ -282,8 +307,10 @@ final class PosAutoKitchenPrintGuard {
       // not be written REFUSES the print. Choosing not to print is recoverable
       // — the operator can reprint on demand — while printing a second ticket
       // for a round the kitchen is already cooking is not.
+      // C9: skipped for [runPreclaimed] — the caller committed the durable
+      // `claimed` record itself, before the cart cleared.
       final claims = _claims;
-      if (claims != null) {
+      if (claims != null && claimBeforeSend) {
         try {
           await claims.record(orderId, PosRoundPrintClaimState.claimed);
         } catch (_) {
@@ -542,6 +569,80 @@ String posAdditionKitchenPrintGuardKey({
   required String orderId,
   required String roundId,
 }) => '$orderId|round:$roundId';
+
+/// [POS-OFFLINE-OPERATIONS-002] C9 — bumps whenever an offline direct-print
+/// attempt (or a manual reprint that settles one) records a claim transition,
+/// so the confirmation's pending-print line re-reads the durable claim. Claim
+/// writes are plain storage and notify nobody; this is the one legal rebuild
+/// signal, written only OUTSIDE provider builds.
+final posOfflineKitchenPrintRevisionProvider = StateProvider<int>((_) => 0);
+
+/// [POS-OFFLINE-OPERATIONS-002] C9 — the OFFLINE direct-print automatic
+/// kitchen ticket: the PHYSICAL attempt that runs AFTER the caller durably
+/// committed the print job (the `claimed` record under
+/// [posLocalKitchenDispatchClaimKey], written BEFORE the cart cleared) and
+/// after the queued confirmation was shown. Ordering per the spec:
+/// outbox commit → durable print-job commit → cart clear + queued success →
+/// THIS physical attempt → server sync later.
+///
+/// The attempt goes through [PosAutoKitchenPrintGuard.runPreclaimed], so a
+/// duplicate invocation shares one send and the claim settles truthfully:
+/// `sent` when the transport accepted the bytes, `failed` (released for a
+/// retry through the manual reprint surface) otherwise. On a confirmed send
+/// the ORDER-scoped [posInitialKitchenPrintClaimKey] is ALSO recorded, so any
+/// later surface keyed by the server order (the client-minted id is stable
+/// across sync) can see the initial ticket already exists and never re-print
+/// it on reconciliation. Bluetooth transports remain genuinely reachable
+/// offline — the transport layer is untouched; a LAN failure surfaces as the
+/// honest `failed` outcome, never a fake success.
+Future<PosKitchenPrintOutcome> runOfflineDirectPrintKitchenTicket({
+  required ProviderContainer container,
+  required String orderId,
+  required String localDispatchClaimKey,
+  required KdsTicketView ticket,
+  required KitchenTicketPrintLabels labels,
+  bool isDemoMode = false,
+  PosKitchenTicketPrinter? printer,
+}) async {
+  // The SHARED eligibility rule — a demo/blank/placeholder order never cooks.
+  if (!isOrderEligibleForKitchenPrint(
+    orderId: orderId,
+    isDemoMode: isDemoMode,
+  )) {
+    return PosKitchenPrintOutcome.ineligibleOrder;
+  }
+  final outcome = await container
+      .read(posAutoKitchenPrintGuardProvider)
+      .runPreclaimed(
+        localDispatchClaimKey,
+        () => printKitchenTicketForOrder(
+          container: container,
+          ticket: ticket,
+          labels: labels,
+          printer: printer,
+        ),
+      );
+  if (outcome == PosKitchenPrintOutcome.printed) {
+    final claims = container.read(posRoundPrintClaimStoreProvider);
+    if (claims != null) {
+      try {
+        await claims.record(
+          posInitialKitchenPrintClaimKey(orderId),
+          PosRoundPrintClaimState.sent,
+        );
+      } catch (_) {
+        // The local dispatch claim is already `sent`, which is the load-bearing
+        // dedupe; losing the order-scoped mirror only weakens defence in depth.
+      }
+    }
+  }
+  try {
+    container.read(posOfflineKitchenPrintRevisionProvider.notifier).state++;
+  } catch (_) {
+    // A torn-down container mid-print must not throw out of a fire-and-forget.
+  }
+  return outcome;
+}
 
 /// Maps a live cart (the rich submit-time lines) + the menu's PER-ITEM prep
 /// snapshot into the SHARED [KdsTicketView] — the SAME model the KDS renders —

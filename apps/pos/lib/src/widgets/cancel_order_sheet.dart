@@ -9,6 +9,7 @@ import '../data/recent_order.dart';
 import '../data/void_repository.dart';
 import '../format/money_format.dart';
 import '../state/order_sync_controller.dart';
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_sync_scope_provider.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/void_controller.dart';
@@ -31,12 +32,18 @@ class CancelOrderSheet extends ConsumerStatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required PosRecentOrder order,
-  }) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => CancelOrderSheet(order: order),
-  );
+  }) {
+    // [POS-OFFLINE-OPERATIONS-002] C11 — the void is a server-authoritative
+    // `order.void` mutation; offline the ONE entry point refuses with the
+    // localized reason instead of opening a sheet whose Confirm can only fail.
+    if (blockPosActionWhileOffline(context)) return Future.value();
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CancelOrderSheet(order: order),
+    );
+  }
 
   @override
   ConsumerState<CancelOrderSheet> createState() => _CancelOrderSheetState();

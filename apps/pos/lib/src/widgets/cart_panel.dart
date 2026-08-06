@@ -17,12 +17,17 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
+import '../data/order_submission.dart' show OrderDispatchMode, OutboxSyncState;
+import '../data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState, posLocalKitchenDispatchClaimKey;
 import '../print/pos_kitchen_ticket_printer.dart'
     show
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
         posAdditionKitchenPrintGuardKey,
-        runAutoKitchenTicketPrintOnSubmit;
+        posRoundPrintClaimStoreProvider,
+        runAutoKitchenTicketPrintOnSubmit,
+        runOfflineDirectPrintKitchenTicket;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/parked_carts_controller.dart';
@@ -932,6 +937,54 @@ Future<void> submitOrderFromCart({
           );
     }
 
+    // [POS-OFFLINE-OPERATIONS-002] C9 — the DURABLE PRINT-JOB COMMIT for an
+    // offline direct_print order, BEFORE the cart clears. On a printer_only
+    // branch the POS ticket IS the kitchen dispatch, so once the cart is gone
+    // the printed ticket is the only path this food has into the kitchen. The
+    // required ordering is: outbox commit (above) → durable print-job commit
+    // (HERE, awaited) → cart clear + queued confirmation (below) → physical
+    // attempt (after, fire-and-forget) → server sync later. The claim key is
+    // the LOCAL dispatch identity `local:v1:<deviceId>:<localOperationId>:kitchen`
+    // (D-022 — globally unique, collision-free with server dispatch UUIDs),
+    // so a crash/restart in any window reads the durable claim and can never
+    // re-print the ticket, while a refused claim write withholds ONLY the
+    // automatic print (fail toward not printing — the deliberate manual
+    // reprint remains) and never the already-committed order.
+    // Applies ONLY when the submit did not reach the server (not applied) and
+    // was not definitively refused; an ONLINE direct_print submit keeps the
+    // existing post-confirmation auto-print path byte-identically.
+    final directPrintEntry = container
+        .read(outboxControllerProvider.notifier)
+        .entryById(result.entry.id);
+    final offlineDirectPrint =
+        dispatchModeBefore == OrderDispatchMode.directPrint &&
+        !container.read(runtimeConfigProvider).isDemoMode &&
+        directPrintEntry != null &&
+        directPrintEntry.syncState != OutboxSyncState.applied &&
+        !directPrintEntry.isDefinitiveNoServerOrder;
+    String? offlineDirectPrintClaimKey;
+    if (offlineDirectPrint) {
+      offlineDirectPrintClaimKey = posLocalKitchenDispatchClaimKey(
+        deviceId: result.entry.deviceId,
+        localOperationId: result.entry.localOperationId,
+      );
+      final claims = container.read(posRoundPrintClaimStoreProvider);
+      if (claims != null) {
+        try {
+          await claims.record(
+            offlineDirectPrintClaimKey,
+            PosRoundPrintClaimState.claimed,
+          );
+        } on Object {
+          // The durable commit was refused: a claim that was not stored cannot
+          // prevent tomorrow's duplicate, so the AUTOMATIC print is withheld
+          // (never the order). The cashier's manual "Print kitchen ticket"
+          // stays available and never consults this claim.
+          offlineDirectPrintClaimKey = null;
+        }
+      }
+    }
+
     cartController.submitOrder(
       orderType: orderTypeBefore,
       tableLabel: tableBefore?.label,
@@ -1022,35 +1075,67 @@ Future<void> submitOrderFromCart({
     // [kitchenPrepByItemId] map. NOTHING here re-reads a menu/prep/modifier
     // provider after the await, so the printed ticket cannot diverge from what the
     // KDS receives.
-    unawaited(
-      runAutoKitchenTicketPrintOnSubmit(
-        container: container,
-        orderId: result.entry.targetId,
-        // Shared eligibility: a permanently-rejected or demo order never cooks.
-        isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
-        // 024: the AUTHORITATIVE suppression, evaluated on the entry whose
-        // verdict the push just recorded — an auth refusal or an unrecognised
-        // structured refusal must not reach the kitchen printer either.
-        definitivelyRejected:
-            kitchenPrintEntry?.isDefinitiveNoServerOrder ?? false,
-        rejectionCode: kitchenPrintEntry?.lastErrorCode,
-        // KITCHEN-PRINT-DUAL-001D: purely ADDITIVE — `enabled` omitted so the print
-        // resolves the persisted auto-print toggle itself AFTER submit (it may
-        // await). ON prints one detailed ticket; OFF prints nothing; a failure or a
-        // missing printer is best-effort and NEVER alters the already-submitted KDS
-        // order. Manual "Print kitchen ticket" on the confirmation stays available.
-        ticket: kdsTicketViewFromCartLines(
-          orderCode: result.orderNumber,
-          orderType: orderTypeBefore,
-          lines: cart.lines,
-          prepByItemId: kitchenPrepByItemId,
-          tableLabel: tableBefore?.label,
-          customerName: customerNameBefore,
-          customerPhone: customerPhoneBefore,
+    // [POS-OFFLINE-OPERATIONS-002] C9: the OFFLINE direct_print order takes the
+    // pre-claimed path — its durable print-job commit already landed BEFORE the
+    // cart cleared, so the physical attempt runs under THAT claim (settled
+    // truthfully to sent/failed). With the commit refused (null key) there is
+    // deliberately NO automatic print at all — never the ordinary unclaimed
+    // path, which would re-open the exact crash-window duplicate this closes.
+    // Everything else (online direct_print, kds, demo) keeps the existing call
+    // byte-identically.
+    if (offlineDirectPrint) {
+      final claimKey = offlineDirectPrintClaimKey;
+      if (claimKey != null) {
+        unawaited(
+          runOfflineDirectPrintKitchenTicket(
+            container: container,
+            orderId: result.entry.targetId,
+            localDispatchClaimKey: claimKey,
+            isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+            ticket: kdsTicketViewFromCartLines(
+              orderCode: result.orderNumber,
+              orderType: orderTypeBefore,
+              lines: cart.lines,
+              prepByItemId: kitchenPrepByItemId,
+              tableLabel: tableBefore?.label,
+              customerName: customerNameBefore,
+              customerPhone: customerPhoneBefore,
+            ),
+            labels: kitchenTicketPrintLabelsFromL10n(l10n),
+          ),
+        );
+      }
+    } else {
+      unawaited(
+        runAutoKitchenTicketPrintOnSubmit(
+          container: container,
+          orderId: result.entry.targetId,
+          // Shared eligibility: a permanently-rejected or demo order never cooks.
+          isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+          // 024: the AUTHORITATIVE suppression, evaluated on the entry whose
+          // verdict the push just recorded — an auth refusal or an unrecognised
+          // structured refusal must not reach the kitchen printer either.
+          definitivelyRejected:
+              kitchenPrintEntry?.isDefinitiveNoServerOrder ?? false,
+          rejectionCode: kitchenPrintEntry?.lastErrorCode,
+          // KITCHEN-PRINT-DUAL-001D: purely ADDITIVE — `enabled` omitted so the print
+          // resolves the persisted auto-print toggle itself AFTER submit (it may
+          // await). ON prints one detailed ticket; OFF prints nothing; a failure or a
+          // missing printer is best-effort and NEVER alters the already-submitted KDS
+          // order. Manual "Print kitchen ticket" on the confirmation stays available.
+          ticket: kdsTicketViewFromCartLines(
+            orderCode: result.orderNumber,
+            orderType: orderTypeBefore,
+            lines: cart.lines,
+            prepByItemId: kitchenPrepByItemId,
+            tableLabel: tableBefore?.label,
+            customerName: customerNameBefore,
+            customerPhone: customerPhoneBefore,
+          ),
+          labels: kitchenTicketPrintLabelsFromL10n(l10n),
         ),
-        labels: kitchenTicketPrintLabelsFromL10n(l10n),
-      ),
-    );
+      );
+    }
     setupController.reset();
   } on OrderSubmissionException {
     // A failure that belongs to a session we have LEFT is not this session's failure;

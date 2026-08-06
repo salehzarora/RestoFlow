@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_shift_close_policy.dart';
 import 'device_settings_sheet.dart';
 import 'shift_close_sheet.dart';
@@ -27,7 +28,15 @@ class DeviceSettingsMenu extends ConsumerWidget {
       icon: const Icon(Icons.more_vert),
       onSelected: (action) => switch (action) {
         _DeviceMenuAction.settings => PosDeviceSettingsSheet.show(context),
-        _DeviceMenuAction.closeShift => PosShiftCloseSheet.show(context),
+        // [POS-OFFLINE-OPERATIONS-002] C11 — the shift close is a
+        // server-authoritative reconciliation; while the POS operates from the
+        // offline snapshot the entry refuses with the one localized reason
+        // instead of opening a workflow whose confirm can only fail. Device
+        // settings stay reachable (local configuration needs no server).
+        _DeviceMenuAction.closeShift =>
+          blockPosActionWhileOffline(context)
+              ? null
+              : PosShiftCloseSheet.show(context),
       },
       itemBuilder: (context) => [
         PopupMenuItem(

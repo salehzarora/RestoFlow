@@ -10041,6 +10041,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Signed in - saved orders are syncing now.'**
   String get posOfflineSyncRestored;
+
+  /// POS first line of the queued-offline order status: the order is durably stored on this till (nothing is claimed about the server).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this device'**
+  String get posOfflineOrderSavedLocally;
+
+  /// POS second line of the queued-offline order status: the stored order is sent automatically once the connection returns.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to sync'**
+  String get posOfflineAwaitingSync;
+
+  /// POS snackbar when a kitchen-ticket print attempt failed while the POS is operating offline (a LAN printer needs the network; Bluetooth may still work).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer unreachable - check the printer connection.'**
+  String get posOfflinePrinterUnreachable;
+
+  /// POS status line on a queued offline direct-print order whose automatic kitchen ticket has not been confirmed sent; the manual print button is the retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket not printed yet - use Print kitchen ticket when the printer is reachable.'**
+  String get posOfflinePrintPending;
+
+  /// POS snackbar shown when a server-backed action (payment, discount, void, shift close) is tapped while the POS is operating from the offline snapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available offline - reconnect to use this action.'**
+  String get posOfflineActionUnavailable;
+
+  /// POS status line on a queued offline order in the normal KDS workflow: the kitchen sees it only after the order syncs.
+  ///
+  /// In en, this message translates to:
+  /// **'The kitchen display receives this order once the connection returns.'**
+  String get posOfflineKdsPending;
 }
 
 class _AppLocalizationsDelegate

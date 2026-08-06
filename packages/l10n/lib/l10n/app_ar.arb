@@ -1690,5 +1690,11 @@
   "posOutboxAuthHold": "{count} بانتظار تسجيل الدخول",
   "posOutboxAuthHoldTooltip": "هذه الطلبات محفوظة على هذا الجهاز. سجّل الدخول من جديد وستُستأنف مزامنتها تلقائيًا.",
   "posOfflineReconnecting": "جارٍ التحقق من الاتصال…",
-  "posOfflineSyncRestored": "تم تسجيل الدخول — تجري الآن مزامنة الطلبات المحفوظة."
+  "posOfflineSyncRestored": "تم تسجيل الدخول — تجري الآن مزامنة الطلبات المحفوظة.",
+  "posOfflineOrderSavedLocally": "محفوظ على هذا الجهاز",
+  "posOfflineAwaitingSync": "بانتظار المزامنة",
+  "posOfflinePrinterUnreachable": "تعذّر الوصول إلى الطابعة — تحقّق من اتصال الطابعة.",
+  "posOfflinePrintPending": "لم تُطبع تذكرة المطبخ بعد — استخدم «طباعة تذكرة المطبخ» عندما تصبح الطابعة متاحة.",
+  "posOfflineActionUnavailable": "غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.",
+  "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال."
 }

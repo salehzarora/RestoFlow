@@ -38,6 +38,34 @@ enum PosRoundPrintClaimState {
   failed,
 }
 
+/// [POS-OFFLINE-OPERATIONS-002] C9 — the LOCAL kitchen dispatch identity of ONE
+/// offline direct-print order: the durable claim key the POS commits BEFORE the
+/// cart clears, so a crash/restart can never re-print (or silently lose) the
+/// ticket for an order the server has not acknowledged yet.
+///
+/// Collision-safe by construction: `deviceId` + `localOperationId` are the
+/// globally-unique client operation identity (DECISION D-022 — the same pair
+/// the server's idempotency ledger keys on), and the `local:v1:` prefix can
+/// never collide with a server dispatch UUID, an `orderId` guard key, an
+/// `orderId|round:<roundId>` addition key, or an `orderId|initial` key — no
+/// UUID and no order-code contains a `:` in these positions.
+String posLocalKitchenDispatchClaimKey({
+  required String deviceId,
+  required String localOperationId,
+}) => 'local:v1:$deviceId:$localOperationId:kitchen';
+
+/// [POS-OFFLINE-OPERATIONS-002] C9 — the ORDER-scoped claim for the INITIAL
+/// kitchen ticket, recorded IN ADDITION to the local dispatch claim once the
+/// offline direct-print ticket is confirmed sent. Mirrors the round-claim
+/// naming (`orderId|round:<roundId>`, see `posAdditionKitchenPrintGuardKey`)
+/// and the server dispatch ledger's own `initial:<orderId>` idempotency key,
+/// so any FUTURE surface keyed by the server order (the client-minted order id
+/// is stable across sync — the server stores it verbatim) can see the ticket
+/// already exists and never re-print it. Today no production server-driven
+/// reprint path exists for `direct_print` (the spool dispatch drain is a
+/// dormant seam); this claim is the defence in depth for when one does.
+String posInitialKitchenPrintClaimKey(String orderId) => '$orderId|initial';
+
 /// Durable per-round automatic-print claims.
 abstract class PosRoundPrintClaimStore {
   /// The claim for [key], or null when this round has never been claimed.

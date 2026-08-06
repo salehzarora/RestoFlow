@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:restoflow_domain/restoflow_domain.dart';
 
 /// ORDER-CUSTOMER-001: the max stored length of the OPTIONAL customer display
@@ -696,6 +698,24 @@ class OutboxEntry {
   /// kitchen print, void, complete — must be withheld when this is true.
   bool get isDefinitiveNoServerOrder =>
       operationType == 'order.submit' && hasDefinitiveVerdict;
+
+  /// [POS-OFFLINE-OPERATIONS-002] C9/C11 — whether this entry is an
+  /// `order.submit` whose FROZEN payload carries
+  /// `dispatch_mode: 'direct_print'` (a verified printer_only branch). The
+  /// payload is the authority: the key is emitted ONLY for a direct_print
+  /// order ([OrderSubmissionPayload.toJson]), so its absence — or an
+  /// undecodable payload — reads as the normal KDS workflow, which is the
+  /// fail-closed direction for every consumer (no local print, KDS-pending
+  /// copy). Presentation-only; never re-routes the operation.
+  bool get isDirectPrintOrderSubmit {
+    if (operationType != 'order.submit') return false;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      return decoded is Map && decoded['dispatch_mode'] == 'direct_print';
+    } on FormatException {
+      return false;
+    }
+  }
 
   /// REVIEW B2: TRUE when the server durably rejected THIS operation identity
   /// for a business reason — replaying the same identity returns the SAME

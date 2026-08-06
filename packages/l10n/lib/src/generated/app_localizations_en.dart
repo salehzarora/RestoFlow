@@ -5474,4 +5474,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posOfflineSyncRestored =>
       'Signed in - saved orders are syncing now.';
+
+  @override
+  String get posOfflineOrderSavedLocally => 'Saved on this device';
+
+  @override
+  String get posOfflineAwaitingSync => 'Waiting to sync';
+
+  @override
+  String get posOfflinePrinterUnreachable =>
+      'Printer unreachable - check the printer connection.';
+
+  @override
+  String get posOfflinePrintPending =>
+      'Kitchen ticket not printed yet - use Print kitchen ticket when the printer is reachable.';
+
+  @override
+  String get posOfflineActionUnavailable =>
+      'Not available offline - reconnect to use this action.';
+
+  @override
+  String get posOfflineKdsPending =>
+      'The kitchen display receives this order once the connection returns.';
 }

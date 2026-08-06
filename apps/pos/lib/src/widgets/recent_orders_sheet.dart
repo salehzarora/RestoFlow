@@ -30,6 +30,7 @@ import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart' show tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
+import '../state/pos_offline_state.dart';
 import '../state/pos_order_complete_controller.dart';
 import '../state/recent_orders_controller.dart';
 import 'order_action_row.dart';
@@ -1113,6 +1114,33 @@ class _OrderCard extends ConsumerWidget {
                         ),
                     ],
                   ),
+                  // [POS-OFFLINE-OPERATIONS-002] C11 — while the POS provably
+                  // operates from the offline snapshot, a row with queued
+                  // local work says WHERE that work is: saved on this device,
+                  // waiting to sync. Two lines, same note idiom as the
+                  // no-charge explanation below; every other phase keeps the
+                  // existing pill copy byte-identically. Covers a retryable
+                  // FAILED entry too — an offline push records a transient
+                  // failure, yet the row is durably stored and the sweep
+                  // resubmits the same identity; a never-created shell keeps
+                  // its own honest marker instead.
+                  if (!order.isNeverCreated &&
+                      (actions.pendingKind != null ||
+                          (outboxState?.isFailed ?? false)) &&
+                      ref.watch(
+                            posOfflineModeProvider.select((s) => s.phase),
+                          ) ==
+                          PosOfflinePhase.offlineCached) ...[
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Text(
+                      key: Key('recent-offline-pending-${order.orderNumber}'),
+                      '${l10n.posOfflineOrderSavedLocally}\n'
+                      '${l10n.posOfflineAwaitingSync}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
                   // still active but owes nothing, the missing Take-payment button needs an
                   // explanation — otherwise the cashier just sees a button that "should be
