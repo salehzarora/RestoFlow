@@ -12,12 +12,16 @@ import '../state/local_storage_health_provider.dart';
 /// and something else in the other.
 ///
 /// The RF-114 aggregation is preserved EXACTLY, including its conservative
-/// priority — storage > failed > resolved > attention > syncing > pending >
-/// synced. "All orders synced" is still reached only when nothing non-final
-/// remains; ambiguous states never fall through to it.
+/// priority — storage > failed > authHold > resolved > attention > syncing >
+/// pending > synced ([POS-OFFLINE-OPERATIONS-002] slots AUTH_HOLD directly
+/// under failed: held work is not broken, but it moves NOTHING until someone
+/// signs in, which outranks every state that resolves on its own). "All orders
+/// synced" is still reached only when nothing non-final remains; ambiguous
+/// states never fall through to it.
 class PosOutboxStatusSummary {
   const PosOutboxStatusSummary({
     required this.failed,
+    required this.authHold,
     required this.resolved,
     required this.attention,
     required this.syncing,
@@ -33,6 +37,7 @@ class PosOutboxStatusSummary {
     required PosLocalStorageHealth storage,
   }) {
     var failed = 0;
+    var authHold = 0;
     var resolved = 0;
     var attention = 0;
     var syncing = 0;
@@ -50,6 +55,11 @@ class PosOutboxStatusSummary {
         case OutboxSyncState.rejected:
         case OutboxSyncState.dead:
           failed++;
+        // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD is its own aggregate state:
+        // neither failed (no Retry can move it) nor pending (no sweep may
+        // touch it) — and, decisively, never part of "all synced".
+        case OutboxSyncState.authHold:
+          authHold++;
         case OutboxSyncState.conflict:
         case OutboxSyncState.resolved:
           attention++;
@@ -64,6 +74,7 @@ class PosOutboxStatusSummary {
     }
     return PosOutboxStatusSummary(
       failed: failed,
+      authHold: authHold,
       resolved: resolved,
       attention: attention,
       syncing: syncing,
@@ -76,6 +87,9 @@ class PosOutboxStatusSummary {
   }
 
   final int failed;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Entries held until a fresh online sign-in.
+  final int authHold;
   final int resolved;
   final int attention;
   final int syncing;
@@ -97,14 +111,21 @@ class PosOutboxStatusSummary {
   bool get isAllApplied =>
       storageHealthy &&
       failed == 0 &&
+      authHold == 0 &&
       resolved == 0 &&
       attention == 0 &&
       syncing == 0 &&
       pending == 0;
 
+  /// [POS-OFFLINE-OPERATIONS-002] True when AUTH_HOLD is the state the
+  /// headline currently describes — the indicator then appends the
+  /// sign-in-resumes explanation to its tooltip/semantics.
+  bool get isAuthHoldHeadline => storageHealthy && failed == 0 && authHold > 0;
+
   IconData get icon {
     if (!storageHealthy) return Icons.sd_card_alert_outlined;
     if (failed > 0) return Icons.error_outline;
+    if (authHold > 0) return Icons.lock_clock;
     if (resolved > 0) return Icons.playlist_remove_outlined;
     if (attention > 0) return Icons.warning_amber_outlined;
     if (syncing > 0) return Icons.sync;
@@ -115,6 +136,7 @@ class PosOutboxStatusSummary {
   RestoflowTone get tone {
     if (!storageHealthy) return RestoflowTone.danger;
     if (failed > 0) return RestoflowTone.danger;
+    if (authHold > 0) return RestoflowTone.warning;
     if (resolved > 0) return RestoflowTone.warning;
     if (attention > 0) return RestoflowTone.warning;
     if (syncing > 0) return RestoflowTone.info;
@@ -132,6 +154,7 @@ class PosOutboxStatusSummary {
           : l10n.posStorageUnreadable(storageUnreadable);
     }
     if (failed > 0) return l10n.posOutboxFailed(failed);
+    if (authHold > 0) return l10n.posOutboxAuthHold(authHold);
     if (resolved > 0) return l10n.posOutboxResolvedFailures(resolved);
     if (attention > 0) return l10n.posOutboxAttention;
     if (syncing > 0) return l10n.posOutboxSyncing;
@@ -144,6 +167,7 @@ class PosOutboxStatusSummary {
   String explanation(AppLocalizations l10n) {
     if (!storageHealthy) return l10n.posStorageNeedsAttention;
     if (failed > 0) return l10n.posSyncDetailsExplainFailed;
+    if (authHold > 0) return l10n.posOutboxAuthHoldTooltip;
     if (resolved > 0) return l10n.posSyncDetailsExplainResolved;
     if (attention > 0) return l10n.posSyncDetailsExplainAttention;
     if (syncing > 0) return l10n.posSyncDetailsExplainSyncing;

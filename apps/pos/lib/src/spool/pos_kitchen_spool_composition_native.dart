@@ -10,6 +10,8 @@ import 'package:restoflow_data_local/restoflow_data_local.dart'
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show
         FlutterSecureDeviceSessionStore,
+        KitchenModeResult,
+        KitchenModeTransientFailure,
         SupabaseDeviceKitchenModeRepository,
         SupabaseDevicePrinterAssignmentsRepository,
         SupabaseKitchenDispatchAckRepository,
@@ -32,8 +34,19 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import '../data/customer_phone.dart' show normalizeCustomerPhone;
 import '../data/ids.dart' show clientIdGeneratorProvider;
+import '../data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState, posInitialKitchenPrintClaimKey;
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posRoundPrintClaimStoreProvider;
 import '../data/kitchen_mode_readiness.dart'
-    show PosKitchenModeScopeKey, posKitchenModeReadinessProvider;
+    show
+        KitchenModeReadinessResolved,
+        PosKitchenModeScopeKey,
+        posKitchenModeReadinessProvider,
+        reconstructOfflineTrustedKitchenMode;
+import '../data/operational_snapshot_store.dart'
+    show PosOperationalSnapshotLoaded, posOperationalSnapshotStoreProvider;
+import '../state/pos_sync_scope_provider.dart' show posSyncScopeProvider;
 import 'kitchen_mode_cache_seed.dart' show readVerifiedCachedMode;
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
@@ -102,10 +115,14 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
       documentsDirectoryProvider: getApplicationDocumentsDirectory,
     ),
-    // CORRECTION-001: the dormant drain seam is FULLY wired — but it can
-    // only ever run for a trusted printer-only-with-revision mode result,
-    // which the production mode repository can never construct (D1), and
-    // the server independently refuses pulls without a readiness report.
+    // CORRECTION-001 / Pass C: the drain is FULLY wired AND production-
+    // reachable. It runs for a trusted printer-only-with-revision mode
+    // result — which `SupabaseDeviceKitchenModeRepository.fetchMode` DOES
+    // construct — behind the server's real gate: a filed readiness report
+    // (`readiness_required` otherwise) + the branch's printer_only revision,
+    // both satisfied by this POS's own production heartbeat. The duplicate-
+    // print defence for initial tickets this POS already printed locally is
+    // the mirror-claim consult wired below (readInitialKitchenPrintClaim).
     pullRepository: SupabaseKitchenDispatchPullRepository(
       transport: transport,
       secretStore: secretStore,
@@ -151,8 +168,11 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     // the operator's language); the rasterizer is the SAME app-injected
     // seam the receipt path uses; both transports are the kitchen-safe
     // single-attempt seams; the gate is THE shared receipt/kitchen
-    // instance. All of it stays unreachable in production until a trusted
-    // printer-only revision exists (D1 + server readiness gate).
+    // instance. Pass C comment correction: this worker set IS production-
+    // reachable — the trusted printer-only revision exists once the server
+    // has a filed readiness report (which this POS's heartbeat files), so
+    // every safety property here must hold on its own, never by presumed
+    // dormancy.
     renderer: KitchenTicketRenderer(
       labels: KitchenTicketLabels.forLanguageCode(
         ui.PlatformDispatcher.instance.locale.languageCode,
@@ -199,6 +219,24 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
         }
       }
       return null;
+    },
+    // [POS-OFFLINE-OPERATIONS-002] Pass C (C1): the mirror-claim reader —
+    // this device's DURABLE order-scoped record that the initial kitchen
+    // ticket already went out locally at submit (offline direct-print). A
+    // plain store read through the sanctioned provider: no timer, no
+    // transport, no spool identifier outside this boundary. The dormancy
+    // guard forbids TIMERS in lib/src/spool — not store reads.
+    readInitialKitchenPrintClaim: (orderId) {
+      try {
+        return ref
+            .read(posRoundPrintClaimStoreProvider)
+            ?.claimOf(posInitialKitchenPrintClaimKey(orderId));
+      } catch (_) {
+        // A torn-down container mid-drain: answer "may already be printed"
+        // so the import can never freeze a duplicate print job on a guess —
+        // the dispatch is re-served and re-consulted on the next run.
+        return PosRoundPrintClaimState.claimed;
+      }
     },
   );
   // REAL disposal: logout/unpair/scope change (the device-context watch) or
@@ -267,6 +305,59 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
   final binding = ref
       .read(posKitchenModeReadinessProvider.notifier)
       .bindScope(PosKitchenModeScopeKey.fromContext(ctxAtBind));
+  // [POS-OFFLINE-OPERATIONS-002] (C7) — the 2-HOUR OFFLINE TRUST WINDOW.
+  //
+  // Reads the durable operational snapshot's kitchen-mode capture for the
+  // CURRENT sync scope and reconstructs a trusted result IFF the capture's
+  // SERVER-verified `verifiedAt` is within 2h of now. The clock derives ONLY
+  // from that stored server time — a restart or reconnect attempt can never
+  // reset it. Scope-safe twice over: the snapshot store verifies its embedded
+  // scope, the read is additionally cross-checked against the scope captured
+  // AT BIND, and the generation-stamped binding drops a publish that arrives
+  // after any scope change. Every failure yields null (no trust).
+  Future<KitchenModeResult?> offlineTrustedModeFromSnapshot() async {
+    try {
+      final scope = ref.read(posSyncScopeProvider);
+      final bindKey = PosKitchenModeScopeKey.fromContext(ctxAtBind);
+      if (scope == null || bindKey == null) return null;
+      if (bindKey.organizationId != scope.organizationId ||
+          (bindKey.restaurantId ?? '') != scope.restaurantId ||
+          bindKey.branchId != scope.branchId ||
+          bindKey.deviceId != scope.deviceId) {
+        return null;
+      }
+      final loaded = await ref
+          .read(posOperationalSnapshotStoreProvider)
+          .load(scope);
+      if (loaded is! PosOperationalSnapshotLoaded) return null;
+      final capture = loaded.snapshot.kitchenMode;
+      if (capture == null) return null;
+      return reconstructOfflineTrustedKitchenMode(
+        mode: capture.mode,
+        verifiedAt: capture.verifiedAt,
+        revision: capture.revision,
+        now: DateTime.now().toUtc(),
+      );
+    } catch (_) {
+      // Includes a torn-down container mid-read: no trust, never a throw.
+      return null;
+    }
+  }
+
+  // Consult the window BEFORE surrendering to Unavailable, then fall back to
+  // the ORIGINAL transition when no trust exists. Used by both transport-level
+  // failure shapes below; a server VERDICT never routes through here.
+  void publishOfflineTrustedOr(void Function() fallback) {
+    unawaited(() async {
+      final trusted = await offlineTrustedModeFromSnapshot();
+      if (trusted != null && binding.isCurrent) {
+        binding.publish(trusted, offlineTrusted: true);
+      } else {
+        fallback();
+      }
+    }());
+  }
+
   final heartbeat = KitchenReadinessHeartbeat(
     deviceContext: () => ref.read(posDeviceContextProvider),
     fetchMode: modeRepository.fetchMode,
@@ -275,8 +366,30 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     // close. Fail-closed: a non-trusted result blocks submission (never guessed
     // KDS); a definitive fetch failure marks the readiness unavailable (retryable).
     // Scope-bound: the binding drops a result that arrives after a scope change.
-    onMode: binding.publish,
-    onModeUnavailable: binding.markUnavailable,
+    //
+    // [POS-OFFLINE-OPERATIONS-002] (C7): the TWO transport-level failure
+    // shapes — a typed transient result and a thrown/timeout fetch — first
+    // consult the snapshot's 2h offline trust window. Server VERDICTS
+    // (invalid session, revision-unavailable, server failure, malformed)
+    // publish untouched: the server was reached, so "offline" is a lie there.
+    // An already-resolved same-scope mode is preserved by the controller's
+    // own no-downgrade rule, so a transient blip still never downgrades it.
+    onMode: (mode) {
+      if (mode is KitchenModeTransientFailure) {
+        final current = ref.read(posKitchenModeReadinessProvider);
+        if (current is KitchenModeReadinessResolved &&
+            current.scope == binding.scope) {
+          // Resolved already: forward the original result (a no-op downgrade
+          // guard) rather than replacing live trust with older cached trust.
+          binding.publish(mode);
+          return;
+        }
+        publishOfflineTrustedOr(() => binding.publish(mode));
+        return;
+      }
+      binding.publish(mode);
+    },
+    onModeUnavailable: () => publishOfflineTrustedOr(binding.markUnavailable),
     // POS-KITCHEN-WORKFLOW-REGRESSION-001: a run with no paired scope settles
     // on the unscoped normal-KDS workflow instead of leaving the gate Loading.
     onNoScope: () =>

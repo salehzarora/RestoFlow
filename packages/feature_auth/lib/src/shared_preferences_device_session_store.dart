@@ -29,8 +29,12 @@ const String kKdsDeviceSessionPrefix = 'restoflow.kds.device_session.v1';
 /// [FlutterSecureDeviceSessionStore] MUST still be used (a real Keychain/Keystore)
 /// — the app selects this store only under `kIsWeb`. The token is still NEVER
 /// logged or shown, and is cleared on unpair / server-side revocation.
+/// [POS-OFFLINE-OPERATIONS-002] Pass A: the web store carries the SAME cached
+/// pairing-scope facet as the native secure store (ids + session handle only —
+/// never the token) under its surface-specific prefix, so a hosted POS tablet
+/// keeps the same offline cold-boot evidence a native one does.
 class SharedPreferencesDeviceSessionSecretStore
-    implements DeviceSessionSecretStore {
+    implements DeviceSessionSecretStore, DeviceContextCacheStore {
   SharedPreferencesDeviceSessionSecretStore(
     this._prefs, {
     String keyPrefix = _defaultPrefix,
@@ -43,6 +47,7 @@ class SharedPreferencesDeviceSessionSecretStore
 
   String get _deviceIdKey => '$_prefix.device_id';
   String get _tokenKey => '$_prefix.session_token';
+  String get _contextCacheKey => '$_prefix.context_cache';
 
   @override
   Future<DeviceSessionCredential?> read() async {
@@ -70,5 +75,29 @@ class SharedPreferencesDeviceSessionSecretStore
     // Remove the token first so a partial failure never leaves a usable secret.
     await _prefs.remove(_tokenKey);
     await _prefs.remove(_deviceIdKey);
+  }
+
+  @override
+  Future<void> writeCachedContext(DeviceContext context) async {
+    await _prefs.setString(
+      _contextCacheKey,
+      encodeCachedDeviceContext(context),
+    );
+  }
+
+  @override
+  Future<DeviceContext?> readCachedContext({
+    required String expectedDeviceId,
+  }) async {
+    final raw = _prefs.getString(_contextCacheKey);
+    if (raw == null || raw.isEmpty) return null;
+    // Fail closed to absent on unreadable/mismatched records; the bytes and
+    // the credential keys are never touched by a read.
+    return decodeCachedDeviceContext(raw, expectedDeviceId: expectedDeviceId);
+  }
+
+  @override
+  Future<void> clearCachedContext() async {
+    await _prefs.remove(_contextCacheKey);
   }
 }

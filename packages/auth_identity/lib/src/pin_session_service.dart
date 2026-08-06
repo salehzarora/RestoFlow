@@ -65,9 +65,20 @@ class PinSessionService {
         'p_local_operation_id': operationId,
       });
     } on SyncTransportException catch (e) {
+      // [POS-OFFLINE-OPERATIONS-002 Pass B] 42501 is matched by its SQLSTATE
+      // here, not by the transport kind: `classifyPostgrestCode` now maps a
+      // 42501 to `auth` only for the session-class sync messages, and the
+      // start_pin_session lockout/precondition raises are not in that
+      // allowlist (correctly — they are not "sign in again" signals for the
+      // OUTBOX). This seam's own contract predates that split and is
+      // preserved verbatim: EVERY start_pin_session 42501 (locked /
+      // structural / precondition) fails closed with the same typed answer.
+      if (e.code == '42501') {
+        return const Failure(AuthLockedOrPreconditionFailure());
+      }
       return Failure(switch (e.kind) {
-        // 42501 from start_pin_session = locked / structural / precondition
-        // (NOT the same as get_my_context's auth-denied 42501).
+        // A typed auth kind without the 42501 code (test doubles / future
+        // transports) keeps the pre-split mapping.
         SyncTransportErrorKind.auth => const AuthLockedOrPreconditionFailure(),
         SyncTransportErrorKind.transient => const AuthNetworkFailure(),
         SyncTransportErrorKind.server => const AuthUnknownFailure(

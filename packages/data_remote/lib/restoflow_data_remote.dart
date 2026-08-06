@@ -19,3 +19,6 @@ export 'src/sync_pull_request.dart';
 export 'src/sync_pull_response.dart';
 export 'src/sync_rpc_transport.dart';
 export 'src/sync_session.dart';
+// [POS-OFFLINE-OPERATIONS-002] Pass A: the hold-then-upgrade transport for the
+// degraded offline boot (zero-IO transient hold; permanent in-place upgrade).
+export 'src/upgradable_sync_transport.dart';

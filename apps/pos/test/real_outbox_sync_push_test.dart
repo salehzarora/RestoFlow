@@ -208,25 +208,32 @@ void main() {
       },
     );
 
-    test(
-      'a 42501 whole-batch failure marks the entry rejected (no throw)',
-      () async {
-        final transport = _RecordingTransport(
-          (_, _) async => throw const SyncTransportException(
-            SyncTransportErrorKind.auth,
-            code: '42501',
-            message: 'revoked device / expired session',
-          ),
-        );
-        final repo = RealOutboxRepository(transport, _session);
-        final entry = _entry();
-        await repo.enqueue(entry);
+    test('a 42501 whole-batch failure HOLDS the entry for re-auth (no throw) '
+        '[POS-OFFLINE-OPERATIONS-002]', () async {
+      // UPDATED CONTRACT (was: rejected → failed/retry): a batch-level auth
+      // failure is a verdict about the SESSION, not the operation. The entry
+      // moves to the durable authHold state — same identity, same payload —
+      // and is released back to pending by the next online sign-in.
+      final transport = _RecordingTransport(
+        // Pass B fixture honesty: kind `auth` is minted by the real transport
+        // only for a session-class 42501 message, so the fake carries one.
+        // (OLD message: 'revoked device / expired session'.)
+        (_, _) async => throw const SyncTransportException(
+          SyncTransportErrorKind.auth,
+          code: '42501',
+          message:
+              'sync_push: PIN session is not valid (inactive/ended/expired)',
+        ),
+      );
+      final repo = RealOutboxRepository(transport, _session);
+      final entry = _entry();
+      await repo.enqueue(entry);
 
-        final pushed = await repo.push(entry.id);
-        expect(pushed.syncState, OutboxSyncState.rejected);
-        expect(pushed.lastErrorCode, '42501');
-      },
-    );
+      final pushed = await repo.push(entry.id);
+      expect(pushed.syncState, OutboxSyncState.authHold);
+      expect(pushed.lastErrorCode, '42501');
+      expect(pushed.lastErrorKind, 'auth');
+    });
 
     test('retry re-queues a rejected entry to pending', () async {
       var firstPush = true;

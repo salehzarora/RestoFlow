@@ -1,6 +1,10 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show UpgradableSyncTransport;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'state/pos_device_context.dart';
@@ -26,6 +30,7 @@ class PosPairingGate extends ConsumerStatefulWidget {
     this.signedInChild,
     this.signedInBuilder,
     this.initialDevice,
+    this.upgradeSignal,
     super.key,
   }) : assert(
          signedInChild != null || signedInBuilder != null,
@@ -46,6 +51,14 @@ class PosPairingGate extends ConsumerStatefulWidget {
 
   /// A pre-existing paired context (e.g. restored), or null.
   final DeviceContext? initialDevice;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass A: the DEGRADED boot's hold-mode
+  /// transport, or null (normal boot). The gate subscribes to its single
+  /// upgrade event and re-runs the restore so the server re-verifies the
+  /// cached pairing (rotating/republishing the authoritative context) the
+  /// moment the boot retry reconnects — silently, with no spinner and no
+  /// subtree teardown, so an in-progress cart survives the reconnection.
+  final UpgradableSyncTransport? upgradeSignal;
 
   @override
   ConsumerState<PosPairingGate> createState() => _PosPairingGateState();
@@ -80,10 +93,15 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
       _restoring = true;
       _restore(manager);
     }
+    // [POS-OFFLINE-OPERATIONS-002] Pass A: on a DEGRADED offline boot, the
+    // single transport-upgrade event triggers a silent server re-verification
+    // of the cached pairing (no spinner — the mounted subtree must survive).
+    widget.upgradeSignal?.addOnUpgrade(_onTransportUpgraded);
   }
 
   @override
   void dispose() {
+    widget.upgradeSignal?.removeOnUpgrade(_onTransportUpgraded);
     // A gate torn down before it ever published must not leave a pending mark
     // behind for the next composition to wait on.
     clearPosDeviceRestorePendingMark();
@@ -101,9 +119,25 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
-    final restored = await manager.restore(
-      expectedDeviceType: _expectedDeviceType,
-    );
+    DeviceContext? restored;
+    if (manager is DeviceSessionOutcomeManager) {
+      // [POS-OFFLINE-OPERATIONS-002] Pass A: the TYPED restore keeps a server
+      // verdict apart from transport-level offline. On `offline` with a
+      // cached scope for the stored secret (transient evidence only, device
+      // id + surface type already verified by the repository) the gate enters
+      // the offline surface on that DURABLE server-verified pairing; the
+      // build-time type guard below still re-checks it. A null cache — and
+      // every rejected verdict — fails closed to the pairing screen as today.
+      restored = switch (await manager.restoreOutcome(
+        expectedDeviceType: _expectedDeviceType,
+      )) {
+        DeviceSessionRestored(:final context) => context,
+        DeviceSessionRestoreOffline(:final cachedContext) => cachedContext,
+        DeviceSessionRestoreRejected() => null,
+      };
+    } else {
+      restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
+    }
     if (!mounted) return;
     setState(() {
       _device = restored;
@@ -111,6 +145,59 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
     });
     _publish(restored);
   }
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass A: the degraded boot's transport was
+  /// upgraded — the server is reachable again. Re-verify WITHOUT a spinner.
+  void _onTransportUpgraded() {
+    if (!mounted) return;
+    // Typed as Object so the `is` check PROMOTES (the outcome manager is a
+    // sibling interface of the pairing repository, not a subtype of it).
+    final Object repository = widget.repository;
+    if (repository is! DeviceSessionOutcomeManager) return;
+    unawaited(_reverifyAfterUpgrade(repository));
+  }
+
+  /// Server re-verification after the in-place transport upgrade. Three exits:
+  ///  * restored with the SAME pairing scope → keep the live tree (and the
+  ///    bound PIN session) untouched — republishing an identical scope would
+  ///    only churn the session controller for zero information;
+  ///  * restored with a DIFFERENT scope → publish it (a genuine pairing
+  ///    transition; downstream gates re-bind fail-closed as they always do);
+  ///  * rejected → unpair locally (secret + cached scope already cleared by
+  ///    the repository) and fall back to the pairing screen;
+  ///  * still offline/transient → keep the cached pairing as-is and let the
+  ///    boot gate's retry loop try again.
+  Future<void> _reverifyAfterUpgrade(
+    DeviceSessionOutcomeManager manager,
+  ) async {
+    final outcome = await manager.restoreOutcome(
+      expectedDeviceType: _expectedDeviceType,
+    );
+    if (!mounted) return;
+    switch (outcome) {
+      case DeviceSessionRestored(:final context):
+        final current = _device;
+        if (current != null && _sameScope(current, context)) return;
+        setState(() => _device = context);
+        _publish(context);
+      case DeviceSessionRestoreRejected():
+        setState(() => _device = null);
+        _publish(null);
+      case DeviceSessionRestoreOffline():
+        break;
+    }
+  }
+
+  /// Whether two contexts name the SAME operational pairing — every component
+  /// the PIN-session binding and the sync scope consume. Display-only fields
+  /// are deliberately excluded (a cosmetic rename must not drop a session).
+  static bool _sameScope(DeviceContext a, DeviceContext b) =>
+      a.organizationId == b.organizationId &&
+      a.restaurantId == b.restaurantId &&
+      a.branchId == b.branchId &&
+      a.deviceId == b.deviceId &&
+      a.deviceType == b.deviceType &&
+      a.deviceSessionId == b.deviceSessionId;
 
   @override
   Widget build(BuildContext context) {

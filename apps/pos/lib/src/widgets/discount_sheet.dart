@@ -14,6 +14,7 @@ import '../format/tax_math.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart';
 import '../state/order_sync_controller.dart';
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 
 /// Modal order-level discount entry (RF-117 part C): a FIXED ₪ amount OR a
 /// PERCENTAGE, plus a REQUIRED reason. On apply it pushes the SERVER-AUTHORITATIVE
@@ -54,18 +55,24 @@ class DiscountSheet extends ConsumerStatefulWidget {
     required int taxTotalMinor,
     required String currencyCode,
     int? expectedRevision,
-  }) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => DiscountSheet(
-      orderId: orderId,
-      subtotalMinor: subtotalMinor,
-      taxTotalMinor: taxTotalMinor,
-      currencyCode: currencyCode,
-      expectedRevision: expectedRevision,
-    ),
-  );
+  }) {
+    // [POS-OFFLINE-OPERATIONS-002] C11 — the discount is a server-authoritative
+    // `order.discount` mutation; offline the ONE entry point refuses with the
+    // localized reason instead of opening a sheet whose Apply can only fail.
+    if (blockPosActionWhileOffline(context)) return Future.value();
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DiscountSheet(
+        orderId: orderId,
+        subtotalMinor: subtotalMinor,
+        taxTotalMinor: taxTotalMinor,
+        currencyCode: currencyCode,
+        expectedRevision: expectedRevision,
+      ),
+    );
+  }
 
   @override
   ConsumerState<DiscountSheet> createState() => _DiscountSheetState();

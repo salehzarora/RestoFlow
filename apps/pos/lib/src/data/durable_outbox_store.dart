@@ -51,6 +51,13 @@ class SharedPrefsOutboxStore
 
   /// Bump ONLY on an incompatible envelope/entry shape change; an unrecognised
   /// version is ignored on load (start clean) rather than mis-parsed.
+  ///
+  /// [POS-OFFLINE-OPERATIONS-002] The `auth_hold` sync-state wire value is an
+  /// ADDITIVE entry-level extension, NOT a version bump: every pre-existing
+  /// envelope decodes unchanged (no old entry carries the value), and an
+  /// envelope holding an `auth_hold` row read by an OLDER build fails that one
+  /// row's `OutboxEntry.fromJson` (unknown sync_state) — which lands it in the
+  /// per-entry quarantine below, preserved byte-verbatim, never destroyed.
   static const int schemaVersion = 1;
 
   bool _degraded = false;

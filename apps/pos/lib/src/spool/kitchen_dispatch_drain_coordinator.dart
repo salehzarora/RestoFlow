@@ -9,11 +9,14 @@ import 'kitchen_dispatch_import_coordinator.dart';
 ///
 /// This coordinator owns paging and typed stop classification only. It is
 /// invoked exclusively by [PosKitchenSpoolRuntime] for a TRUSTED
-/// printer-only-with-revision mode state — which the production mode
-/// repository can NEVER construct today (D1: the getter exposes no
-/// revision), and which the server independently refuses to serve without a
-/// readiness report (`readiness_required`) that nothing files until 001C3.
-/// Tests inject the trusted state explicitly.
+/// printer-only-with-revision mode state. Pass C: that state IS reachable in
+/// production — `SupabaseDeviceKitchenModeRepository.fetchMode` constructs it
+/// from the server's revision, and the server's real pull gate is a FILED
+/// readiness report (`readiness_required`) + the branch's printer_only
+/// revision, both of which the POS's own production heartbeat satisfies. The
+/// duplicate-print defence for tickets the POS already printed locally is
+/// therefore the import coordinator's mirror-claim consult (C1), never an
+/// assumption that this drain cannot run.
 ///
 /// Fatal database/key/storage failures deliberately PROPAGATE (they must
 /// stop the drain and surface typed at the runtime boundary — a broad catch
@@ -78,6 +81,7 @@ final class KitchenDispatchDrainReport {
     this.rowsBlockedConfiguration = 0,
     this.rowsRejected = 0,
     this.rowsLocalStateConflict = 0,
+    this.rowsAlreadyPrintedLocally = 0,
     this.acknowledgementsSucceeded = 0,
     this.acknowledgementsPending = 0,
     this.acknowledgementsTerminal = 0,
@@ -91,6 +95,10 @@ final class KitchenDispatchDrainReport {
   final int rowsBlockedConfiguration;
   final int rowsRejected;
   final int rowsLocalStateConflict;
+
+  /// Pass C (C1): initial dispatches skipped (and acknowledged) because the
+  /// mirror claim says this POS already printed the ticket locally at submit.
+  final int rowsAlreadyPrintedLocally;
   final int acknowledgementsSucceeded;
 
   /// Acknowledgements persisted for RETRY (durable; the pending-ack
@@ -128,6 +136,7 @@ final class KitchenDispatchDrainCoordinator {
     var pagesPulled = 0;
     var rowsReceived = 0, rowsImported = 0, rowsAlreadyPresent = 0;
     var rowsBlocked = 0, rowsRejected = 0, rowsConflict = 0;
+    var rowsAlreadyPrinted = 0;
     var acked = 0, pending = 0, terminal = 0;
 
     KitchenDispatchDrainReport report(KitchenDrainStopReason reason) =>
@@ -140,6 +149,7 @@ final class KitchenDispatchDrainCoordinator {
           rowsBlockedConfiguration: rowsBlocked,
           rowsRejected: rowsRejected,
           rowsLocalStateConflict: rowsConflict,
+          rowsAlreadyPrintedLocally: rowsAlreadyPrinted,
           acknowledgementsSucceeded: acked,
           acknowledgementsPending: pending,
           acknowledgementsTerminal: terminal,
@@ -195,6 +205,7 @@ final class KitchenDispatchDrainCoordinator {
       rowsBlocked += summary.blocked;
       rowsRejected += summary.rejected;
       rowsConflict += summary.localStateConflicts;
+      rowsAlreadyPrinted += summary.alreadyPrintedLocally;
       acked += summary.acked;
       pending += summary.ackRetriesScheduled;
       terminal += summary.ackTerminal;

@@ -85,9 +85,23 @@ final class KitchenModeReadinessLoading extends PosKitchenModeReadiness {
 /// A server-verified (or fresh secure-cached) mode is known — submission proceeds
 /// with the resolved dispatch mode.
 final class KitchenModeReadinessResolved extends PosKitchenModeReadiness {
-  const KitchenModeReadinessResolved(this.mode, [super.scope]);
+  /// [POS-OFFLINE-OPERATIONS-002] (C7): [offlineTrusted] is ADDITIVE (an
+  /// optional trailing positional with a false default, so every existing
+  /// call site and pattern stands unchanged; Dart forbids mixing optional
+  /// positionals with named ones, hence not a named parameter). True ONLY for
+  /// a mode reconstructed from the operational snapshot's server-verified
+  /// capture inside its 2-hour offline trust window.
+  const KitchenModeReadinessResolved(
+    this.mode, [
+    super.scope,
+    this.offlineTrusted = false,
+  ]);
 
   final KitchenModeResult mode;
+
+  /// True when this resolution rests on the offline trust window rather than
+  /// a live server/cache verification.
+  final bool offlineTrusted;
 }
 
 /// Verification failed definitively AND no fresh trusted cache exists — block
@@ -167,6 +181,57 @@ const Duration kPosKitchenModeVerificationTimeout = Duration(seconds: 30);
 final posKitchenModeVerificationTimeoutProvider = Provider<Duration>(
   (_) => kPosKitchenModeVerificationTimeout,
 );
+
+/// [POS-OFFLINE-OPERATIONS-002] (C7): how long a SERVER-VERIFIED kitchen-mode
+/// capture in the operational snapshot may keep resolving submission while
+/// the backend is unreachable. Mirrors the secure mode-cache's stale ceiling.
+const Duration kPosKitchenModeOfflineTrustWindow = Duration(hours: 2);
+
+/// (C7) A capture claiming verification this far in the FUTURE is tolerated
+/// as clock drift; anything further ahead is suspect and yields no trust —
+/// the secure mode-cache's skew rule, restated here because the spool layer
+/// may not be imported outside `lib/src/spool`.
+const Duration kPosKitchenModeOfflineTrustSkewTolerance = Duration(minutes: 1);
+
+/// [POS-OFFLINE-OPERATIONS-002] (C7): reconstructs the TRUSTED offline kitchen
+/// mode from the operational snapshot's server-verified capture, or null when
+/// no trust may be extended. Pure and clock-injected so the window is
+/// testable to the second.
+///
+/// The window derives ONLY from [verifiedAt] — the SERVER-verified moment the
+/// snapshot stored — measured against [now]. Restarts, reconnect attempts and
+/// read-back times can never move it. Rules:
+///
+///  * age > 2h (or a future claim beyond skew tolerance) => null;
+///  * `kds` reconstructs [KitchenModeVerifiedKds] (revision carried through);
+///  * `printer_only` reconstructs [KitchenModePrinterOnlyWithRevision] ONLY
+///    with a positive revision — a revision-less printer_only was never
+///    importable trust online and gains none offline;
+///  * any other mode string => null (fail closed).
+KitchenModeResult? reconstructOfflineTrustedKitchenMode({
+  required String mode,
+  required DateTime verifiedAt,
+  required DateTime now,
+  int? revision,
+}) {
+  final age = now.difference(verifiedAt);
+  if (age.isNegative && -age > kPosKitchenModeOfflineTrustSkewTolerance) {
+    return null;
+  }
+  if (age > kPosKitchenModeOfflineTrustWindow) return null;
+  switch (mode) {
+    case 'kds':
+      return KitchenModeVerifiedKds(verifiedAt: verifiedAt, revision: revision);
+    case 'printer_only':
+      if (revision == null || revision <= 0) return null;
+      return KitchenModePrinterOnlyWithRevision(
+        revision: revision,
+        verifiedAt: verifiedAt,
+      );
+    default:
+      return null;
+  }
+}
 
 /// The authoritative readiness state. Starts [KitchenModeReadinessLoading]; the
 /// native spool composition binds a scope and publishes the verified mode through
@@ -360,8 +425,9 @@ class PosKitchenModeReadinessController
   void _publish(
     int generation,
     PosKitchenModeScopeKey? scope,
-    KitchenModeResult mode,
-  ) {
+    KitchenModeResult mode, {
+    bool offlineTrusted = false,
+  }) {
     if (!_isCurrent(generation, scope)) return;
     // A TRUSTED mode (printer_only WITH a revision, or a verified kds) resolves
     // submission; any other (revision-unavailable / invalid-session / transient /
@@ -369,7 +435,7 @@ class PosKitchenModeReadinessController
     // transient blip never downgrades an already verified mode for the SAME scope.
     if (mode is KitchenModePrinterOnlyWithRevision ||
         mode is KitchenModeVerifiedKds) {
-      _apply(KitchenModeReadinessResolved(mode, _scope));
+      _apply(KitchenModeReadinessResolved(mode, _scope, offlineTrusted));
     } else {
       _markUnavailable(generation, scope);
     }
@@ -415,8 +481,18 @@ class PosKitchenModeBinding {
   bool get isCurrent => _controller._isCurrent(_generation, scope);
 
   /// Publish a fetched/cached mode. Ignored when this binding is superseded.
-  void publish(KitchenModeResult mode) =>
-      _controller._publish(_generation, scope, mode);
+  ///
+  /// [POS-OFFLINE-OPERATIONS-002] (C7): [offlineTrusted] is threaded through
+  /// ADDITIVELY (default false — every existing call site publishes exactly
+  /// what it always did); the composition's offline fallback passes true for
+  /// a snapshot-reconstructed mode inside its 2-hour window.
+  void publish(KitchenModeResult mode, {bool offlineTrusted = false}) =>
+      _controller._publish(
+        _generation,
+        scope,
+        mode,
+        offlineTrusted: offlineTrusted,
+      );
 
   /// Mark the mode unavailable (retryable). Ignored when superseded.
   void markUnavailable() => _controller._markUnavailable(_generation, scope);

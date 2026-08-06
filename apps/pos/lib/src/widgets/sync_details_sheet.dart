@@ -104,6 +104,16 @@ class PosSyncDetailsSheet extends ConsumerWidget {
               label: l10n.posSyncDetailsRowFailed,
               value: s.failed,
             ),
+            // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD gets its own labelled row.
+            // Deliberately NO action button here: retrying cannot move a held
+            // order — signing in again is the release, and the session gate
+            // owns that surface. Not clearable either (dismissal is scoped to
+            // provably-refused work, which this is not).
+            _CountRow(
+              keyName: 'sync-count-auth-hold',
+              label: l10n.posOfflineReauthNeeded,
+              value: s.authHold,
+            ),
             _CountRow(
               keyName: 'sync-count-resolved',
               label: l10n.posSyncDetailsRowResolved,

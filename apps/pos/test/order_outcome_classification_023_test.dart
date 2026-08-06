@@ -269,16 +269,27 @@ void main() {
       expect(entry.isPermanentBusinessRejection, isFalse);
     });
 
-    test('023-T2 an AUTH failure is a definitive rejection', () async {
-      // app.sync_push raises 42501 for an invalid PIN session / device mismatch
-      // in its preamble, BEFORE the per-operation dispatch loop — so a
-      // batch-level auth error proves nothing was accepted.
+    test('023-T2 an AUTH failure is a durable AUTH_HOLD (pending) '
+        '[POS-OFFLINE-OPERATIONS-002]', () async {
+      // UPDATED CONTRACT (was: auth => rejected). app.sync_push raises 42501
+      // in its preamble, BEFORE the per-operation dispatch loop — so nothing
+      // was accepted; but nothing about the OPERATION was refused either. The
+      // entry is HELD verbatim until a fresh online sign-in releases it, and
+      // the honest epistemic outcome is pending (never a success claim, never
+      // a refusal claim).
+      // Pass B fixture honesty: kind `auth` now travels with a session-class
+      // message, as the real transport mints it. (OLD: bare code, no message.)
       final (entry, _) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
-      expect(entry.outcome, PosOrderOutcome.rejected);
+      expect(entry.syncState, OutboxSyncState.authHold);
+      expect(entry.outcome, PosOrderOutcome.pending);
     });
 
     test(
@@ -344,10 +355,19 @@ void main() {
       expect(entry.outcome, PosOrderOutcome.deliveryUnconfirmed);
     });
 
-    test('023-P2 an AUTH rejection survives reload as rejected', () async {
+    test('023-P2 an AUTH_HOLD survives reload as the held, pending entry '
+        '[POS-OFFLINE-OPERATIONS-002]', () async {
+      // UPDATED CONTRACT (was: auth reloads as rejected): the hold is durable
+      // and reloads exactly as it was written — never as a refusal, never as
+      // a success, never silently re-queued.
+      // Pass B fixture honesty: session-class message alongside the kind.
       final (_, store) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
       final reloaded = RealOutboxRepository(
@@ -355,10 +375,9 @@ void main() {
         _session,
         store: store,
       );
-      expect(
-        (await reloaded.recentEntries()).single.outcome,
-        PosOrderOutcome.rejected,
-      );
+      final entry = (await reloaded.recentEntries()).single;
+      expect(entry.syncState, OutboxSyncState.authHold);
+      expect(entry.outcome, PosOrderOutcome.pending);
     });
 
     test(
@@ -420,12 +439,20 @@ void main() {
       _expectNoContradiction();
     });
 
-    testWidgets('023-C3 an AUTH rejection agrees with its header', (
-      tester,
-    ) async {
+    testWidgets('023-C3 an AUTH_HOLD presents as PENDING — no success claim, '
+        'no refusal claim [POS-OFFLINE-OPERATIONS-002]', (tester) async {
+      // UPDATED CONTRACT (was: rejected header). The server never read the
+      // operation, so the page claims exactly what is known: the order is
+      // stored locally and waiting — the same conservative presentation
+      // every queued order gets.
+      // Pass B fixture honesty: session-class message alongside the kind.
       final (entry, _) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
       await _pumpConfirmation(tester, entry);
@@ -436,6 +463,10 @@ void main() {
       );
       expect(
         find.byKey(const Key('confirmation-rejected-header')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('confirmation-pending-header')),
         findsOneWidget,
       );
       expect(find.text(_unconfirmedTitle), findsNothing);

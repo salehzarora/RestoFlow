@@ -31,6 +31,7 @@ class DeviceBootGate<R> extends StatefulWidget {
     required this.locale,
     this.brightness = Brightness.light,
     this.autoRetryInterval,
+    this.mountsWhileOffline,
     super.key,
   });
 
@@ -59,6 +60,16 @@ class DeviceBootGate<R> extends StatefulWidget {
   /// tests) disables auto-retry so a pending timer never blocks
   /// `pumpAndSettle`; the real app opts in.
   final Duration? autoRetryInterval;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Pass A: whether an OFFLINE result may still
+  /// MOUNT the app ([builder]) instead of the blocking [OfflineBootView] — the
+  /// app supplies a degraded, hold-mode composition built over durable pairing
+  /// evidence. The auto-retry loop keeps running exactly as for a blocked
+  /// offline result; a later successful retry delivers the upgraded result to
+  /// [builder] IN PLACE (same widget types/position, so the mounted subtree —
+  /// and an in-progress cart — survives). Null (the default) keeps today's
+  /// behaviour: every offline result blocks on the retryable offline screen.
+  final bool Function(R result)? mountsWhileOffline;
 
   @override
   State<DeviceBootGate<R>> createState() => _DeviceBootGateState<R>();
@@ -127,22 +138,31 @@ class _DeviceBootGateState<R> extends State<DeviceBootGate<R>> {
     super.dispose();
   }
 
+  /// Whether [result] renders the app (vs the offline screen): every
+  /// non-offline result, plus — Pass A — an offline result the app declared
+  /// mountable (a degraded hold-mode composition).
+  bool _mounts(R result) =>
+      !widget.isOffline(result) ||
+      (widget.mountsWhileOffline?.call(result) ?? false);
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<R>(
       future: _future,
       builder: (context, snapshot) {
+        // Pass A: a settled result that MOUNTS the app keeps rendering it
+        // across the gate's own retries (FutureBuilder retains the previous
+        // data while a new future is pending). Without this, every auto-retry
+        // would swap the mounted — possibly degraded-offline — app back to
+        // the boot spinner, destroying an in-progress cart mid-order.
+        if (snapshot.hasData) {
+          final result = snapshot.data as R;
+          if (_mounts(result)) return widget.builder(result);
+        }
         if (snapshot.connectionState != ConnectionState.done) {
           return _shell(const _BootLoading());
         }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return _shell(_offlineView());
-        }
-        final result = snapshot.data as R;
-        if (widget.isOffline(result)) {
-          return _shell(_offlineView());
-        }
-        return widget.builder(result);
+        return _shell(_offlineView());
       },
     );
   }

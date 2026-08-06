@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/kitchen_mode_readiness.dart';
+import '../data/operational_snapshot_store.dart';
 import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
@@ -45,6 +46,10 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     with WidgetsBindingObserver {
   ProviderSubscription<Object?>? _heartbeatSubscription;
 
+  /// [POS-OFFLINE-OPERATIONS-002] keeps the durable operational snapshot's
+  /// kitchen-mode capture fresh whenever a VERIFIED mode resolves.
+  ProviderSubscription<Object?>? _kitchenModeSnapshotSubscription;
+
   /// Runs one startup/resume seam, containing any synchronous failure so a
   /// broken seam can never cancel the seams after it. The readiness controller
   /// owns its own bounded exit (watchdog), so containment is safe: the worst a
@@ -81,6 +86,25 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
             () => ref
                 .read(posKitchenModeReadinessProvider.notifier)
                 .ensureBoundedVerification(),
+          );
+        },
+      );
+    });
+    // [POS-OFFLINE-OPERATIONS-002] Whenever the VERIFIED kitchen mode resolves
+    // (cache seed, heartbeat, retry), refresh the durable operational
+    // snapshot's kitchenMode capture via the writer's read-modify-swap. The
+    // writer contains its own failures and no-ops without a snapshot/scope,
+    // so this listener can never take a sibling seam down — and it is
+    // individually _guarded like every other seam here anyway.
+    _guarded(() {
+      _kitchenModeSnapshotSubscription = ref.listenManual(
+        posVerifiedKitchenModeProvider,
+        (_, mode) {
+          if (mode == null) return;
+          _guarded(
+            () => unawaited(
+              ref.read(operationalSnapshotWriterProvider).refreshKitchenMode(),
+            ),
           );
         },
       );
@@ -148,6 +172,7 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
   @override
   void dispose() {
     _heartbeatSubscription?.close();
+    _kitchenModeSnapshotSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -200,6 +225,11 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // posMenuProvider is scope-derived (it watches the PIN/device session), so the
     // re-fetch always targets the CURRENT scope and a stale old-scope result can
     // never apply. One bounded invalidation per resume (no polling loop).
+    // [POS-OFFLINE-OPERATIONS-002] This stays ONE invalidation per resume and
+    // is now SAFE offline: the menu provider's fetch-failure path serves the
+    // durable operational snapshot for the current scope, so a wake with no
+    // network lands on the cached menu + offline banner instead of the error
+    // screen — the fetch outcome itself is what drives the offline phase.
     _guarded(() => ref.invalidate(posMenuProvider));
   }
 

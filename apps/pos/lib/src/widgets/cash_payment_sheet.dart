@@ -18,6 +18,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart'
     show posActivePrintBridgeReadyProvider, posReceiptReadinessResolverProvider;
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/order_sync_controller.dart';
 import '../state/payment_controller.dart';
@@ -84,19 +85,28 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     required String currencyCode,
     String? orderId,
     int? expectedRevision,
-  }) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => CashPaymentSheet(
-      identity: identity,
-      orderNumber: orderNumber,
-      amountMinor: amountMinor,
-      currencyCode: currencyCode,
-      orderId: orderId,
-      expectedRevision: expectedRevision,
-    ),
-  );
+  }) {
+    // [POS-OFFLINE-OPERATIONS-002] C11 — payment is a server-backed action
+    // (`record_payment` is authorized + audited server-side), so while the POS
+    // provably operates from the offline snapshot the ONE entry point refuses
+    // with the honest localized reason instead of opening a sheet whose
+    // Confirm can only fail. Gated HERE so every caller (confirmation, orders
+    // centre, detail preview) behaves identically; payment logic is untouched.
+    if (blockPosActionWhileOffline(context)) return Future.value();
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CashPaymentSheet(
+        identity: identity,
+        orderNumber: orderNumber,
+        amountMinor: amountMinor,
+        currencyCode: currencyCode,
+        orderId: orderId,
+        expectedRevision: expectedRevision,
+      ),
+    );
+  }
 
   @override
   ConsumerState<CashPaymentSheet> createState() => _CashPaymentSheetState();

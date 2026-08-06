@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:restoflow_domain/restoflow_domain.dart';
 
 /// ORDER-CUSTOMER-001: the max stored length of the OPTIONAL customer display
@@ -35,7 +37,26 @@ enum OutboxSyncState {
   rejected('rejected'),
   dead('dead'),
   conflict('conflict'),
-  resolved('resolved');
+  resolved('resolved'),
+
+  /// [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD — the batch-level `sync_push`
+  /// authorization failed (SQLSTATE 42501: revoked device / expired or invalid
+  /// PIN session), which `app.sync_push` raises from its PREAMBLE, before the
+  /// per-operation dispatch loop — so nothing was created AND nothing about the
+  /// OPERATION itself was refused. The operation is held verbatim (same
+  /// identity, same payload bytes) until a NEW online sign-in releases it back
+  /// to `pending`; the idempotent replay then resubmits the SAME
+  /// `(deviceId, localOperationId)` identity. Deliberately neither pending
+  /// (no sweep may spend attempts on a session the server already refused) nor
+  /// failed (no Retry button — the recovery is signing in, not re-sending),
+  /// and NEVER terminal.
+  ///
+  /// ADDITIVE wire value: envelopes written before this build carry none of
+  /// these and decode unchanged; an envelope written by THIS build and read by
+  /// an older one quarantines the row verbatim (unknown `sync_state` throws in
+  /// [OutboxEntry.fromJson], and the store preserves undecodable entries
+  /// byte-for-byte), so the held order is never destroyed either way.
+  authHold('auth_hold');
 
   const OutboxSyncState(this.wire);
 
@@ -45,12 +66,16 @@ enum OutboxSyncState {
 
   bool get isTerminal => terminals.contains(this);
 
-  /// Queued locally, not yet (demo-)sent.
+  /// Queued locally, not yet (demo-)sent. AUTH_HOLD is deliberately NOT
+  /// pending: the auto-sweep pushes pending entries, and re-pushing under a
+  /// session the server refused only burns attempts.
   bool get isPending => this == created || this == pending;
 
   /// A failed delivery. Whether a RETRY of the SAME operation identity is
   /// meaningful additionally depends on the entry's error code — see
-  /// [OutboxEntry.isPermanentBusinessRejection].
+  /// [OutboxEntry.isPermanentBusinessRejection]. AUTH_HOLD is NOT failed:
+  /// nothing was refused about the operation, so no retry affordance applies —
+  /// a fresh online sign-in releases it.
   bool get isFailed => this == rejected || this == dead;
 }
 
@@ -216,22 +241,24 @@ const String kUnreadableResponseErrorKind = 'unreadable_response';
 /// The [OutboxEntry.lastErrorKind] values that PROVE the operation was refused
 /// and nothing was created.
 ///
-/// `auth` (SQLSTATE 42501) qualifies because `app.sync_push` raises it from its
-/// PREAMBLE — payload shape, PIN session validity, backing device session,
-/// device match — all of which run BEFORE the
-/// `for v_op in jsonb_array_elements(p_operations)` dispatch loop. A failure
-/// inside an operation is caught by that loop's own `exception when others` and
-/// comes back as a per-operation result, not as a thrown transport error. So a
-/// BATCH-level auth exception is positive proof that no operation ran.
-///
 /// [kServerVerdictErrorKind] qualifies because the server answered about this
 /// operation specifically.
+///
+/// `auth` (SQLSTATE 42501) no longer qualifies ([POS-OFFLINE-OPERATIONS-002]
+/// AUTH_HOLD). It is still positive proof that no operation ran — `app.sync_push`
+/// raises it from its PREAMBLE, before the per-operation dispatch loop — but it
+/// is a verdict about the SESSION, not about the operation: the same identity
+/// resubmitted under a fresh sign-in can succeed. Treating it as a definitive
+/// order rejection permanently destroyed queued offline work the moment a PIN
+/// session aged out. Such entries now move to [OutboxSyncState.authHold] and
+/// are released back to `pending` by the next ONLINE sign-in (same
+/// `(deviceId, localOperationId)` identity; the server replays idempotently).
 ///
 /// `transient` and `server` deliberately do NOT qualify. A timeout, a dropped
 /// connection or a 5xx can all occur AFTER the server committed — the client
 /// merely lost the answer. Calling those "rejected" would tell the cashier the
 /// kitchen has nothing when it may already be cooking.
-const Set<String> kDefinitiveRefusalKinds = {'auth', kServerVerdictErrorKind};
+const Set<String> kDefinitiveRefusalKinds = {kServerVerdictErrorKind};
 
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
@@ -562,6 +589,7 @@ class OutboxEntry {
     this.lastErrorCode,
     this.lastErrorDetail,
     this.lastErrorKind,
+    this.nextAttemptAt,
   });
 
   final String id;
@@ -609,6 +637,29 @@ class OutboxEntry {
   /// because that distinction decides what the cashier is told.
   final String? lastErrorKind;
 
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] The earliest instant the automatic
+  /// sweep may spend another attempt on this entry (OFFLINE_SYNC_SPEC §retry:
+  /// exponential backoff, base 2s, cap 5min). Set by [RealOutboxRepository]
+  /// on every NON-definitive failure; cleared by a manual retry, an auth-hold
+  /// release, and the reconnect/startup reset — those are deliberate "try now"
+  /// moments. Null means DUE IMMEDIATELY, which is also what every legacy row
+  /// written before this field decodes to — exactly the pre-backoff behavior.
+  ///
+  /// ADDITIVE wire field (`next_attempt_at`), emitted only when non-null and
+  /// parsed with `DateTime.tryParse` — the same no-schemaVersion-bump
+  /// reasoning as `last_error_kind`: an older build reading a newer row simply
+  /// ignores the key, and a newer build reading an older row is due now.
+  /// Scheduling metadata only: NEVER part of the operation identity or the
+  /// transmitted payload (D-022 identity bytes untouched).
+  final DateTime? nextAttemptAt;
+
+  /// Whether the automatic sweep may attempt this entry at [now]. A missing
+  /// schedule is due (legacy rows / never-failed entries / cleared backoff).
+  bool isDueAt(DateTime now) {
+    final at = nextAttemptAt;
+    return at == null || !now.isBefore(at);
+  }
+
   /// 023: what is actually KNOWN about this order — see [PosOrderOutcome].
   ///
   /// Deliberately NOT "anything that is not an allowlisted rejection is a
@@ -621,6 +672,10 @@ class OutboxEntry {
   /// "rejected" is a second order for food already cooking.
   PosOrderOutcome get outcome {
     if (syncState == OutboxSyncState.applied) return PosOrderOutcome.accepted;
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD is epistemically PENDING: the
+    // server refused the SESSION before reading any operation, so nothing is
+    // claimed about the order — a fresh sign-in releases and resubmits it.
+    if (syncState == OutboxSyncState.authHold) return PosOrderOutcome.pending;
     if (!syncState.isFailed) return PosOrderOutcome.pending;
     if (isPermanentBusinessRejection) return PosOrderOutcome.rejected;
     if (lastErrorKind != null &&
@@ -667,6 +722,24 @@ class OutboxEntry {
   /// kitchen print, void, complete — must be withheld when this is true.
   bool get isDefinitiveNoServerOrder =>
       operationType == 'order.submit' && hasDefinitiveVerdict;
+
+  /// [POS-OFFLINE-OPERATIONS-002] C9/C11 — whether this entry is an
+  /// `order.submit` whose FROZEN payload carries
+  /// `dispatch_mode: 'direct_print'` (a verified printer_only branch). The
+  /// payload is the authority: the key is emitted ONLY for a direct_print
+  /// order ([OrderSubmissionPayload.toJson]), so its absence — or an
+  /// undecodable payload — reads as the normal KDS workflow, which is the
+  /// fail-closed direction for every consumer (no local print, KDS-pending
+  /// copy). Presentation-only; never re-routes the operation.
+  bool get isDirectPrintOrderSubmit {
+    if (operationType != 'order.submit') return false;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      return decoded is Map && decoded['dispatch_mode'] == 'direct_print';
+    } on FormatException {
+      return false;
+    }
+  }
 
   /// REVIEW B2: TRUE when the server durably rejected THIS operation identity
   /// for a business reason — replaying the same identity returns the SAME
@@ -747,6 +820,10 @@ class OutboxEntry {
     'last_error_code': lastErrorCode,
     if (lastErrorDetail != null) 'last_error_detail': lastErrorDetail,
     if (lastErrorKind != null) 'last_error_kind': lastErrorKind,
+    // Pass B: emitted ONLY when non-null so a never-failed entry keeps the
+    // exact pre-feature envelope shape (additive, like last_error_kind).
+    if (nextAttemptAt != null)
+      'next_attempt_at': nextAttemptAt!.toIso8601String(),
   };
 
   /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
@@ -789,6 +866,11 @@ class OutboxEntry {
       lastErrorCode: json['last_error_code'] as String?,
       lastErrorDetail: json['last_error_detail'] as String?,
       lastErrorKind: json['last_error_kind'] as String?,
+      // Pass B: tolerant parse — a missing key (legacy row) or an unreadable
+      // value decodes to null = DUE IMMEDIATELY, never a quarantined entry.
+      nextAttemptAt: DateTime.tryParse(
+        json['next_attempt_at'] as String? ?? '',
+      ),
     );
   }
 
@@ -799,6 +881,8 @@ class OutboxEntry {
     String? lastErrorDetail,
     String? lastErrorKind,
     bool clearError = false,
+    DateTime? nextAttemptAt,
+    bool clearNextAttemptAt = false,
   }) => OutboxEntry(
     id: id,
     deviceId: deviceId,
@@ -821,5 +905,11 @@ class OutboxEntry {
     // Cleared with the rest on a re-queue: a retry that has not run yet has no
     // classification, and keeping a stale one would outlive its evidence.
     lastErrorKind: clearError ? null : (lastErrorKind ?? this.lastErrorKind),
+    // Pass B: its own clear flag (mirroring clearError) — a deliberate "try
+    // now" (manual retry / auth-hold release) must drop the schedule, while a
+    // failure commit replaces it.
+    nextAttemptAt: clearNextAttemptAt
+        ? null
+        : (nextAttemptAt ?? this.nextAttemptAt),
   );
 }

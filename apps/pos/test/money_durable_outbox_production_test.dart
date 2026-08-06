@@ -370,7 +370,13 @@ void main() {
     expect(transport.pinSessions, 2);
 
     // The production controller loads its queue from the durable store.
-    await c2.read(outboxControllerProvider.notifier).pushQueued();
+    // Pass B: startup delivery is the reset path (order_sync_controller's
+    // pushFirst does exactly this), so the entry that failed before the
+    // restart is due NOW rather than waiting out its persisted backoff.
+    // (OLD: pushQueued() — there was no schedule to reset.)
+    await c2
+        .read(outboxControllerProvider.notifier)
+        .pushQueued(resetBackoff: true);
     await settle();
 
     final entries2 = storedEntries(prefs);

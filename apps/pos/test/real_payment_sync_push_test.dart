@@ -210,10 +210,14 @@ void main() {
 
     test('a 42501 whole-batch transport failure fails closed', () async {
       final transport = _RecordingTransport(
+        // Pass B fixture honesty: kind `auth` is minted by the real transport
+        // only for a session-class 42501 message, so the fake carries one.
+        // (OLD message: 'revoked device / expired session'.)
         (_, _) async => throw const SyncTransportException(
           SyncTransportErrorKind.auth,
           code: '42501',
-          message: 'revoked device / expired session',
+          message:
+              'sync_push: PIN session is not valid (inactive/ended/expired)',
         ),
       );
       await expectLater(

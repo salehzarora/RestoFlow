@@ -70,9 +70,13 @@ Map<String, Object?> get _futureRefusal => <String, Object?>{
   'entity': 'order',
 };
 
+// Pass B fixture honesty: kind `auth` is minted by the real transport only
+// for a session-class 42501 message, so the fake carries one.
+// (OLD: kind auth + bare code '42501', no message.)
 const _authFailure = SyncTransportException(
   SyncTransportErrorKind.auth,
   code: '42501',
+  message: 'sync_push: PIN session is not valid (inactive/ended/expired)',
 );
 const _transientFailure = SyncTransportException(
   SyncTransportErrorKind.transient,
@@ -134,42 +138,49 @@ _pushedOnce(List<Object> steps) async {
 
 void main() {
   group('A. a definitive verdict closes the PUSH boundary itself', () {
-    test(
-      '025-A1 a typed AUTH rejection cannot be pushed again directly',
-      () async {
-        final r = await _pushedOnce(const [_authFailure]);
-        final before = r.controller.entryById('e1')!;
-        expect(before.outcome, PosOrderOutcome.rejected);
-        expect(before.lastErrorKind, 'auth');
+    test('025-A1 a typed AUTH failure (now AUTH_HOLD) cannot be pushed again '
+        'directly [POS-OFFLINE-OPERATIONS-002]', () async {
+      // UPDATED CONTRACT (was: auth => rejected + definitive verdict).
+      // AUTH_HOLD keeps the SAME push-boundary guarantee this test exists
+      // for — no direct push may spend another transport attempt on a
+      // session the server refused — while the entry is HELD verbatim
+      // (pending, not rejected) until a fresh online sign-in releases it.
+      final r = await _pushedOnce(const [_authFailure]);
+      final before = r.controller.entryById('e1')!;
+      expect(before.syncState, OutboxSyncState.authHold);
+      expect(before.outcome, PosOrderOutcome.pending);
+      expect(before.lastErrorKind, 'auth');
 
-        // THE DEFECT: a caller reaching the public boundary directly.
-        await r.controller.pushEntry('e1');
+      // THE DEFECT: a caller reaching the public boundary directly.
+      await r.controller.pushEntry('e1');
 
-        expect(
-          r.transport.pushes,
-          r.after,
-          reason:
-              'no second transport attempt may be spent on a settled verdict',
-        );
-        final after = r.controller.entryById('e1')!;
-        expect(after.syncState, OutboxSyncState.rejected);
-        expect(
-          after.syncState,
-          isNot(OutboxSyncState.inFlight),
-          reason: 'the entry must never re-enter the in-flight lifecycle',
-        );
-        expect(after.outcome, PosOrderOutcome.rejected);
-        expect(after.lastErrorKind, 'auth', reason: 'the verdict is preserved');
-        expect(after.lastErrorCode, before.lastErrorCode);
-        expect(
-          after.attemptCount,
-          before.attemptCount,
-          reason: 'no attempt burnt',
-        );
-        expect(after.localOperationId, 'op-1', reason: 'no new identity');
-        expect(after.isDefinitiveNoServerOrder, isTrue);
-      },
-    );
+      expect(
+        r.transport.pushes,
+        r.after,
+        reason: 'no second transport attempt may be spent on a held entry',
+      );
+      final after = r.controller.entryById('e1')!;
+      expect(after.syncState, OutboxSyncState.authHold);
+      expect(
+        after.syncState,
+        isNot(OutboxSyncState.inFlight),
+        reason: 'the entry must never re-enter the in-flight lifecycle',
+      );
+      expect(after.outcome, PosOrderOutcome.pending);
+      expect(after.lastErrorKind, 'auth', reason: 'diagnosis is preserved');
+      expect(after.lastErrorCode, before.lastErrorCode);
+      expect(
+        after.attemptCount,
+        before.attemptCount,
+        reason: 'no attempt burnt',
+      );
+      expect(after.localOperationId, 'op-1', reason: 'no new identity');
+      expect(
+        after.isDefinitiveNoServerOrder,
+        isFalse,
+        reason: 'a hold is not a verdict about the order',
+      );
+    });
 
     test(
       '025-A2 an UNKNOWN structured verdict cannot be pushed again',
@@ -222,9 +233,10 @@ void main() {
         expect(captured.outcome, PosOrderOutcome.deliveryUnconfirmed);
         expect(captured.hasDefinitiveVerdict, isFalse);
 
-        // The verdict arrives.
+        // The AUTH_HOLD arrives ([POS-OFFLINE-OPERATIONS-002]: was a
+        // definitive rejection — the boundary contract is identical).
         await controller.retryEntry('e1');
-        expect(controller.entryById('e1')!.outcome, PosOrderOutcome.rejected);
+        expect(controller.entryById('e1')!.syncState, OutboxSyncState.authHold);
         final settled = transport.pushes;
 
         // The stale callback fires, still holding the retryable object.
@@ -235,9 +247,9 @@ void main() {
           settled,
           reason:
               'the guard must re-read the CURRENT entry, not trust the captured '
-              'one — definitive current state wins',
+              'one — the current held state wins',
         );
-        expect(controller.entryById('e1')!.syncState, OutboxSyncState.rejected);
+        expect(controller.entryById('e1')!.syncState, OutboxSyncState.authHold);
       },
     );
   });

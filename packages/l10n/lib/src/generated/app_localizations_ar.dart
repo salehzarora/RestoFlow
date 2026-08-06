@@ -5381,4 +5381,72 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posSyncClearConfirmBody =>
       'رُفضت قبل إنشاء أي شيء، لذلك لن يُفقد أي طلب. ستُزال من هذه القائمة فقط.';
+
+  @override
+  String get posOfflineModeBanner => 'بلا اتصال — تُعرض القائمة المحفوظة';
+
+  @override
+  String posOfflineDataAge(String age) {
+    return 'حُفظت $age';
+  }
+
+  @override
+  String get posOfflineSetupRequiredTitle => 'مطلوب اتصال بالإنترنت للإعداد';
+
+  @override
+  String get posOfflineSetupRequiredBody =>
+      'لا توجد قائمة محفوظة على هذا الجهاز بعد. يرجى توصيله بالإنترنت مرة واحدة لتنزيل القائمة والإعدادات — وبعدها يمكنه متابعة البيع دون اتصال.';
+
+  @override
+  String get posOfflineReauthNeeded => 'بانتظار تسجيل الدخول';
+
+  @override
+  String get posOfflineSessionExpired =>
+      'انتهت مهلة العمل دون اتصال — يرجى الاتصال بالإنترنت وتسجيل الدخول من جديد.';
+
+  @override
+  String get posOfflineSendBlockedSession =>
+      'الإرسال متوقف — انتهت مهلة العمل دون اتصال. أعد الاتصال وسجّل الدخول لإرسال الطلبات.';
+
+  @override
+  String get posOfflineKitchenModeStale =>
+      'مضى وقت طويل دون اتصال ولا يمكن تأكيد إعداد المطبخ المحفوظ — أعد الاتصال لإرسال الطلبات.';
+
+  @override
+  String posOutboxAuthHold(int count) {
+    return '$count بانتظار تسجيل الدخول';
+  }
+
+  @override
+  String get posOutboxAuthHoldTooltip =>
+      'هذه الطلبات محفوظة على هذا الجهاز. سجّل الدخول من جديد وستُستأنف مزامنتها تلقائيًا.';
+
+  @override
+  String get posOfflineReconnecting => 'جارٍ التحقق من الاتصال…';
+
+  @override
+  String get posOfflineSyncRestored =>
+      'تم تسجيل الدخول — تجري الآن مزامنة الطلبات المحفوظة.';
+
+  @override
+  String get posOfflineOrderSavedLocally => 'محفوظ على هذا الجهاز';
+
+  @override
+  String get posOfflineAwaitingSync => 'بانتظار المزامنة';
+
+  @override
+  String get posOfflinePrinterUnreachable =>
+      'تعذّر الوصول إلى الطابعة — تحقّق من اتصال الطابعة.';
+
+  @override
+  String get posOfflinePrintPending =>
+      'لم تُطبع تذكرة المطبخ بعد — استخدم «طباعة تذكرة المطبخ» عندما تصبح الطابعة متاحة.';
+
+  @override
+  String get posOfflineActionUnavailable =>
+      'غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.';
+
+  @override
+  String get posOfflineKdsPending =>
+      'تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.';
 }

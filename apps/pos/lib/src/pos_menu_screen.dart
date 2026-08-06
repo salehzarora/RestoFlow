@@ -8,6 +8,7 @@ import 'state/cart_controller.dart';
 import 'state/discount_controller.dart' show staffCapabilitiesProvider;
 import 'state/menu_filter.dart';
 import 'state/pos_menu_provider.dart';
+import 'state/pos_offline_state.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/device_settings_menu.dart';
@@ -183,8 +184,21 @@ class _MenuPane extends ConsumerWidget {
         Expanded(
           child: menuAsync.when(
             loading: () => const _MenuSkeleton(),
+            // [POS-OFFLINE-OPERATIONS-002] A menu error while the offline
+            // phase is SETUP-REQUIRED means this till has never completed its
+            // one-time online bootstrap — that gets its own explanation
+            // instead of the generic load error. `offlineCached` never lands
+            // here: the provider returned cached DATA, so the normal grid
+            // (with the slim offline banner) renders below.
             error: (_, _) =>
-                _MenuLoadError(onRetry: () => ref.invalidate(posMenuProvider)),
+                ref.watch(posOfflineModeProvider).phase ==
+                    PosOfflinePhase.setupRequired
+                ? _OfflineSetupRequired(
+                    onRetry: () => ref.invalidate(posMenuProvider),
+                  )
+                : _MenuLoadError(
+                    onRetry: () => ref.invalidate(posMenuProvider),
+                  ),
             data: (menu) => _MenuGrid(menu: menu),
           ),
         ),
@@ -540,6 +554,35 @@ class _MenuLoadError extends StatelessWidget {
   }
 }
 
+/// [POS-OFFLINE-OPERATIONS-002] — the SETUP-REQUIRED state: the menu fetch
+/// failed AND no operational snapshot exists for this till's scope, so there
+/// is nothing safe to sell from until it has been online once. WARNING tone,
+/// not danger: nothing is broken — the till is simply not bootstrapped yet —
+/// and the retry reuses the same invalidate idiom as the ordinary load error.
+class _OfflineSetupRequired extends StatelessWidget {
+  const _OfflineSetupRequired({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return RestoflowStateView(
+      icon: Icons.cloud_off_outlined,
+      tone: RestoflowTone.warning,
+      title: l10n.posOfflineSetupRequiredTitle,
+      message: l10n.posOfflineSetupRequiredBody,
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.authTryAgain),
+        ),
+      ],
+    );
+  }
+}
+
 class _MenuGrid extends ConsumerWidget {
   const _MenuGrid({required this.menu});
 
@@ -582,7 +625,7 @@ class _MenuGrid extends ConsumerWidget {
     }
     // The category rail now lives in the deck (`_MenuPane`); the grid is only
     // the merchandise plane.
-    return items.isEmpty
+    final Widget grid = items.isEmpty
         ? RestoflowStateView(
             icon: Icons.search_off_outlined,
             title: l10n.posSearchNoResults,
@@ -634,5 +677,54 @@ class _MenuGrid extends ConsumerWidget {
               );
             },
           );
+
+    // [POS-OFFLINE-OPERATIONS-002] The slim offline banner sits ABOVE the
+    // merchandise, on the same warm canvas, ONLY while the menu being sold
+    // from is the durable snapshot (phase == offlineCached). No full-screen
+    // treatment: the cache exists precisely so the cashier keeps the ordinary
+    // grid. The lead line names the mode; the body names the data's age from
+    // the snapshot's server fetch time (locale-formatted, never hand-rolled).
+    final offline = ref.watch(posOfflineModeProvider);
+    if (offline.phase != PosOfflinePhase.offlineCached) return grid;
+    final fetchedAt = offline.snapshotFetchedAt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.sm,
+            RestoflowSpacing.lg,
+            0,
+          ),
+          child: RestoflowNoticeBanner(
+            key: const Key('pos-offline-banner'),
+            tone: RestoflowTone.warning,
+            icon: Icons.cloud_off_outlined,
+            title: fetchedAt == null ? null : l10n.posOfflineModeBanner,
+            body: fetchedAt == null
+                ? l10n.posOfflineModeBanner
+                : l10n.posOfflineDataAge(_snapshotAgeLabel(context, fetchedAt)),
+          ),
+        ),
+        Expanded(child: grid),
+      ],
+    );
+  }
+
+  /// The locale-formatted moment the served snapshot was fetched: the time of
+  /// day when it was saved today, otherwise the (medium) date — both through
+  /// [MaterialLocalizations], so ar/he/en each read their own convention.
+  static String _snapshotAgeLabel(BuildContext context, DateTime fetchedAt) {
+    final local = fetchedAt.toLocal();
+    final now = DateTime.now();
+    final material = MaterialLocalizations.of(context);
+    final sameDay =
+        local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    return sameDay
+        ? material.formatTimeOfDay(TimeOfDay.fromDateTime(local))
+        : material.formatMediumDate(local);
   }
 }

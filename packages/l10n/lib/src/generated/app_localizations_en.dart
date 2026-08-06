@@ -5428,4 +5428,72 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posSyncClearConfirmBody =>
       'These were refused before anything was created, so no order is lost. They will be removed from this list only.';
+
+  @override
+  String get posOfflineModeBanner => 'Offline — using saved menu';
+
+  @override
+  String posOfflineDataAge(String age) {
+    return 'Saved $age';
+  }
+
+  @override
+  String get posOfflineSetupRequiredTitle => 'Online setup required';
+
+  @override
+  String get posOfflineSetupRequiredBody =>
+      'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.';
+
+  @override
+  String get posOfflineReauthNeeded => 'Waiting for sign-in';
+
+  @override
+  String get posOfflineSessionExpired =>
+      'Offline sign-in window ended - reconnect to the internet and sign in again.';
+
+  @override
+  String get posOfflineSendBlockedSession =>
+      'Sending is paused - the offline sign-in window ended. Reconnect and sign in to send orders.';
+
+  @override
+  String get posOfflineKitchenModeStale =>
+      'Offline too long to trust the saved kitchen setup - reconnect to send orders.';
+
+  @override
+  String posOutboxAuthHold(int count) {
+    return '$count awaiting sign-in';
+  }
+
+  @override
+  String get posOutboxAuthHoldTooltip =>
+      'These orders are saved on this device. Sign in again and they resume syncing automatically.';
+
+  @override
+  String get posOfflineReconnecting => 'Checking the connection…';
+
+  @override
+  String get posOfflineSyncRestored =>
+      'Signed in - saved orders are syncing now.';
+
+  @override
+  String get posOfflineOrderSavedLocally => 'Saved on this device';
+
+  @override
+  String get posOfflineAwaitingSync => 'Waiting to sync';
+
+  @override
+  String get posOfflinePrinterUnreachable =>
+      'Printer unreachable - check the printer connection.';
+
+  @override
+  String get posOfflinePrintPending =>
+      'Kitchen ticket not printed yet - use Print kitchen ticket when the printer is reachable.';
+
+  @override
+  String get posOfflineActionUnavailable =>
+      'Not available offline - reconnect to use this action.';
+
+  @override
+  String get posOfflineKdsPending =>
+      'The kitchen display receives this order once the connection returns.';
 }

@@ -513,8 +513,16 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
       if (pushFirst) {
         // Step 1+2. A push failure is NOT fatal to the pull: the queue stays
         // durable and the next sweep retries it. We still want the freshest read.
+        //
+        // [POS-OFFLINE-OPERATIONS-002 Pass B] pushFirst==true callers are
+        // exactly startup / resume / manual sync-now — the spec's "reconnect
+        // resets the backoff to now" moments — so the sweep resets every
+        // retryable entry's schedule. The 30s poll uses pushFirst:false and
+        // stays non-sweeping.
         try {
-          await ref.read(outboxControllerProvider.notifier).pushQueued();
+          await ref
+              .read(outboxControllerProvider.notifier)
+              .pushQueued(resetBackoff: true);
         } catch (_) {
           // swallowed by design — the queue is durable and retries itself.
         }

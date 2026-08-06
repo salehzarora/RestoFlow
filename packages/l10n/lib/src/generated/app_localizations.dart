@@ -9969,6 +9969,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These were refused before anything was created, so no order is lost. They will be removed from this list only.'**
   String get posSyncClearConfirmBody;
+
+  /// POS slim banner over the menu grid while the POS is selling from the durable offline snapshot instead of a live backend menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — using saved menu'**
+  String get posOfflineModeBanner;
+
+  /// POS offline-banner detail naming when the served snapshot was fetched from the server; {age} is an already locale-formatted time or date string.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {age}'**
+  String posOfflineDataAge(String age);
+
+  /// POS title of the state shown when the menu fetch failed and no offline snapshot exists yet for this till's scope.
+  ///
+  /// In en, this message translates to:
+  /// **'Online setup required'**
+  String get posOfflineSetupRequiredTitle;
+
+  /// POS body of the setup-required state explaining the one-time online bootstrap a new till needs before it can operate offline.
+  ///
+  /// In en, this message translates to:
+  /// **'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.'**
+  String get posOfflineSetupRequiredBody;
+
+  /// POS state label for outbox operations held until the operator signs in again (AUTH_HOLD) - used as the sync-details row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for sign-in'**
+  String get posOfflineReauthNeeded;
+
+  /// POS notice on the PIN gate when a stored offline session exists for this till but its hard trust window (8h since the last online verification) has ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline sign-in window ended - reconnect to the internet and sign in again.'**
+  String get posOfflineSessionExpired;
+
+  /// POS cart hint shown when Send is blocked because the restored offline session's trust window has ended; browsing the cached menu stays possible.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending is paused - the offline sign-in window ended. Reconnect and sign in to send orders.'**
+  String get posOfflineSendBlockedSession;
+
+  /// POS cart hint when the kitchen workflow mode is unavailable while selling from the offline snapshot and the saved mode's 2-hour trust window has ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline too long to trust the saved kitchen setup - reconnect to send orders.'**
+  String get posOfflineKitchenModeStale;
+
+  /// POS outbox indicator label for queued operations held until the operator signs in again (AUTH_HOLD).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} awaiting sign-in'**
+  String posOutboxAuthHold(int count);
+
+  /// POS explanation for AUTH_HOLD: re-signing in releases the held orders; nothing is lost and no retry is needed.
+  ///
+  /// In en, this message translates to:
+  /// **'These orders are saved on this device. Sign in again and they resume syncing automatically.'**
+  String get posOutboxAuthHoldTooltip;
+
+  /// POS notice while the PIN gate probes whether the backend is reachable before offering the offline session restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the connection…'**
+  String get posOfflineReconnecting;
+
+  /// POS confirmation after a fresh online sign-in released the held offline orders back into normal syncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in - saved orders are syncing now.'**
+  String get posOfflineSyncRestored;
+
+  /// POS first line of the queued-offline order status: the order is durably stored on this till (nothing is claimed about the server).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this device'**
+  String get posOfflineOrderSavedLocally;
+
+  /// POS second line of the queued-offline order status: the stored order is sent automatically once the connection returns.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to sync'**
+  String get posOfflineAwaitingSync;
+
+  /// POS snackbar when a kitchen-ticket print attempt failed while the POS is operating offline (a LAN printer needs the network; Bluetooth may still work).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer unreachable - check the printer connection.'**
+  String get posOfflinePrinterUnreachable;
+
+  /// POS status line on a queued offline direct-print order whose automatic kitchen ticket has not been confirmed sent; the manual print button is the retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket not printed yet - use Print kitchen ticket when the printer is reachable.'**
+  String get posOfflinePrintPending;
+
+  /// POS snackbar shown when a server-backed action (payment, discount, void, shift close) is tapped while the POS is operating from the offline snapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available offline - reconnect to use this action.'**
+  String get posOfflineActionUnavailable;
+
+  /// POS status line on a queued offline order in the normal KDS workflow: the kitchen sees it only after the order syncs.
+  ///
+  /// In en, this message translates to:
+  /// **'The kitchen display receives this order once the connection returns.'**
+  String get posOfflineKdsPending;
 }
 
 class _AppLocalizationsDelegate
