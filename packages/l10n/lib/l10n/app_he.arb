@@ -1678,5 +1678,9 @@
   "posSyncRetryConfirmBody": "ההזמנות השמורות יישלחו שוב. שליחה כפולה של אותה הזמנה בטוחה ולא תיצור כפילות.",
   "posSyncRetryStarted": "שולח שוב הזמנות שנכשלו",
   "posSyncClearConfirmTitle": "לנקות כשלים סופיים?",
-  "posSyncClearConfirmBody": "הם נדחו לפני שנוצר משהו, ולכן לא אבדה אף הזמנה. הם יוסרו מהרשימה הזו בלבד."
+  "posSyncClearConfirmBody": "הם נדחו לפני שנוצר משהו, ולכן לא אבדה אף הזמנה. הם יוסרו מהרשימה הזו בלבד.",
+  "posOfflineModeBanner": "לא מקוון — מוצג התפריט השמור",
+  "posOfflineDataAge": "נשמר {age}",
+  "posOfflineSetupRequiredTitle": "נדרשת הגדרה מקוונת",
+  "posOfflineSetupRequiredBody": "אין עדיין תפריט שמור במכשיר זה. יש לחבר אותו לאינטרנט פעם אחת כדי להוריד את התפריט וההגדרות — לאחר מכן הוא יכול להמשיך למכור ללא חיבור."
 }

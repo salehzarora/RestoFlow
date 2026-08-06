@@ -5381,4 +5381,19 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posSyncClearConfirmBody =>
       'رُفضت قبل إنشاء أي شيء، لذلك لن يُفقد أي طلب. ستُزال من هذه القائمة فقط.';
+
+  @override
+  String get posOfflineModeBanner => 'بلا اتصال — تُعرض القائمة المحفوظة';
+
+  @override
+  String posOfflineDataAge(String age) {
+    return 'حُفظت $age';
+  }
+
+  @override
+  String get posOfflineSetupRequiredTitle => 'مطلوب اتصال بالإنترنت للإعداد';
+
+  @override
+  String get posOfflineSetupRequiredBody =>
+      'لا توجد قائمة محفوظة على هذا الجهاز بعد. يرجى توصيله بالإنترنت مرة واحدة لتنزيل القائمة والإعدادات — وبعدها يمكنه متابعة البيع دون اتصال.';
 }

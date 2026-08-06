@@ -9969,6 +9969,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These were refused before anything was created, so no order is lost. They will be removed from this list only.'**
   String get posSyncClearConfirmBody;
+
+  /// POS slim banner over the menu grid while the POS is selling from the durable offline snapshot instead of a live backend menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — using saved menu'**
+  String get posOfflineModeBanner;
+
+  /// POS offline-banner detail naming when the served snapshot was fetched from the server; {age} is an already locale-formatted time or date string.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {age}'**
+  String posOfflineDataAge(String age);
+
+  /// POS title of the state shown when the menu fetch failed and no offline snapshot exists yet for this till's scope.
+  ///
+  /// In en, this message translates to:
+  /// **'Online setup required'**
+  String get posOfflineSetupRequiredTitle;
+
+  /// POS body of the setup-required state explaining the one-time online bootstrap a new till needs before it can operate offline.
+  ///
+  /// In en, this message translates to:
+  /// **'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.'**
+  String get posOfflineSetupRequiredBody;
 }
 
 class _AppLocalizationsDelegate

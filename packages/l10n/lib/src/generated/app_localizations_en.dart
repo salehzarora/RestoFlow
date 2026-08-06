@@ -5428,4 +5428,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posSyncClearConfirmBody =>
       'These were refused before anything was created, so no order is lost. They will be removed from this list only.';
+
+  @override
+  String get posOfflineModeBanner => 'Offline — using saved menu';
+
+  @override
+  String posOfflineDataAge(String age) {
+    return 'Saved $age';
+  }
+
+  @override
+  String get posOfflineSetupRequiredTitle => 'Online setup required';
+
+  @override
+  String get posOfflineSetupRequiredBody =>
+      'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.';
 }

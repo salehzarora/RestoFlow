@@ -3676,5 +3676,16 @@
   "posSyncClearConfirmTitle": "Clear resolved failures?",
   "@posSyncClearConfirmTitle": {"description": "Confirmation dialog title before clearing resolved failures."},
   "posSyncClearConfirmBody": "These were refused before anything was created, so no order is lost. They will be removed from this list only.",
-  "@posSyncClearConfirmBody": {"description": "Confirmation dialog body explaining that clearing loses no order."}
+  "@posSyncClearConfirmBody": {"description": "Confirmation dialog body explaining that clearing loses no order."},
+  "posOfflineModeBanner": "Offline — using saved menu",
+  "@posOfflineModeBanner": {"description": "POS slim banner over the menu grid while the POS is selling from the durable offline snapshot instead of a live backend menu."},
+  "posOfflineDataAge": "Saved {age}",
+  "@posOfflineDataAge": {
+    "description": "POS offline-banner detail naming when the served snapshot was fetched from the server; {age} is an already locale-formatted time or date string.",
+    "placeholders": { "age": { "type": "String" } }
+  },
+  "posOfflineSetupRequiredTitle": "Online setup required",
+  "@posOfflineSetupRequiredTitle": {"description": "POS title of the state shown when the menu fetch failed and no offline snapshot exists yet for this till's scope."},
+  "posOfflineSetupRequiredBody": "This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.",
+  "@posOfflineSetupRequiredBody": {"description": "POS body of the setup-required state explaining the one-time online bootstrap a new till needs before it can operate offline."}
 }

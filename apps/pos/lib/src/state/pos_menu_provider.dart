@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -6,8 +8,11 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_menu.dart';
+import '../data/operational_snapshot_store.dart';
 import 'menu_availability_controller.dart';
+import 'pos_offline_state.dart';
 import 'pos_session.dart';
+import 'pos_sync_scope_provider.dart';
 
 /// The menu the POS sells from: categories + items + the currency.
 ///
@@ -316,7 +321,10 @@ const List<PosModifierGroup> kDemoModifierGroups = <PosModifierGroup>[
 
 /// A stable, data-driven icon/colour palette for REAL categories (the backend
 /// carries no iconography). Assigned by category order — presentation only.
-const List<(IconData, Color)> _kCategoryPalette = [
+/// [POS-OFFLINE-OPERATIONS-002] Public so the operational-snapshot codec can
+/// re-derive the SAME presentation for a cached category by list position,
+/// instead of persisting styling bytes it would then have to trust.
+const List<(IconData, Color)> kPosCategoryPalette = [
   (Icons.lunch_dining, RestoflowCategoryPalette.terracotta),
   (Icons.dinner_dining, RestoflowCategoryPalette.teal),
   (Icons.fastfood, RestoflowCategoryPalette.amber),
@@ -371,6 +379,64 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   if (transport == null || session == null) {
     throw const PosMenuUnavailable();
   }
+
+  // [POS-OFFLINE-OPERATIONS-002] The scope THIS fetch serves, captured before
+  // any await so every snapshot read/write and offline-state record below is
+  // pinned to it. `ref.read` on purpose: the session/context watches above
+  // already rebuild this provider on every scope transition, so watching the
+  // scope too would only double the rebuilds.
+  final scope = ref.read(posSyncScopeProvider);
+  // Generation guard for the deferred offline-state writes: `onDispose` runs
+  // when this build is invalidated/refreshed, so a superseded fetch (resume
+  // refresh, scope change) can never record its stale outcome.
+  var alive = true;
+  ref.onDispose(() => alive = false);
+  // The offline phase is another provider's state, and this is a provider
+  // build — so the write is deferred one microtask and re-guarded, exactly
+  // the recovery-002 legal-write discipline (never write providers during a
+  // build; never let a superseded scope's result apply).
+  void recordOutcome(void Function(PosOfflineController controller) apply) {
+    if (scope == null) return;
+    Future.microtask(() {
+      if (!alive) return;
+      if (ref.read(posSyncScopeProvider) != scope) return;
+      apply(ref.read(posOfflineModeProvider.notifier));
+    });
+  }
+
+  // [POS-OFFLINE-OPERATIONS-002] The ONE offline fallback: every real-mode
+  // fetch failure below (transport-level, refused envelope, fail-closed
+  // payload) lands here. A valid snapshot for the CURRENT scope is served in
+  // place of the error — through the SAME trusted-classifier boundary as a
+  // live menu — and the offline phase records `offlineCached`; anything else
+  // (absent, unreadable, scope-mismatched) fails closed to the existing
+  // [PosMenuUnavailable] and records `setupRequired`, so the screen can say
+  // honestly that this till has never completed its online bootstrap.
+  Future<PosMenuData> offlineFallback() async {
+    if (scope != null) {
+      PosOperationalSnapshotReadResult result;
+      try {
+        result = await ref
+            .read(posOperationalSnapshotStoreProvider)
+            .load(scope);
+      } catch (_) {
+        // A store that cannot even be opened is an absent snapshot.
+        result = const PosOperationalSnapshotAbsent();
+      }
+      if (result is PosOperationalSnapshotLoaded) {
+        final snapshot = result.snapshot;
+        recordOutcome(
+          (controller) => controller.recordOfflineCacheServed(
+            snapshotFetchedAt: snapshot.fetchedAt,
+          ),
+        );
+        return PosMenuData.withTrustedPrepClassifiers(snapshot.menu);
+      }
+      recordOutcome((controller) => controller.recordSetupRequired());
+    }
+    throw const PosMenuUnavailable();
+  }
+
   final Object? raw;
   try {
     raw = await transport.invoke('pos_menu', <String, dynamic>{
@@ -378,9 +444,9 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       'p_device_id': session.deviceId,
     });
   } on SyncTransportException {
-    throw const PosMenuUnavailable();
+    return offlineFallback();
   }
-  if (raw is! Map || raw['ok'] != true) throw const PosMenuUnavailable();
+  if (raw is! Map || raw['ok'] != true) return offlineFallback();
 
   final categories = <DemoCategory>[];
   var paletteIndex = 0;
@@ -393,7 +459,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     final id = (row['id'] ?? '').toString();
     final name = (row['name'] ?? '').toString();
     final (icon, color) =
-        _kCategoryPalette[paletteIndex % _kCategoryPalette.length];
+        kPosCategoryPalette[paletteIndex % kPosCategoryPalette.length];
     paletteIndex++;
     names[id] = name;
     catDisplayOrder[id] = menuPrintOrderInt(row['display_order']);
@@ -770,7 +836,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // An unreadable group ROW is the same class and strictly worse: it loses a
   // WHOLE configured group and names nothing at all.
   if (hasUnattributableOption || hasUnreadableGroupRow) {
-    throw const PosMenuUnavailable();
+    // [POS-OFFLINE-OPERATIONS-002] The fail-closed payload verdict now lands
+    // on the offline fallback like every other fetch failure: the LAST GOOD
+    // snapshot (which passed this same boundary when it was captured) is a
+    // strictly better outcome than an error screen, and refusing the broken
+    // payload is unchanged — it is never parsed further and never cached.
+    return offlineFallback();
   }
 
   // THE CHOSEN RULE, stated: a product is unavailable when ANY group associated
@@ -810,7 +881,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final currency = (raw['currency_code'] ?? '').toString();
   // 017 (Codex HIGH #2): every classifier link the server sent is proven
   // against the SAME item's own options before any consumer sees it.
-  return PosMenuData.withTrustedPrepClassifiers(
+  final menu = PosMenuData.withTrustedPrepClassifiers(
     PosMenuData(
       categories: orderedCategories,
       items: orderedItems,
@@ -818,4 +889,22 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       modifierGroups: groups,
     ),
   );
+  // [POS-OFFLINE-OPERATIONS-002] A real fetch SUCCEEDED: record the online
+  // phase (deferred + guarded, see recordOutcome) and refresh the durable
+  // operational snapshot fire-and-forget. The writer contains its own
+  // failures (_guarded semantics): a refused write keeps the previous
+  // snapshot and can never fail — or even delay — this menu load.
+  recordOutcome((controller) => controller.recordOnlineFetch());
+  if (scope != null) {
+    unawaited(
+      ref
+          .read(operationalSnapshotWriterProvider)
+          .captureAfterMenuFetch(
+            scope: scope,
+            menu: menu,
+            fetchedAt: DateTime.now().toUtc(),
+          ),
+    );
+  }
+  return menu;
 });

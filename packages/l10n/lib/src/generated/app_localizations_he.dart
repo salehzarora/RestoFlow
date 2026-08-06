@@ -5347,4 +5347,19 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posSyncClearConfirmBody =>
       'הם נדחו לפני שנוצר משהו, ולכן לא אבדה אף הזמנה. הם יוסרו מהרשימה הזו בלבד.';
+
+  @override
+  String get posOfflineModeBanner => 'לא מקוון — מוצג התפריט השמור';
+
+  @override
+  String posOfflineDataAge(String age) {
+    return 'נשמר $age';
+  }
+
+  @override
+  String get posOfflineSetupRequiredTitle => 'נדרשת הגדרה מקוונת';
+
+  @override
+  String get posOfflineSetupRequiredBody =>
+      'אין עדיין תפריט שמור במכשיר זה. יש לחבר אותו לאינטרנט פעם אחת כדי להוריד את התפריט וההגדרות — לאחר מכן הוא יכול להמשיך למכור ללא חיבור.';
 }
