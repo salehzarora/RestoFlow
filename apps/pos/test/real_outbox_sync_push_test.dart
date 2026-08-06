@@ -215,10 +215,14 @@ void main() {
       // moves to the durable authHold state — same identity, same payload —
       // and is released back to pending by the next online sign-in.
       final transport = _RecordingTransport(
+        // Pass B fixture honesty: kind `auth` is minted by the real transport
+        // only for a session-class 42501 message, so the fake carries one.
+        // (OLD message: 'revoked device / expired session'.)
         (_, _) async => throw const SyncTransportException(
           SyncTransportErrorKind.auth,
           code: '42501',
-          message: 'revoked device / expired session',
+          message:
+              'sync_push: PIN session is not valid (inactive/ended/expired)',
         ),
       );
       final repo = RealOutboxRepository(transport, _session);

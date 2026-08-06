@@ -12,8 +12,10 @@ import '../data/order_identity.dart';
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
 import 'cart_controller.dart';
+import 'order_sync_controller.dart' show posSyncClockProvider;
 import 'pos_device_context.dart';
 import 'pos_menu_provider.dart';
+import 'pos_offline_state.dart';
 import 'pos_session.dart';
 import 'recent_orders_controller.dart';
 
@@ -42,14 +44,36 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   bool _disposed = false;
   bool _sweeping = false;
 
-  /// Auto-retry cap for a transiently-FAILED entry before it waits for a manual
-  /// retry (so a persistently-rejecting backend is not spammed).
-  static const int _maxAutoAttempts = 5;
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] A pending request to reset every
+  /// retryable entry's backoff schedule (reconnect / resume / manual sync-now).
+  /// Consumed INSIDE the [_sweep] single-flight latch: the latch RETURNS
+  /// rather than joins, so a reset arriving mid-sweep would otherwise be
+  /// silently dropped — the flag keeps it armed for the next sweep instead.
+  bool _resetRequested = false;
 
   @override
   List<OutboxEntry> build() {
     _repo = ref.watch(outboxRepositoryProvider);
     ref.onDispose(() => _disposed = true);
+    // [POS-OFFLINE-OPERATIONS-002 Pass B] Reconnect evidence: the offline
+    // OPERATING PHASE flips offlineCached -> online ONLY on a real successful
+    // fetch outcome (see pos_offline_state.dart — never a connectivity
+    // plugin), which is the one honest "the backend answered again" signal.
+    // Reset the backoff schedules and sweep, so an outage recovers deliveries
+    // automatically — no manual Retry-all. Inert in demo/tests, where the
+    // phase never leaves `online`. Deliberately NOT noteOnlineVerified (that
+    // is fired BY successful pushes — hooking it here would be circular).
+    // ref.listen in build is the sanctioned pattern; no provider state is
+    // written during build.
+    ref.listen<PosOfflinePhase>(posOfflineModeProvider.select((s) => s.phase), (
+      previous,
+      next,
+    ) {
+      if (previous == PosOfflinePhase.offlineCached &&
+          next == PosOfflinePhase.online) {
+        unawaited(pushQueued(resetBackoff: true));
+      }
+    });
     // RF-114: load any orders queued before a refresh / tab close / app restart
     // (the durable outbox) and best-effort deliver them. Fire-and-forget so
     // build() stays synchronous; state updates when the async load completes.
@@ -82,13 +106,33 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   }
 
   /// Best-effort delivery of queued orders: re-queue + push transiently-FAILED
-  /// entries (up to [_maxAutoAttempts]) and push still-PENDING ones. Retries are
-  /// idempotent (`(deviceId, localOperationId)`, D-022) so a re-push after a
-  /// restart never creates a duplicate. Single-flight; aborts on session loss.
+  /// entries that are DUE under their backoff schedule and push still-PENDING
+  /// ones. Retries are idempotent (`(deviceId, localOperationId)`, D-022) so a
+  /// re-push after a restart never creates a duplicate. Single-flight; aborts
+  /// on session loss.
+  ///
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] The old `_maxAutoAttempts` TERMINAL
+  /// cap is gone: it silently ended delivery ~100s into any outage (5 attempts
+  /// × the 25s tick) and nothing ever reset the persisted attempt count, so
+  /// only a manual Retry-all — worth exactly ONE more attempt — could revive
+  /// the queue. The throttle is now [OutboxEntry.isDueAt] over the exponential
+  /// schedule stamped by the repository (2s base, 5min cap — see
+  /// `outboxRetryBackoff`); there is no terminal cap for transient failures
+  /// because the delay ceiling bounds server load and idempotent replay makes
+  /// extra attempts safe.
   Future<void> _sweep() async {
     if (_sweeping || _disposed) return;
     _sweeping = true;
     try {
+      // Consume a pending backoff reset INSIDE the latch, before the lists are
+      // built — see [_resetRequested]. Resetting selects every retryable
+      // failure regardless of its schedule; the retry below then CLEARS the
+      // schedule durably (repo.retry drops it with the stale error), so the
+      // "due now" decision survives a restart too. AuthHold (not `isFailed`)
+      // and definitive verdicts are excluded by construction.
+      final resetBackoff = _resetRequested;
+      _resetRequested = false;
+      final now = ref.read(posSyncClockProvider)();
       final failed = <String>[
         for (final e in state)
           // REVIEW B2: a permanent business rejection replays its stored
@@ -96,7 +140,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
           // conclusion and imply the order might still go through.
           if (e.syncState.isFailed &&
               !e.hasDefinitiveVerdict &&
-              e.attemptCount < _maxAutoAttempts)
+              (resetBackoff || e.isDueAt(now)))
             e.id,
       ];
       final pending = <String>[
@@ -136,7 +180,20 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   ///
   /// Re-entrancy is already guarded inside [_sweep]; a second caller is a no-op
   /// rather than a second concurrent push.
-  Future<void> pushQueued() => _sweep();
+  ///
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] [resetBackoff] marks this call as a
+  /// reconnect/startup/resume "try NOW" (OFFLINE_SYNC_SPEC: reconnect resets
+  /// the schedule to now): every retryable failure becomes immediately due,
+  /// regardless of its `nextAttemptAt`. The request is latched in
+  /// [_resetRequested] rather than passed down, because a caller arriving
+  /// while a sweep is running gets an immediate return (not a join) and its
+  /// reset must survive for the next sweep. AUTH_HOLD entries and definitive
+  /// verdicts are untouched — the reset only widens the DUE test, never the
+  /// eligibility gates.
+  Future<void> pushQueued({bool resetBackoff = false}) {
+    if (resetBackoff) _resetRequested = true;
+    return _sweep();
+  }
 
   /// How many failures are TERMINAL and provably created nothing on the server,
   /// so an operator may clear them — see
@@ -664,6 +721,9 @@ final outboxRepositoryProvider = Provider<OutboxRepository>((ref) {
     ref.watch(posSyncSessionProvider),
     // RF-114: durable persistence so queued orders survive refresh/restart.
     store: ref.watch(durableOutboxStoreProvider),
+    // Pass B: the injected POS clock stamps `nextAttemptAt` backoff schedules
+    // (production leaves it at DateTime.now; tests pin it).
+    now: ref.watch(posSyncClockProvider),
   );
 });
 

@@ -70,9 +70,13 @@ Map<String, Object?> get _futureRefusal => <String, Object?>{
   'entity': 'order',
 };
 
+// Pass B fixture honesty: kind `auth` is minted by the real transport only
+// for a session-class 42501 message, so the fake carries one.
+// (OLD: kind auth + bare code '42501', no message.)
 const _authFailure = SyncTransportException(
   SyncTransportErrorKind.auth,
   code: '42501',
+  message: 'sync_push: PIN session is not valid (inactive/ended/expired)',
 );
 const _transientFailure = SyncTransportException(
   SyncTransportErrorKind.transient,

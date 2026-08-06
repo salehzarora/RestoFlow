@@ -46,8 +46,11 @@ class SupabaseSyncRpcTransport implements SyncRpcTransport {
           .rpc(function, params: params)
           .timeout(_timeout);
     } on PostgrestException catch (e) {
+      // [POS-OFFLINE-OPERATIONS-002 Pass B] The MESSAGE participates in the
+      // classification: 42501 is `auth` only for the session-class refusals
+      // (see classifyPostgrestCode) — everything else lands `server`.
       throw SyncTransportException(
-        classifyPostgrestCode(e.code),
+        classifyPostgrestCode(e.code, message: e.message),
         code: e.code,
         message: e.message,
       );

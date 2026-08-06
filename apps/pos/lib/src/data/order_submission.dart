@@ -589,6 +589,7 @@ class OutboxEntry {
     this.lastErrorCode,
     this.lastErrorDetail,
     this.lastErrorKind,
+    this.nextAttemptAt,
   });
 
   final String id;
@@ -635,6 +636,29 @@ class OutboxEntry {
   /// from "we never learned what happened", and it must survive a restart
   /// because that distinction decides what the cashier is told.
   final String? lastErrorKind;
+
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] The earliest instant the automatic
+  /// sweep may spend another attempt on this entry (OFFLINE_SYNC_SPEC §retry:
+  /// exponential backoff, base 2s, cap 5min). Set by [RealOutboxRepository]
+  /// on every NON-definitive failure; cleared by a manual retry, an auth-hold
+  /// release, and the reconnect/startup reset — those are deliberate "try now"
+  /// moments. Null means DUE IMMEDIATELY, which is also what every legacy row
+  /// written before this field decodes to — exactly the pre-backoff behavior.
+  ///
+  /// ADDITIVE wire field (`next_attempt_at`), emitted only when non-null and
+  /// parsed with `DateTime.tryParse` — the same no-schemaVersion-bump
+  /// reasoning as `last_error_kind`: an older build reading a newer row simply
+  /// ignores the key, and a newer build reading an older row is due now.
+  /// Scheduling metadata only: NEVER part of the operation identity or the
+  /// transmitted payload (D-022 identity bytes untouched).
+  final DateTime? nextAttemptAt;
+
+  /// Whether the automatic sweep may attempt this entry at [now]. A missing
+  /// schedule is due (legacy rows / never-failed entries / cleared backoff).
+  bool isDueAt(DateTime now) {
+    final at = nextAttemptAt;
+    return at == null || !now.isBefore(at);
+  }
 
   /// 023: what is actually KNOWN about this order — see [PosOrderOutcome].
   ///
@@ -796,6 +820,10 @@ class OutboxEntry {
     'last_error_code': lastErrorCode,
     if (lastErrorDetail != null) 'last_error_detail': lastErrorDetail,
     if (lastErrorKind != null) 'last_error_kind': lastErrorKind,
+    // Pass B: emitted ONLY when non-null so a never-failed entry keeps the
+    // exact pre-feature envelope shape (additive, like last_error_kind).
+    if (nextAttemptAt != null)
+      'next_attempt_at': nextAttemptAt!.toIso8601String(),
   };
 
   /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
@@ -838,6 +866,11 @@ class OutboxEntry {
       lastErrorCode: json['last_error_code'] as String?,
       lastErrorDetail: json['last_error_detail'] as String?,
       lastErrorKind: json['last_error_kind'] as String?,
+      // Pass B: tolerant parse — a missing key (legacy row) or an unreadable
+      // value decodes to null = DUE IMMEDIATELY, never a quarantined entry.
+      nextAttemptAt: DateTime.tryParse(
+        json['next_attempt_at'] as String? ?? '',
+      ),
     );
   }
 
@@ -848,6 +881,8 @@ class OutboxEntry {
     String? lastErrorDetail,
     String? lastErrorKind,
     bool clearError = false,
+    DateTime? nextAttemptAt,
+    bool clearNextAttemptAt = false,
   }) => OutboxEntry(
     id: id,
     deviceId: deviceId,
@@ -870,5 +905,11 @@ class OutboxEntry {
     // Cleared with the rest on a re-queue: a retry that has not run yet has no
     // classification, and keeping a stale one would outlive its evidence.
     lastErrorKind: clearError ? null : (lastErrorKind ?? this.lastErrorKind),
+    // Pass B: its own clear flag (mirroring clearError) — a deliberate "try
+    // now" (manual retry / auth-hold release) must drop the schedule, while a
+    // failure commit replaces it.
+    nextAttemptAt: clearNextAttemptAt
+        ? null
+        : (nextAttemptAt ?? this.nextAttemptAt),
   );
 }

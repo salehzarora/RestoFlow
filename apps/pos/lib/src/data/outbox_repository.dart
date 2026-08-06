@@ -205,6 +205,33 @@ String operationIdentityKey(
       '${jsonEncode(<String, dynamic>{for (final k in sortedKeys) k: identity[k]})}';
 }
 
+/// [POS-OFFLINE-OPERATIONS-002 Pass B] The automatic-retry backoff schedule
+/// (docs/OFFLINE_SYNC_SPEC.md: exponential backoff, base 2s, cap 5min):
+///
+///     delay = clamp(2s × 2^min(attemptCount, 8), ..5min) ± 20% jitter
+///
+/// The jitter is DETERMINISTIC, derived from [localOperationId] — NO Random():
+/// this repo deliberately avoids RNG in retry policies (see
+/// `kitchenPrintRetryPolicy` in packages/printing — deterministic retries are
+/// testable retries). The spread that de-synchronizes a fleet of tills after a
+/// shared outage comes from their DISTINCT operation ids instead.
+///
+/// There is deliberately NO terminal attempt cap: the 5-minute delay ceiling is
+/// the throttle, and idempotent replay (D-022) makes extra attempts safe.
+Duration outboxRetryBackoff(int attemptCount, String localOperationId) {
+  final exponent = attemptCount < 0 ? 0 : (attemptCount > 8 ? 8 : attemptCount);
+  var micros = const Duration(seconds: 2).inMicroseconds << exponent;
+  const capMicros = Duration.microsecondsPerMinute * 5;
+  if (micros > capMicros) micros = capMicros;
+  // A stable, platform-independent fold of the operation id -> -20..+20 (%).
+  var acc = 0;
+  for (final unit in localOperationId.codeUnits) {
+    acc = (acc * 31 + unit) & 0x7fffffff;
+  }
+  final jitterPercent = (acc % 41) - 20;
+  return Duration(microseconds: micros + (micros * jitterPercent) ~/ 100);
+}
+
 /// In-memory, clearly-labelled DEMO outbox (RF-115). Holds enqueued order
 /// submissions and simulates the sync lifecycle (pending → in-flight →
 /// applied / rejected). NO backend, NO persistence — the order body is the real
@@ -338,7 +365,15 @@ class RealOutboxRepository
     this._transport,
     this._session, {
     DurableOutboxStore? store,
-  }) : _store = store;
+    DateTime Function()? now,
+  }) : _store = store,
+       _now = now ?? DateTime.now;
+
+  /// [POS-OFFLINE-OPERATIONS-002 Pass B] The injected clock used ONLY to stamp
+  /// `nextAttemptAt` backoff schedules (fed from `posSyncClockProvider` by
+  /// `outboxRepositoryProvider`; tests pin it). Never part of the operation
+  /// identity or payload.
+  final DateTime Function() _now;
 
   /// The shared public-schema RPC transport, or null when real mode was selected
   /// but the Supabase config was missing/invalid (fail-closed).
@@ -621,6 +656,22 @@ class RealOutboxRepository
               lastErrorKind: e.kind.name,
             );
     }
+    // [POS-OFFLINE-OPERATIONS-002 Pass B] Schedule the NEXT automatic attempt
+    // for every failure that is neither a definitive server verdict (replay
+    // cannot change the answer — no schedule keeps it out of the sweep via its
+    // verdict gate) nor an AUTH_HOLD (released by a sign-in, not by time; not
+    // `isFailed`, so excluded by construction). This single choke point covers
+    // all three failure arms — the transport-exception `rejected` arm above,
+    // the unreadable-reply arm, and a structured non-definitive failed result
+    // — so the sweep's `isDueAt` gate always has an honest schedule to read.
+    // Applied results, conflicts and holds carry no schedule.
+    if (updated.syncState.isFailed && !updated.hasDefinitiveVerdict) {
+      updated = updated.copyWith(
+        nextAttemptAt: _now().add(
+          outboxRetryBackoff(updated.attemptCount, updated.localOperationId),
+        ),
+      );
+    }
     return _commitEntry(entryId, updated, fatal: false);
   }
 
@@ -630,9 +681,14 @@ class RealOutboxRepository
     await _ensureLoaded();
     final current = _entries![_indexOf(entryId)];
     if (!current.syncState.isFailed) return current;
+    // Pass B: a manual retry is a deliberate "try NOW" — the backoff schedule
+    // is dropped with the stale error, so Retry-all buys a real attempt and,
+    // if that attempt fails, a FRESH schedule replaces it. (This closes the
+    // secondary defect where a manual retry bought exactly one attempt.)
     final updated = current.copyWith(
       syncState: OutboxSyncState.pending,
       clearError: true,
+      clearNextAttemptAt: true,
     );
     // Persist BEFORE publishing (as `enqueue` does): a re-queue that only exists
     // in memory would show the cashier a retryable order that reverts to
@@ -686,7 +742,14 @@ class RealOutboxRepository
       final next = <OutboxEntry>[
         for (final e in _entries!)
           if (e.syncState == OutboxSyncState.authHold)
-            e.copyWith(syncState: OutboxSyncState.pending, clearError: true)
+            // Pass B: clearNextAttemptAt travels with clearError — a hold never
+            // carries a schedule by construction (it is not `isFailed`), but a
+            // release is a deliberate "resubmit now" and must never inherit one.
+            e.copyWith(
+              syncState: OutboxSyncState.pending,
+              clearError: true,
+              clearNextAttemptAt: true,
+            )
           else
             e,
       ];

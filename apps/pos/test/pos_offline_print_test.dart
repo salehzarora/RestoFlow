@@ -447,7 +447,12 @@ void main() {
 
     // Reconnect: the sweep resubmits the SAME identity; the server replays
     // its stored result and the entry settles applied.
-    await h.container.read(outboxControllerProvider.notifier).pushQueued();
+    // Pass B: the reconnect flush resets the backoff schedule (the production
+    // reconnect path does the same), so the freshly-failed entry is due NOW.
+    // (OLD: pushQueued() — there was no schedule to reset.)
+    await h.container
+        .read(outboxControllerProvider.notifier)
+        .pushQueued(resetBackoff: true);
     await tester.pumpAndSettle();
     expect(h.entry.syncState, OutboxSyncState.applied);
 

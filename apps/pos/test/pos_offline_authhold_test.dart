@@ -19,7 +19,8 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart'
         SyncRpcTransport,
         SyncSession,
         SyncTransportErrorKind,
-        SyncTransportException;
+        SyncTransportException,
+        classifyPostgrestCode;
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
@@ -35,9 +36,24 @@ const SyncSession _session = SyncSession(
   deviceId: 'dev-1',
 );
 
+// Pass B fixture honesty: the real transport now mints kind `auth` for a
+// 42501 ONLY when its message is one of the session-class refusals, so the
+// fake carries the same pairing a genuine batch failure would.
+// (OLD: kind auth + bare code '42501', no message.)
 const _authFailure = SyncTransportException(
   SyncTransportErrorKind.auth,
   code: '42501',
+  message: 'sync_push: PIN session is not valid (inactive/ended/expired)',
+);
+
+/// Pass B: a batch-level 42501 whose KIND is derived by the REAL classifier —
+/// exactly what `SupabaseSyncRpcTransport` throws for that server message —
+/// so these tests exercise the true classification -> outbox chain, not a
+/// hand-picked kind.
+SyncTransportException _batch42501(String message) => SyncTransportException(
+  classifyPostgrestCode('42501', message: message),
+  code: '42501',
+  message: message,
 );
 
 /// Scripted sync_push transport (the 024/025 idiom): throws or answers each
@@ -195,6 +211,115 @@ void main() {
       expect(await w.controller.dismissResolvedFailures(), 0);
       expect(w.controller.entryById('held-1'), isNotNull);
       expect(w.controller.authHoldCount, 1);
+    });
+  });
+
+  group('Pass B — 42501 is AUTH_HOLD only for the session-class messages', () {
+    // The review-mandated scenario matrix, at the OUTBOX level, driving the
+    // REAL classifier (`_batch42501` derives the kind from the message):
+    // holding is correct ONLY where a fresh ONLINE sign-in can change the
+    // answer. Every other batch 42501 must land in the visible, retryable
+    // failed bucket — a hold would be unreleasable (the re-auth replays the
+    // identical refusal, or — for a PostgREST function ACL denial — cannot
+    // even run, because PIN sign-in dies on the same dead transport).
+    //
+    // Per-op verdicts are deliberately NOT duplicated here: revoked employee /
+    // insufficient capability / wrong tenant / business validation already
+    // arrive as structured per-op refusals and are pinned as DEFINITIVE
+    // rejections by spec test 25 below and definitive_rejection_gating_024.
+
+    test('(i) a session-class batch 42501 still holds (existing behavior '
+        'retained)', () async {
+      final transport = _ScriptedTransport([
+        _batch42501(
+          'sync_push: PIN session is not valid (inactive/ended/expired)',
+        ),
+      ]);
+      final repo = RealOutboxRepository(
+        transport,
+        _session,
+        store: _MemoryStore(),
+      );
+      await repo.enqueue(_seed());
+      final pushed = await repo.push('e1');
+      expect(pushed.syncState, OutboxSyncState.authHold);
+      expect(pushed.lastErrorKind, 'auth');
+      expect(pushed.outcome, PosOrderOutcome.pending);
+    });
+
+    test('(ii) the batch-shape 42501 is REJECTED, not held — and stays '
+        'visible + retryable', () async {
+      final transport = _ScriptedTransport([
+        _batch42501('sync_push: p_operations must be a JSON array'),
+        <String, Object?>{'ok': true, 'status': 'applied'},
+      ]);
+      final store = _MemoryStore();
+      final repo = RealOutboxRepository(transport, _session, store: store);
+      final container = ProviderContainer(
+        overrides: [outboxRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+      // Let the controller's startup recovery settle over the EMPTY store
+      // BEFORE enqueueing, so its sweep cannot race this test's explicit push
+      // for the scripted steps.
+      final controller = container.read(outboxControllerProvider.notifier);
+      await pumpEventQueue();
+      await repo.enqueue(_seed());
+      await controller.pushEntry('e1');
+      await pumpEventQueue();
+
+      final entry = controller.entryById('e1')!;
+      expect(entry.syncState, OutboxSyncState.rejected, reason: 'NOT held');
+      expect(entry.syncState, isNot(OutboxSyncState.authHold));
+      // Visible in the failed bucket, with NO definitive claim about the order.
+      expect(entry.syncState.isFailed, isTrue);
+      expect(entry.outcome, PosOrderOutcome.deliveryUnconfirmed);
+      expect(entry.hasDefinitiveVerdict, isFalse);
+      // And genuinely retryable: a manual retry spends a real attempt.
+      await controller.retryEntry('e1');
+      await pumpEventQueue();
+      expect(transport.pushes, 2);
+      expect(controller.entryById('e1')!.syncState, OutboxSyncState.applied);
+    });
+
+    test(
+      "(iii) PostgREST 'permission denied for function sync_push' is "
+      'REJECTED, not held (the one hold no sign-in could ever release)',
+      () async {
+        final transport = _ScriptedTransport([
+          _batch42501('permission denied for function sync_push'),
+        ]);
+        final repo = RealOutboxRepository(
+          transport,
+          _session,
+          store: _MemoryStore(),
+        );
+        await repo.enqueue(_seed());
+        final pushed = await repo.push('e1');
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.syncState, isNot(OutboxSyncState.authHold));
+        expect(pushed.outcome, PosOrderOutcome.deliveryUnconfirmed);
+        expect(pushed.hasDefinitiveVerdict, isFalse);
+      },
+    );
+
+    test('(iv) a latent RLS 42501 is REJECTED, not held', () async {
+      final transport = _ScriptedTransport([
+        _batch42501(
+          'new row violates row-level security policy for table "orders"',
+        ),
+      ]);
+      final repo = RealOutboxRepository(
+        transport,
+        _session,
+        store: _MemoryStore(),
+      );
+      await repo.enqueue(_seed());
+      final pushed = await repo.push('e1');
+      expect(pushed.syncState, OutboxSyncState.rejected);
+      expect(pushed.syncState, isNot(OutboxSyncState.authHold));
+      expect(pushed.outcome, PosOrderOutcome.deliveryUnconfirmed);
+      expect(pushed.hasDefinitiveVerdict, isFalse);
     });
   });
 

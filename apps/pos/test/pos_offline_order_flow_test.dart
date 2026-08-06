@@ -456,7 +456,14 @@ void main() {
     expect(transport.pushes, 1);
 
     // Reconnect: the flush re-queues + re-pushes the failed entry.
-    await h.container.read(outboxControllerProvider.notifier).pushQueued();
+    // Pass B: the reconnect/startup flush resets the backoff schedule
+    // (order_sync_controller does exactly this on pushFirst) — without the
+    // reset the freshly-failed entry would honestly WAIT out its 2s×2^n
+    // schedule instead of resubmitting inside this test.
+    // (OLD: pushQueued() — there was no schedule to reset.)
+    await h.container
+        .read(outboxControllerProvider.notifier)
+        .pushQueued(resetBackoff: true);
     await tester.pumpAndSettle();
 
     expect(transport.pushes, 2, reason: 'exactly one resubmission');
@@ -497,7 +504,10 @@ void main() {
     await tester.pumpAndSettle();
     final submitted = h.container.read(cartControllerProvider).submittedOrder!;
 
-    await h.container.read(outboxControllerProvider.notifier).pushQueued();
+    // Pass B: reconnect flush resets the backoff (see spec test 21's note).
+    await h.container
+        .read(outboxControllerProvider.notifier)
+        .pushQueued(resetBackoff: true);
     await tester.pumpAndSettle();
 
     final entries = h.container.read(outboxControllerProvider);

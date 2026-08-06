@@ -277,9 +277,15 @@ void main() {
       // entry is HELD verbatim until a fresh online sign-in releases it, and
       // the honest epistemic outcome is pending (never a success claim, never
       // a refusal claim).
+      // Pass B fixture honesty: kind `auth` now travels with a session-class
+      // message, as the real transport mints it. (OLD: bare code, no message.)
       final (entry, _) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
       expect(entry.syncState, OutboxSyncState.authHold);
@@ -354,9 +360,14 @@ void main() {
       // UPDATED CONTRACT (was: auth reloads as rejected): the hold is durable
       // and reloads exactly as it was written — never as a refusal, never as
       // a success, never silently re-queued.
+      // Pass B fixture honesty: session-class message alongside the kind.
       final (_, store) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
       final reloaded = RealOutboxRepository(
@@ -434,9 +445,14 @@ void main() {
       // operation, so the page claims exactly what is known: the order is
       // stored locally and waiting — the same conservative presentation
       // every queued order gets.
+      // Pass B fixture honesty: session-class message alongside the kind.
       final (entry, _) = await _pushOnce(
         _ScriptedTransport(const [
-          SyncTransportException(SyncTransportErrorKind.auth, code: '42501'),
+          SyncTransportException(
+            SyncTransportErrorKind.auth,
+            code: '42501',
+            message: 'sync_push: PIN session not found',
+          ),
         ]),
       );
       await _pumpConfirmation(tester, entry);

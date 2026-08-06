@@ -488,10 +488,14 @@ void main() {
       // Establish ONLINE first (so a record exists), then the server starts
       // refusing the whole batch.
       final transport = _ScriptedTransport(
+        // Pass B fixture honesty: kind `auth` is minted by the real transport
+        // only for a session-class 42501 message, so the fake carries one.
+        // (OLD message: 'revoked device / expired session'.)
         onSyncPush: (_) => throw const SyncTransportException(
           SyncTransportErrorKind.auth,
           code: '42501',
-          message: 'revoked device / expired session',
+          message:
+              'sync_push: PIN session is not valid (inactive/ended/expired)',
         ),
       );
       final store = _MemoryStore();
