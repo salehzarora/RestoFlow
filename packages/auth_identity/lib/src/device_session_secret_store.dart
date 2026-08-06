@@ -25,6 +25,9 @@
 /// in a Flutter package.
 library;
 
+import 'device_context.dart';
+import 'device_context_cache.dart';
+
 /// The secret a paired device must keep: the raw session [sessionToken] (bearer
 /// secret) plus its non-secret [deviceId] (needed to call `restore_device_session`,
 /// which re-derives the server-validated scope). Stored together in secure storage.
@@ -73,8 +76,15 @@ abstract interface class DeviceSessionSecretStore {
 
 /// An in-memory [DeviceSessionSecretStore] for tests and dev/preview only — it does
 /// NOT protect a real production secret on a device.
-class InMemoryDeviceSessionSecretStore implements DeviceSessionSecretStore {
+///
+/// [POS-OFFLINE-OPERATIONS-002] Pass A: it also carries the cached
+/// pairing-scope facet ([DeviceContextCacheStore]) through the SAME
+/// schema-versioned codec production uses, so repository tests exercise the
+/// real encode/decode fail-closed rules rather than an object shortcut.
+class InMemoryDeviceSessionSecretStore
+    implements DeviceSessionSecretStore, DeviceContextCacheStore {
   DeviceSessionCredential? _value;
+  String? _cachedContextRaw;
 
   @override
   Future<DeviceSessionCredential?> read() async => _value;
@@ -87,5 +97,24 @@ class InMemoryDeviceSessionSecretStore implements DeviceSessionSecretStore {
   @override
   Future<void> clear() async {
     _value = null;
+  }
+
+  @override
+  Future<void> writeCachedContext(DeviceContext context) async {
+    _cachedContextRaw = encodeCachedDeviceContext(context);
+  }
+
+  @override
+  Future<DeviceContext?> readCachedContext({
+    required String expectedDeviceId,
+  }) async {
+    final raw = _cachedContextRaw;
+    if (raw == null) return null;
+    return decodeCachedDeviceContext(raw, expectedDeviceId: expectedDeviceId);
+  }
+
+  @override
+  Future<void> clearCachedContext() async {
+    _cachedContextRaw = null;
   }
 }

@@ -376,9 +376,6 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   }
   final transport = ref.watch(posAuthTransportProvider);
   final session = ref.watch(posSyncSessionProvider);
-  if (transport == null || session == null) {
-    throw const PosMenuUnavailable();
-  }
 
   // [POS-OFFLINE-OPERATIONS-002] The scope THIS fetch serves, captured before
   // any await so every snapshot read/write and offline-state record below is
@@ -435,6 +432,17 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       recordOutcome((controller) => controller.recordSetupRequired());
     }
     throw const PosMenuUnavailable();
+  }
+
+  // [POS-OFFLINE-OPERATIONS-002] Pass A (B4): a real-mode composition without
+  // its transport or session (a degraded boot mid-transition, a rebuild while
+  // gates re-establish) must not throw an unconditional error PAST the cached
+  // snapshot — it routes through the SAME offline fallback, which serves a
+  // valid snapshot for the current scope and still fails closed to the honest
+  // setup-required state when none exists (scope-less compositions land there
+  // unchanged, because the fallback throws without a scope).
+  if (transport == null || session == null) {
+    return offlineFallback();
   }
 
   final Object? raw;

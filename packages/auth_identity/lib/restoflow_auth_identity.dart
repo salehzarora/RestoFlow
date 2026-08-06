@@ -17,6 +17,10 @@ export 'src/device_auth_network_error.dart';
 // RF-153: shared device/station pairing context + repository seam (reused by
 // dashboard/POS/KDS).
 export 'src/device_context.dart';
+// [POS-OFFLINE-OPERATIONS-002] Pass A: the durable, schema-versioned cached
+// pairing-scope record (ids + session handle only — never the token) that lets
+// an offline cold boot prove a prior server-verified pairing.
+export 'src/device_context_cache.dart';
 export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
 // Device settings sprint: the safe per-device printer-assignments projection.

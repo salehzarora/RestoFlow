@@ -76,3 +76,59 @@ abstract interface class DeviceSessionManager {
   Future<DeviceContext?> restore({String? expectedDeviceType});
   Future<void> unpair();
 }
+
+/// [POS-OFFLINE-OPERATIONS-002] Pass A — the TYPED outcome of a device-session
+/// restore. [DeviceSessionManager.restore] collapses "the server said no" and
+/// "the server could not be reached" into one `null`, which forces an offline
+/// cold boot to fail closed even when durable pairing evidence exists. This
+/// outcome keeps the two apart:
+///
+///  * [DeviceSessionRestored] — the server re-verified the stored token; the
+///    authoritative context is fresh.
+///  * [DeviceSessionRestoreRejected] — a SERVER VERDICT (invalid/revoked
+///    session, or a valid session of the wrong surface type). The stored
+///    secret AND the cached pairing scope have been cleared (fail closed).
+///  * [DeviceSessionRestoreOffline] — a TRANSPORT-level failure: nothing was
+///    proven either way, so the secret and cached scope are PRESERVED for a
+///    later retry. [DeviceSessionRestoreOffline.cachedContext] carries the
+///    durable server-verified pairing scope ONLY when the failure was
+///    transient (genuine offline evidence) and a valid cached record exists
+///    for the stored secret's device id; otherwise it is null and the caller
+///    behaves exactly as before (fail closed to the pairing screen).
+sealed class DeviceRestoreOutcome {
+  const DeviceRestoreOutcome();
+}
+
+/// The server re-verified the stored session: [context] is authoritative.
+final class DeviceSessionRestored extends DeviceRestoreOutcome {
+  const DeviceSessionRestored(this.context);
+
+  final DeviceContext context;
+}
+
+/// A server VERDICT rejected the stored session; secret + cached scope are
+/// cleared by the repository before this is returned.
+final class DeviceSessionRestoreRejected extends DeviceRestoreOutcome {
+  const DeviceSessionRestoreRejected();
+}
+
+/// The server could not be reached (transport-level failure); stored state is
+/// preserved. [cachedContext] is the durable pairing scope when (and only
+/// when) the failure was transient offline evidence and a valid cached record
+/// matches the stored secret — null otherwise.
+final class DeviceSessionRestoreOffline extends DeviceRestoreOutcome {
+  const DeviceSessionRestoreOffline({this.cachedContext});
+
+  final DeviceContext? cachedContext;
+}
+
+/// A [DeviceSessionManager] that can also report the typed restore outcome
+/// (Pass A). Kept as a SEPARATE interface so existing managers/fakes and the
+/// KDS surface keep compiling unchanged; gates opt in with an `is` check the
+/// same way they already opt into [DeviceSessionManager].
+abstract interface class DeviceSessionOutcomeManager
+    implements DeviceSessionManager {
+  /// Like [DeviceSessionManager.restore], but with the offline/rejected
+  /// distinction (and the cached pairing scope on transient offline evidence).
+  Future<DeviceRestoreOutcome> restoreOutcome({String? expectedDeviceType});
+}
