@@ -504,6 +504,12 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // unknown, an unreadable reply and a legacy row we cannot classify. Only a
     // PROVEN verdict closes the door, so offline reconciliation is untouched.
     if (entryById(entryId)?.hasDefinitiveVerdict ?? false) return;
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD closes this boundary too: a held
+    // entry re-enters the lifecycle ONLY through [releaseAuthHold] (a fresh
+    // online sign-in), never through a direct push that would spend another
+    // attempt on a session the server already refused. Fails closed silently,
+    // exactly like the 025 verdict guard above — the caller did nothing wrong.
+    if (entryById(entryId)?.syncState == OutboxSyncState.authHold) return;
     state = [
       for (final e in state)
         if (e.id == entryId)
@@ -513,6 +519,39 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     ];
     await _repo.push(entryId);
     state = await _repo.recentEntries();
+    // [POS-OFFLINE-OPERATIONS-002] The push we just recorded may have landed a
+    // batch-level auth refusal (AUTH_HOLD) — the ONE failure that is also a
+    // verdict about the PIN SESSION itself. Signal the session seam exactly
+    // once per push (guarded; the controller no-ops when no session is live)
+    // so the PIN gate reappears, while the queued entries stay held — never
+    // deleted, never swept — until the fresh sign-in releases them.
+    for (final e in state) {
+      if (e.id == entryId && e.syncState == OutboxSyncState.authHold) {
+        try {
+          ref
+              .read(posSessionControllerProvider.notifier)
+              .handleServerAuthRefusal();
+        } catch (_) {
+          // Contained: a torn-down container mid-push must not throw here.
+        }
+      }
+    }
+    // [POS-OFFLINE-OPERATIONS-002] Reconnect revalidation: a STRUCTURED server
+    // answer for this operation (applied, or any per-op verdict) proves the
+    // authenticated `sync_push` round-trip worked — the ONE clean seam that
+    // says "this session is live online right now". Throttled inside the
+    // session controller (>5 min between persisted verifications).
+    for (final e in state) {
+      if (e.id == entryId &&
+          (e.syncState == OutboxSyncState.applied ||
+              e.lastErrorKind == kServerVerdictErrorKind)) {
+        try {
+          ref.read(posSessionControllerProvider.notifier).noteOnlineVerified();
+        } catch (_) {
+          // Contained — verification is an enhancement, never load-bearing.
+        }
+      }
+    }
     // RESTAURANT-OPERATIONS-V1-001: the server refusing an item as unavailable
     // means OUR menu is stale — a manager flipped availability after our last
     // load. Reload it so the grid greys the item out before the cashier
@@ -576,6 +615,35 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
   /// Count of entries still queued locally (pending / created).
   int get pendingCount => state.where((e) => e.syncState.isPending).length;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Count of entries held for re-authentication.
+  int get authHoldCount =>
+      state.where((e) => e.syncState == OutboxSyncState.authHold).length;
+
+  /// [POS-OFFLINE-OPERATIONS-002] Releases every AUTH_HOLD entry back to
+  /// `pending` and runs a NORMAL sweep, so the released operations resubmit
+  /// with the SAME `(deviceId, localOperationId)` identity (D-022 — the server
+  /// replays idempotently if any had actually been applied). Called by
+  /// [PosSessionController] on a successful ONLINE establish; a repository
+  /// that cannot hold auth-held work (demo/test doubles) reports 0 honestly.
+  Future<int> releaseAuthHold() async {
+    final Object repo = _repo;
+    if (repo is! PosOutboxAuthHoldRelease) return 0;
+    final int released;
+    try {
+      released = await repo.releaseAuthHold();
+    } catch (_) {
+      // A refused durable write keeps every entry held (durable-or-nothing);
+      // the next successful sign-in tries again. Never a throw into the
+      // establish path that triggered the release.
+      return 0;
+    }
+    if (released > 0 && !_disposed) {
+      state = await _repo.recentEntries();
+      await _sweep();
+    }
+    return released;
+  }
 }
 
 /// The client outbox repository. Selects by client runtime mode (M7): the

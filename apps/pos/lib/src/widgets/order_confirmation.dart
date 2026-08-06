@@ -1016,6 +1016,11 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
     case OutboxSyncState.pending:
     case OutboxSyncState.conflict:
     case OutboxSyncState.resolved:
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD presents as PENDING here — the
+    // order is stored locally and nothing is claimed about the server (its
+    // outcome IS pending); the sign-in-to-release affordance lives on the
+    // outbox indicator/details and the PIN gate, not on this confirmation.
+    case OutboxSyncState.authHold:
       return (
         label: l10n.posSyncStatePending,
         note: l10n.posSyncStoredLocally,

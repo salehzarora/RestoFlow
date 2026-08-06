@@ -35,7 +35,26 @@ enum OutboxSyncState {
   rejected('rejected'),
   dead('dead'),
   conflict('conflict'),
-  resolved('resolved');
+  resolved('resolved'),
+
+  /// [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD — the batch-level `sync_push`
+  /// authorization failed (SQLSTATE 42501: revoked device / expired or invalid
+  /// PIN session), which `app.sync_push` raises from its PREAMBLE, before the
+  /// per-operation dispatch loop — so nothing was created AND nothing about the
+  /// OPERATION itself was refused. The operation is held verbatim (same
+  /// identity, same payload bytes) until a NEW online sign-in releases it back
+  /// to `pending`; the idempotent replay then resubmits the SAME
+  /// `(deviceId, localOperationId)` identity. Deliberately neither pending
+  /// (no sweep may spend attempts on a session the server already refused) nor
+  /// failed (no Retry button — the recovery is signing in, not re-sending),
+  /// and NEVER terminal.
+  ///
+  /// ADDITIVE wire value: envelopes written before this build carry none of
+  /// these and decode unchanged; an envelope written by THIS build and read by
+  /// an older one quarantines the row verbatim (unknown `sync_state` throws in
+  /// [OutboxEntry.fromJson], and the store preserves undecodable entries
+  /// byte-for-byte), so the held order is never destroyed either way.
+  authHold('auth_hold');
 
   const OutboxSyncState(this.wire);
 
@@ -45,12 +64,16 @@ enum OutboxSyncState {
 
   bool get isTerminal => terminals.contains(this);
 
-  /// Queued locally, not yet (demo-)sent.
+  /// Queued locally, not yet (demo-)sent. AUTH_HOLD is deliberately NOT
+  /// pending: the auto-sweep pushes pending entries, and re-pushing under a
+  /// session the server refused only burns attempts.
   bool get isPending => this == created || this == pending;
 
   /// A failed delivery. Whether a RETRY of the SAME operation identity is
   /// meaningful additionally depends on the entry's error code — see
-  /// [OutboxEntry.isPermanentBusinessRejection].
+  /// [OutboxEntry.isPermanentBusinessRejection]. AUTH_HOLD is NOT failed:
+  /// nothing was refused about the operation, so no retry affordance applies —
+  /// a fresh online sign-in releases it.
   bool get isFailed => this == rejected || this == dead;
 }
 
@@ -216,22 +239,24 @@ const String kUnreadableResponseErrorKind = 'unreadable_response';
 /// The [OutboxEntry.lastErrorKind] values that PROVE the operation was refused
 /// and nothing was created.
 ///
-/// `auth` (SQLSTATE 42501) qualifies because `app.sync_push` raises it from its
-/// PREAMBLE — payload shape, PIN session validity, backing device session,
-/// device match — all of which run BEFORE the
-/// `for v_op in jsonb_array_elements(p_operations)` dispatch loop. A failure
-/// inside an operation is caught by that loop's own `exception when others` and
-/// comes back as a per-operation result, not as a thrown transport error. So a
-/// BATCH-level auth exception is positive proof that no operation ran.
-///
 /// [kServerVerdictErrorKind] qualifies because the server answered about this
 /// operation specifically.
+///
+/// `auth` (SQLSTATE 42501) no longer qualifies ([POS-OFFLINE-OPERATIONS-002]
+/// AUTH_HOLD). It is still positive proof that no operation ran — `app.sync_push`
+/// raises it from its PREAMBLE, before the per-operation dispatch loop — but it
+/// is a verdict about the SESSION, not about the operation: the same identity
+/// resubmitted under a fresh sign-in can succeed. Treating it as a definitive
+/// order rejection permanently destroyed queued offline work the moment a PIN
+/// session aged out. Such entries now move to [OutboxSyncState.authHold] and
+/// are released back to `pending` by the next ONLINE sign-in (same
+/// `(deviceId, localOperationId)` identity; the server replays idempotently).
 ///
 /// `transient` and `server` deliberately do NOT qualify. A timeout, a dropped
 /// connection or a 5xx can all occur AFTER the server committed — the client
 /// merely lost the answer. Calling those "rejected" would tell the cashier the
 /// kitchen has nothing when it may already be cooking.
-const Set<String> kDefinitiveRefusalKinds = {'auth', kServerVerdictErrorKind};
+const Set<String> kDefinitiveRefusalKinds = {kServerVerdictErrorKind};
 
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
@@ -621,6 +646,10 @@ class OutboxEntry {
   /// "rejected" is a second order for food already cooking.
   PosOrderOutcome get outcome {
     if (syncState == OutboxSyncState.applied) return PosOrderOutcome.accepted;
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD is epistemically PENDING: the
+    // server refused the SESSION before reading any operation, so nothing is
+    // claimed about the order — a fresh sign-in releases and resubmits it.
+    if (syncState == OutboxSyncState.authHold) return PosOrderOutcome.pending;
     if (!syncState.isFailed) return PosOrderOutcome.pending;
     if (isPermanentBusinessRejection) return PosOrderOutcome.rejected;
     if (lastErrorKind != null &&

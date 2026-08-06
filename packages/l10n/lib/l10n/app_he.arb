@@ -1682,5 +1682,13 @@
   "posOfflineModeBanner": "לא מקוון — מוצג התפריט השמור",
   "posOfflineDataAge": "נשמר {age}",
   "posOfflineSetupRequiredTitle": "נדרשת הגדרה מקוונת",
-  "posOfflineSetupRequiredBody": "אין עדיין תפריט שמור במכשיר זה. יש לחבר אותו לאינטרנט פעם אחת כדי להוריד את התפריט וההגדרות — לאחר מכן הוא יכול להמשיך למכור ללא חיבור."
+  "posOfflineSetupRequiredBody": "אין עדיין תפריט שמור במכשיר זה. יש לחבר אותו לאינטרנט פעם אחת כדי להוריד את התפריט וההגדרות — לאחר מכן הוא יכול להמשיך למכור ללא חיבור.",
+  "posOfflineReauthNeeded": "ממתין להתחברות",
+  "posOfflineSessionExpired": "חלון העבודה ללא חיבור הסתיים — יש להתחבר לאינטרנט ולהיכנס מחדש.",
+  "posOfflineSendBlockedSession": "השליחה מושהית — חלון העבודה ללא חיבור הסתיים. התחברו והיכנסו מחדש כדי לשלוח הזמנות.",
+  "posOfflineKitchenModeStale": "עבר זמן רב מדי ללא חיבור ולא ניתן לאמת את הגדרת המטבח השמורה — התחברו מחדש כדי לשלוח הזמנות.",
+  "posOutboxAuthHold": "{count} ממתינות לכניסה מחדש",
+  "posOutboxAuthHoldTooltip": "ההזמנות האלה שמורות במכשיר הזה. היכנסו מחדש והן יסתנכרנו אוטומטית.",
+  "posOfflineReconnecting": "בודק את החיבור…",
+  "posOfflineSyncRestored": "נכנסת — ההזמנות השמורות מסתנכרנות כעת."
 }

@@ -32,6 +32,8 @@ import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_menu_provider.dart';
+import '../state/pos_offline_session_policy.dart';
+import '../state/pos_offline_state.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import 'modifier_selection_sheet.dart';
@@ -246,6 +248,15 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       final submissionDecision = resolvePosSubmissionDecision(
         ref.watch(posKitchenModeReadinessProvider),
       );
+      // [POS-OFFLINE-OPERATIONS-002] (C6): may THIS session still submit?
+      // Blocks ONLY a restored-offline session whose hard trust window ended —
+      // the cached menu stays browsable, Send explains itself below.
+      final offlineSessionPolicy = ref.watch(posOfflineSessionPolicyProvider);
+      // [POS-OFFLINE-OPERATIONS-002] (C7): while selling from the offline
+      // snapshot, an UNAVAILABLE kitchen mode means the cached mode's 2-hour
+      // trust window has ended (a within-window capture would have resolved
+      // it) — the hint below then says so instead of the generic retry copy.
+      final offlinePhase = ref.watch(posOfflineModeProvider).phase;
       // Finding 4: while APPLIED-AWAITING-REFRESH the send button stays off —
       // the operation must never be dispatched again; the banner offers the
       // refresh retry instead.
@@ -253,6 +264,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
           (addition.active || submissionDecision.canSubmit) &&
+          offlineSessionPolicy.canSubmit &&
           // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a NON-EMPTY malformed phone blocks
           // Send (the field shows the localized inline error); an empty or valid
           // phone never does. Defence-in-depth is re-checked in _handleSend.
@@ -290,12 +302,26 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
         // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the workflow-mode
         // loading/unavailable reason (new orders only); a retry appears for
         // the retryable unavailable case.
+        //
+        // [POS-OFFLINE-OPERATIONS-002] Two additions, same hint row idiom:
+        //  * C7 — unavailable WHILE selling from the offline snapshot means
+        //    the cached kitchen mode aged past its 2h trust window: the copy
+        //    says that (posOfflineKitchenModeStale) instead of the generic
+        //    retry line. The Retry affordance is unchanged.
+        //  * C6 — with the kitchen row silent, a session blocked by the
+        //    offline policy (restored session past its 8h window) claims the
+        //    row with its own reason. Kitchen reasons deliberately outrank
+        //    the session reason so the cashier never sees two banners.
         kitchenModeHint: (!addition.active && !submissionDecision.canSubmit)
             ? (submissionDecision.blockReason ==
                       PosSubmissionBlockReason.kitchenModeUnavailable
-                  ? l10n.posCloseWorkflowUnavailable
+                  ? (offlinePhase == PosOfflinePhase.offlineCached
+                        ? l10n.posOfflineKitchenModeStale
+                        : l10n.posCloseWorkflowUnavailable)
                   : l10n.posKitchenModeLoading)
-            : null,
+            : (!offlineSessionPolicy.canSubmit
+                  ? l10n.posOfflineSendBlockedSession
+                  : null),
         onRetryKitchenMode:
             (!addition.active &&
                 submissionDecision.blockReason ==

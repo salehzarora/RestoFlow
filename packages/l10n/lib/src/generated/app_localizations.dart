@@ -9993,6 +9993,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.'**
   String get posOfflineSetupRequiredBody;
+
+  /// POS state label for outbox operations held until the operator signs in again (AUTH_HOLD) - used as the sync-details row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for sign-in'**
+  String get posOfflineReauthNeeded;
+
+  /// POS notice on the PIN gate when a stored offline session exists for this till but its hard trust window (8h since the last online verification) has ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline sign-in window ended - reconnect to the internet and sign in again.'**
+  String get posOfflineSessionExpired;
+
+  /// POS cart hint shown when Send is blocked because the restored offline session's trust window has ended; browsing the cached menu stays possible.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending is paused - the offline sign-in window ended. Reconnect and sign in to send orders.'**
+  String get posOfflineSendBlockedSession;
+
+  /// POS cart hint when the kitchen workflow mode is unavailable while selling from the offline snapshot and the saved mode's 2-hour trust window has ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline too long to trust the saved kitchen setup - reconnect to send orders.'**
+  String get posOfflineKitchenModeStale;
+
+  /// POS outbox indicator label for queued operations held until the operator signs in again (AUTH_HOLD).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} awaiting sign-in'**
+  String posOutboxAuthHold(int count);
+
+  /// POS explanation for AUTH_HOLD: re-signing in releases the held orders; nothing is lost and no retry is needed.
+  ///
+  /// In en, this message translates to:
+  /// **'These orders are saved on this device. Sign in again and they resume syncing automatically.'**
+  String get posOutboxAuthHoldTooltip;
+
+  /// POS notice while the PIN gate probes whether the backend is reachable before offering the offline session restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the connection…'**
+  String get posOfflineReconnecting;
+
+  /// POS confirmation after a fresh online sign-in released the held offline orders back into normal syncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in - saved orders are syncing now.'**
+  String get posOfflineSyncRestored;
 }
 
 class _AppLocalizationsDelegate

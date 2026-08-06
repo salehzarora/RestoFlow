@@ -5396,4 +5396,35 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posOfflineSetupRequiredBody =>
       'لا توجد قائمة محفوظة على هذا الجهاز بعد. يرجى توصيله بالإنترنت مرة واحدة لتنزيل القائمة والإعدادات — وبعدها يمكنه متابعة البيع دون اتصال.';
+
+  @override
+  String get posOfflineReauthNeeded => 'بانتظار تسجيل الدخول';
+
+  @override
+  String get posOfflineSessionExpired =>
+      'انتهت مهلة العمل دون اتصال — يرجى الاتصال بالإنترنت وتسجيل الدخول من جديد.';
+
+  @override
+  String get posOfflineSendBlockedSession =>
+      'الإرسال متوقف — انتهت مهلة العمل دون اتصال. أعد الاتصال وسجّل الدخول لإرسال الطلبات.';
+
+  @override
+  String get posOfflineKitchenModeStale =>
+      'مضى وقت طويل دون اتصال ولا يمكن تأكيد إعداد المطبخ المحفوظ — أعد الاتصال لإرسال الطلبات.';
+
+  @override
+  String posOutboxAuthHold(int count) {
+    return '$count بانتظار تسجيل الدخول';
+  }
+
+  @override
+  String get posOutboxAuthHoldTooltip =>
+      'هذه الطلبات محفوظة على هذا الجهاز. سجّل الدخول من جديد وستُستأنف مزامنتها تلقائيًا.';
+
+  @override
+  String get posOfflineReconnecting => 'جارٍ التحقق من الاتصال…';
+
+  @override
+  String get posOfflineSyncRestored =>
+      'تم تسجيل الدخول — تجري الآن مزامنة الطلبات المحفوظة.';
 }

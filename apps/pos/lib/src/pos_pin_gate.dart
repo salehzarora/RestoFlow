@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'data/order_submission.dart' show OutboxSyncState;
+import 'state/outbox_controller.dart';
 import 'state/pos_session.dart';
 import 'widgets/language_selector.dart';
 
@@ -15,6 +19,17 @@ import 'widgets/language_selector.dart';
 /// `start_pin_session` with the RESTORED device context's in-memory
 /// device-session handle — fail-closed: no session means no POS, and there is
 /// no fake or bypass path.
+///
+/// [POS-OFFLINE-OPERATIONS-002] (C6): the gate is ALSO where the OFFLINE
+/// session restore slots in, in exactly two shapes — both requiring a valid
+/// secure-stored session for the CURRENT pairing scope:
+///
+///  1. COLD BOOT while offline: before any PIN attempt, a stored record plus a
+///     TRANSPORT-level failure of the token-proven roster read (the honest
+///     offline evidence — never a connectivity flag) restores the session.
+///  2. A typed PIN whose `start_pin_session` fails at the TRANSPORT level
+///     (never on a server refusal — wrong PIN, lockout and 42501 all keep
+///     failing closed) restores the SAME operator's stored session.
 class PosPinGate extends ConsumerStatefulWidget {
   const PosPinGate({
     required this.device,
@@ -46,10 +61,28 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
     with WidgetsBindingObserver {
   bool _expiredNotice = false;
 
+  /// [POS-OFFLINE-OPERATIONS-002] One-shot latch for the cold-boot offline
+  /// probe (1 in the class doc) — the probe belongs to the gate's FIRST
+  /// appearance, never to later rebuilds.
+  bool _offlineProbeStarted = false;
+
+  /// True while the cold-boot probe is checking whether the backend is
+  /// reachable (the gate shows a slim localized notice for it).
+  bool _offlineProbing = false;
+
+  /// True when a stored offline session EXISTS for this pairing but its hard
+  /// trust window has ended — the one case that earns its own explanation.
+  bool _storedSessionExpired = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // [POS-OFFLINE-OPERATIONS-002] Deferred a frame like the sync lifecycle's
+    // startup seams, so provider state has settled before the probe reads it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeRestoreOfflineSession();
+    });
   }
 
   @override
@@ -72,6 +105,49 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
     }
   }
 
+  /// [POS-OFFLINE-OPERATIONS-002] The cold-boot offline restore probe. Runs
+  /// once, and only does anything when a stored record exists for the CURRENT
+  /// pairing: it then asks the backend a real question (the roster read) and
+  /// restores ONLY on a transport-level failure. A reachable server — whatever
+  /// it answers — always means the normal online PIN sign-in.
+  Future<void> _maybeRestoreOfflineSession() async {
+    if (_offlineProbeStarted) return;
+    _offlineProbeStarted = true;
+    final staff = widget.staffRepository;
+    final device = widget.device;
+    if (staff == null ||
+        device.deviceId == null ||
+        device.deviceSessionId == null) {
+      return;
+    }
+    if (ref.read(posSyncSessionProvider) != null) return;
+    final controller = ref.read(posSessionControllerProvider.notifier);
+    // Cheap peek first: with no stored record there is nothing to restore, so
+    // no probe round-trip is spent at all.
+    final record = await controller.peekStoredOfflineSession(device);
+    if (!mounted || record == null) return;
+    setState(() => _offlineProbing = true);
+    try {
+      // OFFLINE EVIDENCE, not a connectivity flag: the token-proven roster
+      // read either answers (server reachable → normal sign-in) or fails at
+      // the transport level (restore may proceed). A server-side refusal
+      // (invalid session) is a VERDICT and never falls back to restore.
+      final roster = await staff.listStaff();
+      final transportFailed = roster.fold<bool>(
+        (_) => false,
+        (failure) => failure == DeviceStaffFailure.network,
+      );
+      if (!transportFailed || !mounted) return;
+      final result = await controller.restoreOfflineSession(device: device);
+      if (!mounted) return;
+      if (result == PosOfflineRestoreResult.expired) {
+        setState(() => _storedSessionExpired = true);
+      }
+    } finally {
+      if (mounted) setState(() => _offlineProbing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final device = widget.device;
@@ -91,9 +167,14 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
         session != null && binding != null && binding.matchesContext(device);
     if (ownSession) {
       // Re-authenticated: clear any stale "expired" notice for the next sign-out.
-      if (_expiredNotice) {
+      if (_expiredNotice || _storedSessionExpired) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _expiredNotice = false);
+          if (mounted) {
+            setState(() {
+              _expiredNotice = false;
+              _storedSessionExpired = false;
+            });
+          }
         });
       }
       return widget.child;
@@ -107,7 +188,19 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
       // fail closed with the honest config/unpaired explanation — never enter.
       return const RealModeUnconfiguredView();
     }
-    return PinLoginScreen(
+    final l10n = AppLocalizations.of(context);
+    // [POS-OFFLINE-OPERATIONS-002] (C8): the batch-auth refusal notice and the
+    // held-work count both surface AT the gate — the sign-in below is what
+    // releases the held orders, so this is where that promise is made.
+    final reauthNeeded = ref.watch(posSessionReauthNoticeProvider);
+    final heldCount = ref.watch(
+      outboxControllerProvider.select(
+        (entries) => entries
+            .where((e) => e.syncState == OutboxSyncState.authHold)
+            .length,
+      ),
+    );
+    final loginScreen = PinLoginScreen(
       staffRepository: staff,
       // POS wording for the no-staff guidance (cashier/manager PINs).
       surface: AppSurface.pos,
@@ -118,8 +211,11 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
       // operator's mistakes never lock the whole device/restaurant.
       attemptLimiter: ref.watch(pinAttemptLimiterProvider),
       attemptScope: (member) => '$deviceId:${member.employeeProfileId}',
-      // RF-118: shown after an inactivity/max-age expiry signed the operator out.
-      expiredNotice: _expiredNotice,
+      // RF-118: shown after an inactivity/max-age expiry signed the operator
+      // out. [POS-OFFLINE-OPERATIONS-002]: the server refusing the session
+      // mid-shift (batch 42501 → AUTH_HOLD) earns the same "enter PIN again"
+      // prompt.
+      expiredNotice: _expiredNotice || reauthNeeded,
       onStartSession: (employeeProfileId, pin) async {
         // PILOT-OPERATIONS-CORRECTIONS-001: resolve the operator's display name
         // from the money-free PIN roster so the shift-close surface can name them.
@@ -134,18 +230,106 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
             }
           }
         }, (_) {});
-        return ref
-            .read(posSessionControllerProvider.notifier)
-            .signInWithPin(
-              // The full pairing context the new session will be BOUND to.
-              device: device,
-              deviceId: deviceId,
-              deviceSessionId: deviceSessionId,
-              employeeProfileId: employeeProfileId,
-              pin: pin,
-              employeeDisplayName: displayName,
+        final controller = ref.read(posSessionControllerProvider.notifier);
+        final heldBefore = ref
+            .read(outboxControllerProvider.notifier)
+            .authHoldCount;
+        final error = await controller.signInWithPin(
+          // The full pairing context the new session will be BOUND to.
+          device: device,
+          deviceId: deviceId,
+          deviceSessionId: deviceSessionId,
+          employeeProfileId: employeeProfileId,
+          pin: pin,
+          employeeDisplayName: displayName,
+        );
+        if (error == null) {
+          // [POS-OFFLINE-OPERATIONS-002] The fresh ONLINE session released the
+          // held work (the session controller's establish hook) — say so.
+          if (heldBefore > 0 && mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context).posOfflineSyncRestored,
+                ),
+              ),
             );
+          }
+          return null;
+        }
+        // [POS-OFFLINE-OPERATIONS-002] (C6): ONLY a transport-level failure
+        // may fall back to the stored offline session, and only for the SAME
+        // operator. A server refusal (wrong PIN → PinLoginError.wrongPin,
+        // lockout/precondition 42501 → PinLoginError.locked, or any other
+        // answered failure) keeps failing closed exactly as before.
+        if (error == PinLoginError.network) {
+          final result = await controller.restoreOfflineSession(
+            device: device,
+            attemptedEmployeeProfileId: employeeProfileId,
+          );
+          if (result == PosOfflineRestoreResult.restored) return null;
+          if (result == PosOfflineRestoreResult.expired && mounted) {
+            setState(() => _storedSessionExpired = true);
+          }
+        }
+        return error;
       },
+    );
+
+    final notices = <Widget>[
+      if (_offlineProbing)
+        RestoflowNoticeBanner(
+          key: const Key('pos-offline-reconnecting-banner'),
+          tone: RestoflowTone.info,
+          icon: Icons.wifi_off_outlined,
+          body: l10n.posOfflineReconnecting,
+        ),
+      if (_storedSessionExpired)
+        RestoflowNoticeBanner(
+          key: const Key('pos-offline-session-expired-banner'),
+          tone: RestoflowTone.warning,
+          icon: Icons.lock_clock_outlined,
+          body: l10n.posOfflineSessionExpired,
+        ),
+      if (reauthNeeded || heldCount > 0)
+        RestoflowNoticeBanner(
+          key: const Key('pos-offline-authhold-banner'),
+          tone: RestoflowTone.warning,
+          icon: Icons.lock_clock,
+          body: l10n.posOutboxAuthHoldTooltip,
+        ),
+    ];
+    if (notices.isEmpty) return loginScreen;
+    // The notices ride ABOVE the shared login screen (which is its own
+    // Scaffold) — additive chrome only, so the screen itself stays untouched.
+    return Material(
+      child: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.md,
+                RestoflowSpacing.sm,
+                RestoflowSpacing.md,
+                0,
+              ),
+              child: Column(
+                children: [
+                  for (final notice in notices)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: RestoflowSpacing.sm,
+                      ),
+                      child: notice,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: loginScreen),
+        ],
+      ),
     );
   }
 }

@@ -339,11 +339,20 @@ void expectExactlyOneOutcome(PosOrderOutcome expected, AppLocalizations l10n) {
 
 void main() {
   group('A. one authoritative predicate', () {
-    test('024-A1 a typed AUTH rejection is definitive', () async {
+    test('024-A1 a typed AUTH batch failure is a durable AUTH_HOLD, not a '
+        'definitive rejection [POS-OFFLINE-OPERATIONS-002]', () async {
+      // UPDATED CONTRACT (was: auth => rejected/definitive). A batch 42501 is
+      // a verdict about the SESSION, not the operation: the same identity
+      // resubmitted under a fresh sign-in can succeed, so destroying it as
+      // "definitively rejected" deleted queued offline work whenever a PIN
+      // session aged out. The entry is now HELD (pending epistemically) and
+      // released by the next online sign-in.
       final (entry, _) = await _pushOnce(const [_authFailure]);
-      expect(entry.outcome, PosOrderOutcome.rejected);
-      expect(entry.hasDefinitiveVerdict, isTrue);
-      expect(entry.isDefinitiveNoServerOrder, isTrue);
+      expect(entry.syncState, OutboxSyncState.authHold);
+      expect(entry.outcome, PosOrderOutcome.pending);
+      expect(entry.hasDefinitiveVerdict, isFalse);
+      expect(entry.isDefinitiveNoServerOrder, isFalse);
+      expect(entry.lastErrorKind, 'auth', reason: 'diagnosis is preserved');
     });
 
     test('024-A2 an UNKNOWN structured refusal is definitive', () async {
@@ -397,15 +406,22 @@ void main() {
     });
   });
 
-  group('B. a typed AUTH rejection withdraws every order action', () {
-    testWidgets('024-B1 no Pay / Discount / print / receipt / Retry', (
-      tester,
-    ) async {
+  group('B. a typed AUTH failure closes every RESEND surface '
+      '(now via AUTH_HOLD, POS-OFFLINE-OPERATIONS-002)', () {
+    testWidgets('024-B1 the confirmation presents it as PENDING — one claim, '
+        'and neither Retry nor Send-now', (tester) async {
+      // UPDATED CONTRACT (was: rejected header + every order action
+      // withdrawn). AUTH_HOLD makes no claim about the order (the server never
+      // read it), so the page presents the pending outcome — the SAME
+      // conservative presentation every queued order gets — and offers no
+      // way to spend a transport attempt on the refused session: signing in
+      // again is the release, and that affordance lives on the PIN gate.
       final l10n = await _en();
       final (entry, _) = await _pushOnce(const [_authFailure]);
       await _pump(tester, entry);
-      expectExactlyOneOutcome(PosOrderOutcome.rejected, l10n);
-      _expectNoServerOrderActions();
+      expectExactlyOneOutcome(PosOrderOutcome.pending, l10n);
+      expect(find.byKey(const Key('sync-retry-button')), findsNothing);
+      expect(find.byKey(const Key('sync-now-button')), findsNothing);
     });
 
     test('024-B2 the automatic sweep never re-pushes it', () async {
@@ -428,8 +444,11 @@ void main() {
       expect(
         transport.pushes,
         afterFirstPush,
-        reason: 'a definitive refusal must never be re-pushed by the sweep',
+        reason:
+            'an AUTH_HOLD entry must never be re-pushed by the sweep — only '
+            'a fresh online sign-in releases it',
       );
+      expect(controller.entryById('e1')!.syncState, OutboxSyncState.authHold);
     });
 
     test('024-B3 a MANUAL retry cannot re-push it either', () async {
@@ -453,6 +472,11 @@ void main() {
         transport.pushes,
         afterFirstPush,
         reason: 'the button is withdrawn, and the command fails closed too',
+      );
+      expect(
+        controller.entryById('e1')!.syncState,
+        OutboxSyncState.authHold,
+        reason: 'held verbatim — released only by a fresh online sign-in',
       );
     });
   });

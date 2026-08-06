@@ -5443,4 +5443,35 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posOfflineSetupRequiredBody =>
       'This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.';
+
+  @override
+  String get posOfflineReauthNeeded => 'Waiting for sign-in';
+
+  @override
+  String get posOfflineSessionExpired =>
+      'Offline sign-in window ended - reconnect to the internet and sign in again.';
+
+  @override
+  String get posOfflineSendBlockedSession =>
+      'Sending is paused - the offline sign-in window ended. Reconnect and sign in to send orders.';
+
+  @override
+  String get posOfflineKitchenModeStale =>
+      'Offline too long to trust the saved kitchen setup - reconnect to send orders.';
+
+  @override
+  String posOutboxAuthHold(int count) {
+    return '$count awaiting sign-in';
+  }
+
+  @override
+  String get posOutboxAuthHoldTooltip =>
+      'These orders are saved on this device. Sign in again and they resume syncing automatically.';
+
+  @override
+  String get posOfflineReconnecting => 'Checking the connection…';
+
+  @override
+  String get posOfflineSyncRestored =>
+      'Signed in - saved orders are syncing now.';
 }

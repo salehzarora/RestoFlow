@@ -5362,4 +5362,34 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posOfflineSetupRequiredBody =>
       'אין עדיין תפריט שמור במכשיר זה. יש לחבר אותו לאינטרנט פעם אחת כדי להוריד את התפריט וההגדרות — לאחר מכן הוא יכול להמשיך למכור ללא חיבור.';
+
+  @override
+  String get posOfflineReauthNeeded => 'ממתין להתחברות';
+
+  @override
+  String get posOfflineSessionExpired =>
+      'חלון העבודה ללא חיבור הסתיים — יש להתחבר לאינטרנט ולהיכנס מחדש.';
+
+  @override
+  String get posOfflineSendBlockedSession =>
+      'השליחה מושהית — חלון העבודה ללא חיבור הסתיים. התחברו והיכנסו מחדש כדי לשלוח הזמנות.';
+
+  @override
+  String get posOfflineKitchenModeStale =>
+      'עבר זמן רב מדי ללא חיבור ולא ניתן לאמת את הגדרת המטבח השמורה — התחברו מחדש כדי לשלוח הזמנות.';
+
+  @override
+  String posOutboxAuthHold(int count) {
+    return '$count ממתינות לכניסה מחדש';
+  }
+
+  @override
+  String get posOutboxAuthHoldTooltip =>
+      'ההזמנות האלה שמורות במכשיר הזה. היכנסו מחדש והן יסתנכרנו אוטומטית.';
+
+  @override
+  String get posOfflineReconnecting => 'בודק את החיבור…';
+
+  @override
+  String get posOfflineSyncRestored => 'נכנסת — ההזמנות השמורות מסתנכרנות כעת.';
 }

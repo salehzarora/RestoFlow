@@ -85,12 +85,19 @@ class OutboxStatusIndicator extends ConsumerWidget {
       ),
     );
 
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD carries its own explanation in
+    // the tooltip: the count alone ("2 awaiting sign-in") does not tell the
+    // operator that signing in — not retrying — is what resumes the sync.
+    final tooltip = summary.isAuthHoldHeadline
+        ? '$label\n${l10n.posOutboxAuthHoldTooltip}'
+        : label;
+
     // A 44dp minimum target in BOTH presentations — it is a real button now.
     final sized = Tooltip(
       key: compact
           ? const Key('outbox-status-compact')
           : const Key('outbox-status-tooltip'),
-      message: label,
+      message: tooltip,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
         child: compact

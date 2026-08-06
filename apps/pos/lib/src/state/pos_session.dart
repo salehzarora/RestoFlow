@@ -7,8 +7,11 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/ids.dart';
+import '../data/secure_session_store.dart';
 import '../data/shift_repository.dart';
+import '../data/sync_cursor_store.dart' show PosSyncScope;
 import 'cart_controller.dart' show posActiveCorrectionSourceProvider;
+import 'outbox_controller.dart' show outboxControllerProvider;
 import 'pos_device_context.dart';
 import 'pos_shift.dart';
 
@@ -233,6 +236,26 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// The current session's pairing binding (see [PosPinSessionBinding]).
   PosPinSessionBinding? get binding => _binding;
 
+  /// [POS-OFFLINE-OPERATIONS-002] (C6): true when the CURRENT session was
+  /// restored from the secure store WITHOUT a server round-trip. Cleared by
+  /// the next proven-online verification ([noteOnlineVerified]) and by every
+  /// fresh online establish. Mirrored reactively into
+  /// [posSessionOfflineRestoreInfoProvider].
+  bool _restoredOffline = false;
+
+  /// The hard end of the restored session's offline trust window
+  /// (`min(serverExpiry ?? +inf, lastOnlineVerify + 8h)`); null when the
+  /// session is live-online.
+  DateTime? _offlineValidUntil;
+
+  /// Throttle anchor for reconnect revalidation: the last time
+  /// `last_online_verify` was PERSISTED (>5 min between writes, so a busy
+  /// till's every push does not churn secure storage).
+  DateTime? _lastVerifyPersistedAt;
+
+  bool get restoredOffline => _restoredOffline;
+  DateTime? get offlineValidUntil => _offlineValidUntil;
+
   /// RF-118: when the current PIN session was established (drives the client
   /// expiry policy). Null when no session is active.
   DateTime? _startedAt;
@@ -274,7 +297,13 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     )) {
       return false;
     }
-    endSession();
+    // [POS-OFFLINE-OPERATIONS-002] The CLIENT-side idle/max-age expiry ends
+    // the in-memory session but deliberately KEEPS the secure store record:
+    // its own hard offline window (min(serverExpiry, lastOnlineVerify + 8h))
+    // still bounds any restore, and the restore paths re-require the same
+    // operator at the PIN gate. Only an explicit logout/unpair or a SERVER
+    // auth refusal destroys the offline-continuity record.
+    endSession(clearStoredSession: false);
     return true;
   }
 
@@ -288,8 +317,38 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     // nothing else client-side would ever end the old session. The pairing gate
     // publishes the context once per genuine transition (init / restore / paired /
     // unpair), never per rebuild, so this cannot churn a live session.
-    ref.watch(posDeviceContextProvider);
+    final ctx = ref.watch(posDeviceContextProvider);
+    // [POS-OFFLINE-OPERATIONS-002] When a PAIRING TRANSITION (unpair / re-pair
+    // into a different context) drops a bound session, the persisted offline
+    // copy dies with it: a till unpaired from branch A must never restore
+    // branch A's session, even before the store's own deviceSessionId check
+    // would refuse it. A rebuild whose context still matches the old binding
+    // (config churn, not a pairing change) keeps the record — that is exactly
+    // the restart-continuity C6 exists for.
+    final previousBinding = _binding;
+    if (previousBinding != null &&
+        (ctx == null || !previousBinding.matchesContext(ctx))) {
+      final staleScope = _scopeOfBinding(previousBinding);
+      if (staleScope != null) {
+        // Timer-free fire-and-forget (Future(...) would arm a zero-duration
+        // Timer, which widget tests flag as pending): the store contains its
+        // own failures, so the bare future needs only an error sink.
+        final store = ref.read(posSecureSessionStoreProvider);
+        unawaited(store.clear(staleScope).catchError((_) {}));
+      }
+    }
     _binding = null;
+    if (previousBinding != null) {
+      // A REBUILD dropped a live session — reset the reactive mirror with it
+      // (deferred one microtask: build() may not write another provider
+      // synchronously). A first build has nothing to reset: the mirror's own
+      // default is already "none", and publishing here would clobber a test's
+      // override of the mirror before anything genuinely transitioned.
+      _setOfflineRestoreInfo(restored: false, validUntil: null, deferred: true);
+    } else {
+      _restoredOffline = false;
+      _offlineValidUntil = null;
+    }
     final cfg = ref.watch(runtimeConfigProvider);
     if (cfg.isDemoMode) return null;
     final transport = ref.watch(posAuthTransportProvider);
@@ -333,6 +392,14 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         ref
             .read(posSignedInEmployeeProfileIdProvider.notifier)
             .set(config.employeeProfileId);
+        // [POS-OFFLINE-OPERATIONS-002] A successful ONLINE establish persists
+        // the bounded offline-continuity record and releases any AUTH_HOLD
+        // queued work (both contained; never load-bearing for sign-in).
+        _afterOnlineEstablish(
+          sessionId: started.pinSessionId,
+          employeeProfileId: config.employeeProfileId,
+          displayName: null,
+        );
         unawaited(_openShiftBestEffort(transport, session));
         return session;
       },
@@ -533,6 +600,14 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         ref
             .read(posSignedInEmployeeProfileIdProvider.notifier)
             .set(employeeProfileId);
+        // [POS-OFFLINE-OPERATIONS-002] A successful ONLINE establish persists
+        // the bounded offline-continuity record (C6) and releases any
+        // AUTH_HOLD queued work (C8). Contained; never load-bearing here.
+        _afterOnlineEstablish(
+          sessionId: started.pinSessionId,
+          employeeProfileId: employeeProfileId,
+          displayName: employeeDisplayName,
+        );
         // A cashier needs an open shift before payments (RF-055); best-effort.
         unawaited(_openShiftBestEffort(transport, session));
         return null;
@@ -549,7 +624,21 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// Ends the current staff session locally (the server session expires on its
   /// own window — Q-009). The POS falls back to the PIN screen. Clears the
   /// captured open-shift handle (RF-113) so a new sign-in starts fresh.
-  void endSession() {
+  ///
+  /// [POS-OFFLINE-OPERATIONS-002] [clearStoredSession] (default TRUE) also
+  /// destroys the secure offline-continuity record — the right default for
+  /// every EXPLICIT sign-out path (shift close, sign-out buttons) and for a
+  /// server auth refusal. The RF-118 client idle/max-age expiry passes FALSE:
+  /// the record's own hard window still bounds any restore, and destroying it
+  /// there would brick a till that merely sat idle offline.
+  void endSession({bool clearStoredSession = true}) {
+    if (clearStoredSession) {
+      final scope = _scopeOfBinding(_binding);
+      if (scope != null) {
+        final store = ref.read(posSecureSessionStoreProvider);
+        unawaited(store.clear(scope).catchError((_) {}));
+      }
+    }
     ref.read(posOpenShiftProvider.notifier).clear();
     ref.read(posSignedInStaffNameProvider.notifier).clear();
     ref.read(posSignedInEmployeeProfileIdProvider.notifier).clear();
@@ -562,9 +651,352 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     _binding = null;
     _startedAt = null; // RF-118: close the client expiry window.
     _pausedAt = null;
+    _lastVerifyPersistedAt = null;
+    _setOfflineRestoreInfo(restored: false, validUntil: null);
     state = const AsyncData(null);
   }
+
+  // ---------------------------------------------------------------------
+  // [POS-OFFLINE-OPERATIONS-002] (C6/C8) — secure bounded session
+  // persistence, offline restore, reconnect revalidation, AUTH_HOLD release.
+  // ---------------------------------------------------------------------
+
+  /// The durable-store scope of [binding], or null when the binding is not a
+  /// FULL pairing binding (the legacy dart-define path with no context —
+  /// nothing may persist or restore for a scope we cannot fully name).
+  PosSyncScope? _scopeOfBinding(PosPinSessionBinding? binding) {
+    final organizationId = binding?.organizationId;
+    final branchId = binding?.branchId;
+    final deviceId = binding?.deviceId;
+    if (binding == null ||
+        organizationId == null ||
+        branchId == null ||
+        deviceId == null ||
+        binding.deviceSessionId == null) {
+      return null;
+    }
+    return PosSyncScope(
+      organizationId: organizationId,
+      restaurantId: binding.restaurantId ?? '',
+      branchId: branchId,
+      deviceId: deviceId,
+    );
+  }
+
+  /// Publishes the restored-offline flags: synchronously into the controller
+  /// fields, and (one microtask deferred when [deferred] — build() may not
+  /// write another provider synchronously, the recovery-002 rule) into the
+  /// reactive [posSessionOfflineRestoreInfoProvider] mirror. The deferred
+  /// write publishes the CURRENT fields, so a faster subsequent transition is
+  /// never clobbered by a stale capture.
+  void _setOfflineRestoreInfo({
+    required bool restored,
+    required DateTime? validUntil,
+    bool deferred = false,
+  }) {
+    _restoredOffline = restored;
+    _offlineValidUntil = validUntil;
+    void publish() {
+      try {
+        ref
+            .read(posSessionOfflineRestoreInfoProvider.notifier)
+            .publish(
+              restoredOffline: _restoredOffline,
+              validUntil: _offlineValidUntil,
+            );
+      } catch (_) {
+        // Container torn down mid-transition — nothing to mirror into.
+      }
+    }
+
+    if (deferred) {
+      Future<void>.microtask(publish);
+    } else {
+      publish();
+    }
+  }
+
+  /// Runs after EVERY successful ONLINE `start_pin_session`: persists the
+  /// bounded offline-continuity record for the full pairing scope, clears the
+  /// re-auth notice, and releases AUTH_HOLD outbox work so it resubmits under
+  /// the fresh session with its ORIGINAL `(deviceId, localOperationId)`
+  /// identity. Everything here is contained — a failure can never fail or
+  /// delay the sign-in that triggered it.
+  void _afterOnlineEstablish({
+    required String sessionId,
+    required String employeeProfileId,
+    required String? displayName,
+  }) {
+    final now = clock();
+    _setOfflineRestoreInfo(restored: false, validUntil: null);
+    try {
+      ref.read(posSessionReauthNoticeProvider.notifier).clear();
+    } catch (_) {}
+    final binding = _binding;
+    final scope = _scopeOfBinding(binding);
+    final deviceSessionId = binding?.deviceSessionId;
+    if (scope != null && deviceSessionId != null) {
+      _lastVerifyPersistedAt = now;
+      final record = PosStoredPinSession(
+        sessionId: sessionId,
+        employeeProfileId: employeeProfileId,
+        organizationId: scope.organizationId,
+        restaurantId: scope.restaurantId,
+        branchId: scope.branchId,
+        deviceId: scope.deviceId,
+        deviceSessionId: deviceSessionId,
+        lastOnlineVerify: now.toUtc(),
+        displayName: displayName,
+        // start_pin_session returns a bare uuid (no expiry on the wire); the
+        // 8h offline window is the binding bound until the server exposes one.
+        serverExpiry: null,
+      );
+      final store = ref.read(posSecureSessionStoreProvider);
+      unawaited(store.save(scope, record).catchError((_) {}));
+    }
+    // C8 release seam: a fresh ONLINE sign-in is the ONE event that releases
+    // auth-held work back to pending (the controller then sweeps normally).
+    try {
+      unawaited(
+        ref
+            .read(outboxControllerProvider.notifier)
+            .releaseAuthHold()
+            .catchError((_) => 0),
+      );
+    } catch (_) {
+      // Contained — release is retried on the next successful sign-in.
+    }
+  }
+
+  /// [POS-OFFLINE-OPERATIONS-002] (C6): attempts to restore the persisted PIN
+  /// session for EXACTLY the current pairing [device] — called by the PIN gate
+  /// when `start_pin_session` failed at the TRANSPORT level (never on a server
+  /// refusal) or when its cold-boot offline probe proved the backend
+  /// unreachable. The restored session is marked [restoredOffline]; submission
+  /// stays allowed strictly until the record's hard offline window ends
+  /// ([posOfflineSessionPolicyProvider] consumes the mirror of that window).
+  ///
+  /// [attemptedEmployeeProfileId], when given (the typed-PIN path), must match
+  /// the stored operator — a transport failure during B's sign-in must never
+  /// resurrect A's session under B's fingers.
+  Future<PosOfflineRestoreResult> restoreOfflineSession({
+    required DeviceContext device,
+    String? attemptedEmployeeProfileId,
+  }) async {
+    if (ref.read(runtimeConfigProvider).isDemoMode) {
+      return PosOfflineRestoreResult.unavailable;
+    }
+    if (state.valueOrNull != null) {
+      return PosOfflineRestoreResult.alreadySignedIn;
+    }
+    final deviceId = device.deviceId;
+    final deviceSessionId = device.deviceSessionId;
+    if (deviceId == null || deviceId.isEmpty || deviceSessionId == null) {
+      return PosOfflineRestoreResult.unavailable;
+    }
+    final scope = PosSyncScope(
+      organizationId: device.organizationId,
+      restaurantId: device.restaurantId ?? '',
+      branchId: device.branchId,
+      deviceId: deviceId,
+    );
+    final PosStoredPinSession? record;
+    try {
+      record = await ref.read(posSecureSessionStoreProvider).read(scope);
+    } catch (_) {
+      return PosOfflineRestoreResult.noRecord;
+    }
+    if (record == null) return PosOfflineRestoreResult.noRecord;
+    if (record.deviceSessionId != deviceSessionId) {
+      // A DIFFERENT pairing minted this record (re-pair always changes the
+      // device session). It can never be valid again — destroy it.
+      unawaited(
+        ref.read(posSecureSessionStoreProvider).clear(scope).catchError((_) {}),
+      );
+      return PosOfflineRestoreResult.wrongPairing;
+    }
+    if (attemptedEmployeeProfileId != null &&
+        attemptedEmployeeProfileId != record.employeeProfileId) {
+      return PosOfflineRestoreResult.wrongEmployee;
+    }
+    if (!record.isValidAt(clock())) {
+      return PosOfflineRestoreResult.expired;
+    }
+    // Restore the SAME established-state shape a live establish produces —
+    // full pairing binding, expiry anchors, published operator identity —
+    // marked restoredOffline with its hard validity end.
+    _binding = PosPinSessionBinding(
+      organizationId: device.organizationId,
+      restaurantId: device.restaurantId,
+      branchId: device.branchId,
+      deviceId: deviceId,
+      deviceSessionId: deviceSessionId,
+    );
+    // RF-118 anchors: the expiry window measures from the last PROVEN online
+    // moment, never from the restore instant (a restore must not extend
+    // anything a real establish would not have).
+    _startedAt = record.lastOnlineVerify;
+    _pausedAt = null;
+    _setOfflineRestoreInfo(
+      restored: true,
+      validUntil: record.offlineValidUntil,
+    );
+    ref.read(posSignedInStaffNameProvider.notifier).set(record.displayName);
+    ref
+        .read(posSignedInEmployeeProfileIdProvider.notifier)
+        .set(record.employeeProfileId);
+    state = AsyncData(
+      SyncSession(pinSessionId: record.sessionId, deviceId: deviceId),
+    );
+    return PosOfflineRestoreResult.restored;
+  }
+
+  /// [POS-OFFLINE-OPERATIONS-002] The stored record for [device]'s scope, or
+  /// null — a READ-ONLY peek the PIN gate uses to explain an EXPIRED offline
+  /// window honestly. Never restores, never deletes.
+  Future<PosStoredPinSession?> peekStoredOfflineSession(
+    DeviceContext device,
+  ) async {
+    final deviceId = device.deviceId;
+    if (deviceId == null || deviceId.isEmpty) return null;
+    try {
+      return await ref
+          .read(posSecureSessionStoreProvider)
+          .read(
+            PosSyncScope(
+              organizationId: device.organizationId,
+              restaurantId: device.restaurantId ?? '',
+              branchId: device.branchId,
+              deviceId: deviceId,
+            ),
+          );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// [POS-OFFLINE-OPERATIONS-002] Reconnect revalidation: a REAL authenticated
+  /// server round-trip completed under the current session (the outbox saw a
+  /// structured `sync_push` answer). Clears the restored-offline mark and —
+  /// throttled to once per 5 minutes — advances the persisted
+  /// `last_online_verify` anchor, so the 8h offline window measures from
+  /// genuine proof, not from optimism.
+  void noteOnlineVerified() {
+    final session = state.valueOrNull;
+    if (session == null) return;
+    final now = clock();
+    _setOfflineRestoreInfo(restored: false, validUntil: null);
+    try {
+      ref.read(posSessionReauthNoticeProvider.notifier).clear();
+    } catch (_) {}
+    final last = _lastVerifyPersistedAt;
+    if (last != null && now.difference(last) < const Duration(minutes: 5)) {
+      return; // write-churn throttle — the anchor moved recently enough.
+    }
+    final scope = _scopeOfBinding(_binding);
+    if (scope == null) return;
+    _lastVerifyPersistedAt = now;
+    unawaited(() async {
+      try {
+        final store = ref.read(posSecureSessionStoreProvider);
+        final existing = await store.read(scope);
+        // Only the record of THIS live session may be re-anchored; a record
+        // for some other session id proves nothing about this one.
+        if (existing != null && existing.sessionId == session.pinSessionId) {
+          await store.save(scope, existing.withOnlineVerify(now));
+        }
+      } catch (_) {
+        // Contained — verification persistence is an enhancement.
+      }
+    }());
+  }
+
+  /// [POS-OFFLINE-OPERATIONS-002] (C8, test 14): the server refused the WHOLE
+  /// `sync_push` batch with 42501 — the PIN session itself is invalid
+  /// (revoked / expired server-side). Ends the session (which destroys the
+  /// offline-continuity record: the server just proved it worthless) and
+  /// raises the gate's re-auth notice. Queued entries are already AUTH_HOLD
+  /// and stay exactly where they are. Idempotent: with no live session this
+  /// is a no-op, so one failing batch signals the seam once.
+  void handleServerAuthRefusal() {
+    if (state.valueOrNull == null) return;
+    try {
+      ref.read(posSessionReauthNoticeProvider.notifier).set();
+    } catch (_) {}
+    endSession();
+  }
 }
+
+/// [POS-OFFLINE-OPERATIONS-002] The typed outcome of an offline restore
+/// attempt — the PIN gate switches on it to choose an honest notice.
+enum PosOfflineRestoreResult {
+  restored,
+  noRecord,
+  expired,
+  wrongPairing,
+  wrongEmployee,
+  alreadySignedIn,
+  unavailable,
+}
+
+/// [POS-OFFLINE-OPERATIONS-002] The REACTIVE mirror of the session
+/// controller's restored-offline mark (+ its hard validity end), so the
+/// offline session policy and the cart recompute the moment it changes —
+/// the controller's own state object ([SyncSession]) deliberately cannot
+/// carry it (shared-package type; additive fields need their own ticket).
+class PosSessionOfflineRestoreInfo {
+  const PosSessionOfflineRestoreInfo({
+    required this.restoredOffline,
+    this.validUntil,
+  });
+
+  static const PosSessionOfflineRestoreInfo none = PosSessionOfflineRestoreInfo(
+    restoredOffline: false,
+  );
+
+  /// True while the current session was restored WITHOUT server proof.
+  final bool restoredOffline;
+
+  /// The hard end of the restored session's offline trust window; null when
+  /// [restoredOffline] is false.
+  final DateTime? validUntil;
+}
+
+class PosSessionOfflineRestoreInfoController
+    extends Notifier<PosSessionOfflineRestoreInfo> {
+  @override
+  PosSessionOfflineRestoreInfo build() => PosSessionOfflineRestoreInfo.none;
+
+  void publish({required bool restoredOffline, required DateTime? validUntil}) {
+    state = restoredOffline
+        ? PosSessionOfflineRestoreInfo(
+            restoredOffline: true,
+            validUntil: validUntil,
+          )
+        : PosSessionOfflineRestoreInfo.none;
+  }
+}
+
+final posSessionOfflineRestoreInfoProvider =
+    NotifierProvider<
+      PosSessionOfflineRestoreInfoController,
+      PosSessionOfflineRestoreInfo
+    >(PosSessionOfflineRestoreInfoController.new);
+
+/// [POS-OFFLINE-OPERATIONS-002] True after the server refused a whole batch
+/// for auth reasons (the session died mid-shift) until the next successful
+/// establish — the PIN gate shows its expired/sign-in-again notice for it.
+class PosSessionReauthNotice extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set() => state = true;
+
+  void clear() => state = false;
+}
+
+final posSessionReauthNoticeProvider =
+    NotifierProvider<PosSessionReauthNotice, bool>(PosSessionReauthNotice.new);
 
 /// The display name of the currently signed-in POS employee (from the PIN roster),
 /// or null when unknown. PILOT-OPERATIONS-CORRECTIONS-001: shown on the shift-close

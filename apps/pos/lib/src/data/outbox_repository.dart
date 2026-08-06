@@ -49,6 +49,22 @@ abstract class PosOutboxFailureDismissal {
   Future<int> dismissResolvedFailures();
 }
 
+/// [POS-OFFLINE-OPERATIONS-002] — the capability a real outbox exposes when it
+/// can RELEASE auth-held operations after a fresh ONLINE sign-in.
+///
+/// Same small-interface precedent as [PosOutboxFailureDismissal]: the demo
+/// store and the many `implements OutboxRepository` test doubles can never
+/// hold an AUTH_HOLD entry (only a real `sync_push` 42501 mints one), so they
+/// are not forced to answer a question that does not apply to them.
+abstract class PosOutboxAuthHoldRelease {
+  /// Transitions every [OutboxSyncState.authHold] entry back to `pending`
+  /// (identity and payload untouched — the SAME `(deviceId, localOperationId)`
+  /// is resubmitted, and the server replays idempotently) and persists the
+  /// change DURABLY-OR-NOTHING: a refused write keeps every entry authHold.
+  /// Returns how many entries were released.
+  Future<int> releaseAuthHold();
+}
+
 abstract class OutboxRepository {
   /// Enqueues [entry] (idempotent on `(deviceId, localOperationId)`), returning
   /// the stored entry — `pending`/`created` until pushed.
@@ -314,7 +330,10 @@ class DemoOutboxStore implements OutboxRepository, PosOutboxFailureDismissal {
 /// entry's `local_operation_id` (D-022). Money stays integer minor units (D-007;
 /// values are passed through verbatim from the captured snapshot - no float).
 class RealOutboxRepository
-    implements OutboxRepository, PosOutboxFailureDismissal {
+    implements
+        OutboxRepository,
+        PosOutboxFailureDismissal,
+        PosOutboxAuthHoldRelease {
   RealOutboxRepository(
     this._transport,
     this._session, {
@@ -538,6 +557,13 @@ class RealOutboxRepository
     final session = _session!;
     final entry = _entries![_indexOf(entryId)];
 
+    // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD is excluded at the repository
+    // boundary too (defence in depth under the controller's own guard): a held
+    // entry may only re-enter the push lifecycle through [releaseAuthHold],
+    // never by a direct push that would spend a transport attempt on a session
+    // the server already refused. Identity and payload stay verbatim.
+    if (entry.syncState == OutboxSyncState.authHold) return entry;
+
     // RF-114 scope guard (defence in depth beyond the per-device store key): an
     // order queued for a DIFFERENT device MUST NOT be submitted under this
     // session (e.g. it survived an unpair/re-pair as a new device). Mark it
@@ -561,9 +587,8 @@ class RealOutboxRepository
       });
       updated = _applyPushResult(entry, raw);
     } on SyncTransportException catch (e) {
-      // A whole-batch failure (e.g. 42501 - revoked device / expired PIN
-      // session) marks the entry rejected so the cashier sees failed -> retry.
-      // Carry only the error code, never raw backend text.
+      // A whole-batch TRANSPORT failure. Carry only the error code, never raw
+      // backend text.
       //
       // 023 (Codex HIGH): ALSO carry the TYPED kind. `e.code ?? e.kind.name`
       // alone destroyed the one fact the confirmation needs — a coded transient
@@ -571,12 +596,30 @@ class RealOutboxRepository
       // bare string, so the UI could not tell "the server refused this" from
       // "we never learned what happened" and defaulted to claiming success.
       // Only the stable enum NAME is persisted; the exception object never is.
-      updated = entry.copyWith(
-        syncState: OutboxSyncState.rejected,
-        attemptCount: entry.attemptCount + 1,
-        lastErrorCode: e.code ?? e.kind.name,
-        lastErrorKind: e.kind.name,
-      );
+      //
+      // [POS-OFFLINE-OPERATIONS-002] AUTH_HOLD: a batch-level 42501 (revoked
+      // device / expired-or-invalid PIN session) is a verdict about the
+      // SESSION, not the operation — `app.sync_push` raises it from its
+      // preamble, before any operation is read. The entry moves to the durable
+      // `authHold` state VERBATIM (same identity, same payload bytes): no
+      // sweep, no Retry, no dismissal — a fresh ONLINE sign-in releases it
+      // back to pending and the idempotent replay resubmits the SAME
+      // (deviceId, localOperationId). Every other transport kind keeps the
+      // established `rejected` bookkeeping (023: outcome derives the honest
+      // delivery-unconfirmed presentation from the stored kind).
+      updated = e.kind == SyncTransportErrorKind.auth
+          ? entry.copyWith(
+              syncState: OutboxSyncState.authHold,
+              attemptCount: entry.attemptCount + 1,
+              lastErrorCode: e.code ?? e.kind.name,
+              lastErrorKind: e.kind.name,
+            )
+          : entry.copyWith(
+              syncState: OutboxSyncState.rejected,
+              attemptCount: entry.attemptCount + 1,
+              lastErrorCode: e.code ?? e.kind.name,
+              lastErrorKind: e.kind.name,
+            );
     }
     return _commitEntry(entryId, updated, fatal: false);
   }
@@ -621,6 +664,41 @@ class RealOutboxRepository
     await _persistOrThrow(next);
     _entries = next;
     return removed;
+  }
+
+  /// [POS-OFFLINE-OPERATIONS-002] Releases every AUTH_HOLD entry back to
+  /// `pending` after a fresh ONLINE sign-in. Inside the commit lock, like every
+  /// other queue mutation; DURABLE-OR-NOTHING like `retry` — a release that
+  /// only reached memory would flip back to authHold on the next start and the
+  /// operator would watch the same orders "release" every morning.
+  ///
+  /// The entries keep their identity and payload byte-verbatim; only the
+  /// lifecycle state and the stale error bookkeeping change. The caller (the
+  /// outbox controller) then runs a NORMAL sweep, which resubmits the SAME
+  /// `(deviceId, localOperationId)` identities — the server's idempotency
+  /// ledger reconciles any operation that had actually been applied before the
+  /// session died.
+  @override
+  Future<int> releaseAuthHold() async {
+    _ensureReady();
+    await _ensureLoaded();
+    return _withCommitLock(() async {
+      final next = <OutboxEntry>[
+        for (final e in _entries!)
+          if (e.syncState == OutboxSyncState.authHold)
+            e.copyWith(syncState: OutboxSyncState.pending, clearError: true)
+          else
+            e,
+      ];
+      var released = 0;
+      for (final e in _entries!) {
+        if (e.syncState == OutboxSyncState.authHold) released++;
+      }
+      if (released == 0) return 0;
+      await _persistOrThrow(next);
+      _entries = next;
+      return released;
+    });
   }
 
   @override

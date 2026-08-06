@@ -3687,5 +3687,24 @@
   "posOfflineSetupRequiredTitle": "Online setup required",
   "@posOfflineSetupRequiredTitle": {"description": "POS title of the state shown when the menu fetch failed and no offline snapshot exists yet for this till's scope."},
   "posOfflineSetupRequiredBody": "This till has no saved menu yet. Connect it to the internet once so it can download the menu and settings — after that it can keep selling offline.",
-  "@posOfflineSetupRequiredBody": {"description": "POS body of the setup-required state explaining the one-time online bootstrap a new till needs before it can operate offline."}
+  "@posOfflineSetupRequiredBody": {"description": "POS body of the setup-required state explaining the one-time online bootstrap a new till needs before it can operate offline."},
+  "posOfflineReauthNeeded": "Waiting for sign-in",
+  "@posOfflineReauthNeeded": {"description": "POS state label for outbox operations held until the operator signs in again (AUTH_HOLD) - used as the sync-details row label."},
+  "posOfflineSessionExpired": "Offline sign-in window ended - reconnect to the internet and sign in again.",
+  "@posOfflineSessionExpired": {"description": "POS notice on the PIN gate when a stored offline session exists for this till but its hard trust window (8h since the last online verification) has ended."},
+  "posOfflineSendBlockedSession": "Sending is paused - the offline sign-in window ended. Reconnect and sign in to send orders.",
+  "@posOfflineSendBlockedSession": {"description": "POS cart hint shown when Send is blocked because the restored offline session's trust window has ended; browsing the cached menu stays possible."},
+  "posOfflineKitchenModeStale": "Offline too long to trust the saved kitchen setup - reconnect to send orders.",
+  "@posOfflineKitchenModeStale": {"description": "POS cart hint when the kitchen workflow mode is unavailable while selling from the offline snapshot and the saved mode's 2-hour trust window has ended."},
+  "posOutboxAuthHold": "{count} awaiting sign-in",
+  "@posOutboxAuthHold": {
+    "description": "POS outbox indicator label for queued operations held until the operator signs in again (AUTH_HOLD).",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "posOutboxAuthHoldTooltip": "These orders are saved on this device. Sign in again and they resume syncing automatically.",
+  "@posOutboxAuthHoldTooltip": {"description": "POS explanation for AUTH_HOLD: re-signing in releases the held orders; nothing is lost and no retry is needed."},
+  "posOfflineReconnecting": "Checking the connection…",
+  "@posOfflineReconnecting": {"description": "POS notice while the PIN gate probes whether the backend is reachable before offering the offline session restore."},
+  "posOfflineSyncRestored": "Signed in - saved orders are syncing now.",
+  "@posOfflineSyncRestored": {"description": "POS confirmation after a fresh online sign-in released the held offline orders back into normal syncing."}
 }
