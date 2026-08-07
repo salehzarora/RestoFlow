@@ -122,7 +122,39 @@
     "versionName": "0.0.26",
     "versionCode": 26,
     "signing": "restoflow-production",
-    "status": "planned - not built",
+    "status": "built - pre-merge candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "2b05204f3904bd4d1dc5106b7d1b68bfa38787db",
+    "sourceSha": "e62cc544f7af05b326733a39c86ddd144e306f0d",
+    "buildDate": "2026-08-07",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v26-e62cc54.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "5d7065d810b69ad17ab34e86c87807462004c011a8308b2fb68e880d8871afd2"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v26-e62cc54.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "68e3460d07e9d82fdd007d8be74ef87790ff11e82126109db0d4220e177e8e8a"
+      }
+    },
+    "candidateNotes": [
+      "Built 2026-08-07 by tools/android_release/build_official_pair.ps1 with",
+      "-SourceSha e62cc54... -AllowNonMain (the script's audited exception):",
+      "the build HEAD is the release/RESTOFLOW-OFFICIAL-V26 ledger commit,",
+      "whose only delta from application source 2b05204f (main, the PR #200",
+      "Offline Operations merge) is this ledger and its documentation.",
+      "PR #201 is open and UNMERGED; these artifacts are pre-merge candidates,",
+      "verified by verify_official_apk.ps1 (both PASS): not debuggable,",
+      "demo=false, Release/AOT (libapp.so, no kernel_blob), zipaligned,",
+      "apksigner-verified, production certificate matches the pin, hosted",
+      "project ref present, forbidden ref absent, no localhost backend,",
+      "minSdk 24 / targetSdk 36, ABIs arm64-v8a armeabi-v7a x86_64.",
+      "NOT installed, NOT uploaded, NOT distributed, no GitHub Release.",
+      "official-v25 artifacts re-hashed unchanged."
+    ],
     "intendedSource": "main at 2b05204f3904bd4d1dc5106b7d1b68bfa38787db (application source; the release branch may add ledger/documentation commits only)",
     "notes": [
       "v26 is the FIRST official Android pair that contains the Offline",
