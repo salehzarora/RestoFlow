@@ -235,8 +235,9 @@ never installs, uploads, pushes, releases or deploys.
 | 0.0.21 / 21 | `restoflow-production` | `ed803bb` | built 2026-08-04 and verified — never installed, never uploaded; superseded by v25 |
 | 0.0.22 / 22 | `restoflow-production` | — | SKIPPED, never built (transitional vc23/vc24 consumed the codes below 25) |
 | vc23 / vc24 | Android **debug** key | `a243fd6` / `f89c8c4` | POS-only transitional lane (Debug/JIT then Release/AOT); vc24 field-tested on SALEH-POS-TEST-01 |
-| **0.0.25 / 25** | **`restoflow-production`** | `f76b67c` (app source `f89c8c4`) | **POS fresh-installed 2026-08-06 on SALEH-POS-TEST-01 (paired, login, printer test, read-only smoke all OK; NO controlled end-to-end order performed); KDS built, not installed; not uploaded** |
-| 0.0.26 / 26 | `restoflow-production` | main `2b05204` intended | planned — first official pair containing Offline Operations (PR #200) |
+| 0.0.25 / 25 | `restoflow-production` | `f76b67c` (app source `f89c8c4`) | POS fresh-installed 2026-08-06 on SALEH-POS-TEST-01 (paired, login, printer test, read-only smoke OK; no controlled end-to-end order); KDS never installed; updated in place by v26 |
+| **0.0.26 / 26** | **`restoflow-production`** | `e62cc54` (app source `2b05204`) | **POS updated IN PLACE over v25 on 2026-08-07 — pairing/printer/shift/employee state all preserved; Offline foundation validated (cold start, cached menu, offline order, kitchen print) but THREE acceptance defects found (latched offline state, reconnect payment block, no offline pre-bill) — fixed by PR #202; KDS built, not installed; not uploaded** |
+| 0.0.27 / 27 | `restoflow-production` | main `b670b59` intended | planned — first pair containing the PR #202 reconnect/payment/pre-bill fixes |
 
 **v21 was the first RestoFlow artifact ever signed with the production identity**
 (verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
@@ -252,10 +253,17 @@ uninstalled and official v25 fresh-installed per
 [ANDROID_FLEET_UPDATE_AND_ROLLBACK.md](ANDROID_FLEET_UPDATE_AND_ROLLBACK.md) §1,
 then pairing (station record «SALEHPOS ONEPLUS»), employee login, printer
 restore + physical test print and a read-only cashier smoke check were all
-confirmed. **No controlled end-to-end order was submitted on v25** — that final
-validation is deferred to the v26 device test. v25 predates the Offline
-Operations merge (PR #200, `2b05204`); v26 is the first pair to contain it.
-The operational restaurant tablet has not been migrated: it still requires the
+confirmed. **The first production-certificate update-in-place followed on
+2026-08-07**: official v26 updated the installed v25 POS with no uninstall and
+no data loss — pairing, printer configuration, shift state and employee access
+all survived, proving the normal update path for every future official release.
+The v26 offline validation passed its foundation (true cold-start offline,
+cached menu, locally saved unpaid order, kitchen printing) and exposed three
+acceptance defects — the offline state stayed latched after reconnect until an
+app restart, an offline-created order stayed payment-blocked after reconnect,
+and the unpaid pre-bill could not print offline — all fixed by PR #202
+(`b670b59`), which is why **v27 is the acceptance-fix release**. The
+operational restaurant tablet has still not been migrated: it requires the
 full §1 outbox-drain gate and migration procedure before anything is installed
 on it.
 
