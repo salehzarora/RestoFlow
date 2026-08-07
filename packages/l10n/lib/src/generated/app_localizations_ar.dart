@@ -5462,4 +5462,15 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posPaymentAwaitingOrderSync =>
       'الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب.';
+
+  @override
+  String get posCashDrawerAutoOpenTitle =>
+      'فتح درج النقود تلقائيًا بعد الدفع نقدًا';
+
+  @override
+  String get posCashDrawerAutoOpenHelp =>
+      'يستخدم منفذ الدرج في طابعة الفواتير.';
+
+  @override
+  String get posCashDrawerOpenFailed => 'تم تسجيل الدفعة — لم يُفتح درج النقود';
 }

@@ -10101,6 +10101,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This order is still syncing - payment opens as soon as the server accepts it.'**
   String get posPaymentAwaitingOrderSync;
+
+  /// Title of the per-device printer-settings toggle that opens the cash drawer automatically after a successful CASH payment (POS-CASH-DRAWER-AUTO-OPEN; RF-074 cash-only semantics). Default OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cash drawer after cash payment'**
+  String get posCashDrawerAutoOpenTitle;
+
+  /// Subtitle under the cash-drawer auto-open toggle explaining that the drawer pulse goes through the CUSTOMER receipt printer's drawer (RJ11) port — no separate drawer device is configured.
+  ///
+  /// In en, this message translates to:
+  /// **'Uses the receipt printer\'s drawer port.'**
+  String get posCashDrawerAutoOpenHelp;
+
+  /// POS snackbar shown when a cash payment was recorded successfully but the automatic drawer-kick send to the receipt printer failed. Honest and non-blocking: the payment/receipt are unaffected and the kick is never retried (the cashier uses the manual drawer release).
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded — cash drawer did not open'**
+  String get posCashDrawerOpenFailed;
 }
 
 class _AppLocalizationsDelegate

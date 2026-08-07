@@ -102,6 +102,33 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     return _send(bytes);
   }
 
+  /// POS-CASH-DRAWER-AUTO-OPEN — submit ONE drawer-kick pulse to this bridge's
+  /// printer, or return null when the profile does not support a drawer.
+  ///
+  /// Deliberately a NARROW extra method on the native bridge only (NOT on the
+  /// [PosPrintBridge] interface): the loopback/fake bridges have no drawer
+  /// port and must never be forced to fake one. The kick document is the
+  /// RF-074 shape — `PrintDocument([PrintDrawerKickLine()])` — encoded by the
+  /// SAME adapter + profile as receipts (the adapter emits the builder's
+  /// default ESC p 0 25 25 pulse and honours
+  /// `profile.capabilities.supportsDrawerKick`), and dispatched through the
+  /// SAME [_send] path: same transport, same per-destination send gate, same
+  /// no-auto-resend semantics. It deliberately does NOT pass through
+  /// [_encode]/`rasterizeForMediaProfile` — a kick is a control pulse, not
+  /// printable content, and must never be turned into raster bytes.
+  ///
+  /// Returns null (a typed "no drawer here" skip, not a failure) when the
+  /// profile's capabilities exclude the drawer kick; the caller treats that
+  /// as a benign skip. Receipt behaviour ([submit]/[_encode]) is untouched.
+  Future<pp.BridgeSubmitResult?> submitDrawerKick() async {
+    if (!profile.capabilities.supportsDrawerKick) return null;
+    final bytes = adapter.encode(
+      const pp.PrintDocument(<pp.PrintLine>[pp.PrintDrawerKickLine()]),
+      profile,
+    );
+    return _send(bytes);
+  }
+
   /// Strip the customer-receipt logo (header image) — used only to re-encode
   /// text-only BEFORE any transport send (case A). Never used as a resend.
   app.PrintDocument _withoutLogo(app.PrintDocument document) =>

@@ -18,6 +18,8 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart'
     show posActivePrintBridgeReadyProvider, posReceiptReadinessResolverProvider;
+import '../print/pos_cash_drawer_service.dart'
+    show PosCashDrawerOutcome, posCashDrawerServiceProvider;
 import '../state/pos_offline_state.dart'
     show blockPosActionWhileOffline, blockPosPaymentUntilSubmitAccepted;
 import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
@@ -254,8 +256,14 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     // throws; these outlive the sheet.
     final receiptRef = ref;
     final l10n = AppLocalizations.of(context);
+    // POS-CASH-DRAWER-AUTO-OPEN: the drawer seams, captured on the SAME
+    // before-the-await rule. The service outlives the sheet; the messenger is
+    // captured so the one failure snackbar can be shown even after the sheet
+    // (and its context) are gone.
+    final drawer = ref.read(posCashDrawerServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await payments.payCash(
+      final payment = await payments.payCash(
         identity: widget.identity,
         orderId: widget.orderId ?? '',
         orderNumber: widget.orderNumber,
@@ -284,6 +292,32 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       // deliberately not awaited into the payment result: a print failure must
       // never roll back a successful payment.
       unawaited(_requestPaidReceipt(receiptRef, l10n));
+      // POS-CASH-DRAWER-AUTO-OPEN: the drawer kick fires from the SAME
+      // authoritative payment edge as the receipt — never from an observer of
+      // a paid status (which would re-pulse on every hydration/refresh). The
+      // service itself enforces cash-only (RF-074), the per-device toggle, and
+      // the durable claim-before-send at-most-once guarantee; receipt and
+      // drawer stay fully independent (neither outcome touches the other, or
+      // payment state). Unawaited: the sheet never blocks on hardware. Every
+      // skip is silent; only a REAL expected-drawer send failure earns the one
+      // non-blocking snackbar, through the pre-await messenger capture.
+      unawaited(
+        drawer
+            .kickForPayment(payment)
+            .then((outcome) {
+              // PR #205 review N3: the kick can settle after the sheet — or
+              // the whole app shell — is gone. A dead messenger silently
+              // skips the warning (the payment stayed successful and the
+              // cashier has the manual release); it must never surface as an
+              // unhandled async error from a SUCCESSFUL payment.
+              if (outcome != PosCashDrawerOutcome.sendFailed) return;
+              if (!messenger.mounted) return;
+              messenger.showSnackBar(
+                SnackBar(content: Text(l10n.posCashDrawerOpenFailed)),
+              );
+            })
+            .catchError((_) {}),
+      );
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
       if (mounted) navigator.pop();

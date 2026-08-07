@@ -5427,4 +5427,15 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posPaymentAwaitingOrderSync =>
       'ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה.';
+
+  @override
+  String get posCashDrawerAutoOpenTitle =>
+      'פתיחת מגירת המזומנים אוטומטית לאחר תשלום במזומן';
+
+  @override
+  String get posCashDrawerAutoOpenHelp =>
+      'משתמש ביציאת המגירה של מדפסת הקבלות.';
+
+  @override
+  String get posCashDrawerOpenFailed => 'התשלום נרשם — מגירת המזומנים לא נפתחה';
 }
