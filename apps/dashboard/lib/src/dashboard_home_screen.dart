@@ -5,6 +5,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
+import 'analytics/dashboard_destination.dart';
+import 'analytics/dashboard_drilldown.dart';
 import 'data/demo_report.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
@@ -27,7 +29,12 @@ import 'widgets/section_card.dart';
 /// presentation only — no data source, calculation, provider, or repository
 /// changed.
 class DashboardHomeScreen extends ConsumerWidget {
-  const DashboardHomeScreen({this.setupPanel, this.deviceSummary, super.key});
+  const DashboardHomeScreen({
+    this.setupPanel,
+    this.deviceSummary,
+    this.onNavigate,
+    super.key,
+  });
 
   /// RF-127 presentation-only composition slot: the shell passes the existing
   /// [DashboardSetupCenter] widget here so the readiness/setup content sits
@@ -43,6 +50,11 @@ class DashboardHomeScreen extends ConsumerWidget {
   /// cards, exactly as before. Never fabricated: no repository, no card.
   final Widget? deviceSummary;
 
+  /// F0.4: the shell's NAMED navigation seam. Null (tests / demo harnesses
+  /// that mount this screen directly) leaves every KPI display-only, exactly
+  /// as before — a drill-down is offered only when there is somewhere to go.
+  final void Function(DashboardDestination destination)? onNavigate;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // RF-140: the same demo/real switch the repository seam reads, so the
@@ -57,6 +69,7 @@ class DashboardHomeScreen extends ConsumerWidget {
     // the loading/error/data states so the title, period, refresh, and range are
     // available in every state (range switchable at any time, as before).
     final panel = setupPanel;
+    final nav = onNavigate;
     return Scaffold(
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -78,6 +91,16 @@ class DashboardHomeScreen extends ConsumerWidget {
                 report: report,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
+                // F0.4: bound HERE, where a WidgetRef exists. The child
+                // stays a plain StatelessWidget and never learns about
+                // Riverpod or the shell's tab indices.
+                onDrillDown: nav == null
+                    ? null
+                    : (drillDown) => runDashboardDrillDown(
+                        ref: ref,
+                        drillDown: drillDown,
+                        navigate: nav,
+                      ),
               ),
               loading: () => const _LoadingState(),
               error: (_, _) => _ErrorState(onRetry: refresh),
@@ -192,6 +215,7 @@ class _ReportContent extends StatelessWidget {
     required this.report,
     required this.isDemo,
     this.deviceSummary,
+    this.onDrillDown,
   });
 
   final DashboardReport report;
@@ -204,10 +228,15 @@ class _ReportContent extends StatelessWidget {
   /// (Dashboard V2); null hides it (demo mode / no real repositories).
   final Widget? deviceSummary;
 
+  /// F0.4: executes a typed drill-down (filters first, then navigate).
+  /// Null keeps every KPI display-only, exactly as before.
+  final void Function(DashboardDrillDown drillDown)? onDrillDown;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    final drill = onDrillDown;
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
@@ -325,6 +354,13 @@ class _ReportContent extends StatelessWidget {
         style: RestoflowMetricCardStyle.kpi,
         label: l10n.dashboardCashSales,
         value: money(report.cashSalesMinor),
+        // F0.4: cash is the ONLY tender the history filter can express
+        // today. card / bit / external stay display-only until the Phase-A
+        // server widening exists - offering a filter the RPC would reject
+        // is worse than offering none.
+        onTap: drill == null
+            ? null
+            : () => drill(const OrdersHistoryDrillDown.cash()),
         icon: Icons.account_balance_wallet_outlined,
         delta: deltaOf(report.cashSalesMinor, comparison?.cashSalesMinor),
       ),
@@ -344,6 +380,12 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardUnpaidOrders,
         value: report.unpaidOrderCount.toString(),
         icon: Icons.pending_actions_outlined,
+        // F0.4: the outstanding-money question opens the list that
+        // answers it. RestoflowMetricCard.onTap already exists
+        // (RF-141D), so this is wiring only - no component change.
+        onTap: drill == null
+            ? null
+            : () => drill(const OrdersHistoryDrillDown.unpaid()),
       ),
       // Dashboard V2: the honest device readiness card (real repositories
       // only) completes the reference's four-card operational row.

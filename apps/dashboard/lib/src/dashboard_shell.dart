@@ -504,6 +504,11 @@ class _DashboardShellState extends State<DashboardShell> {
       child: DashboardHomeScreen(
         setupPanel: setupPanel,
         deviceSummary: deviceSummary,
+        // F0.4: the shell owns tab state, so it supplies the NAMED
+        // navigation seam. The Overview binds it to a WidgetRef and
+        // executes typed drill-downs; the shell learns nothing about
+        // filters, and no magic number crosses this boundary.
+        onNavigate: _goTo,
       ),
     );
   }
