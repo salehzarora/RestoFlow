@@ -63,7 +63,11 @@ class DashboardHomeScreen extends ConsumerWidget {
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final reportAsync = ref.watch(dashboardReportProvider);
 
-    void refresh() => ref.invalidate(dashboardReportProvider);
+    // F0.6: refresh the CURRENT report key only. Invalidating
+    // dashboardReportProvider itself would just rebuild the projection
+    // without re-running the request, and a global invalidate would throw
+    // away every other range/scope the owner had already loaded.
+    void refresh() => refreshOwnerReport(ref);
 
     // Calm persistent chrome (RF-127): the page header + range chips stay above
     // the loading/error/data states so the title, period, refresh, and range are

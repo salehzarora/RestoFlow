@@ -323,54 +323,74 @@ class _DashboardShellState extends State<DashboardShell> {
     // ProviderScopes are recreated instead of reused with different override
     // types across tabs (Riverpod forbids changing an override's type in
     // place).
-    final content = KeyedSubtree(
-      key: ValueKey('dashboard-tab-$_index'),
-      child: switch (_index) {
-        0 => _overview(),
-        1 => _menuSurface(context, l10n),
-        2 => _adminSurface(
-          const AdminDevicesScreen(),
-          // Real device management in authenticated mode; demo store otherwise.
-          repository: _realDeviceRepo ?? _adminStore,
-          demo: _realDeviceRepo == null,
+    // F0.6 — THE STABLE SHARED SCOPE.
+    //
+    // These two overrides used to be repeated inside Overview, Orders and
+    // Activity with IDENTICAL values. Because each surface built its own
+    // ProviderScope INSIDE the KeyedSubtree below, switching tabs destroyed
+    // that container and everything it held - including the loaded owner
+    // report, which then refetched on every return.
+    //
+    // Hoisting them here gives those providers ONE container that outlives
+    // tab changes. Surface-specific overrides (Orders' receipt-logo
+    // resolver, the menu feature scopes) deliberately stay local - only the
+    // genuinely shared ones move.
+    final content = ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
         ),
-        3 => _demoBannerSurface(
-          PrintersScreen(repository: _printersRepo),
-          demo: _printersDemo,
-        ),
-        4 => _demoBannerSurface(
-          StaffScreen(repository: _staffRepo),
-          demo: _staffDemo,
-        ),
-        5 => _demoBannerSurface(
-          TablesScreen(repository: _tablesRepo),
-          demo: _tablesDemo,
-        ),
-        // Users/Settings: REAL mode never renders the demo store's fabricated
-        // people/values. When the real users repository is wired (RF-116), the
-        // Users tab manages real memberships (list + change-role + revoke); a
-        // real membership WITHOUT it falls back to the honest not-connected
-        // state. Demo mode keeps the labelled demo surface.
-        6 => _usersSurface(),
-        7 => _ordersSurface(),
-        8 => _activityLogSurface(),
-        _ =>
-          widget.membership == null
-              ? _adminSurface(
-                  const AdminSettingsScreen(),
-                  repository: _adminStore,
-                  demo: true,
-                )
-              : RealSettingsView(
-                  membership: widget.membership!,
-                  currencyCode: widget.currencyCode,
-                  policyRepository: _shiftClosePolicyRepo,
-                  kitchenWorkflowRepository: _kitchenWorkflowRepo,
-                  settingsRepository: _settingsRepo,
-                  brandingRepository: _brandingRepo,
-                  brandingStorage: widget.brandingLogoStorage,
-                ),
-      },
+      ],
+      child: KeyedSubtree(
+        key: ValueKey('dashboard-tab-$_index'),
+        child: switch (_index) {
+          0 => _overview(),
+          1 => _menuSurface(context, l10n),
+          2 => _adminSurface(
+            const AdminDevicesScreen(),
+            // Real device management in authenticated mode; demo store otherwise.
+            repository: _realDeviceRepo ?? _adminStore,
+            demo: _realDeviceRepo == null,
+          ),
+          3 => _demoBannerSurface(
+            PrintersScreen(repository: _printersRepo),
+            demo: _printersDemo,
+          ),
+          4 => _demoBannerSurface(
+            StaffScreen(repository: _staffRepo),
+            demo: _staffDemo,
+          ),
+          5 => _demoBannerSurface(
+            TablesScreen(repository: _tablesRepo),
+            demo: _tablesDemo,
+          ),
+          // Users/Settings: REAL mode never renders the demo store's fabricated
+          // people/values. When the real users repository is wired (RF-116), the
+          // Users tab manages real memberships (list + change-role + revoke); a
+          // real membership WITHOUT it falls back to the honest not-connected
+          // state. Demo mode keeps the labelled demo surface.
+          6 => _usersSurface(),
+          7 => _ordersSurface(),
+          8 => _activityLogSurface(),
+          _ =>
+            widget.membership == null
+                ? _adminSurface(
+                    const AdminSettingsScreen(),
+                    repository: _adminStore,
+                    demo: true,
+                  )
+                : RealSettingsView(
+                    membership: widget.membership!,
+                    currencyCode: widget.currencyCode,
+                    policyRepository: _shiftClosePolicyRepo,
+                    kitchenWorkflowRepository: _kitchenWorkflowRepo,
+                    settingsRepository: _settingsRepo,
+                    brandingRepository: _brandingRepo,
+                    brandingStorage: widget.brandingLogoStorage,
+                  ),
+        },
+      ),
     );
 
     // Dashboard V2: the persistent header bar lives INSIDE the content column
@@ -494,22 +514,18 @@ class _DashboardShellState extends State<DashboardShell> {
           );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-      ],
-      child: DashboardHomeScreen(
-        setupPanel: setupPanel,
-        deviceSummary: deviceSummary,
-        // F0.4: the shell owns tab state, so it supplies the NAMED
-        // navigation seam. The Overview binds it to a WidgetRef and
-        // executes typed drill-downs; the shell learns nothing about
-        // filters, and no magic number crosses this boundary.
-        onNavigate: _goTo,
-      ),
+    // F0.6: NO local ProviderScope here any more. The membership +
+    // transport overrides moved to ONE stable scope above the tab-switch
+    // KeyedSubtree. This scope was recreated on every return to Overview,
+    // which destroyed the report container and forced a refetch.
+    return DashboardHomeScreen(
+      setupPanel: setupPanel,
+      deviceSummary: deviceSummary,
+      // F0.4: the shell owns tab state, so it supplies the NAMED navigation
+      // seam. The Overview binds it to a WidgetRef and executes typed
+      // drill-downs; the shell learns nothing about filters, and no magic
+      // number crosses this boundary.
+      onNavigate: _goTo,
     );
   }
 
