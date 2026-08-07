@@ -16,13 +16,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/order_history_models.dart' show OrdersTab;
 import '../state/active_orders_providers.dart';
 import '../state/order_history_providers.dart';
 import 'active_orders_screen.dart';
 import 'order_history_screen.dart';
 
+// F0.3: OrdersTab now lives in the models layer; re-exported so existing
+// importers of this screen keep working unchanged.
+export '../data/order_history_models.dart' show OrdersTab;
+
 /// The two views of the Orders area.
-enum OrdersTab { active, history }
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -34,7 +38,13 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   /// The operations centre is the landing view: the question an owner opens the
   /// Orders area to answer is "what is happening right now".
-  OrdersTab _tab = OrdersTab.active;
+  ///
+  /// F0.3: a typed drill-down may ask for History instead (e.g. an unpaid KPI),
+  /// so the OPENING value is read once from [ordersInitialTabProvider]. It is
+  /// read in initState rather than watched, because after arrival the segmented
+  /// control below owns the tab exactly as before — watching would drag the
+  /// owner back to the drill-down's tab when they tried to leave it.
+  late OrdersTab _tab = ref.read(ordersInitialTabProvider);
 
   void _refresh() {
     if (_tab == OrdersTab.active) {

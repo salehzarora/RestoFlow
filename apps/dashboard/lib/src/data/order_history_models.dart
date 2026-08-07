@@ -7,6 +7,15 @@
 /// the UI never branches on the source.
 library;
 
+/// Which Orders sub-view is showing: the live operations centre or the
+/// historical list.
+///
+/// F0.3 moved this here from orders_screen.dart. It was a UI-file enum, which
+/// meant the state layer could not name it without importing a screen (and
+/// orders_screen.dart already imports the providers, so that would have been a
+/// cycle). It is a plain data choice, so the models layer is where it belongs.
+enum OrdersTab { active, history }
+
 /// The date window for the history list — mirrors the backend `p_range` and the
 /// reports' ranges (today / yesterday / last7 / last30).
 enum OrderHistoryRange {

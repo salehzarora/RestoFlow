@@ -26,6 +26,7 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'analytics/dashboard_destination.dart';
 import 'widgets/language_selector.dart';
 import 'tables/tables_repository.dart';
 import 'tables/tables_screen.dart';
@@ -308,6 +309,13 @@ class _DashboardShellState extends State<DashboardShell> {
 
   void _select(int value) => setState(() => _index = value);
 
+  /// F0.3 — the ONE named navigation seam.
+  ///
+  /// Call sites say where they want to go by name instead of by magic number,
+  /// so inserting a destination can no longer silently re-point an existing
+  /// jump at the wrong surface.
+  void _goTo(DashboardDestination destination) => _select(destination.tabIndex);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -467,10 +475,10 @@ class _DashboardShellState extends State<DashboardShell> {
         // wired (sprint); a null scope/read source just omits the card.
         menuReadSource: widget.menuReadSource,
         menuScope: _menuScope,
-        onOpenMenu: () => _select(1),
-        onOpenDevices: () => _select(2),
-        onOpenPrinters: () => _select(3),
-        onOpenStaff: () => _select(4),
+        onOpenMenu: () => _goTo(DashboardDestination.menu),
+        onOpenDevices: () => _goTo(DashboardDestination.devices),
+        onOpenPrinters: () => _goTo(DashboardDestination.printers),
+        onOpenStaff: () => _goTo(DashboardDestination.staff),
       );
     } else {
       setupPanel = null;
@@ -482,7 +490,7 @@ class _DashboardShellState extends State<DashboardShell> {
         ? null
         : DashboardDeviceSummaryCard(
             repository: devices,
-            onOpenDevices: () => _select(2),
+            onOpenDevices: () => _goTo(DashboardDestination.devices),
           );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).

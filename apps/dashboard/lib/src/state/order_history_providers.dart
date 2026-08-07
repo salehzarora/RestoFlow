@@ -48,6 +48,23 @@ final orderHistoryQueryProvider = StateProvider<OrderHistoryQuery>(
   (ref) => const OrderHistoryQuery(),
 );
 
+/// DASHBOARD-OWNER-ANALYTICS-F0.3 — which Orders sub-view to show on entry.
+///
+/// The Orders area's Active/History choice lived ONLY as local widget state
+/// (`_OrdersScreenState._tab`), so nothing outside the screen could ask for
+/// History. An Overview "unpaid" card could switch to the Orders tab but always
+/// landed on Active — the wrong list for the number the owner tapped.
+///
+/// This provider is the smallest seam that fixes it. The screen still owns the
+/// tab while the owner is on it (tapping the segmented control is local state,
+/// exactly as before); this only supplies the value the screen OPENS with, so a
+/// typed drill-down can land on the right sub-view. Defaults to `active`,
+/// preserving the existing landing behaviour for every path that does not set
+/// it.
+final ordersInitialTabProvider = StateProvider<OrdersTab>(
+  (ref) => OrdersTab.active,
+);
+
 /// One order's detail (header + items + payments), loaded lazily when a row is
 /// opened. Family-keyed by order id; scoped through the repository provider.
 final orderDetailProvider = FutureProvider.family<OrderDetail, String>(
