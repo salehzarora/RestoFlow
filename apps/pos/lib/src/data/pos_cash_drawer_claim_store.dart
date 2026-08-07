@@ -72,6 +72,20 @@ class PosCashDrawerClaimStore {
 
   final Future<SharedPreferences> Function() _resolvePrefs;
 
+  /// PR #205 review F1: the tail of the claim-operation SERIAL CHAIN. Every
+  /// [claim] runs strictly after the previous one has settled, so the
+  /// read-check-prune-write transaction below can never interleave with a
+  /// sibling — the at-most-once invariant is upheld by THIS primitive, not by
+  /// the payment sheet's in-flight latch or any other distant UI discipline.
+  /// (Two same-id racers would otherwise both observe "not claimed"; two
+  /// different-id racers would lose one update to last-writer-wins.)
+  ///
+  /// Poison-proofing: the stored tail swallows both values and errors, so one
+  /// failed operation can never wedge the chain — and the public [claim]
+  /// wrapper maps any unexpected throw to [persistFailed] (fail-safe: no
+  /// kick), preserving the "claim never throws" contract.
+  Future<void> _serial = Future<void>.value();
+
   /// The claim id for [paymentId] — the SAME deterministic
   /// `drawer:<paymentId>` identity RF-074's spool dispatcher uses (D-022), so
   /// the two mechanisms could never claim one payment under two names.
@@ -87,7 +101,30 @@ class PosCashDrawerClaimStore {
   /// DO NOT KICK. A claim is never removed and never retried: a crash after
   /// the claim but before the pulse is a missed open by design (RF-074: "a
   /// duplicate open is worse than a missed retry").
+  ///
+  /// Serialized per store instance (see [_serial]): concurrent calls for the
+  /// SAME payment resolve as exactly one [PosCashDrawerClaimResult.claimed]
+  /// and the rest [PosCashDrawerClaimResult.duplicate]; concurrent calls for
+  /// DIFFERENT payments all persist (no lost update).
   Future<PosCashDrawerClaimResult> claim({
+    required String deviceSegment,
+    required String paymentId,
+  }) {
+    final run = _serial.then(
+      (_) =>
+          _claimSerialized(deviceSegment: deviceSegment, paymentId: paymentId),
+    );
+    // The chain tail must survive ANY outcome of `run` — a poisoned tail
+    // would silently disable the drawer forever. Errors are re-surfaced to
+    // the caller through `run` itself (then mapped below), never the tail.
+    _serial = run.then((_) {}, onError: (_) {});
+    return run.then(
+      (result) => result,
+      onError: (_) => PosCashDrawerClaimResult.persistFailed,
+    );
+  }
+
+  Future<PosCashDrawerClaimResult> _claimSerialized({
     required String deviceSegment,
     required String paymentId,
   }) async {

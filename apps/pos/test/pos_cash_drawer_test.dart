@@ -546,6 +546,108 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Claim serialization (PR #205 review F1/N4): the store upholds its OWN
+  // at-most-once invariant — no reliance on the payment sheet's latch.
+  // -------------------------------------------------------------------------
+  group('claim store serialization', () {
+    test('concurrent SAME-id claims: exactly one claimed, one duplicate, '
+        'envelope holds the claim once', () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+      // Gate the prefs resolution so BOTH claims are definitely in flight
+      // before either can read — the exact interleaving that double-kicked
+      // before serialization.
+      final gate = Completer<void>();
+      var calls = 0;
+      final store = PosCashDrawerClaimStore(
+        prefs: () async {
+          calls++;
+          await gate.future;
+          return SharedPreferences.getInstance();
+        },
+      );
+
+      final first = store.claim(deviceSegment: 'dev-1', paymentId: 'p-race');
+      final second = store.claim(deviceSegment: 'dev-1', paymentId: 'p-race');
+      gate.complete();
+      final results = await Future.wait(<Future<PosCashDrawerClaimResult>>[
+        first,
+        second,
+      ]);
+
+      expect(
+        results.where((r) => r == PosCashDrawerClaimResult.claimed),
+        hasLength(1),
+        reason: 'a cash drawer may open at most once per payment',
+      );
+      expect(
+        results.where((r) => r == PosCashDrawerClaimResult.duplicate),
+        hasLength(1),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final claims =
+          ((jsonDecode(prefs.getString(_claimsKey)!) as Map)['claims'] as List)
+              .cast<Map>();
+      expect(claims.where((c) => c['id'] == 'drawer:p-race'), hasLength(1));
+      expect(calls, 2, reason: 'both operations genuinely ran');
+    });
+
+    test('concurrent DIFFERENT-id claims: both claimed, both survive '
+        '(no lost update)', () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+      final gate = Completer<void>();
+      final store = PosCashDrawerClaimStore(
+        prefs: () async {
+          await gate.future;
+          return SharedPreferences.getInstance();
+        },
+      );
+
+      final a = store.claim(deviceSegment: 'dev-1', paymentId: 'p-a');
+      final b = store.claim(deviceSegment: 'dev-1', paymentId: 'p-b');
+      gate.complete();
+      expect(await Future.wait(<Future<PosCashDrawerClaimResult>>[a, b]), [
+        PosCashDrawerClaimResult.claimed,
+        PosCashDrawerClaimResult.claimed,
+      ]);
+
+      // A FRESH store over the same prefs sees BOTH claims — the second
+      // write did not clobber the first (last-writer-wins is impossible
+      // under the serial chain).
+      final reread = PosCashDrawerClaimStore();
+      expect(
+        await reread.claim(deviceSegment: 'dev-1', paymentId: 'p-a'),
+        PosCashDrawerClaimResult.duplicate,
+      );
+      expect(
+        await reread.claim(deviceSegment: 'dev-1', paymentId: 'p-b'),
+        PosCashDrawerClaimResult.duplicate,
+      );
+    });
+
+    test('a failed operation does NOT poison the serial chain', () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+      var shouldThrow = true;
+      final store = PosCashDrawerClaimStore(
+        prefs: () async {
+          if (shouldThrow) throw Exception('store offline');
+          return SharedPreferences.getInstance();
+        },
+      );
+
+      expect(
+        await store.claim(deviceSegment: 'dev-1', paymentId: 'p-fail'),
+        PosCashDrawerClaimResult.persistFailed,
+      );
+      shouldThrow = false;
+      expect(
+        await store.claim(deviceSegment: 'dev-1', paymentId: 'p-after'),
+        PosCashDrawerClaimResult.claimed,
+        reason: 'the chain must keep serving after one failed operation',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // C. Bridge seam bytes + send gate
   // -------------------------------------------------------------------------
   group('C. bridge seam', () {

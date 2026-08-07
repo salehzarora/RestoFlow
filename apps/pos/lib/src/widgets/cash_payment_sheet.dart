@@ -302,13 +302,21 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       // skip is silent; only a REAL expected-drawer send failure earns the one
       // non-blocking snackbar, through the pre-await messenger capture.
       unawaited(
-        drawer.kickForPayment(payment).then((outcome) {
-          if (outcome == PosCashDrawerOutcome.sendFailed) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(l10n.posCashDrawerOpenFailed)),
-            );
-          }
-        }),
+        drawer
+            .kickForPayment(payment)
+            .then((outcome) {
+              // PR #205 review N3: the kick can settle after the sheet — or
+              // the whole app shell — is gone. A dead messenger silently
+              // skips the warning (the payment stayed successful and the
+              // cashier has the manual release); it must never surface as an
+              // unhandled async error from a SUCCESSFUL payment.
+              if (outcome != PosCashDrawerOutcome.sendFailed) return;
+              if (!messenger.mounted) return;
+              messenger.showSnackBar(
+                SnackBar(content: Text(l10n.posCashDrawerOpenFailed)),
+              );
+            })
+            .catchError((_) {}),
       );
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.

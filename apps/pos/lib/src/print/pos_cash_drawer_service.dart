@@ -172,6 +172,12 @@ class PosCashDrawerService {
     // GATE 7 — the DURABLE at-most-once claim, written BEFORE any hardware
     // send. A refused/duplicate claim sends nothing; a crash after this line
     // is a missed open by design (see [PosCashDrawerClaimStore]).
+    //
+    // PR #205 review N2 — key scoping: the claim namespace uses the RF-074-
+    // validated SYNC-SCOPE deviceId, while the toggle (GATE 1) is keyed by
+    // `posPrinterScopeSegmentProvider`. In real paired mode both resolve to
+    // the same paired device id; they diverge only in demo/unpaired states,
+    // which GATE 2 / GATE 4 refuse long before any claim or hardware action.
     final claim = await _ref
         .read(posCashDrawerClaimStoreProvider)
         .claim(deviceSegment: input.deviceId, paymentId: payment.paymentId);
