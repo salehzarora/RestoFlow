@@ -606,6 +606,66 @@ Future<SubmittedOrderView?> authoritativeUnpaidOrderSource({
   return localView;
 }
 
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] The order view behind the
+/// printable UNPAID PRE-BILL, and whether it came from the server or from this
+/// device.
+///
+/// THE DEFECT it fixes. The Print-bill action resolved its data through
+/// [authoritativeUnpaidOrderSource], which for a server-backed order calls
+/// `pos_order_detail` and returns NULL on any failure. Offline that call always
+/// fails, so the action showed "couldn't load — retry" and printed nothing —
+/// while the complete order sat in memory (and on disk) as
+/// `PosRecentOrder.order`. A restaurant could not hand a customer a bill because
+/// the internet was down, which is not a rule anyone chose.
+///
+/// WHY PREFERRING THE FETCH IS STILL RIGHT, AND WHY FALLING BACK IS TOO. Online,
+/// the authoritative detail can include a round ANOTHER till added, which this
+/// device's snapshot would miss — so it is asked first and wins whenever it
+/// answers. Offline, that risk does not exist for this device's view: nobody can
+/// have added anything through a backend nobody can reach. The local snapshot is
+/// then not a degraded guess, it is the honest best answer available — and it is
+/// flagged as such so the printed document can say so out loud.
+///
+/// FAIL CLOSED ON ABSENCE. No fetch result AND no local view returns null and
+/// the caller prints nothing. A PARTIAL document is never assembled, and — like
+/// [authoritativeUnpaidOrderSource] — no [CashPayment] is ever fabricated to get
+/// one out (there is no payment parameter here at all).
+///
+/// Demo keeps its self-contained local record and is NOT flagged local: there is
+/// no server for it to be out of step with, and the demo document already
+/// carries its own provisional/demo notes.
+Future<({SubmittedOrderView view, bool isLocalSnapshot})?>
+printableUnpaidOrderSource({
+  required bool isDemoMode,
+  required String? orderId,
+  required SubmittedOrderView? localView,
+  required OrderDetailRepository repository,
+}) async {
+  if (isDemoMode) {
+    return localView == null ? null : (view: localView, isLocalSnapshot: false);
+  }
+  if (orderId != null) {
+    try {
+      final detail = await repository.fetch(orderId);
+      return (
+        view: submittedOrderViewFromDetail(detail),
+        isLocalSnapshot: false,
+      );
+    } on PosOrderDetailException {
+      // Offline, no PIN session, a transport fault, a malformed answer — every
+      // one of them means the server did not tell us anything, not that the
+      // order is gone. What this device recorded at order time is what we have.
+      if (localView != null) {
+        return (view: localView, isLocalSnapshot: true);
+      }
+      return null; // nothing to print — never a partial document
+    }
+  }
+  // No server identity at all (an order created while offline): the local record
+  // is by definition the only record, and it is not yet synced.
+  return localView == null ? null : (view: localView, isLocalSnapshot: true);
+}
+
 Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
   required bool isDemoMode,
   required String? orderId,

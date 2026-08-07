@@ -267,11 +267,20 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
         if (addition.sending || addition.failed || addition.awaitingRefresh)
           t.orderId,
     };
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Which rows carry the
+    // `itemsAdd` stamp ONLY because the journal has not been read yet. The
+    // blanket above is a fail-closed for MONEY actions and stays exactly as it
+    // was; this set lets the central policy relax the READ-ONLY pre-bill for the
+    // rows it has no actual evidence against (see `amendmentsHydrating`). A row
+    // with a REAL blocked amendment is never in it.
+    final hydrationBlanketOnly = <String>{};
     if (hydrating || blockedOrderIds.isNotEmpty) {
       for (final o in orders) {
         final id = o.orderId;
-        if (hydrating || (id != null && blockedOrderIds.contains(id))) {
+        final reallyBlocked = id != null && blockedOrderIds.contains(id);
+        if (hydrating || reallyBlocked) {
           pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
+          if (!reallyBlocked) hydrationBlanketOnly.add(o.identity.key);
         }
       }
     }
@@ -429,6 +438,12 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                           // acknowledged this order's submit (fail-open — see
                           // posSubmitUnacknowledged).
                           submitUnacknowledged: unacknowledged,
+                          // Pass C: this row's `itemsAdd` stamp is the startup
+                          // blanket, not a known amendment — it relaxes the
+                          // read-only pre-bill and nothing else.
+                          amendmentsHydrating: hydrationBlanketOnly.contains(
+                            o.identity.key,
+                          ),
                           // Gap B: the central close-eligibility policy decides the
                           // printer-only Complete safety net (server re-enforces).
                           completeEligible:

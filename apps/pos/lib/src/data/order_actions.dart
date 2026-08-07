@@ -33,10 +33,29 @@ class PosOrderActions {
     required this.pendingKind,
     this.canAddItems = false,
     this.canComplete = false,
+    this.canPrintBill = false,
     this.submitUnacknowledged = false,
   });
 
   final bool canPay;
+
+  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] The customer-facing
+  /// UNPAID PRE-BILL may be printed for this order.
+  ///
+  /// SEPARATE FROM [canPay] ON PURPOSE, and the separation is the fix. The bill
+  /// action used to render inside `if (actions.canPay)`, so Pass B's
+  /// acknowledgement rule — which correctly withdraws PAYMENT from an order the
+  /// server has never seen — also removed the pre-bill from exactly the order
+  /// that needs one most: the one taken during an outage. Printing is a READ-ONLY
+  /// local render of data this device already holds; it takes no money, needs no
+  /// server acceptance, and cannot be refused by a backend it never calls.
+  ///
+  /// It keeps every OTHER money interlock (see `resolveOrderActions`), because a
+  /// bill is still a customer-facing money document: a paid, comped-to-zero,
+  /// server-refused, terminal or mid-payment order must not be handed to a
+  /// customer as an amount still due.
+  final bool canPrintBill;
+
   final bool canDiscount;
 
   /// May bring the total to exactly zero. Requires [canDiscount] TOO — a comp is a
@@ -88,8 +107,14 @@ class PosOrderActions {
   bool get hasPending => pendingKind != null;
 
   /// True when nothing at all can be offered — the row shows no trailing actions.
+  ///
+  /// Pass C: [canPrintBill] counts. It can be true while [canPay] is false (a
+  /// queued offline order), and an "empty" verdict makes the caller skip the
+  /// whole [OrderActionRow] — which would hide the pre-bill button again by a
+  /// different route.
   bool get isEmpty =>
       !canPay &&
+      !canPrintBill &&
       !canDiscount &&
       !canVoid &&
       !canMoveTable &&
@@ -196,6 +221,23 @@ PosOrderActions resolveOrderActions(
   // are unchanged, because none of them is the operation that fails with
   // `order not found` against an order the server has never seen.
   bool submitUnacknowledged = false,
+  // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Whether a
+  // [PosPendingKind.itemsAdd] on this row is the STARTUP BLANKET rather than a
+  // real amendment for THIS order.
+  //
+  // The Orders sheet stamps `itemsAdd` on EVERY row while the durable amendment
+  // journal is still being read (or could not be read) — a deliberate
+  // fail-closed for MONEY actions, because until that read lands we do not know
+  // which orders have a round in flight. It is not evidence about any particular
+  // order, and `hydrationFailed` makes it non-transient.
+  //
+  // It relaxes [PosOrderActions.canPrintBill] and NOTHING else: with no money
+  // taken, the worst case of a read-only pre-bill is a provisional total (which
+  // a pre-bill is by definition — the customer can order another round the
+  // moment it is printed), while the alternative is a till that cannot hand
+  // anyone a bill because a local disk read failed. A REAL amendment for this
+  // order still withdraws the bill, because THAT total is knowably moving.
+  bool amendmentsHydrating = false,
 }) {
   // A LOCAL DRAFT has no server order. Nothing can be done to it here; it is not a
   // server order at all and must never be presented as one.
@@ -277,6 +319,35 @@ PosOrderActions resolveOrderActions(
       pending != PosPendingKind.payment && // no second concurrent payment
       pending != PosPendingKind.cancellation;
 
+  // PRE-BILL (Pass C). The customer-facing UNPAID bill — a READ-ONLY local
+  // render, never a server call, so it asks for no server acceptance.
+  //
+  // It is EXACTLY the pre-Pass-B payment eligibility MINUS the acknowledgement
+  // requirement: same terminal / settlement / positive-total / already-charged /
+  // server-refused / in-flight-payment / in-flight-cancellation interlocks,
+  // because a bill is still a money document handed to a customer and must never
+  // state an amount due on an order that is paid, comped to zero, refused as
+  // non-chargeable, cancelled, or being paid right now.
+  //
+  // What it deliberately does NOT require is [submitUnacknowledged] being false.
+  // A queued offline order is precisely the case this exists for: the kitchen has
+  // the food, the customer wants the bill, and the only thing missing is a
+  // network the customer did not break. `record_payment` would answer
+  // `order not found`; a printer does not answer anything at all.
+  //
+  // The `itemsAdd` interlock stays for a REAL amendment (the printed total would
+  // predate the round) and is relaxed only for the startup blanket — see
+  // [amendmentsHydrating].
+  final canPrintBill =
+      !terminal &&
+      settlement == PosSettlement.unpaid &&
+      total > 0 &&
+      !alreadyCharged &&
+      !refusedAsNonChargeable &&
+      (!amending || amendmentsHydrating) &&
+      pending != PosPendingKind.payment &&
+      pending != PosPendingKind.cancellation;
+
   // DISCOUNT. Frozen once a live completed payment exists (the financial snapshot
   // freezes at payment — a post-payment price change is a refund, and there is no
   // refund flow). The MARKER is the right test here: the question is "has this order
@@ -343,6 +414,8 @@ PosOrderActions resolveOrderActions(
 
   return PosOrderActions(
     canPay: canPay,
+    // Pass C: the read-only pre-bill, decided independently of payment.
+    canPrintBill: canPrintBill,
     canDiscount: canDiscount,
     canFullComp: canFullComp,
     canVoid: canVoid,

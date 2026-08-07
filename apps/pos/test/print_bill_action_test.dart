@@ -35,15 +35,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// resolver, the real async bridge resolution and the real
 /// [buildBillDocument] — over real prefs and a recording Bluetooth connector.
 ///
-/// SCOPE NOTE, stated plainly: this does NOT assert the Orders-sheet *widget*
-/// renders the button (brief scenario C). The sheet only draws an action row when
-/// `PosOrderActions` is non-empty (`recent_orders_sheet.dart:1018`), and a
-/// locally-recorded fixture does not satisfy `canPay`
-/// (`order_actions.dart:161`), so the row never builds in a widget test I could
-/// stand up. Eligibility is therefore covered by SOURCE: the action is emitted
-/// inside `if (actions.canPay)`, the same authoritative gate the existing
-/// Collect-payment button uses. The widget-level rendering assertion is
-/// OUTSTANDING and recorded in PLAN.md.
+/// SCOPE NOTE. This suite drives the print CHAIN, not the Orders-sheet widget.
+///
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] THE WIDGET-LEVEL ASSERTION
+/// THIS NOTE RECORDED AS OUTSTANDING IS NOW CLOSED, in two places and on two
+/// different fixtures:
+///
+///   * `print_bill_eligibility_test.dart` — the real [RecentOrdersSheet] over a
+///     realistic server-snapshot row: the button renders beside Collect payment,
+///     disappears when the order becomes paid or cancelled, and its label comes
+///     from the ARB in ar as well as en;
+///   * `pos_offline_prebill_test.dart` — the same sheet for a QUEUED OFFLINE
+///     order, where Collect payment is correctly withheld (Pass B) and the
+///     pre-bill must still be offered.
+///
+/// The gate itself also changed: the action is emitted inside
+/// `if (actions.canPrintBill)`, its OWN policy field, no longer `canPay`.
 
 class _RecordingConnector implements BluetoothPrinterConnector {
   final List<Uint8List> sent = <Uint8List>[];
