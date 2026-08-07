@@ -10077,6 +10077,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The kitchen display receives this order once the connection returns.'**
   String get posOfflineKdsPending;
+
+  /// POS offline-banner body shown while a reconnect probe's real menu fetch is in flight; it replaces the saved-data age for the duration of that attempt. The POS is still offline (every server-backed action stays blocked) until the fetch actually succeeds.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting…'**
+  String get posOfflineBannerReconnecting;
 }
 
 class _AppLocalizationsDelegate

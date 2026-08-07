@@ -5414,4 +5414,7 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'מתחבר מחדש…';
 }

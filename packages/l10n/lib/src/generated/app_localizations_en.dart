@@ -5496,4 +5496,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'The kitchen display receives this order once the connection returns.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'Reconnecting…';
 }

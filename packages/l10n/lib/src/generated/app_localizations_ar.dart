@@ -5449,4 +5449,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'جارٍ إعادة الاتصال…';
 }

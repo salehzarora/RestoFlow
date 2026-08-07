@@ -28,6 +28,7 @@ class PosOfflineState {
     required this.phase,
     this.snapshotFetchedAt,
     this.menuFromCache = false,
+    this.probing = false,
   });
 
   /// The starting state: nothing has failed, nothing is served from cache.
@@ -45,6 +46,18 @@ class PosOfflineState {
   /// True when the menu the POS is selling from was reconstructed from the
   /// durable snapshot rather than parsed from a live `pos_menu` response.
   final bool menuFromCache;
+
+  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] True while a reconnect
+  /// PROBE is in flight — a real `pos_menu` attempt started by the lifecycle's
+  /// probe timer whose outcome has not landed yet. Purely presentational: the
+  /// offline banner says "Reconnecting…" instead of the snapshot age.
+  ///
+  /// DELIBERATELY A BOOLEAN, NOT A FOURTH [PosOfflinePhase]. Every gate and
+  /// every UI consumer tests `phase == PosOfflinePhase.offlineCached`
+  /// (see [blockPosActionWhileOffline]); a new enum member would silently
+  /// UN-GATE payment/discount/void/shift-close for the duration of every
+  /// probe. The flag leaves all of those byte-identical.
+  final bool probing;
 }
 
 /// The ONE writer of [PosOfflineState]. The menu fetch path calls exactly one
@@ -52,6 +65,12 @@ class PosOfflineState {
 /// its async work completes and guarded against scope changes, so no provider
 /// is ever written during another provider's build (the vc23 root-cause class,
 /// POS-RUNTIME-RECOVERY-002).
+///
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] [markProbing] is the ONE
+/// exception, and it is not a phase writer: it flips a presentational flag and
+/// can never move the phase in either direction. The three `record*` methods
+/// remain the only writers of [PosOfflineState.phase], and each of them clears
+/// `probing` by construction (the probe's own outcome ends its transient).
 class PosOfflineController extends Notifier<PosOfflineState> {
   @override
   PosOfflineState build() => PosOfflineState.online;
@@ -71,6 +90,24 @@ class PosOfflineController extends Notifier<PosOfflineState> {
   /// The fetch failed and NO usable snapshot exists for the current scope.
   void recordSetupRequired() =>
       state = const PosOfflineState(phase: PosOfflinePhase.setupRequired);
+
+  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] A reconnect probe just
+  /// started a real `pos_menu` attempt. PRESENTATIONAL ONLY — the phase, the
+  /// snapshot age and the cache flag are carried through untouched, so every
+  /// action gate keeps refusing exactly as it did a microsecond earlier. A
+  /// no-op outside [PosOfflinePhase.offlineCached] (nothing else probes) and
+  /// when already probing (no redundant rebuilds).
+  void markProbing() {
+    final current = state;
+    if (current.phase != PosOfflinePhase.offlineCached) return;
+    if (current.probing) return;
+    state = PosOfflineState(
+      phase: current.phase,
+      snapshotFetchedAt: current.snapshotFetchedAt,
+      menuFromCache: current.menuFromCache,
+      probing: true,
+    );
+  }
 }
 
 /// The POS offline operating phase (root state — no autoDispose).
@@ -78,6 +115,28 @@ final posOfflineModeProvider =
     NotifierProvider<PosOfflineController, PosOfflineState>(
       PosOfflineController.new,
     );
+
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] How often the POS
+/// lifecycle RE-ATTEMPTS a real `pos_menu` fetch while it is operating from
+/// the offline snapshot — the seam that ends the one-way offline latch.
+///
+/// NULL BY DEFAULT, exactly like `outboxAutoSweepIntervalProvider` and
+/// `posSyncPollIntervalProvider`: `main.dart` overrides it for the real app
+/// under the `includePeriodicWork` seam, and every widget test therefore stays
+/// timer-free (a live periodic Timer makes `pumpAndSettle` wait forever).
+///
+/// This is a TRIGGER, never a writer. The probe only asks the menu provider to
+/// try again; the offline PHASE is still decided exclusively by that fetch's
+/// real outcome — never by a connectivity plugin, a reachability flag, or the
+/// timer itself.
+final posOfflineReconnectProbeIntervalProvider = Provider<Duration?>(
+  (ref) => null,
+);
+
+/// The production reconnect-probe cadence (see
+/// [posOfflineReconnectProbeIntervalProvider]). Matched to the outbox sweep so
+/// a recovering till performs at most one extra RPC per 25s window.
+const Duration kPosOfflineReconnectProbeInterval = Duration(seconds: 25);
 
 /// [POS-OFFLINE-OPERATIONS-002] C11 — the ONE gate for server-backed actions
 /// while the POS operates from the offline snapshot.

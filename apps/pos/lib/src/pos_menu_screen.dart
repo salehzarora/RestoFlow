@@ -702,7 +702,16 @@ class _MenuGrid extends ConsumerWidget {
             tone: RestoflowTone.warning,
             icon: Icons.cloud_off_outlined,
             title: fetchedAt == null ? null : l10n.posOfflineModeBanner,
-            body: fetchedAt == null
+            // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] While a
+            // reconnect PROBE's fetch is in flight the body says so, then
+            // reverts to the snapshot age when that attempt lands (each
+            // `record*` outcome clears `probing`). The PHASE is untouched, so
+            // this is honest: the POS is still offline and every server-backed
+            // action stays refused until a fetch genuinely succeeds. The
+            // banner's key is unchanged so nothing keyed on it moves.
+            body: offline.probing
+                ? l10n.posOfflineBannerReconnecting
+                : fetchedAt == null
                 ? l10n.posOfflineModeBanner
                 : l10n.posOfflineDataAge(_snapshotAgeLabel(context, fetchedAt)),
           ),

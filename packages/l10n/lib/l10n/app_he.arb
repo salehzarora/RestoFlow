@@ -1696,5 +1696,6 @@
   "posOfflinePrinterUnreachable": "אין גישה למדפסת — בדקו את חיבור המדפסת.",
   "posOfflinePrintPending": "כרטיס המטבח עדיין לא הודפס — השתמשו ב\"הדפסת כרטיס מטבח\" כשהמדפסת זמינה.",
   "posOfflineActionUnavailable": "לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.",
-  "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור."
+  "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.",
+  "posOfflineBannerReconnecting": "מתחבר מחדש…"
 }

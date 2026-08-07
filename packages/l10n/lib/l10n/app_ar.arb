@@ -1696,5 +1696,6 @@
   "posOfflinePrinterUnreachable": "تعذّر الوصول إلى الطابعة — تحقّق من اتصال الطابعة.",
   "posOfflinePrintPending": "لم تُطبع تذكرة المطبخ بعد — استخدم «طباعة تذكرة المطبخ» عندما تصبح الطابعة متاحة.",
   "posOfflineActionUnavailable": "غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.",
-  "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال."
+  "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.",
+  "posOfflineBannerReconnecting": "جارٍ إعادة الاتصال…"
 }
