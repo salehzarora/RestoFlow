@@ -40,47 +40,14 @@
   },
 
   "currentOfficialRelease": {
-    "versionName": "0.0.21",
-    "versionCode": 21,
-    "signing": "restoflow-production",
-    "status": "built / Production-signed / not installed / not uploaded",
-    "sourceSha": "ed803bb1ae839d2b56d37f4f652ed00cd90e4442",
-    "buildDate": "2026-08-04",
-    "versionSymmetrySatisfied": true,
-    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
-    "artifacts": {
-      "pos": {
-        "filename": "RestoFlow-POS-official-v21-ed803bb.apk",
-        "packageId": "com.restoflow.pos",
-        "sha256": "693e83df3a8b52de08f20eb3d627c2074d80eaa0b835f00f6969887500f66345"
-      },
-      "kds": {
-        "filename": "RestoFlow-KDS-official-v21-ed803bb.apk",
-        "packageId": "com.restoflow.kds",
-        "sha256": "31b01b29f3442b01b3ef22f66f824f8057cbc326bbd82211500c1dcf381c6f19"
-      }
-    },
-    "notes": [
-      "First artifacts ever signed with the production identity.",
-      "Verified: not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
-      "correct hosted Supabase project, forbidden reference absent.",
-      "NOT installed on any device, NOT uploaded, NOT distributed, no GitHub Release.",
-      "The artifact files themselves are local and git-ignored; only their public",
-      "SHA-256 values are recorded here.",
-      "Because the certificate differs from the debug-signed pilot, v21 CANNOT",
-      "update the installed pilot apps in place - the one-time migration in",
-      "docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md is still pending."
-    ]
-  },
-
-  "nextOfficialRelease": {
     "versionName": "0.0.25",
     "versionCode": 25,
     "signing": "restoflow-production",
-    "status": "built - pre-merge candidate / Production-signed / NOT installed / NOT uploaded",
+    "status": "built / Production-signed / POS installed (fresh install) on SALEH-POS-TEST-01 / KDS not installed / not uploaded / not distributed",
     "applicationSourceSha": "f89c8c4f8e6924481d8152b6e645180ad03f2949",
     "sourceSha": "f76b67cb954a589725a5c18f116621a6c8a8d893",
     "buildDate": "2026-08-06",
+    "installDate": "2026-08-06",
     "versionSymmetrySatisfied": true,
     "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
     "artifacts": {
@@ -95,29 +62,82 @@
         "sha256": "2dbdb51f3fe35cbc2a2a9666de15925d429a869893de92aab89b6b1b6bb4e373"
       }
     },
-    "candidateNotes": [
-      "Built by tools/android_release/build_official_pair.ps1 with",
-      "-SourceSha f76b67c... -AllowNonMain (the script's audited exception):",
-      "the build HEAD is the release/RESTOFLOW-OFFICIAL-V25 ledger commit,",
-      "whose only delta from application source f89c8c4 is this ledger and",
-      "its documentation. PR #199 is open and UNMERGED; these artifacts are",
-      "pre-merge candidates, verified by verify_official_apk.ps1 (both PASS):",
-      "not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
-      "production certificate matches the pin, hosted project ref present,",
-      "forbidden ref absent. NOT installed, NOT uploaded, NOT distributed,",
-      "no GitHub Release. official-v21 and transitional vc24 unchanged."
-    ],
-    "intendedSource": "main at f89c8c4f8e6924481d8152b6e645180ad03f2949 (application source; the release branch may add ledger/documentation commits only)",
     "notes": [
-      "v25 supersedes the never-built v22 plan (see skippedOfficialReleases).",
-      "25 is the smallest versionCode strictly greater than every code ever",
-      "used on com.restoflow.pos: official v21, transitional vc23 (Debug/JIT)",
-      "and transitional vc24 (Release/AOT, field-tested on SALEH-POS-TEST-01).",
-      "Keeping the whole package lineage monotonic removes downgrade traps",
-      "even though the production signer requires a fresh install anyway.",
-      "POS and KDS ship as the synchronized pair 0.0.25/25 per versionSymmetry.",
-      "versionCode must increase monotonically: Android refuses to install an",
-      "APK whose versionCode is lower than the installed one."
+      "Built pre-merge from release-branch HEAD f76b67c (application source",
+      "f89c8c4 + ledger/docs only); PR #199 subsequently merged that ledger",
+      "branch into main at 0a23686, so the candidate became the official v25.",
+      "POS v25 was installed 2026-08-06 as a FRESH INSTALL on the personal test",
+      "tablet SALEH-POS-TEST-01 (transitional vc24 uninstalled first - the",
+      "production certificate cannot update a debug-signed install in place).",
+      "Verified on-device after install: pairing succeeded against the server",
+      "station record 'SALEHPOS ONEPLUS', employee login succeeded, the local",
+      "printer configuration was restored, a physical printer test print was",
+      "confirmed successful, and a read-only cashier smoke check passed.",
+      "NOT verified: no controlled end-to-end order was submitted after the",
+      "official v25 installation - the final controlled-order validation was",
+      "NOT performed on v25. Do not cite v25 as having passed that test.",
+      "KDS v25 was built and verified but NOT installed on any device.",
+      "The operational restaurant tablet was NOT touched; it remains on its",
+      "previous installation.",
+      "v25 does NOT contain the Offline Operations implementation: PR #200",
+      "merged into main later, at 2b05204f3904bd4d1dc5106b7d1b68bfa38787db.",
+      "Not uploaded, not distributed, no GitHub Release; artifact files stay",
+      "local and git-ignored - only their public SHA-256 values are recorded."
+    ]
+  },
+
+  "previousOfficialReleases": [
+    {
+      "versionName": "0.0.21",
+      "versionCode": 21,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / never installed / never uploaded - superseded by v25 on 2026-08-06",
+      "sourceSha": "ed803bb1ae839d2b56d37f4f652ed00cd90e4442",
+      "buildDate": "2026-08-04",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v21-ed803bb.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "693e83df3a8b52de08f20eb3d627c2074d80eaa0b835f00f6969887500f66345"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v21-ed803bb.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "31b01b29f3442b01b3ef22f66f824f8057cbc326bbd82211500c1dcf381c6f19"
+        }
+      },
+      "notes": [
+        "First artifacts ever signed with the production identity. Verified:",
+        "not debuggable, demo=false, AOT, zipaligned, apksigner-verified,",
+        "correct hosted Supabase project, forbidden reference absent.",
+        "Never installed on any device and never distributed: the transitional",
+        "vc23/vc24 lane and then official v25 superseded it before any rollout."
+      ]
+    }
+  ],
+
+  "nextOfficialRelease": {
+    "versionName": "0.0.26",
+    "versionCode": 26,
+    "signing": "restoflow-production",
+    "status": "planned - not built",
+    "intendedSource": "main at 2b05204f3904bd4d1dc5106b7d1b68bfa38787db (application source; the release branch may add ledger/documentation commits only)",
+    "notes": [
+      "v26 is the FIRST official Android pair that contains the Offline",
+      "Operations implementation: PR #200 (offline cold-boot continuation,",
+      "cached cashier snapshot, bounded offline session, AUTH_HOLD, long-outage",
+      "outbox auto-recovery, durable offline direct-print) merged into main at",
+      "2b05204f3904bd4d1dc5106b7d1b68bfa38787db. Official v25 predates that",
+      "merge and does NOT contain Offline Operations.",
+      "POS and KDS ship as the synchronized pair 0.0.26/26 per versionSymmetry.",
+      "versionCode must increase monotonically: 26 is strictly greater than",
+      "every code ever used on com.restoflow.pos (v21, vc23, vc24, v25), so",
+      "v26 is statically update-compatible over the installed official v25",
+      "(same package id, same production certificate, ascending versionCode).",
+      "Android refuses to install an APK whose versionCode is lower than the",
+      "installed one."
     ]
   },
 

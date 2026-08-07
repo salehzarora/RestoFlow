@@ -232,22 +232,32 @@ never installs, uploads, pushes, releases or deploys.
 | Version | Signing | Source | Status |
 |---|---|---|---|
 | 0.0.20 / 20 | Android **debug** key | `279c4fc` | pilot, manual tablet testing only, never distributed |
-| **0.0.21 / 21** | **`restoflow-production`** | `ed803bb` | **built 2026-08-04 and verified — NOT installed, NOT uploaded, no GitHub Release** |
-| 0.0.22 / 22 | `restoflow-production` | — | planned, not built |
+| 0.0.21 / 21 | `restoflow-production` | `ed803bb` | built 2026-08-04 and verified — never installed, never uploaded; superseded by v25 |
+| 0.0.22 / 22 | `restoflow-production` | — | SKIPPED, never built (transitional vc23/vc24 consumed the codes below 25) |
+| vc23 / vc24 | Android **debug** key | `a243fd6` / `f89c8c4` | POS-only transitional lane (Debug/JIT then Release/AOT); vc24 field-tested on SALEH-POS-TEST-01 |
+| **0.0.25 / 25** | **`restoflow-production`** | `f76b67c` (app source `f89c8c4`) | **POS fresh-installed 2026-08-06 on SALEH-POS-TEST-01 (paired, login, printer test, read-only smoke all OK; NO controlled end-to-end order performed); KDS built, not installed; not uploaded** |
+| 0.0.26 / 26 | `restoflow-production` | main `2b05204` intended | planned — first official pair containing Offline Operations (PR #200) |
 
-**v21 is the first RestoFlow artifact ever signed with the production identity.**
-Both APKs were verified as production-signed (not Android Debug), `0.0.21 / 21`,
-non-debuggable, `demo=false`, AOT, zipaligned, `apksigner`-verified, on the
-correct hosted Supabase project with the forbidden reference absent. Their
-public SHA-256 values are recorded in
+**v21 was the first RestoFlow artifact ever signed with the production identity**
+(verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
+`apksigner`-verified, correct hosted Supabase project) but was never installed;
+official **v25** performed the actual one-time migration. Public SHA-256 values
+for every official artifact are recorded in
 [`version.json`](../tools/android_release/version.json); the artifact files
 themselves stay local and git-ignored.
 
-**The one-time pilot → production migration is still pending.** Because the
-certificate differs from the debug-signed pilot, v21 **cannot** update the
-installed apps in place — follow
-[ANDROID_FLEET_UPDATE_AND_ROLLBACK.md](ANDROID_FLEET_UPDATE_AND_ROLLBACK.md) §1
-before installing anything.
+**The one-time pilot → production migration was completed for the POS on the
+personal test tablet on 2026-08-06**: transitional vc24 (debug-signed) was
+uninstalled and official v25 fresh-installed per
+[ANDROID_FLEET_UPDATE_AND_ROLLBACK.md](ANDROID_FLEET_UPDATE_AND_ROLLBACK.md) §1,
+then pairing (station record «SALEHPOS ONEPLUS»), employee login, printer
+restore + physical test print and a read-only cashier smoke check were all
+confirmed. **No controlled end-to-end order was submitted on v25** — that final
+validation is deferred to the v26 device test. v25 predates the Offline
+Operations merge (PR #200, `2b05204`); v26 is the first pair to contain it.
+The operational restaurant tablet has not been migrated: it still requires the
+full §1 outbox-drain gate and migration procedure before anything is installed
+on it.
 
 ### Two runner defects fixed after the first official build
 
