@@ -236,8 +236,9 @@ never installs, uploads, pushes, releases or deploys.
 | 0.0.22 / 22 | `restoflow-production` | — | SKIPPED, never built (transitional vc23/vc24 consumed the codes below 25) |
 | vc23 / vc24 | Android **debug** key | `a243fd6` / `f89c8c4` | POS-only transitional lane (Debug/JIT then Release/AOT); vc24 field-tested on SALEH-POS-TEST-01 |
 | 0.0.25 / 25 | `restoflow-production` | `f76b67c` (app source `f89c8c4`) | POS fresh-installed 2026-08-06 on SALEH-POS-TEST-01 (paired, login, printer test, read-only smoke OK; no controlled end-to-end order); KDS never installed; updated in place by v26 |
-| **0.0.26 / 26** | **`restoflow-production`** | `e62cc54` (app source `2b05204`) | **POS updated IN PLACE over v25 on 2026-08-07 — pairing/printer/shift/employee state all preserved; Offline foundation validated (cold start, cached menu, offline order, kitchen print) but THREE acceptance defects found (latched offline state, reconnect payment block, no offline pre-bill) — fixed by PR #202; KDS built, not installed; not uploaded** |
-| 0.0.27 / 27 | `restoflow-production` | main `b670b59` intended | planned — first pair containing the PR #202 reconnect/payment/pre-bill fixes |
+| 0.0.26 / 26 | `restoflow-production` | `e62cc54` (app source `2b05204`) | POS updated IN PLACE over v25 on 2026-08-07 — state preserved; Offline foundation validated but THREE acceptance defects found (latched offline state, reconnect payment block, no offline pre-bill) — fixed by PR #202; updated in place by v27; KDS never installed |
+| **0.0.27 / 27** | **`restoflow-production`** | `6a82ec8` (app source `b670b59`) | **POS updated IN PLACE over v26 on 2026-08-07 — FOCUSED ACCEPTANCE MATRIX PASSED: automatic reconnect without restart, Offline unpaid pre-bill printed, payment correctly blocked until sync then completed once on the reconciled order, no duplicates; KDS built, not installed; not uploaded** |
+| 0.0.28 / 28 | `restoflow-production` | — | reserved, not planned in detail |
 
 **v21 was the first RestoFlow artifact ever signed with the production identity**
 (verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
@@ -262,7 +263,13 @@ cached menu, locally saved unpaid order, kitchen printing) and exposed three
 acceptance defects — the offline state stayed latched after reconnect until an
 app restart, an offline-created order stayed payment-blocked after reconnect,
 and the unpaid pre-bill could not print offline — all fixed by PR #202
-(`b670b59`), which is why **v27 is the acceptance-fix release**. The
+(`b670b59`). **v27 closed the loop on 2026-08-07**: another in-place update
+preserved all state, and the focused acceptance matrix passed on real
+hardware — the Offline banner cleared automatically on reconnection with the
+app kept open, the unpaid preliminary bill printed while Offline, payment
+stayed correctly unavailable until the Offline-created order synchronized and
+then completed exactly once on the reconciled order, with no duplicate order
+and no duplicate print. v27 is the current official release. The
 operational restaurant tablet has still not been migrated: it requires the
 full §1 outbox-drain gate and migration procedure before anything is installed
 on it.
