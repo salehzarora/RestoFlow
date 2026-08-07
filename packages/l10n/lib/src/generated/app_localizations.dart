@@ -10083,6 +10083,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reconnecting…'**
   String get posOfflineBannerReconnecting;
+
+  /// POS snackbar shown when payment is attempted for an order whose submit the server has not acknowledged yet. Deliberately says nothing about the connection: this is order-specific and resolves by itself when the queued submit is applied, so the cashier must not be sent to check the network.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is still syncing - payment opens as soon as the server accepts it.'**
+  String get posPaymentAwaitingOrderSync;
 }
 
 class _AppLocalizationsDelegate

@@ -5452,4 +5452,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posOfflineBannerReconnecting => 'جارٍ إعادة الاتصال…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب.';
 }

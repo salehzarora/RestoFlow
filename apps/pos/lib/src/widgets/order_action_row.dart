@@ -112,6 +112,12 @@ class OrderActionRow extends ConsumerWidget {
               amountMinor: order.grandTotalMinor,
               currencyCode: order.currencyCode,
               expectedRevision: order.revision,
+              // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The central
+              // policy's own verdict, carried straight through. It is already
+              // false whenever this button is drawn (an unacknowledged submit
+              // withdraws `canPay`); passing it keeps the ONE entry point able
+              // to refuse honestly if that ever stops being true.
+              submitUnacknowledged: actions.submitUnacknowledged,
             ),
             icon: const Icon(Icons.payments_outlined, size: 18),
             label: Text(l10n.posTakePayment),

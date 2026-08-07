@@ -176,10 +176,25 @@ class OrderConfirmation extends ConsumerWidget {
         authoritative?.discountTotalMinor ?? order.discountTotalMinor;
     final expectedRevision = authoritative?.revision;
 
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] Has the server
+    // acknowledged THIS order's submit? The fallback below (`payment == null`)
+    // never asked, so a queued order — the normal state for the seconds after a
+    // reconnect, and for the whole of an outage — offered Take payment, and
+    // `record_payment` answered `order not found`. The entry is already in scope
+    // here; the predicate owns the fail-open rule (no entry / a server snapshot /
+    // demo mode all read false).
+    final submitUnacknowledged = posSubmitUnacknowledged(
+      isDemo: isDemo,
+      hasServerSnapshot: authoritative != null,
+      submitEntry: entry != null && entry.operationType == 'order.submit'
+          ? entry
+          : null,
+    );
+
     // Actions come from the policy when we HAVE authority. Before the first snapshot
     // arrives we keep the existing, safe behaviour rather than blanking the screen.
     // A rejected draft has no order — NEVER offer payment or discount for it.
-    final canPay = isRejectedDraft
+    final canPay = isRejectedDraft || submitUnacknowledged
         ? false
         : (actions?.canPay ?? (payment == null));
     final canDiscount = isRejectedDraft
@@ -267,24 +282,30 @@ class OrderConfirmation extends ConsumerWidget {
                     icon: Icons.check_circle,
                   ),
                 },
-                // [POS-OFFLINE-OPERATIONS-002] C11 — the queued-OFFLINE order
-                // status, rendered ONLY while the POS is provably operating
-                // from the offline snapshot. Two honest lines (saved locally /
-                // awaiting sync) plus, for a kds order, the KDS-sees-it-after-
-                // sync line. Covers PENDING and DELIVERY-UNCONFIRMED alike: an
-                // offline push lands as a transient transport failure
-                // (unconfirmed), and both statements stay true for it — the
-                // entry IS durably stored and the sweep DOES resubmit the same
-                // identity, which the server replays idempotently. Every other
-                // phase keeps the existing copy byte-identically. Nothing here
-                // invents a server receipt number — the order code shown above
-                // stays the local display code derived from the client-minted
-                // id.
-                if (!isDemo &&
+                // [POS-OFFLINE-OPERATIONS-002] C11 — the QUEUED order status.
+                // Two honest lines (saved locally / awaiting sync) plus, for a
+                // kds order, the KDS-sees-it-after-sync line. Covers PENDING and
+                // DELIVERY-UNCONFIRMED alike: an offline push lands as a
+                // transient transport failure (unconfirmed), and both statements
+                // stay true for it — the entry IS durably stored and the sweep
+                // DOES resubmit the same identity, which the server replays
+                // idempotently. Nothing here invents a server receipt number —
+                // the order code shown above stays the local display code
+                // derived from the client-minted id.
+                //
+                // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] It is the
+                // ORDER'S state that decides, not the global connectivity phase.
+                // ANDed with `phase == offlineCached`, this said nothing at all
+                // about an order still sitting in the queue once the network came
+                // back — precisely the moment a cashier reaches for Take payment.
+                // `submitUnacknowledged` already carries "not demo", "no server
+                // snapshot" and "this device holds the submit entry", so the only
+                // condition left is which of the two non-verdict outcomes it is
+                // (a definitively REFUSED submit keeps its own rejection copy and
+                // recovery actions below).
+                if (submitUnacknowledged &&
                     (outcome == PosOrderOutcome.pending ||
-                        outcome == PosOrderOutcome.deliveryUnconfirmed) &&
-                    ref.watch(posOfflineModeProvider.select((s) => s.phase)) ==
-                        PosOfflinePhase.offlineCached) ...[
+                        outcome == PosOrderOutcome.deliveryUnconfirmed)) ...[
                   const SizedBox(height: RestoflowSpacing.sm),
                   _OfflinePendingNotice(entry: entry, l10n: l10n),
                 ],
@@ -611,6 +632,10 @@ class OrderConfirmation extends ConsumerWidget {
                                 amountMinor: grandTotalMinor,
                                 currencyCode: order.currencyCode,
                                 expectedRevision: expectedRevision,
+                                // Pass B: already false whenever this button is
+                                // drawn; carried so the ONE entry point stays
+                                // able to refuse with the sync-specific message.
+                                submitUnacknowledged: submitUnacknowledged,
                               ),
                               icon: const Icon(Icons.payments_outlined),
                               label: Text(l10n.posTakePayment),

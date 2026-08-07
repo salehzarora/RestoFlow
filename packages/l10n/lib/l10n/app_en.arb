@@ -3720,5 +3720,7 @@
   "posOfflineKdsPending": "The kitchen display receives this order once the connection returns.",
   "@posOfflineKdsPending": {"description": "POS status line on a queued offline order in the normal KDS workflow: the kitchen sees it only after the order syncs."},
   "posOfflineBannerReconnecting": "Reconnecting…",
-  "@posOfflineBannerReconnecting": {"description": "POS offline-banner body shown while a reconnect probe's real menu fetch is in flight; it replaces the saved-data age for the duration of that attempt. The POS is still offline (every server-backed action stays blocked) until the fetch actually succeeds."}
+  "@posOfflineBannerReconnecting": {"description": "POS offline-banner body shown while a reconnect probe's real menu fetch is in flight; it replaces the saved-data age for the duration of that attempt. The POS is still offline (every server-backed action stays blocked) until the fetch actually succeeds."},
+  "posPaymentAwaitingOrderSync": "This order is still syncing - payment opens as soon as the server accepts it.",
+  "@posPaymentAwaitingOrderSync": {"description": "POS snackbar shown when payment is attempted for an order whose submit the server has not acknowledged yet. Deliberately says nothing about the connection: this is order-specific and resolves by itself when the queued submit is applied, so the cashier must not be sent to check the network."}
 }

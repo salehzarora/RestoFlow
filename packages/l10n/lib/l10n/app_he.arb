@@ -1697,5 +1697,6 @@
   "posOfflinePrintPending": "כרטיס המטבח עדיין לא הודפס — השתמשו ב\"הדפסת כרטיס מטבח\" כשהמדפסת זמינה.",
   "posOfflineActionUnavailable": "לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.",
   "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.",
-  "posOfflineBannerReconnecting": "מתחבר מחדש…"
+  "posOfflineBannerReconnecting": "מתחבר מחדש…",
+  "posPaymentAwaitingOrderSync": "ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה."
 }

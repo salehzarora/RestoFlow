@@ -5499,4 +5499,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posOfflineBannerReconnecting => 'Reconnecting…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'This order is still syncing - payment opens as soon as the server accepts it.';
 }

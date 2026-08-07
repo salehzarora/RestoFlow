@@ -5417,4 +5417,8 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posOfflineBannerReconnecting => 'מתחבר מחדש…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה.';
 }

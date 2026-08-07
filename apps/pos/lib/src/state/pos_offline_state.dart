@@ -163,3 +163,39 @@ bool blockPosActionWhileOffline(BuildContext context) {
   );
   return true;
 }
+
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The ORDER-SCOPED payment
+/// refusal, standing beside [blockPosActionWhileOffline] at the SAME single
+/// entry point (`CashPaymentSheet.show`).
+///
+/// The two answer different questions, which is exactly why the offline one
+/// could not cover this. [blockPosActionWhileOffline] asks "is this TILL able to
+/// reach the backend?"; this asks "has the server acknowledged THIS ORDER?". A
+/// perfectly online till can hold an order whose queued submit has not landed —
+/// after a reconnect, that is the normal state for a few seconds — and taking a
+/// payment for it reaches `app.record_payment`, which raises `order not found`
+/// (42501). `app.sync_push` records that as a PERMANENT rejection, and the sheet
+/// used to render it as the generic "Payment not recorded / check the
+/// connection" banner: a false diagnosis of a network fault, over a retry that
+/// could never work.
+///
+/// [submitUnacknowledged] is the CENTRAL policy's own answer (see
+/// `posSubmitUnacknowledged`), carried on [PosOrderActions] so this gate and the
+/// withdrawn button can never disagree. It defaults to false everywhere, which is
+/// the same fail-open rule the predicate itself follows: unknown is not denied.
+///
+/// It shows the SYNC-specific message and NEVER the connectivity copy, and it
+/// changes no payment logic — like its sibling it only declines to open a sheet
+/// whose Confirm can only fail.
+bool blockPosPaymentUntilSubmitAccepted(
+  BuildContext context, {
+  required bool submitUnacknowledged,
+}) {
+  if (!submitUnacknowledged) return false;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(AppLocalizations.of(context).posPaymentAwaitingOrderSync),
+    ),
+  );
+  return true;
+}
