@@ -5510,4 +5510,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posPaymentAwaitingOrderSync =>
       'This order is still syncing - payment opens as soon as the server accepts it.';
+
+  @override
+  String get posCashDrawerAutoOpenTitle =>
+      'Open cash drawer after cash payment';
+
+  @override
+  String get posCashDrawerAutoOpenHelp =>
+      'Uses the receipt printer\'s drawer port.';
+
+  @override
+  String get posCashDrawerOpenFailed =>
+      'Payment recorded — cash drawer did not open';
 }

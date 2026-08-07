@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/pos_bluetooth_printer_config.dart';
+import '../state/pos_cash_drawer_setting.dart';
 import '../state/pos_kitchen_printer_copy.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_purpose.dart';
@@ -184,6 +185,24 @@ class _PrinterSettingsSectionState
             purpose: _purpose,
           ),
         },
+        // POS-CASH-DRAWER-AUTO-OPEN: the per-device drawer toggle lives in
+        // the CUSTOMER RECEIPT area only — the drawer plugs into the receipt
+        // printer's drawer port (there is no kitchen drawer). Default OFF;
+        // the setter persists into the authoritative per-device namespace.
+        if (!kitchen) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          SwitchListTile(
+            key: const Key('cash-drawer-auto-open-switch'),
+            contentPadding: EdgeInsets.zero,
+            value:
+                ref.watch(posCashDrawerAutoOpenProvider).valueOrNull ?? false,
+            onChanged: (enabled) => ref
+                .read(posCashDrawerAutoOpenProvider.notifier)
+                .setEnabled(enabled),
+            title: Text(l10n.posCashDrawerAutoOpenTitle),
+            subtitle: Text(l10n.posCashDrawerAutoOpenHelp),
+          ),
+        ],
       ],
     );
   }

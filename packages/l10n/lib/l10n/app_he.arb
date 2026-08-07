@@ -1702,5 +1702,8 @@
   "posOfflineActionUnavailable": "לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.",
   "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.",
   "posOfflineBannerReconnecting": "מתחבר מחדש…",
-  "posPaymentAwaitingOrderSync": "ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה."
+  "posPaymentAwaitingOrderSync": "ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה.",
+  "posCashDrawerAutoOpenTitle": "פתיחת מגירת המזומנים אוטומטית לאחר תשלום במזומן",
+  "posCashDrawerAutoOpenHelp": "משתמש ביציאת המגירה של מדפסת הקבלות.",
+  "posCashDrawerOpenFailed": "התשלום נרשם — מגירת המזומנים לא נפתחה"
 }

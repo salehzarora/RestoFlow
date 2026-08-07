@@ -1702,5 +1702,8 @@
   "posOfflineActionUnavailable": "غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.",
   "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.",
   "posOfflineBannerReconnecting": "جارٍ إعادة الاتصال…",
-  "posPaymentAwaitingOrderSync": "الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب."
+  "posPaymentAwaitingOrderSync": "الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب.",
+  "posCashDrawerAutoOpenTitle": "فتح درج النقود تلقائيًا بعد الدفع نقدًا",
+  "posCashDrawerAutoOpenHelp": "يستخدم منفذ الدرج في طابعة الفواتير.",
+  "posCashDrawerOpenFailed": "تم تسجيل الدفعة — لم يُفتح درج النقود"
 }

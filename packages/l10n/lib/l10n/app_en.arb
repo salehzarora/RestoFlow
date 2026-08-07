@@ -3726,5 +3726,11 @@
   "posOfflineBannerReconnecting": "Reconnecting…",
   "@posOfflineBannerReconnecting": {"description": "POS offline-banner body shown while a reconnect probe's real menu fetch is in flight; it replaces the saved-data age for the duration of that attempt. The POS is still offline (every server-backed action stays blocked) until the fetch actually succeeds."},
   "posPaymentAwaitingOrderSync": "This order is still syncing - payment opens as soon as the server accepts it.",
-  "@posPaymentAwaitingOrderSync": {"description": "POS snackbar shown when payment is attempted for an order whose submit the server has not acknowledged yet. Deliberately says nothing about the connection: this is order-specific and resolves by itself when the queued submit is applied, so the cashier must not be sent to check the network."}
+  "@posPaymentAwaitingOrderSync": {"description": "POS snackbar shown when payment is attempted for an order whose submit the server has not acknowledged yet. Deliberately says nothing about the connection: this is order-specific and resolves by itself when the queued submit is applied, so the cashier must not be sent to check the network."},
+  "posCashDrawerAutoOpenTitle": "Open cash drawer after cash payment",
+  "@posCashDrawerAutoOpenTitle": {"description": "Title of the per-device printer-settings toggle that opens the cash drawer automatically after a successful CASH payment (POS-CASH-DRAWER-AUTO-OPEN; RF-074 cash-only semantics). Default OFF."},
+  "posCashDrawerAutoOpenHelp": "Uses the receipt printer's drawer port.",
+  "@posCashDrawerAutoOpenHelp": {"description": "Subtitle under the cash-drawer auto-open toggle explaining that the drawer pulse goes through the CUSTOMER receipt printer's drawer (RJ11) port — no separate drawer device is configured."},
+  "posCashDrawerOpenFailed": "Payment recorded — cash drawer did not open",
+  "@posCashDrawerOpenFailed": {"description": "POS snackbar shown when a cash payment was recorded successfully but the automatic drawer-kick send to the receipt printer failed. Honest and non-blocking: the payment/receipt are unaffected and the kick is never retried (the cashier uses the manual drawer release)."}
 }
