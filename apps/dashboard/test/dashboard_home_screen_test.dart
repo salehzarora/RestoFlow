@@ -374,8 +374,15 @@ void main() {
     expect(find.text('Recent orders'), findsOneWidget);
     expect(find.text('O-1009'), findsOneWidget); // newest (cancelled)
     expect(find.text('O-1005'), findsOneWidget); // a paid order
-    expect(find.text('cancelled'), findsWidgets); // O-1009 status pill
-    expect(find.text('completed'), findsWidgets); // a completed order status
+    // F0.5: the recent-order pill no longer prints the raw wire token.
+    // It shows the SAME localized label the Orders surface uses, so the same
+    // order does not read as 'cancelled' here and 'Cancelled' one tab away.
+    expect(find.text('cancelled'), findsNothing);
+    final en = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(en.ordersStatusCancelled), findsWidgets);
+    // F0.5: same rule for the completed pill - localized, never the token.
+    expect(find.text('completed'), findsNothing);
+    expect(find.text(en.ordersStatusCompleted), findsWidgets);
     expect(find.textContaining('Table T5'), findsWidgets); // dine-in table
   });
 

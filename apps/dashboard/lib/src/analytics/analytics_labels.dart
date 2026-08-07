@@ -24,6 +24,8 @@ library;
 
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/demo_report.dart' show DashboardReport;
+
 /// Localizes a payment-method wire token (`cash` / `card` / `bit` /
 /// `external`).
 ///
@@ -61,3 +63,39 @@ const List<String> kPaymentMethodWireTokens = <String>[
 /// fully presentable, without hard-coding the list at each call site.
 bool isKnownPaymentMethod(String method) =>
     kPaymentMethodWireTokens.contains(method);
+
+/// F0.5 — the shift-state wire tokens the owner report can actually carry.
+///
+/// Only these two are real STATES. Every real report path
+/// (owner_report_range, owner_daily_report and the sales_summary fallback)
+/// hardcodes `'none'`, which is not a state at all — it means the payload
+/// carried no shift information.
+const String kShiftStateOpen = 'open';
+const String kShiftStateClosed = 'closed';
+
+/// Whether [report] carries a real shift state worth rendering.
+///
+/// False for `'none'` and for anything unrecognised. Callers use this to OMIT
+/// shift/drawer rows rather than print a measured-looking zero: absence of
+/// data and a genuine ₪0.00 variance are different facts and must not look
+/// alike to an owner reconciling a till.
+bool reportHasShiftState(DashboardReport report) =>
+    report.shiftStatus == kShiftStateOpen ||
+    report.shiftStatus == kShiftStateClosed;
+
+/// Localizes a shift-state token for display.
+///
+/// Reuses the already-translated activity-log phrasings rather than adding new
+/// keys: "Shift opened" / "Shift closed" read correctly as a state and ship in
+/// en/ar/he today. A future polish pass may introduce dedicated adjective-form
+/// keys; that is wording, not honesty, so it does not belong in this slice.
+///
+/// An unrecognised token (including `'none'`) returns an empty string, because
+/// callers are expected to have skipped it via [reportHasShiftState] - it must
+/// never fall through to the raw wire value.
+String shiftStatusLabel(AppLocalizations l10n, String status) =>
+    switch (status) {
+      kShiftStateOpen => l10n.activityLogTitleShiftOpened,
+      kShiftStateClosed => l10n.activityLogTitleShiftClosed,
+      _ => '',
+    };

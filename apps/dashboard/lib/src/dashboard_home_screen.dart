@@ -416,9 +416,20 @@ class _ReportContent extends StatelessWidget {
           value: money(report.collectedMinor),
         ),
         // RF-REPORT-003: cash reconciliation (variance) + shift status live in the
-        // dedicated "Shift & cash" card when it is present — showing them here too
-        // would duplicate (and, in real mode, contradict with ₪0.00) that card.
-        if (report.shiftCash == null) ...[
+        // dedicated "Shift & cash" card when it is present.
+        //
+        // F0.5 — these rows are now omitted when there is NO shift state at all,
+        // rather than rendering a fabricated zero beside a raw wire token.
+        // `shiftCash == null` was being read as "the richer card is absent, so
+        // show the simple rows here", but it actually means "no shift/drawer
+        // data was returned". The rows then claimed a variance of ₪0.00 —
+        // absence of data presented as a measured zero — next to a status pill
+        // reading the literal string `none`.
+        //
+        // This was not a fallback-only defect: owner_report_range,
+        // owner_daily_report AND the sales_summary fallback all hardcode
+        // shiftStatus to 'none', so it showed on every real deployment.
+        if (report.shiftCash == null && reportHasShiftState(report)) ...[
           SummaryRow(
             label: l10n.dashboardCashVariance,
             value: money(report.varianceMinor),
@@ -426,7 +437,7 @@ class _ReportContent extends StatelessWidget {
           SummaryRow(
             label: l10n.dashboardShiftStatus,
             trailing: RestoflowStatusPill(
-              label: report.shiftStatus,
+              label: shiftStatusLabel(l10n, report.shiftStatus),
               tone: RestoflowTone.info,
             ),
           ),
@@ -583,6 +594,12 @@ class _ReportContent extends StatelessWidget {
         : _PaymentMixCard(
             methods: report.paymentMethods,
             currencyCode: report.currencyCode,
+            // F0.4: the Cash legend row answers "which orders make up this
+            // cash total?" through the SAME typed drill-down the Cash KPI
+            // uses, so the two surfaces can never disagree.
+            onTapCash: drill == null
+                ? null
+                : () => drill(const OrdersHistoryDrillDown.cash()),
           );
 
     // LIVE-UX-001 / RF-132: when the report is live-but-limited (real mode with
@@ -1221,10 +1238,24 @@ String _shiftDurationText(AppLocalizations l10n, int minutes) {
 /// from `report.paymentMethods`, never invented) with a legend of dot + method +
 /// share% + amount. Money via [MoneyFormatter]; RTL-safe.
 class _PaymentMixCard extends StatelessWidget {
-  const _PaymentMixCard({required this.methods, required this.currencyCode});
+  const _PaymentMixCard({
+    required this.methods,
+    required this.currencyCode,
+    this.onTapCash,
+  });
 
   final List<PaymentMethodLine> methods;
   final String currencyCode;
+
+  /// F0.4: tapping the CASH legend row opens the cash-tender list.
+  ///
+  /// Only cash. The history filter cannot express card / bit / external
+  /// until the Phase-A server widening lands, and a row that navigated to
+  /// a list the RPC would reject is worse than a row that does nothing, so
+  /// those stay deliberately display-only.
+  ///
+  /// Null keeps every row display-only, exactly as before.
+  final VoidCallback? onTapCash;
 
   @override
   Widget build(BuildContext context) {
@@ -1276,58 +1307,62 @@ class _PaymentMixCard extends StatelessWidget {
             padding: const EdgeInsetsDirectional.only(
               bottom: RestoflowSpacing.sm,
             ),
-            child: Container(
-              padding: const EdgeInsetsDirectional.symmetric(
-                horizontal: RestoflowSpacing.md,
-                vertical: RestoflowSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(color: kRestoflowHairline),
-                borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}%',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: colorFor(m.method),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Flexible(
-                    flex: 2,
-                    child: Text(
-                      label(m.method),
-                      style: theme.textTheme.bodyMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Flexible(
-                    flex: 6,
-                    child: Text(
-                      MoneyFormatter.formatMinor(m.totalMinor, currencyCode),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+            child: _MaybeTappableRow(
+              key: Key('payment-mix-row-${m.method}'),
+              onTap: m.method == 'cash' ? onTapCash : null,
+              child: Container(
+                padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: RestoflowSpacing.md,
+                  vertical: RestoflowSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: kRestoflowHairline),
+                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}%',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: colorFor(m.method),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Flexible(
+                      flex: 2,
+                      child: Text(
+                        label(m.method),
+                        style: theme.textTheme.bodyMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Spacer(),
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Flexible(
+                      flex: 6,
+                      child: Text(
+                        MoneyFormatter.formatMinor(m.totalMinor, currencyCode),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1502,6 +1537,37 @@ class _EmptyState extends StatelessWidget {
       key: const Key('reports-empty'),
       icon: Icons.inbox_outlined,
       message: l10n.dashboardNoReportData,
+    );
+  }
+}
+
+/// F0.4 — wraps a legend row so it is tappable ONLY when a destination exists.
+///
+/// App-local on purpose: RestoflowDonutChart has no tap API, and adding
+/// painter hit-testing to a shared component to make one row clickable would be
+/// a large change for a small gain. The legend is built here, so the
+/// interaction belongs here too - packages/design_system is untouched.
+///
+/// With a null [onTap] it renders the child EXACTLY as before: no ripple, no
+/// button semantics, no hover target. A row that cannot go anywhere must not
+/// look like it can.
+class _MaybeTappableRow extends StatelessWidget {
+  const _MaybeTappableRow({required this.child, this.onTap, super.key});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tap = onTap;
+    if (tap == null) return child;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: tap,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+        child: child,
+      ),
     );
   }
 }
