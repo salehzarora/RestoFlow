@@ -201,6 +201,10 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     // refuses correctly either way.
     final caps = ref.watch(staffCapabilitiesProvider).value;
     final entries = ref.watch(outboxControllerProvider);
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] Demo never reaches the
+    // acknowledgement rule: a demo entry is never pushed, so it stays pending
+    // forever and would strip payment from every demo order.
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the inputs for the printer-only
     // Complete safety net — the VERIFIED kitchen mode (null unless verified
     // printer_only/kds) + the set of orders with a completion in flight.
@@ -218,6 +222,23 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       for (final e in entries)
         if (e.syncState.isPending) _entryIdentity(e).key: PosPendingKind.submit,
     };
+    // Pass B: this device's `order.submit` entry per identity — the ONE input the
+    // acknowledgement predicate needs. Restricted to submits on purpose: a queued
+    // payment or discount targets the same order id and says nothing about
+    // whether the ORDER was ever created.
+    final submitByIdentity = <String, OutboxEntry>{
+      for (final e in entries)
+        if (e.operationType == 'order.submit') posOutboxEntryIdentity(e).key: e,
+    };
+    // COMPUTED IN build FROM THE WATCHED PROVIDERS, never captured once: the
+    // outbox list above and the orders list are both watched, so the moment the
+    // queued submit flips to `applied` this recomputes and payment reopens on the
+    // SAME mounted tree — no restart, no reopen.
+    bool submitUnacknowledgedFor(PosRecentOrder o) => posSubmitUnacknowledged(
+      isDemo: isDemo,
+      hasServerSnapshot: o.snapshot != null,
+      submitEntry: submitByIdentity[o.identity.key],
+    );
     // PSC-001C: an addition THIS DEVICE has in flight (failed-retryable or
     // applied-awaiting-refresh) for an order withdraws that order's other
     // controls, exactly like any other pending local operation. Keyed by the
@@ -246,11 +267,20 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
         if (addition.sending || addition.failed || addition.awaitingRefresh)
           t.orderId,
     };
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Which rows carry the
+    // `itemsAdd` stamp ONLY because the journal has not been read yet. The
+    // blanket above is a fail-closed for MONEY actions and stays exactly as it
+    // was; this set lets the central policy relax the READ-ONLY pre-bill for the
+    // rows it has no actual evidence against (see `amendmentsHydrating`). A row
+    // with a REAL blocked amendment is never in it.
+    final hydrationBlanketOnly = <String>{};
     if (hydrating || blockedOrderIds.isNotEmpty) {
       for (final o in orders) {
         final id = o.orderId;
-        if (hydrating || (id != null && blockedOrderIds.contains(id))) {
+        final reallyBlocked = id != null && blockedOrderIds.contains(id);
+        if (hydrating || reallyBlocked) {
           pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
+          if (!reallyBlocked) hydrationBlanketOnly.add(o.identity.key);
         }
       }
     }
@@ -394,14 +424,26 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                         return _LoadMoreButton(l10n: l10n, status: status);
                       }
                       final o = visible[i];
+                      final unacknowledged = submitUnacknowledgedFor(o);
                       return _OrderCard(
                         order: o,
                         l10n: l10n,
                         isWide: isWide,
+                        awaitingSubmitAck: unacknowledged,
                         actions: resolveOrderActions(
                           o,
                           capabilities: caps,
                           pending: pendingByIdentity[o.identity.key],
+                          // Pass B: payment is withdrawn while the server has not
+                          // acknowledged this order's submit (fail-open — see
+                          // posSubmitUnacknowledged).
+                          submitUnacknowledged: unacknowledged,
+                          // Pass C: this row's `itemsAdd` stamp is the startup
+                          // blanket, not a known amendment — it relaxes the
+                          // read-only pre-bill and nothing else.
+                          amendmentsHydrating: hydrationBlanketOnly.contains(
+                            o.identity.key,
+                          ),
                           // Gap B: the central close-eligibility policy decides the
                           // printer-only Complete safety net (server re-enforces).
                           completeEligible:
@@ -441,14 +483,11 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
 
 /// The IDENTITY of the order an outbox entry submitted.
 ///
-/// `targetId` is the client-generated order id the server adopts, so a queued submit
-/// resolves to the SAME identity as the recent-order row it created — and never to a
-/// different order that merely shares its printed code.
-PosOrderIdentity _entryIdentity(OutboxEntry e) => PosOrderIdentity.of(
-  orderId: e.targetId,
-  localOperationId: e.localOperationId,
-  orderNumber: e.summary.orderNumber,
-);
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The join itself now lives
+/// with the policy it feeds ([posOutboxEntryIdentity] in `order_actions.dart`),
+/// so the acknowledgement predicate and this sheet can never resolve an entry to
+/// two different orders. Behaviour is byte-identical: same fields, same order.
+PosOrderIdentity _entryIdentity(OutboxEntry e) => posOutboxEntryIdentity(e);
 
 // ---------------------------------------------------------------------------
 // Header — title + honest sync status. Never the words "live" or "real-time":
@@ -1013,6 +1052,7 @@ class _OrderCard extends ConsumerWidget {
     required this.isWide,
     required this.outboxState,
     required this.owedPrintEntry,
+    required this.awaitingSubmitAck,
   });
 
   final PosRecentOrder order;
@@ -1020,6 +1060,11 @@ class _OrderCard extends ConsumerWidget {
   final PosOrderActions actions;
   final bool isWide;
   final OutboxSyncState? outboxState;
+
+  /// Pass B: the server has not acknowledged this order's `order.submit` yet —
+  /// the row's OWN state, computed by [posSubmitUnacknowledged] from the watched
+  /// outbox, never from the global connectivity phase.
+  final bool awaitingSubmitAck;
 
   /// Pass C (B2): non-null when this row's direct-print `order.submit` still
   /// OWES its kitchen ticket (local dispatch claim claimed/failed) — the
@@ -1175,23 +1220,26 @@ class _OrderCard extends ConsumerWidget {
                         ),
                     ],
                   ),
-                  // [POS-OFFLINE-OPERATIONS-002] C11 — while the POS provably
-                  // operates from the offline snapshot, a row with queued
-                  // local work says WHERE that work is: saved on this device,
+                  // [POS-OFFLINE-OPERATIONS-002] C11 — a row whose order is not
+                  // yet on the server says WHERE it is: saved on this device,
                   // waiting to sync. Two lines, same note idiom as the
-                  // no-charge explanation below; every other phase keeps the
-                  // existing pill copy byte-identically. Covers a retryable
-                  // FAILED entry too — an offline push records a transient
-                  // failure, yet the row is durably stored and the sweep
-                  // resubmits the same identity; a never-created shell keeps
-                  // its own honest marker instead.
-                  if (!order.isNeverCreated &&
-                      (actions.pendingKind != null ||
-                          (outboxState?.isFailed ?? false)) &&
-                      ref.watch(
-                            posOfflineModeProvider.select((s) => s.phase),
-                          ) ==
-                          PosOfflinePhase.offlineCached) ...[
+                  // no-charge explanation below; a never-created shell keeps its
+                  // own honest marker instead.
+                  //
+                  // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] DRIVEN BY
+                  // THE ORDER'S OWN STATE, NOT BY THE GLOBAL PHASE. It used to be
+                  // ANDed with `phase == offlineCached`, so the moment
+                  // connectivity returned the note vanished from orders that were
+                  // still unsynced — silence about the one thing the cashier had
+                  // to know before trying to take money for them. This is the
+                  // same shape as the CLAIM-driven print notice on the
+                  // confirmation (order_confirmation.dart), and for the same
+                  // reason: an order that is still queued is still queued,
+                  // whatever the network says. Neither line mentions being
+                  // offline, so both stay true online. The predicate is the ONE
+                  // the payment gate uses, so the note and the withdrawn Pay
+                  // button can never disagree.
+                  if (!order.isNeverCreated && awaitingSubmitAck) ...[
                     const SizedBox(height: RestoflowSpacing.sm),
                     Text(
                       key: Key('recent-offline-pending-${order.orderNumber}'),

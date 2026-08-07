@@ -3855,7 +3855,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posPrintBillAction => 'הדפסת חשבון';
 
   @override
-  String get receiptUnpaidBillLabel => 'לא שולם - תשלום בהמשך';
+  String get receiptUnpaidBillLabel => 'חשבון ראשוני — לא שולם';
 
   @override
   String get receiptAmountDueLabel => 'סכום לתשלום';
@@ -3865,6 +3865,12 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posPrintBillFailed => 'הדפסת החשבון נכשלה';
+
+  @override
+  String get receiptLocalReferenceNote => 'אסמכתא מקומית — לא מספר הזמנה מהשרת';
+
+  @override
+  String get receiptOrderNotSyncedNote => 'ההזמנה טרם סונכרנה';
 
   @override
   String get posNetworkPrinterHeading => 'מדפסת רשת (מכשיר זה)';
@@ -5414,4 +5420,11 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'מתחבר מחדש…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה.';
 }

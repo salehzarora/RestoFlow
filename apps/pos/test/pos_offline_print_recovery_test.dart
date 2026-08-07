@@ -489,9 +489,20 @@ void main() {
       reason: 'the owed print must not vanish behind an online phase',
     );
     expect(find.text(h.l10n.posOfflinePrintPending), findsOneWidget);
-    // The phase-gated offline SYNC lines are correctly gone — only the
-    // claim-driven print line survived the phase flip.
-    expect(find.byKey(const Key('confirmation-offline-saved')), findsNothing);
+    // POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B — the SYNC lines survive
+    // the phase flip too, for exactly the reason the print line does. They were
+    // phase-gated, so an order still sitting unsent in the outbox went silent the
+    // instant connectivity returned: the cashier saw a plain confirmation for an
+    // order the server had never heard of, with no hint that anything was
+    // outstanding. The submit here is still `deliveryUnconfirmed`, so "saved on
+    // this device" and "waiting to sync" are both still literally true — neither
+    // line claims to be about being offline. They disappear when the entry is
+    // applied, which is the only thing that actually resolves them.
+    expect(
+      find.byKey(const Key('confirmation-offline-saved')),
+      findsOneWidget,
+      reason: 'an unsynced order must not go quiet just because the phase did',
+    );
   });
 
   testWidgets('B2 — recent-orders recovery after a RESTART: the owed ticket '

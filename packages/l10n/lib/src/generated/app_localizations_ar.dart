@@ -3883,7 +3883,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posPrintBillAction => 'طباعة الحساب';
 
   @override
-  String get receiptUnpaidBillLabel => 'غير مدفوع - الدفع لاحقاً';
+  String get receiptUnpaidBillLabel => 'حساب مبدئي — غير مدفوع';
 
   @override
   String get receiptAmountDueLabel => 'المبلغ المستحق';
@@ -3893,6 +3893,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posPrintBillFailed => 'فشلت طباعة الحساب';
+
+  @override
+  String get receiptLocalReferenceNote => 'مرجع محلي — ليس رقم طلب من الخادم';
+
+  @override
+  String get receiptOrderNotSyncedNote => 'الطلب لم تتم مزامنته بعد';
 
   @override
   String get posNetworkPrinterHeading => 'طابعة الشبكة (هذا الجهاز)';
@@ -5449,4 +5455,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'جارٍ إعادة الاتصال…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب.';
 }

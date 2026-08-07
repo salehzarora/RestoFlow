@@ -364,12 +364,21 @@ PrintDocument buildReceiptDocument(
 /// payment, and inventing one to satisfy the paid builder would print a document
 /// claiming money had been taken. Every payment-only row is suppressed rather
 /// than filled with a placeholder.
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] [isLocalReference] marks a
+/// bill rendered from THIS DEVICE's stored snapshot rather than the
+/// authoritative server detail (the offline case). It adds a note under the
+/// order number saying the code is a local reference and the order has not synced
+/// yet — so the printed paper never lets a customer or an owner mistake a local
+/// code for a server order number. It is the ONLY new parameter, it is
+/// bill-only, and it defaults to false, so [buildReceiptDocument] and every paid
+/// receipt are byte-identical to before.
 PrintDocument buildBillDocument(
   AppLocalizations l10n,
   SubmittedOrderView order, {
   bool isDemo = true,
   String? restaurantName,
   ReceiptLogoAsset? branding,
+  bool isLocalReference = false,
 }) => _buildCustomerDocument(
   l10n,
   order,
@@ -378,6 +387,7 @@ PrintDocument buildBillDocument(
   isDemo: isDemo,
   restaurantName: restaurantName,
   branding: branding,
+  isLocalReference: isLocalReference,
 );
 
 PrintDocument _buildCustomerDocument(
@@ -388,8 +398,13 @@ PrintDocument _buildCustomerDocument(
   bool isDemo = true,
   String? restaurantName,
   ReceiptLogoAsset? branding,
+  bool isLocalReference = false,
 }) {
   final paid = kind == ReceiptDocumentKind.paidReceipt && payment != null;
+  // Pass C: only an UNPAID bill can be a local reference. A paid receipt exists
+  // because a payment was recorded, so there is nothing local about it — and
+  // this guard makes the paid output structurally unreachable from the new flag.
+  final localReference = isLocalReference && !paid;
   // An unpaid bill has no payment to take the currency from; the order snapshot
   // carries the same currency the payment would have.
   final currency = payment?.currencyCode ?? order.currencyCode;
@@ -434,6 +449,14 @@ PrintDocument _buildCustomerDocument(
       // number (payment.receiptNumber) is intentionally NOT printed on the
       // customer receipt; it stays in the data for reporting/support, unchanged.
       PrintLine.subtitle(l10n.posReceiptOrderHeading(order.orderNumber)),
+      // Pass C: an OFFLINE pre-bill prints the LOCAL code — the only code that
+      // exists for an order the server has never numbered — and says so, rather
+      // than fabricating a server order number or silently passing a local one
+      // off as authoritative.
+      if (localReference) ...[
+        PrintLine.note(l10n.receiptLocalReferenceNote),
+        PrintLine.note(l10n.receiptOrderNotSyncedNote),
+      ],
       PrintLine.rule(),
       // Service details grouped + centered: type, table, customer, date/time.
       PrintLine.center(

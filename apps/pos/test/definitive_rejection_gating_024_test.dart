@@ -621,9 +621,25 @@ void main() {
       await _pump(tester, entry);
       expectExactlyOneOutcome(PosOrderOutcome.deliveryUnconfirmed, l10n);
       // The established offline contract: the order may well exist, so the
-      // same-identity retry stays, and so do the offline actions.
+      // same-identity retry stays.
       expect(find.byKey(const Key('sync-retry-button')), findsOneWidget);
-      expect(find.byKey(const Key('pay-cash-button')), findsOneWidget);
+      // POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B — PAYMENT is the one
+      // action that comes off. "May well exist" is not "does exist", and
+      // `record_payment` needs the order to exist: it answers `order not found`
+      // (42501) otherwise, which app.sync_push ledgers as a PERMANENT rejection
+      // against this payment identity. There is no second attempt to spend —
+      // `payments_one_completed_per_order_uidx` permits exactly ONE completed
+      // payment per order — so an unconfirmed submit is precisely where guessing
+      // is unaffordable. This is the SAME reading 024 applied to acceptance
+      // (pending is not accepted); it just applies it to the money action too.
+      // Nothing is permanent: the retry above (or the automatic sweep) re-pushes
+      // the same identity, the server replays it idempotently, and the moment the
+      // entry reads `applied` the button returns on this very screen.
+      expect(
+        find.byKey(const Key('pay-cash-button')),
+        findsNothing,
+        reason: 'payment waits for the server to acknowledge the order',
+      );
     });
 
     test('024-E3 an unconfirmed entry is still re-pushable', () async {

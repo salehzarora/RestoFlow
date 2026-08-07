@@ -7282,10 +7282,10 @@ abstract class AppLocalizations {
   /// **'Print bill'**
   String get posPrintBillAction;
 
-  /// Prominent label printed on an UNPAID customer bill so it can never be mistaken for a paid receipt.
+  /// Prominent label printed on an UNPAID customer bill so it can never be mistaken for a paid receipt. It states BOTH that the document is preliminary and that nothing has been paid (POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001).
   ///
   /// In en, this message translates to:
-  /// **'UNPAID - PAY LATER'**
+  /// **'PRELIMINARY BILL - UNPAID'**
   String get receiptUnpaidBillLabel;
 
   /// Label for the total still owed on an unpaid customer bill.
@@ -7305,6 +7305,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bill print failed'**
   String get posPrintBillFailed;
+
+  /// Note printed on an unpaid pre-bill built from this device's own stored snapshot (e.g. while offline), so the printed code is never mistaken for a server-assigned order number (POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Local reference - not a server order number'**
+  String get receiptLocalReferenceNote;
+
+  /// Note printed under the local-reference note on an unpaid pre-bill, stating that the order has not reached the server yet (POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Order not synced yet'**
+  String get receiptOrderNotSyncedNote;
 
   /// POS device-settings heading for the on-device network (Wi-Fi/Ethernet) ESC/POS printer setup (ANDROID-002).
   ///
@@ -10077,6 +10089,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The kitchen display receives this order once the connection returns.'**
   String get posOfflineKdsPending;
+
+  /// POS offline-banner body shown while a reconnect probe's real menu fetch is in flight; it replaces the saved-data age for the duration of that attempt. The POS is still offline (every server-backed action stays blocked) until the fetch actually succeeds.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting…'**
+  String get posOfflineBannerReconnecting;
+
+  /// POS snackbar shown when payment is attempted for an order whose submit the server has not acknowledged yet. Deliberately says nothing about the connection: this is order-specific and resolves by itself when the queued submit is applied, so the cashier must not be sent to check the network.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is still syncing - payment opens as soon as the server accepts it.'**
+  String get posPaymentAwaitingOrderSync;
 }
 
 class _AppLocalizationsDelegate

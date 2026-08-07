@@ -3911,7 +3911,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posPrintBillAction => 'Print bill';
 
   @override
-  String get receiptUnpaidBillLabel => 'UNPAID - PAY LATER';
+  String get receiptUnpaidBillLabel => 'PRELIMINARY BILL - UNPAID';
 
   @override
   String get receiptAmountDueLabel => 'Amount due';
@@ -3921,6 +3921,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posPrintBillFailed => 'Bill print failed';
+
+  @override
+  String get receiptLocalReferenceNote =>
+      'Local reference - not a server order number';
+
+  @override
+  String get receiptOrderNotSyncedNote => 'Order not synced yet';
 
   @override
   String get posNetworkPrinterHeading => 'Network printer (this device)';
@@ -5496,4 +5503,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posOfflineKdsPending =>
       'The kitchen display receives this order once the connection returns.';
+
+  @override
+  String get posOfflineBannerReconnecting => 'Reconnecting…';
+
+  @override
+  String get posPaymentAwaitingOrderSync =>
+      'This order is still syncing - payment opens as soon as the server accepts it.';
 }

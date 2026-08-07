@@ -18,7 +18,8 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart'
     show posActivePrintBridgeReadyProvider, posReceiptReadinessResolverProvider;
-import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
+import '../state/pos_offline_state.dart'
+    show blockPosActionWhileOffline, blockPosPaymentUntilSubmitAccepted;
 import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/order_sync_controller.dart';
 import '../state/payment_controller.dart';
@@ -85,6 +86,11 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     required String currencyCode,
     String? orderId,
     int? expectedRevision,
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The central policy's
+    // answer to "has the server acknowledged this order's submit?"
+    // (`PosOrderActions.submitUnacknowledged`). FALSE BY DEFAULT — unknown is
+    // never denied, exactly like the predicate that computes it.
+    bool submitUnacknowledged = false,
   }) {
     // [POS-OFFLINE-OPERATIONS-002] C11 — payment is a server-backed action
     // (`record_payment` is authorized + audited server-side), so while the POS
@@ -93,6 +99,16 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     // Confirm can only fail. Gated HERE so every caller (confirmation, orders
     // centre, detail preview) behaves identically; payment logic is untouched.
     if (blockPosActionWhileOffline(context)) return Future.value();
+    // Pass B — the ORDER-SCOPED sibling of that gate. The till may be perfectly
+    // online while THIS order's submit is still queued; `record_payment` would
+    // answer `order not found` and the sheet would blame the network for it.
+    // Same idiom, different question, its own honest message.
+    if (blockPosPaymentUntilSubmitAccepted(
+      context,
+      submitUnacknowledged: submitUnacknowledged,
+    )) {
+      return Future.value();
+    }
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

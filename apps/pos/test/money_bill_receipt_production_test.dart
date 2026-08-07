@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
@@ -99,6 +100,25 @@ PosOrderDetail _detail({
           quantity: 1,
         ),
       ],
+    ),
+  ],
+);
+
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] What THIS DEVICE recorded
+/// at order time — deliberately different money from the server fixture, so a
+/// test can never confuse the two sources.
+const _localOnly = SubmittedOrderView(
+  orderNumber: '#O00042',
+  orderType: OrderType.takeaway,
+  currencyCode: 'ILS',
+  subtotalMinor: 2500,
+  orderId: 'ord-1',
+  lines: [
+    SubmittedLineView(
+      name: 'Local Burger',
+      quantity: 1,
+      lineTotalMinor: 2500,
+      currencyCode: 'ILS',
     ),
   ],
 );
@@ -217,18 +237,83 @@ void main() {
       },
     );
 
-    test('D3 a detail that cannot be loaded yields NO bill — never a partial '
-        'local document', () async {
-      final view = await authoritativeUnpaidOrderSource(
-        isDemoMode: false,
-        orderId: 'ord-1',
-        localView: null,
-        repository: _FailingRepo(),
-      );
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] NARROWED, on purpose.
+    //
+    // This test used to read "a detail that cannot be loaded yields NO bill",
+    // and it pinned exactly the rule that left an OFFLINE till unable to hand a
+    // customer any bill at all: offline the detail can NEVER load, so the action
+    // always printed nothing even though the complete order was in hand.
+    //
+    // Its real intent — NEVER A PARTIAL DOCUMENT — is preserved and now stated
+    // precisely: nothing from the server AND nothing local yields nothing at
+    // all. Asserted on BOTH source functions, since the print action now resolves
+    // through `printableUnpaidOrderSource`.
+    test('D3 a detail that cannot be loaded yields NO bill when there is ALSO '
+        'no local snapshot — never a partial document', () async {
       expect(
-        view,
+        await authoritativeUnpaidOrderSource(
+          isDemoMode: false,
+          orderId: 'ord-1',
+          localView: null,
+          repository: _FailingRepo(),
+        ),
         isNull,
         reason: 'an honest "retry" beats a bill that understates the order',
+      );
+      expect(
+        await printableUnpaidOrderSource(
+          isDemoMode: false,
+          orderId: 'ord-1',
+          localView: null,
+          repository: _FailingRepo(),
+        ),
+        isNull,
+        reason: 'the PRODUCTION bill path fails closed on total absence too',
+      );
+    });
+
+    test('D3b the same failure WITH a local snapshot prints the LOCAL order, '
+        'flagged as a local reference', () async {
+      final source = await printableUnpaidOrderSource(
+        isDemoMode: false,
+        orderId: 'ord-1',
+        localView: _localOnly,
+        repository: _FailingRepo(),
+      );
+      expect(source, isNotNull);
+      expect(identical(source!.view, _localOnly), isTrue);
+      expect(
+        source.isLocalSnapshot,
+        isTrue,
+        reason:
+            'the document must be able to say the data is not the server\'s',
+      );
+      // The money on the document is the LOCAL money — nothing is recomputed.
+      final doc = buildBillDocument(
+        l10n,
+        source.view,
+        isDemo: false,
+        isLocalReference: source.isLocalSnapshot,
+      );
+      expect(valuesOf(doc), contains(money(2500)));
+      expect(textsOf(doc), contains(l10n.receiptLocalReferenceNote));
+    });
+
+    test('D3c when the server DOES answer it wins, and the bill is not marked '
+        'local', () async {
+      final repo = _DetailRepo(_detail());
+      final source = await printableUnpaidOrderSource(
+        isDemoMode: false,
+        orderId: 'ord-1',
+        localView: _localOnly,
+        repository: repo,
+      );
+      expect(repo.fetches, 1, reason: 'the server is still asked FIRST');
+      expect(source!.isLocalSnapshot, isFalse);
+      expect(source.view.subtotalMinor, kSubtotal);
+      expect(
+        textsOf(buildBillDocument(l10n, source.view, isDemo: false)),
+        isNot(contains(l10n.receiptLocalReferenceNote)),
       );
     });
   });

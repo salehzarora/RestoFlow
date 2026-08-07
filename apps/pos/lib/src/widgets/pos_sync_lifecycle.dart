@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +8,7 @@ import '../data/operational_snapshot_store.dart';
 import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
+import '../state/pos_offline_state.dart';
 import '../state/ready_notifications_controller.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the app-lifecycle seam for authoritative sync.
@@ -33,6 +34,32 @@ import '../state/ready_notifications_controller.dart';
 ///     scope restored after startup never started its own verification. The
 ///     subscription makes every pairing/scope change rebuild the heartbeat
 ///     immediately, and the rebuilt composition starts itself (PR #197).
+///
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] — THE RECONNECT PROBE.
+///
+/// The offline phase used to be a ONE-WAY LATCH. `posOfflineModeProvider` is a
+/// root notifier whose build watches nothing, and its only `online` writer is
+/// the `pos_menu` success path — but `posMenuProvider` is a non-autoDispose
+/// FutureProvider whose offline branch RETURNS a value (the cached snapshot)
+/// instead of throwing, so it settles into `AsyncData` and Riverpod never
+/// retries it. The single remaining re-fetch trigger was the resume
+/// invalidation below, and an Android Activity `resumed` is NOT emitted by a
+/// foreground Wi-Fi toggle (there is deliberately no connectivity plugin in
+/// this app). A cashier who lost the venue Wi-Fi for a minute therefore stayed
+/// "offline" — banner latched, payment/discount/void/shift-close refused,
+/// outbox backoff never reset — until the app was restarted.
+///
+/// So this widget (the app's ONE lifecycle owner, which already owns the
+/// resume-time menu invalidation) now also arms a bounded PROBE while the
+/// phase is `offlineCached` and the app is foregrounded. The probe is a
+/// TRIGGER, never a writer: it re-invalidates the menu provider and the
+/// FETCH'S OWN OUTCOME does all phase writing, exactly as before. Nothing here
+/// consults a connectivity API — a completed RPC is the only evidence the POS
+/// accepts, because a connectivity flag lies in both directions (captive
+/// portals, LAN-without-internet). One invalidation per interval at most, an
+/// in-flight check so probes cannot stack, and the timer is cancelled the
+/// instant the phase leaves `offlineCached`, the app leaves the foreground, or
+/// this widget is disposed.
 class PosSyncLifecycle extends ConsumerStatefulWidget {
   const PosSyncLifecycle({required this.child, super.key});
 
@@ -49,6 +76,23 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
   /// [POS-OFFLINE-OPERATIONS-002] keeps the durable operational snapshot's
   /// kitchen-mode capture fresh whenever a VERIFIED mode resolves.
   ProviderSubscription<Object?>? _kitchenModeSnapshotSubscription;
+
+  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] Watches the offline
+  /// PHASE so the reconnect probe can be armed/cancelled on every transition,
+  /// and so the recovered edge (`offlineCached -> online`) can fan out.
+  ProviderSubscription<Object?>? _offlinePhaseSubscription;
+
+  /// (Pass A) The ONE reconnect probe timer. Never more than one exists: every
+  /// arm path goes through [_armReconnectProbe], which returns immediately if
+  /// a timer is already live.
+  Timer? _reconnectProbe;
+
+  /// (Pass A) Whether the app is currently foregrounded. The probe is armed
+  /// ONLY while this is true — a periodic RPC from a backgrounded till is the
+  /// same waste the ready poller and the readiness heartbeat already refuse.
+  /// Starts true: `didChangeAppLifecycleState` is not called for the state the
+  /// app is already in when this widget mounts.
+  bool _foreground = true;
 
   /// Runs one startup/resume seam, containing any synchronous failure so a
   /// broken seam can never cancel the seams after it. The readiness controller
@@ -107,6 +151,32 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
             ),
           );
         },
+      );
+    });
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] The offline-phase
+    // subscription: arms/cancels the reconnect probe and fans out the recovered
+    // edge. `fireImmediately` matters — a COLD OFFLINE BOOT (the app starts
+    // with no network and the menu is served from the snapshot before this
+    // listener is registered) produces no later transition to react to, so
+    // without it the till would come up latched exactly as before.
+    _guarded(() {
+      _offlinePhaseSubscription = ref.listenManual<PosOfflinePhase>(
+        posOfflineModeProvider.select((s) => s.phase),
+        (previous, next) {
+          if (next == PosOfflinePhase.offlineCached) {
+            _armReconnectProbe();
+          } else {
+            _cancelReconnectProbe();
+          }
+          // THE RECOVERED EDGE. Reached only through a real successful
+          // `pos_menu` fetch (the phase has no other `online` writer), so this
+          // is the app's one honest "the backend answered again" moment.
+          if (previous == PosOfflinePhase.offlineCached &&
+              next == PosOfflinePhase.online) {
+            _onReconnected();
+          }
+        },
+        fireImmediately: true,
       );
     });
     // STARTUP. Deferred a frame so the device/PIN context providers have settled;
@@ -169,10 +239,91 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     }
   }
 
+  // ---------------------------------------------------------------------
+  // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] The reconnect probe.
+  // ---------------------------------------------------------------------
+
+  /// Arms the probe if — and only if — it should be running: the app is
+  /// foregrounded, the phase is `offlineCached`, no timer is live already, and
+  /// a cadence is configured. The cadence is NULL by default (tests stay
+  /// timer-free by construction); `main.dart` overrides it for the real app.
+  void _armReconnectProbe() {
+    if (!mounted || !_foreground) return;
+    if (_reconnectProbe != null) return;
+    _guarded(() {
+      if (ref.read(posOfflineModeProvider).phase !=
+          PosOfflinePhase.offlineCached) {
+        return;
+      }
+      final interval = ref.read(posOfflineReconnectProbeIntervalProvider);
+      if (interval == null) return;
+      _reconnectProbe = Timer.periodic(interval, (_) => _probeReconnect());
+    });
+  }
+
+  void _cancelReconnectProbe() {
+    _reconnectProbe?.cancel();
+    _reconnectProbe = null;
+  }
+
+  /// ONE probe tick: ask the menu provider to try the server again.
+  ///
+  /// Writes NO phase. It marks the presentational "reconnecting" transient and
+  /// invalidates `posMenuProvider`; the re-run fetch records `online` on a real
+  /// success and re-records `offlineCached` on a real failure, exactly as it
+  /// does for a startup/resume fetch. The explicit read after the invalidation
+  /// materializes the rebuilt provider even when no surface is listening,
+  /// because an invalidated provider with no listeners is otherwise recomputed
+  /// lazily — i.e. never, which is the latch we are here to break.
+  void _probeReconnect() {
+    if (!mounted) return;
+    _guarded(() {
+      if (ref.read(posOfflineModeProvider).phase !=
+          PosOfflinePhase.offlineCached) {
+        // The phase moved between ticks (the listener normally cancels first;
+        // this is the belt-and-braces path).
+        _cancelReconnectProbe();
+        return;
+      }
+      // NEVER STACK PROBES. A slow/hanging fetch must not accumulate one more
+      // in-flight RPC per interval.
+      if (ref.read(posMenuProvider).isLoading) return;
+      ref.read(posOfflineModeProvider.notifier).markProbing();
+      ref.invalidate(posMenuProvider);
+      ref.read(posMenuProvider);
+    });
+  }
+
+  /// The recovered edge (`offlineCached -> online`): the subsystems that went
+  /// quiet during the outage are woken ONCE, each individually contained.
+  ///
+  /// The OUTBOX is deliberately absent: it owns its own listener on this same
+  /// phase transition (`outbox_controller.dart`), which resets the retry
+  /// backoff and sweeps. Duplicating it here would double the push.
+  void _onReconnected() {
+    // The authoritative pull: single-flight, so a concurrent caller joins.
+    _guarded(() => ref.read(posOrderSyncControllerProvider.notifier).syncNow());
+    // KITCHEN MODE: the offline trust window (2h) may be running down on a
+    // snapshot-reconstructed mode. One immediate readiness report re-verifies
+    // it server-side; the verified result flows through
+    // posVerifiedKitchenModeProvider into the snapshot listener above, which
+    // refreshes the stored capture.
+    //
+    // `onResume` is the SANCTIONED on-demand entry on this seam — the web-safe
+    // [PosKitchenReadinessLifecycle] surface exposes exactly three hooks, and
+    // this is the one that means "re-arm the heartbeat and report NOW"
+    // (`_armTimer()` + `requestImmediate('resume')` inside the coordinator).
+    // Re-arming is idempotent and the report is single-flight, so a reconnect
+    // that races a real resume produces one run, not two.
+    _guarded(() => ref.read(posKitchenReadinessHeartbeatProvider)?.onResume());
+  }
+
   @override
   void dispose() {
     _heartbeatSubscription?.close();
     _kitchenModeSnapshotSubscription?.close();
+    _offlinePhaseSubscription?.close();
+    _cancelReconnectProbe();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -197,8 +348,15 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
       _guarded(
         () => ref.read(posKitchenReadinessHeartbeatProvider)?.onPaused(),
       );
+      // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] The reconnect probe
+      // pauses with everything else: a background till re-attempting `pos_menu`
+      // every 25s is exactly the polling storm this design refuses. Resume
+      // re-arms it below when the phase is still offlineCached.
+      _foreground = false;
+      _cancelReconnectProbe();
       return;
     }
+    _foreground = true;
     // RESUME. The coordinator collapses concurrent callers onto the ONE in-flight
     // sync, so a platform that fires `resumed` more than once cannot start three
     // racing pulls whose losers overwrite the winner.
@@ -231,6 +389,15 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // network lands on the cached menu + offline banner instead of the error
     // screen — the fetch outcome itself is what drives the offline phase.
     _guarded(() => ref.invalidate(posMenuProvider));
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] THE RESUME RACE. The
+    // single invalidation above is fired the instant Android reports `resumed`,
+    // which on a tablet waking onto venue Wi-Fi typically LOSES the race
+    // against association + DHCP (2–10s). Before this ticket that one attempt
+    // was all there was: it failed, re-latched `offlineCached`, and nothing
+    // ever tried again. Re-arm the probe here so a resume that is still
+    // offline keeps retrying on its own cadence. (The phase listener arms it
+    // too; both paths funnel through the same single-timer guard.)
+    _armReconnectProbe();
   }
 
   @override

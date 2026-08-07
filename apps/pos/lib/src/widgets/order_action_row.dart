@@ -112,6 +112,12 @@ class OrderActionRow extends ConsumerWidget {
               amountMinor: order.grandTotalMinor,
               currencyCode: order.currencyCode,
               expectedRevision: order.revision,
+              // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The central
+              // policy's own verdict, carried straight through. It is already
+              // false whenever this button is drawn (an unacknowledged submit
+              // withdraws `canPay`); passing it keeps the ONE entry point able
+              // to refuse honestly if that ever stops being true.
+              submitUnacknowledged: actions.submitUnacknowledged,
             ),
             icon: const Icon(Icons.payments_outlined, size: 18),
             label: Text(l10n.posTakePayment),
@@ -121,11 +127,21 @@ class OrderActionRow extends ConsumerWidget {
     }
 
     // DEFERRED-PAYMENT-RECEIPTS-001: the customer-facing BILL for an order that
-    // is still unpaid. Gated on the SAME authoritative `canPay` the payment
-    // action uses, so it appears exactly while money is still owed and never on
-    // a paid, cancelled or otherwise ineligible order — and it sits BESIDE
-    // Collect payment rather than replacing it.
-    if (actions.canPay) {
+    // is still unpaid. It sits BESIDE Collect payment rather than replacing it.
+    //
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Gated on its OWN
+    // policy field, no longer on `canPay`. Pass B added the
+    // server-acknowledgement requirement to `canPay` — correctly, since
+    // `record_payment` cannot work for an order the server has never seen — and
+    // that silently took the pre-bill away from an order taken during an outage,
+    // which is the exact order a customer is standing there waiting to be billed
+    // for. Printing calls no server, so it needs no server acceptance;
+    // [PosOrderActions.canPrintBill] keeps every other money interlock.
+    //
+    // It is deliberately NOT wrapped in `blockPosActionWhileOffline`: that gate
+    // exists for server-authorized MUTATIONS, and a bill is a read-only local
+    // render.
+    if (actions.canPrintBill) {
       children.add(
         OrderActionButton(
           child: OutlinedButton.icon(
@@ -335,44 +351,86 @@ class OrderActionRow extends ConsumerWidget {
   /// `posActivePrintBridgeReadyProvider` and goes through the canonical
   /// readiness lifecycle, so the FIRST bill after a cold start is not lost to a
   /// synchronously-sampled null bridge.
+  ///
+  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] It NO LONGER requires a
+  /// server round-trip. [printableUnpaidOrderSource] prefers the authoritative
+  /// detail and falls back to this device's stored snapshot when that call fails
+  /// — which offline it always does — and the printed document says so. Every
+  /// other input was already local: the printer transport/config
+  /// (SharedPreferences), the restaurant name (the loaded assignments snapshot)
+  /// and the logo (a durable raster cache).
   Future<void> _printBill(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    final view = await authoritativeUnpaidOrderSource(
+    final source = await printableUnpaidOrderSource(
       isDemoMode: isDemo,
       orderId: order.orderId,
       localView: order.order,
       repository: ref.read(orderDetailRepositoryProvider),
     );
-    if (view == null) {
+    // FAIL CLOSED: no server answer AND no local snapshot means there is no
+    // honest document to build, so nothing is printed at all.
+    if (source == null) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
       );
       return;
     }
-    await ref
-        .read(receiptPrintControllerProvider.notifier)
-        .requestRepeatableDocument(
-          // A DISTINCT key from the paid receipt: the two documents are separate
-          // jobs for one order, and the bill is intentionally repeatable.
-          orderKey: 'bill:${order.identity.key}',
-          resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
-          awaitLogoReady: () =>
-              ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
-          buildDocument: () => buildBillDocument(
-            l10n,
-            view,
-            isDemo: isDemo,
-            restaurantName: ref.read(posRestaurantNameProvider),
-            branding: ref.read(posReceiptLogoAssetProvider),
-          ),
-          resolveBridge: () async => (await ref.read(
-            posActivePrintBridgeReadyProvider.future,
-          ))?.submit,
-        );
+    // A DISTINCT key from the paid receipt: the two documents are separate jobs
+    // for one order, and the bill is intentionally repeatable.
+    final billKey = 'bill:${order.identity.key}';
+    final printer = ref.read(receiptPrintControllerProvider.notifier);
+    await printer.requestRepeatableDocument(
+      orderKey: billKey,
+      resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
+      awaitLogoReady: () =>
+          ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+      buildDocument: () => buildBillDocument(
+        l10n,
+        source.view,
+        isDemo: isDemo,
+        restaurantName: ref.read(posRestaurantNameProvider),
+        branding: ref.read(posReceiptLogoAssetProvider),
+        isLocalReference: source.isLocalSnapshot,
+      ),
+      resolveBridge: () async =>
+          (await ref.read(posActivePrintBridgeReadyProvider.future))?.submit,
+    );
     if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(l10n.posPrintBillStarted)));
+    // OUTCOME-AWARE. The old message claimed "Printing bill" whatever happened —
+    // including with no printer configured or an unreachable one, which is how a
+    // cashier ends up believing a customer was handed paper that never existed.
+    // The job's own status is the same one every other print surface reads.
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          _billPrintFailed(printer.jobFor(billKey)?.status)
+              ? l10n.posPrintBillFailed
+              : l10n.posPrintBillStarted,
+        ),
+      ),
+    );
   }
+
+  /// Whether a finished bill request must be reported as a FAILURE.
+  ///
+  /// It reports failure only on the statuses that mean nothing reached a
+  /// printer: no printer configured, a bridge that could not be reached, and an
+  /// outright build/send failure. `sentToPrinter` (and `printed`) are successes;
+  /// `prepared` is NOT a failure — a demo/sink bridge legitimately accepts a
+  /// document without hardware, and that path has always been honest about being
+  /// only prepared. A null job (nothing was recorded) is treated as a failure
+  /// rather than a claim.
+  static bool _billPrintFailed(PrintJobStatus? status) => switch (status) {
+    PrintJobStatus.sentToPrinter ||
+    PrintJobStatus.printed ||
+    PrintJobStatus.prepared ||
+    PrintJobStatus.waitingForPrinter => false,
+    PrintJobStatus.notConfigured ||
+    PrintJobStatus.bridgeUnavailable ||
+    PrintJobStatus.failed ||
+    null => true,
+  };
 
   Future<void> _reprint(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);

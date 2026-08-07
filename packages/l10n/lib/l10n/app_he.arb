@@ -1223,7 +1223,7 @@
   "@printerProfilesCancelAction": {},
   "posPrintBillAction": "הדפסת חשבון",
   "@posPrintBillAction": {},
-  "receiptUnpaidBillLabel": "לא שולם - תשלום בהמשך",
+  "receiptUnpaidBillLabel": "חשבון ראשוני — לא שולם",
   "@receiptUnpaidBillLabel": {},
   "receiptAmountDueLabel": "סכום לתשלום",
   "@receiptAmountDueLabel": {},
@@ -1231,6 +1231,10 @@
   "@posPrintBillStarted": {},
   "posPrintBillFailed": "הדפסת החשבון נכשלה",
   "@posPrintBillFailed": {},
+  "receiptLocalReferenceNote": "אסמכתא מקומית — לא מספר הזמנה מהשרת",
+  "@receiptLocalReferenceNote": {},
+  "receiptOrderNotSyncedNote": "ההזמנה טרם סונכרנה",
+  "@receiptOrderNotSyncedNote": {},
   "posNetworkPrinterHeading": "מדפסת רשת (מכשיר זה)",
   "posNetworkPrinterHelp": "הדפסה ישירה למדפסת תרמית ברשת Wi‑Fi או Ethernet. אין צורך בגשר הדפסה.",
   "posNetworkPrinterIpLabel": "כתובת IP של המדפסת",
@@ -1696,5 +1700,7 @@
   "posOfflinePrinterUnreachable": "אין גישה למדפסת — בדקו את חיבור המדפסת.",
   "posOfflinePrintPending": "כרטיס המטבח עדיין לא הודפס — השתמשו ב\"הדפסת כרטיס מטבח\" כשהמדפסת זמינה.",
   "posOfflineActionUnavailable": "לא זמין במצב לא מקוון — התחברו מחדש כדי להשתמש בפעולה זו.",
-  "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור."
+  "posOfflineKdsPending": "ההזמנה הזו תגיע למסך המטבח כשהחיבור יחזור.",
+  "posOfflineBannerReconnecting": "מתחבר מחדש…",
+  "posPaymentAwaitingOrderSync": "ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה."
 }

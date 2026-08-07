@@ -902,7 +902,31 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // operational snapshot fire-and-forget. The writer contains its own
   // failures (_guarded semantics): a refused write keeps the previous
   // snapshot and can never fail — or even delay — this menu load.
-  recordOutcome((controller) => controller.recordOnlineFetch());
+  recordOutcome((controller) {
+    controller.recordOnlineFetch();
+    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] SESSION REVALIDATION
+    // WITHOUT AN OUTBOX DEPENDENCY.
+    //
+    // `noteOnlineVerified` used to be reachable ONLY from a successful
+    // `sync_push` (outbox_controller.dart), which requires a QUEUED ENTRY. A
+    // till that went offline with an empty queue therefore kept burning its
+    // 8-hour offline session window even after the network came back, and a
+    // restored-offline session stayed marked as such indefinitely.
+    //
+    // This `pos_menu` call IS a real authenticated round-trip under the live
+    // PIN session — the same class of proof — so it re-anchors the window
+    // here, inheriting this block's microtask + alive-generation + scope
+    // re-check discipline. It is deliberately NOT hooked to the outbox's
+    // reconnect listener (which would be circular — see the note there), and
+    // the session controller's own 5-minute throttle keeps a 25s reconnect
+    // probe from churning secure-storage writes.
+    try {
+      ref.read(posSessionControllerProvider.notifier).noteOnlineVerified();
+    } catch (_) {
+      // Contained: revalidation is an enhancement to a menu load that has
+      // already succeeded. It must never fail — or unsettle — the menu.
+    }
+  });
   if (scope != null) {
     unawaited(
       ref

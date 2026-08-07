@@ -1223,7 +1223,7 @@
   "@printerProfilesCancelAction": {},
   "posPrintBillAction": "طباعة الحساب",
   "@posPrintBillAction": {},
-  "receiptUnpaidBillLabel": "غير مدفوع - الدفع لاحقاً",
+  "receiptUnpaidBillLabel": "حساب مبدئي — غير مدفوع",
   "@receiptUnpaidBillLabel": {},
   "receiptAmountDueLabel": "المبلغ المستحق",
   "@receiptAmountDueLabel": {},
@@ -1231,6 +1231,10 @@
   "@posPrintBillStarted": {},
   "posPrintBillFailed": "فشلت طباعة الحساب",
   "@posPrintBillFailed": {},
+  "receiptLocalReferenceNote": "مرجع محلي — ليس رقم طلب من الخادم",
+  "@receiptLocalReferenceNote": {},
+  "receiptOrderNotSyncedNote": "الطلب لم تتم مزامنته بعد",
+  "@receiptOrderNotSyncedNote": {},
   "posNetworkPrinterHeading": "طابعة الشبكة (هذا الجهاز)",
   "posNetworkPrinterHelp": "اطبع مباشرة على طابعة حرارية عبر Wi‑Fi أو Ethernet على هذه الشبكة. لا حاجة إلى جسر الطباعة.",
   "posNetworkPrinterIpLabel": "عنوان IP للطابعة",
@@ -1696,5 +1700,7 @@
   "posOfflinePrinterUnreachable": "تعذّر الوصول إلى الطابعة — تحقّق من اتصال الطابعة.",
   "posOfflinePrintPending": "لم تُطبع تذكرة المطبخ بعد — استخدم «طباعة تذكرة المطبخ» عندما تصبح الطابعة متاحة.",
   "posOfflineActionUnavailable": "غير متاح دون اتصال — أعد الاتصال لاستخدام هذا الإجراء.",
-  "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال."
+  "posOfflineKdsPending": "تصل هذه الطلبية إلى شاشة المطبخ عند عودة الاتصال.",
+  "posOfflineBannerReconnecting": "جارٍ إعادة الاتصال…",
+  "posPaymentAwaitingOrderSync": "الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب."
 }

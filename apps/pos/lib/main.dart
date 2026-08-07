@@ -31,6 +31,10 @@ import 'src/state/order_sync_controller.dart';
 import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
+import 'src/state/pos_offline_state.dart'
+    show
+        kPosOfflineReconnectProbeInterval,
+        posOfflineReconnectProbeIntervalProvider;
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_receipt_logo.dart' show posReceiptLogoReaderProvider;
 import 'src/state/pos_session.dart';
@@ -146,6 +150,17 @@ List<Override> _posOverrides(
   if (includePeriodicWork)
     outboxAutoSweepIntervalProvider.overrideWithValue(
       const Duration(seconds: 25),
+    ),
+  // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] The RECONNECT PROBE
+  // cadence. While the POS is operating from the offline snapshot the
+  // lifecycle re-attempts a real `pos_menu` fetch on this tick, which is the
+  // ONLY thing that can end the offline phase — the fetch's own outcome still
+  // decides, never a connectivity flag. Deliberately NOT the outbox sweep:
+  // that makes ZERO RPCs with an empty queue, which is the common offline
+  // case. Null in tests (same seam), so widget tests stay timer-free.
+  if (includePeriodicWork)
+    posOfflineReconnectProbeIntervalProvider.overrideWithValue(
+      kPosOfflineReconnectProbeInterval,
     ),
   // MONEY-DURABLE-ADDITIONS-003C: the durable amendment journal. One frozen
   // identity + one byte-identical payload survive process death, so an
