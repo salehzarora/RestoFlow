@@ -176,7 +176,41 @@
     "versionName": "0.0.27",
     "versionCode": 27,
     "signing": "restoflow-production",
-    "status": "planned - not built",
+    "status": "built - pre-merge candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "b670b59a92ae7d7e5237a77e751ff84d34fabf2a",
+    "sourceSha": "6a82ec8262b41eb050c0d1810b6cfd48335f7ef9",
+    "buildDate": "2026-08-07",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v27-6a82ec8.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "b353955a67e1c7faf30611e1c94a5f064736f524f284c6f962fe46fc0ed7ef69"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v27-6a82ec8.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "8347164684104350952c1e66b581f5cc1b749ac0f6f25aaa8419876d2873fa33"
+      }
+    },
+    "candidateNotes": [
+      "Built 2026-08-07 by tools/android_release/build_official_pair.ps1 with",
+      "-SourceSha 6a82ec8... -AllowNonMain (the script's audited exception):",
+      "the build HEAD is the release/RESTOFLOW-OFFICIAL-V27 ledger commit,",
+      "whose only delta from application source b670b59a (main, the PR #202",
+      "reconnect/payment/pre-bill merge) is this ledger and its docs.",
+      "PR #203 is open and UNMERGED; these artifacts are pre-merge",
+      "candidates, verified by verify_official_apk.ps1 (both PASS): not",
+      "debuggable, demo=false, Release/AOT (libapp.so, no kernel_blob),",
+      "zipaligned, apksigner-verified, production certificate matches the",
+      "pin, hosted project ref present, forbidden ref absent, no localhost",
+      "backend, no JWT-shaped token, minSdk 24 / targetSdk 36, ABIs",
+      "arm64-v8a armeabi-v7a x86_64. POS libapp.so differs from v26's",
+      "(new compiled code confirmed) even though the padded APK sizes",
+      "coincide. NOT installed, NOT uploaded, NOT distributed, no GitHub",
+      "Release. official-v25 and official-v26 artifacts re-hashed unchanged."
+    ],
     "intendedSource": "main at b670b59a92ae7d7e5237a77e751ff84d34fabf2a (application source; the release branch may add ledger/documentation commits only)",
     "notes": [
       "v27 is the FIRST Android release containing the PR #202 fixes for the",
