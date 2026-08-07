@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'analytics/analytics_labels.dart';
 import 'data/demo_report.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
@@ -628,8 +629,12 @@ class _ReportContent extends StatelessWidget {
     );
   }
 
+  /// F0.5: was `method == 'cash' ? … : method`, which leaked the raw `card` /
+  /// `bit` / `external` wire tokens into the owner's payment summary. Delegates
+  /// to the ONE shared mapper so this surface and the order sheet can never
+  /// disagree about what a tender is called.
   static String _methodLabel(AppLocalizations l10n, String method) =>
-      method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
+      paymentMethodLabel(l10n, method);
 }
 
 /// RF-127 — the primary analytics row: the dominant sales-by-hour chart beside
@@ -1189,7 +1194,11 @@ class _PaymentMixCard extends StatelessWidget {
       'bit' => semantic.info,
       _ => semantic.warning,
     };
-    String label(String m) => m == 'cash' ? l10n.dashboardPaymentMethodCash : m;
+    // F0.5: the donut legend had its own cash-only mapper, so a card / bit /
+    // external slice was labelled with its raw wire token right next to a
+    // correctly-labelled cash slice. One shared mapper now serves the legend,
+    // the payment summary and the order sheet alike.
+    String label(String m) => paymentMethodLabel(l10n, m);
     final total = methods.fold<int>(0, (s, x) => s + x.totalMinor);
     final top = methods.reduce((a, b) => a.totalMinor >= b.totalMinor ? a : b);
     final topPct = total == 0 ? 0 : (top.totalMinor * 100 / total).round();
