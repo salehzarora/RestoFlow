@@ -29,17 +29,37 @@ final demoOrderStoreProvider = Provider<DemoOrderStore>(
 /// reading `owner_order_history` / `owner_order_detail` over the authenticated
 /// transport, scoped to the active membership (fails closed with no
 /// transport/scope).
-final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>((ref) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    return DemoOrderHistoryRepository(store: ref.watch(demoOrderStoreProvider));
-  }
-  return RealOrderHistoryRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+/// CLIENT-E2: the repository also carries the owner's SELECTED analytics scope,
+/// so leaving Overview on one branch and opening Orders shows that branch's
+/// orders rather than whichever branch the tenant resolver pinned.
+///
+/// Watching the scope here is also what resets pagination: a scope change
+/// rebuilds this provider, which rebuilds [orderHistoryControllerProvider],
+/// which starts a fresh first page with a null cursor. A keyset cursor minted
+/// under one scope can therefore never be replayed under another, and the old
+/// scope's rows cannot append into the new one — the guarantee falls out of the
+/// provider graph instead of needing its own bookkeeping.
+final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      return DemoOrderHistoryRepository(
+        store: ref.watch(demoOrderStoreProvider),
+      );
+    }
+    return RealOrderHistoryRepository(
+      config.supabase,
+      scope: ref.watch(dashboardMembershipProvider),
+      transport: ref.watch(dashboardAuthTransportProvider),
+      analyticsScope: ref.watch(dashboardAnalyticsScopeProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipProvider,
+    dashboardAuthTransportProvider,
+    dashboardAnalyticsScopeProvider,
+  ],
+);
 
 /// The active list controls (range + filters + search). The screen's chips /
 /// dropdowns / search box write this; changing it rebuilds the controller,
