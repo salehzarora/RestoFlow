@@ -33,9 +33,13 @@ class _FixedOptions implements AuditFilterOptionsRepository {
 class _FailingOptions implements AuditFilterOptionsRepository {
   const _FailingOptions();
 
-  // The real repository fails SOFT to an empty list; this mirrors it.
+  // CODEX F-1B-3 FOLLOW-UP: a failure is a FAILURE. This fake used to return an
+  // empty list "because the real repository fails soft", which is exactly the
+  // conflation that let a failed enumeration widen the analytics scope. The
+  // real repository now reports it, so the fake does too.
   @override
-  Future<List<AuditBranchOption>> loadBranches() async => const [];
+  Future<List<AuditBranchOption>> loadBranches() async =>
+      throw const AuditFilterOptionsException('branch options unavailable');
 
   @override
   Future<List<AuditActorOption>> loadActors() async => const [];
