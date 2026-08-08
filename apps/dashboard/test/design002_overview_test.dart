@@ -73,11 +73,15 @@ void main() {
     expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
     expect(find.byType(RestoflowAreaChart), findsOneWidget);
 
-    // Trend deltas: the four money/count KPIs (gross, net, orders, cash) — all
-    // up in the demo data. (RF-127 removed the gradient hero and its delta.)
+    // Trend deltas: the four money/count KPIs (gross, net, orders, cash) are up
+    // in the demo data. (RF-127 removed the gradient hero and its delta.)
     expect(find.byIcon(Icons.arrow_upward), findsNWidgets(4));
-    expect(find.byIcon(Icons.arrow_downward), findsNothing);
-    expect(find.textContaining('vs yesterday'), findsWidgets);
+    // CLIENT-B: average order value now carries a delta too, and in the demo
+    // data it went DOWN — 62000/7 = ₪88.57 today against 56800/6 = ₪94.66
+    // yesterday. More orders, each a little smaller. A suite that insisted
+    // every arrow points up would be asserting the demo flatters itself.
+    expect(find.byIcon(Icons.arrow_downward), findsOneWidget);
+    expect(find.textContaining('vs all of yesterday'), findsWidgets);
   });
 
   testWidgets('a report with no hourly/prior data hides the chart and deltas '

@@ -424,7 +424,16 @@ void main() {
 
       // The safe prior-day comparison lights up honest, integer-% KPI deltas
       // (today 12000 vs yesterday 8000 = +50%), so live no longer looks bare.
-      expect(find.textContaining('50% vs yesterday'), findsWidgets);
+      //
+      // CLIENT-B: the wording is now "vs ALL of yesterday". The server compares
+      // a partial today against a COMPLETE yesterday, and the old phrasing let
+      // an owner read it as an elapsed-time match that no backend computes.
+      expect(find.textContaining('50% vs all of yesterday'), findsWidgets);
+      expect(
+        find.textContaining('50% vs yesterday'),
+        findsNothing,
+        reason: 'the ambiguous wording must be gone, not merely supplemented',
+      );
       // Still real data only — the KPI values are the live figures, not demo.
       expect(_kpi(tester, 'kpi-net-sales'), '₪120.00');
       // With NO hourly data the sales-by-hour chart stays hidden (fallback).

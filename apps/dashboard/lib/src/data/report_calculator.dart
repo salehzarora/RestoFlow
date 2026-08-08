@@ -412,6 +412,14 @@ DashboardReport demoRangeReport(ReportRange range) {
       netSalesMinor: priorNet,
       orderCount: priorOrders,
       cashSalesMinor: priorCash,
+      // CLIENT-B: the demo range dataset has no discount engine (gross == net
+      // above), so the prior window's discount is a truthful 0 rather than an
+      // absent value, and every demo order completes — matching the current
+      // window's `completedOrderCount: orders` on the very next lines. These
+      // agree with the demo's own model instead of borrowing a shape from the
+      // real report.
+      completedOrderCount: priorOrders,
+      discountTotalMinor: 0,
     ),
     shiftCash: _demoRangeShiftCash(range),
     range: range,

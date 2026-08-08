@@ -2211,7 +2211,15 @@
     "description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: accessible screen-reader summary of the Overview daily sales-trend chart. day is the peak day's branch-local calendar label (e.g. 2026-08-08) and amount is the formatted net sales for it; both are pre-built strings.",
     "placeholders": {"day": {"type": "String"}, "amount": {"type": "String"}}
   },
-  "dashboardDeltaVsYesterday": "{percent}% vs yesterday",
+  "dashboardComparedVsYesterdayAll": "Compared with all of yesterday",
+  "@dashboardComparedVsYesterdayAll": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the TODAY range. It must say 'all of yesterday' because the server compares a partial today against a COMPLETE yesterday - there is no elapsed-time-matched comparison."},
+  "dashboardComparedVsDayBefore": "Compared with the day before",
+  "@dashboardComparedVsDayBefore": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the YESTERDAY range (compared with the immediately preceding day)."},
+  "dashboardComparedVsPrev7": "Compared with the previous 7 days",
+  "@dashboardComparedVsPrev7": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 7 DAYS range (compared with the immediately preceding equal-length 7-day window, not a calendar week)."},
+  "dashboardComparedVsPrev30": "Compared with the previous 30 days",
+  "@dashboardComparedVsPrev30": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 30 DAYS range (compared with the immediately preceding equal-length 30-day window, not a calendar month)."},
+  "dashboardDeltaVsYesterday": "{percent}% vs all of yesterday",
   "@dashboardDeltaVsYesterday": {
     "description": "DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.",
     "placeholders": {"percent": {"type": "int"}}

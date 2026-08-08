@@ -3007,8 +3007,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardComparedVsYesterdayAll =>
+      'Compared with all of yesterday';
+
+  @override
+  String get dashboardComparedVsDayBefore => 'Compared with the day before';
+
+  @override
+  String get dashboardComparedVsPrev7 => 'Compared with the previous 7 days';
+
+  @override
+  String get dashboardComparedVsPrev30 => 'Compared with the previous 30 days';
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
-    return '$percent% vs yesterday';
+    return '$percent% vs all of yesterday';
   }
 
   @override

@@ -2982,8 +2982,20 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardComparedVsYesterdayAll => 'مقارنةً بكامل يوم أمس';
+
+  @override
+  String get dashboardComparedVsDayBefore => 'مقارنةً بأول من أمس';
+
+  @override
+  String get dashboardComparedVsPrev7 => 'مقارنةً بالـ٧ أيام السابقة';
+
+  @override
+  String get dashboardComparedVsPrev30 => 'مقارنةً بالـ٣٠ يومًا السابقة';
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
-    return '$percent٪ مقارنةً بالأمس';
+    return '$percent٪ مقارنةً بكامل يوم أمس';
   }
 
   @override

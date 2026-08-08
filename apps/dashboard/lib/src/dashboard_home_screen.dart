@@ -5,6 +5,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
+import 'analytics/comparison_delta.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
 import 'analytics/owner_sales_series_query_key.dart';
@@ -275,14 +276,30 @@ class _ReportContent extends StatelessWidget {
       ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
     };
     final comparison = report.comparison;
+    // CLIENT-B: the KPI deltas now go through the SHARED [ComparisonDelta]
+    // instead of the loose `deltaPercent`, so the zero-baseline rule lives in
+    // one place for every surface. Behaviour is unchanged by construction —
+    // ComparisonDelta's percent is the same truncating integer math, and
+    // `noBasis` covers exactly the null/zero prior that returned null before.
     RestoflowMetricDelta? deltaOf(int current, int? prior) {
-      final pct = deltaPercent(current, prior);
-      if (pct == null) return null;
+      final delta = ComparisonDelta.of(current, prior);
+      if (!delta.hasBasis) return null;
       return RestoflowMetricDelta(
-        label: deltaLabel(pct.abs()),
-        positive: pct >= 0,
+        label: deltaLabel(delta.percent!.abs()),
+        // RestoflowMetricDelta is binary (success/danger); it has no neutral
+        // tone, and widening a shared design-system component is not this
+        // slice's business. A measured `flat` therefore keeps its existing
+        // rendering here, and the comparison strip below — which is app-local —
+        // is where flat and the ambiguous-direction metrics are shown neutrally.
+        positive: !delta.isDecrease,
       );
     }
+
+    // CLIENT-B: average order value compared against the prior window, computed
+    // from INTEGER primitives only — `net ~/ orders` on both sides, never a
+    // double. A prior window with no orders has no average to compare against,
+    // so the getter returns null and ComparisonDelta renders no basis.
+    final priorAvgOrderValueMinor = comparison?.avgOrderValueMinor;
 
     // RF-140: demo mode shows the demo-data notice; real mode shows a slim
     // "live · limited" caution notice — never a demo/deferred banner over real
@@ -365,6 +382,12 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardAvgOrderValue,
         value: money(report.avgOrderValueMinor),
         icon: Icons.trending_up,
+        // CLIENT-B: the card had a value but no comparison. Both sides are
+        // integer minor units derived the same way (net ~/ orders), so the
+        // delta is a like-for-like figure rather than a ratio of ratios.
+        delta: report.orderCount == 0
+            ? null
+            : deltaOf(report.avgOrderValueMinor, priorAvgOrderValueMinor),
       ),
     ];
 
@@ -688,6 +711,52 @@ class _ReportContent extends StatelessWidget {
       if (shiftCashCard != null) shiftCashCard,
     ];
 
+    // CLIENT-B: the period-comparison strip. It carries ONLY the metrics whose
+    // comparison has nowhere else to live — completed orders and discounts —
+    // because net, gross, orders, cash and average ticket already show their
+    // delta on their own KPI card, and repeating them here would be clutter
+    // rather than clarity.
+    //
+    // It renders only when the server actually sent at least one of SERVER-B's
+    // additive comparison keys. Against a database where that migration is not
+    // applied yet, both are absent and the whole strip is simply not there —
+    // which is the honest outcome, and the reason those fields are nullable.
+    final comparisonStrip =
+        (comparison != null &&
+            (comparison.completedOrderCount != null ||
+                comparison.discountTotalMinor != null))
+        ? _ComparisonStrip(
+            title: switch (report.range) {
+              ReportRange.today => l10n.dashboardComparedVsYesterdayAll,
+              ReportRange.yesterday => l10n.dashboardComparedVsDayBefore,
+              ReportRange.last7 => l10n.dashboardComparedVsPrev7,
+              ReportRange.last30 => l10n.dashboardComparedVsPrev30,
+            },
+            rows: [
+              if (comparison.completedOrderCount != null)
+                _ComparisonRowData(
+                  key: 'comparison-completed',
+                  label: l10n.dashboardCompletedOrders,
+                  delta: ComparisonDelta.of(
+                    report.completedOrderCount,
+                    comparison.completedOrderCount,
+                  ),
+                  format: (v) => v.toString(),
+                ),
+              if (comparison.discountTotalMinor != null)
+                _ComparisonRowData(
+                  key: 'comparison-discounts',
+                  label: l10n.dashboardDiscounts,
+                  delta: ComparisonDelta.of(
+                    report.discountTotalMinor,
+                    comparison.discountTotalMinor,
+                  ),
+                  format: money,
+                ),
+            ],
+          )
+        : null;
+
     // RF-132 (Codex review): the reference order is primary KPIs → the
     // dominant analytics row → the compact secondary operational cards →
     // top sellers / recent orders → the detailed summaries. The secondary
@@ -702,6 +771,7 @@ class _ReportContent extends StatelessWidget {
     final blocks = <Widget>[
       banner,
       _KpiGrid(cards: primaryKpis),
+      if (comparisonStrip != null) comparisonStrip,
       if (analyticsStart != null || paymentMix != null)
         _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
       _KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length),
@@ -721,6 +791,151 @@ class _ReportContent extends StatelessWidget {
   /// disagree about what a tender is called.
   static String _methodLabel(AppLocalizations l10n, String method) =>
       paymentMethodLabel(l10n, method);
+}
+
+/// One row of the CLIENT-B comparison strip: a label, a comparison, and the
+/// formatter that turns its integer values into display text.
+///
+/// [format] receives integer minor units for money and a plain count otherwise,
+/// so the row itself never decides what a number means — and never divides.
+class _ComparisonRowData {
+  const _ComparisonRowData({
+    required this.key,
+    required this.label,
+    required this.delta,
+    required this.format,
+  });
+
+  final String key;
+  final String label;
+  final ComparisonDelta delta;
+  final String Function(int value) format;
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-B) — the period-comparison strip.
+///
+/// A compact card that answers one question — "compared with what, and by how
+/// much" — for the metrics that have no delta anywhere else. Its title states
+/// the comparison window in words, which is where the `today` honesty lives:
+/// the server compares a PARTIAL today against a COMPLETE yesterday, so the
+/// heading says "all of yesterday" rather than implying an elapsed-time match
+/// the backend does not compute.
+///
+/// DIRECTION IS NOT DESIRABILITY here, and the rendering says so. The KPI cards
+/// tone their deltas success/danger because more sales is unambiguously better;
+/// these two are not like that. More discount may be a successful promotion or
+/// a leak, and fewer completed orders may mean a quiet day or an unpaid
+/// backlog. So the arrow shows the direction and the colour stays neutral —
+/// the owner is told what moved, not what to feel about it.
+///
+/// A metric with no honest basis (a prior of zero, or one the server did not
+/// send) renders an em dash. A measured no-change renders a real zero, because
+/// "did not move" and "cannot be compared" are different answers.
+class _ComparisonStrip extends StatelessWidget {
+  const _ComparisonStrip({required this.title, required this.rows});
+
+  final String title;
+  final List<_ComparisonRowData> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return RestoflowSectionCard(
+      key: const Key('period-comparison-card'),
+      title: title,
+      children: [for (final row in rows) _ComparisonRow(data: row)],
+    );
+  }
+}
+
+class _ComparisonRow extends StatelessWidget {
+  const _ComparisonRow({required this.data});
+
+  final _ComparisonRowData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final delta = data.delta;
+
+    // Deliberately NOT Icons.arrow_upward/arrow_downward: those are the KPI
+    // cards' TONED trend arrows, and reusing them here would make a neutral
+    // directional mark indistinguishable from a success/danger judgement — on
+    // screen and in every `find.byIcon` assertion in the suite.
+    final (IconData? icon, String text) = switch (delta.state) {
+      // An em dash, never a percentage against nothing.
+      ComparisonState.noBasis => (null, '—'),
+      ComparisonState.flat => (Icons.remove, _text(delta)),
+      ComparisonState.increase => (Icons.north, _text(delta)),
+      ComparisonState.decrease => (Icons.south, _text(delta)),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+      child: Row(
+        children: [
+          // Both sides flex, and both can ellipsize: at a 2x text scale on a
+          // phone a fixed trailing group would push the row past the card.
+          Expanded(
+            flex: 3,
+            child: Text(
+              data.label,
+              style: theme.textTheme.titleSmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: RestoflowIconSizes.xs, color: muted),
+                  const SizedBox(width: RestoflowSpacing.xs),
+                ],
+                Flexible(
+                  child: Text(
+                    key: Key('${data.key}-delta'),
+                    text,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      // Neutral on purpose — see the class doc. No
+                      // success/danger tone.
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The signed change and the signed percentage, e.g. `+₪4.00 · +5%`.
+  ///
+  /// Both come straight from [ComparisonDelta] — integer minor units and
+  /// truncating integer percentage — so no money is ever divided into a double
+  /// on the way to the screen. A negative amount already carries its sign from
+  /// [MoneyFormatter]; only a positive one needs the `+` added.
+  String _text(ComparisonDelta delta) {
+    final absolute = delta.absolute!;
+    final percent = delta.percent!;
+    final amount = absolute > 0
+        ? '+${data.format(absolute)}'
+        : data.format(absolute);
+    final pct = percent > 0 ? '+$percent%' : '$percent%';
+    return '$amount · $pct';
+  }
 }
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-A) — the daily sales trend.

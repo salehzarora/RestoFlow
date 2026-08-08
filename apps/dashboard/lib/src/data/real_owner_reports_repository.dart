@@ -130,6 +130,13 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
         netSalesMinor: _int(cmp['net_minor']),
         orderCount: _int(cmp['order_count']),
         cashSalesMinor: _int(cmp['cash_minor']),
+        // SERVER-B additive keys, read with _intOrNull so an ABSENT key stays
+        // absent. This is the deployment seam: the migration is merged but not
+        // applied everywhere, and `_int` would turn "this server predates the
+        // change" into a measured prior of 0 — a comparison the owner would
+        // read as real. A present 0 still parses as 0.
+        completedOrderCount: _intOrNull(cmp['completed_count']),
+        discountTotalMinor: _intOrNull(cmp['discount_minor']),
       ),
       // Legacy scalar drawer fields are superseded by the shiftCash card.
       openingFloatMinor: 0,
@@ -206,7 +213,12 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       unpaidOrderCount: _int(today['unpaid_count']),
       // Per-method tender breakdown (cash-only today, but real when card/bit land).
       paymentMethods: _tenders(today['tenders'], currency),
-      // Prior-day block -> KPI "vs yesterday" deltas (deltaPercent guards prior 0).
+      // Prior-day block -> KPI "vs yesterday" deltas (ComparisonDelta guards a
+      // zero prior). CLIENT-B: `owner_daily_report.prior_day` carries ONLY
+      // order_count / gross / net / cash — it has no completed or discount
+      // figure for the prior day — so the two additive comparison fields stay
+      // ABSENT here rather than being derived from a differently-defined
+      // number. The comparison strip that needs them simply does not render.
       comparison: ReportComparison(
         grossSalesMinor: _int(prior['gross_minor']),
         netSalesMinor: _int(prior['net_minor']),
@@ -413,6 +425,10 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
     final prior = sevenDays[sevenDays.length - 2];
     if (prior is! Map) return null;
     final priorGross = _int(prior['gross_minor']);
+    // CLIENT-B: completed / discount stay ABSENT. `last_7_days` has neither, and
+    // this path's CURRENT completedOrderCount is the payments count rather than
+    // the status-completed count — a different definition, so even a plausible
+    // prior would be comparing two unlike numbers.
     return ReportComparison(
       grossSalesMinor: priorGross,
       netSalesMinor: priorGross,

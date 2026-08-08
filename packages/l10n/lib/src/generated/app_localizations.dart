@@ -5650,10 +5650,34 @@ abstract class AppLocalizations {
   /// **'Sales by day. Best day {day}: {amount}'**
   String dashboardSalesByDaySemantics(String day, String amount);
 
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the TODAY range. It must say 'all of yesterday' because the server compares a partial today against a COMPLETE yesterday - there is no elapsed-time-matched comparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with all of yesterday'**
+  String get dashboardComparedVsYesterdayAll;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the YESTERDAY range (compared with the immediately preceding day).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the day before'**
+  String get dashboardComparedVsDayBefore;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 7 DAYS range (compared with the immediately preceding equal-length 7-day window, not a calendar week).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 7 days'**
+  String get dashboardComparedVsPrev7;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 30 DAYS range (compared with the immediately preceding equal-length 30-day window, not a calendar month).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 30 days'**
+  String get dashboardComparedVsPrev30;
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:
-  /// **'{percent}% vs yesterday'**
+  /// **'{percent}% vs all of yesterday'**
   String dashboardDeltaVsYesterday(int percent);
 
   /// RF-REPORT-004 reporting-range chip: today.
