@@ -25,6 +25,7 @@
 library;
 
 import 'analytics_range.dart';
+import 'dashboard_analytics_scope.dart';
 
 /// A value-equal, hash-stable identity for one sales-series request.
 class OwnerSalesSeriesQueryKey {
@@ -53,6 +54,23 @@ class OwnerSalesSeriesQueryKey {
   final AnalyticsRange range;
 
   final bool isDemoMode;
+
+  /// CODEX F-1A — the exact scope this key identifies, for the REQUEST it
+  /// identifies.
+  ///
+  /// The family loader hands this to the repository so the ids on the wire are
+  /// the ids in the key, structurally, rather than because two providers happen
+  /// to agree. Null only when no membership is resolved (demo / not wired),
+  /// where the real repository fails closed anyway.
+  DashboardAnalyticsScope? get analyticsScope {
+    final org = organizationId;
+    if (org == null) return null;
+    return DashboardAnalyticsScope.ofIds(
+      organizationId: org,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
 
   @override
   bool operator ==(Object other) =>

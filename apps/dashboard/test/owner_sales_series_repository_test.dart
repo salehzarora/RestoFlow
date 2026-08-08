@@ -98,8 +98,12 @@ void main() {
         expect(transport.lastFunction, 'owner_sales_series');
         expect(transport.lastParams, {
           'p_organization_id': 'org-1',
-          'p_restaurant_id': 'rest-1',
-          'p_branch_id': 'branch-1',
+          // CODEX F-1A: the fixture membership is an ORG owner, so its COVERAGE is
+          // the whole organization. rest-1 / branch-1 are what resolveTenantContext
+          // pinned onto it, and sending them as the request scope was the defect —
+          // the family key said one branch while the RPC asked for another.
+          'p_restaurant_id': null,
+          'p_branch_id': null,
           'p_range': 'last7',
         });
       },

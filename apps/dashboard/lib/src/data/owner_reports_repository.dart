@@ -8,6 +8,7 @@
 /// loading / error / empty states.
 library;
 
+import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart';
 import 'owner_report_source.dart';
 import 'report_calculator.dart';
@@ -16,7 +17,19 @@ import 'report_calculator.dart';
 /// today). Implementations may fail (network, auth, RLS) — the UI renders that
 /// as an error state.
 abstract class OwnerReportsRepository {
-  Future<DashboardReport> loadReport({ReportRange range = ReportRange.today});
+  /// Loads the owner report for [range] within [scope].
+  ///
+  /// CODEX F-1A — [scope] travels WITH the call, handed down from the family
+  /// key that identifies this request. It used to be absent, and the real
+  /// repository read restaurant/branch off the resolved membership instead —
+  /// which `resolveTenantContext` has already pinned to the FIRST of each. So
+  /// the cache key could say "branch B" while the request asked for branch A,
+  /// and a broad owner's analytics stayed silently narrowed no matter what the
+  /// selector said. Null means "use whatever the membership covers".
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
+  });
 }
 
 /// Computes the owner report from a structured demo dataset. There is no
@@ -35,6 +48,9 @@ class DemoOwnerReportsRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    // The demo dataset has no branch dimension, so scope is accepted and
+    // ignored rather than pretended to be applied.
+    DashboardAnalyticsScope? analyticsScope,
   }) async {
     final message = failureMessage;
     if (message != null) {

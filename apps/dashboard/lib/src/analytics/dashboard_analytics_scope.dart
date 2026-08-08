@@ -96,6 +96,29 @@ class DashboardAnalyticsScope {
     branchLabel: option.label,
   );
 
+  /// CODEX F-1A — the scope implied by an explicit id triple.
+  ///
+  /// Exists so a family KEY can hand its exact scope to the request that key
+  /// identifies. The kind is derived from which ids are present, by the same
+  /// rule [coveredBy] uses, so a reconstructed scope and a derived one are the
+  /// same value for the same ids.
+  factory DashboardAnalyticsScope.ofIds({
+    required String organizationId,
+    String? restaurantId,
+    String? branchId,
+    String? branchLabel,
+  }) => DashboardAnalyticsScope(
+    organizationId: organizationId,
+    restaurantId: restaurantId,
+    branchId: branchId,
+    kind: restaurantId == null
+        ? DashboardAnalyticsScopeKind.orgWide
+        : branchId == null
+        ? DashboardAnalyticsScopeKind.restaurantWide
+        : DashboardAnalyticsScopeKind.singleBranch,
+    branchLabel: branchLabel,
+  );
+
   final String organizationId;
 
   /// Null means EVERY permitted restaurant — which the owner RPCs already
@@ -145,9 +168,24 @@ class DashboardAnalyticsScope {
       DashboardAnalyticsScopeKind.orgWide => true,
       DashboardAnalyticsScopeKind.restaurantWide =>
         option.restaurantId == restaurantId,
-      DashboardAnalyticsScopeKind.singleBranch => option.branchId == branchId,
+      // CODEX F-1C — the branch check alone was not enough. A stale or
+      // malformed option carrying the right branch id under a DIFFERENT
+      // restaurant would have matched, which again leans on branch ids being
+      // globally unique. The full triple is required.
+      DashboardAnalyticsScopeKind.singleBranch =>
+        option.restaurantId == restaurantId && option.branchId == branchId,
     };
   }
+
+  /// Whether [option] is this exact scope — all three ids.
+  ///
+  /// Used by the selector to decide whether a loaded option is THE selected
+  /// one. Deliberately stricter than [covers]: coverage answers "may I read
+  /// this", identity answers "is this the row I am sitting on".
+  bool isExactly(AuditBranchOption option) =>
+      option.organizationId == organizationId &&
+      option.restaurantId == restaurantId &&
+      option.branchId == branchId;
 
   @override
   bool operator ==(Object other) =>

@@ -1,3 +1,4 @@
+import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,7 +34,10 @@ class _StubSeriesRepository implements OwnerSalesSeriesRepository {
   final List<AnalyticsRange> calls = <AnalyticsRange>[];
 
   @override
-  Future<OwnerSalesSeries> loadSeries({required AnalyticsRange range}) async {
+  Future<OwnerSalesSeries> loadSeries({
+    required AnalyticsRange range,
+    DashboardAnalyticsScope? analyticsScope,
+  }) async {
     calls.add(range);
     if (fail) throw const OwnerSalesSeriesException('boom');
     if (unavailable) return OwnerSalesSeries.unavailable(range.wire);

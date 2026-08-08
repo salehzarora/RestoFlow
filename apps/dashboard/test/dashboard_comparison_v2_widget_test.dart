@@ -1,3 +1,4 @@
+import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,7 @@ class _FixedRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => report;
 }
 

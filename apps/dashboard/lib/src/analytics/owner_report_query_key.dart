@@ -26,6 +26,8 @@ library;
 
 import '../data/demo_report.dart' show ReportRange;
 
+import 'dashboard_analytics_scope.dart';
+
 /// A value-equal, hash-stable identity for one owner-report request.
 class OwnerReportQueryKey {
   const OwnerReportQueryKey({
@@ -51,6 +53,23 @@ class OwnerReportQueryKey {
   /// Demo and real are different data sources on the same provider path; a
   /// demo result must never satisfy a real request.
   final bool isDemoMode;
+
+  /// CODEX F-1A — the exact scope this key identifies, for the REQUEST it
+  /// identifies.
+  ///
+  /// The family loader hands this to the repository so the ids on the wire are
+  /// the ids in the key, structurally, rather than because two providers happen
+  /// to agree. Null only when no membership is resolved (demo / not wired),
+  /// where the real repository fails closed anyway.
+  DashboardAnalyticsScope? get analyticsScope {
+    final org = organizationId;
+    if (org == null) return null;
+    return DashboardAnalyticsScope.ofIds(
+      organizationId: org,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
 
   @override
   bool operator ==(Object other) =>

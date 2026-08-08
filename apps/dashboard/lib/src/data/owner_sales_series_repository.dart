@@ -8,6 +8,7 @@
 library;
 
 import '../analytics/analytics_range.dart';
+import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart' show kDemoCurrencyCode;
 import 'owner_sales_series.dart';
 import 'report_calculator.dart' show demoDaySales;
@@ -17,7 +18,15 @@ import 'report_calculator.dart' show demoDaySales;
 /// Implementations may fail (network, auth, RLS) — the UI renders that as a
 /// section-level error, never as zeros.
 abstract class OwnerSalesSeriesRepository {
-  Future<OwnerSalesSeries> loadSeries({required AnalyticsRange range});
+  /// Loads the per-day series for [range] within [scope].
+  ///
+  /// CODEX F-1A — [scope] comes from the family key, so the ids on the wire are
+  /// the ids the cached entry is filed under. Null means "use whatever the
+  /// membership covers".
+  Future<OwnerSalesSeries> loadSeries({
+    required AnalyticsRange range,
+    DashboardAnalyticsScope? analyticsScope,
+  });
 }
 
 /// The demo daily series, computed from the SAME per-day generator the demo
@@ -42,7 +51,11 @@ class DemoOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
   final String? failureMessage;
 
   @override
-  Future<OwnerSalesSeries> loadSeries({required AnalyticsRange range}) async {
+  Future<OwnerSalesSeries> loadSeries({
+    required AnalyticsRange range,
+    // The demo generator has no branch dimension; accepted and ignored.
+    DashboardAnalyticsScope? analyticsScope,
+  }) async {
     final message = failureMessage;
     if (message != null) throw OwnerSalesSeriesException(message);
 

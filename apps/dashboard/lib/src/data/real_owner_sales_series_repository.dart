@@ -28,6 +28,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../analytics/analytics_range.dart';
+import '../analytics/dashboard_analytics_scope.dart';
 import 'owner_sales_series.dart';
 import 'owner_sales_series_repository.dart';
 
@@ -43,7 +44,10 @@ class RealOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
   final SyncRpcTransport? transport;
 
   @override
-  Future<OwnerSalesSeries> loadSeries({required AnalyticsRange range}) async {
+  Future<OwnerSalesSeries> loadSeries({
+    required AnalyticsRange range,
+    DashboardAnalyticsScope? analyticsScope,
+  }) async {
     final t = transport;
     final m = scope;
     if (t == null || m == null) {
@@ -51,13 +55,31 @@ class RealOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
         'owner-sales-series: no authenticated transport/scope - real read not wired',
       );
     }
+    // CODEX F-1A — the scope on the wire is the scope in the KEY.
+    //
+    // These params used to come off the resolved membership, whose restaurant
+    // and branch `resolveTenantContext` has already pinned to the FIRST of
+    // each. The family key carried the owner's real selection while the
+    // request carried the pin, so a broad owner's analytics stayed narrowed and
+    // branch A's data could be cached under a branch B key.
+    //
+    // The ORGANIZATION remains the authenticated membership's — it is the
+    // authorization anchor, never a filter. A key claiming a different
+    // organization is a client bug, and fails closed HERE rather than becoming
+    // a cross-org tuple on the wire.
+    final selected = analyticsScope ?? DashboardAnalyticsScope.coveredBy(m);
+    if (selected.organizationId != m.organizationId) {
+      throw const OwnerSalesSeriesException(
+        'owner_sales_series: analytics scope organization does not match the membership',
+      );
+    }
 
     final Object? raw;
     try {
       raw = await t.invoke('owner_sales_series', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
         'p_range': range.wire,
       });
     } on SyncTransportException catch (e) {

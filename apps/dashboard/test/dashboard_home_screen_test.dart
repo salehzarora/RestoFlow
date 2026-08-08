@@ -1,3 +1,4 @@
+import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ class _LimitedRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -70,6 +72,7 @@ class _HourlyRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -128,6 +131,7 @@ class _ShiftRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-06',
@@ -190,6 +194,7 @@ class _UnavailableRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => DashboardReport.rangeUnavailable(range: range, currencyCode: '');
 }
 

@@ -189,9 +189,12 @@ final currentOwnerReportKeyProvider = Provider<OwnerReportQueryKey>((ref) {
 /// refresh action re-runs it, so an error is always retryable.
 final ownerReportForKeyProvider =
     FutureProvider.family<DashboardReport, OwnerReportQueryKey>((ref, key) {
+      // CODEX F-1A: the key's OWN scope goes to the request the key identifies,
+      // so the ids on the wire and the ids the result is filed under cannot
+      // drift apart — including for a retained entry re-run after a rebuild.
       return ref
           .watch(ownerReportsRepositoryProvider)
-          .loadReport(range: key.range);
+          .loadReport(range: key.range, analyticsScope: key.analyticsScope);
     }, dependencies: [ownerReportsRepositoryProvider]);
 
 /// The owner dashboard report for the CURRENT key.
@@ -276,9 +279,11 @@ final ownerSalesSeriesForKeyProvider =
       ref,
       key,
     ) {
+      // CODEX F-1A: same invariant as the report family — the key carries its
+      // scope into its own request.
       return ref
           .watch(ownerSalesSeriesRepositoryProvider)
-          .loadSeries(range: key.range);
+          .loadSeries(range: key.range, analyticsScope: key.analyticsScope);
     }, dependencies: [ownerSalesSeriesRepositoryProvider]);
 
 /// Refreshes ONLY the currently selected report entry — and the daily series

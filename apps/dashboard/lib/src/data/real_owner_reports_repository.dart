@@ -35,6 +35,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart';
 import 'owner_reports_repository.dart';
 
@@ -58,12 +59,31 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async {
     final t = transport;
     final m = scope;
     if (t == null || m == null) {
       throw const RealRepoNotWiredError(
         'owner-reports: no authenticated transport/scope - real read not wired',
+      );
+    }
+    // CODEX F-1A — the scope on the wire is the scope in the KEY.
+    //
+    // These params used to come off the resolved membership, whose restaurant
+    // and branch `resolveTenantContext` has already pinned to the FIRST of
+    // each. The family key carried the owner's real selection while the
+    // request carried the pin, so a broad owner's analytics stayed narrowed and
+    // branch A's data could be cached under a branch B key.
+    //
+    // The ORGANIZATION remains the authenticated membership's — it is the
+    // authorization anchor, never a filter. A key claiming a different
+    // organization is a client bug, and fails closed HERE rather than becoming
+    // a cross-org tuple on the wire.
+    final selected = analyticsScope ?? DashboardAnalyticsScope.coveredBy(m);
+    if (selected.organizationId != m.organizationId) {
+      throw const OwnerReportsException(
+        'owner_report_range: analytics scope organization does not match the membership',
       );
     }
     // RF-REPORT-004: prefer `owner_report_range` (ranges + prior-period
@@ -76,13 +96,15 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
     try {
       rangeRaw = await t.invoke('owner_report_range', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
         'p_range': range.wire,
       });
     } on SyncTransportException catch (e) {
       if (_isMissingRpc(e)) {
-        if (range == ReportRange.today) return _loadDailyReport(t, m);
+        if (range == ReportRange.today) {
+          return _loadDailyReport(t, m, selected);
+        }
         return DashboardReport.rangeUnavailable(range: range, currencyCode: '');
       }
       throw const OwnerReportsException('owner_report_range transport failure');
@@ -162,20 +184,21 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   Future<DashboardReport> _loadDailyReport(
     SyncRpcTransport t,
     MembershipContext m,
+    DashboardAnalyticsScope selected,
   ) async {
     final Object? raw;
     try {
       raw = await t.invoke('owner_daily_report', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
       });
     } on SyncTransportException catch (e) {
       // LIVE-DASHBOARD-001: on production `owner_daily_report` is not deployed
       // yet, so PostgREST returns a "could not find the function" error. ONLY
       // that missing-RPC signature falls back to the deployed `sales_summary`;
       // an auth/permission denial (42501) stays fail-closed below.
-      if (_isMissingRpc(e)) return _loadFromSalesSummary(t, m);
+      if (_isMissingRpc(e)) return _loadFromSalesSummary(t, m, selected);
       throw const OwnerReportsException('owner_daily_report transport failure');
     }
     if (raw is! Map || raw['ok'] != true) {
@@ -351,13 +374,14 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   Future<DashboardReport> _loadFromSalesSummary(
     SyncRpcTransport t,
     MembershipContext m,
+    DashboardAnalyticsScope selected,
   ) async {
     final Object? raw;
     try {
       raw = await t.invoke('sales_summary', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
       });
     } on SyncTransportException {
       throw const OwnerReportsException('sales_summary transport failure');

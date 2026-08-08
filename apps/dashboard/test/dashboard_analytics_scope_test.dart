@@ -67,6 +67,7 @@ class _CountingRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async {
     calls.add(range);
     return const DemoOwnerReportsRepository().loadReport(range: range);
@@ -78,7 +79,10 @@ class _CountingSeriesRepository implements OwnerSalesSeriesRepository {
   int get callCount => calls.length;
 
   @override
-  Future<OwnerSalesSeries> loadSeries({required AnalyticsRange range}) async {
+  Future<OwnerSalesSeries> loadSeries({
+    required AnalyticsRange range,
+    DashboardAnalyticsScope? analyticsScope,
+  }) async {
     calls.add(range);
     return DemoOwnerSalesSeriesRepository(
       clock: () => DateTime(2026, 8, 8),

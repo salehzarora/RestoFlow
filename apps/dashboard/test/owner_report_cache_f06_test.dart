@@ -1,3 +1,4 @@
+import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -36,6 +37,7 @@ class _CountingRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async {
     calls.add(range);
     if (failTimes > 0) {
