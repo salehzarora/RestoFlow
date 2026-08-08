@@ -51,7 +51,9 @@ import '../analytics/dashboard_analytics_scope.dart';
 import '../data/audit_log_models.dart' show AuditBranchOption;
 import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'dashboard_providers.dart'
-    show dashboardCoveredScopeProvider, effectiveAnalyticsBranchProvider;
+    show
+        dashboardCoveredScopeIdentityProvider,
+        effectiveAnalyticsBranchProvider;
 
 /// One real answer about which branches exist, STAMPED with the authorization
 /// context it was loaded for.
@@ -94,17 +96,22 @@ class AnalyticsBranchAnswer {
   final List<AuditBranchOption> options;
 }
 
-final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>((
-  ref,
-) async {
-  final covered = ref.watch(dashboardCoveredScopeProvider);
-  final raw = await ref.watch(auditBranchOptionsProvider.future);
-  return AnalyticsBranchAnswer(
-    // The IDS this answer was loaded under, never the name they had at the time.
-    context: covered?.transportIdentity,
-    options: sanitizeAnalyticsBranchOptions(raw, coverage: covered),
-  );
-}, dependencies: [dashboardCoveredScopeProvider, auditBranchOptionsProvider]);
+final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>(
+  (ref) async {
+    // R1A-01: the LABEL-FREE coverage, so renaming a branch cannot re-enumerate.
+    final covered = ref.watch(dashboardCoveredScopeIdentityProvider);
+    final raw = await ref.watch(auditBranchOptionsProvider.future);
+    return AnalyticsBranchAnswer(
+      // The IDS this answer was loaded under, never the name they had at the time.
+      context: covered,
+      options: sanitizeAnalyticsBranchOptions(raw, coverage: covered),
+    );
+  },
+  dependencies: [
+    dashboardCoveredScopeIdentityProvider,
+    auditBranchOptionsProvider,
+  ],
+);
 
 /// CODEX F-1B-2 / F-1B-3-R1 — the LAST REAL ANSWER for the CURRENT
 /// authorization context, or null if there has not been one.
@@ -128,7 +135,7 @@ final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>((
 /// containing it can.
 final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
   (ref) {
-    final covered = ref.watch(dashboardCoveredScopeProvider);
+    final covered = ref.watch(dashboardCoveredScopeIdentityProvider);
     if (covered == null) return const <AuditBranchOption>[];
     final async = ref.watch(analyticsBranchAnswerProvider);
     // Never answered at all — which is not "answered: none".
@@ -136,11 +143,40 @@ final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
     final answer = async.requireValue;
     // Answered, but for a membership/coverage we have since left. Compared on
     // IDS ONLY (F-1B-3-R1A) so a branch rename cannot look like a new context.
-    if (answer.context != covered.transportIdentity) return null;
+    if (answer.context != covered) return null;
     return answer.options;
   },
-  dependencies: [dashboardCoveredScopeProvider, analyticsBranchAnswerProvider],
+  dependencies: [
+    dashboardCoveredScopeIdentityProvider,
+    analyticsBranchAnswerProvider,
+  ],
 );
+
+/// CODEX R1C-02 — whether [branch] is still a usable filter, given what is
+/// authorized and what the last real answer said.
+///
+/// The SAME question the analytics scope asks, exposed for the operational
+/// surfaces so Activity and Active Orders cannot answer it differently. They
+/// each own their own branch filter (that is deliberate — the F-6 product
+/// decision about unifying them is still open), but "does this branch still
+/// apply" is not a matter of opinion.
+///
+///  * outside current coverage -> no, immediately. A membership change makes a
+///    foreign branch inert before any list is consulted;
+///  * never answered here -> yes. Ignorance is not removal;
+///  * answered, and the answer contains it exactly once -> yes;
+///  * answered, and it is absent — deleted, tombstoned, or dropped as a
+///    conflicting composite -> no.
+bool analyticsBranchStillApplies(
+  AuditBranchOption branch, {
+  required DashboardAnalyticsScope? coverage,
+  required List<AuditBranchOption>? answer,
+}) {
+  if (coverage == null || !coverage.covers(branch)) return false;
+  if (answer == null) return true;
+  return answer.where((o) => sameAnalyticsBranchIdentity(o, branch)).length ==
+      1;
+}
 
 /// CODEX F-1B — the selection that the UI and the financial transport BOTH use.
 ///

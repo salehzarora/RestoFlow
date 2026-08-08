@@ -114,11 +114,11 @@ class _FilterBar extends ConsumerWidget {
         ref.watch(auditBranchOptionsProvider).asData?.value ?? const [];
     final actors =
         ref.watch(auditActorOptionsProvider).asData?.value ?? const [];
-    // Guard the dropdown value against a stale selection no longer in options.
-    final branchValue =
-        branches.any((b) => b.branchId == query.branch?.branchId)
-        ? query.branch?.branchId
-        : null;
+    // CODEX R1C-02 — the value comes from the EFFECTIVE query, which is what
+    // the repository transports. Deriving it from the current option list
+    // instead let the control say "All" while the RPC was still filtered to a
+    // removed branch; the two now cannot disagree, because they are one value.
+    final branchValue = ref.watch(effectiveAuditQueryProvider).branch?.branchId;
     final actorValue =
         actors.any((a) => a.employeeProfileId == query.actor?.employeeProfileId)
         ? query.actor?.employeeProfileId

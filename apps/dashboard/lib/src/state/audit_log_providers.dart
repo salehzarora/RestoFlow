@@ -13,23 +13,32 @@ import '../data/audit_filter_options_repository.dart';
 import '../data/audit_log_models.dart';
 import '../data/audit_log_repository.dart';
 import '../data/real_audit_log_repository.dart';
+import 'analytics_branch_providers.dart'
+    show analyticsBranchOptionsProvider, analyticsBranchStillApplies;
 import 'dashboard_providers.dart';
 
 /// The activity-log data seam. Demo mode (the DEFAULT) uses the in-memory
 /// [DemoAuditLogRepository]; real mode returns [RealAuditLogRepository] reading
 /// `owner_audit_events` over the authenticated transport, scoped to the active
 /// membership (fails closed with no transport/scope).
-final auditLogRepositoryProvider = Provider<AuditLogRepository>((ref) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    return DemoAuditLogRepository();
-  }
-  return RealAuditLogRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+final auditLogRepositoryProvider = Provider<AuditLogRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      return DemoAuditLogRepository();
+    }
+    return RealAuditLogRepository(
+      config.supabase,
+      // R1A-01: identity, not the labelled membership.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
 
 /// The active list controls (range + category + sensitive-only + branch +
 /// actor). The screen's chips / dropdowns / toggle write this; changing it
@@ -48,12 +57,15 @@ final auditFilterOptionsRepositoryProvider =
           return const DemoAuditFilterOptionsRepository();
         }
         return RealAuditFilterOptionsRepository(
-          scope: ref.watch(dashboardMembershipProvider),
+          // R1A-01: identity, not the labelled membership. A rename must not
+          // re-enumerate branches, because the enumeration is what the whole
+          // authoritative-answer memory is built on.
+          scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
           transport: ref.watch(dashboardAuthTransportProvider),
         );
       },
       dependencies: [
-        dashboardMembershipProvider,
+        dashboardMembershipIdentityProvider,
         dashboardAuthTransportProvider,
       ],
     );
@@ -175,9 +187,42 @@ class AuditLogController extends StateNotifier<AuditLogState> {
 }
 
 /// The timeline controller for the current query.
+/// CODEX R1C-02 — the query this surface actually USES, raw filters reconciled
+/// against what is authorized and what the last real branch answer said.
+///
+/// The control read its value from the CURRENT options while the repository
+/// transported `query.branch`, so the two could disagree: after a successful
+/// omission the dropdown fell back to "All" while every RPC stayed filtered to
+/// the removed branch. The list said one thing and the data was another, with
+/// nothing on screen to say which.
+///
+/// One value now feeds BOTH — the visible control and the transport — so they
+/// cannot drift. The RAW query is left alone (no write during build); this is a
+/// projection of it, and it is what the controller and the dropdown read.
+final effectiveAuditQueryProvider = Provider<AuditQuery>(
+  (ref) {
+    final raw = ref.watch(auditLogQueryProvider);
+    final branch = raw.branch;
+    if (branch == null) return raw;
+    return analyticsBranchStillApplies(
+          branch,
+          coverage: ref.watch(dashboardCoveredScopeIdentityProvider),
+          answer: ref.watch(analyticsBranchOptionsProvider),
+        )
+        ? raw
+        : raw.copyWith(clearBranch: true);
+  },
+  dependencies: [
+    auditLogQueryProvider,
+    dashboardCoveredScopeIdentityProvider,
+    analyticsBranchOptionsProvider,
+  ],
+);
+
 final auditLogControllerProvider =
     StateNotifierProvider<AuditLogController, AuditLogState>((ref) {
       final repo = ref.watch(auditLogRepositoryProvider);
-      final query = ref.watch(auditLogQueryProvider);
+      // R1C-02: the EFFECTIVE query, so a retired branch stops being sent.
+      final query = ref.watch(effectiveAuditQueryProvider);
       return AuditLogController(repo, query);
-    }, dependencies: [auditLogRepositoryProvider, auditLogQueryProvider]);
+    }, dependencies: [auditLogRepositoryProvider, effectiveAuditQueryProvider]);

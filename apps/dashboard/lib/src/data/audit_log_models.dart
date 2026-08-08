@@ -150,6 +150,30 @@ class AuditQuery {
     branch: clearBranch ? null : (branch ?? this.branch),
     actor: clearActor ? null : (actor ?? this.actor),
   );
+
+  /// CODEX R1C-02 — value equality, so a DERIVED query that recomputes to the
+  /// same filters does not look like a new one. The controller is recreated
+  /// whenever its query changes, and recreating it reloads the first page, so
+  /// an identity-compared query would reload the timeline every time the branch
+  /// answer was re-fetched even when nothing about the filters had moved.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AuditQuery &&
+          other.range == range &&
+          other.category == category &&
+          other.sensitiveOnly == sensitiveOnly &&
+          other.branch == branch &&
+          other.actor?.employeeProfileId == actor?.employeeProfileId;
+
+  @override
+  int get hashCode => Object.hash(
+    range,
+    category,
+    sensitiveOnly,
+    branch,
+    actor?.employeeProfileId,
+  );
 }
 
 /// One audit event, exactly as the (already secret-scrubbed) RPC returns it.

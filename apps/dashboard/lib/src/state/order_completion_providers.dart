@@ -28,7 +28,8 @@ final orderCompletionRepositoryProvider = Provider<OrderCompletionRepository>((
   }
   return RealOrderCompletionRepository(
     config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
+    // R1A-01: identity, not the labelled membership.
+    scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
     transport: ref.watch(dashboardAuthTransportProvider),
   );
 }, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);

@@ -57,13 +57,15 @@ final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>(
     }
     return RealOrderHistoryRepository(
       config.supabase,
-      scope: ref.watch(dashboardMembershipProvider),
+      // R1A-01: identity, not the labelled membership — a rename must not
+      // rebuild this repository and throw the loaded page away.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
       transport: ref.watch(dashboardAuthTransportProvider),
       analyticsScope: ref.watch(analyticsTransportScopeProvider),
     );
   },
   dependencies: [
-    dashboardMembershipProvider,
+    dashboardMembershipIdentityProvider,
     dashboardAuthTransportProvider,
     analyticsTransportScopeProvider,
   ],

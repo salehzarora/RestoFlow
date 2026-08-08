@@ -61,7 +61,10 @@ class _ActiveOrdersViewState extends ConsumerState<ActiveOrdersView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-    final query = ref.watch(activeOrdersQueryProvider);
+    // CODEX R1C-02 — the EFFECTIVE query drives the controls, because it is
+    // what the board's repository transports. Reading the raw query here let a
+    // removed branch stay on the wire while the control showed "All".
+    final query = ref.watch(effectiveActiveOrdersQueryProvider);
     final state = ref.watch(activeOrdersControllerProvider);
     final branches = ref
         .watch(auditBranchOptionsProvider)
@@ -393,6 +396,10 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // R1C-02: [query] is the EFFECTIVE query, so its branch is exactly what the
+    // board is asking for. It is still checked against the offered items,
+    // because a Dropdown may not hold a value with no item — but the two now
+    // agree by construction rather than by coincidence.
     final branchIds = branches.map((b) => b.branchId).toSet();
     final selectedBranchId = branchIds.contains(query.branch?.branchId)
         ? query.branch?.branchId

@@ -23,6 +23,7 @@ import '../data/real_owner_sales_series_repository.dart';
 import 'analytics_branch_providers.dart'
     show analyticsBranchAnswerProvider, resolvedLiveAnalyticsBranchProvider;
 import 'audit_log_providers.dart' show auditBranchOptionsProvider;
+import 'dashboard_membership_identity.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -41,6 +42,25 @@ final dashboardAuthTransportProvider = Provider<SyncRpcTransport?>(
   dependencies: const [],
 );
 
+/// CODEX R1A-01 — the membership as TRANSPORT/AUTHORIZATION identity.
+///
+/// Every provider that builds a request depends on THIS rather than on
+/// [dashboardMembershipProvider]. `MembershipContext` has no `==`, so watching
+/// it meant any new instance rebuilt the repositories — new financial RPCs, a
+/// discarded Orders History page, pagination restarted — even when the only
+/// difference was a display name. This value compares on the fields that decide
+/// what is asked and what is permitted, and on nothing else, so a rename is a
+/// no-op here and an authorization change is not.
+///
+/// Surfaces that render the membership keep watching the labelled provider.
+final dashboardMembershipIdentityProvider =
+    Provider<DashboardMembershipIdentity?>((ref) {
+      final membership = ref.watch(dashboardMembershipProvider);
+      return membership == null
+          ? null
+          : DashboardMembershipIdentity.of(membership);
+    }, dependencies: [dashboardMembershipProvider]);
+
 /// The owner-reports data seam (RF-119).
 ///
 /// SINGLE swap point. The demo/real choice is decided by [runtimeConfigProvider]
@@ -51,17 +71,24 @@ final dashboardAuthTransportProvider = Provider<SyncRpcTransport?>(
 /// authenticated transport, scoped to the active membership. With no
 /// transport/scope it fails closed (see [RealRepoNotWiredError]) and the
 /// existing error state surfaces it.
-final ownerReportsRepositoryProvider = Provider<OwnerReportsRepository>((ref) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    return const DemoOwnerReportsRepository();
-  }
-  return RealOwnerReportsRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+final ownerReportsRepositoryProvider = Provider<OwnerReportsRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      return const DemoOwnerReportsRepository();
+    }
+    return RealOwnerReportsRepository(
+      config.supabase,
+      // R1A-01: identity, not the labelled membership.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
 
 /// The selected reporting date range (RF-REPORT-004). The Overview's range chips
 /// write this; the report provider watches it, so changing the range re-runs
@@ -83,6 +110,20 @@ final dashboardCoveredScopeProvider = Provider<DashboardAnalyticsScope?>((ref) {
   if (membership == null) return null;
   return DashboardAnalyticsScope.coveredBy(membership);
 }, dependencies: [dashboardMembershipProvider]);
+
+/// CODEX R1A-01 — the covered scope as a LABEL-FREE identity.
+///
+/// [dashboardCoveredScopeProvider] keeps its label because the selector renders
+/// it for a branch-fixed membership. But the branch-option chain hangs off
+/// coverage, and for that membership `coveredBy` copies `branchName` into the
+/// scope — so a rename produced an unequal coverage and RE-ENUMERATED the
+/// branches, discarding and re-fetching the very answer the omission machinery
+/// depends on. Everything downstream of coverage that only needs ids reads this.
+final dashboardCoveredScopeIdentityProvider =
+    Provider<DashboardAnalyticsScope?>(
+      (ref) => ref.watch(dashboardCoveredScopeProvider)?.transportIdentity,
+      dependencies: [dashboardCoveredScopeProvider],
+    );
 
 /// CLIENT-E1 — the owner's explicit branch choice, or null for "all permitted".
 ///
@@ -264,11 +305,15 @@ final ownerSalesSeriesRepositoryProvider = Provider<OwnerSalesSeriesRepository>(
       return const DemoOwnerSalesSeriesRepository();
     }
     return RealOwnerSalesSeriesRepository(
-      scope: ref.watch(dashboardMembershipProvider),
+      // R1A-01: identity, not the labelled membership.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
       transport: ref.watch(dashboardAuthTransportProvider),
     );
   },
-  dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider],
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
 );
 
 /// CLIENT-A — the identity of the sales series the Overview currently needs, or
@@ -358,23 +403,82 @@ final ownerSalesSeriesForKeyProvider =
 /// A FAILED enumeration does not block the refresh: the last authoritative
 /// answer still stands (F-1B-3-R1), so the financial half re-runs against the
 /// retained scope. Refreshing must never be able to widen the figures.
-Future<void> refreshOwnerReport(WidgetRef ref) async {
-  // No membership (demo mode) means no branch list to re-read.
-  if (ref.read(dashboardCoveredScopeProvider) != null) {
-    ref.invalidate(auditBranchOptionsProvider);
-    try {
-      await ref.read(analyticsBranchAnswerProvider.future);
-    } catch (_) {
-      // Technical failure: keep the last authoritative scope and carry on.
+/// CODEX R1C-03 — the refresh SEQUENCE, owned by the shared container.
+///
+/// It used to run on the Overview's `WidgetRef`, awaiting the branch
+/// enumeration and then checking `ref.context.mounted` before touching the
+/// financial families. Crossing the responsive breakpoint mid-flight remounts
+/// that widget, so the check failed and the second half was simply skipped: the
+/// branch authority updated while every figure on the page stayed stale, and
+/// nothing said so. Whether a data refresh COMPLETES must not depend on whether
+/// a particular widget survived.
+///
+/// Living in a [StateNotifierProvider] moves the continuation onto a `Ref` with
+/// the container's lifetime — the same hoisted container the branch answer and
+/// the report families live in — so a remount, a tab change or a resize cannot
+/// cancel it.
+///
+/// The state is whether a refresh is in flight, and it is also the single-flight
+/// gate: a second tap joins the running refresh instead of starting a rival one,
+/// so two sequences can never interleave their invalidations or land their
+/// results out of order.
+class DashboardRefreshController extends StateNotifier<bool> {
+  DashboardRefreshController(this._ref) : super(false);
+
+  final Ref _ref;
+  Future<void>? _inFlight;
+
+  /// Runs the refresh, or joins the one already running.
+  Future<void> refresh() => _inFlight ??= _run().whenComplete(() {
+    _inFlight = null;
+    if (mounted) state = false;
+  });
+
+  Future<void> _run() async {
+    state = true;
+    // ORDER MATTERS (F-1B-3-R1C). Invalidating the report first would refetch
+    // the current branch, and only then would the enumeration report it gone
+    // and refetch the parent — one avoidable request for a scope the owner is
+    // no longer in, with its result briefly on screen. Settling the branch
+    // answer first means the financial invalidation reads the key that answer
+    // produced.
+    //
+    // No membership (demo mode) means there is no branch list to re-read.
+    if (_ref.read(dashboardCoveredScopeIdentityProvider) != null) {
+      _ref.invalidate(auditBranchOptionsProvider);
+      try {
+        await _ref.read(analyticsBranchAnswerProvider.future);
+      } catch (_) {
+        // Technical failure: the last authoritative answer stands, and the
+        // figures refresh against it. Refreshing must never widen the scope.
+      }
     }
-    // The owner may have left the surface while the enumeration was in flight.
-    if (!ref.context.mounted) return;
-  }
-  ref.invalidate(
-    ownerReportForKeyProvider(ref.read(currentOwnerReportKeyProvider)),
-  );
-  final seriesKey = ref.read(currentOwnerSalesSeriesKeyProvider);
-  if (seriesKey != null) {
-    ref.invalidate(ownerSalesSeriesForKeyProvider(seriesKey));
+    _ref.invalidate(
+      ownerReportForKeyProvider(_ref.read(currentOwnerReportKeyProvider)),
+    );
+    final seriesKey = _ref.read(currentOwnerSalesSeriesKeyProvider);
+    if (seriesKey != null) {
+      _ref.invalidate(ownerSalesSeriesForKeyProvider(seriesKey));
+    }
   }
 }
+
+/// True while a refresh is in flight.
+final dashboardRefreshControllerProvider =
+    StateNotifierProvider<DashboardRefreshController, bool>(
+      DashboardRefreshController.new,
+      dependencies: [
+        dashboardCoveredScopeIdentityProvider,
+        auditBranchOptionsProvider,
+        analyticsBranchAnswerProvider,
+        currentOwnerReportKeyProvider,
+        currentOwnerSalesSeriesKeyProvider,
+        ownerReportForKeyProvider,
+        ownerSalesSeriesForKeyProvider,
+      ],
+    );
+
+/// The Overview's refresh action. A thin call into the controller above, kept
+/// under its original name so every existing call site and test is unchanged.
+Future<void> refreshOwnerReport(WidgetRef ref) =>
+    ref.read(dashboardRefreshControllerProvider.notifier).refresh();
