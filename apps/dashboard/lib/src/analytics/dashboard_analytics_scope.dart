@@ -177,6 +177,30 @@ class DashboardAnalyticsScope {
     };
   }
 
+  /// CODEX F-1B-1-R1 — this scope as TRANSPORT IDENTITY: the same ids and kind
+  /// with the display label dropped.
+  ///
+  /// [branchLabel] is part of `==` and `hashCode`, and rightly so for a value
+  /// the UI renders. But a provider that watches the whole scope in order to
+  /// build a REQUEST inherits that: renaming a branch produced an unequal
+  /// scope, which rebuilt `orderHistoryRepositoryProvider`, which rebuilt the
+  /// controller, which discarded the loaded page and re-issued
+  /// `owner_order_history` from a null cursor. The owner's list jumped back to
+  /// the top because someone had edited a branch's NAME.
+  ///
+  /// The report and series keys never had this problem — they are built from
+  /// ids and compare equal across a rename. This gives the transport-bearing
+  /// providers the same property without asking every one of them to remember
+  /// to strip the label.
+  DashboardAnalyticsScope get transportIdentity => branchLabel == null
+      ? this
+      : DashboardAnalyticsScope(
+          organizationId: organizationId,
+          restaurantId: restaurantId,
+          branchId: branchId,
+          kind: kind,
+        );
+
   /// Whether [option] is this exact scope — all three ids.
   ///
   /// Used by the selector to decide whether a loaded option is THE selected

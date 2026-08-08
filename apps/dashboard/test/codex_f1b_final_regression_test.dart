@@ -203,11 +203,24 @@ Future<void> _loadReport(ProviderContainer c) => c.read(
 );
 
 /// Re-runs the option load and waits for it to settle (success or failure).
+///
+/// CODEX F-1B-3-R1: settles the ANALYTICS answer as well — it stamps the raw
+/// list with the authorization context it was loaded for, one microtask later.
 Future<void> _reloadOptions(ProviderContainer c) async {
   c.invalidate(auditBranchOptionsProvider);
   await c
       .read(auditBranchOptionsProvider.future)
       .catchError((_) => const <AuditBranchOption>[]);
+  await _settleAnswer(c);
+}
+
+/// Awaits the stamped analytics answer, swallowing the failure cases.
+Future<void> _settleAnswer(ProviderContainer c) async {
+  try {
+    await c.read(analyticsBranchAnswerProvider.future);
+  } catch (_) {
+    // The failure states are the point of several of these cases.
+  }
 }
 
 void main() {

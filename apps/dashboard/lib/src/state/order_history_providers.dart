@@ -39,6 +39,14 @@ final demoOrderStoreProvider = Provider<DemoOrderStore>(
 /// under one scope can therefore never be replayed under another, and the old
 /// scope's rows cannot append into the new one — the guarantee falls out of the
 /// provider graph instead of needing its own bookkeeping.
+///
+/// CODEX F-1B-1-R1 — it watches [analyticsTransportScopeProvider], the
+/// LABEL-FREE identity. That reset is exactly right for a change of scope and
+/// exactly wrong for a change of NAME: renaming a branch left every id
+/// identical, but the label is part of `DashboardAnalyticsScope`'s equality, so
+/// the value compared unequal, this provider rebuilt, the controller rebuilt,
+/// and the owner's loaded page vanished back to the top. A rename is display
+/// metadata; it must not look like a new query.
 final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>(
   (ref) {
     final config = ref.watch(runtimeConfigProvider);
@@ -51,13 +59,13 @@ final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>(
       config.supabase,
       scope: ref.watch(dashboardMembershipProvider),
       transport: ref.watch(dashboardAuthTransportProvider),
-      analyticsScope: ref.watch(dashboardAnalyticsScopeProvider),
+      analyticsScope: ref.watch(analyticsTransportScopeProvider),
     );
   },
   dependencies: [
     dashboardMembershipProvider,
     dashboardAuthTransportProvider,
-    dashboardAnalyticsScopeProvider,
+    analyticsTransportScopeProvider,
   ],
 );
 

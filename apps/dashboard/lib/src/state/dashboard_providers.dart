@@ -174,6 +174,19 @@ final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
   ],
 );
 
+/// CODEX F-1B-1-R1 — the analytics scope as a REQUEST identity: the same ids
+/// and kind, with the display label stripped.
+///
+/// Providers that build a request watch THIS, so a branch rename cannot rebuild
+/// them. [dashboardAnalyticsScopeProvider] keeps the label, because the Overview
+/// selector and the Orders scope indicator have to render the branch's current
+/// name — the two consumers genuinely want different things, and the split says
+/// so rather than leaving each caller to remember.
+final analyticsTransportScopeProvider = Provider<DashboardAnalyticsScope?>(
+  (ref) => ref.watch(dashboardAnalyticsScopeProvider)?.transportIdentity,
+  dependencies: [dashboardAnalyticsScopeProvider],
+);
+
 /// F0.6 / CLIENT-E1 — the identity of the report the Overview is asking for.
 ///
 /// Derived, never written by a screen: it reads the same scope the repository

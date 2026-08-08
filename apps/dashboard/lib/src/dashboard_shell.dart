@@ -537,12 +537,24 @@ class _DashboardShellState extends State<DashboardShell> {
   /// dataset with an honest banner. Same ProviderScope wiring as the Overview so
   /// both order seams pick up the scope + transport.
   Widget _ordersSurface() {
+    // CODEX F-1B-3-R2 — the membership + transport overrides are GONE from
+    // here, and that is the fix rather than a tidy-up.
+    //
+    // They were repeated with values identical to the stable scope above, and
+    // an override is what decides WHERE a provider lives: Riverpod places a
+    // provider in the deepest container overriding any of its transitive
+    // dependencies. Branch options depend on both, so Overview and Orders each
+    // built their OWN branch-options chain — two enumerations, and worse, two
+    // independent memories of what the last successful answer said. Overview
+    // could learn that branch B is gone and move to the parent scope while
+    // Orders, mounting fresh, had never been told and issued an
+    // `owner_order_history` request for B.
+    //
+    // With the duplicates removed both surfaces resolve in the ONE hoisted
+    // container, so there is a single answer and a single scope. Only the
+    // genuinely Orders-local override stays.
     return ProviderScope(
       overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
         // PRINT-BRANDING-LOGO-001: the current-logo URL resolver for the order
         // reprint preview (null -> text-only).
         receiptLogoUrlResolverProvider.overrideWithValue(
@@ -579,15 +591,10 @@ class _DashboardShellState extends State<DashboardShell> {
   /// transport (real mode); demo mode shows the in-memory timeline with an
   /// honest banner. Same ProviderScope wiring as the Orders surface.
   Widget _activityLogSurface() {
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-      ],
-      child: const ActivityLogScreen(),
-    );
+    // CODEX F-1B-3-R2 — same duplicate overrides, same effect: Activity was
+    // enumerating branches into a container of its own. It inherits the stable
+    // scope above, which is where those values already are.
+    return const ActivityLogScreen();
   }
 
   /// The Users tab (RF-116). Demo mode: the labelled demo store. Real mode with

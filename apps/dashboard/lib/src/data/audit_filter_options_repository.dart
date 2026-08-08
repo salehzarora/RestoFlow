@@ -167,29 +167,34 @@ class RealAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
     // rather than fatal — one bad branch row is not evidence that the rest of
     // the payload is wrong — so an empty result here means the caller really
     // covers no selectable branch.
-    final out = <AuditBranchOption>[];
+    //
+    // CODEX F-1B-2-R1 — DECODE EVERYTHING, THEN DETECT CONFLICTS, THEN FILTER
+    // BY ROLE. In that order, and the order is the whole point.
+    //
+    // Role filtering used to happen while decoding, so a branch id delivered
+    // twice under two different restaurants could lose one of its two rows
+    // before anything compared them. For a restaurant owner of rest-2 the
+    // rest-CONFLICT row simply vanished, the client-side sanitiser saw one
+    // clean tuple, and branch-2 was offered as if nothing were wrong. The
+    // conflict check was documented as whole-response and in production it was
+    // not.
+    //
+    // Conflicts are therefore decided over EVERY decoded row, including rows
+    // this caller may not read, and only the surviving branch ids are then
+    // narrowed to the caller's coverage. Unauthorized rows still never leave
+    // this method — they are evidence about a branch id, not options.
+    final decoded = <AuditBranchOption>[];
     for (final r in restaurants.whereType<Map>()) {
       final restaurantId = _str(r['id']);
       if (restaurantId == null) continue;
-      // Role-derived coverage: never surface a branch the caller does not cover.
-      if (m.role == MembershipRole.restaurantOwner &&
-          restaurantId != m.restaurantId) {
-        continue;
-      }
       final restaurantName = _str(r['name']) ?? '';
       final branches = r['branches'];
       if (branches is! List) continue;
       for (final b in branches.whereType<Map>()) {
         final branchId = _str(b['id']);
         if (branchId == null) continue;
-        // Managers (and any non-owner role) cover ONLY their own branch.
-        if (m.role != MembershipRole.orgOwner &&
-            m.role != MembershipRole.restaurantOwner &&
-            branchId != m.branchId) {
-          continue;
-        }
         final branchName = _str(b['name']) ?? branchId;
-        out.add(
+        decoded.add(
           AuditBranchOption(
             // CODEX F-1: the organization this call was AUTHORIZED under —
             // `list_org_structure` was invoked with exactly this id, so the
@@ -204,7 +209,53 @@ class RealAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
         );
       }
     }
+
+    final conflicting = _conflictingBranchIds(decoded);
+    final out = <AuditBranchOption>[];
+    final taken = <String>{};
+    for (final option in decoded) {
+      if (conflicting.contains(option.branchId)) continue;
+      // Role-derived coverage: never surface a branch the caller does not
+      // cover. Unchanged rules, applied AFTER the conflict pass.
+      if (m.role == MembershipRole.restaurantOwner &&
+          option.restaurantId != m.restaurantId) {
+        continue;
+      }
+      // Managers (and any non-owner role) cover ONLY their own branch.
+      if (m.role != MembershipRole.orgOwner &&
+          m.role != MembershipRole.restaurantOwner &&
+          option.branchId != m.branchId) {
+        continue;
+      }
+      // Rows agreeing on all three ids are one branch; a differing label is
+      // cosmetic. First occurrence wins, which is deterministic because the
+      // server orders stably — and safe, because every row still carrying this
+      // branch id shares its composite.
+      if (!taken.add(option.branchId)) continue;
+      out.add(option);
+    }
     return out;
+  }
+
+  /// Branch ids that arrived under more than one composite identity.
+  ///
+  /// Same id, different restaurant or organization: the payload contradicts
+  /// itself about where that branch lives, so the id is unusable. Whole-list
+  /// and symmetric — the answer cannot depend on which of the two rows came
+  /// first.
+  static Set<String> _conflictingBranchIds(List<AuditBranchOption> decoded) {
+    final firstById = <String, AuditBranchOption>{};
+    final conflicting = <String>{};
+    for (final option in decoded) {
+      final seen = firstById[option.branchId];
+      if (seen == null) {
+        firstById[option.branchId] = option;
+      } else if (seen.restaurantId != option.restaurantId ||
+          seen.organizationId != option.organizationId) {
+        conflicting.add(option.branchId);
+      }
+    }
+    return conflicting;
   }
 
   @override

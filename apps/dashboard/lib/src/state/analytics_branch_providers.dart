@@ -53,30 +53,79 @@ import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'dashboard_providers.dart'
     show dashboardCoveredScopeProvider, effectiveAnalyticsBranchProvider;
 
-/// CODEX F-1B-2 — the live branch options an analytics surface may act on:
-/// conflict-sanitised and coverage-filtered, with loading and error preserved.
+/// One real answer about which branches exist, STAMPED with the authorization
+/// context it was loaded for.
 ///
-/// A single provider so the CONTROL and the SCOPE can never disagree about
-/// which options are real. The previous arrangement recomputed the selectable
-/// list inside the widget, which is precisely how a rule applied in one place
-/// and not the other went unnoticed.
+/// The stamp is the point. Riverpod keeps a provider's previous value across a
+/// rebuild — including a rebuild caused by a DEPENDENCY CHANGE, and including
+/// one whose reload then fails. Verified, not assumed: switching the membership
+/// leaves `AsyncLoading(value: <previous>)`, and if the new load then throws it
+/// leaves `AsyncError(value: <previous>)`. Both report `hasValue == true`. So
+/// "the last successful answer" is not by itself a safe question — organization
+/// A's answer is still sitting there while organization B is asking.
 ///
-/// Async state is passed through rather than flattened, because the difference
-/// between "no branches" and "not known yet" is the whole of F-1B-3.
-final analyticsBranchOptionsProvider =
-    Provider<AsyncValue<List<AuditBranchOption>>>(
-      (ref) {
-        final covered = ref.watch(dashboardCoveredScopeProvider);
-        if (covered == null)
-          return const AsyncValue.data(<AuditBranchOption>[]);
-        return ref
-            .watch(auditBranchOptionsProvider)
-            .whenData(
-              (raw) => sanitizeAnalyticsBranchOptions(raw, coverage: covered),
-            );
-      },
-      dependencies: [dashboardCoveredScopeProvider, auditBranchOptionsProvider],
-    );
+/// Neither `isRefreshing` nor `isReloading` separates the two cases (the
+/// dependency-change-then-failure state is not "loading" at all), so the
+/// context is recorded here, at the moment the answer is produced, and checked
+/// on the way out. `list_org_structure` is NOT re-issued: this awaits the
+/// existing [auditBranchOptionsProvider] future, so Activity, Active Orders and
+/// the analytics scope still share one request.
+class AnalyticsBranchAnswer {
+  const AnalyticsBranchAnswer({required this.context, required this.options});
+
+  /// The coverage this answer describes. An answer whose context is not the
+  /// current one answers a question nobody is asking any more.
+  final DashboardAnalyticsScope context;
+
+  /// Conflict-sanitised, coverage-filtered branches. Empty is an ANSWER.
+  final List<AuditBranchOption> options;
+}
+
+final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>((
+  ref,
+) async {
+  final covered = ref.watch(dashboardCoveredScopeProvider);
+  final raw = await ref.watch(auditBranchOptionsProvider.future);
+  return AnalyticsBranchAnswer(
+    context: covered!,
+    options: sanitizeAnalyticsBranchOptions(raw, coverage: covered),
+  );
+}, dependencies: [dashboardCoveredScopeProvider, auditBranchOptionsProvider]);
+
+/// CODEX F-1B-2 / F-1B-3-R1 — the LAST REAL ANSWER for the CURRENT
+/// authorization context, or null if there has not been one.
+///
+/// One provider so the CONTROL and the SCOPE can never disagree about which
+/// branches are real. Computing the selectable list inside the widget is
+/// precisely how a rule applied in one place and not the other went unnoticed.
+///
+/// WHY "LAST REAL ANSWER" AND NOT "CURRENTLY SUCCESSFUL". The first version
+/// asked whether the CURRENT state is `AsyncData` and fell back to the raw
+/// selection otherwise. That has a hole with a memory: once a successful list
+/// has authoritatively omitted branch B and the scope has moved to the parent,
+/// a later FAILED refresh is not `AsyncData` — so the rule fell back to the
+/// still-stored raw B and RESURRECTED it, moving the money back to a branch no
+/// successful response had reintroduced. Nothing had said B was back; the
+/// client had merely stopped knowing, and treated that as permission.
+///
+/// So: resolve against the last real answer when there is one for THIS context,
+/// and fall back to the raw selection only when the question has never been
+/// answered here. Ignorance never restores a branch; only another real answer
+/// containing it can.
+final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
+  (ref) {
+    final covered = ref.watch(dashboardCoveredScopeProvider);
+    if (covered == null) return const <AuditBranchOption>[];
+    final async = ref.watch(analyticsBranchAnswerProvider);
+    // Never answered at all — which is not "answered: none".
+    if (!async.hasValue) return null;
+    final answer = async.requireValue;
+    // Answered, but for a membership/coverage we have since left.
+    if (answer.context != covered) return null;
+    return answer.options;
+  },
+  dependencies: [dashboardCoveredScopeProvider, analyticsBranchAnswerProvider],
+);
 
 /// CODEX F-1B — the selection that the UI and the financial transport BOTH use.
 ///
@@ -84,34 +133,37 @@ final analyticsBranchOptionsProvider =
 /// usability, and it is the only value a surface should act on.
 ///
 ///  * no authorized selection -> null;
-///  * options LOADING or FAILED -> the authorized selection stands. Transient
-///    ignorance is not evidence of removal, and widening the scope on a failed
-///    fetch would silently change what every figure on the page means;
-///  * options SUCCEEDED -> the CURRENT list decides. Exactly one match on
-///    branch IDENTITY (organization + restaurant + branch, never the label —
-///    F-1B-1) returns that LIVE option, so a renamed branch keeps its scope and
-///    shows its new name. Zero matches — deleted, tombstoned, or dropped as a
-///    conflicting composite — returns null, and the scope falls back to the
-///    authorized parent rather than staying on a branch that is no longer
-///    there.
+///  * NEVER ANSWERED here (a first load in flight, or a first load that failed)
+///    -> the authorized selection stands. Ignorance is not evidence of removal,
+///    and widening the scope on a failed fetch would silently change what every
+///    figure on the page means;
+///  * ANSWERED -> the last real answer decides, even while a refresh is in
+///    flight or after one has failed. Exactly one match on branch IDENTITY
+///    (organization + restaurant + branch, never the label — F-1B-1) returns
+///    that option, so a renamed branch keeps its scope and shows its new name.
+///    Zero matches — deleted, tombstoned, or dropped as a conflicting composite
+///    — returns null, and the scope falls back to the authorized parent rather
+///    than staying on a branch that is no longer there.
 ///
-/// Returning the LIVE option rather than the stored one is what makes a rename
-/// free: the ids are identical, so the family keys do not change and no
+/// F-1B-3-R1: the second bullet is what stops an omission from being undone by
+/// a later failure. Once a real answer has said branch B is gone, no amount of
+/// subsequent not-knowing brings it back; only another real answer containing
+/// it can.
+///
+/// Returning the ANSWER'S option rather than the stored one is what makes a
+/// rename free: the ids are identical, so the family keys do not change and no
 /// analytics request is re-issued for a change of display text.
 final resolvedLiveAnalyticsBranchProvider = Provider<AuditBranchOption?>(
   (ref) {
     final effective = ref.watch(effectiveAnalyticsBranchProvider);
     if (effective == null) return null;
 
-    final live = switch (ref.watch(analyticsBranchOptionsProvider)) {
-      AsyncData(:final value) => value,
-      _ => null,
-    };
-    // Loading or error: nothing authoritative has been said about existence.
-    if (live == null) return effective;
+    final answered = ref.watch(analyticsBranchOptionsProvider);
+    // Never answered here: nothing authoritative has been said about existence.
+    if (answered == null) return effective;
 
     final matches = [
-      for (final option in live)
+      for (final option in answered)
         if (sameAnalyticsBranchIdentity(option, effective)) option,
     ];
     // Sanitised options hold at most one row per identity, so more than one

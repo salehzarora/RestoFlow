@@ -269,20 +269,22 @@ class _ScopeSelector extends ConsumerWidget {
     //    no longer contains the selection at all. Null then means the broad
     //    scope, and the figures below have moved to the broad scope too;
     //
-    //  * options LOADING or FAILED — nothing authoritative is known, so the
-    //    selection still drives the reports. Offering only "All permitted
-    //    branches" here would have the control claim a breadth the transport
-    //    does not have, so the branch being queried is offered as the single
-    //    individual option. The owner sees the scope their numbers are in, and
-    //    the field still holds a value present exactly once.
-    final live = switch (ref.watch(analyticsBranchOptionsProvider)) {
-      AsyncData(:final value) => value,
-      _ => null,
-    };
+    //  * NEVER ANSWERED — a first load in flight or failed. Nothing
+    //    authoritative is known, so the selection still drives the reports.
+    //    Offering only "All permitted branches" here would have the control
+    //    claim a breadth the transport does not have, so the branch being
+    //    queried is offered as the single individual option. The owner sees the
+    //    scope their numbers are in, and the field still holds a value present
+    //    exactly once.
+    //
+    // A refresh that is in flight or has failed keeps showing the LAST ANSWER
+    // (F-1B-3-R1), so a branch a successful list already retired cannot
+    // reappear in the control any more than it can in the transport.
+    final answered = ref.watch(analyticsBranchOptionsProvider);
     final resolved = ref.watch(resolvedLiveAnalyticsBranchProvider);
     final List<AuditBranchOption> selectable;
-    if (live != null) {
-      selectable = live;
+    if (answered != null) {
+      selectable = answered;
     } else if (resolved != null) {
       selectable = [resolved];
     } else {

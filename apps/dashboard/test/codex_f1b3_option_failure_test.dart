@@ -7,6 +7,7 @@ import 'package:restoflow_dashboard/src/data/audit_log_models.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/order_history_models.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_dashboard/src/state/analytics_branch_providers.dart';
 import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_dashboard/src/state/order_history_providers.dart';
@@ -177,6 +178,11 @@ ProviderContainer _container({
 
 /// Settles the branch-option load WITHOUT letting its failure escape, so the
 /// assertions below are about the resulting scope rather than about the throw.
+///
+/// CODEX F-1B-3-R1: the ANALYTICS answer is settled too. It stamps the raw list
+/// with the authorization context it was loaded for, which costs one extra
+/// microtask hop — so awaiting only the raw future would assert against a
+/// chain that has not finished arriving.
 Future<AsyncValue<List<AuditBranchOption>>> _settleOptions(
   ProviderContainer c,
 ) async {
@@ -184,6 +190,11 @@ Future<AsyncValue<List<AuditBranchOption>>> _settleOptions(
     await c.read(auditBranchOptionsProvider.future);
   } catch (_) {
     // Expected for the failure outcomes; the provider holds the error.
+  }
+  try {
+    await c.read(analyticsBranchAnswerProvider.future);
+  } catch (_) {
+    // Same failure, one link further down.
   }
   return c.read(auditBranchOptionsProvider);
 }
