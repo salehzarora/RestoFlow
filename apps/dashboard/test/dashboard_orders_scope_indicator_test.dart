@@ -6,6 +6,7 @@ import 'package:restoflow_dashboard/src/data/audit_log_models.dart';
 import 'package:restoflow_dashboard/src/data/order_history_models.dart';
 import 'package:restoflow_dashboard/src/data/order_history_repository.dart';
 import 'package:restoflow_dashboard/src/orders/order_history_screen.dart';
+import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_dashboard/src/state/order_history_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -61,6 +62,11 @@ Widget _wrap({
     dashboardMembershipProvider.overrideWithValue(_membership(role)),
     orderHistoryRepositoryProvider.overrideWithValue(const _EmptyRepository()),
     selectedAnalyticsBranchProvider.overrideWith((ref) => selected),
+    // CODEX F-1B-3 — the selected branch has to EXIST. A successful option
+    // list that omits it now retires the selection (a deleted branch must not
+    // stay a hidden financial scope), so a fixture asserting that a selection
+    // takes effect has to model a world where the branch is really there.
+    auditBranchOptionsProvider.overrideWith((ref) async => const [_harbor]),
   ],
   child: MaterialApp(
     locale: locale,

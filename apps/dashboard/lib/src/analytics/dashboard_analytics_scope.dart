@@ -206,3 +206,85 @@ class DashboardAnalyticsScope {
       'DashboardAnalyticsScope(${kind.name}, org: $organizationId, '
       'restaurant: $restaurantId, branch: $branchId)';
 }
+
+/// CODEX F-1B-1 — analytics branch IDENTITY, which the display label is NOT
+/// part of.
+///
+/// `AuditBranchOption.==` includes `label`, and legitimately so: the Activity
+/// and Active Orders filters use an option as a DISPLAY value, where a renamed
+/// branch really is a different thing to show. But an analytics scope is three
+/// ids — the owner RPCs take no label at all — so for scope purposes a label is
+/// metadata ABOUT a branch, never a way of naming one.
+///
+/// Using value equality to answer "is this the branch I selected" therefore
+/// made a RENAME look like a different branch. A branch selected as "Old name"
+/// and re-delivered as "New name" is the same `org/restaurant/branch` triple:
+/// transport stayed on it, while the selector — finding no *equal* option —
+/// fell back to "All permitted branches". Scope and screen disagreed until the
+/// owner picked again, and nothing on screen said which was right.
+///
+/// `AuditBranchOption.==` is deliberately left ALONE (CODEX F-1B §22).
+/// Redefining model equality to fix one selector would quietly change every
+/// other consumer that treats an option as a display value.
+bool sameAnalyticsBranchIdentity(AuditBranchOption a, AuditBranchOption b) =>
+    a.organizationId == b.organizationId &&
+    a.restaurantId == b.restaurantId &&
+    a.branchId == b.branchId;
+
+/// CODEX F-1B-2 — the branch options an analytics selector may offer, given the
+/// list as delivered and the caller's [coverage].
+///
+/// Three rules, in this order:
+///
+///  1. **Conflicting composites are excluded ENTIRELY.** Two rows sharing a
+///     `branchId` under different restaurants (or organizations) cannot both be
+///     true. The previous de-duplication kept the FIRST and dropped the rest,
+///     which made list ORDER load-bearing for tenant scoping: put the wrong
+///     tuple first and the wrong tuple won. Branch ids are UUID primary keys in
+///     a valid schema, so this only happens with stale or malformed decoded
+///     data — exactly when guessing is least defensible. The branch id is
+///     therefore dropped, not repaired: not first, not last, and never by
+///     substituting a restaurant or organization the client invented.
+///
+///     The check runs over the list AS DELIVERED, BEFORE coverage narrowing, so
+///     a conflict cannot be hidden by one of its two rows happening to fall
+///     outside coverage. It is symmetric and whole-list, so the answer does not
+///     depend on which conflicting row arrives first.
+///
+///  2. **Coverage still filters.** A branch the role does not cover is never
+///     offered, as before.
+///
+///  3. **One entry per surviving identity.** Rows that agree on all three ids
+///     are ONE branch; differing labels are a cosmetic metadata conflict, not a
+///     scope conflict, so they collapse to a single selectable entry. First
+///     occurrence wins, which is deterministic because the option source orders
+///     stably (created_at, then name) — and safe, because after rule 1 every
+///     remaining row with a given branch id carries the SAME composite.
+///
+/// Rule 3 is where the old first-wins behaviour survives; rule 1 is what makes
+/// it sound.
+List<AuditBranchOption> sanitizeAnalyticsBranchOptions(
+  Iterable<AuditBranchOption> options, {
+  DashboardAnalyticsScope? coverage,
+}) {
+  final firstByBranchId = <String, AuditBranchOption>{};
+  final conflicting = <String>{};
+  for (final option in options) {
+    final seen = firstByBranchId[option.branchId];
+    if (seen == null) {
+      firstByBranchId[option.branchId] = option;
+    } else if (!sameAnalyticsBranchIdentity(seen, option)) {
+      conflicting.add(option.branchId);
+    }
+  }
+
+  final selectable = <AuditBranchOption>[];
+  final taken = <String>{};
+  for (final option in options) {
+    if (conflicting.contains(option.branchId)) continue;
+    if (coverage != null && !coverage.covers(option)) continue;
+    if (!taken.add(option.branchId)) continue;
+    selectable.add(option);
+  }
+  return selectable;
+}

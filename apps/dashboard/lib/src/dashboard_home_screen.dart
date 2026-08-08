@@ -16,7 +16,8 @@ import 'data/audit_log_models.dart' show AuditBranchOption;
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
 import 'format/money_format.dart';
-import 'state/audit_log_providers.dart' show auditBranchOptionsProvider;
+import 'state/analytics_branch_providers.dart'
+    show analyticsBranchOptionsProvider, resolvedLiveAnalyticsBranchProvider;
 import 'state/dashboard_providers.dart';
 // CLIENT-D: the ONE localized order-type mapper, already shared by the order
 // history list, the active board and the detail sheet. Imported rather than
@@ -250,52 +251,44 @@ class _ScopeSelector extends ConsumerWidget {
       );
     }
 
-    // Fail-soft: a failed or still-loading option list yields no individual
-    // branches, so the control offers only the broad scope — which is exactly
-    // what is being displayed. Never a fabricated option, never a fallback to
-    // some branch the owner did not pick.
-    final options =
-        ref.watch(auditBranchOptionsProvider).asData?.value ??
-        const <AuditBranchOption>[];
-    // CODEX F-1B — items must have UNIQUE values, and the selected value must
-    // be present exactly once among them.
+    // CODEX F-1B — THE CONTROL SHOWS THE SCOPE THE REPORTS ARE ACTUALLY USING.
     //
-    // The dropdown's item value is a branch id, so two covered options sharing
-    // a branch id under different restaurants would produce two items with the
-    // same value — which DropdownButtonFormField asserts on just as loudly as a
-    // value with no item. Options are therefore de-duplicated by branch id,
-    // first occurrence winning; the source orders deterministically
-    // (created_at then name), so which one wins is stable rather than
-    // arbitrary.
-    final selectable = <AuditBranchOption>[];
-    final seenBranchIds = <String>{};
-    for (final o in options) {
-      if (!covered.covers(o)) continue;
-      if (!seenBranchIds.add(o.branchId)) continue;
-      selectable.add(o);
+    // The item list and the selected value are derived from ONE list, so
+    // "exactly one item carries the selected value" is true by construction
+    // rather than by a check that has to be kept in step. The list itself comes
+    // from [analyticsBranchOptionsProvider] — the same conflict-sanitised,
+    // coverage-filtered source the scope resolves against (F-1B-2), so the
+    // control and the transport cannot disagree about which branches are real.
+    //
+    // Two states, and the difference between them is F-1B-3:
+    //
+    //  * options LOADED — offer them, and show whatever
+    //    [resolvedLiveAnalyticsBranchProvider] resolved to. That is either one
+    //    of these very options (matched on IDENTITY, so a renamed branch keeps
+    //    its place and shows its NEW name — F-1B-1) or null, because the list
+    //    no longer contains the selection at all. Null then means the broad
+    //    scope, and the figures below have moved to the broad scope too;
+    //
+    //  * options LOADING or FAILED — nothing authoritative is known, so the
+    //    selection still drives the reports. Offering only "All permitted
+    //    branches" here would have the control claim a breadth the transport
+    //    does not have, so the branch being queried is offered as the single
+    //    individual option. The owner sees the scope their numbers are in, and
+    //    the field still holds a value present exactly once.
+    final live = switch (ref.watch(analyticsBranchOptionsProvider)) {
+      AsyncData(:final value) => value,
+      _ => null,
+    };
+    final resolved = ref.watch(resolvedLiveAnalyticsBranchProvider);
+    final List<AuditBranchOption> selectable;
+    if (live != null) {
+      selectable = live;
+    } else if (resolved != null) {
+      selectable = [resolved];
+    } else {
+      selectable = const [];
     }
-    // CODEX F-1 / F-1B: the value shown is resolved against the CURRENT item
-    // set, not merely against coverage.
-    //
-    // Coverage and option-list membership are different questions, and the gap
-    // between them is reachable: returning to an organization whose branch is
-    // still selected makes that branch coverage-valid IMMEDIATELY, while its
-    // option list is still loading. The selection is authorized, but the item
-    // for it does not exist yet — so the field must show the broad option until
-    // it does. Requiring EXACTLY ONE full-identity match also refuses to guess
-    // when the loaded data is ambiguous, instead of silently picking the first.
-    //
-    // Note this affects the CONTROL only. The analytics scope keeps following
-    // authorized coverage, so a transient option-list refresh never makes the
-    // financial figures jump to a broader scope.
-    final effective = ref.watch(effectiveAnalyticsBranchProvider);
-    final matches = effective == null
-        ? const <AuditBranchOption>[]
-        : [
-            for (final o in selectable)
-              if (o == effective) o,
-          ];
-    final selectedId = matches.length == 1 ? matches.single.branchId : null;
+    final selectedId = resolved?.branchId;
 
     return Padding(
       padding: padding,

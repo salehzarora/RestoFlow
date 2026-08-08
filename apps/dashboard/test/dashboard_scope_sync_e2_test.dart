@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/analytics/dashboard_drilldown.dart';
 import 'package:restoflow_dashboard/src/data/audit_log_models.dart';
 import 'package:restoflow_dashboard/src/data/order_history_models.dart';
 import 'package:restoflow_dashboard/src/data/real_order_history_repository.dart';
+import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_dashboard/src/state/order_history_providers.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -87,6 +88,19 @@ const _branchInRest2 = AuditBranchOption(
   label: 'Rest Two · Airport',
 );
 
+/// CODEX F-1B-3 — the branches that actually EXIST in these fixtures.
+///
+/// A successful option list is now authoritative about existence: a selection
+/// it omits stops applying, so the reports fall back to the authorized parent
+/// scope instead of querying a branch that is no longer there. A test asserting
+/// that a selection reaches the wire must therefore say the branch exists —
+/// otherwise it is asserting the very defect F-1B-3 fixes.
+const _liveOptions = <AuditBranchOption>[
+  _branchInRest1,
+  _otherBranchInRest1,
+  _branchInRest2,
+];
+
 /// Invokes the history RPC through the repository and returns the params sent.
 Future<Map<String, dynamic>> _historyParams({
   required MembershipRole role,
@@ -101,6 +115,7 @@ Future<Map<String, dynamic>> _historyParams({
       runtimeConfigProvider.overrideWithValue(
         RuntimeConfig.test(isDemoMode: false),
       ),
+      auditBranchOptionsProvider.overrideWith((ref) async => _liveOptions),
     ],
   );
   addTearDown(container.dispose);
@@ -272,6 +287,9 @@ void main() {
             runtimeConfigProvider.overrideWithValue(
               RuntimeConfig.test(isDemoMode: false),
             ),
+            auditBranchOptionsProvider.overrideWith(
+              (ref) async => _liveOptions,
+            ),
           ],
           child: Consumer(
             builder: (context, ref, _) {
@@ -398,6 +416,7 @@ void main() {
           runtimeConfigProvider.overrideWithValue(
             RuntimeConfig.test(isDemoMode: false),
           ),
+          auditBranchOptionsProvider.overrideWith((ref) async => _liveOptions),
         ],
       );
       addTearDown(container.dispose);
@@ -426,6 +445,7 @@ void main() {
           runtimeConfigProvider.overrideWithValue(
             RuntimeConfig.test(isDemoMode: false),
           ),
+          auditBranchOptionsProvider.overrideWith((ref) async => _liveOptions),
         ],
       );
       addTearDown(container.dispose);
@@ -451,6 +471,9 @@ void main() {
             dashboardAuthTransportProvider.overrideWithValue(transport),
             runtimeConfigProvider.overrideWithValue(
               RuntimeConfig.test(isDemoMode: false),
+            ),
+            auditBranchOptionsProvider.overrideWith(
+              (ref) async => _liveOptions,
             ),
           ],
         );
@@ -492,6 +515,7 @@ void main() {
           runtimeConfigProvider.overrideWithValue(
             RuntimeConfig.test(isDemoMode: false),
           ),
+          auditBranchOptionsProvider.overrideWith((ref) async => _liveOptions),
         ],
       );
       addTearDown(container.dispose);
@@ -533,6 +557,9 @@ void main() {
             dashboardAuthTransportProvider.overrideWithValue(transport),
             runtimeConfigProvider.overrideWithValue(
               RuntimeConfig.test(isDemoMode: false),
+            ),
+            auditBranchOptionsProvider.overrideWith(
+              (ref) async => _liveOptions,
             ),
           ],
         );

@@ -197,6 +197,14 @@ void main() {
       expect(beforeScope.branchId, 'branch-A1');
       expect(c.read(effectiveAnalyticsBranchProvider), _orgABranch);
 
+      // CODEX F-1B-3 — reading the scope now also enumerates the live branch
+      // options, because a selection has to be checked against what still
+      // exists. That enumeration ran under the org A membership and asked for
+      // org A, which is correct. What must never happen is an org A id
+      // reaching a request AFTER the membership changes, so the decisive scan
+      // below starts here rather than at the beginning of the session.
+      final callsUnderOrgA = transport.params.length;
+
       // 5: the membership is REPLACED on the same container. No new root.
       c.updateOverrides([
         dashboardMembershipProvider.overrideWithValue(
@@ -246,11 +254,24 @@ void main() {
       expect(history['p_restaurant_id'], isNull);
       expect(history['p_branch_id'], isNull);
 
-      // The decisive assertion: no org A identifier anywhere on the wire.
-      for (final call in transport.params) {
+      // The decisive assertion: no org A identifier on the wire once org B is
+      // the membership.
+      for (final call in transport.params.skip(callsUnderOrgA)) {
         expect(call.values, isNot(contains('rest-A')));
         expect(call.values, isNot(contains('branch-A1')));
         expect(call.values, isNot(contains('org-A')));
+      }
+      // And the only thing that DID go out under org A was the branch
+      // enumeration, which carries the organization and nothing else — so org
+      // A's restaurant and branch reached no request at any point in the
+      // session.
+      expect(
+        transport.functions.take(callsUnderOrgA),
+        everyElement('list_org_structure'),
+      );
+      for (final call in transport.params) {
+        expect(call.values, isNot(contains('rest-A')));
+        expect(call.values, isNot(contains('branch-A1')));
       }
     });
 

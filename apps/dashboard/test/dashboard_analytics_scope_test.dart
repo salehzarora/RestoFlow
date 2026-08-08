@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/data/owner_sales_series.dart';
 import 'package:restoflow_dashboard/src/data/owner_sales_series_repository.dart';
 import 'package:restoflow_dashboard/src/analytics/analytics_range.dart';
+import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-E1) — the explicit analytics scope.
@@ -102,6 +103,19 @@ ProviderContainer _container({
         ownerReportsRepositoryProvider.overrideWithValue(reports),
       if (series != null)
         ownerSalesSeriesRepositoryProvider.overrideWithValue(series),
+      // CODEX F-1B-3 — a successful option list is authoritative about which
+      // branches EXIST, and a selection it omits stops applying. These fixtures
+      // therefore have to say their branches are real; otherwise every
+      // selection here would retire the moment the demo option list resolved,
+      // and the tests would be asserting the omission path rather than the
+      // scope path they are about.
+      auditBranchOptionsProvider.overrideWith(
+        (ref) async => const [
+          _branchInRest1,
+          _otherBranchInRest1,
+          _branchInRest2,
+        ],
+      ),
     ],
   );
   addTearDown(c.dispose);

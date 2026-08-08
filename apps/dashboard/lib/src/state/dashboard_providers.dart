@@ -14,6 +14,14 @@ import '../data/owner_sales_series.dart';
 import '../data/owner_sales_series_repository.dart';
 import '../data/real_owner_reports_repository.dart';
 import '../data/real_owner_sales_series_repository.dart';
+// CODEX F-1B-3. The import graph between this file and the analytics-branch
+// lifecycle is cyclic (that file needs the coverage and effective-selection
+// providers defined here). The PROVIDER graph is not: it runs scope -> resolved
+// live -> sanitised options -> raw options -> membership, and terminates. Dart
+// initialises top-level finals lazily, so the cycle is a file-layout detail,
+// not an initialisation order hazard.
+import 'analytics_branch_providers.dart'
+    show resolvedLiveAnalyticsBranchProvider;
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -133,11 +141,27 @@ final effectiveAnalyticsBranchProvider = Provider<AuditBranchOption?>(
 /// coverage rather than keeping an id they may no longer read. Coverage is
 /// role-derived, so this is true the instant the membership changes — it does
 /// not wait for an option list.
+///
+/// CODEX F-1B-3 — it now reads [resolvedLiveAnalyticsBranchProvider], which
+/// adds the second question coverage cannot answer: does this branch still
+/// EXIST. A branch a successful option list omits stops applying here, so a
+/// deleted or tombstoned branch can no longer remain a hidden financial scope
+/// while the selector shows "All permitted branches". A LOADING or FAILED list
+/// changes nothing, so a flaky fetch never widens the figures.
+///
+/// THE FALLBACK IS [covered], AND THAT IS THE WHOLE OMISSION RULE. Coverage is
+/// the authorized PARENT of whatever was selected, so an omitted branch lands
+/// on org/null/null for an org-wide owner, on org/rest/null for a
+/// restaurant-wide owner — never on a sibling restaurant — and, for a
+/// branch-FIXED membership whose coverage IS one branch, on that same branch.
+/// A fixed membership therefore cannot be widened by an option list that fails
+/// to enumerate its branch, because its authorization never came from the list
+/// in the first place.
 final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
   (ref) {
     final covered = ref.watch(dashboardCoveredScopeProvider);
     if (covered == null) return null;
-    final selected = ref.watch(effectiveAnalyticsBranchProvider);
+    final selected = ref.watch(resolvedLiveAnalyticsBranchProvider);
     if (selected == null) return covered;
     return DashboardAnalyticsScope.branch(
       organizationId: covered.organizationId,
@@ -146,7 +170,7 @@ final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
   },
   dependencies: [
     dashboardCoveredScopeProvider,
-    effectiveAnalyticsBranchProvider,
+    resolvedLiveAnalyticsBranchProvider,
   ],
 );
 

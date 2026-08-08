@@ -137,8 +137,13 @@ ProviderContainer _container({
       runtimeConfigProvider.overrideWithValue(
         RuntimeConfig.test(isDemoMode: false),
       ),
-      if (options != null)
-        auditFilterOptionsRepositoryProvider.overrideWithValue(options),
+      // CODEX F-1B-3 — a successful option list is now authoritative about
+      // which branches EXIST, and one that omits the selection retires it. The
+      // default therefore says branch B is real, so these F-1A transport cases
+      // exercise the scope path they are about rather than the omission path.
+      auditFilterOptionsRepositoryProvider.overrideWithValue(
+        options ?? const _FixedOptions([_branchB]),
+      ),
     ],
   );
   addTearDown(c.dispose);
@@ -459,8 +464,17 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
     }
 
-    testWidgets('a coverage-valid selection whose option has NOT loaded shows '
-        'the broad value, not a dangling id', (tester) async {
+    // CODEX F-1B-3 SUPERSEDES THE ORIGINAL EXPECTATION HERE. This case used to
+    // assert that an in-flight option list shows the BROAD value. That kept the
+    // dropdown assertion-safe but made the control claim a breadth the reports
+    // did not have — the transport was already on branch B. The control now
+    // offers the branch it is querying, so the value is present exactly once
+    // AND the screen matches the figures. The invariant the case exists to
+    // protect (never a value without an item) is asserted as before.
+    testWidgets('a coverage-valid selection whose option has NOT loaded is '
+        'shown as the branch being queried, with an item of its own', (
+      tester,
+    ) async {
       size(tester);
       late ProviderContainer c;
       await tester.pumpWidget(
@@ -477,9 +491,14 @@ void main() {
       c.read(selectedAnalyticsBranchProvider.notifier).state = _branchB;
       await tester.pump();
 
-      // Options still in flight: the branch IS authorized but has no item.
+      // Options still in flight: the branch IS authorized, still drives the
+      // reports, and is offered as its own item rather than silently widened.
       expect(c.read(effectiveAnalyticsBranchProvider), _branchB);
-      expect(valueOf(tester), isNull);
+      expect(valueOf(tester), 'branch-2');
+      expect(c.read(dashboardAnalyticsScopeProvider)!.branchId, 'branch-2');
+      // A value with no item throws on the very frame it is built, so a clean
+      // frame here is the item's existence. (Opening the menu is avoided on
+      // purpose: settling it would resolve the in-flight load under test.)
       expect(tester.takeException(), isNull);
 
       // ...and once they land, it resumes.
@@ -488,8 +507,11 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // CODEX F-1B-3 — same supersession as the case above: a FAILED list is not
+    // evidence that the branch is gone, so the scope stays on it AND the
+    // control now says so.
     testWidgets(
-      'a FAILED option load leaves the broad value and no exception',
+      'a FAILED option load keeps the branch, in both the scope and the control',
       (tester) async {
         size(tester);
         late ProviderContainer c;
@@ -505,7 +527,8 @@ void main() {
         c.read(selectedAnalyticsBranchProvider.notifier).state = _branchB;
         await tester.pumpAndSettle();
 
-        expect(valueOf(tester), isNull);
+        expect(valueOf(tester), 'branch-2');
+        expect(await openItemValues(tester), {null, 'branch-2'});
         expect(tester.takeException(), isNull);
         // The analytics scope still follows AUTHORIZED coverage — a failed
         // option list must not silently widen the financial query.
@@ -542,8 +565,13 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the SAME branch id under a DIFFERENT restaurant never yields '
-        'two items with one value', (tester) async {
+    // CODEX F-1B-2 SUPERSEDES THE ORIGINAL EXPECTATION HERE. This case used to
+    // assert that the FIRST of two conflicting composites survives, which made
+    // list order decide which restaurant a branch belongs to. Both are now
+    // dropped: a branch id carrying two different composites is corrupt data,
+    // and the client fails closed rather than picking a winner.
+    testWidgets('the SAME branch id under a DIFFERENT restaurant is dropped '
+        'ENTIRELY, not resolved by list order', (tester) async {
       size(tester);
       const conflicting = AuditBranchOption(
         organizationId: 'org-1',
@@ -560,11 +588,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(await openItemValues(tester), {null, 'branch-2'});
-      // Decisive: the SECOND option carrying the same branch id under a
-      // different restaurant is dropped, so its label never reaches the menu.
+      expect(await openItemValues(tester), {null});
+      // Decisive: NEITHER conflicting label reaches the menu. Keeping one would
+      // be a guess about which restaurant owns branch-2, and the answer would
+      // depend on which row the server happened to send first.
       expect(find.text('Conflicting · Harbor'), findsNothing);
-      expect(find.text('Rest Two · Harbor'), findsWidgets);
+      expect(find.text('Rest Two · Harbor'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -615,16 +644,20 @@ void main() {
         const _FixedOptions([_orgAOption], delay: Duration(milliseconds: 200)),
       );
       await tester.pump();
-      expect(valueOf(tester), isNull, reason: 'authorized but no item yet');
+      // CODEX F-1B-3: authorized and still driving the reports, so the control
+      // says so rather than claiming the broad scope it is not using.
+      expect(valueOf(tester), 'branch-A1', reason: 'authorized and in use');
+      expect(c.read(dashboardAnalyticsScopeProvider)!.branchId, 'branch-A1');
       expect(tester.takeException(), isNull);
 
-      // 6b: options FAIL.
+      // 6b: options FAIL — still not evidence the branch is gone.
       await pump(
         _membership(organizationId: 'org-A', restaurantId: 'rest-A'),
         const _FixedOptions([], fail: true),
       );
       await tester.pumpAndSettle();
-      expect(valueOf(tester), isNull);
+      expect(valueOf(tester), 'branch-A1');
+      expect(c.read(dashboardAnalyticsScopeProvider)!.branchId, 'branch-A1');
       expect(tester.takeException(), isNull);
 
       // 6c: options LOAD — exactly one A1 exists, so it may resume.
