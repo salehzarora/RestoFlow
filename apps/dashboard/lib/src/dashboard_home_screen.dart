@@ -6,14 +6,17 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
 import 'analytics/comparison_delta.dart';
+import 'analytics/dashboard_analytics_scope.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
 import 'analytics/order_type_analytics.dart';
 import 'analytics/owner_sales_series_query_key.dart';
 import 'analytics/payment_method_analytics.dart';
+import 'data/audit_log_models.dart' show AuditBranchOption;
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
 import 'format/money_format.dart';
+import 'state/audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'state/dashboard_providers.dart';
 // CLIENT-D: the ONE localized order-type mapper, already shared by the order
 // history list, the active board and the detail sheet. Imported rather than
@@ -175,8 +178,131 @@ class _OverviewChrome extends ConsumerWidget {
             ),
           ],
         ),
+        const _ScopeSelector(),
         const _RangeFilterBar(),
       ],
+    );
+  }
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-E1) — the analytics scope control.
+///
+/// Sits ABOVE the range chips and the KPIs, because the scope changes what
+/// every figure below it means and an owner has to see it before they read a
+/// number, not after.
+///
+/// It is a FILTER over already-authorized coverage. It writes one provider —
+/// the selected branch — and touches no membership, role or token. The options
+/// come from the SAME scope-safe source the Activity branch filter uses
+/// (`list_org_structure`, then filtered to the caller's role coverage), so a
+/// branch this owner cannot read is never even offered.
+///
+/// Three shapes, decided by what the membership actually covers:
+///
+///  * a scope-LIMITED membership (manager, cashier, …) covers exactly one
+///    branch, so it gets a read-only label. No dropdown, and above all no "All
+///    permitted branches" option — offering a choice that does not exist would
+///    imply the data might be broader than it is;
+///  * a broad membership gets "All permitted branches" plus its authorized
+///    branches, and STARTS on the broad option. That default is the fix: the
+///    resolved membership had already been pinned to the first branch, so the
+///    old Overview silently reported one branch of an organization;
+///  * no membership at all (demo mode) renders nothing, exactly as before.
+///
+/// A failed option load leaves the broad default in place and simply offers no
+/// individual branches. It never falls back to a branch, and never widens.
+class _ScopeSelector extends ConsumerWidget {
+  const _ScopeSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final covered = ref.watch(dashboardCoveredScopeProvider);
+    if (covered == null) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final padding = const EdgeInsetsDirectional.fromSTEB(
+      RestoflowSpacing.lg,
+      RestoflowSpacing.md,
+      RestoflowSpacing.lg,
+      0,
+    );
+
+    // A membership that covers ONE branch has nothing to choose. Show what is
+    // being reported on and stop there.
+    if (covered.kind == DashboardAnalyticsScopeKind.singleBranch) {
+      final name = covered.branchLabel;
+      if (name == null || name.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: padding,
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(
+            key: const Key('overview-scope-fixed'),
+            '${l10n.activityLogFilterBranch}: $name',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    // Fail-soft: a failed or still-loading option list yields no individual
+    // branches, so the control offers only the broad scope — which is exactly
+    // what is being displayed. Never a fabricated option, never a fallback to
+    // some branch the owner did not pick.
+    final options =
+        ref.watch(auditBranchOptionsProvider).asData?.value ??
+        const <AuditBranchOption>[];
+    final selectable = [
+      for (final o in options)
+        if (covered.covers(o)) o,
+    ];
+    final selected = ref.watch(dashboardAnalyticsScopeProvider);
+    final selectedId = selected?.branchId;
+
+    return Padding(
+      padding: padding,
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: DropdownButtonFormField<String?>(
+            key: const Key('overview-scope-selector'),
+            initialValue: selectedId,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: l10n.activityLogFilterBranch,
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+            items: [
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text(
+                  l10n.activityLogBranchAll,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              for (final b in selectable)
+                DropdownMenuItem<String?>(
+                  value: b.branchId,
+                  child: Text(b.label, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (id) {
+              ref
+                  .read(selectedAnalyticsBranchProvider.notifier)
+                  .state = id == null
+                  ? null
+                  : selectable.firstWhere((b) => b.branchId == id);
+            },
+          ),
+        ),
+      ),
     );
   }
 }

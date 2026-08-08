@@ -4,8 +4,10 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../analytics/analytics_range.dart';
+import '../analytics/dashboard_analytics_scope.dart';
 import '../analytics/owner_report_query_key.dart';
 import '../analytics/owner_sales_series_query_key.dart';
+import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/demo_report.dart';
 import '../data/owner_reports_repository.dart';
 import '../data/owner_sales_series.dart';
@@ -59,22 +61,80 @@ final reportRangeProvider = StateProvider<ReportRange>(
   (ref) => ReportRange.today,
 );
 
-/// F0.6 — the identity of the report the Overview is currently asking for.
+/// CLIENT-E1 — the BROADEST scope the current membership is authorized to
+/// report on. Null when no membership is resolved (demo mode, or before the
+/// shell publishes one).
+///
+/// Derived from the ROLE, never from the resolved membership's ids: those have
+/// already been narrowed to a concrete first-restaurant / first-branch by
+/// `resolveTenantContext`, so they cannot say what the membership covers. This
+/// is the same recovery the Activity branch filter has always used.
+final dashboardCoveredScopeProvider = Provider<DashboardAnalyticsScope?>((ref) {
+  final membership = ref.watch(dashboardMembershipProvider);
+  if (membership == null) return null;
+  return DashboardAnalyticsScope.coveredBy(membership);
+}, dependencies: [dashboardMembershipProvider]);
+
+/// CLIENT-E1 — the owner's explicit branch choice, or null for "all permitted".
+///
+/// Written ONLY by the Overview scope selector. Null is not "unknown"; it is
+/// the deliberate broad default, which is the whole point of this slice — an
+/// org owner now starts at their organization rather than at whichever branch
+/// happened to be created first.
+///
+/// Session-lived and in-memory. No persistence is introduced here: a remembered
+/// selection would have to be re-authorized on every membership change, and
+/// that is a larger contract than this slice owns.
+final selectedAnalyticsBranchProvider = StateProvider<AuditBranchOption?>(
+  (ref) => null,
+);
+
+/// CLIENT-E1 — the scope every Overview analytic actually reads.
+///
+/// The selection is applied ONLY when the current coverage still contains it.
+/// That check is the fail-closed guard for a membership that changed underneath
+/// a stale selection: an owner demoted to one branch, or moved to another
+/// restaurant, silently falls back to their real coverage rather than keeping
+/// an id they may no longer read. Coverage is role-derived, so this is true the
+/// instant the membership changes — it does not wait for an option list.
+final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
+  (ref) {
+    final covered = ref.watch(dashboardCoveredScopeProvider);
+    if (covered == null) return null;
+    final selected = ref.watch(selectedAnalyticsBranchProvider);
+    if (selected == null || !covered.covers(selected)) return covered;
+    return DashboardAnalyticsScope.branch(
+      organizationId: covered.organizationId,
+      option: selected,
+    );
+  },
+  dependencies: [
+    dashboardCoveredScopeProvider,
+    selectedAnalyticsBranchProvider,
+  ],
+);
+
+/// F0.6 / CLIENT-E1 — the identity of the report the Overview is asking for.
 ///
 /// Derived, never written by a screen: it reads the same scope the repository
 /// posts (`p_organization_id` / `p_restaurant_id` / `p_branch_id` / `p_range`)
 /// plus the demo-vs-real source. Drill-down state deliberately cannot reach it,
 /// so a business filter can never rewrite tenant identity.
+///
+/// CLIENT-E1 swaps the membership's NARROWED ids for the selected analytics
+/// scope. The key space is unchanged — same three ids, same cache — so two
+/// branches, or a branch and "all permitted", remain two entries that can never
+/// satisfy each other.
 final currentOwnerReportKeyProvider = Provider<OwnerReportQueryKey>((ref) {
-  final membership = ref.watch(dashboardMembershipProvider);
+  final scope = ref.watch(dashboardAnalyticsScopeProvider);
   return OwnerReportQueryKey(
-    organizationId: membership?.organizationId,
-    restaurantId: membership?.restaurantId,
-    branchId: membership?.branchId,
+    organizationId: scope?.organizationId,
+    restaurantId: scope?.restaurantId,
+    branchId: scope?.branchId,
     range: ref.watch(reportRangeProvider),
     isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
   );
-}, dependencies: [dashboardMembershipProvider, reportRangeProvider]);
+}, dependencies: [dashboardAnalyticsScopeProvider, reportRangeProvider]);
 
 /// F0.6 — the owner report FOR ONE EXACT REQUEST IDENTITY.
 ///
@@ -144,22 +204,29 @@ final ownerSalesSeriesRepositoryProvider = Provider<OwnerSalesSeriesRepository>(
 /// with one point. Only the multi-day ranges produce a key, and a family entry
 /// with no key is never watched, so no request is issued at all.
 ///
-/// Scope is read from the resolved membership, exactly like the report key —
-/// drill-down and filter state deliberately cannot reach it.
+/// Scope is read from the SAME selected analytics scope the report key uses
+/// (CLIENT-E1), so the KPIs and every trend on the page describe one window of
+/// one scope — there is no arrangement in which the headline figures show one
+/// branch while the charts below them show all of them. Drill-down and filter
+/// state deliberately cannot reach it.
+///
+/// The single-day gate still comes FIRST: changing the selected branch on
+/// today or yesterday still produces no key, and therefore still issues no
+/// `owner_sales_series` request at all.
 final currentOwnerSalesSeriesKeyProvider = Provider<OwnerSalesSeriesQueryKey?>((
   ref,
 ) {
   final range = AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider));
   if (range.isSingleDay) return null;
-  final membership = ref.watch(dashboardMembershipProvider);
+  final scope = ref.watch(dashboardAnalyticsScopeProvider);
   return OwnerSalesSeriesQueryKey(
-    organizationId: membership?.organizationId,
-    restaurantId: membership?.restaurantId,
-    branchId: membership?.branchId,
+    organizationId: scope?.organizationId,
+    restaurantId: scope?.restaurantId,
+    branchId: scope?.branchId,
     range: range,
     isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
   );
-}, dependencies: [dashboardMembershipProvider, reportRangeProvider]);
+}, dependencies: [dashboardAnalyticsScopeProvider, reportRangeProvider]);
 
 /// CLIENT-A — the sales series FOR ONE EXACT REQUEST IDENTITY.
 ///

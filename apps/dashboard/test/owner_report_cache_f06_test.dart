@@ -58,6 +58,22 @@ MembershipContext _membershipA = MembershipContext(
   status: 'active',
 );
 
+/// CLIENT-E1: branch-scoped roles, so their COVERAGE really is one branch.
+/// They were org owners before, which no longer distinguishes them: an org
+/// owner covers the whole organization no matter which branch the tenant
+/// resolver happened to pin onto the membership.
+MembershipContext _membershipBranchOne = MembershipContext(
+  id: 'm-b1',
+  organizationId: 'org-1',
+  organizationName: 'Org',
+  restaurantId: 'rest-1',
+  restaurantName: 'Rest',
+  branchId: 'branch-1',
+  branchName: 'Branch One',
+  role: MembershipRole.manager,
+  status: 'active',
+);
+
 MembershipContext _membershipOtherBranch = MembershipContext(
   id: 'm-b',
   organizationId: 'org-1',
@@ -65,8 +81,8 @@ MembershipContext _membershipOtherBranch = MembershipContext(
   restaurantId: 'rest-1',
   restaurantName: 'Rest',
   branchId: 'branch-2',
-  branchName: 'Branch',
-  role: MembershipRole.orgOwner,
+  branchName: 'Branch Two',
+  role: MembershipRole.manager,
   status: 'active',
 );
 
@@ -273,14 +289,18 @@ void main() {
     });
 
     test('F. a different BRANCH is a different request', () async {
+      // CLIENT-E1: both memberships are BRANCH-SCOPED, so their coverage — and
+      // therefore their key — really is one branch each.
       final repoA = _CountingRepository();
-      final a = makeContainer(repoA);
+      final a = makeContainer(repoA, membership: _membershipBranchOne);
       await a.read(dashboardReportProvider.future);
 
       final repoB = _CountingRepository();
       final b = makeContainer(repoB, membership: _membershipOtherBranch);
       await b.read(dashboardReportProvider.future);
 
+      expect(a.read(currentOwnerReportKeyProvider).branchId, 'branch-1');
+      expect(b.read(currentOwnerReportKeyProvider).branchId, 'branch-2');
       expect(
         a.read(currentOwnerReportKeyProvider),
         isNot(b.read(currentOwnerReportKeyProvider)),
@@ -295,7 +315,12 @@ void main() {
 
       final key = c.read(currentOwnerReportKeyProvider);
       expect(key.organizationId, 'org-2');
-      expect(key.restaurantId, 'rest-9');
+      // CLIENT-E1: an ORG owner reports on the whole organization. The
+      // restaurant/branch the tenant resolver pinned onto the membership
+      // ('rest-9' / 'branch-9', the first of each) is NOT their scope — reading
+      // it as such was the silent narrowing this slice removes.
+      expect(key.restaurantId, isNull);
+      expect(key.branchId, isNull);
       expect(repo.callCount, 1);
     });
 

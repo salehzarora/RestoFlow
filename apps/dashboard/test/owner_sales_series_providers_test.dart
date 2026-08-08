@@ -51,6 +51,22 @@ MembershipContext _membershipA = MembershipContext(
   status: 'active',
 );
 
+/// CLIENT-E1: branch-scoped roles, so their COVERAGE really is one branch.
+/// They were org owners before, which no longer distinguishes them: an org
+/// owner covers the whole organization no matter which branch the tenant
+/// resolver happened to pin onto the membership.
+MembershipContext _membershipBranchOne = MembershipContext(
+  id: 'm-b1',
+  organizationId: 'org-1',
+  organizationName: 'Org',
+  restaurantId: 'rest-1',
+  restaurantName: 'Rest',
+  branchId: 'branch-1',
+  branchName: 'Branch One',
+  role: MembershipRole.manager,
+  status: 'active',
+);
+
 MembershipContext _membershipOtherBranch = MembershipContext(
   id: 'm-b',
   organizationId: 'org-1',
@@ -58,8 +74,8 @@ MembershipContext _membershipOtherBranch = MembershipContext(
   restaurantId: 'rest-1',
   restaurantName: 'Rest',
   branchId: 'branch-2',
-  branchName: 'Branch',
-  role: MembershipRole.orgOwner,
+  branchName: 'Branch Two',
+  role: MembershipRole.manager,
   status: 'active',
 );
 
@@ -210,16 +226,31 @@ void main() {
     );
 
     test(
-      'the key carries the resolved MEMBERSHIP scope, never a filter',
+      'the key carries the AUTHORIZED analytics scope, never a filter',
       () async {
         final c = makeContainer(_CountingSeriesRepository());
         c.read(reportRangeProvider.notifier).state = ReportRange.last7;
 
+        // CLIENT-E1: _membershipA is an ORG owner, so its scope is the whole
+        // organization — not the first restaurant/branch the tenant resolver
+        // pinned onto the membership. Reading those pinned ids as the scope
+        // was the silent narrowing this slice removes.
         final key = c.read(currentOwnerSalesSeriesKeyProvider)!;
         expect(key.organizationId, 'org-1');
-        expect(key.restaurantId, 'rest-1');
-        expect(key.branchId, 'branch-1');
+        expect(key.restaurantId, isNull);
+        expect(key.branchId, isNull);
         expect(key.isDemoMode, isTrue);
+
+        // A BRANCH-scoped membership carries both ids, because that is what it
+        // genuinely covers.
+        final b = makeContainer(
+          _CountingSeriesRepository(),
+          membership: _membershipBranchOne,
+        );
+        b.read(reportRangeProvider.notifier).state = ReportRange.last7;
+        final branchKey = b.read(currentOwnerSalesSeriesKeyProvider)!;
+        expect(branchKey.restaurantId, 'rest-1');
+        expect(branchKey.branchId, 'branch-1');
       },
     );
   });
@@ -294,8 +325,10 @@ void main() {
     });
 
     test('E. a different BRANCH is a different request', () async {
+      // CLIENT-E1: branch-SCOPED memberships, whose coverage really is one
+      // branch each. As org owners they would both cover the whole org.
       final repoA = _CountingSeriesRepository();
-      final a = makeContainer(repoA);
+      final a = makeContainer(repoA, membership: _membershipBranchOne);
       a.read(reportRangeProvider.notifier).state = ReportRange.last7;
       await readSeries(a);
 
@@ -319,8 +352,10 @@ void main() {
 
       final key = c.read(currentOwnerSalesSeriesKeyProvider)!;
       expect(key.organizationId, 'org-2');
-      expect(key.restaurantId, 'rest-9');
-      expect(key.branchId, 'branch-9');
+      // CLIENT-E1: an org owner's scope is the organization; rest-9 / branch-9
+      // were the resolver's first-of-each, never their authorized scope.
+      expect(key.restaurantId, isNull);
+      expect(key.branchId, isNull);
       expect(repo.callCount, 1);
     });
 
