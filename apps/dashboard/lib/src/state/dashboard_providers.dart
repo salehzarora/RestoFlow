@@ -3,10 +3,15 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../analytics/analytics_range.dart';
 import '../analytics/owner_report_query_key.dart';
+import '../analytics/owner_sales_series_query_key.dart';
 import '../data/demo_report.dart';
 import '../data/owner_reports_repository.dart';
+import '../data/owner_sales_series.dart';
+import '../data/owner_sales_series_repository.dart';
 import '../data/real_owner_reports_repository.dart';
+import '../data/real_owner_sales_series_repository.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -111,7 +116,70 @@ final dashboardReportProvider = FutureProvider<DashboardReport>((ref) {
   return ref.watch(ownerReportForKeyProvider(key).future);
 }, dependencies: [ownerReportForKeyProvider, currentOwnerReportKeyProvider]);
 
-/// Refreshes ONLY the currently selected report entry.
+/// CLIENT-A — the daily sales-series data seam (`owner_sales_series`).
+///
+/// The same demo/real switch [ownerReportsRepositoryProvider] uses, so the two
+/// owner surfaces can never end up reading different data sources at once. Demo
+/// is the DEFAULT; real mode fails closed with no transport/scope.
+final ownerSalesSeriesRepositoryProvider = Provider<OwnerSalesSeriesRepository>(
+  (ref) {
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const DemoOwnerSalesSeriesRepository();
+    }
+    return RealOwnerSalesSeriesRepository(
+      scope: ref.watch(dashboardMembershipProvider),
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider],
+);
+
+/// CLIENT-A — the identity of the sales series the Overview currently needs, or
+/// NULL when it needs none.
+///
+/// Null is the load gate, and it is a provider rather than a rule the UI has to
+/// remember: `today` and `yesterday` keep their existing sales-by-HOUR curve,
+/// which already answers "how did this day go", so asking the server to break a
+/// single day into one daily bucket would be a second round trip for a chart
+/// with one point. Only the multi-day ranges produce a key, and a family entry
+/// with no key is never watched, so no request is issued at all.
+///
+/// Scope is read from the resolved membership, exactly like the report key —
+/// drill-down and filter state deliberately cannot reach it.
+final currentOwnerSalesSeriesKeyProvider = Provider<OwnerSalesSeriesQueryKey?>((
+  ref,
+) {
+  final range = AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider));
+  if (range.isSingleDay) return null;
+  final membership = ref.watch(dashboardMembershipProvider);
+  return OwnerSalesSeriesQueryKey(
+    organizationId: membership?.organizationId,
+    restaurantId: membership?.restaurantId,
+    branchId: membership?.branchId,
+    range: range,
+    isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+  );
+}, dependencies: [dashboardMembershipProvider, reportRangeProvider]);
+
+/// CLIENT-A — the sales series FOR ONE EXACT REQUEST IDENTITY.
+///
+/// Keyed like [ownerReportForKeyProvider] and for the same reason: two scopes,
+/// or two ranges, are two entries that can never satisfy each other. Not
+/// `autoDispose` — the shell rebuilds each tab under a keyed subtree, so an
+/// auto-disposing entry would refetch every time the owner left Overview and
+/// came back, which is the exact defect F0.6 fixed for the report.
+final ownerSalesSeriesForKeyProvider =
+    FutureProvider.family<OwnerSalesSeries, OwnerSalesSeriesQueryKey>((
+      ref,
+      key,
+    ) {
+      return ref
+          .watch(ownerSalesSeriesRepositoryProvider)
+          .loadSeries(range: key.range);
+    }, dependencies: [ownerSalesSeriesRepositoryProvider]);
+
+/// Refreshes ONLY the currently selected report entry — and the daily series
+/// beside it, when the selected range has one.
 ///
 /// `invalidate` rather than `refresh`: the caller does not want the Future, and
 /// invalidate re-runs the entry lazily for the widgets already watching it,
@@ -119,6 +187,17 @@ final dashboardReportProvider = FutureProvider<DashboardReport>((ref) {
 /// return a Future nobody awaits. Other ranges and other scopes keep their
 /// cached results — a refresh is "re-read what I am looking at", not "throw
 /// away everything the dashboard knows".
-void refreshOwnerReport(WidgetRef ref) => ref.invalidate(
-  ownerReportForKeyProvider(ref.read(currentOwnerReportKeyProvider)),
-);
+///
+/// The series is included because the refresh button sits above BOTH: leaving
+/// the trend stale while the KPIs above it updated would make the page
+/// self-contradictory, and an owner would have no way to tell which half was
+/// current.
+void refreshOwnerReport(WidgetRef ref) {
+  ref.invalidate(
+    ownerReportForKeyProvider(ref.read(currentOwnerReportKeyProvider)),
+  );
+  final seriesKey = ref.read(currentOwnerSalesSeriesKeyProvider);
+  if (seriesKey != null) {
+    ref.invalidate(ownerSalesSeriesForKeyProvider(seriesKey));
+  }
+}

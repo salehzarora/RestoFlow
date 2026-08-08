@@ -929,6 +929,8 @@
   "dashboardModeLiveData": "بيانات مباشرة",
   "dashboardSalesByHour": "المبيعات حسب الساعة",
   "dashboardSalesByHourSemantics": "المبيعات حسب الساعة. الذروة عند {hour}: {amount}",
+  "dashboardSalesByDay": "المبيعات حسب اليوم",
+  "dashboardSalesByDaySemantics": "المبيعات حسب اليوم. أفضل يوم {day}: {amount}",
   "dashboardDeltaVsYesterday": "{percent}٪ مقارنةً بالأمس",
   "dashboardRangeToday": "اليوم",
   "dashboardRangeYesterday": "أمس",

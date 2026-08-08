@@ -243,6 +243,17 @@ DashboardReport demoDashboardReport() =>
   return (netMinor: net, cashMinor: cash, orders: orders);
 }
 
+/// CLIENT-A: the SAME per-day demo figures, exposed for the demo daily sales
+/// series.
+///
+/// A read-only accessor rather than a copy, deliberately: the demo daily trend
+/// and the demo range KPI must sum to the same number, and the only way to
+/// guarantee that is for both to read one generator. A second table of demo
+/// numbers would drift the first time either was edited, and a chart that
+/// disagrees with the total above it is worse than no chart.
+({int netMinor, int cashMinor, int orders}) demoDaySales(int dayOffset) =>
+    _demoDay(dayOffset);
+
 /// The demo day's illustrative net-by-hour shape (sums to 62000 minor); index 9
 /// (19:00) is the peak the exact-sum remainder is folded into.
 const List<int> _demoHourShape = <int>[

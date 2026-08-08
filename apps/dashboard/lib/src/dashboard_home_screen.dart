@@ -7,7 +7,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'analytics/analytics_labels.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
+import 'analytics/owner_sales_series_query_key.dart';
 import 'data/demo_report.dart';
+import 'data/owner_sales_series.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
 import 'widgets/daily_summary_card.dart';
@@ -72,6 +74,13 @@ class DashboardHomeScreen extends ConsumerWidget {
     // Calm persistent chrome (RF-127): the page header + range chips stay above
     // the loading/error/data states so the title, period, refresh, and range are
     // available in every state (range switchable at any time, as before).
+    // CLIENT-A: the daily sales trend, for the multi-day ranges only. A null key
+    // means the selected range keeps its sales-by-HOUR curve, and — because the
+    // family entry is then never watched — no `owner_sales_series` request is
+    // issued at all. Built HERE so the card is a composition slot like
+    // [setupPanel]/[deviceSummary] and `_ReportContent` stays Riverpod-free.
+    final seriesKey = ref.watch(currentOwnerSalesSeriesKeyProvider);
+
     final panel = setupPanel;
     final nav = onNavigate;
     return Scaffold(
@@ -95,6 +104,9 @@ class DashboardHomeScreen extends ConsumerWidget {
                 report: report,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
+                salesByDay: seriesKey == null
+                    ? null
+                    : _SalesByDayCard(queryKey: seriesKey),
                 // F0.4: bound HERE, where a WidgetRef exists. The child
                 // stays a plain StatelessWidget and never learns about
                 // Riverpod or the shell's tab indices.
@@ -219,6 +231,7 @@ class _ReportContent extends StatelessWidget {
     required this.report,
     required this.isDemo,
     this.deviceSummary,
+    this.salesByDay,
     this.onDrillDown,
   });
 
@@ -231,6 +244,12 @@ class _ReportContent extends StatelessWidget {
   /// The shell-provided device readiness card for the operational row
   /// (Dashboard V2); null hides it (demo mode / no real repositories).
   final Widget? deviceSummary;
+
+  /// CLIENT-A: the daily sales-trend card, for the multi-day ranges. Null for
+  /// `today`/`yesterday`, which keep the sales-by-hour curve — so this slot and
+  /// the hourly chart are never both present, and the analytics row always has
+  /// exactly one dominant time series in it.
+  final Widget? salesByDay;
 
   /// F0.4: executes a typed drill-down (filters first, then navigate).
   /// Null keeps every KPI display-only, exactly as before.
@@ -674,8 +693,12 @@ class _ReportContent extends StatelessWidget {
     // top sellers / recent orders → the detailed summaries. The secondary
     // grid therefore renders AFTER the analytics row (or the honest limited
     // panel holding its slot), never between the KPIs and the chart.
+    // CLIENT-A: the multi-day ranges fill the analytics slot with the daily
+    // trend. It takes precedence over the limited-analytics placeholder for the
+    // obvious reason — the placeholder exists to say "there is no chart yet",
+    // and now there is one.
     final analyticsStart =
-        salesByHour ?? (showLimitedNote ? limitedNote : null);
+        salesByHour ?? salesByDay ?? (showLimitedNote ? limitedNote : null);
     final blocks = <Widget>[
       banner,
       _KpiGrid(cards: primaryKpis),
@@ -698,6 +721,128 @@ class _ReportContent extends StatelessWidget {
   /// disagree about what a tender is called.
   static String _methodLabel(AppLocalizations l10n, String method) =>
       paymentMethodLabel(l10n, method);
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-A) — the daily sales trend.
+///
+/// The multi-day counterpart of the sales-by-hour card, and deliberately the
+/// SAME component: [RestoflowAreaChart], not the unused [RestoflowBarChart]. The
+/// bar chart was considered and rejected on two concrete grounds — it has no
+/// selection/tooltip API at all, so the per-day figures this card exists to
+/// expose would have nowhere to go, and it labels every bar with no
+/// subsampling, which a 30-day window cannot fit. Matching the hourly chart also
+/// means an owner reads one visual language for "sales over time" regardless of
+/// which range they picked.
+///
+/// The metric is BILLED NET (`net_minor`) — the same figure as the "Net sales"
+/// KPI above it and the same figure the hourly curve plots, so the bars sum to
+/// the headline. Collected cash is deliberately NOT overlaid: billed and
+/// collected are different facts, and drawing them as one unlabelled series is
+/// exactly the confusion the server split them to prevent.
+///
+/// Every state is honest and LOCAL to this card — a failed series never removes
+/// the KPIs, the payment mix, or the rest of the Overview:
+///
+///  * loading  -> a spinner, never a zeroed chart;
+///  * missing  -> "range unavailable" (the RPC is not deployed on this database
+///                yet), which is not the same claim as "no sales";
+///  * empty    -> "no report data", the server's real answer;
+///  * error    -> the shared error state.
+class _SalesByDayCard extends ConsumerWidget {
+  const _SalesByDayCard({required this.queryKey});
+
+  final OwnerSalesSeriesQueryKey queryKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(ownerSalesSeriesForKeyProvider(queryKey));
+    return RestoflowSectionCard(
+      key: const Key('sales-by-day-card'),
+      title: l10n.dashboardSalesByDay,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        async.when(
+          loading: () => const Padding(
+            key: Key('sales-by-day-loading'),
+            padding: EdgeInsets.symmetric(vertical: RestoflowSpacing.xl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, _) => RestoflowStateView(
+            key: const Key('sales-by-day-error'),
+            icon: Icons.error_outline,
+            tone: RestoflowTone.danger,
+            message: l10n.dashboardReportsError,
+          ),
+          data: (series) => _seriesBody(context, l10n, series),
+        ),
+      ],
+    );
+  }
+
+  Widget _seriesBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    OwnerSalesSeries series,
+  ) {
+    if (!series.supported) {
+      return RestoflowStateView(
+        key: const Key('sales-by-day-unavailable'),
+        icon: Icons.event_busy_outlined,
+        message: l10n.dashboardRangeUnavailable,
+      );
+    }
+    final peak = series.peakByNet;
+    if (peak == null) {
+      return RestoflowStateView(
+        key: const Key('sales-by-day-empty'),
+        icon: Icons.inbox_outlined,
+        message: l10n.dashboardNoReportData,
+      );
+    }
+
+    String money(int amountMinor) =>
+        MoneyFormatter.formatMinor(amountMinor, series.currencyCode);
+
+    // The chart datum carries only a short label and an int, so the tooltip
+    // needs a way back to the full bucket. Keyed by IDENTITY, not by the axis
+    // label: a 30-day window can span a short month and repeat a day-of-month,
+    // and a label lookup would then tooltip the wrong day's money.
+    final byDatum = Map<RestoflowAreaDatum, OwnerSalesSeriesBucket>.identity();
+    final points = <RestoflowAreaDatum>[];
+    for (final bucket in series.buckets) {
+      final datum = RestoflowAreaDatum(
+        label: bucket.day.dayOfMonthLabel,
+        value: bucket.netMinor,
+      );
+      byDatum[datum] = bucket;
+      points.add(datum);
+    }
+    final peakLabel = money(peak.netMinor);
+
+    return RestoflowAreaChart(
+      key: const Key('sales-by-day-chart'),
+      height: 260,
+      points: points,
+      peakValueLabel: peakLabel,
+      yAxisTicks: _axisTicksFor(peak.netMinor),
+      yAxisLabelBuilder: money,
+      smooth: true,
+      // The full branch-local date, the day's net, and its order count — the
+      // three things an owner asks of a bar. The date is the server's exact
+      // calendar label, never a device-timezone re-render.
+      tooltipBuilder: (datum) {
+        final bucket = byDatum[datum];
+        if (bucket == null) return money(datum.value);
+        return '${bucket.day.label}\n${money(bucket.netMinor)}\n'
+            '${bucket.orderCount} · ${l10n.dashboardOrders}';
+      },
+      semanticsLabel: l10n.dashboardSalesByDaySemantics(
+        peak.day.label,
+        peakLabel,
+      ),
+    );
+  }
 }
 
 /// RF-127 — the primary analytics row: the dominant sales-by-hour chart beside

@@ -2204,6 +2204,13 @@
     "description": "RF-127: accessible screen-reader summary of the Overview sales-by-hour area chart. hour is the peak hour label (e.g. 19:00) and amount is the formatted peak sales value; both are pre-built strings.",
     "placeholders": {"hour": {"type": "String"}, "amount": {"type": "String"}}
   },
+  "dashboardSalesByDay": "Sales by day",
+  "@dashboardSalesByDay": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview daily sales-trend chart card, shown for the multi-day ranges (last 7 / last 30 days). Distinct from the single-day sales-by-hour card."},
+  "dashboardSalesByDaySemantics": "Sales by day. Best day {day}: {amount}",
+  "@dashboardSalesByDaySemantics": {
+    "description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: accessible screen-reader summary of the Overview daily sales-trend chart. day is the peak day's branch-local calendar label (e.g. 2026-08-08) and amount is the formatted net sales for it; both are pre-built strings.",
+    "placeholders": {"day": {"type": "String"}, "amount": {"type": "String"}}
+  },
   "dashboardDeltaVsYesterday": "{percent}% vs yesterday",
   "@dashboardDeltaVsYesterday": {
     "description": "DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.",

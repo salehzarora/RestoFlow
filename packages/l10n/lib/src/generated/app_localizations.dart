@@ -5638,6 +5638,18 @@ abstract class AppLocalizations {
   /// **'Sales by hour. Peak at {hour}: {amount}'**
   String dashboardSalesByHourSemantics(String hour, String amount);
 
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview daily sales-trend chart card, shown for the multi-day ranges (last 7 / last 30 days). Distinct from the single-day sales-by-hour card.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by day'**
+  String get dashboardSalesByDay;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: accessible screen-reader summary of the Overview daily sales-trend chart. day is the peak day's branch-local calendar label (e.g. 2026-08-08) and amount is the formatted net sales for it; both are pre-built strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by day. Best day {day}: {amount}'**
+  String dashboardSalesByDaySemantics(String day, String amount);
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:

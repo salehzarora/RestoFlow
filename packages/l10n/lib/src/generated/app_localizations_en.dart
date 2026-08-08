@@ -2999,6 +2999,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByDay => 'Sales by day';
+
+  @override
+  String dashboardSalesByDaySemantics(String day, String amount) {
+    return 'Sales by day. Best day $day: $amount';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent% vs yesterday';
   }

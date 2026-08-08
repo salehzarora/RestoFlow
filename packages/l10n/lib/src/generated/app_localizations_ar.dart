@@ -2974,6 +2974,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByDay => 'المبيعات حسب اليوم';
+
+  @override
+  String dashboardSalesByDaySemantics(String day, String amount) {
+    return 'المبيعات حسب اليوم. أفضل يوم $day: $amount';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent٪ مقارنةً بالأمس';
   }
