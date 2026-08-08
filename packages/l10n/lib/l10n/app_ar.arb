@@ -931,6 +931,8 @@
   "dashboardSalesByHourSemantics": "المبيعات حسب الساعة. الذروة عند {hour}: {amount}",
   "dashboardSalesByDay": "المبيعات حسب اليوم",
   "dashboardSalesByDaySemantics": "المبيعات حسب اليوم. أفضل يوم {day}: {amount}",
+  "dashboardSalesByOrderType": "المبيعات حسب نوع الطلب",
+  "dashboardShareOfOrders": "{percent}٪ من الطلبات",
   "dashboardRecordedTendersNote": "مبالغ مسجّلة في النظام فقط — وليست تسوية من مزوّد الدفع.",
   "dashboardRecordedPaymentsCount": "{count, plural, =0{لا دفعات مسجّلة} =1{دفعة مسجّلة واحدة} =2{دفعتان مسجّلتان} few{{count} دفعات مسجّلة} many{{count} دفعة مسجّلة} other{{count} دفعة مسجّلة}}",
   "dashboardShareOfCollected": "{percent}٪ من المحصّل",

@@ -3007,6 +3007,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByOrderType => 'Sales by order type';
+
+  @override
+  String dashboardShareOfOrders(String percent) {
+    return '$percent% of orders';
+  }
+
+  @override
   String get dashboardRecordedTendersNote =>
       'Recorded tenders only — not processor settlement.';
 

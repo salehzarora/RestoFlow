@@ -5650,6 +5650,18 @@ abstract class AppLocalizations {
   /// **'Sales by day. Best day {day}: {amount}'**
   String dashboardSalesByDaySemantics(String day, String amount);
 
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview dine-in/takeaway breakdown card, shown for the multi-day ranges. Parallels the existing 'Sales by branch' card.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by order type'**
+  String get dashboardSalesByOrderType;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: one order type's share of the window's ORDER COUNT on the Overview order-type card. The denominator is named in the string so it cannot be misread as a share of sales — the net amount is shown separately on the same row. percent is a pre-built one-decimal string.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of orders'**
+  String dashboardShareOfOrders(String percent);
+
   /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: caption under the Overview payment-mix card. RestoFlow stores the tenders staff recorded at the till; it has no acquirer integration, so these figures must never be read as processor approval, reconciliation or settlement.
   ///
   /// In en, this message translates to:

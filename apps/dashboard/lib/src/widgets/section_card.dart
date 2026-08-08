@@ -45,11 +45,21 @@ class SectionRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: RestoflowSpacing.md),
-          Text(
-            trailingValue,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.primary,
+          // CLIENT-D: flexible with a LOOSE fit — natural width whenever there
+          // is room (so nothing that renders today moves), ellipsized only when
+          // a four-figure amount at a large text scale would otherwise push the
+          // row past the card edge.
+          Flexible(
+            child: Text(
+              trailingValue,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
             ),
           ),
         ],

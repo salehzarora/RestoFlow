@@ -931,6 +931,8 @@
   "dashboardSalesByHourSemantics": "מכירות לפי שעה. שיא ב-{hour}: {amount}",
   "dashboardSalesByDay": "מכירות לפי יום",
   "dashboardSalesByDaySemantics": "מכירות לפי יום. היום החזק ביותר {day}: {amount}",
+  "dashboardSalesByOrderType": "מכירות לפי סוג הזמנה",
+  "dashboardShareOfOrders": "{percent}% מההזמנות",
   "dashboardRecordedTendersNote": "תשלומים שנרשמו במערכת בלבד — לא סליקה מול חברת האשראי.",
   "dashboardRecordedPaymentsCount": "{count, plural, =1{תשלום אחד שנרשם} =2{שני תשלומים שנרשמו} other{{count} תשלומים שנרשמו}}",
   "dashboardShareOfCollected": "{percent}% מהנגבה",

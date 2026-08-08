@@ -2211,6 +2211,13 @@
     "description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: accessible screen-reader summary of the Overview daily sales-trend chart. day is the peak day's branch-local calendar label (e.g. 2026-08-08) and amount is the formatted net sales for it; both are pre-built strings.",
     "placeholders": {"day": {"type": "String"}, "amount": {"type": "String"}}
   },
+  "dashboardSalesByOrderType": "Sales by order type",
+  "@dashboardSalesByOrderType": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview dine-in/takeaway breakdown card, shown for the multi-day ranges. Parallels the existing 'Sales by branch' card."},
+  "dashboardShareOfOrders": "{percent}% of orders",
+  "@dashboardShareOfOrders": {
+    "description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: one order type's share of the window's ORDER COUNT on the Overview order-type card. The denominator is named in the string so it cannot be misread as a share of sales — the net amount is shown separately on the same row. percent is a pre-built one-decimal string.",
+    "placeholders": {"percent": {"type": "String"}}
+  },
   "dashboardRecordedTendersNote": "Recorded tenders only — not processor settlement.",
   "@dashboardRecordedTendersNote": {"description": "DASHBOARD-OWNER-ANALYTICS-PHASE-A: caption under the Overview payment-mix card. RestoFlow stores the tenders staff recorded at the till; it has no acquirer integration, so these figures must never be read as processor approval, reconciliation or settlement."},
   "dashboardRecordedPaymentsCount": "{count, plural, =1{1 recorded payment} other{{count} recorded payments}}",

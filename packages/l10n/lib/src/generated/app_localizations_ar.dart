@@ -2982,6 +2982,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByOrderType => 'المبيعات حسب نوع الطلب';
+
+  @override
+  String dashboardShareOfOrders(String percent) {
+    return '$percent٪ من الطلبات';
+  }
+
+  @override
   String get dashboardRecordedTendersNote =>
       'مبالغ مسجّلة في النظام فقط — وليست تسوية من مزوّد الدفع.';
 

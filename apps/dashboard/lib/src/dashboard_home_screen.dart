@@ -8,12 +8,17 @@ import 'analytics/analytics_labels.dart';
 import 'analytics/comparison_delta.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
+import 'analytics/order_type_analytics.dart';
 import 'analytics/owner_sales_series_query_key.dart';
 import 'analytics/payment_method_analytics.dart';
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
+// CLIENT-D: the ONE localized order-type mapper, already shared by the order
+// history list, the active board and the detail sheet. Imported rather than
+// re-declared so this surface cannot drift from what those call a dine-in.
+import 'orders/order_history_screen.dart' show orderTypeLabel;
 import 'widgets/daily_summary_card.dart';
 import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
@@ -745,10 +750,34 @@ class _ReportContent extends StatelessWidget {
       if (report.topItems.isNotEmpty) topItems,
       if (report.recentOrders.isNotEmpty) recentOrders,
     ];
+    // CLIENT-D: the dine-in / takeaway split joins the secondary grid beside
+    // "Sales by branch", its closest sibling — a compact breakdown of the same
+    // window, not a second analytics page. Present only for the multi-day
+    // ranges: `owner_report_range` has no order-type breakdown, and today /
+    // yesterday deliberately issue no series request to go and find one.
+    final Widget? orderTypeCard = salesSeriesKey == null
+        ? null
+        : _OrderTypeCard(
+            queryKey: salesSeriesKey!,
+            currencyCode: report.currencyCode,
+            onTapOrderType: drill == null
+                ? null
+                : (orderType) => switch (orderType) {
+                    'dine_in' => drill(const OrdersHistoryDrillDown.dineIn()),
+                    'takeaway' => drill(
+                      const OrdersHistoryDrillDown.takeaway(),
+                    ),
+                    // Unreachable: the card offers a tap only for the two
+                    // persisted tokens. Doing nothing is the safe floor.
+                    _ => null,
+                  },
+          );
+
     final remaining = <Widget>[
       summary,
       payment,
       if (report.branches.isNotEmpty) branches,
+      if (orderTypeCard != null) orderTypeCard,
       if (shiftCashCard != null) shiftCashCard,
     ];
 
@@ -1882,6 +1911,91 @@ class _PaymentMixCard extends StatelessWidget {
             color: scheme.onSurfaceVariant,
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-D) — the dine-in / takeaway split.
+///
+/// Reads the SAME `owner_sales_series` entry the daily sales trend and the
+/// per-method tender strip already watch — same query key, same family — so the
+/// whole Overview still makes exactly ONE series request per multi-day range.
+///
+/// SINGLE-DAY RANGES DO NOT GET THIS CARD. `owner_report_range` carries no
+/// order-type breakdown, and today/yesterday deliberately never ask for a
+/// series (CLIENT-A). Adding a request here to fill one card would quietly
+/// double the page's cost on its default range, so the card is simply absent
+/// instead — the caller passes no key for those ranges.
+///
+/// Two figures per type, and they answer different questions: the SHARE is a
+/// share of ORDERS, said in words, and the money beside it is that type's billed
+/// net. One unlabelled "share" next to an amount would be read as whichever the
+/// reader assumed.
+///
+/// Rows are tappable. Unlike the tender methods, `p_order_type` has been part of
+/// `owner_order_history` since its first migration, so every deployed database
+/// can answer it — no capability gate is needed or wanted here. An UNRECOGNISED
+/// future type is still display-only, because the client filter enum has no
+/// value for it and inventing a token is how an owner lands on an empty list.
+class _OrderTypeCard extends ConsumerWidget {
+  const _OrderTypeCard({
+    required this.queryKey,
+    required this.currencyCode,
+    this.onTapOrderType,
+  });
+
+  final OwnerSalesSeriesQueryKey queryKey;
+  final String currencyCode;
+
+  /// Opens the order list for one type. Null keeps every row display-only.
+  final void Function(String orderType)? onTapOrderType;
+
+  /// Whether a row may be tapped: a destination must exist and the token must
+  /// be one the history filter can actually express.
+  bool _isTappable(String orderType) =>
+      onTapOrderType != null && kOrderTypeWireTokens.contains(orderType);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(ownerSalesSeriesForKeyProvider(queryKey));
+    final series = async.valueOrNull;
+    // Loading, failed, unavailable, or an empty window: no card. Nothing here
+    // is worth a placeholder of its own — the daily trend above already reports
+    // the state of this exact series, and repeating it would be noise. What
+    // matters is that ZERO rows are drawn rather than zero-valued ones.
+    if (series == null || !series.supported || series.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final rows = aggregateOrderTypeAnalytics(series.buckets);
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    String money(int amountMinor) =>
+        MoneyFormatter.formatMinor(amountMinor, currencyCode);
+
+    return RestoflowSectionCard(
+      key: const Key('order-type-card'),
+      title: l10n.dashboardSalesByOrderType,
+      children: [
+        for (final row in rows)
+          _MaybeTappableRow(
+            key: Key('order-type-row-${row.orderType}'),
+            onTap: _isTappable(row.orderType)
+                ? () => onTapOrderType!(row.orderType)
+                : null,
+            child: SectionRow(
+              label: orderTypeLabel(l10n, row.orderType),
+              // Count first (the existing "N · Orders" idiom), then the share
+              // with its denominator spelled out.
+              secondary: [
+                '${row.orderCount} · ${l10n.dashboardOrders}',
+                if (row.shareBps case final bps?)
+                  l10n.dashboardShareOfOrders(formatShareBps(bps)),
+              ].join(' · '),
+              trailingValue: money(row.netMinor),
+            ),
+          ),
       ],
     );
   }

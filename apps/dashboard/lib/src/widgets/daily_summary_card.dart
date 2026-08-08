@@ -55,14 +55,25 @@ class _SummaryRowTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: RestoflowSpacing.md),
-          row.trailing ??
-              Text(
-                row.value ?? '',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+          // CLIENT-D: the value is FLEXIBLE, not natural-size. Loose fit means
+          // it still takes its natural width whenever there is room — so every
+          // layout that works today is pixel-unchanged — but a four-figure
+          // amount at a 2x text scale on a phone now ellipsizes instead of
+          // overflowing the card. A real day's takings reach four figures.
+          Flexible(
+            child:
+                row.trailing ??
+                Text(
+                  row.value ?? '',
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                textAlign: TextAlign.end,
-              ),
+          ),
         ],
       ),
     );

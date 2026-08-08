@@ -2960,6 +2960,14 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByOrderType => 'מכירות לפי סוג הזמנה';
+
+  @override
+  String dashboardShareOfOrders(String percent) {
+    return '$percent% מההזמנות';
+  }
+
+  @override
   String get dashboardRecordedTendersNote =>
       'תשלומים שנרשמו במערכת בלבד — לא סליקה מול חברת האשראי.';
 

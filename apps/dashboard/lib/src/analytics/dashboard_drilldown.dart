@@ -23,7 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/audit_log_models.dart' show AuditCategory, AuditQuery;
 import '../data/order_history_models.dart'
-    show OrderHistoryQuery, OrderStatusFilter, PaymentFilter;
+    show OrderHistoryQuery, OrderStatusFilter, OrderTypeFilter, PaymentFilter;
 import '../orders/orders_screen.dart' show OrdersTab;
 import '../state/audit_log_providers.dart' show auditLogQueryProvider;
 import '../state/order_history_providers.dart'
@@ -58,6 +58,7 @@ final class OrdersHistoryDrillDown extends DashboardDrillDown {
   const OrdersHistoryDrillDown({
     this.payment = PaymentFilter.all,
     this.status = OrderStatusFilter.all,
+    this.orderType = OrderTypeFilter.all,
   });
 
   /// Unpaid orders — the outstanding-money question.
@@ -80,12 +81,25 @@ final class OrdersHistoryDrillDown extends DashboardDrillDown {
   const OrdersHistoryDrillDown.external()
     : this(payment: PaymentFilter.external);
 
+  /// CLIENT-D — the order-type split.
+  ///
+  /// Ungated, unlike the tender methods: `p_order_type` has been part of
+  /// `owner_order_history` since the ORIGINAL ORDERS-HISTORY-001 migration and
+  /// is present unchanged in every later definition, so every deployed database
+  /// — hosted included — can already answer it. The tokens are the persisted
+  /// values the RPC compares against `orders.order_type` directly.
+  const OrdersHistoryDrillDown.dineIn()
+    : this(orderType: OrderTypeFilter.dineIn);
+  const OrdersHistoryDrillDown.takeaway()
+    : this(orderType: OrderTypeFilter.takeaway);
+
   /// Voided orders — their own bucket, never merged with discounts.
   const OrdersHistoryDrillDown.voided()
     : this(status: OrderStatusFilter.voided);
 
   final PaymentFilter payment;
   final OrderStatusFilter status;
+  final OrderTypeFilter orderType;
 
   @override
   DashboardDestination get destination => DashboardDestination.orders;
@@ -97,6 +111,7 @@ final class OrdersHistoryDrillDown extends DashboardDrillDown {
     ref.read(orderHistoryQueryProvider.notifier).state = OrderHistoryQuery(
       payment: payment,
       status: status,
+      orderType: orderType,
     );
   }
 }
