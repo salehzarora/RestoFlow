@@ -5650,6 +5650,36 @@ abstract class AppLocalizations {
   /// **'Sales by day. Best day {day}: {amount}'**
   String dashboardSalesByDaySemantics(String day, String amount);
 
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: caption under the Overview payment-mix card. RestoFlow stores the tenders staff recorded at the till; it has no acquirer integration, so these figures must never be read as processor approval, reconciliation or settlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded tenders only — not processor settlement.'**
+  String get dashboardRecordedTendersNote;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: transaction count for one payment method on the Overview payment-mix card. Counts completed payment records, not orders.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 recorded payment} other{{count} recorded payments}}'**
+  String dashboardRecordedPaymentsCount(int count);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: one payment method's share of the window's COLLECTED money on the Overview payment-mix card. The denominator is named in the string so the share cannot be misread as a share of billed sales. percent is a pre-built one-decimal string.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of collected'**
+  String dashboardShareOfCollected(String percent);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: mean recorded tender for one payment method on the Overview payment-mix card. This is the size of a PAYMENT, not of an order — it is not the average order value KPI. amount is pre-formatted integer-minor money.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. payment {amount}'**
+  String dashboardAvgRecordedPayment(String amount);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the compact per-method daily tender trend shown on the Overview for the multi-day ranges. method is the already-localized payment-method name.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily recorded tender: {method}'**
+  String dashboardMethodTrendTitle(String method);
+
   /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the TODAY range. It must say 'all of yesterday' because the server compares a partial today against a COMPLETE yesterday - there is no elapsed-time-matched comparison.
   ///
   /// In en, this message translates to:

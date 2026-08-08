@@ -140,8 +140,15 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
         if (!settled) return false;
       case PaymentFilter.unpaid:
         if (settled) return false;
+      // CLIENT-C: one rule for every tender method, matching the SERVER-B
+      // filter exactly — the order's single COMPLETED payment must carry this
+      // method. A pending or failed tender is therefore never a match, in demo
+      // exactly as on the server.
       case PaymentFilter.cash:
-        if (d.completedPayment?.method != 'cash') return false;
+      case PaymentFilter.card:
+      case PaymentFilter.bit:
+      case PaymentFilter.external:
+        if (d.completedPayment?.method != q.payment.wire) return false;
       case PaymentFilter.all:
         break;
     }

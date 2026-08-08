@@ -163,8 +163,13 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
         if (!settled) return false;
       case PaymentFilter.unpaid:
         if (settled) return false;
+      // CLIENT-C: every tender method asks the same question — the order's
+      // single COMPLETED payment must carry it.
       case PaymentFilter.cash:
-        if (d.completedPayment?.method != 'cash') return false;
+      case PaymentFilter.card:
+      case PaymentFilter.bit:
+      case PaymentFilter.external:
+        if (d.completedPayment?.method != q.payment.wire) return false;
       case PaymentFilter.all:
         break;
     }

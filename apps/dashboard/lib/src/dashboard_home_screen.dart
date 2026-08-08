@@ -9,6 +9,7 @@ import 'analytics/comparison_delta.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
 import 'analytics/owner_sales_series_query_key.dart';
+import 'analytics/payment_method_analytics.dart';
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
 import 'format/money_format.dart';
@@ -108,6 +109,7 @@ class DashboardHomeScreen extends ConsumerWidget {
                 salesByDay: seriesKey == null
                     ? null
                     : _SalesByDayCard(queryKey: seriesKey),
+                salesSeriesKey: seriesKey,
                 // F0.4: bound HERE, where a WidgetRef exists. The child
                 // stays a plain StatelessWidget and never learns about
                 // Riverpod or the shell's tab indices.
@@ -233,6 +235,7 @@ class _ReportContent extends StatelessWidget {
     required this.isDemo,
     this.deviceSummary,
     this.salesByDay,
+    this.salesSeriesKey,
     this.onDrillDown,
   });
 
@@ -251,6 +254,14 @@ class _ReportContent extends StatelessWidget {
   /// the hourly chart are never both present, and the analytics row always has
   /// exactly one dominant time series in it.
   final Widget? salesByDay;
+
+  /// CLIENT-C: the identity of the sales series ALREADY being loaded for
+  /// [salesByDay], or null when this range has none.
+  ///
+  /// A plain value, not a provider read — this widget stays Riverpod-free. It
+  /// is handed to the per-method trend strip, which watches the SAME family
+  /// entry, so the payment trend costs no additional request.
+  final OwnerSalesSeriesQueryKey? salesSeriesKey;
 
   /// F0.4: executes a typed drill-down (filters first, then navigate).
   /// Null keeps every KPI display-only, exactly as before.
@@ -631,17 +642,47 @@ class _ReportContent extends StatelessWidget {
     }
 
     // "1c" payment-mix donut (real data only — from report.paymentMethods).
+    //
+    // CLIENT-C: the rows now carry share and average alongside the amount. The
+    // share DENOMINATOR is the window's COLLECTED total, which is the only
+    // divisor under which the methods describe one whole — billed sales would
+    // shrink every share whenever an order went unpaid, for a reason that has
+    // nothing to do with tenders.
     final Widget? paymentMix = report.paymentMethods.isEmpty
         ? null
         : _PaymentMixCard(
-            methods: report.paymentMethods,
+            analytics: PaymentMethodAnalytics.forLines(
+              report.paymentMethods,
+              totalCollectedMinor: report.collectedMinor,
+            ),
             currencyCode: report.currencyCode,
-            // F0.4: the Cash legend row answers "which orders make up this
-            // cash total?" through the SAME typed drill-down the Cash KPI
-            // uses, so the two surfaces can never disagree.
-            onTapCash: drill == null
+            supportsMethodFilters: report.supportsPaymentMethodHistoryFilters,
+            // F0.4 / CLIENT-C: a legend row answers "which orders make up this
+            // total?" through the SAME typed drill-down the KPI cards use, so
+            // the two surfaces can never disagree. Cash has always been
+            // expressible; the other three go through the capability gate
+            // inside the card, and an unknown method has no token at all.
+            onTapMethod: drill == null
                 ? null
-                : () => drill(const OrdersHistoryDrillDown.cash()),
+                : (method) => switch (method) {
+                    'cash' => drill(const OrdersHistoryDrillDown.cash()),
+                    'card' => drill(const OrdersHistoryDrillDown.card()),
+                    'bit' => drill(const OrdersHistoryDrillDown.bit()),
+                    'external' => drill(
+                      const OrdersHistoryDrillDown.external(),
+                    ),
+                    // Unreachable: the card only offers a tap for the four
+                    // tokens above. Doing nothing is the safe floor if that
+                    // ever changes.
+                    _ => null,
+                  },
+            trend: salesSeriesKey == null
+                ? null
+                : _MethodTrendStrip(
+                    queryKey: salesSeriesKey!,
+                    method: _trendMethodFor(report.paymentMethods),
+                    currencyCode: report.currencyCode,
+                  ),
           );
 
     // LIVE-UX-001 / RF-132: when the report is live-but-limited (real mode with
@@ -791,6 +832,22 @@ class _ReportContent extends StatelessWidget {
   /// disagree about what a tender is called.
   static String _methodLabel(AppLocalizations l10n, String method) =>
       paymentMethodLabel(l10n, method);
+
+  /// CLIENT-C: which method the compact daily tender trend shows.
+  ///
+  /// Deterministic, and deliberately not a control: cash when the window has
+  /// any, otherwise the method that carried the most money. A selector would
+  /// add interactive state to a secondary strip, and — more importantly — a
+  /// chart whose subject can change silently is a chart whose numbers get
+  /// attributed to the wrong tender. The heading always names what is drawn.
+  static String _trendMethodFor(List<PaymentMethodLine> methods) {
+    for (final m in methods) {
+      if (m.method == 'cash') return 'cash';
+    }
+    return methods
+        .reduce((a, b) => a.totalMinor >= b.totalMinor ? a : b)
+        .method;
+  }
 }
 
 /// One row of the CLIENT-B comparison strip: a label, a comparison, and the
@@ -1594,28 +1651,62 @@ String _shiftDurationText(AppLocalizations l10n, int minutes) {
   return l10n.dashboardShiftDurationValue(safe ~/ 60, safe % 60);
 }
 
-/// The "1c" payment-mix donut card: a ring of the period's tenders (real data
-/// from `report.paymentMethods`, never invented) with a legend of dot + method +
-/// share% + amount. Money via [MoneyFormatter]; RTL-safe.
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-C) — the payment mix, enriched.
+///
+/// The donut and its legend stay; each legend row now answers what an owner
+/// actually asks of a tender line — how much, how many, what share of the money
+/// that came in, and how big a typical payment is. Every figure is integer
+/// minor units or an integer count, computed by [PaymentMethodAnalytics] from
+/// what the report already returned. No extra request, no estimate.
+///
+/// RECORDED TENDER ONLY. These are the completed payments staff recorded at the
+/// till. RestoFlow has no acquirer integration, so the card carries a caption
+/// saying exactly that: nothing here is a processor approval, a reconciliation
+/// or a settlement, and the wording must never imply one.
+///
+/// CLICKABILITY IS A DEPLOYMENT QUESTION. Cash has always been expressible by
+/// the history RPC. card / bit / external became expressible only with the
+/// SERVER-B migration, and BEFORE it an unknown `p_payment` returned an empty
+/// list rather than an error — so a row that navigated on an older database
+/// would answer "no orders" for money the owner can see. Those rows are
+/// therefore display-only until [supportsMethodFilters] proves otherwise, and
+/// an unrecognised future method is never clickable at all, because there is no
+/// filter token to send for it.
 class _PaymentMixCard extends StatelessWidget {
   const _PaymentMixCard({
-    required this.methods,
+    required this.analytics,
     required this.currencyCode,
-    this.onTapCash,
+    required this.supportsMethodFilters,
+    this.onTapMethod,
+    this.trend,
   });
 
-  final List<PaymentMethodLine> methods;
+  final List<PaymentMethodAnalytics> analytics;
   final String currencyCode;
 
-  /// F0.4: tapping the CASH legend row opens the cash-tender list.
-  ///
-  /// Only cash. The history filter cannot express card / bit / external
-  /// until the Phase-A server widening lands, and a row that navigated to
-  /// a list the RPC would reject is worse than a row that does nothing, so
-  /// those stay deliberately display-only.
-  ///
-  /// Null keeps every row display-only, exactly as before.
-  final VoidCallback? onTapCash;
+  /// Whether the deployed server can answer a card / bit / external history
+  /// filter. False leaves those rows display-only; cash is unaffected.
+  final bool supportsMethodFilters;
+
+  /// Opens the order list for one tender method. Null keeps EVERY row
+  /// display-only, exactly as before.
+  final void Function(String method)? onTapMethod;
+
+  /// The compact per-method daily trend, for the multi-day ranges. Null on
+  /// today / yesterday, which keep the current-window mix only.
+  final Widget? trend;
+
+  /// Whether a row may be tapped: a destination must exist, the token must be
+  /// one the history filter knows, and for the three new ones the server must
+  /// have proven it can answer them.
+  bool _isTappable(String method) {
+    if (onTapMethod == null) return false;
+    return switch (method) {
+      'cash' => true,
+      'card' || 'bit' || 'external' => supportsMethodFilters,
+      _ => false,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1636,40 +1727,46 @@ class _PaymentMixCard extends StatelessWidget {
     // correctly-labelled cash slice. One shared mapper now serves the legend,
     // the payment summary and the order sheet alike.
     String label(String m) => paymentMethodLabel(l10n, m);
-    final total = methods.fold<int>(0, (s, x) => s + x.totalMinor);
-    final top = methods.reduce((a, b) => a.totalMinor >= b.totalMinor ? a : b);
-    final topPct = total == 0 ? 0 : (top.totalMinor * 100 / total).round();
+    String money(int amountMinor) =>
+        MoneyFormatter.formatMinor(amountMinor, currencyCode);
+
+    final top = analytics.reduce(
+      (a, b) => a.amountMinor >= b.amountMinor ? a : b,
+    );
+    // Integer basis points, then a half-up whole percent — the same number the
+    // previous `(amount * 100 / total).round()` produced, without ever creating
+    // a double to round.
+    final topBps = top.shareBps;
 
     final donut = RestoflowDonutChart(
       size: 120,
       ringWidth: 15,
       segments: [
-        for (final m in methods)
+        for (final m in analytics)
           RestoflowDonutSegment(
-            value: m.totalMinor,
+            value: m.amountMinor,
             color: colorFor(m.method),
             label: label(m.method),
           ),
       ],
-      centerLabel: '$topPct%',
+      centerLabel: '${topBps == null ? 0 : roundedPercentFromBps(topBps)}%',
       centerSub: label(top.method),
     );
 
-    // Dashboard V2 legend: one bordered row per tender — share% + dot + name
-    // at the reading start, the formatted amount at the reading end. Only real
-    // returned methods render (a cash-only day is one truthful row).
     final legend = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final m in methods)
+        for (final m in analytics)
           Padding(
             padding: const EdgeInsetsDirectional.only(
               bottom: RestoflowSpacing.sm,
             ),
             child: _MaybeTappableRow(
               key: Key('payment-mix-row-${m.method}'),
-              onTap: m.method == 'cash' ? onTapCash : null,
+              onTap: _isTappable(m.method)
+                  ? () => onTapMethod!(m.method)
+                  : null,
               child: Container(
                 padding: const EdgeInsetsDirectional.symmetric(
                   horizontal: RestoflowSpacing.md,
@@ -1679,47 +1776,64 @@ class _PaymentMixCard extends StatelessWidget {
                   border: Border.all(color: kRestoflowHairline),
                   borderRadius: BorderRadius.circular(RestoflowRadii.sm),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}%',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: colorFor(m.method),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    Flexible(
-                      flex: 2,
-                      child: Text(
-                        label(m.method),
-                        style: theme.textTheme.bodyMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Spacer(),
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    Flexible(
-                      flex: 6,
-                      child: Text(
-                        MoneyFormatter.formatMinor(m.totalMinor, currencyCode),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colorFor(m.method),
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            label(m.method),
+                            style: theme.textTheme.bodyMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            key: Key('payment-amount-${m.method}'),
+                            money(m.amountMinor),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: RestoflowSpacing.xs),
+                    // Count, share and average. Each is OMITTED rather than
+                    // faked when its basis is missing: a window that collected
+                    // nothing has no share to take, and a method with no
+                    // payments has nothing to average.
+                    Text(
+                      key: Key('payment-meta-${m.method}'),
+                      [
+                        l10n.dashboardRecordedPaymentsCount(m.count),
+                        if (m.shareBps case final bps?)
+                          l10n.dashboardShareOfCollected(formatShareBps(bps)),
+                        if (m.averageMinor case final avg?)
+                          l10n.dashboardAvgRecordedPayment(money(avg)),
+                      ].join(' · '),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -1729,6 +1843,7 @@ class _PaymentMixCard extends StatelessWidget {
       ],
     );
 
+    final t = trend;
     return RestoflowSectionCard(
       key: const Key('payment-mix-card'),
       title: l10n.dashboardPaymentMix,
@@ -1758,8 +1873,122 @@ class _PaymentMixCard extends StatelessWidget {
             );
           },
         ),
+        if (t != null) ...[const SizedBox(height: RestoflowSpacing.md), t],
+        const SizedBox(height: RestoflowSpacing.xs),
+        Text(
+          key: const Key('payment-recorded-tenders-note'),
+          l10n.dashboardRecordedTendersNote,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
       ],
     );
+  }
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-C) — the compact per-method daily
+/// tender trend, for the multi-day ranges.
+///
+/// Reads the SAME `owner_sales_series` entry the daily sales trend already
+/// loaded — same query key, same family — so this adds NO request. On today and
+/// yesterday it is never built, because those ranges deliberately never ask for
+/// a series at all.
+///
+/// ONE method, named in the heading. Four overlapping lines in a card this size
+/// would be decoration rather than information, and an unlabelled multi-series
+/// chart is exactly how a reader ends up attributing one method's money to
+/// another. The method is chosen deterministically — cash when the window has
+/// any, otherwise the method that carried the most — so the chart never changes
+/// what it is showing without the heading changing with it.
+///
+/// [RestoflowBarChart] rather than the area chart used for the headline trend:
+/// this is a secondary strip inside another card, it needs no tooltip, and the
+/// bar chart's compact single-hue rendering is what it was built for. Its axis
+/// labels every bar with no subsampling, so a 30-day window would draw thirty
+/// overlapping numbers — the labels are therefore thinned here, which the
+/// component supports natively by passing an empty label.
+class _MethodTrendStrip extends ConsumerWidget {
+  const _MethodTrendStrip({
+    required this.queryKey,
+    required this.method,
+    required this.currencyCode,
+  });
+
+  final OwnerSalesSeriesQueryKey queryKey;
+  final String method;
+  final String currencyCode;
+
+  /// At most this many x-axis labels; the rest render blank so 30 days stay
+  /// readable in a narrow card.
+  static const int _maxLabels = 7;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final series = ref
+        .watch(ownerSalesSeriesForKeyProvider(queryKey))
+        .valueOrNull;
+    // Loading, failed, or a server without the series RPC: the strip simply is
+    // not there. The payment analytics above it come from a different call and
+    // must keep rendering — one missing capability may not take another
+    // surface's data down with it.
+    if (series == null || !series.supported || series.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final amounts = <int>[
+      for (final bucket in series.buckets) _amountFor(bucket),
+    ];
+    if (amounts.every((a) => a == 0)) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final step = (series.buckets.length / _maxLabels).ceil().clamp(
+      1,
+      series.buckets.length,
+    );
+    final peak = amounts.reduce((a, b) => a > b ? a : b);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          key: const Key('payment-method-trend-title'),
+          l10n.dashboardMethodTrendTitle(paymentMethodLabel(l10n, method)),
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowBarChart(
+          key: const Key('payment-method-trend-chart'),
+          height: 120,
+          bars: [
+            for (var i = 0; i < series.buckets.length; i++)
+              RestoflowBarDatum(
+                // The day-of-month, thinned. Never a re-rendered date: the
+                // label comes from the server's own calendar token.
+                label: i % step == 0 || i == series.buckets.length - 1
+                    ? series.buckets[i].day.dayOfMonthLabel
+                    : '',
+                value: amounts[i],
+              ),
+          ],
+          peakValueLabel: MoneyFormatter.formatMinor(peak, currencyCode),
+        ),
+      ],
+    );
+  }
+
+  /// This method's recorded completed tender for one day.
+  ///
+  /// A day the method does not appear in collected NOTHING by it — the server
+  /// omits a method with no completed payment — so 0 is the truthful value, not
+  /// a gap to be interpolated.
+  int _amountFor(OwnerSalesSeriesBucket bucket) {
+    for (final line in bucket.byMethod) {
+      if (line.method == method) return line.totalMinor;
+    }
+    return 0;
   }
 }
 

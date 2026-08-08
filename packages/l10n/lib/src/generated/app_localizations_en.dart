@@ -3007,6 +3007,36 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardRecordedTendersNote =>
+      'Recorded tenders only — not processor settlement.';
+
+  @override
+  String dashboardRecordedPaymentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count recorded payments',
+      one: '1 recorded payment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardShareOfCollected(String percent) {
+    return '$percent% of collected';
+  }
+
+  @override
+  String dashboardAvgRecordedPayment(String amount) {
+    return 'Avg. payment $amount';
+  }
+
+  @override
+  String dashboardMethodTrendTitle(String method) {
+    return 'Daily recorded tender: $method';
+  }
+
+  @override
   String get dashboardComparedVsYesterdayAll =>
       'Compared with all of yesterday';
 

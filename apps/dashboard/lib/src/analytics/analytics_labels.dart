@@ -25,6 +25,7 @@ library;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_report.dart' show DashboardReport;
+import '../data/order_history_models.dart' show PaymentFilter;
 
 /// Localizes a payment-method wire token (`cash` / `card` / `bit` /
 /// `external`).
@@ -63,6 +64,54 @@ const List<String> kPaymentMethodWireTokens = <String>[
 /// fully presentable, without hard-coding the list at each call site.
 bool isKnownPaymentMethod(String method) =>
     kPaymentMethodWireTokens.contains(method);
+
+/// CLIENT-C — the localized label for an order-history payment FILTER.
+///
+/// Delegates the four tender methods to [paymentMethodLabel] so the Overview's
+/// payment mix and the Orders filter can never disagree about what a tender is
+/// called; only the settlement states (`all` / `paid` / `unpaid`) have their own
+/// wording, which already ships.
+String paymentFilterLabel(AppLocalizations l10n, PaymentFilter filter) =>
+    switch (filter) {
+      PaymentFilter.all => l10n.ordersPaymentAll,
+      PaymentFilter.paid => l10n.dashboardPaid,
+      PaymentFilter.unpaid => l10n.dashboardUnpaid,
+      PaymentFilter.cash ||
+      PaymentFilter.card ||
+      PaymentFilter.bit ||
+      PaymentFilter.external => paymentMethodLabel(l10n, filter.wire!),
+    };
+
+/// The payment-filter options an Orders dropdown should OFFER, always including
+/// [current] so the control can display the state it is actually in.
+///
+/// The manually offered set is deliberately the pre-existing one — all / paid /
+/// unpaid / cash. card / bit / external are reachable by DRILL-DOWN, which is
+/// gated on proof that the server can answer them
+/// ([DashboardReport.supportsPaymentMethodHistoryFilters]); offering them in a
+/// free-standing dropdown would hand an owner on a pre-SERVER-B database a
+/// filter that silently returns nothing.
+///
+/// But a control must still be able to RENDER a value applied from elsewhere:
+/// a dropdown whose current value is missing from its items is a framework
+/// assertion, and more importantly an owner who arrived by drill-down has to be
+/// able to see, and undo, the filter they are looking at.
+Map<PaymentFilter, String> paymentFilterOptions(
+  AppLocalizations l10n,
+  PaymentFilter current,
+) {
+  final options = <PaymentFilter, String>{
+    for (final f in const [
+      PaymentFilter.all,
+      PaymentFilter.paid,
+      PaymentFilter.unpaid,
+      PaymentFilter.cash,
+    ])
+      f: paymentFilterLabel(l10n, f),
+  };
+  options.putIfAbsent(current, () => paymentFilterLabel(l10n, current));
+  return options;
+}
 
 /// F0.5 — the shift-state wire tokens the owner report can actually carry.
 ///

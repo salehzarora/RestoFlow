@@ -437,6 +437,33 @@ class DashboardReport {
   /// real day can have zero orders/sales yet a closed shift with counted cash (an
   /// opening float / drawer reconciliation), and that must render the "Shift &
   /// cash" card instead of being hidden behind the generic empty state.
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-C) — whether this server can
+  /// answer a card / bit / external order-history filter.
+  ///
+  /// This is a DEPLOYMENT fact, not a product one, and it is derived rather
+  /// than configured: migration `20260811090000` contains BOTH the additive
+  /// `comparison.completed_count` / `comparison.discount_minor` keys AND the
+  /// `owner_order_history` payment widening. One migration, so the presence of
+  /// the comparison keys in a payload this database just produced is direct
+  /// evidence that the widening is deployed too — no capability RPC, no probe
+  /// of the history endpoint, no version string.
+  ///
+  /// Why it must be gated at all: BEFORE that migration an unknown `p_payment`
+  /// matched no branch and returned an EMPTY LIST rather than raising. So a
+  /// card row that navigated on an old database would land the owner on a list
+  /// reading "no orders" for a tender they can see money for — a confident
+  /// wrong answer, which is worse than an inert row.
+  ///
+  /// Both keys are required, and null (absent OR malformed) means no: the
+  /// conservative direction here costs a click and the optimistic one costs
+  /// trust. A present ZERO is a real value and still proves the migration.
+  bool get supportsPaymentMethodHistoryFilters {
+    final cmp = comparison;
+    return cmp != null &&
+        cmp.completedOrderCount != null &&
+        cmp.discountTotalMinor != null;
+  }
+
   bool get isEmpty =>
       orderCount == 0 &&
       completedOrderCount == 0 &&

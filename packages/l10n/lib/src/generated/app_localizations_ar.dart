@@ -2982,6 +2982,40 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardRecordedTendersNote =>
+      'مبالغ مسجّلة في النظام فقط — وليست تسوية من مزوّد الدفع.';
+
+  @override
+  String dashboardRecordedPaymentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعة مسجّلة',
+      many: '$count دفعة مسجّلة',
+      few: '$count دفعات مسجّلة',
+      two: 'دفعتان مسجّلتان',
+      one: 'دفعة مسجّلة واحدة',
+      zero: 'لا دفعات مسجّلة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardShareOfCollected(String percent) {
+    return '$percent٪ من المحصّل';
+  }
+
+  @override
+  String dashboardAvgRecordedPayment(String amount) {
+    return 'متوسط الدفعة $amount';
+  }
+
+  @override
+  String dashboardMethodTrendTitle(String method) {
+    return 'المبالغ المسجّلة يوميًا: $method';
+  }
+
+  @override
   String get dashboardComparedVsYesterdayAll => 'مقارنةً بكامل يوم أمس';
 
   @override

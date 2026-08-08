@@ -2960,6 +2960,37 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get dashboardRecordedTendersNote =>
+      'תשלומים שנרשמו במערכת בלבד — לא סליקה מול חברת האשראי.';
+
+  @override
+  String dashboardRecordedPaymentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count תשלומים שנרשמו',
+      two: 'שני תשלומים שנרשמו',
+      one: 'תשלום אחד שנרשם',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardShareOfCollected(String percent) {
+    return '$percent% מהנגבה';
+  }
+
+  @override
+  String dashboardAvgRecordedPayment(String amount) {
+    return 'תשלום ממוצע $amount';
+  }
+
+  @override
+  String dashboardMethodTrendTitle(String method) {
+    return 'תקבולים שנרשמו לפי יום: $method';
+  }
+
+  @override
   String get dashboardComparedVsYesterdayAll => 'לעומת כל יום אתמול';
 
   @override

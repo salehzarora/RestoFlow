@@ -13,6 +13,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../state/order_history_providers.dart';
@@ -260,12 +261,9 @@ class _PaymentDropdown extends StatelessWidget {
       keyValue: 'orders-payment-filter',
       label: l10n.ordersFilterPayment,
       value: query.payment,
-      items: {
-        PaymentFilter.all: l10n.ordersPaymentAll,
-        PaymentFilter.paid: l10n.dashboardPaid,
-        PaymentFilter.unpaid: l10n.dashboardUnpaid,
-        PaymentFilter.cash: l10n.posPaymentMethodCash,
-      },
+      // CLIENT-C: the shared option set, which always includes the CURRENT
+      // value so a filter applied by drill-down can be seen and undone here.
+      items: paymentFilterOptions(l10n, query.payment),
       onChanged: (v) => onApply((q) => q.copyWith(payment: v)),
     );
   }

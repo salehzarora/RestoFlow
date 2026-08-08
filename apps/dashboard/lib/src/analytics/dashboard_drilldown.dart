@@ -63,9 +63,22 @@ final class OrdersHistoryDrillDown extends DashboardDrillDown {
   /// Unpaid orders — the outstanding-money question.
   const OrdersHistoryDrillDown.unpaid() : this(payment: PaymentFilter.unpaid);
 
-  /// Cash-tendered orders. Only `cash` is expressible today; card / bit /
-  /// external are Phase-A server work and deliberately absent here.
+  /// Cash-tendered orders.
   const OrdersHistoryDrillDown.cash() : this(payment: PaymentFilter.cash);
+
+  /// CLIENT-C — the tender methods SERVER-B widened the history RPC to accept.
+  ///
+  /// WHETHER these may be offered is NOT decided here. This type says what a
+  /// drill-down means; whether the deployed server can answer it is a property
+  /// of the report the caller is looking at
+  /// ([DashboardReport.supportsPaymentMethodHistoryFilters]). Keeping the
+  /// capability out of the model means the same drill-down stays valid the
+  /// moment the migration is applied, with no model change — and stops a
+  /// deployment fact from leaking into a business vocabulary.
+  const OrdersHistoryDrillDown.card() : this(payment: PaymentFilter.card);
+  const OrdersHistoryDrillDown.bit() : this(payment: PaymentFilter.bit);
+  const OrdersHistoryDrillDown.external()
+    : this(payment: PaymentFilter.external);
 
   /// Voided orders — their own bucket, never merged with discounts.
   const OrdersHistoryDrillDown.voided()

@@ -18,6 +18,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/active_orders_models.dart';
 import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/order_history_models.dart';
@@ -481,12 +482,9 @@ class _FilterBar extends StatelessWidget {
               keyValue: 'active-orders-payment-filter',
               label: l10n.ordersFilterPayment,
               value: query.payment,
-              items: {
-                PaymentFilter.all: l10n.ordersPaymentAll,
-                PaymentFilter.paid: l10n.dashboardPaid,
-                PaymentFilter.unpaid: l10n.dashboardUnpaid,
-                PaymentFilter.cash: l10n.posPaymentMethodCash,
-              },
+              // CLIENT-C: shared with the History filter, and always able to
+              // render the value it is actually holding.
+              items: paymentFilterOptions(l10n, query.payment),
               onChanged: (v) => onApply((q) => q.copyWith(payment: v)),
             ),
           ],
