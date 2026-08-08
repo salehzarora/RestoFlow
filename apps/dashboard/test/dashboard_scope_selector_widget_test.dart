@@ -43,16 +43,19 @@ class _FailingOptions implements AuditFilterOptionsRepository {
 
 const _branches = <AuditBranchOption>[
   AuditBranchOption(
+    organizationId: 'org-1',
     branchId: 'branch-1',
     restaurantId: 'rest-1',
     label: 'Rest One · Main',
   ),
   AuditBranchOption(
+    organizationId: 'org-1',
     branchId: 'branch-2',
     restaurantId: 'rest-1',
     label: 'Rest One · Harbor',
   ),
   AuditBranchOption(
+    organizationId: 'org-1',
     branchId: 'branch-9',
     restaurantId: 'rest-2',
     label: 'Rest Two · Main',

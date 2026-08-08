@@ -89,20 +89,56 @@ final selectedAnalyticsBranchProvider = StateProvider<AuditBranchOption?>(
   (ref) => null,
 );
 
+/// CODEX F-1 — the selection AFTER coverage sanitisation, or null.
+///
+/// This is the ONE place a raw selection becomes an effective one, and it is a
+/// separate provider so the invariant is observable rather than implied: the
+/// scope selector renders THIS value, so a control can never sit on an option
+/// that is not in its own item list.
+///
+/// WHY SANITISE RATHER THAN RESET THE RAW STATE. The obvious fix — have
+/// [selectedAnalyticsBranchProvider] watch the membership so it re-initialises
+/// — would give it a `dependencies` entry on a provider the shell OVERRIDES per
+/// surface. Riverpod then instantiates the selection in each overriding
+/// container (`container.dart` places a provider in the deepest container that
+/// overrides any of its transitive dependencies), so Overview and Orders would
+/// each get their OWN selection and CLIENT-E2's cross-surface synchronisation
+/// would silently break. Keeping the raw state dependency-free keeps it at the
+/// root, shared, and sanitising on read gives the same guarantee without that
+/// fragility.
+///
+/// A selection that becomes valid again — the owner switches back to the
+/// organization they made it in — simply starts applying again, which is the
+/// behaviour an owner expects from their own last choice.
+final effectiveAnalyticsBranchProvider = Provider<AuditBranchOption?>(
+  (ref) {
+    final covered = ref.watch(dashboardCoveredScopeProvider);
+    final selected = ref.watch(selectedAnalyticsBranchProvider);
+    if (covered == null || selected == null) return null;
+    return covered.covers(selected) ? selected : null;
+  },
+  dependencies: [
+    dashboardCoveredScopeProvider,
+    selectedAnalyticsBranchProvider,
+  ],
+);
+
 /// CLIENT-E1 — the scope every Overview analytic actually reads.
 ///
-/// The selection is applied ONLY when the current coverage still contains it.
-/// That check is the fail-closed guard for a membership that changed underneath
-/// a stale selection: an owner demoted to one branch, or moved to another
-/// restaurant, silently falls back to their real coverage rather than keeping
-/// an id they may no longer read. Coverage is role-derived, so this is true the
-/// instant the membership changes — it does not wait for an option list.
+/// The selection is applied ONLY when the current coverage still contains it —
+/// including its ORGANIZATION (CODEX F-1). That check is the fail-closed guard
+/// for a membership that changed underneath a stale selection: an owner
+/// demoted to one branch, moved to another restaurant, or signed out and
+/// replaced by a different organization's owner falls back to their real
+/// coverage rather than keeping an id they may no longer read. Coverage is
+/// role-derived, so this is true the instant the membership changes — it does
+/// not wait for an option list.
 final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
   (ref) {
     final covered = ref.watch(dashboardCoveredScopeProvider);
     if (covered == null) return null;
-    final selected = ref.watch(selectedAnalyticsBranchProvider);
-    if (selected == null || !covered.covers(selected)) return covered;
+    final selected = ref.watch(effectiveAnalyticsBranchProvider);
+    if (selected == null) return covered;
     return DashboardAnalyticsScope.branch(
       organizationId: covered.organizationId,
       option: selected,
@@ -110,7 +146,7 @@ final dashboardAnalyticsScopeProvider = Provider<DashboardAnalyticsScope?>(
   },
   dependencies: [
     dashboardCoveredScopeProvider,
-    selectedAnalyticsBranchProvider,
+    effectiveAnalyticsBranchProvider,
   ],
 );
 

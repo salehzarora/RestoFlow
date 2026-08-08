@@ -42,16 +42,19 @@ MembershipContext _membership({
 );
 
 const _branchInRest1 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-1',
   restaurantId: 'rest-1',
   label: 'Rest One · Downtown',
 );
 const _otherBranchInRest1 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-2',
   restaurantId: 'rest-1',
   label: 'Rest One · Harbor',
 );
 const _branchInRest2 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-9',
   restaurantId: 'rest-2',
   label: 'Rest Two · Airport',
@@ -190,11 +193,13 @@ void main() {
     test('E. option labels keep the source disambiguation, so identical branch '
         'names across restaurants stay distinguishable', () {
       const a = AuditBranchOption(
+        organizationId: 'org-1',
         branchId: 'b-1',
         restaurantId: 'r-1',
         label: 'Rest One · Main',
       );
       const b = AuditBranchOption(
+        organizationId: 'org-1',
         branchId: 'b-2',
         restaurantId: 'r-2',
         label: 'Rest Two · Main',

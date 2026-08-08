@@ -46,6 +46,7 @@ MembershipContext _membership(MembershipRole role) => MembershipContext(
 );
 
 const _harbor = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-2',
   restaurantId: 'rest-1',
   label: 'Rest One · Harbor',

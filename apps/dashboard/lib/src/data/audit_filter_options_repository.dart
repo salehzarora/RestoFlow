@@ -57,11 +57,13 @@ class DemoAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
   @override
   Future<List<AuditBranchOption>> loadBranches() async => const [
     AuditBranchOption(
+      organizationId: 'demo-org-1',
       branchId: 'demo-branch-downtown',
       restaurantId: 'demo-rest-1',
       label: 'RestoFlow · Downtown',
     ),
     AuditBranchOption(
+      organizationId: 'demo-org-1',
       branchId: 'demo-branch-harbor',
       restaurantId: 'demo-rest-1',
       label: 'RestoFlow · Harbor',
@@ -125,6 +127,10 @@ class RealAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
         final branchName = _str(b['name']) ?? branchId;
         out.add(
           AuditBranchOption(
+            // CODEX F-1: the organization this call was AUTHORIZED under —
+            // `list_org_structure` was invoked with exactly this id, so the
+            // option is stamped with it rather than re-read. No extra query.
+            organizationId: m.organizationId,
             branchId: branchId,
             restaurantId: restaurantId,
             label: restaurantName.isEmpty

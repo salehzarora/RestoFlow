@@ -69,16 +69,19 @@ MembershipContext _membership(
 );
 
 const _branchInRest1 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-1',
   restaurantId: 'rest-1',
   label: 'Rest One · Main',
 );
 const _otherBranchInRest1 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-2',
   restaurantId: 'rest-1',
   label: 'Rest One · Harbor',
 );
 const _branchInRest2 = AuditBranchOption(
+  organizationId: 'org-1',
   branchId: 'branch-9',
   restaurantId: 'rest-2',
   label: 'Rest Two · Airport',

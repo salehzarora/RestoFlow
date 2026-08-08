@@ -261,8 +261,14 @@ class _ScopeSelector extends ConsumerWidget {
       for (final o in options)
         if (covered.covers(o)) o,
     ];
-    final selected = ref.watch(dashboardAnalyticsScopeProvider);
-    final selectedId = selected?.branchId;
+    // CODEX F-1: the SANITISED selection, so this control's value is always
+    // either null (the broad option) or an option genuinely present in
+    // [selectable]. Reading the raw selection let a branch chosen under a
+    // PREVIOUS organization stay as the field's value while the item list had
+    // moved on — which DropdownButtonFormField asserts on. Reading the
+    // effective selection states that invariant directly rather than leaving it
+    // to fall out of how the scope happens to be derived.
+    final selectedId = ref.watch(effectiveAnalyticsBranchProvider)?.branchId;
 
     return Padding(
       padding: padding,

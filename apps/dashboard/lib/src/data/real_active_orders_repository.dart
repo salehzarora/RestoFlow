@@ -48,6 +48,25 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
         'active-orders: no authenticated transport/scope - real read not wired',
       );
     }
+    // CODEX F-2: `owner_active_orders` ENUM-VALIDATES p_payment to
+    // paid/unpaid/cash and raises 22023 for anything else. CLIENT-C widened the
+    // SHARED PaymentFilter with card/bit/external for the order-history RPC,
+    // which accepts them — this one does not, so one type now spans two RPCs
+    // with different accepted domains.
+    //
+    // Fail CLOSED at the boundary rather than mapping an unsupported tender to
+    // "all": silently broadening would answer a question nobody asked and hide
+    // the programmer error behind a plausible-looking board. Nothing can reach
+    // this today — the Active board owns its own query and its dropdown offers
+    // only the supported four — so this is the guard that keeps it that way.
+
+    if (query.payment.isMethod && query.payment != PaymentFilter.cash) {
+      throw ActiveOrdersException(
+        'owner_active_orders does not support the '
+        '${query.payment.wire} tender filter',
+      );
+    }
+
     // "All permitted branches" resolves from the caller's ROLE (org_owner ->
     // whole org, restaurant_owner -> whole restaurant, otherwise the one covered
     // branch). A picked branch comes from the scope-safe option list, never a

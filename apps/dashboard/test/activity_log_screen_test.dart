@@ -285,6 +285,7 @@ void main() {
         .read(auditLogQueryProvider)
         .copyWith(
           branch: const AuditBranchOption(
+            organizationId: 'org-1',
             branchId: 'demo-branch-harbor',
             restaurantId: 'demo-rest-1',
             label: 'RestoFlow · Harbor',

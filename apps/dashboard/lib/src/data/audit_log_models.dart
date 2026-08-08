@@ -56,14 +56,47 @@ enum AuditCategory {
 /// RPC's `p_restaurant_id`/`p_branch_id` when this branch is selected.
 class AuditBranchOption {
   const AuditBranchOption({
+    required this.organizationId,
     required this.branchId,
     required this.restaurantId,
     required this.label,
   });
 
+  /// CODEX F-1 — the organization this branch belongs to.
+  ///
+  /// Added because a branch option outlives the membership that produced it:
+  /// the selection lives in the root provider container, which is never rebuilt
+  /// on sign-out, so an option chosen under one organization can still be in
+  /// memory when a membership in ANOTHER organization becomes active. Without
+  /// this field `DashboardAnalyticsScope.covers` had nothing to compare and its
+  /// org-wide arm returned true for any branch id at all.
+  ///
+  /// It is NOT an authorization claim — the server still derives its own scope
+  /// and intersects whatever arrives. It is what lets the client stop sending a
+  /// request it already knows is nonsense.
+  final String organizationId;
+
   final String branchId;
   final String restaurantId;
   final String label;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AuditBranchOption &&
+          other.organizationId == organizationId &&
+          other.branchId == branchId &&
+          other.restaurantId == restaurantId &&
+          other.label == label;
+
+  @override
+  int get hashCode =>
+      Object.hash(organizationId, branchId, restaurantId, label);
+
+  @override
+  String toString() =>
+      'AuditBranchOption(org: $organizationId, restaurant: $restaurantId, '
+      'branch: $branchId)';
 }
 
 /// One selectable STAFF actor the caller may filter by (options come from the

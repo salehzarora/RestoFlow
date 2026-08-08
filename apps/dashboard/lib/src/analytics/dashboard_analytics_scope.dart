@@ -121,12 +121,33 @@ class DashboardAnalyticsScope {
   /// deliberately about COVERAGE rather than about a loaded option list: the
   /// list is a convenience that can be stale or still loading, while coverage
   /// is derived from the role and is true the instant the membership changes.
-  bool covers(AuditBranchOption option) => switch (kind) {
-    DashboardAnalyticsScopeKind.orgWide => true,
-    DashboardAnalyticsScopeKind.restaurantWide =>
-      option.restaurantId == restaurantId,
-    DashboardAnalyticsScopeKind.singleBranch => option.branchId == branchId,
-  };
+  ///
+  /// CODEX F-1 — ORGANIZATION EQUALITY IS MANDATORY, and is checked FIRST for
+  /// every kind. The org-wide arm previously returned true unconditionally,
+  /// which was only ever safe while a selection could not outlive its
+  /// membership. It can: the selection lives in the root provider container,
+  /// and signing out does not rebuild it (`main.dart` creates it once in
+  /// `runApp`, and `DashboardAuthFlow` clears widget state only). So a branch
+  /// picked in one organization survived into the next session and, under a
+  /// different org, was still accepted — sending that org's id together with
+  /// another org's restaurant and branch.
+  ///
+  /// The server always refused those (`actor_rank_in_scope` -> 42501), so no
+  /// data ever crossed; what leaked was a request the client should never have
+  /// formed, and a selector holding a value absent from its own item list.
+  ///
+  /// Branch ids are NOT treated as globally unique here. Even if they are in
+  /// practice, leaning on that would make a uniqueness property load-bearing
+  /// for tenant scoping, which is not what it is for.
+  bool covers(AuditBranchOption option) {
+    if (option.organizationId != organizationId) return false;
+    return switch (kind) {
+      DashboardAnalyticsScopeKind.orgWide => true,
+      DashboardAnalyticsScopeKind.restaurantWide =>
+        option.restaurantId == restaurantId,
+      DashboardAnalyticsScopeKind.singleBranch => option.branchId == branchId,
+    };
+  }
 
   @override
   bool operator ==(Object other) =>
