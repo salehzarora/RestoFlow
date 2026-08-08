@@ -73,9 +73,22 @@ import 'dashboard_providers.dart'
 class AnalyticsBranchAnswer {
   const AnalyticsBranchAnswer({required this.context, required this.options});
 
-  /// The coverage this answer describes. An answer whose context is not the
-  /// current one answers a question nobody is asking any more.
-  final DashboardAnalyticsScope context;
+  /// The coverage this answer describes, as a LABEL-FREE identity. An answer
+  /// whose context is not the current one answers a question nobody is asking
+  /// any more.
+  ///
+  /// CODEX F-1B-3-R1A — label-free, because the stamp decides whether a
+  /// remembered answer still applies and a display name has no business in that
+  /// decision. `DashboardAnalyticsScope.coveredBy` copies `membership.branchName`
+  /// into `branchLabel` for a branch-fixed membership, and scope equality
+  /// includes it, so RENAMING that branch changed the stamp: the answer was
+  /// discarded, the context read as "never answered", and the resolution fell
+  /// back to the raw selection — the same resurrection F-1B-3-R1 exists to
+  /// prevent, reached through a rename instead of a failure.
+  ///
+  /// Null only where there is no membership at all (demo mode), which is also a
+  /// context: it matches the current null coverage and mismatches any real one.
+  final DashboardAnalyticsScope? context;
 
   /// Conflict-sanitised, coverage-filtered branches. Empty is an ANSWER.
   final List<AuditBranchOption> options;
@@ -87,7 +100,8 @@ final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>((
   final covered = ref.watch(dashboardCoveredScopeProvider);
   final raw = await ref.watch(auditBranchOptionsProvider.future);
   return AnalyticsBranchAnswer(
-    context: covered!,
+    // The IDS this answer was loaded under, never the name they had at the time.
+    context: covered?.transportIdentity,
     options: sanitizeAnalyticsBranchOptions(raw, coverage: covered),
   );
 }, dependencies: [dashboardCoveredScopeProvider, auditBranchOptionsProvider]);
@@ -120,8 +134,9 @@ final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
     // Never answered at all — which is not "answered: none".
     if (!async.hasValue) return null;
     final answer = async.requireValue;
-    // Answered, but for a membership/coverage we have since left.
-    if (answer.context != covered) return null;
+    // Answered, but for a membership/coverage we have since left. Compared on
+    // IDS ONLY (F-1B-3-R1A) so a branch rename cannot look like a new context.
+    if (answer.context != covered.transportIdentity) return null;
     return answer.options;
   },
   dependencies: [dashboardCoveredScopeProvider, analyticsBranchAnswerProvider],

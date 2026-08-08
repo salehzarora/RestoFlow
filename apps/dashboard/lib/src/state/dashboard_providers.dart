@@ -21,7 +21,8 @@ import '../data/real_owner_sales_series_repository.dart';
 // initialises top-level finals lazily, so the cycle is a file-layout detail,
 // not an initialisation order hazard.
 import 'analytics_branch_providers.dart'
-    show resolvedLiveAnalyticsBranchProvider;
+    show analyticsBranchAnswerProvider, resolvedLiveAnalyticsBranchProvider;
+import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -337,7 +338,38 @@ final ownerSalesSeriesForKeyProvider =
 /// the trend stale while the KPIs above it updated would make the page
 /// self-contradictory, and an owner would have no way to tell which half was
 /// current.
-void refreshOwnerReport(WidgetRef ref) {
+/// CODEX F-1B-3-R1C — THE BRANCH LIST IS REFRESHED HERE TOO, AND FIRST.
+///
+/// Until now nothing in production ever re-ran `list_org_structure`. The
+/// authoritative-omission machinery was therefore only reachable in tests: a
+/// branch deleted mid-session stayed selectable, and stayed the financial
+/// scope, for the life of the session. The refresh the owner already has is the
+/// right place for it — no polling, no second button, no refresh on tab
+/// changes, and the SAME shared container, so one enumeration serves every
+/// surface.
+///
+/// ORDER MATTERS. Invalidating the report first would refetch branch B, and
+/// only then would the enumeration report B gone and refetch the parent — one
+/// avoidable request for a scope the owner is no longer in, with its result
+/// briefly on screen. Settling the branch answer first means the financial
+/// invalidation reads the key the answer produced, so exactly one report
+/// request goes out and it is for the right scope.
+///
+/// A FAILED enumeration does not block the refresh: the last authoritative
+/// answer still stands (F-1B-3-R1), so the financial half re-runs against the
+/// retained scope. Refreshing must never be able to widen the figures.
+Future<void> refreshOwnerReport(WidgetRef ref) async {
+  // No membership (demo mode) means no branch list to re-read.
+  if (ref.read(dashboardCoveredScopeProvider) != null) {
+    ref.invalidate(auditBranchOptionsProvider);
+    try {
+      await ref.read(analyticsBranchAnswerProvider.future);
+    } catch (_) {
+      // Technical failure: keep the last authoritative scope and carry on.
+    }
+    // The owner may have left the surface while the enumeration was in flight.
+    if (!ref.context.mounted) return;
+  }
   ref.invalidate(
     ownerReportForKeyProvider(ref.read(currentOwnerReportKeyProvider)),
   );

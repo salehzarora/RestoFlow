@@ -331,66 +331,71 @@ class _DashboardShellState extends State<DashboardShell> {
     // that container and everything it held - including the loaded owner
     // report, which then refetched on every return.
     //
-    // Hoisting them here gives those providers ONE container that outlives
+    // Hoisting them gives those providers ONE container that outlives
     // tab changes. Surface-specific overrides (Orders' receipt-logo
     // resolver, the menu feature scopes) deliberately stay local - only the
     // genuinely shared ones move.
-    final content = ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
+    //
+    // CODEX F-1B-3-R1B — the scope is now ABOVE the LayoutBuilder, not inside
+    // it. It used to wrap this subtree, which the responsive builder places in
+    // two structurally different trees: `Row > Expanded > Column` at rail
+    // widths, `Column` at phone widths. Crossing ~560px therefore gave the
+    // ProviderScope a different ancestor chain, so its element could not be
+    // reused — the container was disposed and rebuilt, taking the loaded report
+    // AND the remembered branch answer with it. An owner who had already been
+    // told branch B was gone would be back to "never answered" purely because
+    // the window was resized, and the raw selection would apply again.
+    //
+    // Layout may change what is on screen; it must not change which container
+    // owns the membership, the transport, or what the dashboard has learned.
+    final content = KeyedSubtree(
+      key: ValueKey('dashboard-tab-$_index'),
+      child: switch (_index) {
+        0 => _overview(),
+        1 => _menuSurface(context, l10n),
+        2 => _adminSurface(
+          const AdminDevicesScreen(),
+          // Real device management in authenticated mode; demo store otherwise.
+          repository: _realDeviceRepo ?? _adminStore,
+          demo: _realDeviceRepo == null,
         ),
-      ],
-      child: KeyedSubtree(
-        key: ValueKey('dashboard-tab-$_index'),
-        child: switch (_index) {
-          0 => _overview(),
-          1 => _menuSurface(context, l10n),
-          2 => _adminSurface(
-            const AdminDevicesScreen(),
-            // Real device management in authenticated mode; demo store otherwise.
-            repository: _realDeviceRepo ?? _adminStore,
-            demo: _realDeviceRepo == null,
-          ),
-          3 => _demoBannerSurface(
-            PrintersScreen(repository: _printersRepo),
-            demo: _printersDemo,
-          ),
-          4 => _demoBannerSurface(
-            StaffScreen(repository: _staffRepo),
-            demo: _staffDemo,
-          ),
-          5 => _demoBannerSurface(
-            TablesScreen(repository: _tablesRepo),
-            demo: _tablesDemo,
-          ),
-          // Users/Settings: REAL mode never renders the demo store's fabricated
-          // people/values. When the real users repository is wired (RF-116), the
-          // Users tab manages real memberships (list + change-role + revoke); a
-          // real membership WITHOUT it falls back to the honest not-connected
-          // state. Demo mode keeps the labelled demo surface.
-          6 => _usersSurface(),
-          7 => _ordersSurface(),
-          8 => _activityLogSurface(),
-          _ =>
-            widget.membership == null
-                ? _adminSurface(
-                    const AdminSettingsScreen(),
-                    repository: _adminStore,
-                    demo: true,
-                  )
-                : RealSettingsView(
-                    membership: widget.membership!,
-                    currencyCode: widget.currencyCode,
-                    policyRepository: _shiftClosePolicyRepo,
-                    kitchenWorkflowRepository: _kitchenWorkflowRepo,
-                    settingsRepository: _settingsRepo,
-                    brandingRepository: _brandingRepo,
-                    brandingStorage: widget.brandingLogoStorage,
-                  ),
-        },
-      ),
+        3 => _demoBannerSurface(
+          PrintersScreen(repository: _printersRepo),
+          demo: _printersDemo,
+        ),
+        4 => _demoBannerSurface(
+          StaffScreen(repository: _staffRepo),
+          demo: _staffDemo,
+        ),
+        5 => _demoBannerSurface(
+          TablesScreen(repository: _tablesRepo),
+          demo: _tablesDemo,
+        ),
+        // Users/Settings: REAL mode never renders the demo store's fabricated
+        // people/values. When the real users repository is wired (RF-116), the
+        // Users tab manages real memberships (list + change-role + revoke); a
+        // real membership WITHOUT it falls back to the honest not-connected
+        // state. Demo mode keeps the labelled demo surface.
+        6 => _usersSurface(),
+        7 => _ordersSurface(),
+        8 => _activityLogSurface(),
+        _ =>
+          widget.membership == null
+              ? _adminSurface(
+                  const AdminSettingsScreen(),
+                  repository: _adminStore,
+                  demo: true,
+                )
+              : RealSettingsView(
+                  membership: widget.membership!,
+                  currencyCode: widget.currencyCode,
+                  policyRepository: _shiftClosePolicyRepo,
+                  kitchenWorkflowRepository: _kitchenWorkflowRepo,
+                  settingsRepository: _settingsRepo,
+                  brandingRepository: _brandingRepo,
+                  brandingStorage: widget.brandingLogoStorage,
+                ),
+      },
     );
 
     // Dashboard V2: the persistent header bar lives INSIDE the content column
@@ -402,71 +407,79 @@ class _DashboardShellState extends State<DashboardShell> {
       onSignOut: widget.onSignOut,
     );
 
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Dashboard "1c" responsive rules (§9): the labelled/icon rail
-          // stays on the reading-start side (right in RTL) for every
-          // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
-          final width = constraints.maxWidth;
-          if (width >= DashboardShell._railBreakpoint) {
-            final compact = width < DashboardShell._fullRailBreakpoint;
-            final railWidth = width >= DashboardShell._desktopBreakpoint
-                ? 232.0
-                : (compact ? 72.0 : 212.0);
-            return Row(
-              children: [
-                _SideNav(
-                  destinations: _destinations(l10n),
-                  selectedIndex: _index,
-                  onSelected: _select,
-                  membership: widget.membership,
-                  width: railWidth,
-                  compact: compact,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      header,
-                      const Divider(height: 1),
-                      Expanded(child: content),
-                    ],
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+      ],
+      child: Scaffold(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+            // stays on the reading-start side (right in RTL) for every
+            // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+            final width = constraints.maxWidth;
+            if (width >= DashboardShell._railBreakpoint) {
+              final compact = width < DashboardShell._fullRailBreakpoint;
+              final railWidth = width >= DashboardShell._desktopBreakpoint
+                  ? 232.0
+                  : (compact ? 72.0 : 212.0);
+              return Row(
+                children: [
+                  _SideNav(
+                    destinations: _destinations(l10n),
+                    selectedIndex: _index,
+                    onSelected: _select,
+                    membership: widget.membership,
+                    width: railWidth,
+                    compact: compact,
                   ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        header,
+                        const Divider(height: 1),
+                        Expanded(child: content),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                header,
+                const Divider(height: 1),
+                Expanded(child: content),
+                NavigationBar(
+                  key: const Key('dashboard-bottom-nav'),
+                  selectedIndex: _index,
+                  onDestinationSelected: _select,
+                  // RF-132 (Codex review): ten destinations at phone width
+                  // leave no room to render any label unclipped, so the bar
+                  // is deliberately ICON-ONLY. NavigationBar keeps each
+                  // destination's label + selected state in its semantics
+                  // ("<label>, Tab N of 10") even with the label hidden,
+                  // and the tooltip covers hover/long-press; selection
+                  // stays visible via the filled icon + indicator pill.
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                  destinations: _destinations(l10n)
+                      .map(
+                        (d) => NavigationDestination(
+                          icon: Icon(d.icon),
+                          selectedIcon: Icon(d.selectedIcon),
+                          label: d.label,
+                          tooltip: d.label,
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
             );
-          }
-          return Column(
-            children: [
-              header,
-              const Divider(height: 1),
-              Expanded(child: content),
-              NavigationBar(
-                key: const Key('dashboard-bottom-nav'),
-                selectedIndex: _index,
-                onDestinationSelected: _select,
-                // RF-132 (Codex review): ten destinations at phone width
-                // leave no room to render any label unclipped, so the bar
-                // is deliberately ICON-ONLY. NavigationBar keeps each
-                // destination's label + selected state in its semantics
-                // ("<label>, Tab N of 10") even with the label hidden,
-                // and the tooltip covers hover/long-press; selection
-                // stays visible via the filled icon + indicator pill.
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                destinations: _destinations(l10n)
-                    .map(
-                      (d) => NavigationDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: d.label,
-                        tooltip: d.label,
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }

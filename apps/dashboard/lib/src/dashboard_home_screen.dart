@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -80,7 +82,11 @@ class DashboardHomeScreen extends ConsumerWidget {
     // dashboardReportProvider itself would just rebuild the projection
     // without re-running the request, and a global invalidate would throw
     // away every other range/scope the owner had already loaded.
-    void refresh() => refreshOwnerReport(ref);
+    // CODEX F-1B-3-R1C: the refresh now also re-reads the branch list, so it is
+    // asynchronous. `unawaited` rather than a discarded arrow-body future — the
+    // action reports nothing back and handles its own failures, and saying so
+    // explicitly beats leaving a Future to be dropped silently.
+    void refresh() => unawaited(refreshOwnerReport(ref));
 
     // Calm persistent chrome (RF-127): the page header + range chips stay above
     // the loading/error/data states so the title, period, refresh, and range are
