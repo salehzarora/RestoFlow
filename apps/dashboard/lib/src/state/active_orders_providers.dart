@@ -31,11 +31,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/active_orders_models.dart';
+import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/active_orders_repository.dart';
 import '../data/order_history_models.dart';
 import '../data/real_active_orders_repository.dart';
 import 'analytics_branch_providers.dart'
-    show analyticsBranchOptionsProvider, analyticsBranchStillApplies;
+    show
+        analyticsBranchOptionsProvider,
+        analyticsBranchStillApplies,
+        operationalBranchItems;
 import 'dashboard_providers.dart';
 import 'order_history_providers.dart' show demoOrderStoreProvider;
 
@@ -104,6 +108,8 @@ final effectiveActiveOrdersQueryProvider = Provider<ActiveOrdersQuery>(
           branch,
           coverage: ref.watch(dashboardCoveredScopeIdentityProvider),
           answer: ref.watch(analyticsBranchOptionsProvider),
+          // FINDING 3: demo mode has no coverage to require.
+          coverageRequired: !ref.watch(runtimeConfigProvider).isDemoMode,
         )
         ? raw
         : raw.copyWith(clearBranch: true);
@@ -112,6 +118,21 @@ final effectiveActiveOrdersQueryProvider = Provider<ActiveOrdersQuery>(
     activeOrdersQueryProvider,
     dashboardCoveredScopeIdentityProvider,
     analyticsBranchOptionsProvider,
+  ],
+);
+
+/// CODEX FINDING 2 - the branch items the active board's control must offer.
+///
+/// Same source as the transport, so a technical option failure can no longer
+/// leave the board displaying "All" while every request carries branch B.
+final activeOrdersBranchItemsProvider = Provider<List<AuditBranchOption>>(
+  (ref) => operationalBranchItems(
+    answer: ref.watch(analyticsBranchOptionsProvider),
+    effective: ref.watch(effectiveActiveOrdersQueryProvider).branch,
+  ),
+  dependencies: [
+    analyticsBranchOptionsProvider,
+    effectiveActiveOrdersQueryProvider,
   ],
 );
 

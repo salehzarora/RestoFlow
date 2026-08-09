@@ -253,6 +253,15 @@ void main() {
       await c.read(
         ownerReportForKeyProvider(c.read(currentOwnerReportKeyProvider)).future,
       );
+      // CODEX ITEM 9 — actually LOAD the series family before the rename.
+      // Asserting repository identity alone proved the provider was not
+      // rebuilt; it did not prove the loaded SERIES survived, because nothing
+      // had loaded one. The range is last7, so this key exists.
+      final seriesKey = c.read(currentOwnerSalesSeriesKeyProvider)!;
+      final series = await c.read(
+        ownerSalesSeriesForKeyProvider(seriesKey).future,
+      );
+      expect(t.countOf('owner_sales_series'), 1);
       await _pump();
       final before = c.read(orderHistoryControllerProvider);
       expect(before.rows, isNotEmpty);
@@ -302,6 +311,14 @@ void main() {
       final after = c.read(orderHistoryControllerProvider);
       expect(after.rows, before.rows);
       expect(after.cursor, 'cursor-1');
+      // ITEM 9: the loaded series is still there, from the same entry, with no
+      // second request.
+      expect(c.read(currentOwnerSalesSeriesKeyProvider), seriesKey);
+      expect(
+        await c.read(ownerSalesSeriesForKeyProvider(seriesKey).future),
+        same(series),
+      );
+      expect(t.countOf('owner_sales_series'), 1);
 
       // The UI still sees the LIVE name.
       expect(c.read(dashboardMembershipProvider)!.branchName, 'Main Street');
@@ -537,11 +554,16 @@ void main() {
     );
 
     test('the reconciliation is one rule, shared with the analytics scope', () {
-      const covered = null;
+      // Real mode with nothing authorized: fail closed.
       expect(
-        analyticsBranchStillApplies(_harbor, coverage: covered, answer: null),
+        analyticsBranchStillApplies(
+          _harbor,
+          coverage: null,
+          answer: null,
+          coverageRequired: true,
+        ),
         isFalse,
-        reason: 'no coverage, no filter',
+        reason: 'real mode without coverage sends nothing',
       );
     });
 

@@ -24,7 +24,6 @@ import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../state/active_orders_providers.dart';
-import '../state/audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'order_detail_sheet.dart';
 import 'order_history_screen.dart'
     show orderTypeLabel, statusLabelFor, statusTone;
@@ -66,9 +65,9 @@ class _ActiveOrdersViewState extends ConsumerState<ActiveOrdersView> {
     // removed branch stay on the wire while the control showed "All".
     final query = ref.watch(effectiveActiveOrdersQueryProvider);
     final state = ref.watch(activeOrdersControllerProvider);
-    final branches = ref
-        .watch(auditBranchOptionsProvider)
-        .maybeWhen(data: (b) => b, orElse: () => const <AuditBranchOption>[]);
+    // CODEX FINDING 2 - the items come from the same source as the transport,
+    // so the board can no longer show "All" while filtering to a branch.
+    final branches = ref.watch(activeOrdersBranchItemsProvider);
     // ONE clock read per board build (the KDS rule) so every row's age is
     // measured against the same instant.
     final now = ref.watch(activeOrdersClockProvider)();

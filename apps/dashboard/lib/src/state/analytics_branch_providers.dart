@@ -135,8 +135,13 @@ final analyticsBranchAnswerProvider = FutureProvider<AnalyticsBranchAnswer>(
 /// containing it can.
 final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
   (ref) {
+    // CODEX FINDING 3 — a null coverage is DEMO MODE, not "no branches".
+    // Returning an empty list here made every demo branch selection reconcile
+    // to "All", which silently disabled branch filtering on Activity and the
+    // active board in the one mode where nothing is authorized at all. The
+    // answer stands on its own: it is stamped with the null context and matches
+    // it, so the demo option list is a real answer like any other.
     final covered = ref.watch(dashboardCoveredScopeIdentityProvider);
-    if (covered == null) return const <AuditBranchOption>[];
     final async = ref.watch(analyticsBranchAnswerProvider);
     // Never answered at all — which is not "answered: none".
     if (!async.hasValue) return null;
@@ -167,15 +172,52 @@ final analyticsBranchOptionsProvider = Provider<List<AuditBranchOption>?>(
 ///  * answered, and the answer contains it exactly once -> yes;
 ///  * answered, and it is absent — deleted, tombstoned, or dropped as a
 ///    conflicting composite -> no.
+/// [coverageRequired] is REAL MODE. There, an authorized coverage is mandatory
+/// and a missing one fails closed — a request must never escape the coverage
+/// check merely because the check had nothing to say. Demo mode has no
+/// membership and therefore no coverage at all, so validity comes from the demo
+/// option list instead; treating its null coverage as "not covered" is what
+/// disabled demo branch filtering (CODEX FINDING 3).
 bool analyticsBranchStillApplies(
   AuditBranchOption branch, {
   required DashboardAnalyticsScope? coverage,
   required List<AuditBranchOption>? answer,
+  required bool coverageRequired,
 }) {
-  if (coverage == null || !coverage.covers(branch)) return false;
+  if (coverage != null) {
+    if (!coverage.covers(branch)) return false;
+  } else if (coverageRequired) {
+    return false;
+  }
   if (answer == null) return true;
   return answer.where((o) => sameAnalyticsBranchIdentity(o, branch)).length ==
       1;
+}
+
+/// CODEX FINDINGS 1 & 2 — the branch options an operational filter must OFFER,
+/// given the last real answer and the branch it is actually querying.
+///
+/// A `DropdownButtonFormField` asserts on a value with no item, and both
+/// operational surfaces built their items from the RAW async option list: a
+/// technical failure emptied it while the effective query — and the wire —
+/// still carried branch B. Activity therefore ASSERTED, and the active board
+/// silently showed "All" while filtering to B.
+///
+/// The same rule the analytics selector already uses: when there is no answer
+/// to offer, offer exactly the branch being queried, so the control is both
+/// assertion-safe and truthful. Never a first-branch fallback, and never a
+/// value the list does not contain.
+List<AuditBranchOption> operationalBranchItems({
+  required List<AuditBranchOption>? answer,
+  required AuditBranchOption? effective,
+}) {
+  final items = <AuditBranchOption>[];
+  final taken = <String>{};
+  for (final option in answer ?? const <AuditBranchOption>[]) {
+    if (taken.add(option.branchId)) items.add(option);
+  }
+  if (effective != null && taken.add(effective.branchId)) items.add(effective);
+  return items;
 }
 
 /// CODEX F-1B — the selection that the UI and the financial transport BOTH use.

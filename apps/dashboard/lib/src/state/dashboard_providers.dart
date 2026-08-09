@@ -452,6 +452,16 @@ class DashboardRefreshController extends StateNotifier<bool> {
         // Technical failure: the last authoritative answer stands, and the
         // figures refresh against it. Refreshing must never widen the scope.
       }
+      // CODEX FINDING 5 - the container may be GONE by now.
+      //
+      // Surviving a widget remount was the point of moving here (R1C-03), but
+      // sign-out disposes the whole shell container, and a continuation that
+      // then reads or invalidates a disposed `Ref` throws where nobody is
+      // waiting to catch it. `mounted` is the notifier's own lifetime, which is
+      // exactly the container's, so it answers the only question that matters:
+      // is there still an authorization context to refresh for. Nothing is
+      // requested after it says no.
+      if (!mounted) return;
     }
     _ref.invalidate(
       ownerReportForKeyProvider(_ref.read(currentOwnerReportKeyProvider)),
