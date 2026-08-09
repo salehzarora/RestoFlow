@@ -35,6 +35,13 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'audit_log_models.dart';
+import 'audit_log_repository.dart'
+    show
+        demoActorAmira,
+        demoActorNadia,
+        demoActorSami,
+        demoBranchDowntown,
+        demoBranchHarbor;
 
 /// The (restaurant, branch) scope a [membership] COVERS for the default "all
 /// permitted branches" query. The tenant resolver pins a single concrete branch
@@ -94,17 +101,21 @@ abstract class AuditFilterOptionsRepository {
 class DemoAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
   const DemoAuditFilterOptionsRepository();
 
+  /// STATIC-97CDEE8-DEMO-ACTIVITY-01 — the ids come from the SAME constants the
+  /// demo timeline stamps its events with. They were already equal as literals;
+  /// naming them makes that a fact the compiler keeps rather than a coincidence
+  /// two files have to keep agreeing on by hand.
   @override
   Future<List<AuditBranchOption>> loadBranches() async => const [
     AuditBranchOption(
       organizationId: 'demo-org-1',
-      branchId: 'demo-branch-downtown',
+      branchId: demoBranchDowntown,
       restaurantId: 'demo-rest-1',
       label: 'RestoFlow · Downtown',
     ),
     AuditBranchOption(
       organizationId: 'demo-org-1',
-      branchId: 'demo-branch-harbor',
+      branchId: demoBranchHarbor,
       restaurantId: 'demo-rest-1',
       label: 'RestoFlow · Harbor',
     ),
@@ -112,9 +123,9 @@ class DemoAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
 
   @override
   Future<List<AuditActorOption>> loadActors() async => const [
-    AuditActorOption(employeeProfileId: 'demo-staff-amira', label: 'Amira'),
-    AuditActorOption(employeeProfileId: 'demo-staff-sami', label: 'Sami'),
-    AuditActorOption(employeeProfileId: 'demo-staff-nadia', label: 'Nadia'),
+    AuditActorOption(employeeProfileId: demoActorAmira, label: 'Amira'),
+    AuditActorOption(employeeProfileId: demoActorSami, label: 'Sami'),
+    AuditActorOption(employeeProfileId: demoActorNadia, label: 'Nadia'),
   ];
 }
 
