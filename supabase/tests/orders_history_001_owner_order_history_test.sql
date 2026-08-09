@@ -253,16 +253,19 @@ select throws_ok(
 reset role;
 
 -- ===== (36) both wrappers INVOKER + locked search_path + no anon/PUBLIC =======
+-- DASHBOARD-VISUAL-RANGE-REFRESH-S0 appended p_start/p_end, moving the arity
+-- from 10 to 12. owner_order_detail is untouched and stays at 4. The property
+-- under test is unchanged.
 select ok(
-  (select prosecdef = false from pg_proc where proname='owner_order_history' and pronamespace='public'::regnamespace and pronargs=10)
+  (select prosecdef = false from pg_proc where proname='owner_order_history' and pronamespace='public'::regnamespace and pronargs=12)
   and (select prosecdef = false from pg_proc where proname='owner_order_detail' and pronamespace='public'::regnamespace and pronargs=4)
   and exists (select 1 from pg_proc p cross join lateral unnest(coalesce(p.proconfig,'{}'::text[])) as cfg
-              where p.proname='owner_order_history' and p.pronamespace='public'::regnamespace and p.pronargs=10 and cfg like 'search_path=%')
+              where p.proname='owner_order_history' and p.pronamespace='public'::regnamespace and p.pronargs=12 and cfg like 'search_path=%')
   and exists (select 1 from pg_proc p cross join lateral unnest(coalesce(p.proconfig,'{}'::text[])) as cfg
               where p.proname='owner_order_detail' and p.pronamespace='public'::regnamespace and p.pronargs=4 and cfg like 'search_path=%')
-  and not has_function_privilege('anon',   'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text)', 'execute')
-  and not has_function_privilege('public', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text)', 'execute')
-  and has_function_privilege('authenticated', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text)', 'execute')
+  and not has_function_privilege('anon',   'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text,date,date)', 'execute')
+  and not has_function_privilege('public', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text,date,date)', 'execute')
+  and has_function_privilege('authenticated', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text,date,date)', 'execute')
   and not has_function_privilege('anon',   'public.owner_order_detail(uuid,uuid,uuid,uuid)', 'execute')
   and has_function_privilege('authenticated', 'public.owner_order_detail(uuid,uuid,uuid,uuid)', 'execute'),
   'both public wrappers are INVOKER, search_path-locked, authenticated-only (no anon/PUBLIC)');
