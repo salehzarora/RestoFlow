@@ -210,8 +210,34 @@ OutboxEntry _pendingSubmit(String orderId, String orderNumber) => OutboxEntry(
     currencyCode: 'ILS',
   ),
   syncState: OutboxSyncState.pending,
-  clientCreatedAt: DateTime.utc(2026, 8, 6, 9),
+  clientCreatedAt: _fixtureAt,
 );
+
+/// RF-CI-POS-RECENT-ORDERS-CLOCK-ROT — the ONE pinned "now" this file's
+/// recent-orders windowing is evaluated against.
+///
+/// `PosRecentOrdersController` windows to today + yesterday, measured from
+/// `posSyncClockProvider` (which production leaves at `DateTime.now`), and
+/// `PosRecentOrder.sortAt` prefers `snapshot.createdAt` over `submittedAt`. This
+/// file's fixtures are dated, so once real time passed their date + 1 day every
+/// snapshot-bearing row fell out of the window and the rows simply vanished:
+/// green on 2026-08-07, red on 2026-08-09, with no code change in between.
+///
+/// Pinning the seam the controller already reads is the fix. Nothing about the
+/// window, the sort, or the payability rules is relaxed — the tests just stop
+/// asking what day it is in the real world.
+final _pinnedNow = DateTime.utc(2026, 8, 6, 12);
+
+/// The pinned clock as the provider override both containers install.
+DateTime _pinnedClock() => _pinnedNow;
+
+/// Fixture activity happens EARLIER ON THE PINNED DAY, so it is inside the
+/// today+yesterday window by construction, in any runner timezone.
+final _fixtureAt = _pinnedNow.subtract(const Duration(hours: 3)); // 09:00Z
+final _fixtureSyncedAt = _fixtureAt.add(const Duration(minutes: 1));
+
+/// Midnight of the pinned day, for the offline-cache marker.
+final _pinnedDayStart = DateTime.utc(2026, 8, 6);
 
 SubmittedOrderView _view(String orderNumber, String orderId) =>
     SubmittedOrderView(
@@ -245,9 +271,9 @@ PosOrderSnapshot _snapshot(
   discountTotalMinor: 0,
   taxTotalMinor: 0,
   grandTotalMinor: grandTotalMinor,
-  createdAt: DateTime.utc(2026, 8, 6, 9),
-  updatedAt: DateTime.utc(2026, 8, 6, 9, 1),
-  syncAt: DateTime.utc(2026, 8, 6, 9, 1),
+  createdAt: _fixtureAt,
+  updatedAt: _fixtureSyncedAt,
+  syncAt: _fixtureSyncedAt,
   orderType: 'takeaway',
   currencyCode: 'ILS',
 );
@@ -327,6 +353,9 @@ Future<_Harness> _pump(
       orderSnapshotRepositoryProvider.overrideWithValue(snapshots),
       // No polling timer: `pumpAndSettle` must terminate.
       posSyncPollIntervalProvider.overrideWithValue(null),
+      // The recent-orders window reads THIS clock; pin it so the dated
+      // fixtures above stay inside it whatever today's real date is.
+      posSyncClockProvider.overrideWithValue(_pinnedClock),
     ],
   );
   addTearDown(container.dispose);
@@ -349,7 +378,7 @@ Future<_Harness> _pump(
   if (offlineCached) {
     container
         .read(posOfflineModeProvider.notifier)
-        .recordOfflineCacheServed(snapshotFetchedAt: DateTime.utc(2026, 8, 6));
+        .recordOfflineCacheServed(snapshotFetchedAt: _pinnedDayStart);
   }
 
   final l10n = await AppLocalizations.delegate.load(const Locale('en'));
@@ -444,7 +473,7 @@ void main() {
       );
       final order = PosRecentOrder(
         order: _view('#ORDER1', 'order-1'),
-        submittedAt: DateTime.utc(2026, 8, 6, 9),
+        submittedAt: _fixtureAt,
       );
       final withheld = resolveOrderActions(order, submitUnacknowledged: true);
       final offered = resolveOrderActions(order);
@@ -512,7 +541,7 @@ void main() {
         payloadJson: '{}',
         summary: queued.summary,
         syncState: OutboxSyncState.pending,
-        clientCreatedAt: DateTime.utc(2026, 8, 6, 9),
+        clientCreatedAt: _fixtureAt,
       );
       final identity = PosOrderIdentity.server('order-1');
       expect(posSubmitEntryFor([payment], identity), isNull);
@@ -843,7 +872,9 @@ void main() {
       await store.persist(_seededScope.key, [
         PosRecentOrder(
           order: _view('#U1', 'order-1'),
-          submittedAt: DateTime.now(),
+          // Pinned like every other fixture: a row seeded at the real wall
+          // clock is only ever in-window by luck of when the suite runs.
+          submittedAt: _fixtureAt,
           snapshot: snapshot,
         ),
       ]);
@@ -861,6 +892,8 @@ void main() {
             DemoOrderSnapshotRepository(),
           ),
           posSyncPollIntervalProvider.overrideWithValue(null),
+          // Same pinned window clock as the main harness.
+          posSyncClockProvider.overrideWithValue(_pinnedClock),
         ],
       );
       addTearDown(container.dispose);
