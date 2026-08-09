@@ -23,11 +23,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/audit_log_models.dart' show AuditCategory, AuditQuery;
 import '../data/order_history_models.dart'
-    show OrderHistoryQuery, OrderStatusFilter, OrderTypeFilter, PaymentFilter;
+    show
+        OrderHistoryQuery,
+        OrderHistoryRange,
+        OrderStatusFilter,
+        OrderTypeFilter,
+        PaymentFilter;
 import '../orders/orders_screen.dart' show OrdersTab;
 import '../state/audit_log_providers.dart' show auditLogQueryProvider;
+import '../state/dashboard_providers.dart' show analyticsWindowProvider;
 import '../state/order_history_providers.dart'
     show orderHistoryQueryProvider, ordersInitialTabProvider;
+import 'analytics_window.dart';
 import 'dashboard_destination.dart';
 
 /// An instruction to move the owner to a surface with specific filters applied.
@@ -107,11 +114,29 @@ final class OrdersHistoryDrillDown extends DashboardDrillDown {
   @override
   void applyFilters(WidgetRef ref) {
     ref.read(ordersInitialTabProvider.notifier).state = OrdersTab.history;
-    // A fresh query, not copyWith: see the class comment.
+    // F2 — THE RANGE TRAVELS WITH THE DRILL-DOWN.
+    //
+    // A fresh query resets every field the drill-down does not own (see the
+    // class comment), and until now the analytics range was one of them — so
+    // "1,240 orders over the last 90 days" opened a list of TODAY's orders and
+    // silently contradicted the number that was clicked. The committed window is
+    // read here rather than stored on the drill-down so there is still exactly
+    // one source of truth for "which window am I looking at".
+    final window = ref.read(analyticsWindowProvider);
     ref.read(orderHistoryQueryProvider.notifier).state = OrderHistoryQuery(
       payment: payment,
       status: status,
       orderType: orderType,
+      // A preset maps to its token; a custom window carries its dates, and the
+      // range field is left at its default because the window outranks it.
+      range: switch (window) {
+        PresetAnalyticsWindow(:final range) => range.asOrderHistoryRange,
+        CustomAnalyticsWindow() => OrderHistoryRange.today,
+      },
+      customWindow: switch (window) {
+        PresetAnalyticsWindow() => null,
+        final CustomAnalyticsWindow w => w,
+      },
     );
   }
 }

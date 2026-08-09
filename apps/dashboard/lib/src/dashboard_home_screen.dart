@@ -7,9 +7,10 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
-import 'analytics/analytics_range.dart'
-    show kOverviewRangePresetsBeforeCustomUx;
+import 'analytics/analytics_window.dart';
 import 'analytics/comparison_delta.dart';
+import 'analytics/custom_range_sheet.dart';
+import 'analytics/overview_range_choice.dart';
 import 'analytics/dashboard_analytics_scope.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
@@ -355,10 +356,20 @@ class _ScopeSelector extends ConsumerWidget {
 class _RangeFilterBar extends ConsumerWidget {
   const _RangeFilterBar();
 
+  /// Below this the selector scrolls horizontally instead of wrapping.
+  static const double _wideBreakpoint = 900;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final selected = ref.watch(reportRangeProvider);
+    final window = ref.watch(analyticsWindowProvider);
+    final selected = switch (window) {
+      PresetAnalyticsWindow(:final range) => OverviewRangeChoice.preset(
+        range.asReportRange,
+      ),
+      CustomAnalyticsWindow() => const OverviewRangeChoice.custom(),
+    };
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         RestoflowSpacing.lg,
@@ -368,28 +379,174 @@ class _RangeFilterBar extends ConsumerWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 700;
-          final control = RestoflowSegmentedControl<ReportRange>(
+          final wide = constraints.maxWidth >= _wideBreakpoint;
+          final chips = [
+            for (final choice in kOverviewRangeChoices)
+              _RangeChip(
+                key: Key('range-chip-${choice.id}'),
+                label: _choiceLabel(l10n, choice),
+                selected: choice == selected,
+                onTap: () => _select(context, ref, choice),
+              ),
+          ];
+
+          // ONE Wrap at every width — it flows to the reading end on wide
+          // layouts and on to as many lines as it needs on narrow ones.
+          //
+          // WHY NOT A HORIZONTAL SCROLL ROW ON MOBILE, which was the first
+          // shape tried: at 390px only three of the seven pills fit, so Custom
+          // and the 60/90 presets sat outside the viewport. A choice you must
+          // discover by dragging is barely a choice, and making the selected one
+          // auto-scroll into view is exactly the scroll bookkeeping this slice
+          // set out to avoid. A Wrap keeps all seven laid out, hit-testable and
+          // reachable with no gesture, costs one extra line of height inside an
+          // already-scrolling page, and gets RTL ordering from Directionality
+          // for free. Seven equal-width segments were never an option — the
+          // labels are unreadable below about 700px.
+          // The key outlives the widget TYPE deliberately: it names "the range
+          // filter", which still exists, so the suites that assert the filter is
+          // present keep testing that fact rather than the shape it happens to
+          // have this quarter.
+          final row = Wrap(
             key: const Key('reports-range-filter'),
-            expand: narrow,
-            selected: selected,
-            onSelected: (r) => ref.read(reportRangeProvider.notifier).state = r,
-            segments: [
-              for (final r in kOverviewRangePresetsBeforeCustomUx)
-                RestoflowSegment(
-                  value: r,
-                  label: _rangeLabel(l10n, r),
-                  icon: Icons.calendar_today,
-                  key: Key('range-chip-${r.wire}'),
-                ),
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.sm,
+            alignment: wide ? WrapAlignment.end : WrapAlignment.start,
+            children: chips,
+          );
+          return Column(
+            crossAxisAlignment: wide
+                ? CrossAxisAlignment.stretch
+                : CrossAxisAlignment.start,
+            children: [
+              row,
+              _CustomRangeCaption(window: window),
             ],
           );
-          if (narrow) return control;
-          return Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: control,
-          );
         },
+      ),
+    );
+  }
+
+  void _select(
+    BuildContext context,
+    WidgetRef ref,
+    OverviewRangeChoice choice,
+  ) {
+    switch (choice) {
+      case PresetRangeChoice(:final range):
+        commitAnalyticsPreset(ref, range);
+      case CustomRangeChoice():
+        // Selecting Custom OPENS the sheet; it does not commit anything. The
+        // committed window only changes when Apply is pressed.
+        unawaited(showCustomRangeSheet(context, ref));
+    }
+  }
+}
+
+/// The localized label for one selector choice.
+String _choiceLabel(AppLocalizations l10n, OverviewRangeChoice choice) =>
+    switch (choice) {
+      PresetRangeChoice(:final range) => _rangeLabel(l10n, range),
+      CustomRangeChoice() => l10n.dashboardRangeCustom,
+    };
+
+/// One selector pill.
+///
+/// Selected uses the brand primary (V0's navy) with its on-primary foreground;
+/// unselected is a neutral surface with a hairline border, so the selected state
+/// reads from colour AND weight rather than colour alone.
+class _RangeChip extends StatelessWidget {
+  const _RangeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = selected ? scheme.onPrimary : kRestoflowInk2;
+    // MergeSemantics, not a wrapping Semantics node: the InkWell already
+    // contributes the tap/focus actions and the Text contributes the label, so
+    // wrapping them produced TWO nodes — one that said "selected" without being
+    // tappable and one that was tappable without saying so. Merging yields the
+    // single node a screen reader expects: button, selected, labelled, tappable.
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? scheme.primary : kRestoflowSurface,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              // 44px minimum height keeps the touch target at the platform
+              // standard even though the label is small.
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.lg,
+                vertical: RestoflowSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected ? scheme.primary : kRestoflowHairline,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: fg,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The committed custom range, spelled out under the chips.
+///
+/// The CHIP stays the short localized "Custom" — turning it into
+/// "01/03/2026 – 09/03/2026" would make one pill wider than the whole scroll row
+/// at 430px. The dates belong here, where they can wrap.
+class _CustomRangeCaption extends StatelessWidget {
+  const _CustomRangeCaption({required this.window});
+
+  final AnalyticsWindow window;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = window;
+    if (w is! CustomAnalyticsWindow) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final material = MaterialLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      child: Semantics(
+        label: l10n.dashboardRangeCustomDays(w.inclusiveDayCount),
+        child: Text(
+          key: const Key('range-custom-caption'),
+          l10n.dashboardRangeCustomSelected(
+            // Locale-aware through MaterialLocalizations, so ar/he render their
+            // own numerals and order without this file importing intl.
+            material.formatShortDate(w.startDay),
+            material.formatShortDate(w.endDay),
+          ),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ),
     );
   }

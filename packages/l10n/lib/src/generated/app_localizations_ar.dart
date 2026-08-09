@@ -3073,6 +3073,49 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardRangeCustom => 'مخصّص';
 
   @override
+  String get dashboardRangeCustomTitle => 'نطاق مخصّص';
+
+  @override
+  String get dashboardRangeCustomChoose => 'اختر التواريخ';
+
+  @override
+  String get dashboardRangeCustomFrom => 'من';
+
+  @override
+  String get dashboardRangeCustomTo => 'إلى';
+
+  @override
+  String get dashboardRangeCustomApply => 'تطبيق';
+
+  @override
+  String get dashboardRangeCustomCancel => 'إلغاء';
+
+  @override
+  String get dashboardRangeCustomClear => 'مسح التواريخ';
+
+  @override
+  String get dashboardRangeCustomEmpty => 'اختر تاريخ البداية والنهاية';
+
+  @override
+  String get dashboardRangeCustomReversed =>
+      'لا يمكن أن يسبق تاريخ النهاية تاريخ البداية';
+
+  @override
+  String dashboardRangeCustomTooLong(int max) {
+    return 'اختر $max يومًا كحد أقصى';
+  }
+
+  @override
+  String dashboardRangeCustomSelected(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String dashboardRangeCustomDays(int days) {
+    return 'نطاق $days يومًا';
+  }
+
+  @override
   String get dashboardRangeUnavailable =>
       'هذا النطاق غير متاح في التقارير المباشرة بعد — جرّب اليوم، أو تحقق لاحقًا بعد إطلاق تحديث التقارير.';
 

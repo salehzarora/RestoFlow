@@ -25,6 +25,7 @@ import 'analytics_branch_providers.dart'
 import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'dashboard_membership_identity.dart';
 import '../analytics/analytics_window.dart';
+import '../analytics/custom_range_draft.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -136,9 +137,33 @@ void commitAnalyticsPreset(WidgetRef ref, ReportRange range) {
 }
 
 /// Commits a validated CUSTOM window. [window] is already valid by construction.
+///
+/// Also remembers it in [lastCustomAnalyticsWindowProvider] so reopening the
+/// sheet after a detour through a preset starts from what the owner last chose.
 void commitCustomAnalyticsWindow(WidgetRef ref, CustomAnalyticsWindow window) {
+  ref.read(lastCustomAnalyticsWindowProvider.notifier).state = window;
   ref.read(customAnalyticsWindowProvider.notifier).state = window;
 }
+
+/// DASHBOARD-VISUAL-RANGE-REFRESH-F2 — the custom-range DRAFT.
+///
+/// Deliberately NOT part of any query key, and deliberately not the committed
+/// window: this is what the owner is typing, and typing a From date must not
+/// issue a request. It reaches [customAnalyticsWindowProvider] only through
+/// Apply.
+final customRangeDraftProvider = StateProvider<CustomRangeDraft>(
+  (ref) => CustomRangeDraft.empty,
+);
+
+/// The last custom window committed THIS SESSION, for reopening the sheet.
+///
+/// Memory, not truth: selecting a preset clears the committed custom window but
+/// leaves this alone, so returning to Custom offers the previous dates instead
+/// of an empty sheet. Nothing reads it to build a request, which is what keeps
+/// it from becoming a second source of truth.
+final lastCustomAnalyticsWindowProvider = StateProvider<CustomAnalyticsWindow?>(
+  (ref) => null,
+);
 
 /// CLIENT-E1 — the BROADEST scope the current membership is authorized to
 /// report on. Null when no membership is resolved (demo mode, or before the

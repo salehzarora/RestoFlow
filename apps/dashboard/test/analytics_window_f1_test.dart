@@ -12,6 +12,7 @@ import 'package:restoflow_dashboard/src/analytics/analytics_range.dart';
 import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 import 'package:restoflow_dashboard/src/analytics/owner_report_query_key.dart';
 import 'package:restoflow_dashboard/src/analytics/owner_sales_series_query_key.dart';
+import 'package:restoflow_dashboard/src/analytics/overview_range_choice.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart' show ReportRange;
 import 'package:restoflow_dashboard/src/data/order_history_models.dart';
 
@@ -339,33 +340,28 @@ void main() {
     });
   });
 
-  group('F1.F the Overview control stays at four presets until F2', () {
-    test(
-      'the legacy segmented control exposes exactly today/yesterday/7/30',
-      () {
-        expect(kOverviewRangePresetsBeforeCustomUx, const [
-          ReportRange.today,
-          ReportRange.yesterday,
-          ReportRange.last7,
-          ReportRange.last30,
-        ]);
-      },
-    );
+  group('F2 the Overview selector now offers all seven choices', () {
+    test('six presets plus Custom, in display order', () {
+      expect(kOverviewRangeChoices, const [
+        OverviewRangeChoice.preset(ReportRange.today),
+        OverviewRangeChoice.preset(ReportRange.yesterday),
+        OverviewRangeChoice.preset(ReportRange.last7),
+        OverviewRangeChoice.preset(ReportRange.last30),
+        OverviewRangeChoice.preset(ReportRange.last60),
+        OverviewRangeChoice.preset(ReportRange.last90),
+        OverviewRangeChoice.custom(),
+      ]);
+    });
 
-    test('last60/last90 are supported by the DOMAIN while deliberately absent '
-        'from that control — F2 owns exposing them', () {
+    test('Custom is NOT a ReportRange — it is a separate choice, which is why '
+        'the enum never grew a custom case', () {
+      const custom = OverviewRangeChoice.custom();
+      expect(custom, isA<CustomRangeChoice>());
+      expect(custom.id, 'custom');
       expect(
-        kOverviewRangePresetsBeforeCustomUx,
-        isNot(contains(ReportRange.last60)),
+        kOverviewRangeChoices.whereType<PresetRangeChoice>().length,
+        ReportRange.values.length,
       );
-      expect(
-        kOverviewRangePresetsBeforeCustomUx,
-        isNot(contains(ReportRange.last90)),
-      );
-      // The domain still knows them, which is the whole point of the split.
-      expect(ReportRange.values, contains(ReportRange.last60));
-      expect(ReportRange.values, contains(ReportRange.last90));
-      expect(AnalyticsRange.fromReportRange(ReportRange.last90).wire, 'last90');
     });
   });
 }

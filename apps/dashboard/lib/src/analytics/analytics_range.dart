@@ -28,29 +28,6 @@ library;
 import '../data/demo_report.dart' show ReportRange;
 import '../data/order_history_models.dart' show OrderHistoryRange;
 
-/// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — the presets the CURRENT Overview
-/// segmented control offers, which is deliberately NARROWER than the domain.
-///
-/// The domain, the query keys, the repositories and the wire all support
-/// `last60` and `last90` as of F1. This list does not, and that is a scope
-/// decision rather than an oversight: the existing control is one horizontal
-/// mutually-exclusive group sized for four options, and six overflow it at the
-/// widths the layout tests already pin (a 35px RenderFlex overflow at 390/700).
-/// Exposing them would mean redesigning the selector, which is F2's slice.
-///
-/// F2 REPLACES THIS with the responsive seven-choice selector (the four below
-/// plus Last 60 days, Last 90 days and Custom) and deletes this constant.
-///
-/// Written out case by case ON PURPOSE. `ReportRange.values.take(4)` would be a
-/// silent trap: it depends on declaration order, so adding a case in the wrong
-/// position would quietly change which chips appear.
-const List<ReportRange> kOverviewRangePresetsBeforeCustomUx = <ReportRange>[
-  ReportRange.today,
-  ReportRange.yesterday,
-  ReportRange.last7,
-  ReportRange.last30,
-];
-
 /// The canonical analytics range.
 ///
 /// Values and wire tokens match the server's `p_range` contract exactly.

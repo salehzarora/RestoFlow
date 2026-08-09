@@ -106,13 +106,23 @@ void main() {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // One segmented control replaces the detached chips.
+    // F2 replaced the four-value segmented control with a seven-choice pill
+    // group — six presets plus Custom, which a `SegmentedControl<ReportRange>`
+    // could not express because Custom is not a ReportRange. The filter itself
+    // is still ONE cohesive group under the same key.
     expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
-    expect(find.byType(RestoflowSegmentedControl<ReportRange>), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
 
-    // The four stable keys survive, inside the control.
-    for (final wire in const ['today', 'yesterday', 'last7', 'last30']) {
+    // The stable keys survive, inside the group — now including 60/90/custom.
+    for (final wire in const [
+      'today',
+      'yesterday',
+      'last7',
+      'last30',
+      'last60',
+      'last90',
+      'custom',
+    ]) {
       expect(
         find.descendant(
           of: find.byKey(const Key('reports-range-filter')),
@@ -485,10 +495,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
-        expect(
-          find.byType(RestoflowSegmentedControl<ReportRange>),
-          findsOneWidget,
-        );
+        // Every choice stays laid out and reachable at this width — the reason
+        // F2 wraps rather than horizontally scrolling.
+        expect(find.byKey(const Key('range-chip-custom')), findsOneWidget);
+        expect(find.byKey(const Key('range-chip-last90')), findsOneWidget);
       },
     );
   }

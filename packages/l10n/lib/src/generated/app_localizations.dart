@@ -5782,6 +5782,78 @@ abstract class AppLocalizations {
   /// **'Custom'**
   String get dashboardRangeCustom;
 
+  /// F2: title of the custom From/To range picker sheet on the Dashboard Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom range'**
+  String get dashboardRangeCustomTitle;
+
+  /// F2: button inside the custom-range sheet that opens the platform date-range picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose dates'**
+  String get dashboardRangeCustomChoose;
+
+  /// F2: label for the START date of a custom analytics range.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dashboardRangeCustomFrom;
+
+  /// F2: label for the END date of a custom analytics range.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dashboardRangeCustomTo;
+
+  /// F2: commits the drafted custom range. Disabled until the draft is valid.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get dashboardRangeCustomApply;
+
+  /// F2: discards the drafted custom range and leaves the committed window unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dashboardRangeCustomCancel;
+
+  /// F2: clears the DRAFT dates inside the custom-range sheet. It does not change the committed range — only Apply does.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear dates'**
+  String get dashboardRangeCustomClear;
+
+  /// F2: hint shown while the custom-range draft is incomplete. Both bounds are required, matching the server (supplying one raises 22023).
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a start and end date'**
+  String get dashboardRangeCustomEmpty;
+
+  /// F2: validation message when a custom range is reversed. The dates are NEVER silently swapped.
+  ///
+  /// In en, this message translates to:
+  /// **'The end date cannot be before the start date'**
+  String get dashboardRangeCustomReversed;
+
+  /// F2: validation message when a custom range exceeds the maximum inclusive span the server accepts. Never silently truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at most {max} days'**
+  String dashboardRangeCustomTooLong(int max);
+
+  /// F2: the committed custom range shown beneath the Custom chip. start and end are already locale-formatted short dates.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String dashboardRangeCustomSelected(String start, String end);
+
+  /// F2: accessibility/semantic label describing the length of the committed custom range.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}-day range'**
+  String dashboardRangeCustomDays(int days);
+
   /// RF-REPORT-004 honest state shown when the owner_report_range RPC isn't deployed yet and the chosen range isn't today.
   ///
   /// In en, this message translates to:

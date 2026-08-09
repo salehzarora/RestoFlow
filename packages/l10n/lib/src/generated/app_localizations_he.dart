@@ -3048,6 +3048,49 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardRangeCustom => 'מותאם אישית';
 
   @override
+  String get dashboardRangeCustomTitle => 'טווח מותאם אישית';
+
+  @override
+  String get dashboardRangeCustomChoose => 'בחירת תאריכים';
+
+  @override
+  String get dashboardRangeCustomFrom => 'מתאריך';
+
+  @override
+  String get dashboardRangeCustomTo => 'עד תאריך';
+
+  @override
+  String get dashboardRangeCustomApply => 'החלה';
+
+  @override
+  String get dashboardRangeCustomCancel => 'ביטול';
+
+  @override
+  String get dashboardRangeCustomClear => 'ניקוי התאריכים';
+
+  @override
+  String get dashboardRangeCustomEmpty => 'יש לבחור תאריך התחלה וסיום';
+
+  @override
+  String get dashboardRangeCustomReversed =>
+      'תאריך הסיום לא יכול להקדים את תאריך ההתחלה';
+
+  @override
+  String dashboardRangeCustomTooLong(int max) {
+    return 'יש לבחור עד $max ימים';
+  }
+
+  @override
+  String dashboardRangeCustomSelected(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String dashboardRangeCustomDays(int days) {
+    return 'טווח של $days ימים';
+  }
+
+  @override
   String get dashboardRangeUnavailable =>
       'טווח זה עדיין אינו זמין בדוחות החיים — נסה היום, או בדוק שוב לאחר שעדכון הדוחות יעלה.';
 

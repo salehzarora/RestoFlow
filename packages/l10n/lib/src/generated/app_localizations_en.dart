@@ -3095,6 +3095,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardRangeCustom => 'Custom';
 
   @override
+  String get dashboardRangeCustomTitle => 'Custom range';
+
+  @override
+  String get dashboardRangeCustomChoose => 'Choose dates';
+
+  @override
+  String get dashboardRangeCustomFrom => 'From';
+
+  @override
+  String get dashboardRangeCustomTo => 'To';
+
+  @override
+  String get dashboardRangeCustomApply => 'Apply';
+
+  @override
+  String get dashboardRangeCustomCancel => 'Cancel';
+
+  @override
+  String get dashboardRangeCustomClear => 'Clear dates';
+
+  @override
+  String get dashboardRangeCustomEmpty => 'Pick a start and end date';
+
+  @override
+  String get dashboardRangeCustomReversed =>
+      'The end date cannot be before the start date';
+
+  @override
+  String dashboardRangeCustomTooLong(int max) {
+    return 'Choose at most $max days';
+  }
+
+  @override
+  String dashboardRangeCustomSelected(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String dashboardRangeCustomDays(int days) {
+    return '$days-day range';
+  }
+
+  @override
   String get dashboardRangeUnavailable =>
       'This range isn\'t available in live reports yet — try Today, or check back after the reporting update ships.';
 
