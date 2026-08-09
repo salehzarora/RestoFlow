@@ -35,7 +35,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(156);
+select plan(168);
 
 -- ===== fixture ==============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -271,9 +271,18 @@ select is((select ((app.owner_report_range('00000000-0000-0000-0000-0000000a0000
 select is((select ((app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'yesterday'))->'current'->>'net_minor')::bigint), 0::bigint, 'B4 yesterday unchanged');
 select is((select ((app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last60'))->'current'->>'net_minor')::bigint), 8091::bigint, 'B5 last60 = last30 + t-45 + t-59');
 select is((select ((app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last90'))->'current'->>'net_minor')::bigint), 15740::bigint, 'B6 last90 = last60 + t-60 + t-75 + t-89');
-select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last60'))->>'range_start'), to_char(current_date - 59, 'YYYY-MM-DD'), 'B7 last60 starts 59 days back — 60 branch-local days INCLUDING today');
-select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last60'))->>'range_end'), to_char(current_date, 'YYYY-MM-DD'), 'B8 last60 ends today');
-select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last90'))->>'range_start'), to_char(current_date - 89, 'YYYY-MM-DD'), 'B9 last90 starts 89 days back');
+-- B7-B9 are BRANCH-SCOPED on purpose. range_start/range_end are a
+-- representative display window — min(cur_start) / max(cur_end) across every
+-- branch in scope — so an ORG-WIDE call spans this fixture's two timezones, and
+-- between 21:00 and 24:00 UTC the UTC+3 branch has already rolled over: max()
+-- then returns TOMORROW and an org-wide assertion against current_date fails for
+-- three hours a day. Pinning these to the UTC branch asserts the intended
+-- property (a 60-day window ends on that branch's own today) with no dependence
+-- on the hour the suite happens to run. The multi-timezone behaviour is covered
+-- separately, and correctly, by B28.
+select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', 'last60'))->>'range_start'), to_char(current_date - 59, 'YYYY-MM-DD'), 'B7 last60 starts 59 days back — 60 branch-local days INCLUDING today');
+select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', 'last60'))->>'range_end'), to_char(current_date, 'YYYY-MM-DD'), 'B8 last60 ends today');
+select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', 'last90'))->>'range_start'), to_char(current_date - 89, 'YYYY-MM-DD'), 'B9 last90 starts 89 days back');
 select is((select (app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last90'))->>'range'), 'last90', 'B10 the preset token is echoed back');
 
 -- Preset comparisons still describe the immediately preceding equal-length
@@ -467,6 +476,76 @@ select is((select (b->>'net_minor')::bigint from t_series_gross), 2200::bigint,
 select is((select ((b->>'gross_minor')::bigint - (b->>'discount_minor')::bigint) from t_series_gross),
           (select (b->>'net_minor')::bigint from t_series_gross),
           'F10 and the same identity holds — the chart and the KPI card agree');
+
+-- ============================================================================
+-- G. S0.2 — the DAILY surfaces obey the same live-lines rule
+-- ============================================================================
+-- S0.1 fixed owner_report_range and owner_sales_series. app.owner_daily_report
+-- and the RF-075 view public.daily_branch_sales_report computed the identical
+-- rollup the identical wrong way. Leaving them would have been worse than the
+-- original bug: three surfaces consistently wrong is a bug, but two right and
+-- two wrong is a CONTRADICTION — the same order, the same day, two different
+-- gross figures depending on which panel the owner opened.
+--
+-- Same fixture, same expected numbers as section F: gross 2240, discount 40,
+-- net 2200 for branch A1a today, with 675 of dead-line money excluded.
+
+-- The RF-075 view is security_invoker, so it is read with the same identity
+-- GUCs the RF-075 suite uses.
+set local app.current_organization_id = '00000000-0000-0000-0000-0000000a0000';
+
+create temporary table t_daily on commit drop as
+  select app.owner_daily_report(
+    '00000000-0000-0000-0000-0000000a0000',
+    '00000000-0000-0000-0000-0000000a1000',
+    '00000000-0000-0000-0000-0000000a1a00')->'today' as d;
+
+select is((select (d->>'gross_minor')::bigint from t_daily), 2240::bigint,
+          'G1 owner_daily_report gross excludes voided and cancelled lines');
+select is((select (d->>'discount_minor')::bigint from t_daily), 40::bigint,
+          'G2 and so does its item-discount component');
+select is((select (d->>'net_minor')::bigint from t_daily), 2200::bigint,
+          'G3 its net is unchanged — read from orders.subtotal_minor');
+select is((select ((d->>'gross_minor')::bigint - (d->>'discount_minor')::bigint) from t_daily),
+          (select (d->>'net_minor')::bigint from t_daily),
+          'G4 gross - discount = net holds here too');
+
+create temporary table t_view on commit drop as
+  select * from public.daily_branch_sales_report
+  where branch_id = '00000000-0000-0000-0000-0000000a1a00'
+    and business_day = current_date;
+
+select is((select count(*)::int from t_view), 1, 'G5 exactly one RF-075 row for the branch-day');
+select is((select gross_minor::bigint from t_view), 2240::bigint,
+          'G6 daily_branch_sales_report gross excludes dead lines');
+select is((select discount_total_minor::bigint from t_view), 40::bigint,
+          'G7 and its discount total excludes their captured discounts');
+select is((select net_sales_minor::bigint from t_view), 2200::bigint,
+          'G8 its net is unchanged');
+select is((select (gross_minor - discount_total_minor - net_sales_minor)::bigint from t_view), 0::bigint,
+          'G9 the RF-075 "zero drift" identity its own comment promises now actually holds with a dead line present');
+
+-- The two RF-092 rollups are pure consumers of the view, so the correction has
+-- to arrive without either of them being edited.
+select is((select gross_minor::bigint from public.dashboard_org_daily_sales
+           where organization_id = '00000000-0000-0000-0000-0000000a0000' and business_day = current_date),
+          2240::bigint, 'G10 the corrected number propagates to the ORG daily rollup untouched');
+select is((select gross_minor::bigint from public.dashboard_restaurant_daily_sales
+           where restaurant_id = '00000000-0000-0000-0000-0000000a1000' and business_day = current_date),
+          2240::bigint, 'G11 and to the RESTAURANT daily rollup');
+
+-- The whole point of S0.2, stated as one assertion: four independent owner
+-- analytics surfaces, one branch-day, ONE answer.
+select is((select count(distinct g)::int from (
+            select ((app.owner_report_range('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00','today'))->'current'->>'gross_minor')::bigint as g
+            union all
+            select ((app.owner_sales_series('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00','today'))->'buckets'->0->>'gross_minor')::bigint
+            union all
+            select ((app.owner_daily_report('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00'))->'today'->>'gross_minor')::bigint
+            union all
+            select gross_minor::bigint from t_view
+          ) x), 1,
+          'G12 all FOUR owner analytics surfaces report ONE gross for the same branch-day');
 
 -- ============================================================================
 -- E. ACL + security posture

@@ -1,15 +1,17 @@
 -- DASHBOARD-VISUAL-RANGE-REFRESH-S0 (SERVER) — 60/90/custom windows everywhere,
 -- plus a real TOP-SELLING-ITEMS aggregate.
 --
--- Includes S0.1: the gross rollup in owner_report_range and owner_sales_series
--- now counts LIVE lines only. Folded in here rather than shipped as a follow-up
--- migration because this file already recreates both functions and has never
--- been applied anywhere — so there is no deployed behaviour to preserve, and no
--- reason to put a known-wrong gross into production first.
+-- Includes S0.1 and S0.2: the gross rollup now counts LIVE lines only in ALL
+-- FOUR surfaces that compute it — owner_report_range and owner_sales_series
+-- (S0.1), then app.owner_daily_report and the RF-075 VIEW
+-- public.daily_branch_sales_report (S0.2, section 6). Folded in here rather than
+-- shipped as follow-ups because this file has never been applied anywhere: there
+-- is no deployed behaviour to preserve, and no reason to put a known-wrong gross
+-- into production first and correct it afterwards.
 --
--- ADDITIVE AND READ-ONLY. This migration creates and replaces functions and
--- reissues their grants. It creates no table, column, index, trigger, writer,
--- RLS policy, backfill or seed, and no function below writes a single row.
+-- ADDITIVE AND READ-ONLY. This migration creates and replaces functions, replaces
+-- ONE view (section 6b), and reissues grants. It creates no table, column, index,
+-- trigger, writer, RLS policy, backfill or seed, and nothing below writes a row.
 --
 -- WHY A SERVER SLICE AT ALL. The Dashboard wants three things the database
 -- cannot currently answer:
@@ -1618,10 +1620,12 @@ comment on function app.owner_sales_series(uuid, uuid, uuid, text, date, date) i
 -- BYPASSRLS superuser-adjacent role whose access does not come from these
 -- grants, and pretending otherwise would be security theatre.
 --
--- SCOPE NOTE: app.owner_daily_report, app.owner_order_detail and the other
--- older owner wrappers share the PUBLIC-only revoke pattern. They are NOT
--- touched here — hardening them is unrelated to any signature this migration
--- changes, and is reported separately rather than smuggled into this slice.
+-- SCOPE NOTE: app.owner_order_detail and the other older owner wrappers share
+-- the PUBLIC-only revoke pattern. They are NOT touched here — hardening them is
+-- unrelated to any signature this migration changes, and is reported separately
+-- rather than smuggled into this slice. app.owner_daily_report WAS in that list
+-- until S0.2; it is now recreated by section 6 below and hardened there, since
+-- a function this migration touches should not keep the weaker pattern.
 
 revoke all on function app.owner_top_items(uuid, uuid, uuid, text, date, date, integer) from public;
 revoke all on function app.owner_top_items(uuid, uuid, uuid, text, date, date, integer) from anon;
@@ -1655,6 +1659,509 @@ revoke all on function public.owner_sales_series(uuid, uuid, uuid, text, date, d
 revoke all on function public.owner_sales_series(uuid, uuid, uuid, text, date, date) from anon;
 grant execute on function public.owner_sales_series(uuid, uuid, uuid, text, date, date) to authenticated;
 
+
+-- ===========================================================================
+-- 6. S0.2 — the SAME live-lines rule for the DAILY surfaces.
+-- ===========================================================================
+--
+-- S0.1 fixed the gross rollup in owner_report_range and owner_sales_series. Two
+-- more surfaces computed the identical rollup the identical wrong way, and
+-- leaving them would have been worse than the original bug: three surfaces
+-- consistently wrong is a bug, but two right and two wrong is a CONTRADICTION —
+-- the same live order with a struck-off line would report different gross and
+-- discount depending on which panel the owner happened to open.
+--
+--   * app.owner_daily_report          (last defined 20260715090000)
+--   * public.daily_branch_sales_report (RF-075 view, defined 20260623090000)
+--
+-- Both bodies below are those definitions reproduced EXACTLY, with exactly ONE
+-- line inserted into each — the same predicate, in the same place:
+--       and oi.status not in ('voided', 'cancelled')
+-- They were extracted mechanically rather than retyped, so the only difference
+-- from the shipped definitions is that one line.
+--
+-- Both compute net from ORDER-level columns (subtotal_minor - discount_total_minor),
+-- so net does not move; the fix RESTORES gross - discount = net in both, which is
+-- the reconciliation identity the RF-075 view's own comment already promises.
+--
+-- WHY HERE and not a new migration: this file has never been applied anywhere.
+-- A second migration would mean deliberately publishing a definition we already
+-- know is wrong and correcting it in the next statement. The filename says
+-- "range_top_items" and now carries a daily-report fix too — a naming cost paid
+-- knowingly, in exchange for never shipping a broken intermediate.
+--
+-- DOWNSTREAM (public.dashboard_org_daily_sales, public.dashboard_restaurant_daily_sales)
+-- is deliberately NOT touched: both are views that SELECT FROM
+-- daily_branch_sales_report and re-aggregate its columns, so they inherit the
+-- corrected numbers. Editing them would add risk without changing a single value.
+
+-- ---------------------------------------------------------------------------
+-- 6a. app.owner_daily_report — signature, security posture and body unchanged
+--     except for the one predicate. CREATE OR REPLACE, so no DROP and no ACL
+--     loss; the grants are restated below anyway.
+-- ---------------------------------------------------------------------------
+create or replace function app.owner_daily_report(
+  p_organization_id uuid,
+  p_restaurant_id   uuid default null,
+  p_branch_id       uuid default null
+)
+  returns jsonb
+  language plpgsql
+  stable
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_actor    uuid    := app.current_app_user_id();
+  v_rank     integer;
+  v_currency text;
+  v_today    date    := current_date;
+  v_prior    date    := current_date - 1;
+  v_result   jsonb;
+begin
+  if v_actor is null then
+    raise exception 'owner_daily_report: authentication required' using errcode = '42501';
+  end if;
+  if p_organization_id is null then
+    raise exception 'owner_daily_report: organization_id is required' using errcode = '42501';
+  end if;
+
+  -- authority over the PASSED scope (downward-only coverage); 0 => not a covering member.
+  v_rank := app.actor_rank_in_scope(p_organization_id, p_restaurant_id, p_branch_id);
+  if v_rank = 0 then
+    raise exception 'owner_daily_report: caller has no active membership covering the requested scope' using errcode = '42501';
+  end if;
+  -- FINANCIAL-READ allowlist (GUC-free, app.can_read_financials-STYLE): the caller
+  -- must hold an ACTIVE membership covering the PASSED scope (downward-only,
+  -- mirroring app.actor_rank_in_scope) whose role is a financial-read role —
+  -- cashier / manager / restaurant_owner / org_owner / accountant; kitchen_staff
+  -- is DENIED.
+  if not exists (
+    select 1
+    from public.memberships m
+    where m.app_user_id     = v_actor
+      and m.organization_id = p_organization_id
+      and m.status          = 'active'
+      and m.deleted_at is null
+      and m.role in ('cashier', 'manager', 'restaurant_owner', 'org_owner', 'accountant')
+      and (m.restaurant_id is null or m.restaurant_id = p_restaurant_id)
+      and (m.branch_id     is null or m.branch_id     = p_branch_id)
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'permission_denied', 'entity', 'owner_daily_report');
+  end if;
+
+  select o.default_currency into v_currency
+    from public.organizations o
+    where o.id = p_organization_id and o.deleted_at is null;
+  if not found then
+    raise exception 'owner_daily_report: organization not found (or deleted)' using errcode = '42501';
+  end if;
+
+  with branch_tz as (
+    -- branch-local zone (RF-075): COALESCE(branch, restaurant); tz-less excluded.
+    select b.organization_id, b.restaurant_id, b.id as branch_id,
+           coalesce(b.timezone, r.timezone) as zone
+    from public.branches b
+    join public.restaurants r
+      on r.organization_id = b.organization_id
+     and r.id              = b.restaurant_id
+     and r.deleted_at is null
+    where b.deleted_at is null
+  ),
+  order_day as (
+    select o.id as order_id,
+           o.status,
+           o.subtotal_minor,
+           o.discount_total_minor,
+           o.grand_total_minor,
+           (o.created_at at time zone t.zone)::date        as business_day,
+           -- RF-REPORT-002: branch-local hour (0..23) for the sales-by-hour chart.
+           extract(hour from (o.created_at at time zone t.zone))::int as business_hour
+    from public.orders o
+    join branch_tz t
+      on t.organization_id = o.organization_id
+     and t.branch_id       = o.branch_id
+    where o.organization_id = p_organization_id
+      and (p_restaurant_id is null or o.restaurant_id = p_restaurant_id)
+      and (p_branch_id     is null or o.branch_id     = p_branch_id)
+      and o.deleted_at is null
+      and t.zone is not null
+      and (o.created_at at time zone t.zone)::date in (v_today, v_prior)
+  ),
+  item_rollup as (
+    -- per-order pre-discount gross + item-level discount (integer sums).
+    select oi.order_id,
+           sum(oi.line_total_minor + oi.line_discount_minor) as gross_minor,
+           sum(oi.line_discount_minor)                       as item_discount_minor
+    from public.order_items oi
+    where oi.deleted_at is null
+      and oi.status not in ('voided', 'cancelled')
+      and oi.order_id in (select od.order_id from order_day od)
+    group by oi.order_id
+  ),
+  payment_day as (
+    -- completed payments joined to LIVE non-void/cancel orders, branch-local day.
+    select p.id,
+           p.method,
+           p.amount_minor,
+           p.created_at,
+           (p.created_at at time zone t.zone)::date as business_day
+    from public.payments p
+    join branch_tz t
+      on t.organization_id = p.organization_id
+     and t.branch_id       = p.branch_id
+    join public.orders o
+      on o.organization_id = p.organization_id
+     and o.id              = p.order_id
+     and o.deleted_at is null
+     and o.status not in ('cancelled', 'voided')  -- defensive belt (RF-062 blocks structurally)
+    where p.organization_id = p_organization_id
+      and (p_restaurant_id is null or p.restaurant_id = p_restaurant_id)
+      and (p_branch_id     is null or p.branch_id     = p_branch_id)
+      and p.deleted_at is null
+      and p.status = 'completed'
+      and t.zone is not null
+      and (p.created_at at time zone t.zone)::date in (v_today, v_prior)
+  ),
+  -- MONEY-SETTLEMENT-CONSISTENCY-001 removed the `paid_orders` CTE. It was a MARKER
+  -- ("a completed payment row exists"), and it was DAY-KEYED: it matched the PAYMENT's
+  -- branch-local day against the ORDER's branch-local day, so an order billed at 23:50
+  -- and paid at 00:10 was counted unpaid forever. Settlement is a property of the ORDER,
+  -- not of a calendar day, so unpaid_count now asks the canonical predicate directly.
+  sales as (
+    -- billed sales = orders NOT voided/cancelled/draft.
+    select od.business_day,
+           count(*)::bigint                                                                as order_count,
+           count(*) filter (where od.status = 'completed')::bigint                         as completed_count,
+           -- OUTSTANDING money, the canonical rule. A NON-CHARGEABLE zero-total order owes
+           -- nothing and is NOT counted; an UNDER-COVERED order still owes and IS counted.
+           count(*) filter (
+             where not app.order_is_fully_settled(p_organization_id, od.order_id)
+           )::bigint                                                                        as unpaid_count,
+           coalesce(sum(ir.gross_minor), 0)::bigint                                         as gross_minor,
+           (coalesce(sum(ir.item_discount_minor), 0)
+             + coalesce(sum(od.discount_total_minor), 0))::bigint                           as discount_minor,
+           coalesce(sum(od.subtotal_minor - od.discount_total_minor), 0)::bigint            as net_minor
+    from order_day od
+    left join item_rollup ir on ir.order_id = od.order_id
+    where od.status not in ('voided', 'cancelled', 'draft')
+    group by od.business_day
+  ),
+  voids as (
+    select od.business_day,
+           count(*)::bigint                              as void_count,
+           coalesce(sum(od.grand_total_minor), 0)::bigint as void_total_minor
+    from order_day od
+    where od.status = 'voided'
+    group by od.business_day
+  ),
+  collected as (
+    select business_day,
+           coalesce(sum(amount_minor), 0)::bigint                              as collected_minor,
+           coalesce(sum(amount_minor) filter (where method = 'cash'), 0)::bigint as cash_minor
+    from payment_day
+    group by business_day
+  ),
+  last_cash as (
+    -- the most recent completed cash payment on the day (id desc tiebreak).
+    select distinct on (business_day)
+           business_day, amount_minor as last_cash_payment_minor
+    from payment_day
+    where method = 'cash'
+    order by business_day, created_at desc, id desc
+  ),
+  tenders as (
+    select business_day,
+           jsonb_agg(jsonb_build_object('method', method, 'count', cnt, 'total_minor', total_minor)
+                     order by method) as tenders
+    from (
+      select business_day, method,
+             count(*)::bigint                       as cnt,
+             coalesce(sum(amount_minor), 0)::bigint as total_minor
+      from payment_day
+      group by business_day, method
+    ) g
+    group by business_day
+  ),
+  hourly_net as (
+    -- RF-REPORT-002: TODAY's BILLED net (subtotal - discount) per branch-local
+    -- hour, over the SAME billed orders as `sales` (void/cancelled/draft excluded).
+    select od.business_hour                                                     as hour,
+           coalesce(sum(od.subtotal_minor - od.discount_total_minor), 0)::bigint as net_minor
+    from order_day od
+    where od.business_day = v_today
+      and od.status not in ('voided', 'cancelled', 'draft')
+    group by od.business_hour
+  ),
+  hourly_series as (
+    -- 24 zero-filled buckets so the chart axis is stable (honest zeros).
+    select h.hour::int                                                                        as hour,
+           coalesce((select hn.net_minor from hourly_net hn where hn.hour = h.hour), 0)::bigint as net_minor
+    from generate_series(0, 23) as h(hour)
+  ),
+  closed_shifts_today as (
+    -- RF-REPORT-003: CLOSED (or reconciled) shifts whose BRANCH-LOCAL closed_at
+    -- day is TODAY (tz-less branches excluded, same as the sales figures). Reads
+    -- the RF-055-persisted expected/counted/variance (integer minor). A shift
+    -- that spanned midnight is attributed to its CLOSE day (cash-count day).
+    select s.id                    as shift_id,
+           s.branch_id,
+           b.name                  as branch_name,
+           ep.display_name         as closed_by_name,
+           -- BRANCH-LOCAL display strings (consistent with the closed_at bucketing;
+           -- never leak a raw UTC ISO whose calendar date contradicts the bucket).
+           to_char((s.opened_at at time zone t.zone), 'YYYY-MM-DD HH24:MI') as opened_at,
+           to_char((s.closed_at at time zone t.zone), 'YYYY-MM-DD HH24:MI') as closed_at,
+           s.expected_total_minor,
+           s.counted_total_minor,
+           s.variance_minor
+    from public.shifts s
+    join branch_tz t
+      on t.organization_id = s.organization_id
+     and t.branch_id       = s.branch_id
+    join public.branches b
+      on b.organization_id = s.organization_id
+     and b.id              = s.branch_id
+    left join public.employee_profiles ep
+      on ep.organization_id = s.organization_id
+     and ep.id             = s.closed_by_employee_profile_id
+    where s.organization_id = p_organization_id
+      and (p_restaurant_id is null or s.restaurant_id = p_restaurant_id)
+      and (p_branch_id     is null or s.branch_id     = p_branch_id)
+      and s.deleted_at is null
+      and s.status in ('closed', 'reconciled')
+      and s.closed_at is not null
+      and t.zone is not null
+      and (s.closed_at at time zone t.zone)::date = v_today
+  ),
+  open_shifts as (
+    -- OPEN shifts NOW in scope (point-in-time count; NOT day/tz bucketed).
+    select count(*)::bigint as cnt
+    from public.shifts s
+    where s.organization_id = p_organization_id
+      and (p_restaurant_id is null or s.restaurant_id = p_restaurant_id)
+      and (p_branch_id     is null or s.branch_id     = p_branch_id)
+      and s.deleted_at is null
+      and s.status in ('opening', 'open', 'closing')
+  )
+  select jsonb_build_object(
+    'today', jsonb_build_object(
+      'order_count',             coalesce((select s.order_count     from sales s     where s.business_day = v_today), 0),
+      'completed_count',         coalesce((select s.completed_count from sales s     where s.business_day = v_today), 0),
+      'open_count',              coalesce((select s.order_count - s.completed_count from sales s where s.business_day = v_today), 0),
+      'unpaid_count',            coalesce((select s.unpaid_count    from sales s     where s.business_day = v_today), 0),
+      'gross_minor',             coalesce((select s.gross_minor     from sales s     where s.business_day = v_today), 0),
+      'discount_minor',          coalesce((select s.discount_minor  from sales s     where s.business_day = v_today), 0),
+      'net_minor',               coalesce((select s.net_minor       from sales s     where s.business_day = v_today), 0),
+      'void_count',              coalesce((select v.void_count      from voids v     where v.business_day = v_today), 0),
+      'void_total_minor',        coalesce((select v.void_total_minor from voids v    where v.business_day = v_today), 0),
+      'collected_minor',         coalesce((select c.collected_minor from collected c where c.business_day = v_today), 0),
+      'cash_minor',              coalesce((select c.cash_minor      from collected c where c.business_day = v_today), 0),
+      'last_cash_payment_minor', coalesce((select l.last_cash_payment_minor from last_cash l where l.business_day = v_today), 0),
+      'tenders',                 coalesce((select t.tenders         from tenders t   where t.business_day = v_today), '[]'::jsonb)),
+    'prior_day', jsonb_build_object(
+      'order_count',  coalesce((select s.order_count from sales s     where s.business_day = v_prior), 0),
+      'gross_minor',  coalesce((select s.gross_minor from sales s     where s.business_day = v_prior), 0),
+      'net_minor',    coalesce((select s.net_minor   from sales s     where s.business_day = v_prior), 0),
+      'cash_minor',   coalesce((select c.cash_minor  from collected c where c.business_day = v_prior), 0)),
+    -- RF-REPORT-002: TODAY's 24 sales-by-hour buckets (billed net, integer minor).
+    'hourly', coalesce(
+      (select jsonb_agg(jsonb_build_object('hour', hs.hour, 'net_minor', hs.net_minor) order by hs.hour)
+       from hourly_series hs),
+      '[]'::jsonb),
+    -- RF-REPORT-003: TODAY's shift / cash reconciliation (stored RF-055 values).
+    'shift_cash', jsonb_build_object(
+      'closed_shift_count',  coalesce((select count(*)::int from closed_shifts_today), 0),
+      'open_shift_count',    coalesce((select cnt::int from open_shifts), 0),
+      'expected_cash_minor', coalesce((select sum(expected_total_minor)::bigint from closed_shifts_today), 0),
+      'counted_cash_minor',  coalesce((select sum(counted_total_minor)::bigint  from closed_shifts_today), 0),
+      'cash_variance_minor', coalesce((select sum(variance_minor)::bigint       from closed_shifts_today), 0),
+      'last_closed_shift', (
+        select jsonb_build_object(
+                 'shift_id',            cs.shift_id,
+                 'branch_id',           cs.branch_id,
+                 'branch_name',         cs.branch_name,
+                 'opened_at',           cs.opened_at,
+                 'closed_at',           cs.closed_at,
+                 'closed_by_name',      cs.closed_by_name,
+                 'expected_cash_minor', cs.expected_total_minor,
+                 'counted_cash_minor',  cs.counted_total_minor,
+                 'cash_variance_minor', cs.variance_minor)
+        from closed_shifts_today cs
+        order by cs.closed_at desc, cs.shift_id desc
+        limit 1),
+      'recent_closed_shifts', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'shift_id',            r.shift_id,
+                 'branch_id',           r.branch_id,
+                 'branch_name',         r.branch_name,
+                 'closed_at',           r.closed_at,
+                 'closed_by_name',      r.closed_by_name,
+                 'expected_cash_minor', r.expected_total_minor,
+                 'counted_cash_minor',  r.counted_total_minor,
+                 'cash_variance_minor', r.variance_minor)
+               order by r.closed_at desc, r.shift_id desc)
+        from (select * from closed_shifts_today order by closed_at desc, shift_id desc limit 5) r),
+        '[]'::jsonb))
+  ) into v_result;
+
+  return jsonb_build_object(
+    'ok', true,
+    'entity', 'owner_daily_report',
+    'currency_code', v_currency,
+    'business_date', v_today
+  ) || v_result;
+end;
+$$;
+
+-- ACL for the owner_daily_report family. This migration now TOUCHES it, so it
+-- gets the same hardening the four functions above got: `anon` revoked
+-- EXPLICITLY, not merely via PUBLIC, because hosted Supabase grants anon EXECUTE
+-- at CREATE time through ALTER DEFAULT PRIVILEGES and a PUBLIC revoke does not
+-- remove it. Every prior owner_daily_report migration revoked PUBLIC only.
+--
+-- This is NARROWING ONLY: no role gains anything it did not already have, and
+-- `authenticated` — the only role that legitimately calls it — is unaffected.
+revoke all on function app.owner_daily_report(uuid, uuid, uuid) from public;
+revoke all on function app.owner_daily_report(uuid, uuid, uuid) from anon;
+grant execute on function app.owner_daily_report(uuid, uuid, uuid) to authenticated;
+
+revoke all on function public.owner_daily_report(uuid, uuid, uuid) from public;
+revoke all on function public.owner_daily_report(uuid, uuid, uuid) from anon;
+grant execute on function public.owner_daily_report(uuid, uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 6b. public.daily_branch_sales_report — the RF-075 VIEW (not a function).
+--
+--     CREATE OR REPLACE VIEW, which requires the output column list to be
+--     unchanged — it is: the fix lives inside an internal CTE and the 14
+--     selected columns are identical, so the two dependent RF-092 views keep
+--     working without being touched.
+--
+--     ITS ACCESS CONTRACT IS PRESERVED, NOT REWRITTEN. CREATE OR REPLACE VIEW
+--     keeps the object's existing privileges, so RF-075's `revoke all from
+--     public` + `grant select to authenticated` still stand and nothing is
+--     widened. No anon revoke is added here: unlike a SECURITY DEFINER RPC this
+--     view is `security_invoker = true`, so RF-059 RLS (can_read_financials)
+--     evaluates as the CALLER and an anon session sees no rows regardless. That
+--     asymmetry with 6a is deliberate rather than an oversight.
+-- ---------------------------------------------------------------------------
+create or replace view public.daily_branch_sales_report
+  with (security_invoker = true) as
+with branch_tz as (
+  select b.organization_id,
+         b.restaurant_id,
+         b.id                                   as branch_id,
+         coalesce(b.timezone, r.timezone)       as zone
+  from public.branches b
+  join public.restaurants r
+    on r.organization_id = b.organization_id
+   and r.id              = b.restaurant_id
+  where b.deleted_at is null
+),
+order_day as (
+  select o.organization_id,
+         o.restaurant_id,
+         o.branch_id,
+         (o.created_at at time zone t.zone)::date as business_day,
+         o.currency_code,
+         o.id            as order_id,
+         o.status,
+         o.subtotal_minor,
+         o.discount_total_minor,
+         o.tax_total_minor,
+         o.grand_total_minor
+  from public.orders o
+  join branch_tz t
+    on t.organization_id = o.organization_id
+   and t.branch_id       = o.branch_id
+  where o.deleted_at is null
+    and t.zone is not null
+),
+item_rollup as (
+  -- per-order pre-discount gross + item-level discount (integer sums)
+  select oi.order_id,
+         sum(oi.line_total_minor + oi.line_discount_minor) as gross_minor,
+         sum(oi.line_discount_minor)                       as item_discount_minor
+  from public.order_items oi
+  where oi.deleted_at is null
+    and oi.status not in ('voided', 'cancelled')
+  group by oi.order_id
+),
+sales as (
+  -- real sales = orders that are not voided/cancelled/draft
+  select od.organization_id,
+         od.restaurant_id,
+         od.branch_id,
+         od.business_day,
+         od.currency_code,
+         count(*)                                                   as order_count,
+         coalesce(sum(ir.gross_minor), 0)                           as gross_minor,
+         coalesce(sum(ir.item_discount_minor), 0)
+           + coalesce(sum(od.discount_total_minor), 0)              as discount_total_minor,
+         coalesce(sum(od.subtotal_minor - od.discount_total_minor), 0) as net_sales_minor,
+         coalesce(sum(od.tax_total_minor), 0)                       as tax_total_minor
+  from order_day od
+  left join item_rollup ir on ir.order_id = od.order_id
+  where od.status not in ('voided', 'cancelled', 'draft')
+  group by od.organization_id, od.restaurant_id, od.branch_id, od.business_day, od.currency_code
+),
+voids as (
+  select od.organization_id,
+         od.restaurant_id,
+         od.branch_id,
+         od.business_day,
+         od.currency_code,
+         count(*)                          as void_count,
+         coalesce(sum(od.grand_total_minor), 0) as void_total_minor
+  from order_day od
+  where od.status = 'voided'
+  group by od.organization_id, od.restaurant_id, od.branch_id, od.business_day, od.currency_code
+),
+collected as (
+  -- only COMPLETED payments are money actually taken (cash only in MVP)
+  select p.organization_id,
+         p.restaurant_id,
+         p.branch_id,
+         (p.created_at at time zone t.zone)::date as business_day,
+         p.currency_code,
+         coalesce(sum(p.amount_minor), 0)                                          as collected_total_minor,
+         coalesce(sum(p.amount_minor) filter (where p.method = 'cash'), 0)         as collected_cash_minor
+  from public.payments p
+  join branch_tz t
+    on t.organization_id = p.organization_id
+   and t.branch_id       = p.branch_id
+  where p.deleted_at is null
+    and p.status = 'completed'
+    and t.zone is not null
+  group by p.organization_id, p.restaurant_id, p.branch_id, (p.created_at at time zone t.zone)::date, p.currency_code
+),
+keys as (
+  select organization_id, restaurant_id, branch_id, business_day, currency_code from sales
+  union
+  select organization_id, restaurant_id, branch_id, business_day, currency_code from voids
+  union
+  select organization_id, restaurant_id, branch_id, business_day, currency_code from collected
+)
+select k.organization_id,
+       k.restaurant_id,
+       k.branch_id,
+       k.business_day,
+       k.currency_code,
+       coalesce(s.order_count, 0)            as order_count,
+       coalesce(s.gross_minor, 0)            as gross_minor,
+       coalesce(s.discount_total_minor, 0)   as discount_total_minor,
+       coalesce(s.net_sales_minor, 0)        as net_sales_minor,
+       coalesce(s.tax_total_minor, 0)        as tax_total_minor,
+       coalesce(v.void_count, 0)             as void_count,
+       coalesce(v.void_total_minor, 0)       as void_total_minor,
+       coalesce(c.collected_total_minor, 0)  as collected_total_minor,
+       coalesce(c.collected_cash_minor, 0)   as collected_cash_minor
+from keys k
+left join sales     s using (organization_id, restaurant_id, branch_id, business_day, currency_code)
+left join voids     v using (organization_id, restaurant_id, branch_id, business_day, currency_code)
+left join collected c using (organization_id, restaurant_id, branch_id, business_day, currency_code);
+
 -- ============================================================================
 -- HOSTED APPLY NOTE (not performed by this slice): dropping and recreating
 -- PostgREST-reachable functions changes the exposed RPC surface, so a hosted
@@ -1666,4 +2173,11 @@ grant execute on function public.owner_sales_series(uuid, uuid, uuid, text, date
 --   drop function if exists app.owner_top_items(uuid, uuid, uuid, text, date, date, integer);
 --   -- and re-apply 20260706110000 / 20260710090000 / 20260811090000 to restore
 --   -- the narrower owner_report_range / owner_order_history signatures.
+--   -- S0.2: re-apply 20260715090000 to restore app.owner_daily_report. For the
+--   -- view, re-run the BODY of 20260623090000's daily_branch_sales_report as
+--   -- `create or replace view` — that file declares it with a bare `create view`,
+--   -- which would raise 42P07 against the existing object, and a drop+recreate
+--   -- would cascade to the two RF-092 dependents and lose the security_invoker
+--   -- setting and the grants. Both objects are CREATE OR REPLACE here, so neither
+--   -- was dropped, no ACL was lost, and the RF-092 views are untouched throughout.
 -- ============================================================================
