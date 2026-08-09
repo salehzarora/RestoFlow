@@ -59,6 +59,29 @@ Future<void> _pick(WidgetTester tester, String key, String label) async {
 List<String> _resultIds(ProviderContainer c) =>
     c.read(auditLogControllerProvider).events.map((e) => e.eventId).toList();
 
+const _harborOption = AuditBranchOption(
+  organizationId: 'demo-org-1',
+  branchId: demoBranchHarbor,
+  restaurantId: 'demo-rest-1',
+  label: 'RestoFlow · Harbor',
+);
+
+/// Whether [part] appears inside [whole] in the same relative order.
+bool _isSubsequence(List<String> part, List<String> whole) {
+  var i = 0;
+  for (final id in whole) {
+    if (i < part.length && part[i] == id) i++;
+  }
+  return i == part.length;
+}
+
+bool _inRange(DemoAuditEvent e, AuditRange range) => switch (range) {
+  AuditRange.today => e.daysAgo == 0,
+  AuditRange.yesterday => e.daysAgo == 1,
+  AuditRange.last7 => e.daysAgo >= 0 && e.daysAgo <= 6,
+  AuditRange.last30 => e.daysAgo >= 0 && e.daysAgo <= 29,
+};
+
 void main() {
   // The fixture's shape, asserted rather than assumed — every case below reads
   // as a claim about these rows.
@@ -184,6 +207,186 @@ void main() {
     });
   });
 
+  // =========================================================================
+  // STATIC-C548C0E-DEMO-ACTIVITY-ORDER-01 — an audit timeline is newest-first
+  // =========================================================================
+  group('the demo timeline is newest-first', () {
+    /// The order the fixture set SHOULD come back in for [query], derived
+    /// independently of the repository so the expectation is not the code
+    /// under test restated.
+    List<String> expectedOrder(AuditQuery query) {
+      final rows = [
+        for (final e in demoAuditEvents())
+          if (_inRange(e, query.range) &&
+              (query.branch == null || e.branchId == query.branch!.branchId) &&
+              (query.actor == null ||
+                  e.actorId == query.actor!.employeeProfileId))
+            e,
+      ];
+      rows.sort((a, b) {
+        final byDay = a.daysAgo.compareTo(b.daysAgo);
+        if (byDay != 0) return byDay;
+        return b.minuteOfDay.compareTo(a.minuteOfDay);
+      });
+      return [for (final e in rows) e.event.eventId];
+    }
+
+    Future<List<String>> idsFor(AuditQuery query, {int pageSize = 25}) async {
+      final page = await DemoAuditLogRepository(
+        pageSize: pageSize,
+      ).loadEvents(query);
+      return page.events.map((e) => e.eventId).toList();
+    }
+
+    test('A. the default today timeline is in descending time order', () async {
+      const q = AuditQuery();
+      final ids = await idsFor(q);
+      expect(ids, expectedOrder(q));
+      // The defect in one assertion: 15:40 was appended after 09:40.
+      expect(
+        ids.indexOf('demo-ae-9'),
+        lessThan(ids.indexOf('demo-ae-1')),
+        reason: '15:40 must precede 14:05',
+      );
+      expect(ids.first, 'demo-ae-9');
+    });
+
+    test('B. ACTOR only: Amira newest-first', () async {
+      const q = AuditQuery(
+        actor: AuditActorOption(
+          employeeProfileId: demoActorAmira,
+          label: 'Amira',
+        ),
+      );
+      final ids = await idsFor(q);
+      expect(ids, expectedOrder(q));
+      expect(ids.indexOf('demo-ae-9'), lessThan(ids.indexOf('demo-ae-1')));
+    });
+
+    test('C. BRANCH only: Harbor newest-first', () async {
+      const q = AuditQuery(branch: _harborOption);
+      final ids = await idsFor(q);
+      expect(ids, expectedOrder(q));
+      expect(ids, ['demo-ae-9', 'demo-ae-10']);
+    });
+
+    test('D. BRANCH + ACTOR: the matching set, in order', () async {
+      const q = AuditQuery(
+        branch: _harborOption,
+        actor: AuditActorOption(
+          employeeProfileId: demoActorAmira,
+          label: 'Amira',
+        ),
+      );
+      final ids = await idsFor(q);
+      expect(ids, expectedOrder(q));
+      expect(ids, ['demo-ae-9']);
+    });
+
+    test('E. a small page size puts the NEWEST rows on page 1, and the rest '
+        'follow with no gap or repeat', () async {
+      const q = AuditQuery(range: AuditRange.last7);
+      final expected = expectedOrder(q);
+      expect(expected.length, greaterThan(4), reason: 'enough rows to page');
+
+      final repo = DemoAuditLogRepository(pageSize: 2);
+      final collected = <String>[];
+      String? cursor;
+      var guard = 0;
+      do {
+        final page = await repo.loadEvents(q, cursor: cursor);
+        collected.addAll(page.events.map((e) => e.eventId));
+        cursor = page.nextCursor;
+        expect(++guard, lessThan(20), reason: 'pagination must terminate');
+      } while (cursor != null);
+
+      expect(collected, expected, reason: 'no gap, no repeat, right order');
+      expect(
+        collected.toSet().length,
+        collected.length,
+        reason: 'no duplicate',
+      );
+      // Page 1 alone must already hold the two newest.
+      final first = await repo.loadEvents(q);
+      expect(first.events.map((e) => e.eventId), expected.take(2));
+    });
+
+    test('F. ordering survives the other filters', () async {
+      // For CATEGORY and SENSITIVE-ONLY the expectation is stated as a
+      // SUBSEQUENCE of the full ordered timeline rather than as a list of ids.
+      // Reproducing those two predicates here would mean copying the code under
+      // test into its own test; "filtering removes rows and never reorders the
+      // ones it keeps" is both the stronger claim and the one that stays true
+      // when the predicates change.
+      final full = expectedOrder(const AuditQuery(range: AuditRange.last7));
+
+      final voids = await idsFor(
+        const AuditQuery(
+          range: AuditRange.last7,
+          category: AuditCategory.voids,
+        ),
+      );
+      expect(
+        voids.length,
+        greaterThan(1),
+        reason: 'more than one void to order',
+      );
+      expect(_isSubsequence(voids, full), isTrue, reason: '$voids vs $full');
+
+      final sensitive = await idsFor(
+        const AuditQuery(range: AuditRange.last7, sensitiveOnly: true),
+      );
+      expect(sensitive.length, greaterThan(1));
+      expect(_isSubsequence(sensitive, full), isTrue);
+    });
+
+    test(
+      'a tie at the same minute resolves by source order, deterministically',
+      () async {
+        const a = AuditEvent(
+          eventId: 'tie-a',
+          action: 'order.voided',
+          category: 'voids',
+          occurredAtLabel: '12:00',
+        );
+        const b = AuditEvent(
+          eventId: 'tie-b',
+          action: 'order.voided',
+          category: 'voids',
+          occurredAtLabel: '12:00',
+        );
+        final repo = DemoAuditLogRepository(
+          events: const [
+            DemoAuditEvent(daysAgo: 0, minuteOfDay: 720, event: a),
+            DemoAuditEvent(daysAgo: 0, minuteOfDay: 720, event: b),
+          ],
+        );
+        for (var i = 0; i < 3; i++) {
+          final page = await repo.loadEvents(const AuditQuery());
+          expect(page.events.map((e) => e.eventId), ['tie-a', 'tie-b']);
+        }
+      },
+    );
+
+    test('every fixture minute matches the time in its own label', () {
+      for (final e in demoAuditEvents()) {
+        final match = RegExp(
+          r'(\d{2}):(\d{2})',
+        ).firstMatch(e.event.occurredAtLabel);
+        expect(match, isNotNull, reason: e.event.eventId);
+        final expected =
+            int.parse(match!.group(1)!) * 60 + int.parse(match.group(2)!);
+        expect(
+          e.minuteOfDay,
+          expected,
+          reason:
+              '${e.event.eventId} says "${e.event.occurredAtLabel}" but '
+              'sorts at ${e.minuteOfDay}',
+        );
+      }
+    });
+  });
+
   group('the real demo Activity screen filters its timeline', () {
     testWidgets('BRANCH + ACTOR: only Harbor events by Amira survive', (
       tester,
@@ -224,6 +427,35 @@ void main() {
       );
       expect(ids, isNot(contains(otherActorSameBranch.event.eventId)));
       expect(ids, isNot(contains(sameActorOtherBranch.event.eventId)));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the rendered timeline itself is newest-first', (tester) async {
+      _size(tester);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      final c = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('activity-branch-filter'))),
+        listen: false,
+      );
+
+      // Through the REAL controller and repository, not a sorting helper.
+      final ids = _resultIds(c);
+      final byId = {for (final e in demoAuditEvents()) e.event.eventId: e};
+      for (var i = 1; i < ids.length; i++) {
+        final prev = byId[ids[i - 1]]!;
+        final next = byId[ids[i]]!;
+        final ordered =
+            prev.daysAgo < next.daysAgo ||
+            (prev.daysAgo == next.daysAgo &&
+                prev.minuteOfDay >= next.minuteOfDay);
+        expect(
+          ordered,
+          isTrue,
+          reason: '${ids[i - 1]} then ${ids[i]} is out of order',
+        );
+      }
+      expect(ids.first, 'demo-ae-9', reason: 'the newest event leads');
       expect(tester.takeException(), isNull);
     });
 

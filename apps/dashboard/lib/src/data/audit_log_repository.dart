@@ -33,12 +33,29 @@ class AuditLogException implements Exception {
 class DemoAuditEvent {
   const DemoAuditEvent({
     required this.daysAgo,
+    required this.minuteOfDay,
     required this.event,
     this.branchId,
     this.actorId,
   });
 
   final int daysAgo;
+
+  /// STATIC-C548C0E-DEMO-ACTIVITY-ORDER-01 — minutes since midnight on that
+  /// day, so two events on one day have a total order of their own.
+  ///
+  /// REQUIRED, deliberately. The timeline used to come out in whatever order
+  /// the fixtures happened to be declared in, which held only until someone
+  /// appended a row — and I did exactly that, putting 15:40 and 15:05 after
+  /// 09:40. A field that must be supplied makes "when did this happen" part of
+  /// writing a fixture rather than something to notice afterwards.
+  ///
+  /// It is NOT parsed from [AuditEvent.occurredAtLabel]: that is display text,
+  /// localizable and free-form ("Yesterday 23:10"), and sorting a timeline by
+  /// scraping its own labels would be brittle in exactly the way this defect
+  /// already proved.
+  final int minuteOfDay;
+
   final AuditEvent event;
 
   /// STATIC-97CDEE8-DEMO-ACTIVITY-01 — the identities the demo timeline filters
@@ -84,11 +101,26 @@ class DemoAuditLogRepository implements AuditLogRepository {
     final message = failureMessage;
     if (message != null) throw AuditLogException(message);
 
-    final matched = _events.where((e) => _matches(e, query)).toList();
+    // STATIC-C548C0E-DEMO-ACTIVITY-ORDER-01 — FILTER, then SORT, then paginate,
+    // in that order.
+    //
+    // This used to preserve source order and paginate it, so the timeline was
+    // only newest-first for as long as the fixture list happened to be written
+    // that way. It stopped being: appending the Harbor rows put 15:40 and 15:05
+    // after 09:40, and with a small page size the newest events could land on a
+    // LATER page than older ones. Sorting each page after slicing would look
+    // right on page one and still be wrong across the boundary, which is why
+    // the whole matched set is ordered before anything is taken from it.
+    final matched = <(int, DemoAuditEvent)>[];
+    for (var i = 0; i < _events.length; i++) {
+      if (_matches(_events[i], query)) matched.add((i, _events[i]));
+    }
+    matched.sort(_newestFirst);
+    final ordered = [for (final (_, e) in matched) e];
     final offset = int.tryParse(cursor ?? '') ?? 0;
-    final slice = matched.skip(offset).take(pageSize).toList();
+    final slice = ordered.skip(offset).take(pageSize).toList();
     final consumed = offset + slice.length;
-    final hasMore = consumed < matched.length;
+    final hasMore = consumed < ordered.length;
     return AuditPage(
       events: slice.map((e) => e.event).toList(growable: false),
       hasMore: hasMore,
@@ -124,6 +156,21 @@ class DemoAuditLogRepository implements AuditLogRepository {
     return true;
   }
 
+  /// Newest first: fewer days ago wins, then later in the day wins.
+  ///
+  /// The source index is the tie-break, and it is carried explicitly because
+  /// `List.sort` is NOT stable in Dart — two events at the same minute would
+  /// otherwise come back in an order that is merely whatever the sort happened
+  /// to do. A demo dataset nobody can predict is a demo dataset nobody can
+  /// write a test against.
+  static int _newestFirst((int, DemoAuditEvent) a, (int, DemoAuditEvent) b) {
+    final byDay = a.$2.daysAgo.compareTo(b.$2.daysAgo);
+    if (byDay != 0) return byDay;
+    final byMinute = b.$2.minuteOfDay.compareTo(a.$2.minuteOfDay);
+    if (byMinute != 0) return byMinute;
+    return a.$1.compareTo(b.$1);
+  }
+
   static bool _isSensitive(String action) =>
       action.endsWith('_denied') ||
       action.startsWith('order.void') ||
@@ -156,6 +203,7 @@ const demoActorNadia = 'demo-staff-nadia';
 List<DemoAuditEvent> demoAuditEvents() => [
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 845,
     branchId: demoBranchDowntown,
     actorId: demoActorAmira,
     event: const AuditEvent(
@@ -174,6 +222,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 800,
     branchId: demoBranchDowntown,
     actorId: demoActorAmira,
     event: const AuditEvent(
@@ -196,6 +245,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 660,
     actorId: demoActorSami,
     event: const AuditEvent(
       eventId: 'demo-ae-3',
@@ -222,6 +272,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 615,
     actorId: demoActorSami,
     event: const AuditEvent(
       eventId: 'demo-ae-4',
@@ -235,6 +286,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 580,
     branchId: demoBranchDowntown,
     actorId: demoActorNadia,
     event: const AuditEvent(
@@ -252,6 +304,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 1,
+    minuteOfDay: 1390,
     branchId: demoBranchDowntown,
     actorId: demoActorAmira,
     event: const AuditEvent(
@@ -268,6 +321,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 1,
+    minuteOfDay: 1110,
     branchId: demoBranchDowntown,
     actorId: demoActorSami,
     event: const AuditEvent(
@@ -282,6 +336,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 1,
+    minuteOfDay: 960,
     actorId: demoActorSami,
     event: const AuditEvent(
       eventId: 'demo-ae-8',
@@ -294,6 +349,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 940,
     branchId: demoBranchHarbor,
     actorId: demoActorAmira,
     event: const AuditEvent(
@@ -312,6 +368,7 @@ List<DemoAuditEvent> demoAuditEvents() => [
   ),
   DemoAuditEvent(
     daysAgo: 0,
+    minuteOfDay: 905,
     branchId: demoBranchHarbor,
     actorId: demoActorSami,
     event: const AuditEvent(
