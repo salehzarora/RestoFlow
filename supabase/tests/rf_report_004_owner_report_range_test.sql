@@ -214,14 +214,18 @@ select throws_ok(
 reset role;
 
 -- ===== (31) public wrapper: INVOKER + locked search_path + no anon/PUBLIC ======
+-- DASHBOARD-VISUAL-RANGE-REFRESH-S0 widened the signature to 6 arguments
+-- (p_start/p_end appended), so the arity moved from 4 to 6. The PROPERTY under
+-- test — INVOKER, locked search_path, authenticated-only — is unchanged, and is
+-- still asserted against the one signature that now exists.
 select ok(
-  (select prosecdef = false from pg_proc where proname='owner_report_range' and pronamespace='public'::regnamespace and pronargs=4)
+  (select prosecdef = false from pg_proc where proname='owner_report_range' and pronamespace='public'::regnamespace and pronargs=6)
   and (select exists(
      select 1 from pg_proc p cross join lateral unnest(coalesce(p.proconfig, '{}'::text[])) as cfg
-     where p.proname='owner_report_range' and p.pronamespace='public'::regnamespace and p.pronargs=4 and cfg like 'search_path=%'))
-  and not has_function_privilege('anon', 'public.owner_report_range(uuid, uuid, uuid, text)', 'execute')
-  and not has_function_privilege('public', 'public.owner_report_range(uuid, uuid, uuid, text)', 'execute')
-  and has_function_privilege('authenticated', 'public.owner_report_range(uuid, uuid, uuid, text)', 'execute'),
+     where p.proname='owner_report_range' and p.pronamespace='public'::regnamespace and p.pronargs=6 and cfg like 'search_path=%'))
+  and not has_function_privilege('anon', 'public.owner_report_range(uuid, uuid, uuid, text, date, date)', 'execute')
+  and not has_function_privilege('public', 'public.owner_report_range(uuid, uuid, uuid, text, date, date)', 'execute')
+  and has_function_privilege('authenticated', 'public.owner_report_range(uuid, uuid, uuid, text, date, date)', 'execute'),
   'public.owner_report_range is INVOKER, search_path-locked, authenticated-only (no anon/PUBLIC)');
 
 select * from finish();

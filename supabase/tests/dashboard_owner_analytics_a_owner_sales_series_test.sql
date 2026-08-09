@@ -158,7 +158,10 @@ select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-000000
 select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, null, current_date - 92, current_date)$$, '22023', null, '>92 day window rejected');
 select lives_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, null, current_date - 91, current_date)$$, 'exactly 92 inclusive days accepted');
 select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, null, current_date, null)$$, '22023', null, 'half-supplied custom window rejected');
-select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, 'last90')$$, '22023', null, 'unknown predefined range => 22023');
+-- DASHBOARD-VISUAL-RANGE-REFRESH-S0 promoted 'last90' to a real preset token,
+-- so the probe uses one that is still unknown. The rule is unchanged: an
+-- unrecognised token is a bad request, never a silent fallback to today.
+select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, 'quarter')$$, '22023', null, 'unknown predefined range => 22023');
 
 -- ===== branch-local timezone ===============================================
 select is((select jsonb_array_length((app.owner_sales_series('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a3000','00000000-0000-0000-0000-0000000a3a00','today'))->'buckets')), 1, 'A3a 00:30 local order lands in LOCAL today, not UTC yesterday');
