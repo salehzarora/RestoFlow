@@ -3011,6 +3011,17 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardComparedVsPrev30 => 'לעומת 30 הימים הקודמים';
 
   @override
+  String get dashboardComparedVsPrev60 => 'לעומת 60 הימים הקודמים';
+
+  @override
+  String get dashboardComparedVsPrev90 => 'לעומת 90 הימים הקודמים';
+
+  @override
+  String dashboardComparedVsPrevDays(int days) {
+    return 'לעומת $days הימים הקודמים';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent% לעומת כל יום אתמול';
   }
@@ -3026,6 +3037,15 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get dashboardRangeLast30 => '30 הימים האחרונים';
+
+  @override
+  String get dashboardRangeLast60 => '60 הימים האחרונים';
+
+  @override
+  String get dashboardRangeLast90 => '90 הימים האחרונים';
+
+  @override
+  String get dashboardRangeCustom => 'מותאם אישית';
 
   @override
   String get dashboardRangeUnavailable =>
@@ -3044,6 +3064,21 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String dashboardDeltaVsPrev30(int percent) {
     return '$percent% לעומת 30 הימים הקודמים';
+  }
+
+  @override
+  String dashboardDeltaVsPrev60(int percent) {
+    return '$percent% לעומת 60 הימים הקודמים';
+  }
+
+  @override
+  String dashboardDeltaVsPrev90(int percent) {
+    return '$percent% לעומת 90 הימים הקודמים';
+  }
+
+  @override
+  String dashboardDeltaVsPrevDays(int percent, int days) {
+    return '$percent% לעומת $days הימים הקודמים';
   }
 
   @override

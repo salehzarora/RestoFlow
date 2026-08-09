@@ -15,11 +15,17 @@ import 'package:restoflow_dashboard/src/data/order_history_models.dart'
 void main() {
   group('F0.1 AnalyticsRange — wire compatibility', () {
     test('wire tokens are exactly the server p_range contract', () {
+      // F1 appended last60/last90. These are the exact six preset tokens
+      // `20260812090000_dashboard_owner_analytics_range_top_items.sql` accepts
+      // for p_range; anything else raises 22023 on the server, so this list is
+      // a contract and not a convenience.
       expect(AnalyticsRange.values.map((r) => r.wire).toList(), [
         'today',
         'yesterday',
         'last7',
         'last30',
+        'last60',
+        'last90',
       ]);
     });
 
@@ -57,12 +63,36 @@ void main() {
       for (final r in AnalyticsRange.values) {
         expect(AnalyticsRange.fromWire(r.wire), r);
       }
-      // Matching the pre-existing forgiving behaviour of BOTH legacy enums: a
-      // malformed echo degrades to today rather than crashing a dashboard.
+      // F1 — `last60` and `last90` are REAL tokens now, so they parse exactly.
+      // This assertion previously read `fromWire('last90') == today`, which was
+      // correct then and is a wrong-window bug now; it was updated rather than
+      // preserved for green CI.
+      expect(AnalyticsRange.fromWire('last60'), AnalyticsRange.last60);
+      expect(AnalyticsRange.fromWire('last90'), AnalyticsRange.last90);
+
+      // The lenient fallback is RETAINED for compatibility and tested as its
+      // own behaviour: a malformed echo degrades to today rather than crashing
+      // a dashboard. Tokens the domain does not know still land here.
       expect(AnalyticsRange.fromWire(null), AnalyticsRange.today);
       expect(AnalyticsRange.fromWire(''), AnalyticsRange.today);
-      expect(AnalyticsRange.fromWire('last90'), AnalyticsRange.today);
       expect(AnalyticsRange.fromWire('TODAY'), AnalyticsRange.today);
+      expect(AnalyticsRange.fromWire('quarter'), AnalyticsRange.today);
+      // `custom` is a legitimate server answer and is NOT a preset. Through the
+      // lenient door it becomes today — which is exactly why new code must use
+      // tryFromWire, and why the series model keeps its raw wire string.
+      expect(AnalyticsRange.fromWire('custom'), AnalyticsRange.today);
+    });
+
+    test('tryFromWire is the EXPLICIT door: null for anything that is not a '
+        'preset, so a custom echo cannot masquerade as today', () {
+      for (final r in AnalyticsRange.values) {
+        expect(AnalyticsRange.tryFromWire(r.wire), r);
+      }
+      expect(AnalyticsRange.tryFromWire('custom'), isNull);
+      expect(AnalyticsRange.tryFromWire('quarter'), isNull);
+      expect(AnalyticsRange.tryFromWire('TODAY'), isNull);
+      expect(AnalyticsRange.tryFromWire(''), isNull);
+      expect(AnalyticsRange.tryFromWire(null), isNull);
     });
 
     test('isSingleDay matches the legacy ReportRange definition exactly', () {

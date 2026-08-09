@@ -21,7 +21,9 @@ enum ReportRange {
   today('today'),
   yesterday('yesterday'),
   last7('last7'),
-  last30('last30');
+  last30('last30'),
+  last60('last60'),
+  last90('last90');
 
   const ReportRange(this.wire);
 

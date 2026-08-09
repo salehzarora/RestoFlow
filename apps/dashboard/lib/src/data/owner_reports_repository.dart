@@ -12,6 +12,7 @@ import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart';
 import 'owner_report_source.dart';
 import 'report_calculator.dart';
+import '../analytics/analytics_window.dart' show CustomAnalyticsWindow;
 
 /// Loads the owner [DashboardReport] for a [range] (RF-REPORT-004; defaults to
 /// today). Implementations may fail (network, auth, RLS) — the UI renders that
@@ -29,6 +30,7 @@ abstract class OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   });
 }
 
@@ -51,6 +53,7 @@ class DemoOwnerReportsRepository implements OwnerReportsRepository {
     // The demo dataset has no branch dimension, so scope is accepted and
     // ignored rather than pretended to be applied.
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     final message = failureMessage;
     if (message != null) {

@@ -28,6 +28,29 @@ library;
 import '../data/demo_report.dart' show ReportRange;
 import '../data/order_history_models.dart' show OrderHistoryRange;
 
+/// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — the presets the CURRENT Overview
+/// segmented control offers, which is deliberately NARROWER than the domain.
+///
+/// The domain, the query keys, the repositories and the wire all support
+/// `last60` and `last90` as of F1. This list does not, and that is a scope
+/// decision rather than an oversight: the existing control is one horizontal
+/// mutually-exclusive group sized for four options, and six overflow it at the
+/// widths the layout tests already pin (a 35px RenderFlex overflow at 390/700).
+/// Exposing them would mean redesigning the selector, which is F2's slice.
+///
+/// F2 REPLACES THIS with the responsive seven-choice selector (the four below
+/// plus Last 60 days, Last 90 days and Custom) and deletes this constant.
+///
+/// Written out case by case ON PURPOSE. `ReportRange.values.take(4)` would be a
+/// silent trap: it depends on declaration order, so adding a case in the wrong
+/// position would quietly change which chips appear.
+const List<ReportRange> kOverviewRangePresetsBeforeCustomUx = <ReportRange>[
+  ReportRange.today,
+  ReportRange.yesterday,
+  ReportRange.last7,
+  ReportRange.last30,
+];
+
 /// The canonical analytics range.
 ///
 /// Values and wire tokens match the server's `p_range` contract exactly.
@@ -35,7 +58,9 @@ enum AnalyticsRange {
   today('today'),
   yesterday('yesterday'),
   last7('last7'),
-  last30('last30');
+  last30('last30'),
+  last60('last60'),
+  last90('last90');
 
   const AnalyticsRange(this.wire);
 
@@ -55,17 +80,34 @@ enum AnalyticsRange {
     today || yesterday => 1,
     last7 => 7,
     last30 => 30,
+    last60 => 60,
+    last90 => 90,
   };
+
+  /// Parses a wire token, or returns null when the token is not a preset.
+  ///
+  /// This is the EXPLICIT path, and the one new code should use. `custom` is a
+  /// legitimate answer from the server — [OwnerSalesSeries.rangeWire] documents
+  /// exactly that — and it is not a preset, so it lands here as null rather than
+  /// being quietly reported as [today].
+  static AnalyticsRange? tryFromWire(String? wire) {
+    for (final r in AnalyticsRange.values) {
+      if (r.wire == wire) return r;
+    }
+    return null;
+  }
 
   /// Parses a wire token; unknown/malformed input falls back to [today] so a
   /// bad echo from the server can never throw in the UI. Both legacy enums
   /// already behaved this way.
-  static AnalyticsRange fromWire(String? wire) {
-    for (final r in AnalyticsRange.values) {
-      if (r.wire == wire) return r;
-    }
-    return today;
-  }
+  ///
+  /// KEPT LENIENT DELIBERATELY, and only for compatibility: existing callers
+  /// treat this as total. The coercion is now narrower than it was, because
+  /// `last60` and `last90` are real tokens rather than unknown ones — the tokens
+  /// this slice adds are parsed exactly, not coerced. Prefer [tryFromWire] when
+  /// you can act on "not a preset"; a `custom` echo still arrives here as
+  /// [today], which is why the series model keeps its raw string instead.
+  static AnalyticsRange fromWire(String? wire) => tryFromWire(wire) ?? today;
 
   /// The kind of comparison this range is shown against.
   ///
@@ -76,7 +118,10 @@ enum AnalyticsRange {
   AnalyticsComparisonKind get comparisonKind => switch (this) {
     today => AnalyticsComparisonKind.partialVsCompletePriorDay,
     yesterday => AnalyticsComparisonKind.equalLengthPriorWindow,
-    last7 || last30 => AnalyticsComparisonKind.equalLengthPriorWindow,
+    last7 ||
+    last30 ||
+    last60 ||
+    last90 => AnalyticsComparisonKind.equalLengthPriorWindow,
   };
 
   // --- Legacy interop. Total and lossless in both directions. ---------------
@@ -87,6 +132,8 @@ enum AnalyticsRange {
     yesterday => ReportRange.yesterday,
     last7 => ReportRange.last7,
     last30 => ReportRange.last30,
+    last60 => ReportRange.last60,
+    last90 => ReportRange.last90,
   };
 
   /// The equivalent legacy order-history enum.
@@ -95,6 +142,8 @@ enum AnalyticsRange {
     yesterday => OrderHistoryRange.yesterday,
     last7 => OrderHistoryRange.last7,
     last30 => OrderHistoryRange.last30,
+    last60 => OrderHistoryRange.last60,
+    last90 => OrderHistoryRange.last90,
   };
 
   /// Adopts a legacy reports range.
@@ -103,6 +152,8 @@ enum AnalyticsRange {
     ReportRange.yesterday => yesterday,
     ReportRange.last7 => last7,
     ReportRange.last30 => last30,
+    ReportRange.last60 => last60,
+    ReportRange.last90 => last90,
   };
 
   /// Adopts a legacy order-history range.
@@ -112,6 +163,8 @@ enum AnalyticsRange {
         OrderHistoryRange.yesterday => yesterday,
         OrderHistoryRange.last7 => last7,
         OrderHistoryRange.last30 => last30,
+        OrderHistoryRange.last60 => last60,
+        OrderHistoryRange.last90 => last90,
       };
 }
 

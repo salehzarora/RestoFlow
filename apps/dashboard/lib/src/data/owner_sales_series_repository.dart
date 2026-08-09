@@ -12,6 +12,7 @@ import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart' show kDemoCurrencyCode;
 import 'owner_sales_series.dart';
 import 'report_calculator.dart' show demoDaySales;
+import '../analytics/analytics_window.dart';
 
 /// Loads the per-day sales series for a [range].
 ///
@@ -26,6 +27,7 @@ abstract class OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   });
 }
 
@@ -55,14 +57,27 @@ class DemoOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
     required AnalyticsRange range,
     // The demo generator has no branch dimension; accepted and ignored.
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     final message = failureMessage;
     if (message != null) throw OwnerSalesSeriesException(message);
 
     final now = (clock ?? DateTime.now)();
     final buckets = <OwnerSalesSeriesBucket>[];
+    // F1 — a CUSTOM window is an absolute date range, so it is walked as
+    // offsets-from-today rather than as `range.days` back from today. Both
+    // branches produce ONE bucket per day (O(days), never O(days²)), and a
+    // custom window can never silently degrade to `today`: `range` is not read
+    // at all when a window is committed, exactly as on the server.
+    final today = CustomAnalyticsWindow.normalizeDay(now);
+    final firstOffset = customWindow == null
+        ? range.days - 1
+        : today.difference(customWindow.startDay).inDays;
+    final lastOffset = customWindow == null
+        ? 0
+        : today.difference(customWindow.endDay).inDays;
     // Ascending by day, matching the server's contract: oldest first, today last.
-    for (var offset = range.days - 1; offset >= 0; offset--) {
+    for (var offset = firstOffset; offset >= lastOffset; offset--) {
       // Date-only arithmetic through the DateTime CONSTRUCTOR, which normalises
       // an out-of-range day (e.g. "the 0th of March") into the previous month.
       // `subtract(Duration(days: n))` would be wrong here: it removes 24-hour
@@ -97,7 +112,10 @@ class DemoOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
     }
     return OwnerSalesSeries(
       currencyCode: kDemoCurrencyCode,
-      rangeWire: range.wire,
+      // Echo what was actually asked for. A custom window reports `custom`,
+      // which is precisely why this model keeps the raw wire string instead of
+      // narrowing it to an enum.
+      rangeWire: (customWindow ?? AnalyticsWindow.preset(range)).wire,
       buckets: List.unmodifiable(buckets),
     );
   }

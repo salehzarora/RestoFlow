@@ -16,6 +16,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
     show MenuManagementScreen;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// RF-132 — visual-fidelity corrections against the approved Overview
 /// reference: the cohesive segmented range control (stable keys + behavior
@@ -50,6 +51,7 @@ class _LimitedRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',

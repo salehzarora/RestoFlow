@@ -7,6 +7,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
+import 'analytics/analytics_range.dart'
+    show kOverviewRangePresetsBeforeCustomUx;
 import 'analytics/comparison_delta.dart';
 import 'analytics/dashboard_analytics_scope.dart';
 import 'analytics/dashboard_destination.dart';
@@ -373,7 +375,7 @@ class _RangeFilterBar extends ConsumerWidget {
             selected: selected,
             onSelected: (r) => ref.read(reportRangeProvider.notifier).state = r,
             segments: [
-              for (final r in ReportRange.values)
+              for (final r in kOverviewRangePresetsBeforeCustomUx)
                 RestoflowSegment(
                   value: r,
                   label: _rangeLabel(l10n, r),
@@ -450,6 +452,8 @@ class _ReportContent extends StatelessWidget {
       ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
       ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
       ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
+      ReportRange.last60 => l10n.dashboardDeltaVsPrev60(pct),
+      ReportRange.last90 => l10n.dashboardDeltaVsPrev90(pct),
     };
     final comparison = report.comparison;
     // CLIENT-B: the KPI deltas now go through the SHARED [ComparisonDelta]
@@ -961,6 +965,8 @@ class _ReportContent extends StatelessWidget {
               ReportRange.yesterday => l10n.dashboardComparedVsDayBefore,
               ReportRange.last7 => l10n.dashboardComparedVsPrev7,
               ReportRange.last30 => l10n.dashboardComparedVsPrev30,
+              ReportRange.last60 => l10n.dashboardComparedVsPrev60,
+              ReportRange.last90 => l10n.dashboardComparedVsPrev90,
             },
             rows: [
               if (comparison.completedOrderCount != null)
@@ -1448,6 +1454,8 @@ String _rangeLabel(AppLocalizations l10n, ReportRange r) => switch (r) {
   ReportRange.yesterday => l10n.dashboardRangeYesterday,
   ReportRange.last7 => l10n.dashboardRangeLast7,
   ReportRange.last30 => l10n.dashboardRangeLast30,
+  ReportRange.last60 => l10n.dashboardRangeLast60,
+  ReportRange.last90 => l10n.dashboardRangeLast90,
 };
 
 /// The chrome subtitle: for today, the business-date "Report day: …" context

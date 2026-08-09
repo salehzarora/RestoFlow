@@ -9,6 +9,7 @@ import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// A live-LIMITED report like the sales_summary fallback produces (LIVE-UX-001):
 /// KPIs + a safe "vs yesterday" comparison, but NO hourly / branch / top-item /
@@ -19,6 +20,7 @@ class _LimitedRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -73,6 +75,7 @@ class _HourlyRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -132,6 +135,7 @@ class _ShiftRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-06',
@@ -195,6 +199,7 @@ class _UnavailableRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => DashboardReport.rangeUnavailable(range: range, currencyCode: '');
 }
 

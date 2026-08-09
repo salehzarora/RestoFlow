@@ -3058,6 +3058,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardComparedVsPrev30 => 'Compared with the previous 30 days';
 
   @override
+  String get dashboardComparedVsPrev60 => 'Compared with the previous 60 days';
+
+  @override
+  String get dashboardComparedVsPrev90 => 'Compared with the previous 90 days';
+
+  @override
+  String dashboardComparedVsPrevDays(int days) {
+    return 'Compared with the previous $days days';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent% vs all of yesterday';
   }
@@ -3073,6 +3084,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardRangeLast30 => 'Last 30 days';
+
+  @override
+  String get dashboardRangeLast60 => 'Last 60 days';
+
+  @override
+  String get dashboardRangeLast90 => 'Last 90 days';
+
+  @override
+  String get dashboardRangeCustom => 'Custom';
 
   @override
   String get dashboardRangeUnavailable =>
@@ -3091,6 +3111,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String dashboardDeltaVsPrev30(int percent) {
     return '$percent% vs previous 30 days';
+  }
+
+  @override
+  String dashboardDeltaVsPrev60(int percent) {
+    return '$percent% vs previous 60 days';
+  }
+
+  @override
+  String dashboardDeltaVsPrev90(int percent) {
+    return '$percent% vs previous 90 days';
+  }
+
+  @override
+  String dashboardDeltaVsPrevDays(int percent, int days) {
+    return '$percent% vs previous $days days';
   }
 
   @override

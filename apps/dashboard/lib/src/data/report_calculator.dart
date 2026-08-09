@@ -300,6 +300,8 @@ ShiftCash _demoRangeShiftCash(ReportRange range) {
     ReportRange.yesterday => 1,
     ReportRange.last7 => 7,
     ReportRange.last30 => 30,
+    ReportRange.last60 => 60,
+    ReportRange.last90 => 90,
     ReportRange.today => 1,
   };
   const floatMinor = 50000; // ₪500 opening float
@@ -359,6 +361,8 @@ DashboardReport demoRangeReport(ReportRange range) {
     ReportRange.yesterday => (1, 1),
     ReportRange.last7 => (0, 6),
     ReportRange.last30 => (0, 29),
+    ReportRange.last60 => (0, 59),
+    ReportRange.last90 => (0, 89),
     ReportRange.today => (0, 0),
   };
   final span = curEnd - curStart + 1;

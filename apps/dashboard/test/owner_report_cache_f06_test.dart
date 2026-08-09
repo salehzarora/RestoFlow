@@ -11,6 +11,7 @@ import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:flutter/material.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-F0.6 — scoped report retention.
 ///
@@ -38,6 +39,7 @@ class _CountingRepository implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     if (failTimes > 0) {

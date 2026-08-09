@@ -5716,6 +5716,24 @@ abstract class AppLocalizations {
   /// **'Compared with the previous 30 days'**
   String get dashboardComparedVsPrev30;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for the LAST 60 DAYS range (compared with the immediately preceding equal-length 60-day window).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 60 days'**
+  String get dashboardComparedVsPrev60;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for the LAST 90 DAYS range (compared with the immediately preceding equal-length 90-day window).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 90 days'**
+  String get dashboardComparedVsPrev90;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for a CUSTOM From/To window. The server compares it against the immediately preceding window of the SAME length, so the length is stated rather than a preset name. days is the inclusive day count.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous {days} days'**
+  String dashboardComparedVsPrevDays(int days);
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:
@@ -5746,6 +5764,24 @@ abstract class AppLocalizations {
   /// **'Last 30 days'**
   String get dashboardRangeLast30;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range chip: the rolling last 60 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 60 days'**
+  String get dashboardRangeLast60;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range chip: the rolling last 90 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 90 days'**
+  String get dashboardRangeLast90;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range label for a CUSTOM From/To window chosen by the owner.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get dashboardRangeCustom;
+
   /// RF-REPORT-004 honest state shown when the owner_report_range RPC isn't deployed yet and the chosen range isn't today.
   ///
   /// In en, this message translates to:
@@ -5769,6 +5805,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{percent}% vs previous 30 days'**
   String dashboardDeltaVsPrev30(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for the Last 60 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 60 days'**
+  String dashboardDeltaVsPrev60(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for the Last 90 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 90 days'**
+  String dashboardDeltaVsPrev90(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for a CUSTOM From/To window, compared against the immediately preceding window of the same length. percent is the absolute integer percentage change; days is the inclusive day count.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous {days} days'**
+  String dashboardDeltaVsPrevDays(int percent, int days);
 
   /// RF-REPORT-004 Shift & cash pill: count of shifts closed in the selected (non-today) range.
   ///

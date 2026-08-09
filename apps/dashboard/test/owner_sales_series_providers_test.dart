@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_sales_series.dart';
 import 'package:restoflow_dashboard/src/data/owner_sales_series_repository.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-A) — sales-series request identity
 /// and REQUEST COUNT.
@@ -31,6 +32,7 @@ class _CountingSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     if (failTimes > 0) {
