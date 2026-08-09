@@ -174,9 +174,11 @@ select ok((select yday->'comparison' ? 'completed_count' from t_rr), 'empty prio
 select is((select (yday->'comparison'->>'completed_count')::bigint from t_rr), 0::bigint, 'empty prior window completed_count = 0');
 select is((select (yday->'comparison'->>'discount_minor')::bigint  from t_rr), 0::bigint, 'empty prior window discount_minor = 0');
 
--- (21) recreating the function did not drop its input validation
+-- (21) recreating the function did not drop its input validation.
+-- DASHBOARD-VISUAL-RANGE-REFRESH-S0 made 'last90' a REAL token, so the probe
+-- moved to one that is still unknown. The rule under test is unchanged.
 select throws_ok(
-  $$select app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'last90')$$,
+  $$select app.owner_report_range('00000000-0000-0000-0000-0000000a0000', null, null, 'quarter')$$,
   '22023', null, 'owner_report_range still rejects an unknown range');
 
 -- (22) the public wrapper carries the new keys through unchanged
@@ -186,10 +188,12 @@ select is((select (public.owner_report_range(
              '00000000-0000-0000-0000-0000000a1a00', 'today')->'comparison'->>'discount_minor')::bigint),
           150::bigint, 'public wrapper returns the new comparison keys');
 
--- (23-24) CREATE OR REPLACE preserved the ACL (same signature => same grants)
-select ok(not has_function_privilege('anon', 'public.owner_report_range(uuid,uuid,uuid,text)', 'execute'),
+-- (23-24) the ACL survives. S0 later DROPPED and recreated this function to
+-- append p_start/p_end, which takes the grants with it — so these now assert
+-- that the recreate restated them, against the 6-argument signature.
+select ok(not has_function_privilege('anon', 'public.owner_report_range(uuid,uuid,uuid,text,date,date)', 'execute'),
           'anon still cannot execute public.owner_report_range');
-select ok(has_function_privilege('authenticated', 'public.owner_report_range(uuid,uuid,uuid,text)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.owner_report_range(uuid,uuid,uuid,text,date,date)', 'execute'),
           'authenticated still can execute public.owner_report_range');
 
 -- ============================================================================
@@ -246,9 +250,10 @@ select throws_ok(
   $$select app.owner_order_history('00000000-0000-0000-0000-0000000a0000', null, null, 'today', null, null, null, 'CARD', 25, null)$$,
   '22023', null, 'payment tokens are case-sensitive, like every other filter here');
 
--- (42) recreating the function did not drop its other validation
+-- (42) recreating the function did not drop its other validation.
+-- 'last90' is a real token since S0; the probe moved, the rule did not.
 select throws_ok(
-  $$select app.owner_order_history('00000000-0000-0000-0000-0000000a0000', null, null, 'last90')$$,
+  $$select app.owner_order_history('00000000-0000-0000-0000-0000000a0000', null, null, 'quarter')$$,
   '22023', null, 'owner_order_history still rejects an unknown range');
 
 -- (43-44) the widened filter did not widen the tenant boundary
@@ -260,10 +265,10 @@ set local app.current_app_user_id = '00000000-0000-0000-0000-00000000f005';
 select is((select (app.owner_order_history('00000000-0000-0000-0000-0000000b0000', null, null, 'today', null, null, null, 'card', 50, null))->'orders'->0->>'order_id'),
           '00000000-0000-0000-0000-00000002b001', 'Org B owner sees only Org B''s card order');
 
--- (45-46) ACL preserved across CREATE OR REPLACE
-select ok(not has_function_privilege('anon', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text)', 'execute'),
+-- (45-46) ACL preserved across the S0 DROP + recreate (p_start/p_end appended)
+select ok(not has_function_privilege('anon', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text,date,date)', 'execute'),
           'anon still cannot execute public.owner_order_history');
-select ok(has_function_privilege('authenticated', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.owner_order_history(uuid,uuid,uuid,text,text,text,text,text,int,text,date,date)', 'execute'),
           'authenticated still can execute public.owner_order_history');
 
 select * from finish();
