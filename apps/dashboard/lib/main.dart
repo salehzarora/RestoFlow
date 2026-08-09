@@ -233,7 +233,7 @@ class DashboardApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      theme: restoflowBaseTheme(),
+      theme: restoflowLightBrandTheme(),
       home: _home(),
     );
   }

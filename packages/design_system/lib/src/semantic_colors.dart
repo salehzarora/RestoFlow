@@ -105,10 +105,12 @@ class RestoflowSemanticColors extends ThemeExtension<RestoflowSemanticColors> {
     onAccent: Color(0xFFFFFFFF),
     accentContainer: Color(0xFFFFEDD5),
     onAccentContainer: Color(0xFF7C2D12),
-    sidebarSurface: Color(0xFF10201A),
-    sidebarOnSurface: Color(0xFFE7F2EC),
-    sidebarMuted: Color(0xFF8BA79A),
-    sidebarActiveBackground: Color(0xFF1B7A52),
+    // RESTOFLOW-GLOBAL-VISUAL-V0: the rail is brand CHROME, not a status, so it
+    // moves with the identity. The status fields above deliberately do not.
+    sidebarSurface: Color(0xFF0F2038),
+    sidebarOnSurface: Color(0xFFE8EDF5),
+    sidebarMuted: Color(0xFF9AA7BC),
+    sidebarActiveBackground: Color(0xFF16335E),
     sidebarActiveForeground: Color(0xFFFFFFFF),
   );
 
@@ -134,10 +136,10 @@ class RestoflowSemanticColors extends ThemeExtension<RestoflowSemanticColors> {
     onAccent: Color(0xFF431407),
     accentContainer: Color(0xFF9A3412),
     onAccentContainer: Color(0xFFFFEDD5),
-    sidebarSurface: Color(0xFF0B1712),
-    sidebarOnSurface: Color(0xFFE7F2EC),
-    sidebarMuted: Color(0xFF7E998C),
-    sidebarActiveBackground: Color(0xFF1B7A52),
+    sidebarSurface: Color(0xFF0B1526),
+    sidebarOnSurface: Color(0xFFE8EDF5),
+    sidebarMuted: Color(0xFF8494AC),
+    sidebarActiveBackground: Color(0xFF16335E),
     sidebarActiveForeground: Color(0xFFFFFFFF),
   );
 
