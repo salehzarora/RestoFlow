@@ -164,8 +164,9 @@ class _SegmentButton<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final radius = BorderRadius.circular(RestoflowRadii.sm + 1);
-    final foreground = selected ? Colors.white : kRestoflowInk2;
+    final foreground = selected ? scheme.onPrimary : kRestoflowInk2;
     final icon = segment.icon;
 
     final content = Container(
@@ -175,13 +176,17 @@ class _SegmentButton<T> extends StatelessWidget {
         vertical: RestoflowSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: selected ? kRestoflowSeedColor : Colors.transparent,
+        // V1: the selected segment is the brand primary from the SCHEME, so a
+        // theme override moves it. The lift used a hardcoded brand-green alpha,
+        // which would have stayed green under a navy theme; it is now derived
+        // from whatever primary is actually painted.
+        color: selected ? scheme.primary : Colors.transparent,
         borderRadius: radius,
         boxShadow: selected
-            ? const [
+            ? [
                 BoxShadow(
-                  color: Color(0x3D1B7A52),
-                  offset: Offset(0, 2),
+                  color: scheme.primary.withValues(alpha: 0.24),
+                  offset: const Offset(0, 2),
                   blurRadius: 8,
                 ),
               ]

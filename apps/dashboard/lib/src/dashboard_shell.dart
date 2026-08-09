@@ -1079,13 +1079,16 @@ class _SideNavTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected ? kRestoflowSeedColor : Colors.transparent,
         borderRadius: radius,
-        // RF-132: the active pill's soft shadow is brand-green tinted (the
-        // reference's restrained glow) rather than the neutral card shadow.
+        // RF-132: the active pill's soft shadow is BRAND tinted (the reference's
+        // restrained glow) rather than the neutral card shadow.
+        //
+        // V1: derived from the painted brand colour instead of a hardcoded
+        // green alpha, so the glow follows the identity instead of outliving it.
         boxShadow: selected
-            ? const [
+            ? [
                 BoxShadow(
-                  color: Color(0x521B7A52),
-                  offset: Offset(0, 4),
+                  color: kRestoflowSeedColor.withValues(alpha: 0.32),
+                  offset: const Offset(0, 4),
                   blurRadius: 12,
                 ),
               ]
