@@ -7,6 +7,15 @@
 /// the UI never branches on the source.
 library;
 
+/// Which Orders sub-view is showing: the live operations centre or the
+/// historical list.
+///
+/// F0.3 moved this here from orders_screen.dart. It was a UI-file enum, which
+/// meant the state layer could not name it without importing a screen (and
+/// orders_screen.dart already imports the providers, so that would have been a
+/// cycle). It is a plain data choice, so the models layer is where it belongs.
+enum OrdersTab { active, history }
+
 /// The date window for the history list — mirrors the backend `p_range` and the
 /// reports' ranges (today / yesterday / last7 / last30).
 enum OrderHistoryRange {
@@ -41,10 +50,26 @@ enum PaymentFilter {
   all(null),
   paid('paid'),
   unpaid('unpaid'),
-  cash('cash');
+  cash('cash'),
+  // CLIENT-C: the tender methods SERVER-B widened `owner_order_history` to
+  // accept. The tokens are the wire values the RPC validates, so a typo here
+  // would be a 22023 rather than a silently empty list.
+  card('card'),
+  bit('bit'),
+  external('external');
 
   const PaymentFilter(this.wire);
   final String? wire;
+
+  /// True for the filters that name a recorded TENDER METHOD rather than a
+  /// settlement STATE.
+  ///
+  /// The distinction matters because the two are answered by different server
+  /// logic — `paid`/`unpaid` evaluate settlement now, while a method filter
+  /// matches the order's single COMPLETED payment — and because only the method
+  /// filters depend on the SERVER-B widening being deployed.
+  bool get isMethod =>
+      this == cash || this == card || this == bit || this == external;
 }
 
 /// Status filter — a curated subset of the order-status set plus `all` (null).

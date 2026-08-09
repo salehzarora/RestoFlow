@@ -110,19 +110,26 @@ class _FilterBar extends ConsumerWidget {
       AuditRange.last7: l10n.ordersRangeLast7,
       AuditRange.last30: l10n.ordersRangeLast30,
     };
-    final branches =
-        ref.watch(auditBranchOptionsProvider).asData?.value ?? const [];
+    // CODEX FINDINGS 1 & 6 - items and values come from the EFFECTIVE query.
+    //
+    // Both lists used to be flattened from the raw async source, so a technical
+    // failure emptied them while the effective query - and the wire - still
+    // carried a branch: the field held a value with no item and Flutter
+    // asserted. These providers guarantee the value is offered exactly once.
+    final branches = ref.watch(activityBranchItemsProvider);
     final actors =
-        ref.watch(auditActorOptionsProvider).asData?.value ?? const [];
-    // Guard the dropdown value against a stale selection no longer in options.
-    final branchValue =
-        branches.any((b) => b.branchId == query.branch?.branchId)
-        ? query.branch?.branchId
-        : null;
-    final actorValue =
-        actors.any((a) => a.employeeProfileId == query.actor?.employeeProfileId)
-        ? query.actor?.employeeProfileId
-        : null;
+        ref.watch(auditActorChoicesProvider) ??
+        ref.watch(auditActorOptionsProvider).asData?.value ??
+        const <AuditActorOption>[];
+    // CODEX R1C-02 — the value comes from the EFFECTIVE query, which is what
+    // the repository transports. Deriving it from the current option list
+    // instead let the control say "All" while the RPC was still filtered to a
+    // removed branch; the two now cannot disagree, because they are one value.
+    final branchValue = ref.watch(effectiveAuditQueryProvider).branch?.branchId;
+    final actorValue = ref
+        .watch(effectiveAuditQueryProvider)
+        .actor
+        ?.employeeProfileId;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

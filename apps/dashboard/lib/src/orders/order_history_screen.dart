@@ -13,8 +13,10 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
+import '../state/dashboard_providers.dart' show dashboardAnalyticsScopeProvider;
 import '../state/order_history_providers.dart';
 import 'order_detail_sheet.dart';
 import 'settlement_badge.dart';
@@ -186,7 +188,51 @@ class _FilterBar extends StatelessWidget {
             _PaymentDropdown(query: query, onApply: onApply, l10n: l10n),
           ],
         ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        const _ScopeIndicator(),
       ],
+    );
+  }
+}
+
+/// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-E2) — what scope this list covers.
+///
+/// The history request now follows the branch the owner selected on Overview,
+/// which is the fix; but a list that silently filters to one branch is the very
+/// defect CLIENT-E1 removed from the Overview, so the scope has to be legible
+/// here too. This is deliberately a READ-ONLY indicator rather than a second
+/// selector: one dashboard-wide branch choice, made in one place, shown
+/// wherever it applies. A second control would be a second source of truth,
+/// and the two would eventually disagree.
+///
+/// Renders nothing when no membership is resolved (demo mode), exactly as
+/// before.
+class _ScopeIndicator extends ConsumerWidget {
+  const _ScopeIndicator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    if (scope == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    // A single-branch scope names the branch; the broad kinds reuse the
+    // established "All permitted branches" wording, which already means "every
+    // branch inside what you are allowed to see".
+    final value = scope.isAllPermitted
+        ? l10n.activityLogBranchAll
+        : (scope.branchLabel ?? l10n.activityLogBranchAll);
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Text(
+        key: const Key('orders-scope-indicator'),
+        '${l10n.activityLogFilterBranch}: $value',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
@@ -260,12 +306,9 @@ class _PaymentDropdown extends StatelessWidget {
       keyValue: 'orders-payment-filter',
       label: l10n.ordersFilterPayment,
       value: query.payment,
-      items: {
-        PaymentFilter.all: l10n.ordersPaymentAll,
-        PaymentFilter.paid: l10n.dashboardPaid,
-        PaymentFilter.unpaid: l10n.dashboardUnpaid,
-        PaymentFilter.cash: l10n.posPaymentMethodCash,
-      },
+      // CLIENT-C: the shared option set, which always includes the CURRENT
+      // value so a filter applied by drill-down can be seen and undone here.
+      items: paymentFilterOptions(l10n, query.payment),
       onChanged: (v) => onApply((q) => q.copyWith(payment: v)),
     );
   }

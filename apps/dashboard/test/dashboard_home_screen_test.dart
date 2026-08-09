@@ -1,3 +1,4 @@
+import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ class _LimitedRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -70,6 +72,7 @@ class _HourlyRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -128,6 +131,7 @@ class _ShiftRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-06',
@@ -190,6 +194,7 @@ class _UnavailableRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => DashboardReport.rangeUnavailable(range: range, currencyCode: '');
 }
 
@@ -374,8 +379,15 @@ void main() {
     expect(find.text('Recent orders'), findsOneWidget);
     expect(find.text('O-1009'), findsOneWidget); // newest (cancelled)
     expect(find.text('O-1005'), findsOneWidget); // a paid order
-    expect(find.text('cancelled'), findsWidgets); // O-1009 status pill
-    expect(find.text('completed'), findsWidgets); // a completed order status
+    // F0.5: the recent-order pill no longer prints the raw wire token.
+    // It shows the SAME localized label the Orders surface uses, so the same
+    // order does not read as 'cancelled' here and 'Cancelled' one tab away.
+    expect(find.text('cancelled'), findsNothing);
+    final en = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(en.ordersStatusCancelled), findsWidgets);
+    // F0.5: same rule for the completed pill - localized, never the token.
+    expect(find.text('completed'), findsNothing);
+    expect(find.text(en.ordersStatusCompleted), findsWidgets);
     expect(find.textContaining('Table T5'), findsWidgets); // dine-in table
   });
 
@@ -417,7 +429,16 @@ void main() {
 
       // The safe prior-day comparison lights up honest, integer-% KPI deltas
       // (today 12000 vs yesterday 8000 = +50%), so live no longer looks bare.
-      expect(find.textContaining('50% vs yesterday'), findsWidgets);
+      //
+      // CLIENT-B: the wording is now "vs ALL of yesterday". The server compares
+      // a partial today against a COMPLETE yesterday, and the old phrasing let
+      // an owner read it as an elapsed-time match that no backend computes.
+      expect(find.textContaining('50% vs all of yesterday'), findsWidgets);
+      expect(
+        find.textContaining('50% vs yesterday'),
+        findsNothing,
+        reason: 'the ambiguous wording must be gone, not merely supplemented',
+      );
       // Still real data only — the KPI values are the live figures, not demo.
       expect(_kpi(tester, 'kpi-net-sales'), '₪120.00');
       // With NO hourly data the sales-by-hour chart stays hidden (fallback).

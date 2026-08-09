@@ -180,6 +180,25 @@ class ActiveOrdersQuery {
     final s = search.trim();
     return s.isEmpty ? null : s;
   }
+
+  /// CODEX R1C-02 — value equality, for the same reason as [AuditQuery]: the
+  /// board's controller is recreated whenever its query changes, and a DERIVED
+  /// query must not look new merely because it was recomputed.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ActiveOrdersQuery &&
+          other.queue == queue &&
+          other.sort == sort &&
+          other.branch == branch &&
+          other.stage == stage &&
+          other.orderType == orderType &&
+          other.payment == payment &&
+          other.search == search;
+
+  @override
+  int get hashCode =>
+      Object.hash(queue, sort, branch, stage, orderType, payment, search);
 }
 
 /// The scope's operational picture. Deliberately covers the SCOPE (org /

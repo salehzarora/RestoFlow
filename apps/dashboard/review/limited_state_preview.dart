@@ -15,6 +15,7 @@
 //
 // Build (review only, from apps/dashboard):
 //   flutter build web --release -t review/limited_state_preview.dart
+import '../lib/src/analytics/dashboard_analytics_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
@@ -32,6 +33,7 @@ class _ReviewLimitedRepo implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',

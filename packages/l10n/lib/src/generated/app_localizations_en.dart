@@ -2999,8 +2999,67 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByDay => 'Sales by day';
+
+  @override
+  String dashboardSalesByDaySemantics(String day, String amount) {
+    return 'Sales by day. Best day $day: $amount';
+  }
+
+  @override
+  String get dashboardSalesByOrderType => 'Sales by order type';
+
+  @override
+  String dashboardShareOfOrders(String percent) {
+    return '$percent% of orders';
+  }
+
+  @override
+  String get dashboardRecordedTendersNote =>
+      'Recorded tenders only — not processor settlement.';
+
+  @override
+  String dashboardRecordedPaymentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count recorded payments',
+      one: '1 recorded payment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardShareOfCollected(String percent) {
+    return '$percent% of collected';
+  }
+
+  @override
+  String dashboardAvgRecordedPayment(String amount) {
+    return 'Avg. payment $amount';
+  }
+
+  @override
+  String dashboardMethodTrendTitle(String method) {
+    return 'Daily recorded tender: $method';
+  }
+
+  @override
+  String get dashboardComparedVsYesterdayAll =>
+      'Compared with all of yesterday';
+
+  @override
+  String get dashboardComparedVsDayBefore => 'Compared with the day before';
+
+  @override
+  String get dashboardComparedVsPrev7 => 'Compared with the previous 7 days';
+
+  @override
+  String get dashboardComparedVsPrev30 => 'Compared with the previous 30 days';
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
-    return '$percent% vs yesterday';
+    return '$percent% vs all of yesterday';
   }
 
   @override

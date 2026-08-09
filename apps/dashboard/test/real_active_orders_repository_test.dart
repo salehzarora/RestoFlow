@@ -180,6 +180,7 @@ void main() {
       ).loadActive(
         const ActiveOrdersQuery(
           branch: AuditBranchOption(
+            organizationId: 'org-1',
             branchId: 'branch-9',
             restaurantId: 'rest-9',
             label: 'Harbor',

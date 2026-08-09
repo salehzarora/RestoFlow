@@ -399,6 +399,13 @@ OwnerReportDataset demoOwnerReportDataset() => const OwnerReportDataset(
     netSalesMinor: 56800,
     orderCount: 6,
     cashSalesMinor: 44100,
+    // CLIENT-B: the two SERVER-B comparison primitives, kept INTERNALLY
+    // CONSISTENT with the figures above rather than picked freely — discount is
+    // exactly gross - net (57200 - 56800), and 5 of the 6 prior orders reached
+    // `completed`. A demo whose own numbers do not reconcile teaches an owner to
+    // distrust the real ones.
+    completedOrderCount: 5,
+    discountTotalMinor: 400,
   ),
 );
 

@@ -31,9 +31,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/active_orders_models.dart';
+import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/active_orders_repository.dart';
 import '../data/order_history_models.dart';
 import '../data/real_active_orders_repository.dart';
+import 'analytics_branch_providers.dart'
+    show
+        analyticsBranchOptionsProvider,
+        analyticsBranchStillApplies,
+        operationalBranchItems;
 import 'dashboard_providers.dart';
 import 'order_history_providers.dart' show demoOrderStoreProvider;
 
@@ -45,22 +51,29 @@ const Duration kActiveOrdersRefreshInterval = Duration(seconds: 30);
 /// [DemoActiveOrdersRepository]; real mode returns [RealActiveOrdersRepository]
 /// reading `owner_active_orders` over the authenticated transport, scoped to the
 /// active membership (fails closed with no transport/scope).
-final activeOrdersRepositoryProvider = Provider<ActiveOrdersRepository>((ref) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    // The SHARED demo store, so a demo completion really drops the order off
-    // this board (ORDER-COMPLETION-001).
-    return DemoActiveOrdersRepository(
-      store: ref.watch(demoOrderStoreProvider),
-      clock: ref.watch(activeOrdersClockProvider),
+final activeOrdersRepositoryProvider = Provider<ActiveOrdersRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      // The SHARED demo store, so a demo completion really drops the order off
+      // this board (ORDER-COMPLETION-001).
+      return DemoActiveOrdersRepository(
+        store: ref.watch(demoOrderStoreProvider),
+        clock: ref.watch(activeOrdersClockProvider),
+      );
+    }
+    return RealActiveOrdersRepository(
+      config.supabase,
+      // R1A-01: identity, not the labelled membership.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
     );
-  }
-  return RealActiveOrdersRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
 
 /// The clock the board reads elapsed age against. Overridable so tests use a
 /// FIXED instant instead of real time (ages must never be wall-clock dependent).
@@ -72,6 +85,55 @@ final activeOrdersClockProvider = Provider<DateTime Function()>(
 /// search). Defaults to the IN-PROGRESS queue, NEWEST first.
 final activeOrdersQueryProvider = StateProvider<ActiveOrdersQuery>(
   (ref) => const ActiveOrdersQuery(),
+);
+
+/// CODEX R1C-02 — the query this surface actually USES, raw filters reconciled
+/// against what is authorized and what the last real branch answer said.
+///
+/// The control read its value from the CURRENT options while the repository
+/// transported `query.branch`, so the two could disagree: after a successful
+/// omission the dropdown fell back to "All" while every RPC stayed filtered to
+/// the removed branch. The list said one thing and the data was another, with
+/// nothing on screen to say which.
+///
+/// One value now feeds BOTH — the visible control and the transport — so they
+/// cannot drift. The RAW query is left alone (no write during build); this is a
+/// projection of it, and it is what the controller and the dropdown read.
+final effectiveActiveOrdersQueryProvider = Provider<ActiveOrdersQuery>(
+  (ref) {
+    final raw = ref.watch(activeOrdersQueryProvider);
+    final branch = raw.branch;
+    if (branch == null) return raw;
+    return analyticsBranchStillApplies(
+          branch,
+          coverage: ref.watch(dashboardCoveredScopeIdentityProvider),
+          answer: ref.watch(analyticsBranchOptionsProvider),
+          // FINDING 3: demo mode has no coverage to require.
+          coverageRequired: !ref.watch(runtimeConfigProvider).isDemoMode,
+        )
+        ? raw
+        : raw.copyWith(clearBranch: true);
+  },
+  dependencies: [
+    activeOrdersQueryProvider,
+    dashboardCoveredScopeIdentityProvider,
+    analyticsBranchOptionsProvider,
+  ],
+);
+
+/// CODEX FINDING 2 - the branch items the active board's control must offer.
+///
+/// Same source as the transport, so a technical option failure can no longer
+/// leave the board displaying "All" while every request carries branch B.
+final activeOrdersBranchItemsProvider = Provider<List<AuditBranchOption>>(
+  (ref) => operationalBranchItems(
+    answer: ref.watch(analyticsBranchOptionsProvider),
+    effective: ref.watch(effectiveActiveOrdersQueryProvider).branch,
+  ),
+  dependencies: [
+    analyticsBranchOptionsProvider,
+    effectiveActiveOrdersQueryProvider,
+  ],
 );
 
 /// The auto-refresh cadence, INJECTED so scheduling is testable.
@@ -280,7 +342,8 @@ final activeOrdersControllerProvider =
       (ref) {
         final controller = ActiveOrdersController(
           ref.watch(activeOrdersRepositoryProvider),
-          ref.watch(activeOrdersQueryProvider),
+          // R1C-02: the EFFECTIVE query, so a retired branch stops being sent.
+          ref.watch(effectiveActiveOrdersQueryProvider),
           ref.watch(activeOrdersClockProvider),
           ref.watch(activeOrdersPollIntervalProvider),
         );
@@ -289,7 +352,7 @@ final activeOrdersControllerProvider =
       },
       dependencies: [
         activeOrdersRepositoryProvider,
-        activeOrdersQueryProvider,
+        effectiveActiveOrdersQueryProvider,
         activeOrdersClockProvider,
         activeOrdersPollIntervalProvider,
       ],

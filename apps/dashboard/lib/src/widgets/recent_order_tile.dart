@@ -3,6 +3,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_report.dart';
+import '../orders/order_history_screen.dart' show statusLabel, statusTone;
 import '../format/money_format.dart';
 
 /// One recent-orders row: the order number + net total on the first line, then a
@@ -69,7 +70,14 @@ class RecentOrderTile extends StatelessWidget {
               ),
               // RF-141C: shared status pills (info = order status, success/
               // neutral = paid/unpaid).
-              RestoflowStatusPill(label: row.status, tone: RestoflowTone.info),
+              // F0.5: was `label: row.status`, printing the raw wire token
+              // (submitted / preparing / voided...) into an owner-facing pill.
+              // Reuses the app's established status mapper - a THIRD copy of
+              // that mapping is exactly what this slice exists to avoid.
+              RestoflowStatusPill(
+                label: statusLabel(l10n, row.status),
+                tone: statusTone(row.status),
+              ),
               RestoflowStatusPill(
                 label: row.isPaid ? l10n.dashboardPaid : l10n.dashboardUnpaid,
                 tone: row.isPaid

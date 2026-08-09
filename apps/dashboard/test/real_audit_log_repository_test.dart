@@ -173,6 +173,7 @@ void main() {
     await repo.loadEvents(
       const AuditQuery(
         branch: AuditBranchOption(
+          organizationId: 'org-1',
           branchId: 'branch-9',
           restaurantId: 'rest-9',
           label: 'Rest 9 · North',

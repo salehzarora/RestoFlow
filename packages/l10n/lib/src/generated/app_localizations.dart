@@ -5638,10 +5638,88 @@ abstract class AppLocalizations {
   /// **'Sales by hour. Peak at {hour}: {amount}'**
   String dashboardSalesByHourSemantics(String hour, String amount);
 
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview daily sales-trend chart card, shown for the multi-day ranges (last 7 / last 30 days). Distinct from the single-day sales-by-hour card.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by day'**
+  String get dashboardSalesByDay;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: accessible screen-reader summary of the Overview daily sales-trend chart. day is the peak day's branch-local calendar label (e.g. 2026-08-08) and amount is the formatted net sales for it; both are pre-built strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by day. Best day {day}: {amount}'**
+  String dashboardSalesByDaySemantics(String day, String amount);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: title of the Overview dine-in/takeaway breakdown card, shown for the multi-day ranges. Parallels the existing 'Sales by branch' card.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by order type'**
+  String get dashboardSalesByOrderType;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: one order type's share of the window's ORDER COUNT on the Overview order-type card. The denominator is named in the string so it cannot be misread as a share of sales — the net amount is shown separately on the same row. percent is a pre-built one-decimal string.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of orders'**
+  String dashboardShareOfOrders(String percent);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: caption under the Overview payment-mix card. RestoFlow stores the tenders staff recorded at the till; it has no acquirer integration, so these figures must never be read as processor approval, reconciliation or settlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded tenders only — not processor settlement.'**
+  String get dashboardRecordedTendersNote;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: transaction count for one payment method on the Overview payment-mix card. Counts completed payment records, not orders.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 recorded payment} other{{count} recorded payments}}'**
+  String dashboardRecordedPaymentsCount(int count);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: one payment method's share of the window's COLLECTED money on the Overview payment-mix card. The denominator is named in the string so the share cannot be misread as a share of billed sales. percent is a pre-built one-decimal string.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of collected'**
+  String dashboardShareOfCollected(String percent);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: mean recorded tender for one payment method on the Overview payment-mix card. This is the size of a PAYMENT, not of an order — it is not the average order value KPI. amount is pre-formatted integer-minor money.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. payment {amount}'**
+  String dashboardAvgRecordedPayment(String amount);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the compact per-method daily tender trend shown on the Overview for the multi-day ranges. method is the already-localized payment-method name.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily recorded tender: {method}'**
+  String dashboardMethodTrendTitle(String method);
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the TODAY range. It must say 'all of yesterday' because the server compares a partial today against a COMPLETE yesterday - there is no elapsed-time-matched comparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with all of yesterday'**
+  String get dashboardComparedVsYesterdayAll;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the YESTERDAY range (compared with the immediately preceding day).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the day before'**
+  String get dashboardComparedVsDayBefore;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 7 DAYS range (compared with the immediately preceding equal-length 7-day window, not a calendar week).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 7 days'**
+  String get dashboardComparedVsPrev7;
+
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A: heading of the Overview period-comparison strip for the LAST 30 DAYS range (compared with the immediately preceding equal-length 30-day window, not a calendar month).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 30 days'**
+  String get dashboardComparedVsPrev30;
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:
-  /// **'{percent}% vs yesterday'**
+  /// **'{percent}% vs all of yesterday'**
   String dashboardDeltaVsYesterday(int percent);
 
   /// RF-REPORT-004 reporting-range chip: today.

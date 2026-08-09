@@ -29,23 +29,70 @@ final demoOrderStoreProvider = Provider<DemoOrderStore>(
 /// reading `owner_order_history` / `owner_order_detail` over the authenticated
 /// transport, scoped to the active membership (fails closed with no
 /// transport/scope).
-final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>((ref) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    return DemoOrderHistoryRepository(store: ref.watch(demoOrderStoreProvider));
-  }
-  return RealOrderHistoryRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+/// CLIENT-E2: the repository also carries the owner's SELECTED analytics scope,
+/// so leaving Overview on one branch and opening Orders shows that branch's
+/// orders rather than whichever branch the tenant resolver pinned.
+///
+/// Watching the scope here is also what resets pagination: a scope change
+/// rebuilds this provider, which rebuilds [orderHistoryControllerProvider],
+/// which starts a fresh first page with a null cursor. A keyset cursor minted
+/// under one scope can therefore never be replayed under another, and the old
+/// scope's rows cannot append into the new one — the guarantee falls out of the
+/// provider graph instead of needing its own bookkeeping.
+///
+/// CODEX F-1B-1-R1 — it watches [analyticsTransportScopeProvider], the
+/// LABEL-FREE identity. That reset is exactly right for a change of scope and
+/// exactly wrong for a change of NAME: renaming a branch left every id
+/// identical, but the label is part of `DashboardAnalyticsScope`'s equality, so
+/// the value compared unequal, this provider rebuilt, the controller rebuilt,
+/// and the owner's loaded page vanished back to the top. A rename is display
+/// metadata; it must not look like a new query.
+final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      return DemoOrderHistoryRepository(
+        store: ref.watch(demoOrderStoreProvider),
+      );
+    }
+    return RealOrderHistoryRepository(
+      config.supabase,
+      // R1A-01: identity, not the labelled membership — a rename must not
+      // rebuild this repository and throw the loaded page away.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+      analyticsScope: ref.watch(analyticsTransportScopeProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+    analyticsTransportScopeProvider,
+  ],
+);
 
 /// The active list controls (range + filters + search). The screen's chips /
 /// dropdowns / search box write this; changing it rebuilds the controller,
 /// which reloads the first page for the new window.
 final orderHistoryQueryProvider = StateProvider<OrderHistoryQuery>(
   (ref) => const OrderHistoryQuery(),
+);
+
+/// DASHBOARD-OWNER-ANALYTICS-F0.3 — which Orders sub-view to show on entry.
+///
+/// The Orders area's Active/History choice lived ONLY as local widget state
+/// (`_OrdersScreenState._tab`), so nothing outside the screen could ask for
+/// History. An Overview "unpaid" card could switch to the Orders tab but always
+/// landed on Active — the wrong list for the number the owner tapped.
+///
+/// This provider is the smallest seam that fixes it. The screen still owns the
+/// tab while the owner is on it (tapping the segmented control is local state,
+/// exactly as before); this only supplies the value the screen OPENS with, so a
+/// typed drill-down can land on the right sub-view. Defaults to `active`,
+/// preserving the existing landing behaviour for every path that does not set
+/// it.
+final ordersInitialTabProvider = StateProvider<OrdersTab>(
+  (ref) => OrdersTab.active,
 );
 
 /// One order's detail (header + items + payments), loaded lazily when a row is

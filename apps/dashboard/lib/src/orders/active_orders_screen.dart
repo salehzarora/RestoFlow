@@ -18,12 +18,12 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/active_orders_models.dart';
 import '../data/audit_log_models.dart' show AuditBranchOption;
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../state/active_orders_providers.dart';
-import '../state/audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'order_detail_sheet.dart';
 import 'order_history_screen.dart'
     show orderTypeLabel, statusLabelFor, statusTone;
@@ -60,11 +60,14 @@ class _ActiveOrdersViewState extends ConsumerState<ActiveOrdersView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-    final query = ref.watch(activeOrdersQueryProvider);
+    // CODEX R1C-02 — the EFFECTIVE query drives the controls, because it is
+    // what the board's repository transports. Reading the raw query here let a
+    // removed branch stay on the wire while the control showed "All".
+    final query = ref.watch(effectiveActiveOrdersQueryProvider);
     final state = ref.watch(activeOrdersControllerProvider);
-    final branches = ref
-        .watch(auditBranchOptionsProvider)
-        .maybeWhen(data: (b) => b, orElse: () => const <AuditBranchOption>[]);
+    // CODEX FINDING 2 - the items come from the same source as the transport,
+    // so the board can no longer show "All" while filtering to a branch.
+    final branches = ref.watch(activeOrdersBranchItemsProvider);
     // ONE clock read per board build (the KDS rule) so every row's age is
     // measured against the same instant.
     final now = ref.watch(activeOrdersClockProvider)();
@@ -392,6 +395,10 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // R1C-02: [query] is the EFFECTIVE query, so its branch is exactly what the
+    // board is asking for. It is still checked against the offered items,
+    // because a Dropdown may not hold a value with no item — but the two now
+    // agree by construction rather than by coincidence.
     final branchIds = branches.map((b) => b.branchId).toSet();
     final selectedBranchId = branchIds.contains(query.branch?.branchId)
         ? query.branch?.branchId
@@ -481,12 +488,9 @@ class _FilterBar extends StatelessWidget {
               keyValue: 'active-orders-payment-filter',
               label: l10n.ordersFilterPayment,
               value: query.payment,
-              items: {
-                PaymentFilter.all: l10n.ordersPaymentAll,
-                PaymentFilter.paid: l10n.dashboardPaid,
-                PaymentFilter.unpaid: l10n.dashboardUnpaid,
-                PaymentFilter.cash: l10n.posPaymentMethodCash,
-              },
+              // CLIENT-C: shared with the History filter, and always able to
+              // render the value it is actually holding.
+              items: paymentFilterOptions(l10n, query.payment),
               onChanged: (v) => onApply((q) => q.copyWith(payment: v)),
             ),
           ],

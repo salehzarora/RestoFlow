@@ -35,6 +35,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart';
 import 'owner_reports_repository.dart';
 
@@ -58,12 +59,31 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   @override
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
+    DashboardAnalyticsScope? analyticsScope,
   }) async {
     final t = transport;
     final m = scope;
     if (t == null || m == null) {
       throw const RealRepoNotWiredError(
         'owner-reports: no authenticated transport/scope - real read not wired',
+      );
+    }
+    // CODEX F-1A — the scope on the wire is the scope in the KEY.
+    //
+    // These params used to come off the resolved membership, whose restaurant
+    // and branch `resolveTenantContext` has already pinned to the FIRST of
+    // each. The family key carried the owner's real selection while the
+    // request carried the pin, so a broad owner's analytics stayed narrowed and
+    // branch A's data could be cached under a branch B key.
+    //
+    // The ORGANIZATION remains the authenticated membership's — it is the
+    // authorization anchor, never a filter. A key claiming a different
+    // organization is a client bug, and fails closed HERE rather than becoming
+    // a cross-org tuple on the wire.
+    final selected = analyticsScope ?? DashboardAnalyticsScope.coveredBy(m);
+    if (selected.organizationId != m.organizationId) {
+      throw const OwnerReportsException(
+        'owner_report_range: analytics scope organization does not match the membership',
       );
     }
     // RF-REPORT-004: prefer `owner_report_range` (ranges + prior-period
@@ -76,13 +96,15 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
     try {
       rangeRaw = await t.invoke('owner_report_range', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
         'p_range': range.wire,
       });
     } on SyncTransportException catch (e) {
       if (_isMissingRpc(e)) {
-        if (range == ReportRange.today) return _loadDailyReport(t, m);
+        if (range == ReportRange.today) {
+          return _loadDailyReport(t, m, selected);
+        }
         return DashboardReport.rangeUnavailable(range: range, currencyCode: '');
       }
       throw const OwnerReportsException('owner_report_range transport failure');
@@ -130,6 +152,13 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
         netSalesMinor: _int(cmp['net_minor']),
         orderCount: _int(cmp['order_count']),
         cashSalesMinor: _int(cmp['cash_minor']),
+        // SERVER-B additive keys, read with _intOrNull so an ABSENT key stays
+        // absent. This is the deployment seam: the migration is merged but not
+        // applied everywhere, and `_int` would turn "this server predates the
+        // change" into a measured prior of 0 — a comparison the owner would
+        // read as real. A present 0 still parses as 0.
+        completedOrderCount: _intOrNull(cmp['completed_count']),
+        discountTotalMinor: _intOrNull(cmp['discount_minor']),
       ),
       // Legacy scalar drawer fields are superseded by the shiftCash card.
       openingFloatMinor: 0,
@@ -155,20 +184,21 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   Future<DashboardReport> _loadDailyReport(
     SyncRpcTransport t,
     MembershipContext m,
+    DashboardAnalyticsScope selected,
   ) async {
     final Object? raw;
     try {
       raw = await t.invoke('owner_daily_report', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
       });
     } on SyncTransportException catch (e) {
       // LIVE-DASHBOARD-001: on production `owner_daily_report` is not deployed
       // yet, so PostgREST returns a "could not find the function" error. ONLY
       // that missing-RPC signature falls back to the deployed `sales_summary`;
       // an auth/permission denial (42501) stays fail-closed below.
-      if (_isMissingRpc(e)) return _loadFromSalesSummary(t, m);
+      if (_isMissingRpc(e)) return _loadFromSalesSummary(t, m, selected);
       throw const OwnerReportsException('owner_daily_report transport failure');
     }
     if (raw is! Map || raw['ok'] != true) {
@@ -206,7 +236,12 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       unpaidOrderCount: _int(today['unpaid_count']),
       // Per-method tender breakdown (cash-only today, but real when card/bit land).
       paymentMethods: _tenders(today['tenders'], currency),
-      // Prior-day block -> KPI "vs yesterday" deltas (deltaPercent guards prior 0).
+      // Prior-day block -> KPI "vs yesterday" deltas (ComparisonDelta guards a
+      // zero prior). CLIENT-B: `owner_daily_report.prior_day` carries ONLY
+      // order_count / gross / net / cash — it has no completed or discount
+      // figure for the prior day — so the two additive comparison fields stay
+      // ABSENT here rather than being derived from a differently-defined
+      // number. The comparison strip that needs them simply does not render.
       comparison: ReportComparison(
         grossSalesMinor: _int(prior['gross_minor']),
         netSalesMinor: _int(prior['net_minor']),
@@ -339,13 +374,14 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   Future<DashboardReport> _loadFromSalesSummary(
     SyncRpcTransport t,
     MembershipContext m,
+    DashboardAnalyticsScope selected,
   ) async {
     final Object? raw;
     try {
       raw = await t.invoke('sales_summary', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
       });
     } on SyncTransportException {
       throw const OwnerReportsException('sales_summary transport failure');
@@ -413,6 +449,10 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
     final prior = sevenDays[sevenDays.length - 2];
     if (prior is! Map) return null;
     final priorGross = _int(prior['gross_minor']);
+    // CLIENT-B: completed / discount stay ABSENT. `last_7_days` has neither, and
+    // this path's CURRENT completedOrderCount is the payments count rather than
+    // the status-completed count — a different definition, so even a plausible
+    // prior would be comparing two unlike numbers.
     return ReportComparison(
       grossSalesMinor: priorGross,
       netSalesMinor: priorGross,

@@ -19,19 +19,29 @@ import 'order_history_providers.dart';
 /// The completion seam. Demo mode mutates the shared demo store; real mode calls
 /// `owner_complete_order` over the authenticated transport (fails closed with no
 /// transport/scope — never a demo fallback).
-final orderCompletionRepositoryProvider = Provider<OrderCompletionRepository>((
-  ref,
-) {
-  final config = ref.watch(runtimeConfigProvider);
-  if (config.isDemoMode) {
-    return DemoOrderCompletionRepository(ref.watch(demoOrderStoreProvider));
-  }
-  return RealOrderCompletionRepository(
-    config.supabase,
-    scope: ref.watch(dashboardMembershipProvider),
-    transport: ref.watch(dashboardAuthTransportProvider),
-  );
-}, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
+final orderCompletionRepositoryProvider = Provider<OrderCompletionRepository>(
+  (ref) {
+    final config = ref.watch(runtimeConfigProvider);
+    if (config.isDemoMode) {
+      return DemoOrderCompletionRepository(ref.watch(demoOrderStoreProvider));
+    }
+    return RealOrderCompletionRepository(
+      config.supabase,
+      // R1A-01: identity, not the labelled membership.
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    // CODEX FINDING 4 — this list must name what is actually WATCHED. The
+    // R1A-01 migration changed the watch to the identity and left the
+    // declaration behind, which is not cosmetic: Riverpod validates scoped reads
+    // against this list, so constructing the real completion repository inside
+    // the Dashboard's scoped container asserted.
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
 
 /// The mutation state for ONE order's completion.
 class OrderCompletionState {

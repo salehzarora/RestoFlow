@@ -2974,8 +2974,70 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardSalesByDay => 'المبيعات حسب اليوم';
+
+  @override
+  String dashboardSalesByDaySemantics(String day, String amount) {
+    return 'المبيعات حسب اليوم. أفضل يوم $day: $amount';
+  }
+
+  @override
+  String get dashboardSalesByOrderType => 'المبيعات حسب نوع الطلب';
+
+  @override
+  String dashboardShareOfOrders(String percent) {
+    return '$percent٪ من الطلبات';
+  }
+
+  @override
+  String get dashboardRecordedTendersNote =>
+      'مبالغ مسجّلة في النظام فقط — وليست تسوية من مزوّد الدفع.';
+
+  @override
+  String dashboardRecordedPaymentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعة مسجّلة',
+      many: '$count دفعة مسجّلة',
+      few: '$count دفعات مسجّلة',
+      two: 'دفعتان مسجّلتان',
+      one: 'دفعة مسجّلة واحدة',
+      zero: 'لا دفعات مسجّلة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardShareOfCollected(String percent) {
+    return '$percent٪ من المحصّل';
+  }
+
+  @override
+  String dashboardAvgRecordedPayment(String amount) {
+    return 'متوسط الدفعة $amount';
+  }
+
+  @override
+  String dashboardMethodTrendTitle(String method) {
+    return 'المبالغ المسجّلة يوميًا: $method';
+  }
+
+  @override
+  String get dashboardComparedVsYesterdayAll => 'مقارنةً بكامل يوم أمس';
+
+  @override
+  String get dashboardComparedVsDayBefore => 'مقارنةً بأول من أمس';
+
+  @override
+  String get dashboardComparedVsPrev7 => 'مقارنةً بالـ٧ أيام السابقة';
+
+  @override
+  String get dashboardComparedVsPrev30 => 'مقارنةً بالـ٣٠ يومًا السابقة';
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
-    return '$percent٪ مقارنةً بالأمس';
+    return '$percent٪ مقارنةً بكامل يوم أمس';
   }
 
   @override

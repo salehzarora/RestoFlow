@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../branding/receipt_logo_url_resolver.dart';
@@ -361,14 +362,10 @@ class _DetailContent extends StatelessWidget {
   );
 }
 
+// F0.5: this mapping now lives once, in analytics/analytics_labels.dart. The
+// local alias is kept so the many call sites below read unchanged.
 String _paymentMethodLabel(AppLocalizations l10n, String method) =>
-    switch (method) {
-      'cash' => l10n.posPaymentMethodCash,
-      'card' => l10n.posPaymentMethodCard,
-      'bit' => l10n.posPaymentMethodBit,
-      'external' => l10n.posPaymentMethodExternal,
-      _ => method,
-    };
+    paymentMethodLabel(l10n, method);
 
 /// A key/value row (left label muted, right value emphasised when a total).
 class _Row extends StatelessWidget {

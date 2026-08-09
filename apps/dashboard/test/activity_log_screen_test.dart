@@ -19,10 +19,16 @@ DemoAuditEvent _ev(
   required String action,
   required String category,
   int daysAgo = 0,
+  // STATIC-C548C0E-DEMO-ACTIVITY-ORDER-01: the timeline sorts newest-first, so
+  // a fixture has to say when it happened. These cases are about rendering and
+  // do not care, so they share one minute and fall back to the deterministic
+  // source-order tie-break — which is what kept their expectations unchanged.
+  int minuteOfDay = 840, // 14:00, matching occurredAtLabel below
   String? reason,
   Map<String, Object?> newValues = const {},
 }) => DemoAuditEvent(
   daysAgo: daysAgo,
+  minuteOfDay: minuteOfDay,
   event: AuditEvent(
     eventId: id,
     action: action,
@@ -285,6 +291,7 @@ void main() {
         .read(auditLogQueryProvider)
         .copyWith(
           branch: const AuditBranchOption(
+            organizationId: 'org-1',
             branchId: 'demo-branch-harbor',
             restaurantId: 'demo-rest-1',
             label: 'RestoFlow · Harbor',

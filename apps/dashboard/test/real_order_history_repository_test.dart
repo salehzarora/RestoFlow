@@ -164,8 +164,12 @@ void main() {
     expect(transport.lastFunction, 'owner_order_history');
     expect(transport.lastParams, {
       'p_organization_id': 'org-1',
-      'p_restaurant_id': 'rest-1',
-      'p_branch_id': 'branch-1',
+      // CLIENT-E2: the fixture membership is an ORG owner, so its COVERAGE is
+      // the whole organization. rest-1 / branch-1 are what resolveTenantContext
+      // pinned onto it (the first of each), and sending them as the scope was
+      // the silent narrowing this slice removes from Orders history.
+      'p_restaurant_id': null,
+      'p_branch_id': null,
       'p_range': 'today',
       'p_search': null,
       'p_status': null,
@@ -216,8 +220,12 @@ void main() {
 
     expect(transport.lastParams, {
       'p_organization_id': 'org-1',
-      'p_restaurant_id': 'rest-1',
-      'p_branch_id': 'branch-1',
+      // CLIENT-E2: the fixture membership is an ORG owner, so its COVERAGE is
+      // the whole organization. rest-1 / branch-1 are what resolveTenantContext
+      // pinned onto it (the first of each), and sending them as the scope was
+      // the silent narrowing this slice removes from Orders history.
+      'p_restaurant_id': null,
+      'p_branch_id': null,
       'p_range': 'last7',
       'p_search': 'Layla',
       'p_status': 'completed',
@@ -242,8 +250,12 @@ void main() {
     expect(transport.lastFunction, 'owner_order_detail');
     expect(transport.lastParams, {
       'p_organization_id': 'org-1',
-      'p_restaurant_id': 'rest-1',
-      'p_branch_id': 'branch-1',
+      // CLIENT-E2: the fixture membership is an ORG owner, so its COVERAGE is
+      // the whole organization. rest-1 / branch-1 are what resolveTenantContext
+      // pinned onto it (the first of each), and sending them as the scope was
+      // the silent narrowing this slice removes from Orders history.
+      'p_restaurant_id': null,
+      'p_branch_id': null,
       'p_order_id': 'o1',
     });
 

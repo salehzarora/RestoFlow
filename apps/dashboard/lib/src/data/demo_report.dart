@@ -126,12 +126,43 @@ class ReportComparison {
     required this.netSalesMinor,
     required this.orderCount,
     required this.cashSalesMinor,
+    this.completedOrderCount,
+    this.discountTotalMinor,
   });
 
   final int grossSalesMinor;
   final int netSalesMinor;
   final int orderCount;
   final int cashSalesMinor;
+
+  /// SERVER-B additive comparison keys — NULLABLE, and null means ABSENT.
+  ///
+  /// The migration that adds `comparison.completed_count` and
+  /// `comparison.discount_minor` to `owner_report_range` is merged but not yet
+  /// applied to every database, and the two legacy report paths
+  /// (`owner_daily_report.prior_day`, `sales_summary.last_7_days`) do not carry
+  /// them at all. So the client has to be able to say "this server did not tell
+  /// me", which is a different fact from "the prior window had none".
+  ///
+  /// They are nullable rather than defaulted to 0 for exactly that reason: a 0
+  /// prior is a real measured value that [ComparisonDelta] treats as no-basis,
+  /// while an absent prior means the comparison should not be offered at all.
+  /// Collapsing the two would silently claim the server answered a question it
+  /// was never asked.
+  final int? completedOrderCount;
+  final int? discountTotalMinor;
+
+  /// The prior window's average order value, in integer minor units, or null
+  /// when it has no orders to average.
+  ///
+  /// Integer (truncating) division of two integers the server sent — never
+  /// floating point, and never a ratio derived from another ratio (D-007).
+  /// Deliberately NULLABLE where `DashboardReport.avgOrderValueMinor` returns 0
+  /// for an order-less window: on the current side the product shows ₪0.00, but
+  /// as a COMPARISON BASIS a window with no orders has no average at all, and a
+  /// 0 there would make every current value look like infinite growth.
+  int? get avgOrderValueMinor =>
+      orderCount == 0 ? null : netSalesMinor ~/ orderCount;
 }
 
 /// A signed integer percentage change of [current] vs [prior], or null when a
@@ -406,6 +437,33 @@ class DashboardReport {
   /// real day can have zero orders/sales yet a closed shift with counted cash (an
   /// opening float / drawer reconciliation), and that must render the "Shift &
   /// cash" card instead of being hidden behind the generic empty state.
+  /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-C) — whether this server can
+  /// answer a card / bit / external order-history filter.
+  ///
+  /// This is a DEPLOYMENT fact, not a product one, and it is derived rather
+  /// than configured: migration `20260811090000` contains BOTH the additive
+  /// `comparison.completed_count` / `comparison.discount_minor` keys AND the
+  /// `owner_order_history` payment widening. One migration, so the presence of
+  /// the comparison keys in a payload this database just produced is direct
+  /// evidence that the widening is deployed too — no capability RPC, no probe
+  /// of the history endpoint, no version string.
+  ///
+  /// Why it must be gated at all: BEFORE that migration an unknown `p_payment`
+  /// matched no branch and returned an EMPTY LIST rather than raising. So a
+  /// card row that navigated on an old database would land the owner on a list
+  /// reading "no orders" for a tender they can see money for — a confident
+  /// wrong answer, which is worse than an inert row.
+  ///
+  /// Both keys are required, and null (absent OR malformed) means no: the
+  /// conservative direction here costs a click and the optimistic one costs
+  /// trust. A present ZERO is a real value and still proves the migration.
+  bool get supportsPaymentMethodHistoryFilters {
+    final cmp = comparison;
+    return cmp != null &&
+        cmp.completedOrderCount != null &&
+        cmp.discountTotalMinor != null;
+  }
+
   bool get isEmpty =>
       orderCount == 0 &&
       completedOrderCount == 0 &&

@@ -17,12 +17,18 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../analytics/dashboard_analytics_scope.dart';
 import 'order_history_models.dart';
 import 'order_history_repository.dart';
 
 /// Reads order history + detail from the ORDERS-HISTORY-001 RPCs.
 class RealOrderHistoryRepository implements OrderHistoryRepository {
-  const RealOrderHistoryRepository(this.config, {this.scope, this.transport});
+  const RealOrderHistoryRepository(
+    this.config, {
+    this.scope,
+    this.transport,
+    this.analyticsScope,
+  });
 
   /// The validated client runtime config (anon key only). Null when real mode
   /// was selected but the Supabase config was missing/invalid (fail-closed
@@ -34,6 +40,14 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
 
   /// The AUTHENTICATED transport. Null => not wired (fail-closed).
   final SyncRpcTransport? transport;
+
+  /// CLIENT-E2 — the owner's selected analytics scope, or null to use whatever
+  /// the membership COVERS.
+  ///
+  /// A business filter, never an authorization claim: the server derives its
+  /// own scope from the caller and intersects whatever arrives here, so this
+  /// can only narrow what is returned.
+  final DashboardAnalyticsScope? analyticsScope;
 
   @override
   Future<OrderHistoryPage> loadHistory(
@@ -47,12 +61,23 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
         'order-history: no authenticated transport/scope - real read not wired',
       );
     }
+    // CLIENT-E2: the scope the owner actually selected — NOT the membership's
+    // ids. `resolveTenantContext` pins a concrete first-restaurant and
+    // first-branch onto every resolved membership, so reading them here showed
+    // an org owner ONE branch's orders while calling it their history. Falling
+    // back to the membership's COVERAGE (role-derived, exactly as the active
+    // board and the audit log already do) means even an unwired caller stops
+    // narrowing silently.
+    final selected = analyticsScope ?? DashboardAnalyticsScope.coveredBy(m);
+
     final Object? raw;
     try {
       raw = await t.invoke('owner_order_history', <String, dynamic>{
+        // The organization stays the membership's — it is the authorization
+        // anchor, and the selected scope is only ever a filter inside it.
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
         'p_range': query.range.wire,
         'p_search': query.searchOrNull,
         'p_status': query.status.wire,
@@ -94,12 +119,19 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
         'order-history: no authenticated transport/scope - real read not wired',
       );
     }
+    // CLIENT-E2: the DETAIL call must be scoped exactly like the LIST that
+    // produced the row. Leaving it pinned to the membership would mean an
+    // org-wide list could show an order from the second restaurant that then
+    // failed to open, because the detail lookup was still narrowed to the
+    // first — a row you can see but not read.
+    final selected = analyticsScope ?? DashboardAnalyticsScope.coveredBy(m);
+
     final Object? raw;
     try {
       raw = await t.invoke('owner_order_detail', <String, dynamic>{
         'p_organization_id': m.organizationId,
-        'p_restaurant_id': m.restaurantId,
-        'p_branch_id': m.branchId,
+        'p_restaurant_id': selected.restaurantId,
+        'p_branch_id': selected.branchId,
         'p_order_id': orderId,
       });
     } on SyncTransportException {

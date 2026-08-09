@@ -26,6 +26,7 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'analytics/dashboard_destination.dart';
 import 'widgets/language_selector.dart';
 import 'tables/tables_repository.dart';
 import 'tables/tables_screen.dart';
@@ -308,6 +309,13 @@ class _DashboardShellState extends State<DashboardShell> {
 
   void _select(int value) => setState(() => _index = value);
 
+  /// F0.3 — the ONE named navigation seam.
+  ///
+  /// Call sites say where they want to go by name instead of by magic number,
+  /// so inserting a destination can no longer silently re-point an existing
+  /// jump at the wrong surface.
+  void _goTo(DashboardDestination destination) => _select(destination.tabIndex);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -315,6 +323,31 @@ class _DashboardShellState extends State<DashboardShell> {
     // ProviderScopes are recreated instead of reused with different override
     // types across tabs (Riverpod forbids changing an override's type in
     // place).
+    // F0.6 — THE STABLE SHARED SCOPE.
+    //
+    // These two overrides used to be repeated inside Overview, Orders and
+    // Activity with IDENTICAL values. Because each surface built its own
+    // ProviderScope INSIDE the KeyedSubtree below, switching tabs destroyed
+    // that container and everything it held - including the loaded owner
+    // report, which then refetched on every return.
+    //
+    // Hoisting them gives those providers ONE container that outlives
+    // tab changes. Surface-specific overrides (Orders' receipt-logo
+    // resolver, the menu feature scopes) deliberately stay local - only the
+    // genuinely shared ones move.
+    //
+    // CODEX F-1B-3-R1B — the scope is now ABOVE the LayoutBuilder, not inside
+    // it. It used to wrap this subtree, which the responsive builder places in
+    // two structurally different trees: `Row > Expanded > Column` at rail
+    // widths, `Column` at phone widths. Crossing ~560px therefore gave the
+    // ProviderScope a different ancestor chain, so its element could not be
+    // reused — the container was disposed and rebuilt, taking the loaded report
+    // AND the remembered branch answer with it. An owner who had already been
+    // told branch B was gone would be back to "never answered" purely because
+    // the window was resized, and the raw selection would apply again.
+    //
+    // Layout may change what is on screen; it must not change which container
+    // owns the membership, the transport, or what the dashboard has learned.
     final content = KeyedSubtree(
       key: ValueKey('dashboard-tab-$_index'),
       child: switch (_index) {
@@ -374,71 +407,79 @@ class _DashboardShellState extends State<DashboardShell> {
       onSignOut: widget.onSignOut,
     );
 
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Dashboard "1c" responsive rules (§9): the labelled/icon rail
-          // stays on the reading-start side (right in RTL) for every
-          // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
-          final width = constraints.maxWidth;
-          if (width >= DashboardShell._railBreakpoint) {
-            final compact = width < DashboardShell._fullRailBreakpoint;
-            final railWidth = width >= DashboardShell._desktopBreakpoint
-                ? 232.0
-                : (compact ? 72.0 : 212.0);
-            return Row(
-              children: [
-                _SideNav(
-                  destinations: _destinations(l10n),
-                  selectedIndex: _index,
-                  onSelected: _select,
-                  membership: widget.membership,
-                  width: railWidth,
-                  compact: compact,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      header,
-                      const Divider(height: 1),
-                      Expanded(child: content),
-                    ],
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+      ],
+      child: Scaffold(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+            // stays on the reading-start side (right in RTL) for every
+            // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+            final width = constraints.maxWidth;
+            if (width >= DashboardShell._railBreakpoint) {
+              final compact = width < DashboardShell._fullRailBreakpoint;
+              final railWidth = width >= DashboardShell._desktopBreakpoint
+                  ? 232.0
+                  : (compact ? 72.0 : 212.0);
+              return Row(
+                children: [
+                  _SideNav(
+                    destinations: _destinations(l10n),
+                    selectedIndex: _index,
+                    onSelected: _select,
+                    membership: widget.membership,
+                    width: railWidth,
+                    compact: compact,
                   ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        header,
+                        const Divider(height: 1),
+                        Expanded(child: content),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                header,
+                const Divider(height: 1),
+                Expanded(child: content),
+                NavigationBar(
+                  key: const Key('dashboard-bottom-nav'),
+                  selectedIndex: _index,
+                  onDestinationSelected: _select,
+                  // RF-132 (Codex review): ten destinations at phone width
+                  // leave no room to render any label unclipped, so the bar
+                  // is deliberately ICON-ONLY. NavigationBar keeps each
+                  // destination's label + selected state in its semantics
+                  // ("<label>, Tab N of 10") even with the label hidden,
+                  // and the tooltip covers hover/long-press; selection
+                  // stays visible via the filled icon + indicator pill.
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                  destinations: _destinations(l10n)
+                      .map(
+                        (d) => NavigationDestination(
+                          icon: Icon(d.icon),
+                          selectedIcon: Icon(d.selectedIcon),
+                          label: d.label,
+                          tooltip: d.label,
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
             );
-          }
-          return Column(
-            children: [
-              header,
-              const Divider(height: 1),
-              Expanded(child: content),
-              NavigationBar(
-                key: const Key('dashboard-bottom-nav'),
-                selectedIndex: _index,
-                onDestinationSelected: _select,
-                // RF-132 (Codex review): ten destinations at phone width
-                // leave no room to render any label unclipped, so the bar
-                // is deliberately ICON-ONLY. NavigationBar keeps each
-                // destination's label + selected state in its semantics
-                // ("<label>, Tab N of 10") even with the label hidden,
-                // and the tooltip covers hover/long-press; selection
-                // stays visible via the filled icon + indicator pill.
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                destinations: _destinations(l10n)
-                    .map(
-                      (d) => NavigationDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: d.label,
-                        tooltip: d.label,
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -467,10 +508,10 @@ class _DashboardShellState extends State<DashboardShell> {
         // wired (sprint); a null scope/read source just omits the card.
         menuReadSource: widget.menuReadSource,
         menuScope: _menuScope,
-        onOpenMenu: () => _select(1),
-        onOpenDevices: () => _select(2),
-        onOpenPrinters: () => _select(3),
-        onOpenStaff: () => _select(4),
+        onOpenMenu: () => _goTo(DashboardDestination.menu),
+        onOpenDevices: () => _goTo(DashboardDestination.devices),
+        onOpenPrinters: () => _goTo(DashboardDestination.printers),
+        onOpenStaff: () => _goTo(DashboardDestination.staff),
       );
     } else {
       setupPanel = null;
@@ -482,21 +523,22 @@ class _DashboardShellState extends State<DashboardShell> {
         ? null
         : DashboardDeviceSummaryCard(
             repository: devices,
-            onOpenDevices: () => _select(2),
+            onOpenDevices: () => _goTo(DashboardDestination.devices),
           );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-      ],
-      child: DashboardHomeScreen(
-        setupPanel: setupPanel,
-        deviceSummary: deviceSummary,
-      ),
+    // F0.6: NO local ProviderScope here any more. The membership +
+    // transport overrides moved to ONE stable scope above the tab-switch
+    // KeyedSubtree. This scope was recreated on every return to Overview,
+    // which destroyed the report container and forced a refetch.
+    return DashboardHomeScreen(
+      setupPanel: setupPanel,
+      deviceSummary: deviceSummary,
+      // F0.4: the shell owns tab state, so it supplies the NAMED navigation
+      // seam. The Overview binds it to a WidgetRef and executes typed
+      // drill-downs; the shell learns nothing about filters, and no magic
+      // number crosses this boundary.
+      onNavigate: _goTo,
     );
   }
 
@@ -508,12 +550,24 @@ class _DashboardShellState extends State<DashboardShell> {
   /// dataset with an honest banner. Same ProviderScope wiring as the Overview so
   /// both order seams pick up the scope + transport.
   Widget _ordersSurface() {
+    // CODEX F-1B-3-R2 — the membership + transport overrides are GONE from
+    // here, and that is the fix rather than a tidy-up.
+    //
+    // They were repeated with values identical to the stable scope above, and
+    // an override is what decides WHERE a provider lives: Riverpod places a
+    // provider in the deepest container overriding any of its transitive
+    // dependencies. Branch options depend on both, so Overview and Orders each
+    // built their OWN branch-options chain — two enumerations, and worse, two
+    // independent memories of what the last successful answer said. Overview
+    // could learn that branch B is gone and move to the parent scope while
+    // Orders, mounting fresh, had never been told and issued an
+    // `owner_order_history` request for B.
+    //
+    // With the duplicates removed both surfaces resolve in the ONE hoisted
+    // container, so there is a single answer and a single scope. Only the
+    // genuinely Orders-local override stays.
     return ProviderScope(
       overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
         // PRINT-BRANDING-LOGO-001: the current-logo URL resolver for the order
         // reprint preview (null -> text-only).
         receiptLogoUrlResolverProvider.overrideWithValue(
@@ -550,15 +604,10 @@ class _DashboardShellState extends State<DashboardShell> {
   /// transport (real mode); demo mode shows the in-memory timeline with an
   /// honest banner. Same ProviderScope wiring as the Orders surface.
   Widget _activityLogSurface() {
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-      ],
-      child: const ActivityLogScreen(),
-    );
+    // CODEX F-1B-3-R2 — same duplicate overrides, same effect: Activity was
+    // enumerating branches into a container of its own. It inherits the stable
+    // scope above, which is where those values already are.
+    return const ActivityLogScreen();
   }
 
   /// The Users tab (RF-116). Demo mode: the labelled demo store. Real mode with

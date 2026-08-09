@@ -12,6 +12,7 @@ library;
 
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../analytics/analytics_labels.dart';
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import 'print_document.dart';
@@ -24,14 +25,12 @@ String _orderTypeLabel(AppLocalizations l10n, String type) => switch (type) {
 };
 
 /// The localized payment-method label, or the raw value.
+///
+/// F0.5: the mapping itself now lives once, in
+/// analytics/analytics_labels.dart; this stays as a local alias so the
+/// print builders below read unchanged.
 String _paymentMethodLabel(AppLocalizations l10n, String method) =>
-    switch (method) {
-      'cash' => l10n.posPaymentMethodCash,
-      'card' => l10n.posPaymentMethodCard,
-      'bit' => l10n.posPaymentMethodBit,
-      'external' => l10n.posPaymentMethodExternal,
-      _ => method,
-    };
+    paymentMethodLabel(l10n, method);
 
 /// A compact "×N" suffix for a repeated modifier/item (N>1 only).
 String _timesSuffix(int quantity) => quantity > 1 ? ' ×$quantity' : '';

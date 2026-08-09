@@ -5,8 +5,11 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 /// AUDIT-LOG-DASHBOARD-001 — the branch/actor filter options are SCOPE-SAFE:
 /// branches are role-filtered so a branch manager never sees a sibling; actors
-/// come from the scope-covering `list_staff` (names only, no email); both fail
-/// soft to an empty list.
+/// come from the scope-covering `list_staff` (names only, no email).
+///
+/// CODEX F-1B-3 FOLLOW-UP: actors still fail soft to an empty list, branches no
+/// longer do — the analytics scope reads them, and "could not ask" must not look
+/// like "there are none".
 class _FakeTransport implements SyncRpcTransport {
   _FakeTransport(this._handler);
 
@@ -198,25 +201,56 @@ void main() {
     },
   );
 
-  test('D61 fail-soft: no transport -> empty options', () async {
-    const repo = RealAuditFilterOptionsRepository();
-    expect(await repo.loadBranches(), isEmpty);
-    expect(await repo.loadActors(), isEmpty);
-  });
-
+  // CODEX F-1B-3 FOLLOW-UP SUPERSEDES THE BRANCH HALF OF D61/D62.
+  //
+  // Both used to assert that a failure comes back as an empty branch list. That
+  // was safe while the list only shaped a dropdown, and stopped being safe when
+  // the analytics scope started treating a successful list as authoritative
+  // about which branches exist: "could not ask" and "there are none" became the
+  // same value, and a failed enumeration silently widened an owner's financial
+  // scope. Branches now report failure; ACTORS still fail soft, because they
+  // filter names and never scope.
   test(
-    'D62 fail-soft: a rejected RPC -> empty options (never fabricated)',
+    'D61 no transport -> branches report failure, actors fail soft',
     () async {
-      final repo = RealAuditFilterOptionsRepository(
-        scope: _m(
-          role: MembershipRole.orgOwner,
-          restaurantId: 'r1',
-          branchId: 'b1',
-        ),
-        transport: _FakeTransport((_, _) => <String, dynamic>{'ok': false}),
+      const repo = RealAuditFilterOptionsRepository();
+      expect(
+        () => repo.loadBranches(),
+        throwsA(isA<AuditFilterOptionsException>()),
       );
-      expect(await repo.loadBranches(), isEmpty);
       expect(await repo.loadActors(), isEmpty);
     },
   );
+
+  test('D62 a rejected RPC -> branches report failure (never fabricated, and '
+      'never softened into "no branches")', () async {
+    final repo = RealAuditFilterOptionsRepository(
+      scope: _m(
+        role: MembershipRole.orgOwner,
+        restaurantId: 'r1',
+        branchId: 'b1',
+      ),
+      transport: _FakeTransport((_, _) => <String, dynamic>{'ok': false}),
+    );
+    expect(
+      () => repo.loadBranches(),
+      throwsA(isA<AuditFilterOptionsException>()),
+    );
+    expect(await repo.loadActors(), isEmpty);
+  });
+
+  test('D63 a SUCCESSFUL response with no restaurants is an answer, not a '
+      'failure', () async {
+    final repo = RealAuditFilterOptionsRepository(
+      scope: _m(
+        role: MembershipRole.orgOwner,
+        restaurantId: 'r1',
+        branchId: 'b1',
+      ),
+      transport: _FakeTransport(
+        (_, _) => <String, dynamic>{'ok': true, 'restaurants': <dynamic>[]},
+      ),
+    );
+    expect(await repo.loadBranches(), isEmpty);
+  });
 }

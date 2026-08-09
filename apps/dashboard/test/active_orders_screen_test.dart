@@ -323,6 +323,7 @@ void main() {
       await ids(
         _allActive.copyWith(
           branch: const AuditBranchOption(
+            organizationId: 'org-1',
             branchId: 'demo-branch-harbor',
             restaurantId: 'demo-rest-1',
             label: 'Harbor',
