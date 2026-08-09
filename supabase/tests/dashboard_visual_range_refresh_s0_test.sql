@@ -35,7 +35,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(146);
+select plan(156);
 
 -- ===== fixture ==============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -117,7 +117,10 @@ insert into order_items (id, organization_id, restaurant_id, branch_id, order_id
   ('00000000-0000-0000-0000-0000000110ff', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d001', '00000000-0000-0000-0000-000000010b02', 'Hummus',        1, 400,  400, 0, 'served', (current_date + interval '10 hours') at time zone 'UTC'),
   -- T2: Falafel 300 + Salad 200 = 500
   ('00000000-0000-0000-0000-000000011002', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d002', '00000000-0000-0000-0000-000000010b01', 'Falafel',       1, 300,  300, 0, 'served', (current_date + interval '11 hours') at time zone 'UTC'),
-  ('00000000-0000-0000-0000-000000011003', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d002', '00000000-0000-0000-0000-000000010b03', 'Salad',         1, 200,  200, 0, 'served', (current_date + interval '11 hours') at time zone 'UTC'),
+  -- A LIVE line carrying a REAL line discount (base 240, less 40, total 200).
+  -- Without it, "dead-line discounts are excluded" could be satisfied by a
+  -- rollup that simply reported zero discount for everything.
+  ('00000000-0000-0000-0000-000000011003', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d002', '00000000-0000-0000-0000-000000010b03', 'Salad',         1, 240,  200, 40, 'served', (current_date + interval '11 hours') at time zone 'UTC'),
   -- T3 is a VOIDED ORDER; its line is cascade-voided. Item b06 exists ONLY here.
   ('00000000-0000-0000-0000-000000011004', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d003', '00000000-0000-0000-0000-000000010b06', 'Void Only',     1, 700,  700, 0, 'voided', (current_date + interval '12 hours') at time zone 'UTC'),
   -- T4 CANCELLED / T5 DRAFT / T6 DELETED keep LIVE lines on purpose: only the
@@ -129,7 +132,13 @@ insert into order_items (id, organization_id, restaurant_id, branch_id, order_id
   -- snapshot is newer still. If the void filter were missing, the displayed
   -- name would be 'Hummus VOIDED' and the revenue would be 400 too high.
   ('00000000-0000-0000-0000-000000011007', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d007', '00000000-0000-0000-0000-000000010b02', 'Hummus Bowl',   1, 100,  100, 0, 'served', (current_date + interval '16 hours') at time zone 'UTC'),
-  ('00000000-0000-0000-0000-000000011009', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d007', '00000000-0000-0000-0000-000000010b02', 'Hummus VOIDED', 4, 100,  400, 0, 'voided', (current_date + interval '17 hours 30 minutes') at time zone 'UTC'),
+  -- S0.1: the dead lines now carry REAL money (a total AND a discount), so
+  -- including them is observable in gross and discount, not just in quantity.
+  ('00000000-0000-0000-0000-000000011009', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d007', '00000000-0000-0000-0000-000000010b02', 'Hummus VOIDED', 4, 100,  370, 30, 'voided', (current_date + interval '17 hours 30 minutes') at time zone 'UTC'),
+  -- A CANCELLED line inside the same live, billed order T1. Its line_total is
+  -- NOT part of T1.subtotal_minor (1000 = 600 + 400), exactly as the order
+  -- writers compute it — so counting it in gross invents revenue.
+  ('00000000-0000-0000-0000-00000001100c', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d001', '00000000-0000-0000-0000-000000010b01', 'Falafel CANCELLED', 1, 275, 250, 25, 'cancelled', (current_date + interval '10 hours 30 minutes') at time zone 'UTC'),
   -- T8: a genuine REVENUE + QUANTITY tie, broken by name ascending.
   ('00000000-0000-0000-0000-00000001100a', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d008', '00000000-0000-0000-0000-000000010b04', 'Zeta',          1, 300,  300, 0, 'served', (current_date + interval '17 hours') at time zone 'UTC'),
   ('00000000-0000-0000-0000-00000001100b', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a1000', '00000000-0000-0000-0000-0000000a1a00', '00000000-0000-0000-0000-00000001d008', '00000000-0000-0000-0000-000000010b05', 'Alpha',         1, 300,  300, 0, 'served', (current_date + interval '17 hours') at time zone 'UTC'),
@@ -384,6 +393,80 @@ select is((select (app.owner_sales_series('00000000-0000-0000-0000-0000000a0000'
 select is((select jsonb_array_length((app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, null, current_date - 46, current_date - 44))->'buckets')), 1, 'D11 custom still selects exactly the days asked for');
 select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, null, current_date - 92, current_date)$$, '22023', null, 'D12 the 92-day cap still holds');
 select throws_ok($$select app.owner_sales_series('00000000-0000-0000-0000-0000000a0000', null, null, 'quarter')$$, '22023', null, 'D13 an unknown token still raises 22023');
+
+-- ============================================================================
+-- F. S0.1 — VOIDED / CANCELLED LINES ARE NOT REVENUE (gross rollups)
+-- ============================================================================
+-- A line voided or cancelled OFF a live bill is not sold. The order writers
+-- already say so: orders.subtotal_minor is recomputed as SUM(line_total_minor)
+-- over lines whose status is NOT voided/cancelled. The gross rollup in
+-- owner_report_range and owner_sales_series read every non-deleted line
+-- instead, so a line struck off the bill still inflated gross — and the
+-- discount captured on that dead line inflated discount_minor with it.
+--
+-- Net was never affected (it reads orders.subtotal_minor), which is exactly why
+-- this could sit unnoticed: the headline number was right while the number
+-- beside it was wrong.
+--
+-- Today's branch-A1a fixture, after S0.1:
+--   live lines      600 + 400 + 300 + (200 total, 40 discount) + 100 + 300 + 300
+--                   => SUM(line_total) = 2200, SUM(line_discount) = 40
+--   dead lines      T1 cancelled (250 + 25) and T7 voided (370 + 30)
+--
+--   gross    = SUM(line_total + line_discount) over LIVE lines   = 2240
+--   discount = SUM(live line_discount) + SUM(order discount)     =   40
+--   net      = SUM(order subtotal - order discount)              = 2200
+--
+-- Before the fix those were 2915 and 95: the two dead lines contributed 675 of
+-- invented gross.
+
+-- The fixture guards come FIRST. Every assertion below is about rows being
+-- EXCLUDED, so if the dead lines ever vanished from the fixture the whole
+-- section would pass while proving nothing.
+select is((select count(*)::int from order_items oi
+           where oi.order_id in ('00000000-0000-0000-0000-00000001d001',
+                                 '00000000-0000-0000-0000-00000001d007')
+             and oi.deleted_at is null
+             and oi.status in ('voided', 'cancelled')),
+          2, 'F1 the fixture really holds dead lines INSIDE live billed orders');
+select is((select sum(oi.line_total_minor + oi.line_discount_minor)::bigint from order_items oi
+           where oi.order_id in ('00000000-0000-0000-0000-00000001d001',
+                                 '00000000-0000-0000-0000-00000001d007')
+             and oi.deleted_at is null
+             and oi.status in ('voided', 'cancelled')),
+          675::bigint, 'F2 and they carry real money, so excluding them is observable');
+
+create temporary table t_gross on commit drop as
+  select app.owner_report_range(
+    '00000000-0000-0000-0000-0000000a0000',
+    '00000000-0000-0000-0000-0000000a1000',
+    '00000000-0000-0000-0000-0000000a1a00', 'today') as res;
+
+select is((select (res->'current'->>'gross_minor')::bigint from t_gross), 2240::bigint,
+          'F3 owner_report_range gross EXCLUDES voided and cancelled lines');
+select is((select (res->'current'->>'discount_minor')::bigint from t_gross), 40::bigint,
+          'F4 and so does the item-discount component — 40 is the LIVE line''s discount, not the dead lines'' 55');
+select is((select (res->'current'->>'net_minor')::bigint from t_gross), 2200::bigint,
+          'F5 net is UNCHANGED — it always read orders.subtotal_minor');
+select is((select ((res->'current'->>'gross_minor')::bigint - (res->'current'->>'discount_minor')::bigint) from t_gross),
+          (select (res->'current'->>'net_minor')::bigint from t_gross),
+          'F6 gross - discount = net: the three now describe ONE set of lines');
+
+create temporary table t_series_gross on commit drop as
+  select app.owner_sales_series(
+    '00000000-0000-0000-0000-0000000a0000',
+    '00000000-0000-0000-0000-0000000a1000',
+    '00000000-0000-0000-0000-0000000a1a00', 'today')->'buckets'->0 as b;
+
+select is((select (b->>'gross_minor')::bigint from t_series_gross), 2240::bigint,
+          'F7 owner_sales_series gross excludes them in the daily bucket too');
+select is((select (b->>'discount_minor')::bigint from t_series_gross), 40::bigint,
+          'F8 and its discount matches owner_report_range exactly');
+select is((select (b->>'net_minor')::bigint from t_series_gross), 2200::bigint,
+          'F9 the series net is unchanged as well');
+select is((select ((b->>'gross_minor')::bigint - (b->>'discount_minor')::bigint) from t_series_gross),
+          (select (b->>'net_minor')::bigint from t_series_gross),
+          'F10 and the same identity holds — the chart and the KPI card agree');
 
 -- ============================================================================
 -- E. ACL + security posture

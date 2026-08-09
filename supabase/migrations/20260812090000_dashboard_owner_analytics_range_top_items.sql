@@ -1,6 +1,12 @@
 -- DASHBOARD-VISUAL-RANGE-REFRESH-S0 (SERVER) — 60/90/custom windows everywhere,
 -- plus a real TOP-SELLING-ITEMS aggregate.
 --
+-- Includes S0.1: the gross rollup in owner_report_range and owner_sales_series
+-- now counts LIVE lines only. Folded in here rather than shipped as a follow-up
+-- migration because this file already recreates both functions and has never
+-- been applied anywhere — so there is no deployed behaviour to preserve, and no
+-- reason to put a known-wrong gross into production first.
+--
 -- ADDITIVE AND READ-ONLY. This migration creates and replaces functions and
 -- reissues their grants. It creates no table, column, index, trigger, writer,
 -- RLS policy, backfill or seed, and no function below writes a single row.
@@ -375,6 +381,9 @@ comment on function public.owner_top_items(uuid, uuid, uuid, text, date, date, i
 --     which is exactly cur_start - 1 — so no existing range moved by a day.
 --   * the envelope reports range='custom' when a custom pair was supplied,
 --     matching owner_sales_series.
+--   * S0.1: item_rollup now counts LIVE lines only, so a line voided or
+--     cancelled off a live bill no longer inflates gross_minor (or, via its
+--     captured line discount, discount_minor). See the CTE for why.
 --
 -- THE COMPARISON WINDOW FOR CUSTOM is the IMMEDIATELY PRECEDING window of the
 -- SAME LENGTH: [start - span, start - 1] where span = (end - start + 1). It is
@@ -551,11 +560,29 @@ begin
       and (o.created_at at time zone t.zone)::date between t.prev_start and t.cur_end
   ),
   item_rollup as (
+    -- S0.1 — LIVE LINES ONLY. A line voided or cancelled OFF a live bill was
+    -- not sold, and the order writers already encode exactly that: after
+    -- apply_discount or void_order, orders.subtotal_minor is recomputed as
+    -- SUM(line_total_minor) over this same predicate.
+    --
+    -- Reading every non-deleted line instead let a struck-off line inflate
+    -- gross_minor, and the discount captured on that dead line inflate
+    -- discount_minor — while net_minor, which reads orders.subtotal_minor,
+    -- stayed correct. That is precisely why it went unnoticed: the headline
+    -- number was right and the number beside it was wrong.
+    --
+    -- The filter belongs on the CTE rather than on the gross sum alone, because
+    -- gross and the item-discount component must describe the SAME set of
+    -- lines. Otherwise the identity gross - discount = net stops holding.
+    --
+    -- NOTE this is only reachable for a dead line inside a LIVE order: when the
+    -- ORDER itself is voided or cancelled, `sales` already drops it wholesale.
     select oi.order_id,
            sum(oi.line_total_minor + oi.line_discount_minor) as gross_minor,
            sum(oi.line_discount_minor)                       as item_discount_minor
     from public.order_items oi
     where oi.deleted_at is null
+      and oi.status not in ('voided', 'cancelled')
       and oi.order_id in (select ow.order_id from order_win ow)
     group by oi.order_id
   ),
@@ -1237,9 +1264,11 @@ comment on function public.owner_order_history(uuid, uuid, uuid, text, text, tex
 -- Signature UNCHANGED, so this is a CREATE OR REPLACE and the existing ACL
 -- survives; it is restated below anyway, under the rider.
 --
--- The only change is two CASE arms. Everything else is the 20260810090000 body
--- verbatim, including the custom-window block, which is where 60/90 could
--- otherwise have been faked from the client.
+-- Two changes only: the two CASE arms, and — under S0.1 — the same LIVE-LINES
+-- ONLY filter on item_rollup that owner_report_range gets above, so the chart
+-- and the KPI card cannot disagree about gross. Everything else is the
+-- 20260810090000 body verbatim, including the custom-window block, which is
+-- where 60/90 could otherwise have been faked from the client.
 --
 -- WHY NOT LET THE CLIENT SEND last90 AS A CUSTOM PAIR: a client computing
 -- (today - 89, today) has to decide what "today" is, and its only honest answer
@@ -1406,11 +1435,29 @@ begin
       and (o.created_at at time zone t.zone)::date between t.win_start and t.win_end
   ),
   item_rollup as (
+    -- S0.1 — LIVE LINES ONLY. A line voided or cancelled OFF a live bill was
+    -- not sold, and the order writers already encode exactly that: after
+    -- apply_discount or void_order, orders.subtotal_minor is recomputed as
+    -- SUM(line_total_minor) over this same predicate.
+    --
+    -- Reading every non-deleted line instead let a struck-off line inflate
+    -- gross_minor, and the discount captured on that dead line inflate
+    -- discount_minor — while net_minor, which reads orders.subtotal_minor,
+    -- stayed correct. That is precisely why it went unnoticed: the headline
+    -- number was right and the number beside it was wrong.
+    --
+    -- The filter belongs on the CTE rather than on the gross sum alone, because
+    -- gross and the item-discount component must describe the SAME set of
+    -- lines. Otherwise the identity gross - discount = net stops holding.
+    --
+    -- NOTE this is only reachable for a dead line inside a LIVE order: when the
+    -- ORDER itself is voided or cancelled, `sales` already drops it wholesale.
     select oi.order_id,
            sum(oi.line_total_minor + oi.line_discount_minor) as gross_minor,
            sum(oi.line_discount_minor)                       as item_discount_minor
     from public.order_items oi
     where oi.deleted_at is null
+      and oi.status not in ('voided', 'cancelled')
       and oi.order_id in (select ow.order_id from order_win ow)
     group by oi.order_id
   ),
