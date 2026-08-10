@@ -132,6 +132,7 @@ class DashboardShell extends StatefulWidget {
     this.tablesRepository,
     this.reportsTransport,
     this.onSignOut,
+    this.debugOnSetupInvalidation,
     super.key,
   });
 
@@ -186,6 +187,17 @@ class DashboardShell extends StatefulWidget {
   /// Signs the current user out (real mode). Null => no sign-out affordance
   /// (demo mode / legacy tests).
   final Future<void> Function()? onSignOut;
+
+  /// V2.1 FINAL — the leave-writer invalidation's OWN [WidgetRef], published
+  /// for tests. Null in production, where nothing reads it.
+  ///
+  /// It exists because the defect it guards against was invisible to every
+  /// count-based test: the invalidation ran, on the wrong container, and looked
+  /// exactly like a working one from the outside. Publishing the ref the path
+  /// actually uses lets a test assert the ONE property that was violated — that
+  /// this code resolves through the overrides below, not past them.
+  @visibleForTesting
+  final void Function(WidgetRef ref)? debugOnSetupInvalidation;
 
   /// Dashboard "1c" responsive breakpoints (§9). Below [_railBreakpoint] the
   /// shell shows a phone bottom nav; from there the side rail stays on the
@@ -363,29 +375,45 @@ class _DashboardShellState extends State<DashboardShell> {
   /// It is coarser than invalidating at each mutation call site, which lives in
   /// the shared admin package. The trade is deliberate: at most one reload per
   /// visit to a writing tab, in exchange for never showing a stale count.
-  void _invalidateSetupSourcesFor(int leavingIndex) {
-    final key = ProviderScope.containerOf(
-      context,
-      listen: false,
-    ).read(currentSetupScopeKeyProvider);
-    final container = ProviderScope.containerOf(context, listen: false);
+  ///
+  /// V2.1 FINAL — WHY THIS TAKES A [WidgetRef] INSTEAD OF LOOKING ONE UP.
+  ///
+  /// The first attempt at this method resolved its container itself, with
+  /// `ProviderScope.containerOf(context)`. That `context` is the State's own —
+  /// the shell element — and the ProviderScope carrying the setup overrides is
+  /// something `build` RETURNS, so it is a descendant. The lookup therefore
+  /// walked straight past every override and found the ROOT container, where
+  /// `setupDevicesRepositoryProvider` is null, `dashboardMembershipProvider` is
+  /// null, and [currentSetupScopeKeyProvider] is consequently an all-null key
+  /// that no surface watches. Every invalidation landed on an entry nobody
+  /// reads, so the whole leave-writer refresh was inert while looking, from any
+  /// count of repository calls, exactly like a working one.
+  ///
+  /// [ref] comes from a `Consumer` placed immediately BELOW that ProviderScope,
+  /// so it resolves THROUGH the overrides: the same container the Overview
+  /// reads, the same repositories the tabs use, the same key. No second
+  /// container is created and no repository is built twice — the point is to
+  /// reach the one that already exists rather than to make another.
+  void _invalidateSetupSourcesFor(int leavingIndex, WidgetRef ref) {
+    widget.debugOnSetupInvalidation?.call(ref);
+    final key = ref.read(currentSetupScopeKeyProvider);
     switch (DashboardDestination.fromIndex(leavingIndex)) {
       case DashboardDestination.devices:
-        container.invalidate(setupDevicesProvider(key));
+        ref.invalidate(setupDevicesProvider(key));
       case DashboardDestination.printers:
-        container.invalidate(setupPrintersProvider(key));
+        ref.invalidate(setupPrintersProvider(key));
       case DashboardDestination.staff:
-        container.invalidate(setupStaffProvider(key));
+        ref.invalidate(setupStaffProvider(key));
       case DashboardDestination.menu:
-        container.invalidate(setupMenuProvider(key));
+        ref.invalidate(setupMenuProvider(key));
       default:
         break;
     }
   }
 
-  void _select(int value) {
+  void _select(int value, WidgetRef ref) {
     if (value == _index) return;
-    _invalidateSetupSourcesFor(_index);
+    _invalidateSetupSourcesFor(_index, ref);
     setState(() => _index = value);
   }
 
@@ -394,11 +422,41 @@ class _DashboardShellState extends State<DashboardShell> {
   /// Call sites say where they want to go by name instead of by magic number,
   /// so inserting a destination can no longer silently re-point an existing
   /// jump at the wrong surface.
-  void _goTo(DashboardDestination destination) => _select(destination.tabIndex);
+  void _goTo(DashboardDestination destination, WidgetRef ref) =>
+      _select(destination.tabIndex, ref);
 
+  /// V2.1 FINAL — the override scope, and immediately beneath it the [Consumer]
+  /// that gives every navigating callback a ref INSIDE it.
+  ///
+  /// The whole shell body is built in that builder deliberately: navigation is
+  /// triggered from the rail, from the bottom bar, from the Setup Center's
+  /// stats and from the Overview's KPI drill-downs, and a ref that only some of
+  /// those could reach would be a fix that holds for some routes and not
+  /// others.
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+        // V2.1 — the setup/device repositories reach their providers HERE,
+        // above the KeyedSubtree, so the loads survive the destination
+        // teardown. These are the SAME instances the Devices / Printers /
+        // Staff tabs use; nothing is constructed twice.
+        setupDevicesRepositoryProvider.overrideWithValue(_realDeviceRepo),
+        setupPrintersRepositoryProvider.overrideWithValue(_printersRepo),
+        setupStaffRepositoryProvider.overrideWithValue(_staffRepo),
+        setupMenuSourceProvider.overrideWithValue(widget.menuReadSource),
+        setupMenuScopeProvider.overrideWithValue(_menuScope),
+      ],
+      child: Consumer(builder: (context, ref, _) => _body(context, l10n, ref)),
+    );
+  }
+
+  Widget _body(BuildContext context, AppLocalizations l10n, WidgetRef ref) {
     // KeyedSubtree: each tab gets a FRESH subtree, so the per-surface
     // ProviderScopes are recreated instead of reused with different override
     // types across tabs (Riverpod forbids changing an override's type in
@@ -431,7 +489,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final content = KeyedSubtree(
       key: ValueKey('dashboard-tab-$_index'),
       child: switch (_index) {
-        0 => _overview(),
+        0 => _overview(ref),
         1 => _menuSurface(context, l10n),
         2 => _adminSurface(
           const AdminDevicesScreen(),
@@ -487,88 +545,71 @@ class _DashboardShellState extends State<DashboardShell> {
       onSignOut: widget.onSignOut,
     );
 
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-        // V2.1 — the setup/device repositories reach their providers HERE,
-        // above the KeyedSubtree, so the loads survive the destination
-        // teardown. These are the SAME instances the Devices / Printers /
-        // Staff tabs use; nothing is constructed twice.
-        setupDevicesRepositoryProvider.overrideWithValue(_realDeviceRepo),
-        setupPrintersRepositoryProvider.overrideWithValue(_printersRepo),
-        setupStaffRepositoryProvider.overrideWithValue(_staffRepo),
-        setupMenuSourceProvider.overrideWithValue(widget.menuReadSource),
-        setupMenuScopeProvider.overrideWithValue(_menuScope),
-      ],
-      child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            // Dashboard "1c" responsive rules (§9): the labelled/icon rail
-            // stays on the reading-start side (right in RTL) for every
-            // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
-            final width = constraints.maxWidth;
-            if (width >= DashboardShell._railBreakpoint) {
-              final compact = width < DashboardShell._fullRailBreakpoint;
-              final railWidth = width >= DashboardShell._desktopBreakpoint
-                  ? 232.0
-                  : (compact ? 72.0 : 212.0);
-              return Row(
-                children: [
-                  _SideNav(
-                    destinations: _destinations(l10n),
-                    selectedIndex: _index,
-                    onSelected: _select,
-                    membership: widget.membership,
-                    width: railWidth,
-                    compact: compact,
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        header,
-                        const Divider(height: 1),
-                        Expanded(child: content),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }
-            return Column(
+    return Scaffold(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+          // stays on the reading-start side (right in RTL) for every
+          // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+          final width = constraints.maxWidth;
+          if (width >= DashboardShell._railBreakpoint) {
+            final compact = width < DashboardShell._fullRailBreakpoint;
+            final railWidth = width >= DashboardShell._desktopBreakpoint
+                ? 232.0
+                : (compact ? 72.0 : 212.0);
+            return Row(
               children: [
-                header,
-                const Divider(height: 1),
-                Expanded(child: content),
-                NavigationBar(
-                  key: const Key('dashboard-bottom-nav'),
+                _SideNav(
+                  destinations: _destinations(l10n),
                   selectedIndex: _index,
-                  onDestinationSelected: _select,
-                  // RF-132 (Codex review): ten destinations at phone width
-                  // leave no room to render any label unclipped, so the bar
-                  // is deliberately ICON-ONLY. NavigationBar keeps each
-                  // destination's label + selected state in its semantics
-                  // ("<label>, Tab N of 10") even with the label hidden,
-                  // and the tooltip covers hover/long-press; selection
-                  // stays visible via the filled icon + indicator pill.
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                  destinations: _destinations(l10n)
-                      .map(
-                        (d) => NavigationDestination(
-                          icon: Icon(d.icon),
-                          selectedIcon: Icon(d.selectedIcon),
-                          label: d.label,
-                          tooltip: d.label,
-                        ),
-                      )
-                      .toList(),
+                  onSelected: (value) => _select(value, ref),
+                  membership: widget.membership,
+                  width: railWidth,
+                  compact: compact,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      header,
+                      const Divider(height: 1),
+                      Expanded(child: content),
+                    ],
+                  ),
                 ),
               ],
             );
-          },
-        ),
+          }
+          return Column(
+            children: [
+              header,
+              const Divider(height: 1),
+              Expanded(child: content),
+              NavigationBar(
+                key: const Key('dashboard-bottom-nav'),
+                selectedIndex: _index,
+                onDestinationSelected: (value) => _select(value, ref),
+                // RF-132 (Codex review): ten destinations at phone width
+                // leave no room to render any label unclipped, so the bar
+                // is deliberately ICON-ONLY. NavigationBar keeps each
+                // destination's label + selected state in its semantics
+                // ("<label>, Tab N of 10") even with the label hidden,
+                // and the tooltip covers hover/long-press; selection
+                // stays visible via the filled icon + indicator pill.
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                destinations: _destinations(l10n)
+                    .map(
+                      (d) => NavigationDestination(
+                        icon: Icon(d.icon),
+                        selectedIcon: Icon(d.selectedIcon),
+                        label: d.label,
+                        tooltip: d.label,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -582,7 +623,7 @@ class _DashboardShellState extends State<DashboardShell> {
   /// chrome), instead of a wrapping Column. Repository ownership, the menu params,
   /// the `_select` navigation callbacks, and the report ProviderScope overrides
   /// are all unchanged.
-  Widget _overview() {
+  Widget _overview(WidgetRef ref) {
     final devices = _realDeviceRepo;
     // The direct null-check promotes `devices` to non-null inside the branch.
     final Widget? setupPanel;
@@ -593,10 +634,10 @@ class _DashboardShellState extends State<DashboardShell> {
         // V2.1 — no repositories here any more: the panel reads the four
         // provider entries keyed by the current setup scope, so returning to
         // Overview costs nothing.
-        onOpenMenu: () => _goTo(DashboardDestination.menu),
-        onOpenDevices: () => _goTo(DashboardDestination.devices),
-        onOpenPrinters: () => _goTo(DashboardDestination.printers),
-        onOpenStaff: () => _goTo(DashboardDestination.staff),
+        onOpenMenu: () => _goTo(DashboardDestination.menu, ref),
+        onOpenDevices: () => _goTo(DashboardDestination.devices, ref),
+        onOpenPrinters: () => _goTo(DashboardDestination.printers, ref),
+        onOpenStaff: () => _goTo(DashboardDestination.staff, ref),
       );
     } else {
       setupPanel = null;
@@ -607,7 +648,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final Widget? deviceSummary = devices == null
         ? null
         : DashboardDeviceSummaryCard(
-            onOpenDevices: () => _goTo(DashboardDestination.devices),
+            onOpenDevices: () => _goTo(DashboardDestination.devices, ref),
           );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
@@ -622,7 +663,7 @@ class _DashboardShellState extends State<DashboardShell> {
       // seam. The Overview binds it to a WidgetRef and executes typed
       // drill-downs; the shell learns nothing about filters, and no magic
       // number crosses this boundary.
-      onNavigate: _goTo,
+      onNavigate: (destination) => _goTo(destination, ref),
     );
   }
 
