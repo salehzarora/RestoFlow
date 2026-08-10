@@ -1154,18 +1154,34 @@ class _SideNav extends StatelessWidget {
   }
 }
 
-/// One rail destination: brand-green fill + white foreground when selected,
-/// muted ink otherwise, with a warm hover on inactive rows. Icon-only when
-/// [compact] (label moves to a tooltip). The Row fills the rail width so the
-/// active fill spans it and the icon centres in compact mode.
+/// One rail destination: a navy fill + white foreground when selected, muted ink
+/// otherwise, with a cool brand hover on every row. Icon-only when [compact]
+/// (label moves to a tooltip). The Row fills the rail width so the active fill
+/// spans it and the icon centres in compact mode.
 ///
 /// Accessibility (RF-125): each tile is one merged semantic node — a selectable
 /// button carrying the destination [item.label] even when the visual is
 /// icon-only ([compact]) — so selection is announced (not conveyed by colour
 /// alone; the icon also switches to its filled variant) and screen readers read
-/// a label for every destination. Keyboard focus is visible via [InkWell]'s
-/// focus highlight.
-class _SideNavTile extends StatelessWidget {
+/// a label for every destination.
+///
+/// V2.2 — WHY THE FILL MOVED, AND WHY FOCUS IS A RING.
+///
+/// The selected fill used to be painted by an [AnimatedContainer] that was the
+/// InkWell's CHILD. Material draws ink — hover, focus and splash overlays —
+/// between its own surface and that child, so on a selected tile every one of
+/// those overlays was painted UNDERNEATH an opaque navy rectangle. The result
+/// was a destination that gave no hover feedback and, worse, showed no keyboard
+/// focus at all: a keyboard user tabbing along the rail could not see where they
+/// were. The fill is now the [Material]'s own colour, which puts the ink layer
+/// back on top of it where the whole feedback system expects to be.
+///
+/// Focus is a RING rather than a wash, and that is deliberate: a wash is a
+/// colour-only signal, and on the navy bed there is no wash light enough to read
+/// reliably at a glance. The ring is drawn as a non-participating overlay, so
+/// gaining focus changes nothing about the tile's size or position — a focus
+/// indicator that nudges the layout is its own bug.
+class _SideNavTile extends StatefulWidget {
   const _SideNavTile({
     required this.item,
     required this.selected,
@@ -1179,11 +1195,32 @@ class _SideNavTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_SideNavTile> createState() => _SideNavTileState();
+}
+
+class _SideNavTileState extends State<_SideNavTile> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final selected = widget.selected;
+    final compact = widget.compact;
     final radius = BorderRadius.circular(RestoflowRadii.md);
     final iconColor = selected ? Colors.white : kRestoflowInk3;
     final labelColor = selected ? Colors.white : kRestoflowInk2;
+
+    // Hover/focus overlays, each read against the bed they actually land on.
+    // On the navy pill only a light film is legible; on the white rail the quiet
+    // brand tint is a real step (the previous hover was the page canvas, barely
+    // 3% off white, which is why the rail felt inert under the mouse).
+    final hoverColor = selected
+        ? Colors.white.withValues(alpha: 0.14)
+        : kRestoflowNavyContainer;
+    final focusWash = selected
+        ? Colors.white.withValues(alpha: 0.20)
+        : kRestoflowNavyContainer;
+    final focusRing = selected ? Colors.white : kRestoflowSeedColor;
 
     final row = Row(
       mainAxisAlignment: compact
@@ -1191,7 +1228,7 @@ class _SideNavTile extends StatelessWidget {
           : MainAxisAlignment.start,
       children: [
         Icon(
-          selected ? item.selectedIcon : item.icon,
+          selected ? widget.item.selectedIcon : widget.item.icon,
           size: RestoflowIconSizes.md,
           color: iconColor,
         ),
@@ -1199,7 +1236,7 @@ class _SideNavTile extends StatelessWidget {
           const SizedBox(width: RestoflowSpacing.md),
           Expanded(
             child: Text(
-              item.label,
+              widget.item.label,
               style: theme.textTheme.labelLarge?.copyWith(color: labelColor),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1209,10 +1246,39 @@ class _SideNavTile extends StatelessWidget {
       ],
     );
 
+    final body = Padding(
+      padding: EdgeInsetsDirectional.symmetric(
+        horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
+        vertical: RestoflowSpacing.md,
+      ),
+      child: row,
+    );
+
+    final interactive = Material(
+      // THE FILL. Being the Material's colour rather than a child decoration is
+      // the whole fix — the ink layer now sits above it.
+      color: selected ? kRestoflowSeedColor : Colors.transparent,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: widget.onTap,
+        onFocusChange: (value) {
+          if (value != _focused) setState(() => _focused = value);
+        },
+        borderRadius: radius,
+        hoverColor: hoverColor,
+        focusColor: focusWash,
+        child: ExcludeSemantics(
+          child: compact
+              ? Tooltip(message: widget.item.label, child: body)
+              : body,
+        ),
+      ),
+    );
+
     final tile = AnimatedContainer(
       duration: RestoflowDurations.fast,
       decoration: BoxDecoration(
-        color: selected ? kRestoflowSeedColor : Colors.transparent,
         borderRadius: radius,
         // RF-132: the active pill's soft shadow is BRAND tinted (the reference's
         // restrained glow) rather than the neutral card shadow.
@@ -1229,11 +1295,26 @@ class _SideNavTile extends StatelessWidget {
               ]
             : null,
       ),
-      padding: EdgeInsetsDirectional.symmetric(
-        horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
-        vertical: RestoflowSpacing.md,
+      child: Stack(
+        children: [
+          interactive,
+          if (_focused)
+            // Positioned.fill + IgnorePointer: the ring is painted INSIDE the
+            // tile's existing bounds and takes part in neither layout nor hit
+            // testing, so focus cannot move anything or steal a tap.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const Key('rail-focus-ring'),
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: focusRing, width: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      child: row,
     );
 
     return Padding(
@@ -1246,26 +1327,8 @@ class _SideNavTile extends StatelessWidget {
         child: Semantics(
           selected: selected,
           button: true,
-          label: item.label,
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: radius,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: radius,
-              // Inactive rows show a warm hover; the active row's opaque green
-              // fill sits above the ink so it stays solid.
-              hoverColor: kRestoflowCanvas,
-              // Visible keyboard focus on the white rail — a light brand tint,
-              // distinct from the warm hover.
-              focusColor: kRestoflowSeedColor.withValues(alpha: 0.12),
-              child: ExcludeSemantics(
-                child: compact
-                    ? Tooltip(message: item.label, child: tile)
-                    : tile,
-              ),
-            ),
-          ),
+          label: widget.item.label,
+          child: tile,
         ),
       ),
     );
