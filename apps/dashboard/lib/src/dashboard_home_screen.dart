@@ -7,6 +7,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
+import 'analytics/analytics_comparison_labels.dart';
 import 'analytics/analytics_window.dart';
 import 'analytics/comparison_delta.dart';
 import 'analytics/custom_range_sheet.dart';
@@ -79,6 +80,9 @@ class DashboardHomeScreen extends ConsumerWidget {
     // banner/header are honest about the data source (never claim demo data in
     // real mode, nor vice versa). Demo is the DEFAULT.
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // F2.1 — the ONE committed window, read where a ref exists and handed
+    // down as a value so the content widget stays Riverpod-free.
+    final window = ref.watch(analyticsWindowProvider);
     final reportAsync = ref.watch(dashboardReportProvider);
 
     // F0.6: refresh the CURRENT report key only. Invalidating
@@ -122,6 +126,7 @@ class DashboardHomeScreen extends ConsumerWidget {
             child: reportAsync.when(
               data: (report) => _ReportContent(
                 report: report,
+                window: window,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
                 salesByDay: seriesKey == null
@@ -556,6 +561,7 @@ class _CustomRangeCaption extends StatelessWidget {
 class _ReportContent extends StatelessWidget {
   const _ReportContent({
     required this.report,
+    required this.window,
     required this.isDemo,
     this.deviceSummary,
     this.salesByDay,
@@ -564,6 +570,15 @@ class _ReportContent extends StatelessWidget {
   });
 
   final DashboardReport report;
+
+  /// F2.1 — the COMMITTED analytics window, passed as a plain value so this
+  /// widget stays Riverpod-free (the same rule [salesSeriesKey] follows).
+  ///
+  /// The comparison wording is derived from THIS, not from `report.range`: a
+  /// custom window leaves that field holding whatever preset token the request
+  /// was built with, which is how a 14-day range came to announce "previous 30
+  /// days".
+  final AnalyticsWindow window;
 
   /// Whether the report is demo data (computed locally) or real data. Drives the
   /// banner so the data source is labelled honestly (RF-140).
@@ -604,14 +619,8 @@ class _ReportContent extends StatelessWidget {
     // the range's prior window (owner_report_range). The label matches the
     // selected range; a null comparison shows no delta (never invented). Integer
     // percentage math only (never floating-point).
-    String deltaLabel(int pct) => switch (report.range) {
-      ReportRange.today => l10n.dashboardDeltaVsYesterday(pct),
-      ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
-      ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
-      ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
-      ReportRange.last60 => l10n.dashboardDeltaVsPrev60(pct),
-      ReportRange.last90 => l10n.dashboardDeltaVsPrev90(pct),
-    };
+    String deltaLabel(int pct) =>
+        analyticsComparisonDeltaLabel(l10n, window, pct);
     final comparison = report.comparison;
     // CLIENT-B: the KPI deltas now go through the SHARED [ComparisonDelta]
     // instead of the loose `deltaPercent`, so the zero-baseline rule lives in
@@ -1117,14 +1126,7 @@ class _ReportContent extends StatelessWidget {
             (comparison.completedOrderCount != null ||
                 comparison.discountTotalMinor != null))
         ? _ComparisonStrip(
-            title: switch (report.range) {
-              ReportRange.today => l10n.dashboardComparedVsYesterdayAll,
-              ReportRange.yesterday => l10n.dashboardComparedVsDayBefore,
-              ReportRange.last7 => l10n.dashboardComparedVsPrev7,
-              ReportRange.last30 => l10n.dashboardComparedVsPrev30,
-              ReportRange.last60 => l10n.dashboardComparedVsPrev60,
-              ReportRange.last90 => l10n.dashboardComparedVsPrev90,
-            },
+            title: analyticsComparisonTitle(l10n, window),
             rows: [
               if (comparison.completedOrderCount != null)
                 _ComparisonRowData(
