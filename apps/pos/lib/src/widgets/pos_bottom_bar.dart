@@ -17,7 +17,7 @@ Future<void> showPosCartSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    barrierColor: const Color(0x7310201A),
+    barrierColor: const Color(0x730B1526),
     builder: (sheetContext) {
       final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.89;
       return ConstrainedBox(
