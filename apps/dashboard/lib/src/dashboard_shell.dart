@@ -877,14 +877,24 @@ class _ShellHeaderBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: RestoflowSpacing.sm),
-          RestoflowStatusPill(
-            // DESIGN-002: user-facing data-source wording (was the developer
-            // "Demo" / "Real" jargon).
-            label: isReal
-                ? l10n.dashboardModeLiveData
-                : l10n.dashboardModeDemoData,
-            tone: isReal ? RestoflowTone.success : RestoflowTone.info,
-            icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
+          // Flexible, because this Row is the one place a hardened pill still
+          // cannot save itself. A non-flex child of a horizontal RenderFlex is
+          // laid out with an UNBOUNDED width, so the pill keeps its full
+          // intrinsic size, starves the Expanded context label beside it, and
+          // the HEADER overflows rather than the pill. Arabic and Hebrew reach
+          // that point at 390px / 2x where English does not. Giving the pill a
+          // finite share is the call-site half of the fix; the component owns
+          // the other half.
+          Flexible(
+            child: RestoflowStatusPill(
+              // DESIGN-002: user-facing data-source wording (was the developer
+              // "Demo" / "Real" jargon).
+              label: isReal
+                  ? l10n.dashboardModeLiveData
+                  : l10n.dashboardModeDemoData,
+              tone: isReal ? RestoflowTone.success : RestoflowTone.info,
+              icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
+            ),
           ),
           const SizedBox(width: RestoflowSpacing.xs),
           // Sprint (I): the language switcher lives on the persistent header,
