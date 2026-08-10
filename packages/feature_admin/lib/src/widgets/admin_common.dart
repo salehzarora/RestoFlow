@@ -163,11 +163,24 @@ class AdminPill extends StatelessWidget {
             Icon(icon, size: RestoflowIconSizes.xs, color: foreground),
             const SizedBox(width: RestoflowSpacing.xs),
           ],
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
+          // The label yields when the pill is width-constrained.
+          //
+          // A pill sizes to its content, which is right until something hands
+          // it less room than that — a Wrap line at 390px, or a status pill
+          // beside a device name at a doubled text scale. The Text could not
+          // give any ground, so the pill's own Row overflowed and painted the
+          // striped bar INSIDE the pill. Flexible is loose-fit, so a pill with
+          // room keeps its exact natural width and nothing that fits today
+          // moves; only a pill that would otherwise overflow now ellipsizes.
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

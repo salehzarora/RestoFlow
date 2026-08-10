@@ -482,10 +482,19 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
-                AdminPill.tone(
-                  label: visual.label,
-                  tone: visual.tone,
-                  icon: visual.icon,
+                // Flexible, because a Row lays a NON-flex child out with an
+                // unbounded main axis: the status pill took its full intrinsic
+                // width and the header row ran past the card whenever the name
+                // beside it needed room too (most visibly at a doubled text
+                // scale). Loose fit — a pill that fits keeps its natural width;
+                // one that would not now gets a bounded constraint it can
+                // ellipsize inside instead of an overflow.
+                Flexible(
+                  child: AdminPill.tone(
+                    label: visual.label,
+                    tone: visual.tone,
+                    icon: visual.icon,
+                  ),
                 ),
               ],
             ),
@@ -534,8 +543,30 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
             ],
             if (widget.canManage && (_revocable || _action() != null)) ...[
               const SizedBox(height: RestoflowSpacing.md),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              // The action row REFLOWS instead of clipping.
+              //
+              // It used to be `Row(mainAxisAlignment: end)` holding two
+              // intrinsically-sized buttons — the danger-ghost Revoke and
+              // whichever single lifecycle action the status offers.
+              // `mainAxisAlignment` decides where SPARE space goes and does
+              // nothing when there is none, and neither child was flexible, so
+              // below roughly 540px the pair simply ran past the card: 52/66/29
+              // px at 390 in English, 78/74/50 at 390 in Arabic, and still 12
+              // and 26 at 430. What that painted over is the point — the
+              // striped bar landed on a control that revokes a paired device.
+              //
+              // A Wrap keeps the identical children, in the identical order,
+              // aligned to the identical reading end, and lets the second
+              // button drop to its own line when the first no longer leaves
+              // room. Deliberately NOT a FittedBox and not an icon-only
+              // fallback: both keep the layout "working" by making a
+              // destructive control smaller or less legible, which is a worse
+              // outcome than a second line.
+              Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.sm,
                 children: [
                   if (_revocable)
                     TextButton.icon(
@@ -547,10 +578,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                       ),
                       label: Text(l10n.adminRevoke),
                     ),
-                  if (_action() case final action?) ...[
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    action,
-                  ],
+                  if (_action() case final action?) action,
                 ],
               ),
             ],

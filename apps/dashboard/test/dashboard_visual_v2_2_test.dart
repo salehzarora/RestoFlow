@@ -77,21 +77,34 @@ const _member = MembershipContext(
   status: 'active',
 );
 
-/// Every RenderFlex that reported an overflow in the current tree.
+/// Runs [body] and returns every RenderFlex overflow the renderer reported.
 ///
-/// Flutter reports overflow through the error reporter at PAINT time, so a
-/// widget test that never paints, or that swallows exceptions, sees nothing.
-/// Driving a real viewport and then reading `takeException` is the only way this
-/// class of defect is observable at all — which is exactly why it survived.
-List<String> _overflowErrors(WidgetTester tester) {
-  final found = <String>[];
-  var error = tester.takeException();
-  while (error != null) {
-    final text = error.toString();
-    if (text.contains('overflowed')) found.add(text.split('\n').first);
-    error = tester.takeException();
-  }
-  return found;
+/// NOT `tester.takeException()`. A RenderFlex overflow is reported during
+/// PAINT through [FlutterError.onError], and in this harness it does NOT reach
+/// `takeException` - that getter returns null while the renderer is dumping
+/// "overflowed by 52 pixels" to the console. A matrix built on it is therefore
+/// green whatever the layout does, which is worse than having no matrix at all,
+/// because it reads as coverage. Found while fixing the shared admin devices
+/// screen, whose overflow this file's first draft could not see.
+///
+/// The handler is restored BEFORE the caller's expectation runs: the test
+/// binding asserts it owns `FlutterError.onError` by then, and leaving the
+/// override installed turns every later failure in the file into an opaque
+/// "did not complete".
+Future<List<String>> _overflowsDuring(Future<void> Function() body) async {
+  final overflows = <String>[];
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    final text = details.exceptionAsString();
+    if (text.contains('overflowed')) {
+      overflows.add(text.split('\n').first.trim());
+    } else {
+      previous?.call(details);
+    }
+  };
+  await body();
+  FlutterError.onError = previous;
+  return overflows;
 }
 
 void main() {
@@ -287,8 +300,10 @@ void main() {
     testWidgets('the rail renders without overflow at 2x text scale', (
       tester,
     ) async {
-      await pumpRail(tester, scale: 2.0);
-      expect(_overflowErrors(tester), isEmpty);
+      final overflows = await _overflowsDuring(
+        () => pumpRail(tester, scale: 2.0),
+      );
+      expect(overflows, isEmpty);
       expect(find.byKey(const Key('dashboard-side-rail')), findsOneWidget);
     });
   });
@@ -318,9 +333,11 @@ void main() {
     // mobile acceptance widths.
     for (final width in [700.0, 540.0, 430.0, 390.0]) {
       testWidgets('no overflow at ${width.toInt()}px', (tester) async {
-        await pumpPrinters(tester, Size(width, 1600));
+        final overflows = await _overflowsDuring(
+          () => pumpPrinters(tester, Size(width, 1600)),
+        );
         expect(
-          _overflowErrors(tester),
+          overflows,
           isEmpty,
           reason: 'the printer action row must reflow, never clip',
         );
@@ -328,17 +345,21 @@ void main() {
     }
 
     testWidgets('no overflow at 430px, 2x text scale', (tester) async {
-      await pumpPrinters(tester, const Size(430, 2400), scale: 2.0);
-      expect(_overflowErrors(tester), isEmpty);
+      final overflows = await _overflowsDuring(
+        () => pumpPrinters(tester, const Size(430, 2400), scale: 2.0),
+      );
+      expect(overflows, isEmpty);
     });
 
     testWidgets('no overflow at 430px in Arabic', (tester) async {
-      await pumpPrinters(
-        tester,
-        const Size(430, 1600),
-        locale: const Locale('ar'),
+      final overflows = await _overflowsDuring(
+        () => pumpPrinters(
+          tester,
+          const Size(430, 1600),
+          locale: const Locale('ar'),
+        ),
       );
-      expect(_overflowErrors(tester), isEmpty);
+      expect(overflows, isEmpty);
     });
 
     testWidgets('every printer action survives the reflow', (tester) async {
@@ -458,9 +479,11 @@ void main() {
     ]) {
       testWidgets('no overflow at ${width.toInt()}px', (tester) async {
         _size(tester, Size(width, 3600));
-        await tester.pumpWidget(_app(const DashboardHomeScreen()));
-        await tester.pumpAndSettle();
-        expect(_overflowErrors(tester), isEmpty);
+        final overflows = await _overflowsDuring(() async {
+          await tester.pumpWidget(_app(const DashboardHomeScreen()));
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
         // The range selector stays usable at every width (never scrolled off).
         expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
       });
@@ -476,22 +499,26 @@ void main() {
         tester,
       ) async {
         _size(tester, const Size(1280, 6000));
-        await tester.pumpWidget(
-          _app(const DashboardHomeScreen(), locale: locale, scale: 2.0),
-        );
-        await tester.pumpAndSettle();
-        expect(_overflowErrors(tester), isEmpty);
+        final overflows = await _overflowsDuring(() async {
+          await tester.pumpWidget(
+            _app(const DashboardHomeScreen(), locale: locale, scale: 2.0),
+          );
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
       });
 
       testWidgets('Overview at 430 / 2x / ${locale.languageCode}', (
         tester,
       ) async {
         _size(tester, const Size(430, 9000));
-        await tester.pumpWidget(
-          _app(const DashboardHomeScreen(), locale: locale, scale: 2.0),
-        );
-        await tester.pumpAndSettle();
-        expect(_overflowErrors(tester), isEmpty);
+        final overflows = await _overflowsDuring(() async {
+          await tester.pumpWidget(
+            _app(const DashboardHomeScreen(), locale: locale, scale: 2.0),
+          );
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
       });
     }
   });
@@ -607,6 +634,73 @@ void main() {
         isNot(paymentTenderColorOf(context, 'cash')),
       );
     });
+  });
+
+  // =========================================================================
+  // I. THE SHARED DEVICES SCREEN, AS THE DASHBOARD RENDERS IT
+  //
+  // SHARED-ADMIN-DEVICE-ACTIONS-RESPONSIVE-001. The screen lives in
+  // feature_admin and has its own matrix there; this group exists because the
+  // defect was only ever OBSERVED here — the Dashboard wraps it in a demo
+  // banner column inside the shell, which is a narrower frame than the
+  // standalone harness, and that is why the two contexts reported different
+  // pixel counts for the same broken row.
+  // =========================================================================
+  group('I. the Devices destination holds at mobile widths', () {
+    Future<List<String>> openDevices(
+      WidgetTester tester, {
+      required double width,
+      Locale locale = const Locale('en'),
+    }) async {
+      _size(tester, Size(width, 3000));
+      return _overflowsDuring(() async {
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              locale: locale,
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              theme: restoflowBaseTheme(),
+              home: DashboardShell(
+                membership: _member,
+                deviceRepositoryFor: (_) => _Devices(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        // Phone layout at these widths: the bottom nav owns navigation.
+        tester
+            .widget<NavigationBar>(
+              find.byKey(const Key('dashboard-bottom-nav')),
+            )
+            .onDestinationSelected!(DashboardDestination.devices.tabIndex);
+        await tester.pumpAndSettle();
+      });
+    }
+
+    for (final width in [390.0, 420.0, 430.0]) {
+      for (final locale in const [Locale('en'), Locale('ar')]) {
+        testWidgets('Devices at ${width.toInt()}px / ${locale.languageCode}', (
+          tester,
+        ) async {
+          final overflows = await openDevices(
+            tester,
+            width: width,
+            locale: locale,
+          );
+          expect(
+            overflows,
+            isEmpty,
+            reason: 'the Dashboard must render the shared screen cleanly',
+          );
+          // The destination really opened, and the shell survived it.
+          expect(find.byType(AdminDevicesScreen), findsOneWidget);
+          expect(find.byKey(const Key('dashboard-bottom-nav')), findsOneWidget);
+          expect(find.byKey(const Key('reports-heading')), findsNothing);
+        });
+      }
+    }
   });
 
   // =========================================================================
