@@ -1826,40 +1826,22 @@ class _ShiftCashCard extends StatelessWidget {
       title: l10n.dashboardShiftCashTitle,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
-        // A PILL MAY NEVER BE WIDER THAN THE ROW IT SITS IN.
-        //
-        // `Wrap` offers a child the full width but never forces it, and
-        // `RestoflowStatusPill` sizes to its label, so a counted label such as
-        // "12 closed today" overflows its own inner `Row` at large text scales
-        // instead of being laid out narrower. Scaling down is the honest
-        // response: the whole label stays readable, which clipping or an
-        // ellipsis would not preserve, and at ordinary text scales the pill is
-        // already narrower than the bound so nothing scales at all.
-        LayoutBuilder(
-          builder: (context, constraints) => Wrap(
-            spacing: RestoflowSpacing.sm,
-            runSpacing: RestoflowSpacing.xs,
-            children: [
-              for (final pill in <Widget>[
-                RestoflowStatusPill(
-                  label: closedLabel,
-                  tone: RestoflowTone.info,
-                ),
-                RestoflowStatusPill(
-                  label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
-                  tone: RestoflowTone.neutral,
-                ),
-              ])
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: AlignmentDirectional.centerStart,
-                    child: pill,
-                  ),
-                ),
-            ],
-          ),
+        // DESIGN-SYSTEM-STATUS-PILL-OVERFLOW-001 — the LayoutBuilder +
+        // ConstrainedBox + FittedBox(scaleDown) that F3 wrapped these two pills
+        // in are gone. `RestoflowStatusPill` now refuses to exceed the box it
+        // is handed, so the defence belongs to the component and repeating it
+        // here would only shrink a counted label below the text scale the user
+        // asked for. A plain Wrap is once again the whole story.
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            RestoflowStatusPill(label: closedLabel, tone: RestoflowTone.info),
+            RestoflowStatusPill(
+              label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
+              tone: RestoflowTone.neutral,
+            ),
+          ],
         ),
         if (!shiftCash.hasClosedShifts) ...[
           const SizedBox(height: RestoflowSpacing.md),
