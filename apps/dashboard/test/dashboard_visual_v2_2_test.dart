@@ -30,7 +30,9 @@ import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
 import 'package:restoflow_dashboard/src/printers/printers_repository.dart';
 import 'package:restoflow_dashboard/src/printers/printers_screen.dart';
+import 'package:restoflow_dashboard/src/setup/setup_center.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
+import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -700,6 +702,71 @@ void main() {
           expect(find.byKey(const Key('reports-heading')), findsNothing);
         });
       }
+    }
+  });
+
+  // =========================================================================
+  // J. SHARED-READINESS-STRIP-TEXTSCALE-001 — the guard lives HERE
+  //
+  // The fix is in `packages/design_system` (the completion cluster's header is
+  // now a Wrap), but the defect only reproduces through the DASHBOARD's real
+  // composition: localized labels, live stats and a trailing refresh, in the
+  // two-column band around 700px. A design-system fixture with invented English
+  // labels passed at 700 x 2x even while the shipped screen overflowed by 27px,
+  // so a guard placed there would have been decoration. This one failed at 27px
+  // on the parent commit, in all three locales.
+  // =========================================================================
+  group('J. the setup readiness strip holds at a doubled text scale', () {
+    for (final locale in const [Locale('en'), Locale('ar'), Locale('he')]) {
+      testWidgets('700px / 2x / ${locale.languageCode}', (tester) async {
+        _size(tester, const Size(700, 6000));
+        final overflows = await _overflowsDuring(() async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                setupDevicesRepositoryProvider.overrideWithValue(_Devices()),
+                setupPrintersRepositoryProvider.overrideWithValue(
+                  InMemoryPrintersStore(),
+                ),
+                setupStaffRepositoryProvider.overrideWithValue(
+                  InMemoryStaffStore(),
+                ),
+              ],
+              child: MaterialApp(
+                locale: locale,
+                localizationsDelegates: restoflowLocalizationsDelegates,
+                supportedLocales: kSupportedLocales,
+                theme: restoflowBaseTheme(),
+                builder: (context, child) => MediaQuery.withClampedTextScaling(
+                  minScaleFactor: 2.0,
+                  maxScaleFactor: 2.0,
+                  child: child!,
+                ),
+                home: Scaffold(
+                  body: SingleChildScrollView(
+                    child: DashboardSetupCenter(
+                      onOpenMenu: () {},
+                      onOpenDevices: () {},
+                      onOpenPrinters: () {},
+                      onOpenStaff: () {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        });
+        expect(
+          overflows,
+          isEmpty,
+          reason: 'an owner with large text must still read their checklist',
+        );
+        // ...and the checklist still says everything it said before.
+        expect(find.byKey(const Key('setup-stat-devices')), findsOneWidget);
+        expect(find.byKey(const Key('setup-stat-printers')), findsOneWidget);
+        expect(find.byKey(const Key('setup-stat-staff')), findsOneWidget);
+      });
     }
   });
 

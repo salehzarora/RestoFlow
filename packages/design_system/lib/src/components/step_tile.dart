@@ -51,12 +51,28 @@ class RestoflowStepTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // THE BADGE SIZES TO ITS NUMBER; IT USED TO CLAMP IT.
+          //
+          // This was a fixed 28x28 circle. A Container with a fixed size does
+          // not report a RenderFlex overflow when its child needs more room —
+          // it simply lays the child out inside the box and the rest is gone,
+          // silently. Measured: at 1.5x a two-digit step wants 42x30 and got
+          // 28x28, so "10" rendered as most of a "1"; at 2x even a single digit
+          // wants 28x40 and lost its descender. At 1x index 10 was already
+          // EXACTLY 28 wide — one pixel from breaking.
+          //
+          // Minimum constraints instead of a fixed box: identical at 1x for a
+          // single digit (28x28, and a pill radius on a square is a circle), and
+          // it grows into a stadium rather than truncating the number the badge
+          // exists to show.
           Container(
-            width: 28,
-            height: 28,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            padding: const EdgeInsetsDirectional.symmetric(
+              horizontal: RestoflowSpacing.xs,
+            ),
             decoration: BoxDecoration(
               color: done ? successBg : scheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(RestoflowRadii.pill),
             ),
             alignment: Alignment.center,
             child: done
