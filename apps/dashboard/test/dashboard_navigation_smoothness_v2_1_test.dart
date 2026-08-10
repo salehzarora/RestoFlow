@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_dashboard/src/analytics/dashboard_destination.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
 import 'package:restoflow_dashboard/src/setup/device_summary_card.dart';
 import 'package:restoflow_dashboard/src/setup/setup_center.dart';
@@ -415,7 +416,7 @@ void main() {
   group('H. leaving a WRITING tab refreshes only what that tab writes', () {
     Future<_CountingDevices> pumpShell(WidgetTester tester) async {
       final devices = _CountingDevices();
-      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.physicalSize = const Size(420, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -450,8 +451,10 @@ void main() {
       return devices;
     }
 
-    Future<void> goTo(WidgetTester tester, String label) async {
-      await tester.tap(find.text(label).last, warnIfMissed: false);
+    Future<void> goTo(WidgetTester tester, DashboardDestination d) async {
+      tester
+          .widget<NavigationBar>(find.byKey(const Key('dashboard-bottom-nav')))
+          .onDestinationSelected!(d.tabIndex);
       await tester.pumpAndSettle();
     }
 
@@ -468,14 +471,168 @@ void main() {
       final devices = await pumpShell(tester);
       final afterFirstMount = devices.loadDevicesCalls;
 
-      await goTo(tester, 'Orders');
-      await goTo(tester, 'Overview');
+      await goTo(tester, DashboardDestination.orders);
+      // Prove the switch really happened before asserting about caching.
+      expect(find.byKey(const Key('reports-heading')), findsNothing);
+      await goTo(tester, DashboardDestination.overview);
+      expect(find.byKey(const Key('reports-heading')), findsOneWidget);
 
       expect(
         devices.loadDevicesCalls,
         afterFirstMount,
         reason: 'Orders cannot write setup data, so the count stays cached',
       );
+    });
+  });
+
+  // =========================================================================
+  // I. PERMISSION DOWNGRADE — the ValueKey, not just the SetupScopeKey
+  // =========================================================================
+  group('I. a membership change rebuilds the scope-bearing repositories', () {
+    MembershipContext member({
+      String id = 'm-1',
+      String org = 'org-1',
+      MembershipRole role = MembershipRole.orgOwner,
+    }) => MembershipContext(
+      id: id,
+      organizationId: org,
+      organizationName: 'Org',
+      restaurantId: 'rest-1',
+      restaurantName: 'Rest',
+      branchId: 'branch-1',
+      branchName: 'Main',
+      role: role,
+      status: 'active',
+    );
+
+    /// Mirrors what main.dart does: the shell carries a membership-derived key.
+    Widget app(
+      MembershipContext membership,
+      List<AdminScope> built,
+      _CountingDevices devices, {
+      bool withKey = true,
+    }) => ProviderScope(
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        theme: restoflowBaseTheme(),
+        home: DashboardShell(
+          key: withKey
+              ? ValueKey(dashboardShellIdentity(membership))
+              : const ValueKey('fixed'),
+          membership: membership,
+          deviceRepositoryFor: (scope) {
+            built.add(scope);
+            return devices;
+          },
+        ),
+      ),
+    );
+
+    testWidgets('a downgraded role rebuilds the repository for the new scope', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final built = <AdminScope>[];
+      final devices = _CountingDevices();
+
+      await tester.pumpWidget(app(member(), built, devices));
+      await tester.pumpAndSettle();
+      expect(built, hasLength(1), reason: 'the owner scope was built once');
+
+      // A rebuild with the SAME membership must not churn.
+      await tester.pumpWidget(app(member(), built, devices));
+      await tester.pumpAndSettle();
+      expect(built, hasLength(1), reason: 'no needless repository rebuild');
+
+      // Downgrade the role: the repository was constructed for the OLD
+      // authority, so the State must be disposed and it must be rebuilt.
+      await tester.pumpWidget(
+        app(member(role: MembershipRole.cashier), built, devices),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        built,
+        hasLength(2),
+        reason: 'a weaker membership must not keep owner-scoped repositories',
+      );
+    });
+
+    testWidgets('a different organization rebuilds the repository', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final built = <AdminScope>[];
+      final devices = _CountingDevices();
+
+      await tester.pumpWidget(app(member(), built, devices));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(app(member(org: 'org-2'), built, devices));
+      await tester.pumpAndSettle();
+
+      expect(built, hasLength(2));
+      expect(
+        built.last.organizationId,
+        'org-2',
+        reason: 'the new repository must be scoped to the NEW tenant',
+      );
+    });
+  });
+
+  // =========================================================================
+  // J. NO DESTINATION RETENTION WAS INTRODUCED
+  // =========================================================================
+  group('J. the destination lifecycle is unchanged', () {
+    testWidgets('leaving a destination really does destroy its subtree', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(420, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            theme: restoflowBaseTheme(),
+            home: const DashboardShell(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('reports-heading')), findsOneWidget);
+
+      tester
+          .widget<NavigationBar>(find.byKey(const Key('dashboard-bottom-nav')))
+          .onDestinationSelected!(DashboardDestination.orders.tabIndex);
+      await tester.pumpAndSettle();
+
+      // If V2.1 had introduced Offstage/IndexedStack retention, the Overview
+      // heading would still be in the tree. It must not be: the poller and
+      // drill-down contracts both depend on destinations really going away.
+      expect(
+        find.byKey(const Key('reports-heading')),
+        findsNothing,
+        reason: 'no destination retention may have been introduced',
+      );
+      // Deliberately NOT asserting on Offstage/IndexedStack types: Material's
+      // own NavigationBar builds both, so those assertions would be about
+      // Flutter rather than about us (they fail on an untouched tree). The
+      // destroyed subtree above IS the evidence — a retained destination could
+      // not satisfy it, and the poller and drill-down contracts both rest on
+      // exactly that teardown.
     });
   });
 }
