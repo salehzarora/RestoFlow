@@ -9,6 +9,7 @@ import 'package:restoflow_dashboard/src/state/locale_controller.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
 
 /// Dashboard V2 — composition refinements over RF-132: the full-height rail,
 /// the interactive sales-by-hour selection, and the honest device readiness
@@ -50,6 +51,19 @@ class _FailingDevicesStub extends DemoAdminStore {
   Future<AdminResult<List<AdminDevice>>> loadDevices() async =>
       const Failure(AdminNotFound());
 }
+
+/// V2.1 — the card no longer takes a repository: it reads the canonical device
+/// provider, so a test supplies its stub by overriding the repository SEAM.
+/// Keeping the old call shape here means every existing expectation in this
+/// file still describes the same scenario.
+Widget _deviceCard({
+  required AdminRepository repository,
+  VoidCallback? onOpenDevices,
+  Key? key,
+}) => ProviderScope(
+  overrides: [setupDevicesRepositoryProvider.overrideWithValue(repository)],
+  child: DashboardDeviceSummaryCard(key: key, onOpenDevices: onOpenDevices),
+);
 
 void main() {
   testWidgets('the side rail runs the full viewport height with the header '
@@ -152,7 +166,7 @@ void main() {
           body: Center(
             child: SizedBox(
               width: 320,
-              child: DashboardDeviceSummaryCard(
+              child: _deviceCard(
                 repository: _DevicesStub(const [
                   AdminDevice(
                     id: 'd-1',
@@ -206,7 +220,7 @@ void main() {
           body: Center(
             child: SizedBox(
               width: 320,
-              child: DashboardDeviceSummaryCard(
+              child: _deviceCard(
                 repository: _FailingDevicesStub(),
                 onOpenDevices: () => opened++,
               ),
@@ -241,7 +255,7 @@ void main() {
         body: Center(
           child: SizedBox(
             width: 320,
-            child: DashboardDeviceSummaryCard(repository: repository),
+            child: _deviceCard(repository: repository),
           ),
         ),
       ),
@@ -315,7 +329,7 @@ void main() {
               child: SizedBox(
                 width: 320,
                 // A fresh key per pump: each scenario is an independent load.
-                child: DashboardDeviceSummaryCard(
+                child: _deviceCard(
                   key: UniqueKey(),
                   repository: _DevicesStub(devices),
                 ),
@@ -367,11 +381,7 @@ void main() {
       'slot — the unavailable card fills the operational row', (tester) async {
     _size(tester, const Size(1320, 3200));
     await tester.pumpWidget(
-      _wrap(
-        deviceSummary: DashboardDeviceSummaryCard(
-          repository: _FailingDevicesStub(),
-        ),
-      ),
+      _wrap(deviceSummary: _deviceCard(repository: _FailingDevicesStub())),
     );
     await tester.pumpAndSettle();
 

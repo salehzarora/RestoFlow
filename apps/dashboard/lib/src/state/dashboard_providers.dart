@@ -33,6 +33,7 @@ import '../data/owner_top_items_repository.dart';
 import '../data/real_owner_top_items_repository.dart';
 import '../data/order_history_models.dart';
 import 'order_history_providers.dart';
+import 'setup_device_providers.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -690,6 +691,13 @@ class DashboardRefreshController extends StateNotifier<bool> {
         _ref.read(currentOverviewRecentOrdersKeyProvider),
       ),
     );
+    // V2.1 — the Overview's setup block refreshes with the rest of the page.
+    // CURRENT key only: refreshing the branch on screen must not throw away
+    // another branch's cached readiness counts.
+    invalidateSetupSourcesFromRef(
+      _ref,
+      _ref.read(currentSetupScopeKeyProvider),
+    );
   }
 }
 
@@ -709,6 +717,11 @@ final dashboardRefreshControllerProvider =
         ownerTopItemsForKeyProvider,
         currentOverviewRecentOrdersKeyProvider,
         overviewRecentOrdersForKeyProvider,
+        currentSetupScopeKeyProvider,
+        setupDevicesProvider,
+        setupPrintersProvider,
+        setupStaffProvider,
+        setupMenuProvider,
       ],
     );
 

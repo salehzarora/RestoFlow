@@ -26,6 +26,7 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'state/setup_device_providers.dart';
 import 'analytics/dashboard_destination.dart';
 import 'widgets/language_selector.dart';
 import 'tables/tables_repository.dart';
@@ -413,6 +414,15 @@ class _DashboardShellState extends State<DashboardShell> {
         dashboardAuthTransportProvider.overrideWithValue(
           widget.reportsTransport,
         ),
+        // V2.1 — the setup/device repositories reach their providers HERE,
+        // above the KeyedSubtree, so the loads survive the destination
+        // teardown. These are the SAME instances the Devices / Printers /
+        // Staff tabs use; nothing is constructed twice.
+        setupDevicesRepositoryProvider.overrideWithValue(_realDeviceRepo),
+        setupPrintersRepositoryProvider.overrideWithValue(_printersRepo),
+        setupStaffRepositoryProvider.overrideWithValue(_staffRepo),
+        setupMenuSourceProvider.overrideWithValue(widget.menuReadSource),
+        setupMenuScopeProvider.overrideWithValue(_menuScope),
       ],
       child: Scaffold(
         body: LayoutBuilder(
@@ -501,13 +511,9 @@ class _DashboardShellState extends State<DashboardShell> {
         widget.printersRepository != null &&
         widget.staffRepository != null) {
       setupPanel = DashboardSetupCenter(
-        devicesRepository: devices,
-        printersRepository: _printersRepo,
-        staffRepository: _staffRepo,
-        // The guided checklist counts the REAL menu when its seams are
-        // wired (sprint); a null scope/read source just omits the card.
-        menuReadSource: widget.menuReadSource,
-        menuScope: _menuScope,
+        // V2.1 — no repositories here any more: the panel reads the four
+        // provider entries keyed by the current setup scope, so returning to
+        // Overview costs nothing.
         onOpenMenu: () => _goTo(DashboardDestination.menu),
         onOpenDevices: () => _goTo(DashboardDestination.devices),
         onOpenPrinters: () => _goTo(DashboardDestination.printers),
@@ -522,7 +528,6 @@ class _DashboardShellState extends State<DashboardShell> {
     final Widget? deviceSummary = devices == null
         ? null
         : DashboardDeviceSummaryCard(
-            repository: devices,
             onOpenDevices: () => _goTo(DashboardDestination.devices),
           );
     // Scope the report seam to the active membership + the session-carrying
