@@ -217,9 +217,27 @@ class KdsTicketCard extends StatelessWidget {
                 ),
                 const SizedBox(height: RestoflowSpacing.sm),
               ],
+              // THE HEADER'S TRAILING CLUSTER CAN GIVE GROUND; THE ORDER
+              // NUMBER CANNOT.
+              //
+              // The elapsed pill, the status chip and the reprint control were
+              // all NON-FLEX children of this Row, so each measured its full
+              // intrinsic width however little the column had left — and at 2x
+              // text scale the row ran past the card by 48px in every script.
+              // A wall-mounted board is exactly where someone turns text size
+              // up, so this is the setting the defect was hiding behind.
+              //
+              // The cluster is now a Flexible-bounded Wrap: the pills drop to a
+              // second line rather than pushing anything off the card. The
+              // order number keeps the larger flex share and stays on the first
+              // line, because it is the one thing a chef reads from across the
+              // pass — §7's rule that supporting content yields before critical
+              // content, applied literally.
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
+                    flex: 3,
                     child: Text(
                       ticketHeader,
                       // PRINT-LAYOUT-001: the order number reads from across the
@@ -231,25 +249,31 @@ class KdsTicketCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (elapsedPill != null) ...[
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    elapsedPill,
-                  ],
                   const SizedBox(width: RestoflowSpacing.sm),
-                  KdsStatusChip(status: ticket.status),
-                  // A1: the always-visible per-card Reprint control (LIVE board).
-                  // Money-free; re-runs the existing kitchen print, never an
-                  // order/status change.
-                  if (onReprint != null) ...[
-                    const SizedBox(width: RestoflowSpacing.xs),
-                    IconButton(
-                      key: Key('kds-reprint-${ticket.kitchenTicketId}'),
-                      tooltip: l10n.printReprintAction,
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.print_outlined),
-                      onPressed: onReprint,
+                  Flexible(
+                    flex: 2,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: RestoflowSpacing.sm,
+                      runSpacing: RestoflowSpacing.xs,
+                      children: [
+                        if (elapsedPill != null) elapsedPill,
+                        KdsStatusChip(status: ticket.status),
+                        // A1: the always-visible per-card Reprint control (LIVE
+                        // board). Money-free; re-runs the existing kitchen
+                        // print, never an order/status change.
+                        if (onReprint != null)
+                          IconButton(
+                            key: Key('kds-reprint-${ticket.kitchenTicketId}'),
+                            tooltip: l10n.printReprintAction,
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.print_outlined),
+                            onPressed: onReprint,
+                          ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
               if (dineIn ||
@@ -458,7 +482,18 @@ class KdsTicketCard extends StatelessWidget {
       result = _NewArrivalHighlight(
         key: Key('kds-new-arrival-${ticket.kitchenTicketId}'),
         window: newArrivalWindow,
-        color: theme.colorScheme.primary,
+        // GLOBAL-BRAND-KDS-V5: the ATTENTION accent, not the structural navy.
+        //
+        // This used to be `colorScheme.primary` — the same brand navy the board
+        // paints its ordinary chrome with. "Look here now" was therefore
+        // announced in the one colour that means "this is the furniture", so a
+        // new ticket had to be spotted by its motion alone. Orange is what the
+        // accent exists for, and KDS is the surface allowed to use it loudly.
+        //
+        // Deliberately NOT warning or danger: a freshly-arrived ticket is not
+        // late and has not been cancelled, and the cancellation pulse above
+        // still uses `error` precisely so the two stay tellable apart.
+        color: RestoflowSemanticColors.of(theme.brightness).accent,
         child: result,
       );
     }
@@ -581,8 +616,9 @@ class _NewArrivalHighlightState extends State<_NewArrivalHighlight>
 }
 
 /// KDS-ALERTS (C): the loud "New order" badge shown at the top of a freshly-
-/// arrived ticket card. A small filled pill (brand-primary → high contrast on
-/// the dark board) with a bell icon. Static (the pulsing glow carries the
+/// arrived ticket card. A small filled pill (V5: the brand ATTENTION orange, so
+/// the badge and the pulsing glow speak with one voice instead of the badge
+/// wearing the board's structural navy) with a bell icon. Static (the pulsing glow carries the
 /// motion), so it never breaks `pumpAndSettle`. Money-free chrome.
 class _NewOrderBadge extends StatelessWidget {
   const _NewOrderBadge({required this.label, super.key});
@@ -592,6 +628,7 @@ class _NewOrderBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final attention = RestoflowSemanticColors.of(theme.brightness);
     return Container(
       padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.sm,
@@ -600,7 +637,7 @@ class _NewOrderBadge extends StatelessWidget {
         RestoflowSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary,
+        color: attention.accent,
         borderRadius: BorderRadius.circular(RestoflowRadii.pill),
       ),
       child: Row(
@@ -609,14 +646,21 @@ class _NewOrderBadge extends StatelessWidget {
           Icon(
             Icons.notifications_active,
             size: RestoflowIconSizes.sm,
-            color: theme.colorScheme.onPrimary,
+            color: attention.onAccent,
           ),
           const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onPrimary,
-              fontWeight: FontWeight.w900,
+          // Flexible: the badge sits at the head of a card that narrows with
+          // the board, and a non-flex label is how a pill overflows its own
+          // row. The paired on-accent foreground keeps it legible.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: attention.onAccent,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],

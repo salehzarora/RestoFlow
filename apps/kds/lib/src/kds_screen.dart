@@ -229,7 +229,18 @@ class _KdsScreenState extends State<KdsScreen> {
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: RestoflowSpacing.sm),
-            Text(l10n.kdsAppTitle),
+            // The title yields before the bar does. An AppBar bounds its title
+            // (to whatever the actions leave), but a Row lays a NON-FLEX child
+            // out with an unbounded main axis — so this Text measured its full
+            // width and the row ran past the bar by 47px at 2x. The same defect
+            // the platform console had; the same one-word fix.
+            Flexible(
+              child: Text(
+                l10n.kdsAppTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: widget.appBarActions,
