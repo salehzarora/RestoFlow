@@ -16,9 +16,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_dashboard/src/dashboard_shell.dart';
 import 'package:restoflow_dashboard/src/setup/device_summary_card.dart';
 import 'package:restoflow_dashboard/src/setup/setup_center.dart';
 import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// Counts every call. One instance stands in for the single repository the
@@ -303,4 +306,200 @@ void main() {
       expect(await container.read(setupDevicesProvider(key).future), isNull);
     });
   });
+
+  group('G. the shell identity key rebuilds scope-bearing State', () {
+    MembershipContext member({
+      String id = 'm-1',
+      String org = 'org-1',
+      String? restaurant = 'rest-1',
+      String? branch = 'branch-1',
+      MembershipRole role = MembershipRole.orgOwner,
+    }) => MembershipContext(
+      id: id,
+      organizationId: org,
+      organizationName: 'Org',
+      restaurantId: restaurant,
+      restaurantName: 'Rest',
+      branchId: branch,
+      branchName: 'Main',
+      role: role,
+      status: 'active',
+    );
+
+    test('identity changes with every field that scopes a repository', () {
+      final base = dashboardShellIdentity(member(), currencyCode: 'ILS');
+
+      // Same everything => same State may be reused.
+      expect(dashboardShellIdentity(member(), currencyCode: 'ILS'), base);
+
+      // Each of these builds a DIFFERENT AdminScope or a different authority,
+      // so each must dispose the old State and its late-final repositories.
+      expect(
+        dashboardShellIdentity(member(id: 'm-2'), currencyCode: 'ILS'),
+        isNot(base),
+      );
+      expect(
+        dashboardShellIdentity(member(org: 'org-2'), currencyCode: 'ILS'),
+        isNot(base),
+      );
+      expect(
+        dashboardShellIdentity(
+          member(restaurant: 'rest-2'),
+          currencyCode: 'ILS',
+        ),
+        isNot(base),
+      );
+      expect(
+        dashboardShellIdentity(member(branch: 'branch-2'), currencyCode: 'ILS'),
+        isNot(base),
+      );
+      expect(
+        dashboardShellIdentity(
+          member(role: MembershipRole.cashier),
+          currencyCode: 'ILS',
+        ),
+        isNot(base),
+        reason: 'a downgraded role must not keep repositories built for owner',
+      );
+      expect(
+        dashboardShellIdentity(member(), currencyCode: 'USD'),
+        isNot(base),
+        reason: 'AdminScope embeds the currency',
+      );
+    });
+
+    test('demo mode has its own stable identity', () {
+      expect(dashboardShellIdentity(null), 'demo');
+      expect(dashboardShellIdentity(null), dashboardShellIdentity(null));
+      expect(
+        dashboardShellIdentity(null),
+        isNot(dashboardShellIdentity(member())),
+      );
+    });
+
+    testWidgets('a changed identity DISPOSES the old State and rebuilds its '
+        'scope-bearing fields', (tester) async {
+      // The property that matters is not the string — it is that Flutter
+      // actually tears the State down. A StatefulWidget whose State records
+      // its construction stands in for the shell's `late final` repositories:
+      // if the State survives, so would a stale repository.
+      final built = <String>[];
+
+      Widget app(String identity) => MaterialApp(
+        home: _ScopeProbe(
+          key: ValueKey(identity),
+          onInit: built.add,
+          identity: identity,
+        ),
+      );
+
+      await tester.pumpWidget(app('org-1|owner'));
+      await tester.pumpAndSettle();
+      expect(built, ['org-1|owner']);
+
+      // Same identity, rebuilt widget: the State (and its repositories) are
+      // reused, which is exactly what we want for ordinary rebuilds.
+      await tester.pumpWidget(app('org-1|owner'));
+      await tester.pumpAndSettle();
+      expect(built, ['org-1|owner'], reason: 'no needless teardown');
+
+      // Different membership identity: the State must be recreated.
+      await tester.pumpWidget(app('org-2|owner'));
+      await tester.pumpAndSettle();
+      expect(built, [
+        'org-1|owner',
+        'org-2|owner',
+      ], reason: 'a membership change must rebuild the scope-bearing State');
+    });
+  });
+  group('H. leaving a WRITING tab refreshes only what that tab writes', () {
+    Future<_CountingDevices> pumpShell(WidgetTester tester) async {
+      final devices = _CountingDevices();
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      // The SHELL overrides the repository seam from its own `late final`
+      // field, so a test must supply the repository the way the shell really
+      // gets it — an outer override would simply be shadowed.
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            theme: restoflowBaseTheme(),
+            home: DashboardShell(
+              membership: const MembershipContext(
+                id: 'm-1',
+                organizationId: 'org-1',
+                organizationName: 'Org',
+                restaurantId: 'rest-1',
+                restaurantName: 'Rest',
+                branchId: 'branch-1',
+                branchName: 'Main',
+                role: MembershipRole.orgOwner,
+                status: 'active',
+              ),
+              deviceRepositoryFor: (_) => devices,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return devices;
+    }
+
+    Future<void> goTo(WidgetTester tester, String label) async {
+      await tester.tap(find.text(label).last, warnIfMissed: false);
+      await tester.pumpAndSettle();
+    }
+
+    // NOTE: there is deliberately no "Devices -> Overview reloads" test here.
+    // The obvious one is CONFOUNDED: the Devices screen calls loadDevices()
+    // itself, so the counter rises whether or not the Overview's cached entry
+    // was invalidated, and the test passes with the fix reverted. Proving the
+    // invalidation needs a counter that only the setup provider increments —
+    // written up as the remaining V2.1 gap rather than left here looking green.
+
+    testWidgets('Overview -> Orders -> Overview reloads NOTHING', (
+      tester,
+    ) async {
+      final devices = await pumpShell(tester);
+      final afterFirstMount = devices.loadDevicesCalls;
+
+      await goTo(tester, 'Orders');
+      await goTo(tester, 'Overview');
+
+      expect(
+        devices.loadDevicesCalls,
+        afterFirstMount,
+        reason: 'Orders cannot write setup data, so the count stays cached',
+      );
+    });
+  });
+}
+
+/// Stands in for the shell's scope-bearing State: it records every time its
+/// State is constructed, which is precisely when `late final` repositories
+/// would be rebuilt.
+class _ScopeProbe extends StatefulWidget {
+  const _ScopeProbe({required this.identity, required this.onInit, super.key});
+
+  final String identity;
+  final void Function(String) onInit;
+
+  @override
+  State<_ScopeProbe> createState() => _ScopeProbeState();
+}
+
+class _ScopeProbeState extends State<_ScopeProbe> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onInit(widget.identity);
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

@@ -66,6 +66,47 @@ AdminScope dashboardAdminScopeFor(
   );
 }
 
+/// GLOBAL-BRAND-DASHBOARD-V2-1 — the identity that must recreate the shell.
+///
+/// [DashboardShell] builds its admin scope and its real repositories ONCE, in
+/// `late final` fields, so they live exactly as long as the State does. That is
+/// the right lifetime for a session — and the wrong one across a membership
+/// change, because Flutter will happily reuse the State when only the widget's
+/// arguments change. The repositories would then still be scoped, and
+/// authorized, to the PREVIOUS membership.
+///
+/// Value-based provider keys defend the CACHE against that; they cannot defend
+/// the repository objects. Putting this string in a [ValueKey] closes the gap:
+/// a different identity is a different widget, the old State is disposed, and
+/// every `late final` is rebuilt for the membership actually signed in.
+///
+/// WHAT IS IN IT, and why each field earns its place:
+///   * membership id + org / restaurant / branch — the scope the repositories
+///     are constructed from (`dashboardAdminScopeFor`);
+///   * role — authorization. A downgrade must not keep a State whose
+///     repositories were built for the stronger role;
+///   * currencyCode — `AdminScope` embeds it, so a resolved currency change
+///     produces a genuinely different scope.
+///
+/// What is deliberately NOT in it: display labels, the selected analytics
+/// range, and the repository instances themselves. Those change for cosmetic
+/// or local reasons, and rebuilding the whole shell for them would throw away
+/// scroll positions and in-flight work for nothing.
+String dashboardShellIdentity(
+  MembershipContext? membership, {
+  String? currencyCode,
+}) {
+  if (membership == null) return 'demo';
+  return [
+    membership.id,
+    membership.organizationId,
+    membership.restaurantId ?? '-',
+    membership.branchId ?? '-',
+    membership.role.name,
+    currencyCode ?? '-',
+  ].join('|');
+}
+
 /// The owner/manager dashboard shell: a branded navigation
 /// (Overview · Menu · Devices · Printers · Staff · Tables · Users · Settings)
 /// with a persistent context bar (active restaurant/branch + an honest
@@ -308,7 +349,45 @@ class _DashboardShellState extends State<DashboardShell> {
   bool get _staffDemo => widget.staffRepository == null;
   bool get _tablesDemo => widget.tablesRepository == null;
 
-  void _select(int value) => setState(() => _index = value);
+  /// V2.1 — leaving a destination where the user could have CHANGED setup data
+  /// invalidates exactly the read model that destination writes to.
+  ///
+  /// Caching the Overview's setup counts bought a free return trip, but it also
+  /// meant a device created on the Devices tab would not show up in the
+  /// readiness checklist until a manual refresh — the counts would sit there
+  /// looking authoritative and be wrong. This is the smallest truthful
+  /// correction: not a global wipe, not a reload on every navigation, and not a
+  /// reload for destinations that cannot write setup data at all (Overview,
+  /// Orders, Activity, Users, Tables, Settings all leave the counts untouched).
+  ///
+  /// It is coarser than invalidating at each mutation call site, which lives in
+  /// the shared admin package. The trade is deliberate: at most one reload per
+  /// visit to a writing tab, in exchange for never showing a stale count.
+  void _invalidateSetupSourcesFor(int leavingIndex) {
+    final key = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(currentSetupScopeKeyProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    switch (DashboardDestination.fromIndex(leavingIndex)) {
+      case DashboardDestination.devices:
+        container.invalidate(setupDevicesProvider(key));
+      case DashboardDestination.printers:
+        container.invalidate(setupPrintersProvider(key));
+      case DashboardDestination.staff:
+        container.invalidate(setupStaffProvider(key));
+      case DashboardDestination.menu:
+        container.invalidate(setupMenuProvider(key));
+      default:
+        break;
+    }
+  }
+
+  void _select(int value) {
+    if (value == _index) return;
+    _invalidateSetupSourcesFor(_index);
+    setState(() => _index = value);
+  }
 
   /// F0.3 — the ONE named navigation seam.
   ///
