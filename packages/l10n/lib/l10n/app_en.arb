@@ -1428,6 +1428,8 @@
     "description": "Owner dashboard action that retries loading the report after an error."
   },
   "dashboardNoReportData": "No report data for this day.",
+  "dashboardNoDataForRange": "No data for the selected period.",
+  "@dashboardNoDataForRange": {"description": "DASHBOARD-VISUAL-RANGE-REFRESH-F3: honest empty state for the Overview's Top items and Recent orders cards when the SELECTED WINDOW genuinely contains nothing. Period-neutral on purpose: the older dashboardNoReportData says \"for this day\", which became wrong once last60/last90/custom windows existed."},
   "@dashboardNoReportData": {
     "description": "Owner dashboard message shown when there is no report data for the day."
   },

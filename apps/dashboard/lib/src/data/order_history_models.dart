@@ -9,6 +9,14 @@ library;
 
 import '../analytics/analytics_window.dart' show CustomAnalyticsWindow;
 
+/// The Orders screen's page size, and the default for [OrderHistoryQuery.limit].
+///
+/// The Overview's Recent Orders card overrides it with [kOverviewRecentOrdersLimit].
+const int kOrderHistoryPageSize = 25;
+
+/// How many rows the Overview's Recent Orders card shows.
+const int kOverviewRecentOrdersLimit = 8;
+
 /// Which Orders sub-view is showing: the live operations centre or the
 /// historical list.
 ///
@@ -105,6 +113,7 @@ class OrderHistoryQuery {
     this.orderType = OrderTypeFilter.all,
     this.payment = PaymentFilter.all,
     this.customWindow,
+    this.limit = kOrderHistoryPageSize,
   });
 
   final OrderHistoryRange range;
@@ -122,6 +131,14 @@ class OrderHistoryQuery {
   /// restores the previous one instead of silently resetting to today.
   final CustomAnalyticsWindow? customWindow;
 
+  /// F3 — how many rows this request asks for.
+  ///
+  /// ON THE QUERY rather than on the repository, because it is on the WIRE
+  /// (`p_limit`) and therefore part of what makes two requests different: the
+  /// Overview's eight-row Recent Orders card and the Orders screen's 25-row page
+  /// are not the same request and must not share a cached answer.
+  final int limit;
+
   /// True when this query is a custom From/To window.
   bool get isCustomWindow => customWindow != null;
 
@@ -133,7 +150,9 @@ class OrderHistoryQuery {
     PaymentFilter? payment,
     CustomAnalyticsWindow? customWindow,
     bool clearCustomWindow = false,
+    int? limit,
   }) => OrderHistoryQuery(
+    limit: limit ?? this.limit,
     range: range ?? this.range,
     search: search ?? this.search,
     status: status ?? this.status,

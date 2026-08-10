@@ -3454,6 +3454,12 @@ abstract class AppLocalizations {
   /// **'No report data for this day.'**
   String get dashboardNoReportData;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F3: honest empty state for the Overview's Top items and Recent orders cards when the SELECTED WINDOW genuinely contains nothing. Period-neutral on purpose: the older dashboardNoReportData says "for this day", which became wrong once last60/last90/custom windows existed.
+  ///
+  /// In en, this message translates to:
+  /// **'No data for the selected period.'**
+  String get dashboardNoDataForRange;
+
   /// Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend.
   ///
   /// In en, this message translates to:

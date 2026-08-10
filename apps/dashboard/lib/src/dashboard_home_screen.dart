@@ -21,6 +21,7 @@ import 'analytics/payment_method_analytics.dart';
 import 'data/audit_log_models.dart' show AuditBranchOption;
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
+import 'data/owner_top_items.dart';
 import 'format/money_format.dart';
 import 'state/analytics_branch_providers.dart'
     show analyticsBranchOptionsProvider, resolvedLiveAnalyticsBranchProvider;
@@ -522,6 +523,168 @@ class _RangeChip extends StatelessWidget {
   }
 }
 
+/// F3 — Top Selling Items, on the committed analytics window.
+///
+/// Every state is honest and LOCAL to this card, exactly as [_SalesByDayCard]
+/// established: a failed or absent top-items RPC never removes the KPIs beside
+/// it. The four answers are deliberately distinct —
+///
+///   * loading      -> a skeleton, never a zeroed list;
+///   * unavailable  -> the RPC is not deployed on this database (PGRST202);
+///   * empty        -> the server's REAL answer that this window sold nothing;
+///   * error        -> the shared error state.
+///
+/// "Unavailable" and "empty" are the pair that matters. Collapsing them would
+/// tell an owner their best week sold nothing because a migration had not run.
+class _TopItemsCard extends ConsumerWidget {
+  const _TopItemsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(
+      ownerTopItemsForKeyProvider(ref.watch(currentOwnerTopItemsKeyProvider)),
+    );
+    return RestoflowSectionCard(
+      key: const Key('top-items-card'),
+      title: l10n.dashboardTopItems,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        async.when(
+          loading: () => const Padding(
+            key: Key('top-items-loading'),
+            padding: EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+            // A skeleton rather than a spinner: three cards can be in flight at
+            // once on this page, and stacked indicators read as a broken screen.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+              ],
+            ),
+          ),
+          error: (_, _) => RestoflowStateView(
+            key: const Key('top-items-error'),
+            icon: Icons.error_outline,
+            tone: RestoflowTone.danger,
+            message: l10n.dashboardReportsError,
+          ),
+          data: (items) => _topItemsBody(context, l10n, items),
+        ),
+      ],
+    );
+  }
+
+  Widget _topItemsBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    OwnerTopItems items,
+  ) {
+    if (!items.supported) {
+      return RestoflowStateView(
+        key: const Key('top-items-unavailable'),
+        icon: Icons.event_busy_outlined,
+        message: l10n.dashboardRangeUnavailable,
+      );
+    }
+    if (items.isEmpty) {
+      return RestoflowStateView(
+        key: const Key('top-items-empty'),
+        icon: Icons.inbox_outlined,
+        message: l10n.dashboardNoDataForRange,
+      );
+    }
+    final top = items.topRevenueMinor;
+    return Column(
+      key: const Key('top-items-list'),
+      // STRETCH, not the Column default of center: a centred child sizes to its
+      // intrinsic width, and a rank row at 2x text scale on a 390px phone is
+      // wider than the card — a 5px overflow with no visible cause.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < items.items.length; i++)
+          RestoflowRankRow(
+            rank: i + 1,
+            name: items.items[i].name,
+            meta:
+                '×${items.items[i].quantity} · '
+                '${MoneyFormatter.formatMinor(items.items[i].lineRevenueMinor, items.currencyCode)}',
+            // Display-only ratio for the share bar. Money itself stays integer
+            // minor everywhere above (D-007) — this never reaches a total.
+            fraction: top == 0 ? 0 : items.items[i].lineRevenueMinor / top,
+          ),
+      ],
+    );
+  }
+}
+
+/// F3 — Recent Orders, on the committed analytics window.
+///
+/// Reads the SAME order-history repository the Orders screen uses, through its
+/// own keyed entry asking for the newest eight rows of the current window. An
+/// empty window is an empty STATE here, never an error: "no orders in these
+/// dates" is a fact about the business, not a failure of the dashboard.
+class _RecentOrdersCard extends ConsumerWidget {
+  const _RecentOrdersCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(
+      overviewRecentOrdersForKeyProvider(
+        ref.watch(currentOverviewRecentOrdersKeyProvider),
+      ),
+    );
+    return RestoflowSectionCard(
+      key: const Key('recent-orders-card'),
+      title: l10n.dashboardRecentOrders,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        async.when(
+          loading: () => const Padding(
+            key: Key('recent-orders-loading'),
+            padding: EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+              ],
+            ),
+          ),
+          error: (_, _) => RestoflowStateView(
+            key: const Key('recent-orders-error'),
+            icon: Icons.error_outline,
+            tone: RestoflowTone.danger,
+            message: l10n.dashboardReportsError,
+          ),
+          data: (page) => page.rows.isEmpty
+              ? RestoflowStateView(
+                  key: const Key('recent-orders-empty'),
+                  icon: Icons.inbox_outlined,
+                  message: l10n.dashboardNoDataForRange,
+                )
+              : Column(
+                  key: const Key('recent-orders-list'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final row in page.rows)
+                      RecentOrderTile(row: RecentOrderRow.fromHistory(row)),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 /// The committed custom range, spelled out under the chips.
 ///
 /// The CHIP stays the short localized "Custom" — turning it into
@@ -892,36 +1055,11 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    // "1c" top sellers: a numbered rank badge + name + `×qty · amount` + a mini
-    // share bar (revenue / top revenue). Money stays formatted via MoneyFormatter.
-    final topRevenue = report.topItems.isEmpty
-        ? 0
-        : report.topItems.first.lineRevenueMinor;
-    final topItems = RestoflowSectionCard(
-      key: const Key('top-items-card'),
-      title: l10n.dashboardTopItems,
-      children: [
-        for (var i = 0; i < report.topItems.length; i++)
-          RestoflowRankRow(
-            rank: i + 1,
-            name: report.topItems[i].name,
-            meta:
-                '×${report.topItems[i].quantity} · '
-                '${MoneyFormatter.formatMinor(report.topItems[i].lineRevenueMinor, report.topItems[i].currencyCode)}',
-            fraction: topRevenue == 0
-                ? 0
-                : report.topItems[i].lineRevenueMinor / topRevenue,
-          ),
-      ],
-    );
-
-    final recentOrders = RestoflowSectionCard(
-      key: const Key('recent-orders-card'),
-      title: l10n.dashboardRecentOrders,
-      children: [
-        for (final row in report.recentOrders) RecentOrderTile(row: row),
-      ],
-    );
+    // F3 — both cards now own their own request, keyed on the committed window.
+    // They used to be projections of DashboardReport, which meant they were
+    // EMPTY in real mode and empty for every demo range except today.
+    const topItems = _TopItemsCard();
+    const recentOrders = _RecentOrdersCard();
 
     // RF-127: the sales-by-hour curve is the DOMINANT visualization. It renders
     // only when the report carries hourly data (demo mode / RF-REPORT-002); real
@@ -1025,12 +1163,13 @@ class _ReportContent extends StatelessWidget {
     // coming" panel HOLDS the analytics slot (instead of the legacy tables
     // collapsing into the first viewport). No fake chart, no fake values — a
     // muted icon + the existing explanation. Never shown in demo (full data).
+    // F3 — top items and recent orders are NO LONGER part of this predicate.
+    // The panel promises they "will appear here once full reporting is enabled";
+    // they now load from their own RPCs and answer for themselves, so keeping
+    // them in the gate would hide the panel the moment either returned a row
+    // while per-branch sales and the hourly curve were still genuinely absent.
     final showLimitedNote =
-        !isDemo &&
-        report.hourlyNetSales.isEmpty &&
-        report.branches.isEmpty &&
-        report.topItems.isEmpty &&
-        report.recentOrders.isEmpty;
+        !isDemo && report.hourlyNetSales.isEmpty && report.branches.isEmpty;
     final theme = Theme.of(context);
     final limitedNote = RestoflowSectionCard(
       key: const Key('reports-limited-analytics'),
@@ -1076,10 +1215,11 @@ class _ReportContent extends StatelessWidget {
     // the live-limited state the honest limited-analytics panel HOLDS the
     // chart's slot in the analytics row (beside the real payment mix when that
     // exists), so the legacy tables never climb into the first viewport.
-    final strongPair = <Widget>[
-      if (report.topItems.isNotEmpty) topItems,
-      if (report.recentOrders.isNotEmpty) recentOrders,
-    ];
+    // ALWAYS present. Dropping a card when its list was empty made "this window
+    // sold nothing" indistinguishable from "this never loaded", and it made the
+    // pair's position in the page depend on the data. Each card now answers for
+    // itself.
+    const strongPair = <Widget>[topItems, recentOrders];
     // CLIENT-D: the dine-in / takeaway split joins the secondary grid beside
     // "Sales by branch", its closest sibling — a compact breakdown of the same
     // window, not a second analytics page. Present only for the multi-day
@@ -1686,16 +1826,40 @@ class _ShiftCashCard extends StatelessWidget {
       title: l10n.dashboardShiftCashTitle,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
-        Wrap(
-          spacing: RestoflowSpacing.sm,
-          runSpacing: RestoflowSpacing.xs,
-          children: [
-            RestoflowStatusPill(label: closedLabel, tone: RestoflowTone.info),
-            RestoflowStatusPill(
-              label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
-              tone: RestoflowTone.neutral,
-            ),
-          ],
+        // A PILL MAY NEVER BE WIDER THAN THE ROW IT SITS IN.
+        //
+        // `Wrap` offers a child the full width but never forces it, and
+        // `RestoflowStatusPill` sizes to its label, so a counted label such as
+        // "12 closed today" overflows its own inner `Row` at large text scales
+        // instead of being laid out narrower. Scaling down is the honest
+        // response: the whole label stays readable, which clipping or an
+        // ellipsis would not preserve, and at ordinary text scales the pill is
+        // already narrower than the bound so nothing scales at all.
+        LayoutBuilder(
+          builder: (context, constraints) => Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.xs,
+            children: [
+              for (final pill in <Widget>[
+                RestoflowStatusPill(
+                  label: closedLabel,
+                  tone: RestoflowTone.info,
+                ),
+                RestoflowStatusPill(
+                  label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
+                  tone: RestoflowTone.neutral,
+                ),
+              ])
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: pill,
+                  ),
+                ),
+            ],
+          ),
         ),
         if (!shiftCash.hasClosedShifts) ...[
           const SizedBox(height: RestoflowSpacing.md),

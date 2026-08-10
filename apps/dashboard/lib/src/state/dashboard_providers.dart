@@ -26,6 +26,13 @@ import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'dashboard_membership_identity.dart';
 import '../analytics/analytics_window.dart';
 import '../analytics/custom_range_draft.dart';
+import '../analytics/owner_top_items_query_key.dart';
+import '../analytics/overview_recent_orders_query_key.dart';
+import '../data/owner_top_items.dart';
+import '../data/owner_top_items_repository.dart';
+import '../data/real_owner_top_items_repository.dart';
+import '../data/order_history_models.dart';
+import 'order_history_providers.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -465,6 +472,111 @@ final ownerSalesSeriesForKeyProvider =
           );
     }, dependencies: [ownerSalesSeriesRepositoryProvider]);
 
+// ===========================================================================
+// F3 — Top Selling Items and Recent Orders, on the committed window.
+// ===========================================================================
+
+/// F3 — the top-items data seam (`owner_top_items`).
+///
+/// The same demo/real switch the report and series use, so the three owner
+/// surfaces can never read different sources at once. Demo is the DEFAULT, which
+/// also means a bare `ProviderScope` in a widget test gets deterministic data
+/// rather than a pending real request.
+final ownerTopItemsRepositoryProvider = Provider<OwnerTopItemsRepository>(
+  (ref) {
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const DemoOwnerTopItemsRepository();
+    }
+    return RealOwnerTopItemsRepository(
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
+
+/// F3 — the identity of the top-items request the Overview currently needs.
+///
+/// Unlike the sales series this is NEVER null: "what sold best" is a real
+/// question for a single day as much as for ninety, so there is no gate.
+final currentOwnerTopItemsKeyProvider = Provider<OwnerTopItemsQueryKey>(
+  (ref) {
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    return OwnerTopItemsQueryKey(
+      organizationId: scope?.organizationId,
+      restaurantId: scope?.restaurantId,
+      branchId: scope?.branchId,
+      range: AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+      customWindow: ref.watch(customAnalyticsWindowProvider),
+      isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+    );
+  },
+  dependencies: [
+    dashboardAnalyticsScopeProvider,
+    reportRangeProvider,
+    customAnalyticsWindowProvider,
+  ],
+);
+
+/// F3 — the top items FOR ONE EXACT REQUEST IDENTITY.
+///
+/// Keyed like the report and series families, and for the same reason: two
+/// scopes, or two windows, are two entries that can never satisfy each other.
+/// Not `autoDispose` — leaving Overview and returning must not refetch.
+final ownerTopItemsForKeyProvider =
+    FutureProvider.family<OwnerTopItems, OwnerTopItemsQueryKey>((ref, key) {
+      return ref
+          .watch(ownerTopItemsRepositoryProvider)
+          .loadTopItems(
+            range: key.range,
+            analyticsScope: key.analyticsScope,
+            customWindow: key.customWindow,
+            limit: key.limit,
+          );
+    }, dependencies: [ownerTopItemsRepositoryProvider]);
+
+/// F3 — the identity of the Overview's Recent Orders request.
+///
+/// Built from the SAME committed window and analytics scope as everything else
+/// on the page, so the card can never describe a different window from the KPIs
+/// above it — which is exactly what it did before F3, when it showed whatever
+/// the demo dataset held and nothing at all in real mode.
+final currentOverviewRecentOrdersKeyProvider =
+    Provider<OverviewRecentOrdersQueryKey>(
+      (ref) {
+        final scope = ref.watch(dashboardAnalyticsScopeProvider);
+        return OverviewRecentOrdersQueryKey(
+          organizationId: scope?.organizationId,
+          restaurantId: scope?.restaurantId,
+          branchId: scope?.branchId,
+          range: AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+          customWindow: ref.watch(customAnalyticsWindowProvider),
+          isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+        );
+      },
+      dependencies: [
+        dashboardAnalyticsScopeProvider,
+        reportRangeProvider,
+        customAnalyticsWindowProvider,
+      ],
+    );
+
+/// F3 — the Overview's newest orders for one exact identity.
+///
+/// Reuses the EXISTING order-history repository rather than adding a second
+/// client for `owner_order_history`: two callers of one RPC drift, and the
+/// repository already carries the analytics scope and the F1 window.
+final overviewRecentOrdersForKeyProvider =
+    FutureProvider.family<OrderHistoryPage, OverviewRecentOrdersQueryKey>((
+      ref,
+      key,
+    ) {
+      return ref.watch(orderHistoryRepositoryProvider).loadHistory(key.query);
+    }, dependencies: [orderHistoryRepositoryProvider]);
+
 /// Refreshes ONLY the currently selected report entry — and the daily series
 /// beside it, when the selected range has one.
 ///
@@ -566,6 +678,18 @@ class DashboardRefreshController extends StateNotifier<bool> {
     if (seriesKey != null) {
       _ref.invalidate(ownerSalesSeriesForKeyProvider(seriesKey));
     }
+    // F3 — the two card surfaces refresh with everything else, for the CURRENT
+    // key only. The refresh button sits above all four; leaving top items or
+    // recent orders stale while the KPIs updated would make the page
+    // self-contradictory, with no way for an owner to tell which half is now.
+    _ref.invalidate(
+      ownerTopItemsForKeyProvider(_ref.read(currentOwnerTopItemsKeyProvider)),
+    );
+    _ref.invalidate(
+      overviewRecentOrdersForKeyProvider(
+        _ref.read(currentOverviewRecentOrdersKeyProvider),
+      ),
+    );
   }
 }
 
@@ -581,6 +705,10 @@ final dashboardRefreshControllerProvider =
         currentOwnerSalesSeriesKeyProvider,
         ownerReportForKeyProvider,
         ownerSalesSeriesForKeyProvider,
+        currentOwnerTopItemsKeyProvider,
+        ownerTopItemsForKeyProvider,
+        currentOverviewRecentOrdersKeyProvider,
+        overviewRecentOrdersForKeyProvider,
       ],
     );
 

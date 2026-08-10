@@ -560,6 +560,7 @@
   "dashboardReportsError": "לא ניתן לטעון דוחות.",
   "dashboardRetry": "נסה שוב",
   "dashboardNoReportData": "אין נתוני דוח ליום זה.",
+  "dashboardNoDataForRange": "אין נתונים לתקופה שנבחרה.",
   "dashboardDemoReportsNotice": "דוחות הדגמה — מחושבים מקומית מהזמנות לדוגמה, ללא סנכרון לשרת.",
   "dashboardRealModeNotice": "דוחות חיים — לקריאה בלבד ומוגבלים. חלק מהנתונים עדיין לא זמינים כאן.",
   "dashboardLiveDataTag": "חי · מוגבל",

@@ -77,7 +77,6 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
     DemoOrderStore? store,
     List<DemoOrder>? orders,
     this.failureMessage,
-    this.pageSize = 25,
     DateTime Function()? clock,
   }) : _store = store ?? DemoOrderStore(orders),
        _clock = clock ?? DateTime.now;
@@ -96,9 +95,6 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
   /// message (drives/tests the error state).
   final String? failureMessage;
 
-  /// How many rows a page holds (so tests can exercise "load more").
-  final int pageSize;
-
   @override
   Future<OrderHistoryPage> loadHistory(
     OrderHistoryQuery query, {
@@ -109,7 +105,9 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
 
     final matched = _orders.where((o) => _matches(o, query)).toList();
     final offset = int.tryParse(cursor ?? '') ?? 0;
-    final slice = matched.skip(offset).take(pageSize).toList();
+    // F3 — the REQUEST decides its size. The Overview asks for 8, the Orders
+    // screen for 25; a repository-level page size could not tell them apart.
+    final slice = matched.skip(offset).take(query.limit).toList();
     final consumed = offset + slice.length;
     final hasMore = consumed < matched.length;
     return OrderHistoryPage(

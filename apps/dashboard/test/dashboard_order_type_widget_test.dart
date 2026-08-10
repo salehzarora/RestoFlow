@@ -573,7 +573,7 @@ void main() {
     });
 
     testWidgets('survives a 2x text scale at phone width', (tester) async {
-      _size(tester, const Size(390, 6600));
+      _size(tester, const Size(390, 9200));
       tester.platformDispatcher.textScaleFactorTestValue = 2.0;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 

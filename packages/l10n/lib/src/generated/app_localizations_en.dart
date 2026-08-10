@@ -1836,6 +1836,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardNoReportData => 'No report data for this day.';
 
   @override
+  String get dashboardNoDataForRange => 'No data for the selected period.';
+
+  @override
   String get dashboardDemoReportsNotice =>
       'Demo reports — calculated locally from sample orders, not synced to a backend.';
 

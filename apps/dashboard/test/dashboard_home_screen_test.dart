@@ -10,6 +10,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
+import 'package:restoflow_dashboard/src/widgets/recent_order_tile.dart';
 
 /// A live-LIMITED report like the sales_summary fallback produces (LIVE-UX-001):
 /// KPIs + a safe "vs yesterday" comparison, but NO hourly / branch / top-item /
@@ -381,18 +382,37 @@ void main() {
     expect(find.textContaining('×4'), findsWidgets); // both top sellers sold ×4
 
     // Recent orders: numbers, statuses and a dine-in table label.
+    //
+    // F3 — this card now reads the ORDER-HISTORY repository for the committed
+    // window instead of the owner-report dataset, so in demo the Overview and
+    // the Orders tab finally show the same orders. The old O-100x numbers came
+    // from the report fixture, which no longer feeds this card.
     expect(find.text('Recent orders'), findsOneWidget);
-    expect(find.text('O-1009'), findsOneWidget); // newest (cancelled)
-    expect(find.text('O-1005'), findsOneWidget); // a paid order
-    // F0.5: the recent-order pill no longer prints the raw wire token.
-    // It shows the SAME localized label the Orders surface uses, so the same
-    // order does not read as 'cancelled' here and 'Cancelled' one tab away.
-    expect(find.text('cancelled'), findsNothing);
+    expect(find.byKey(const Key('recent-orders-list')), findsOneWidget);
+    expect(find.byType(RecentOrderTile), findsWidgets);
+    // F0.5: the recent-order pill no longer prints the raw wire token. It shows
+    // the SAME localized label the Orders surface uses, so the same order does
+    // not read as 'submitted' here and 'Submitted' one tab away.
+    //
+    // F3 — the statuses asserted are the ones the ORDER-HISTORY fixture
+    // actually puts in this window, not the report fixture's. Every wire token
+    // the fixture can produce is checked for absence, so the rule is enforced
+    // across the whole card rather than for one lucky row.
+    for (final token in const [
+      'completed',
+      'preparing',
+      'submitted',
+      'accepted',
+      'ready',
+      'served',
+      'voided',
+      'cancelled',
+    ]) {
+      expect(find.text(token), findsNothing, reason: 'raw token "$token"');
+    }
     final en = await AppLocalizations.delegate.load(const Locale('en'));
-    expect(find.text(en.ordersStatusCancelled), findsWidgets);
-    // F0.5: same rule for the completed pill - localized, never the token.
-    expect(find.text('completed'), findsNothing);
     expect(find.text(en.ordersStatusCompleted), findsWidgets);
+    expect(find.text(en.ordersStatusPreparing), findsWidgets);
     expect(find.textContaining('Table T5'), findsWidgets); // dine-in table
   });
 
@@ -425,12 +445,18 @@ void main() {
         findsOneWidget,
       );
 
-      // Empty sections are HIDDEN (never bare titled cards) and NO fabricated
+      // Sections with NO source at all stay hidden, and no fabricated
       // sales-by-hour chart is drawn.
       expect(find.byKey(const Key('sales-by-branch-card')), findsNothing);
-      expect(find.byKey(const Key('top-items-card')), findsNothing);
-      expect(find.byKey(const Key('recent-orders-card')), findsNothing);
       expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
+
+      // F3 — top items and recent orders now have their OWN sources, so they
+      // are present and answer for themselves. Being absent used to be the only
+      // honest option; now "this window sold nothing" is a real answer the card
+      // can give, and hiding it would make an empty window indistinguishable
+      // from a card that never loaded.
+      expect(find.byKey(const Key('top-items-card')), findsOneWidget);
+      expect(find.byKey(const Key('recent-orders-card')), findsOneWidget);
 
       // The safe prior-day comparison lights up honest, integer-% KPI deltas
       // (today 12000 vs yesterday 8000 = +50%), so live no longer looks bare.

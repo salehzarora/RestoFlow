@@ -20,6 +20,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../analytics/dashboard_analytics_scope.dart';
 import 'order_history_models.dart';
 import 'order_history_repository.dart';
+import '../analytics/analytics_range.dart';
+import '../analytics/analytics_window.dart';
 
 /// Reads order history + detail from the ORDERS-HISTORY-001 RPCs.
 class RealOrderHistoryRepository implements OrderHistoryRepository {
@@ -78,12 +80,21 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
         'p_organization_id': m.organizationId,
         'p_restaurant_id': selected.restaurantId,
         'p_branch_id': selected.branchId,
-        'p_range': query.range.wire,
         'p_search': query.searchOrNull,
         'p_status': query.status.wire,
         'p_order_type': query.orderType.wire,
         'p_payment': query.payment.wire,
-        'p_limit': 25,
+        // F3 — the committed window reaches the wire. Before this the call
+        // sent only `p_range`, so a CUSTOM window silently fell back to
+        // whatever preset token the query still carried: the Orders list
+        // answered a different question from the one the owner asked.
+        ...analyticsWindowParams(
+          query.customWindow ??
+              AnalyticsWindow.preset(
+                AnalyticsRange.fromOrderHistoryRange(query.range),
+              ),
+        ),
+        'p_limit': query.limit,
         'p_cursor': cursor,
       });
     } on SyncTransportException {

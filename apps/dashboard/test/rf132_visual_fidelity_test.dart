@@ -267,7 +267,14 @@ void main() {
     // Nothing fabricated: no chart, no analytics sections.
     expect(find.byType(RestoflowAreaChart), findsNothing);
     expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
-    expect(find.byKey(const Key('top-items-card')), findsNothing);
+    // F3 — the top-items card is now ALWAYS mounted, because it loads from its
+    // own RPC rather than being a projection of this report, and a card that
+    // disappears cannot tell an owner why it has nothing to show. What must
+    // still hold is the honesty rule this test exists for: it renders one of
+    // its own non-fabricating states, never a ranked list.
+    expect(find.byKey(const Key('top-items-card')), findsOneWidget);
+    expect(find.byKey(const Key('top-items-list')), findsNothing);
+    expect(find.byType(RestoflowRankRow), findsNothing);
 
     // The limited panel sits in the analytics position: below the primary
     // KPIs, above the secondary operational cards, and above the legacy

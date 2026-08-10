@@ -1805,6 +1805,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardNoReportData => 'אין נתוני דוח ליום זה.';
 
   @override
+  String get dashboardNoDataForRange => 'אין נתונים לתקופה שנבחרה.';
+
+  @override
   String get dashboardDemoReportsNotice =>
       'דוחות הדגמה — מחושבים מקומית מהזמנות לדוגמה, ללא סנכרון לשרת.';
 

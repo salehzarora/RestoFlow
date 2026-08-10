@@ -560,6 +560,7 @@
   "dashboardReportsError": "تعذّر تحميل التقارير.",
   "dashboardRetry": "إعادة المحاولة",
   "dashboardNoReportData": "لا توجد بيانات تقرير لهذا اليوم.",
+  "dashboardNoDataForRange": "لا توجد بيانات للفترة المحددة.",
   "dashboardDemoReportsNotice": "تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم.",
   "dashboardRealModeNotice": "تقارير مباشرة — للقراءة فقط ومحدودة. بعض الأرقام غير متوفرة هنا بعد.",
   "dashboardLiveDataTag": "مباشر · محدود",

@@ -65,12 +65,22 @@ DemoOrder _order(
   ),
 );
 
-Widget _wrap(OrderHistoryRepository repo, {bool demo = true}) => ProviderScope(
+Widget _wrap(
+  OrderHistoryRepository repo, {
+  bool demo = true,
+  int? limit,
+}) => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: demo),
     ),
     orderHistoryRepositoryProvider.overrideWithValue(repo),
+    // F3 moved the page size from the repository onto the QUERY, because it is
+    // on the wire (`p_limit`) and therefore part of request identity.
+    if (limit != null)
+      orderHistoryQueryProvider.overrideWith(
+        (ref) => OrderHistoryQuery(limit: limit),
+      ),
   ],
   child: const MaterialApp(
     locale: Locale('en'),
@@ -155,9 +165,8 @@ void main() {
     _wide(tester);
     final repo = DemoOrderHistoryRepository(
       orders: [for (var i = 0; i < 5; i++) _order('t$i')],
-      pageSize: 2,
     );
-    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpWidget(_wrap(repo, limit: 2));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('order-card-t0')), findsOneWidget);

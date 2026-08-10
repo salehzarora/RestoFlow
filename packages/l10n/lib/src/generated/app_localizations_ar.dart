@@ -1823,6 +1823,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardNoReportData => 'لا توجد بيانات تقرير لهذا اليوم.';
 
   @override
+  String get dashboardNoDataForRange => 'لا توجد بيانات للفترة المحددة.';
+
+  @override
   String get dashboardDemoReportsNotice =>
       'تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم.';
 
