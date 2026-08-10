@@ -157,7 +157,25 @@ class MenuItemCard extends StatelessWidget {
     /// Already trimmed and proven non-empty by [build]; null = render nothing.
     String? description,
   ) {
-    final hasDescription = description != null;
+    // THE DESCRIPTION YIELDS TO TEXT SCALE; THE NAME AND PRICE NEVER DO.
+    //
+    // The card body is a FIXED [kPosMenuCardBodyHeight] (140) because the grid
+    // computes cell height from it, but everything inside it scales with the
+    // user's text setting. At 2x the name, two description lines and the
+    // price/add row wanted 174px, so the body overflowed by 34 on EVERY card —
+    // a striped bar across the whole menu for any cashier who had turned text
+    // size up.
+    //
+    // The description is the only element on the card that is purely
+    // presentational (POS-PRODUCT-DESCRIPTIONS-001 says so: no tap target, no
+    // tooltip, no placeholder when absent). So it is the element that gives
+    // ground: two lines at ordinary sizes, one when text grows, none when it
+    // grows further. The product NAME and the PRICE are what a cashier reads to
+    // ring an order and are never reduced — and nothing is shrunk, which would
+    // silently undo the setting the user asked for.
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final descriptionLines = textScale <= 1.15 ? 2 : (textScale <= 1.6 ? 1 : 0);
+    final hasDescription = description != null && descriptionLines > 0;
     // POS-VISUAL-REDESIGN-PHASE-1-007: a WHITE card, not `colorScheme.surface`
     // — the green-tinted surface sat within three values of the hairline and
     // dissolved the card's own edge. r14 (the biggest object on screen) and the
@@ -239,7 +257,7 @@ class MenuItemCard extends StatelessWidget {
                                 // glyphs apart and breaks their shaping.
                                 letterSpacing: 0,
                               ),
-                              maxLines: 2,
+                              maxLines: descriptionLines,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -481,7 +499,7 @@ class _InCartBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(7),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x4710201A),
+            color: Color(0x470B1526),
             offset: Offset(0, 2),
             blurRadius: 6,
           ),
@@ -531,7 +549,7 @@ class _OptionsIndicator extends StatelessWidget {
         // Flat translucent ink over the photo — the spec's one backdrop-blur is
         // deliberately NOT ported: it reads the same and costs a layer.
         decoration: BoxDecoration(
-          color: const Color(0xB8101A15),
+          color: const Color(0xB80B1526),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -581,8 +599,8 @@ class _AddButton extends StatelessWidget {
       style: IconButton.styleFrom(
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
-        disabledBackgroundColor: const Color(0xFFEFE9DC),
-        disabledForegroundColor: const Color(0xFFBDB4A2),
+        disabledBackgroundColor: const Color(0xFFE9EEF5),
+        disabledForegroundColor: const Color(0xFFA8B2C1),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(RestoflowRadii.md)),

@@ -1568,13 +1568,13 @@ class _EmptyCart extends StatelessWidget {
             width: 68,
             height: 68,
             decoration: const BoxDecoration(
-              color: Color(0xFFF1EADC),
+              color: Color(0xFFE8EDF4),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.remove_shopping_cart_outlined,
               size: 32,
-              color: Color(0xFFB7AE9B),
+              color: Color(0xFF98A4B6),
             ),
           ),
           const SizedBox(height: RestoflowSpacing.md),
@@ -2108,7 +2108,7 @@ class _CartFooter extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(kPosSendRadius),
-                  boxShadow: onSend == null ? null : kPosGreenGlow,
+                  boxShadow: onSend == null ? null : kPosPrimaryGlow,
                 ),
                 child: FilledButton.icon(
                   onPressed: onSend,
@@ -2145,7 +2145,7 @@ class _CartFooter extends StatelessWidget {
                     ),
                     foregroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.disabled)
-                          ? const Color(0xFFA79E8C)
+                          ? const Color(0xFF8B97A9)
                           : null,
                     ),
                   ),

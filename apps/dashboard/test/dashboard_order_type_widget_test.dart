@@ -16,6 +16,7 @@ import 'package:restoflow_dashboard/src/state/order_history_providers.dart';
 import 'package:restoflow_dashboard/src/widgets/section_card.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-D) — the Overview order-type card.
 ///
@@ -34,6 +35,7 @@ class _FixedRepository implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => report;
 }
 
@@ -48,6 +50,7 @@ class _CountingSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     if (unavailable) return OwnerSalesSeries.unavailable(range.wire);
@@ -570,7 +573,7 @@ void main() {
     });
 
     testWidgets('survives a 2x text scale at phone width', (tester) async {
-      _size(tester, const Size(390, 6600));
+      _size(tester, const Size(390, 9200));
       tester.platformDispatcher.textScaleFactorTestValue = 2.0;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
@@ -613,6 +616,7 @@ class _FailingSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     throw const OwnerSalesSeriesException('boom');
   }

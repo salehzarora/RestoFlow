@@ -38,6 +38,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../analytics/dashboard_analytics_scope.dart';
 import 'demo_report.dart';
 import 'owner_reports_repository.dart';
+import '../analytics/analytics_range.dart';
+import '../analytics/analytics_window.dart';
 
 /// Reads the owner [DashboardReport] from `public.owner_daily_report`.
 class RealOwnerReportsRepository implements OwnerReportsRepository {
@@ -60,6 +62,7 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     final t = transport;
     final m = scope;
@@ -98,7 +101,10 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
         'p_organization_id': m.organizationId,
         'p_restaurant_id': selected.restaurantId,
         'p_branch_id': selected.branchId,
-        'p_range': range.wire,
+        ...analyticsWindowParams(
+          customWindow ??
+              AnalyticsWindow.preset(AnalyticsRange.fromReportRange(range)),
+        ),
       });
     } on SyncTransportException catch (e) {
       if (_isMissingRpc(e)) {

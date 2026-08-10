@@ -53,7 +53,12 @@ void main() {
       );
     });
 
-    test('shadow ink is the brand green-black, translucent', () {
+    test('shadow ink is the brand navy-black, translucent', () {
+      // RESTOFLOW-GLOBAL-VISUAL-V0: the brand moved green -> navy, so the ink
+      // every tier tints with moved with it (#10201A -> #0B1526). The RULE is
+      // unchanged and still asserted exactly: one shared brand ink across all
+      // four tiers, never opaque. Pinned to the token rather than a literal, so
+      // the next identity change cannot leave the tiers and the token disagreeing.
       for (final tier in [
         RestoflowShadows.xs,
         RestoflowShadows.sm,
@@ -61,11 +66,15 @@ void main() {
         RestoflowShadows.lg,
       ]) {
         for (final shadow in tier) {
-          // Same RGB as the dark sidebar surface (#10201A), never opaque.
-          expect(shadow.color.toARGB32() & 0x00FFFFFF, 0x10201A);
+          expect(
+            shadow.color.toARGB32() & 0x00FFFFFF,
+            kRestoflowShadowInk.toARGB32() & 0x00FFFFFF,
+          );
           expect(shadow.color.a, lessThan(0.25));
         }
       }
+      // The ink itself is the navy-black the rail is built from.
+      expect(kRestoflowShadowInk.toARGB32() & 0x00FFFFFF, 0x0B1526);
     });
   });
 }

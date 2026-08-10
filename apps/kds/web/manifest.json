@@ -4,7 +4,7 @@
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
-    "theme_color": "#1B7A52",
+    "theme_color": "#16335E",
     "description": "RestoFlow KDS — kitchen display demo (in-memory M5 demo).",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

@@ -10,6 +10,7 @@ import 'package:restoflow_dashboard/src/data/owner_sales_series_repository.dart'
 import 'package:restoflow_dashboard/src/analytics/analytics_range.dart';
 import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-E1) — the explicit analytics scope.
 ///
@@ -69,6 +70,7 @@ class _CountingRepository implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     return const DemoOwnerReportsRepository().loadReport(range: range);
@@ -83,6 +85,7 @@ class _CountingSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     return DemoOwnerSalesSeriesRepository(

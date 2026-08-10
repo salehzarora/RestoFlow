@@ -7,16 +7,22 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'analytics/analytics_labels.dart';
+import 'analytics/analytics_comparison_labels.dart';
+import 'analytics/analytics_window.dart';
 import 'analytics/comparison_delta.dart';
+import 'analytics/custom_range_sheet.dart';
+import 'analytics/overview_range_choice.dart';
 import 'analytics/dashboard_analytics_scope.dart';
 import 'analytics/dashboard_destination.dart';
 import 'analytics/dashboard_drilldown.dart';
 import 'analytics/order_type_analytics.dart';
 import 'analytics/owner_sales_series_query_key.dart';
 import 'analytics/payment_method_analytics.dart';
+import 'analytics/payment_tender_colors.dart';
 import 'data/audit_log_models.dart' show AuditBranchOption;
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
+import 'data/owner_top_items.dart';
 import 'format/money_format.dart';
 import 'state/analytics_branch_providers.dart'
     show analyticsBranchOptionsProvider, resolvedLiveAnalyticsBranchProvider;
@@ -76,6 +82,9 @@ class DashboardHomeScreen extends ConsumerWidget {
     // banner/header are honest about the data source (never claim demo data in
     // real mode, nor vice versa). Demo is the DEFAULT.
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // F2.1 — the ONE committed window, read where a ref exists and handed
+    // down as a value so the content widget stays Riverpod-free.
+    final window = ref.watch(analyticsWindowProvider);
     final reportAsync = ref.watch(dashboardReportProvider);
 
     // F0.6: refresh the CURRENT report key only. Invalidating
@@ -119,6 +128,7 @@ class DashboardHomeScreen extends ConsumerWidget {
             child: reportAsync.when(
               data: (report) => _ReportContent(
                 report: report,
+                window: window,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
                 salesByDay: seriesKey == null
@@ -353,10 +363,20 @@ class _ScopeSelector extends ConsumerWidget {
 class _RangeFilterBar extends ConsumerWidget {
   const _RangeFilterBar();
 
+  /// Below this the selector scrolls horizontally instead of wrapping.
+  static const double _wideBreakpoint = 900;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final selected = ref.watch(reportRangeProvider);
+    final window = ref.watch(analyticsWindowProvider);
+    final selected = switch (window) {
+      PresetAnalyticsWindow(:final range) => OverviewRangeChoice.preset(
+        range.asReportRange,
+      ),
+      CustomAnalyticsWindow() => const OverviewRangeChoice.custom(),
+    };
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         RestoflowSpacing.lg,
@@ -366,28 +386,367 @@ class _RangeFilterBar extends ConsumerWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 700;
-          final control = RestoflowSegmentedControl<ReportRange>(
+          final wide = constraints.maxWidth >= _wideBreakpoint;
+          final chips = [
+            for (final choice in kOverviewRangeChoices)
+              _RangeChip(
+                key: Key('range-chip-${choice.id}'),
+                label: _choiceLabel(l10n, choice),
+                selected: choice == selected,
+                onTap: () => _select(context, ref, choice),
+              ),
+          ];
+
+          // ONE Wrap at every width — it flows to the reading end on wide
+          // layouts and on to as many lines as it needs on narrow ones.
+          //
+          // WHY NOT A HORIZONTAL SCROLL ROW ON MOBILE, which was the first
+          // shape tried: at 390px only three of the seven pills fit, so Custom
+          // and the 60/90 presets sat outside the viewport. A choice you must
+          // discover by dragging is barely a choice, and making the selected one
+          // auto-scroll into view is exactly the scroll bookkeeping this slice
+          // set out to avoid. A Wrap keeps all seven laid out, hit-testable and
+          // reachable with no gesture, costs one extra line of height inside an
+          // already-scrolling page, and gets RTL ordering from Directionality
+          // for free. Seven equal-width segments were never an option — the
+          // labels are unreadable below about 700px.
+          // The key outlives the widget TYPE deliberately: it names "the range
+          // filter", which still exists, so the suites that assert the filter is
+          // present keep testing that fact rather than the shape it happens to
+          // have this quarter.
+          final row = Wrap(
             key: const Key('reports-range-filter'),
-            expand: narrow,
-            selected: selected,
-            onSelected: (r) => ref.read(reportRangeProvider.notifier).state = r,
-            segments: [
-              for (final r in ReportRange.values)
-                RestoflowSegment(
-                  value: r,
-                  label: _rangeLabel(l10n, r),
-                  icon: Icons.calendar_today,
-                  key: Key('range-chip-${r.wire}'),
-                ),
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.sm,
+            alignment: wide ? WrapAlignment.end : WrapAlignment.start,
+            children: chips,
+          );
+          return Column(
+            crossAxisAlignment: wide
+                ? CrossAxisAlignment.stretch
+                : CrossAxisAlignment.start,
+            children: [
+              row,
+              _CustomRangeCaption(window: window),
             ],
           );
-          if (narrow) return control;
-          return Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: control,
-          );
         },
+      ),
+    );
+  }
+
+  void _select(
+    BuildContext context,
+    WidgetRef ref,
+    OverviewRangeChoice choice,
+  ) {
+    switch (choice) {
+      case PresetRangeChoice(:final range):
+        commitAnalyticsPreset(ref, range);
+      case CustomRangeChoice():
+        // Selecting Custom OPENS the sheet; it does not commit anything. The
+        // committed window only changes when Apply is pressed.
+        unawaited(showCustomRangeSheet(context, ref));
+    }
+  }
+}
+
+/// The localized label for one selector choice.
+String _choiceLabel(AppLocalizations l10n, OverviewRangeChoice choice) =>
+    switch (choice) {
+      PresetRangeChoice(:final range) => _rangeLabel(l10n, range),
+      CustomRangeChoice() => l10n.dashboardRangeCustom,
+    };
+
+/// One selector pill.
+///
+/// Selected uses the brand primary (V0's navy) with its on-primary foreground;
+/// unselected is a neutral surface with a hairline border, so the selected state
+/// reads from colour AND weight rather than colour alone.
+class _RangeChip extends StatelessWidget {
+  const _RangeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = selected ? scheme.onPrimary : kRestoflowInk2;
+    // MergeSemantics, not a wrapping Semantics node: the InkWell already
+    // contributes the tap/focus actions and the Text contributes the label, so
+    // wrapping them produced TWO nodes — one that said "selected" without being
+    // tappable and one that was tappable without saying so. Merging yields the
+    // single node a screen reader expects: button, selected, labelled, tappable.
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? scheme.primary : kRestoflowSurface,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              // 44px minimum height keeps the touch target at the platform
+              // standard even though the label is small.
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.lg,
+                vertical: RestoflowSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected ? scheme.primary : kRestoflowHairline,
+                ),
+              ),
+              // Align with a widthFactor, NOT `Container(alignment:)`.
+              //
+              // A Container given a non-null `alignment` wraps its child in a
+              // bare `Align`, and an `Align` with no widthFactor expands to
+              // fill whatever bounded width it is offered. Inside the selector
+              // Wrap that is the FULL row, so all seven pills claimed a line
+              // each and the range control ate the entire first viewport at
+              // every width — a chip that fills its row is not a chip. The
+              // widthFactor makes the box hug its label again while still
+              // centring the text inside the 44px touch target.
+              child: Align(
+                alignment: Alignment.center,
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// F3 — Top Selling Items, on the committed analytics window.
+///
+/// Every state is honest and LOCAL to this card, exactly as [_SalesByDayCard]
+/// established: a failed or absent top-items RPC never removes the KPIs beside
+/// it. The four answers are deliberately distinct —
+///
+///   * loading      -> a skeleton, never a zeroed list;
+///   * unavailable  -> the RPC is not deployed on this database (PGRST202);
+///   * empty        -> the server's REAL answer that this window sold nothing;
+///   * error        -> the shared error state.
+///
+/// "Unavailable" and "empty" are the pair that matters. Collapsing them would
+/// tell an owner their best week sold nothing because a migration had not run.
+class _TopItemsCard extends ConsumerWidget {
+  const _TopItemsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(
+      ownerTopItemsForKeyProvider(ref.watch(currentOwnerTopItemsKeyProvider)),
+    );
+    return RestoflowSectionCard(
+      key: const Key('top-items-card'),
+      title: l10n.dashboardTopItems,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        async.when(
+          loading: () => const Padding(
+            key: Key('top-items-loading'),
+            padding: EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+            // A skeleton rather than a spinner: three cards can be in flight at
+            // once on this page, and stacked indicators read as a broken screen.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+              ],
+            ),
+          ),
+          error: (_, _) => RestoflowStateView(
+            key: const Key('top-items-error'),
+            icon: Icons.error_outline,
+            tone: RestoflowTone.danger,
+            message: l10n.dashboardReportsError,
+          ),
+          data: (items) => _topItemsBody(context, l10n, items),
+        ),
+      ],
+    );
+  }
+
+  Widget _topItemsBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    OwnerTopItems items,
+  ) {
+    if (!items.supported) {
+      return RestoflowStateView(
+        key: const Key('top-items-unavailable'),
+        icon: Icons.event_busy_outlined,
+        message: l10n.dashboardRangeUnavailable,
+      );
+    }
+    if (items.isEmpty) {
+      return RestoflowStateView(
+        key: const Key('top-items-empty'),
+        icon: Icons.inbox_outlined,
+        message: l10n.dashboardNoDataForRange,
+      );
+    }
+    final top = items.topRevenueMinor;
+    return Column(
+      key: const Key('top-items-list'),
+      // STRETCH, not the Column default of center: a centred child sizes to its
+      // intrinsic width, and a rank row at 2x text scale on a 390px phone is
+      // wider than the card — a 5px overflow with no visible cause.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < items.items.length; i++)
+          RestoflowRankRow(
+            rank: i + 1,
+            name: items.items[i].name,
+            meta:
+                '×${items.items[i].quantity} · '
+                '${MoneyFormatter.formatMinor(items.items[i].lineRevenueMinor, items.currencyCode)}',
+            // Display-only ratio for the share bar. Money itself stays integer
+            // minor everywhere above (D-007) — this never reaches a total.
+            fraction: top == 0 ? 0 : items.items[i].lineRevenueMinor / top,
+          ),
+      ],
+    );
+  }
+}
+
+/// F3 — Recent Orders, on the committed analytics window.
+///
+/// Reads the SAME order-history repository the Orders screen uses, through its
+/// own keyed entry asking for the newest eight rows of the current window. An
+/// empty window is an empty STATE here, never an error: "no orders in these
+/// dates" is a fact about the business, not a failure of the dashboard.
+class _RecentOrdersCard extends ConsumerWidget {
+  const _RecentOrdersCard({this.onViewAll});
+
+  /// V2.2 — opens the full order history. Null (tests / demo harnesses that
+  /// mount the Overview without a navigation seam) hides the action entirely
+  /// rather than offering a control that goes nowhere.
+  final VoidCallback? onViewAll;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(
+      overviewRecentOrdersForKeyProvider(
+        ref.watch(currentOverviewRecentOrdersKeyProvider),
+      ),
+    );
+    final viewAll = onViewAll;
+    return RestoflowSectionCard(
+      key: const Key('recent-orders-card'),
+      title: l10n.dashboardRecentOrders,
+      // The card shows the newest eight; this is where the other ones are.
+      // It travels through the SAME typed drill-down the KPI cards use, whose
+      // `applyFilters` already carries the committed analytics window — so the
+      // list that opens describes the window the card was describing, and the
+      // two can never disagree about which dates are on screen.
+      action: viewAll == null
+          ? null
+          : TextButton(
+              key: const Key('recent-orders-view-all'),
+              onPressed: viewAll,
+              child: Text(l10n.dashboardRecentOrdersViewAll),
+            ),
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        async.when(
+          loading: () => const Padding(
+            key: Key('recent-orders-loading'),
+            padding: EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+                SizedBox(height: RestoflowSpacing.sm),
+                RestoflowSkeleton(height: 18),
+              ],
+            ),
+          ),
+          error: (_, _) => RestoflowStateView(
+            key: const Key('recent-orders-error'),
+            icon: Icons.error_outline,
+            tone: RestoflowTone.danger,
+            message: l10n.dashboardReportsError,
+          ),
+          data: (page) => page.rows.isEmpty
+              ? RestoflowStateView(
+                  key: const Key('recent-orders-empty'),
+                  icon: Icons.inbox_outlined,
+                  message: l10n.dashboardNoDataForRange,
+                )
+              : Column(
+                  key: const Key('recent-orders-list'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final row in page.rows)
+                      RecentOrderTile(row: RecentOrderRow.fromHistory(row)),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The committed custom range, spelled out under the chips.
+///
+/// The CHIP stays the short localized "Custom" — turning it into
+/// "01/03/2026 – 09/03/2026" would make one pill wider than the whole scroll row
+/// at 430px. The dates belong here, where they can wrap.
+class _CustomRangeCaption extends StatelessWidget {
+  const _CustomRangeCaption({required this.window});
+
+  final AnalyticsWindow window;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = window;
+    if (w is! CustomAnalyticsWindow) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final material = MaterialLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      child: Semantics(
+        label: l10n.dashboardRangeCustomDays(w.inclusiveDayCount),
+        child: Text(
+          key: const Key('range-custom-caption'),
+          l10n.dashboardRangeCustomSelected(
+            // Locale-aware through MaterialLocalizations, so ar/he render their
+            // own numerals and order without this file importing intl.
+            material.formatShortDate(w.startDay),
+            material.formatShortDate(w.endDay),
+          ),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ),
     );
   }
@@ -397,6 +756,7 @@ class _RangeFilterBar extends ConsumerWidget {
 class _ReportContent extends StatelessWidget {
   const _ReportContent({
     required this.report,
+    required this.window,
     required this.isDemo,
     this.deviceSummary,
     this.salesByDay,
@@ -405,6 +765,15 @@ class _ReportContent extends StatelessWidget {
   });
 
   final DashboardReport report;
+
+  /// F2.1 — the COMMITTED analytics window, passed as a plain value so this
+  /// widget stays Riverpod-free (the same rule [salesSeriesKey] follows).
+  ///
+  /// The comparison wording is derived from THIS, not from `report.range`: a
+  /// custom window leaves that field holding whatever preset token the request
+  /// was built with, which is how a 14-day range came to announce "previous 30
+  /// days".
+  final AnalyticsWindow window;
 
   /// Whether the report is demo data (computed locally) or real data. Drives the
   /// banner so the data source is labelled honestly (RF-140).
@@ -445,12 +814,8 @@ class _ReportContent extends StatelessWidget {
     // the range's prior window (owner_report_range). The label matches the
     // selected range; a null comparison shows no delta (never invented). Integer
     // percentage math only (never floating-point).
-    String deltaLabel(int pct) => switch (report.range) {
-      ReportRange.today => l10n.dashboardDeltaVsYesterday(pct),
-      ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
-      ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
-      ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
-    };
+    String deltaLabel(int pct) =>
+        analyticsComparisonDeltaLabel(l10n, window, pct);
     final comparison = report.comparison;
     // CLIENT-B: the KPI deltas now go through the SHARED [ComparisonDelta]
     // instead of the loose `deltaPercent`, so the zero-baseline rule lives in
@@ -615,6 +980,10 @@ class _ReportContent extends StatelessWidget {
     ];
 
     final summary = DailySummaryCard(
+      // V2.2: a stable key, matching the sibling `payment-summary-card`, so the
+      // "nothing was removed" guard can name it instead of matching localized
+      // prose that a translation pass would quietly break.
+      key: const Key('daily-summary-card'),
       title: l10n.dashboardDailySummary,
       rows: [
         SummaryRow(
@@ -722,35 +1091,17 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    // "1c" top sellers: a numbered rank badge + name + `×qty · amount` + a mini
-    // share bar (revenue / top revenue). Money stays formatted via MoneyFormatter.
-    final topRevenue = report.topItems.isEmpty
-        ? 0
-        : report.topItems.first.lineRevenueMinor;
-    final topItems = RestoflowSectionCard(
-      key: const Key('top-items-card'),
-      title: l10n.dashboardTopItems,
-      children: [
-        for (var i = 0; i < report.topItems.length; i++)
-          RestoflowRankRow(
-            rank: i + 1,
-            name: report.topItems[i].name,
-            meta:
-                '×${report.topItems[i].quantity} · '
-                '${MoneyFormatter.formatMinor(report.topItems[i].lineRevenueMinor, report.topItems[i].currencyCode)}',
-            fraction: topRevenue == 0
-                ? 0
-                : report.topItems[i].lineRevenueMinor / topRevenue,
-          ),
-      ],
-    );
-
-    final recentOrders = RestoflowSectionCard(
-      key: const Key('recent-orders-card'),
-      title: l10n.dashboardRecentOrders,
-      children: [
-        for (final row in report.recentOrders) RecentOrderTile(row: row),
-      ],
+    // F3 — both cards now own their own request, keyed on the committed window.
+    // They used to be projections of DashboardReport, which meant they were
+    // EMPTY in real mode and empty for every demo range except today.
+    const topItems = _TopItemsCard();
+    final recentOrders = _RecentOrdersCard(
+      // The unfiltered history on the CURRENT window: `OrdersHistoryDrillDown`
+      // with every filter left at "all". No new navigation path, and no chance
+      // of the list landing on a different window from the card.
+      onViewAll: drill == null
+          ? null
+          : () => drill(const OrdersHistoryDrillDown()),
     );
 
     // RF-127: the sales-by-hour curve is the DOMINANT visualization. It renders
@@ -855,12 +1206,13 @@ class _ReportContent extends StatelessWidget {
     // coming" panel HOLDS the analytics slot (instead of the legacy tables
     // collapsing into the first viewport). No fake chart, no fake values — a
     // muted icon + the existing explanation. Never shown in demo (full data).
+    // F3 — top items and recent orders are NO LONGER part of this predicate.
+    // The panel promises they "will appear here once full reporting is enabled";
+    // they now load from their own RPCs and answer for themselves, so keeping
+    // them in the gate would hide the panel the moment either returned a row
+    // while per-branch sales and the hourly curve were still genuinely absent.
     final showLimitedNote =
-        !isDemo &&
-        report.hourlyNetSales.isEmpty &&
-        report.branches.isEmpty &&
-        report.topItems.isEmpty &&
-        report.recentOrders.isEmpty;
+        !isDemo && report.hourlyNetSales.isEmpty && report.branches.isEmpty;
     final theme = Theme.of(context);
     final limitedNote = RestoflowSectionCard(
       key: const Key('reports-limited-analytics'),
@@ -906,10 +1258,11 @@ class _ReportContent extends StatelessWidget {
     // the live-limited state the honest limited-analytics panel HOLDS the
     // chart's slot in the analytics row (beside the real payment mix when that
     // exists), so the legacy tables never climb into the first viewport.
-    final strongPair = <Widget>[
-      if (report.topItems.isNotEmpty) topItems,
-      if (report.recentOrders.isNotEmpty) recentOrders,
-    ];
+    // ALWAYS present. Dropping a card when its list was empty made "this window
+    // sold nothing" indistinguishable from "this never loaded", and it made the
+    // pair's position in the page depend on the data. Each card now answers for
+    // itself.
+    final strongPair = <Widget>[topItems, recentOrders];
     // CLIENT-D: the dine-in / takeaway split joins the secondary grid beside
     // "Sales by branch", its closest sibling — a compact breakdown of the same
     // window, not a second analytics page. Present only for the multi-day
@@ -956,12 +1309,7 @@ class _ReportContent extends StatelessWidget {
             (comparison.completedOrderCount != null ||
                 comparison.discountTotalMinor != null))
         ? _ComparisonStrip(
-            title: switch (report.range) {
-              ReportRange.today => l10n.dashboardComparedVsYesterdayAll,
-              ReportRange.yesterday => l10n.dashboardComparedVsDayBefore,
-              ReportRange.last7 => l10n.dashboardComparedVsPrev7,
-              ReportRange.last30 => l10n.dashboardComparedVsPrev30,
-            },
+            title: analyticsComparisonTitle(l10n, window),
             rows: [
               if (comparison.completedOrderCount != null)
                 _ComparisonRowData(
@@ -998,20 +1346,43 @@ class _ReportContent extends StatelessWidget {
     // and now there is one.
     final analyticsStart =
         salesByHour ?? salesByDay ?? (showLimitedNote ? limitedNote : null);
-    final blocks = <Widget>[
-      banner,
-      _KpiGrid(cards: primaryKpis),
-      if (comparisonStrip != null) comparisonStrip,
-      if (analyticsStart != null || paymentMix != null)
-        _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
-      _KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length),
-      if (strongPair.isNotEmpty) _PairRow(sections: strongPair),
-      if (remaining.isNotEmpty) _TwoColumn(sections: remaining),
+
+    // V2.2 — THE PAGE IS A SEQUENCE OF ZONES, NOT A STACK OF CARDS.
+    //
+    // Every block used to be separated by the same gap, so eleven cards of
+    // differing importance arrived as one undifferentiated column: the eye had
+    // to read each title to work out where one idea ended and the next began.
+    // Grouping them and giving the BOUNDARIES more air than the gaps inside a
+    // group is the whole change — no card is added, removed, resized or
+    // restyled by it.
+    //
+    // The one ORDER change is the comparison strip, which used to sit between
+    // the KPIs and the chart. That put the supporting figure above the thing it
+    // supports, and pushed the page's dominant visualization down out of the
+    // first viewport. It now reads directly under the trend it belongs to,
+    // which is also what makes them one zone rather than two neighbours.
+    final zones = <List<Widget>>[
+      // ZONE 1 — what this page is describing.
+      [banner],
+      // ZONE 2 — the headline figures.
+      [_KpiGrid(cards: primaryKpis)],
+      // ZONE 3 — the trend, then the comparison that reads it.
+      [
+        if (analyticsStart != null || paymentMix != null)
+          _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
+        if (comparisonStrip != null) comparisonStrip,
+      ],
+      // ZONE 4 — live operational state.
+      [_KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length)],
+      // ZONE 5 — what sold, and what just happened.
+      [if (strongPair.isNotEmpty) _PairRow(sections: strongPair)],
+      // ZONE 6 — the supporting detail an owner goes looking for.
+      [if (remaining.isNotEmpty) _TwoColumn(sections: remaining)],
     ];
 
     return ListView(
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
-      children: _verticallySpaced(blocks),
+      children: _zoned(zones),
     );
   }
 
@@ -1448,6 +1819,8 @@ String _rangeLabel(AppLocalizations l10n, ReportRange r) => switch (r) {
   ReportRange.yesterday => l10n.dashboardRangeYesterday,
   ReportRange.last7 => l10n.dashboardRangeLast7,
   ReportRange.last30 => l10n.dashboardRangeLast30,
+  ReportRange.last60 => l10n.dashboardRangeLast60,
+  ReportRange.last90 => l10n.dashboardRangeLast90,
 };
 
 /// The chrome subtitle: for today, the business-date "Report day: …" context
@@ -1475,6 +1848,26 @@ List<Widget> _verticallySpaced(List<Widget> items) => [
     items[i],
   ],
 ];
+
+/// V2.2 — flattens [zones] into one column, spacing WITHIN a zone at the normal
+/// rhythm and BETWEEN zones at the wider one.
+///
+/// The wide step is what makes the grouping legible; without it the zones exist
+/// only in this source file. Empty zones are skipped entirely — a range with no
+/// comparison, or a real-mode report with no per-branch rows, must not leave a
+/// double gap where a group would have been (the same LIVE-UX-001 rule
+/// [_verticallySpaced] follows, one level up).
+List<Widget> _zoned(List<List<Widget>> zones) {
+  final out = <Widget>[];
+  for (final zone in zones) {
+    if (zone.isEmpty) continue;
+    if (out.isNotEmpty) {
+      out.add(const SizedBox(height: RestoflowSpacing.xxl));
+    }
+    out.addAll(_verticallySpaced(zone));
+  }
+  return out;
+}
 
 /// RF-REPORT-003 — the Overview's "Shift & cash" card: TODAY's closed-shift cash
 /// reconciliation (counts + expected/counted/variance aggregate) and the last
@@ -1519,6 +1912,12 @@ class _ShiftCashCard extends StatelessWidget {
       title: l10n.dashboardShiftCashTitle,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
+        // DESIGN-SYSTEM-STATUS-PILL-OVERFLOW-001 — the LayoutBuilder +
+        // ConstrainedBox + FittedBox(scaleDown) that F3 wrapped these two pills
+        // in are gone. `RestoflowStatusPill` now refuses to exceed the box it
+        // is handed, so the defence belongs to the component and repeating it
+        // here would only shrink a counted label below the text scale the user
+        // asked for. A plain Wrap is once again the whole story.
         Wrap(
           spacing: RestoflowSpacing.sm,
           runSpacing: RestoflowSpacing.xs,
@@ -1902,15 +2301,13 @@ class _PaymentMixCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
-    Color colorFor(String m) => switch (m) {
-      'cash' => kRestoflowSeedColor,
-      'card' => semantic.accent,
-      'bit' => semantic.info,
-      _ => semantic.warning,
-    };
+    // V2 — the deferred categorical tender mapping, owned by
+    // `paymentTenderColor` beside the shared label mapper. ONE closure still
+    // feeds both the donut segment and the legend swatch, so the two can never
+    // drift (the F0.5 defect); the mapping itself is now a pure function so
+    // every wire token can be asserted, including the ones no demo fixture
+    // produces — which is exactly where the old semantic-tone leak hid.
+    Color colorFor(String m) => paymentTenderColorOf(context, m);
     // F0.5: the donut legend had its own cash-only mapper, so a card / bit /
     // external slice was labelled with its raw wire token right next to a
     // correctly-labelled cash slice. One shared mapper now serves the legend,
@@ -1946,10 +2343,14 @@ class _PaymentMixCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final m in analytics)
+        for (final (i, m) in analytics.indexed)
           Padding(
-            padding: const EdgeInsetsDirectional.only(
-              bottom: RestoflowSpacing.sm,
+            // V2.2: the gap goes BETWEEN legend rows, not after the last one.
+            // A trailing 8px left the legend floating above the tender trend
+            // and the recorded-tenders note, so the card's internal rhythm
+            // disagreed with every other card on the page.
+            padding: EdgeInsetsDirectional.only(
+              bottom: i == analytics.length - 1 ? 0 : RestoflowSpacing.sm,
             ),
             child: _MaybeTappableRow(
               key: Key('payment-mix-row-${m.method}'),

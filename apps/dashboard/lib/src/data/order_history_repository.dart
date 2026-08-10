@@ -9,6 +9,7 @@
 /// honest loading / error / empty states.
 library;
 
+import '../analytics/analytics_window.dart' show CustomAnalyticsWindow;
 import 'demo_order_store.dart';
 import 'order_history_models.dart';
 
@@ -76,19 +77,23 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
     DemoOrderStore? store,
     List<DemoOrder>? orders,
     this.failureMessage,
-    this.pageSize = 25,
-  }) : _store = store ?? DemoOrderStore(orders);
+    DateTime Function()? clock,
+  }) : _store = store ?? DemoOrderStore(orders),
+       _clock = clock ?? DateTime.now;
 
   final DemoOrderStore _store;
+
+  /// Only consulted for a CUSTOM window, which is the one selection expressed in
+  /// absolute dates while the fixtures are expressed in [DemoOrder.daysAgo]
+  /// offsets. Injected so a demo custom window is deterministic in tests rather
+  /// than rotting the moment the suite runs across midnight.
+  final DateTime Function() _clock;
 
   List<DemoOrder> get _orders => _store.orders;
 
   /// When non-null, both loads throw an [OrderHistoryException] with this
   /// message (drives/tests the error state).
   final String? failureMessage;
-
-  /// How many rows a page holds (so tests can exercise "load more").
-  final int pageSize;
 
   @override
   Future<OrderHistoryPage> loadHistory(
@@ -100,7 +105,9 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
 
     final matched = _orders.where((o) => _matches(o, query)).toList();
     final offset = int.tryParse(cursor ?? '') ?? 0;
-    final slice = matched.skip(offset).take(pageSize).toList();
+    // F3 — the REQUEST decides its size. The Overview asks for 8, the Orders
+    // screen for 25; a repository-level page size could not tell them apart.
+    final slice = matched.skip(offset).take(query.limit).toList();
     final consumed = offset + slice.length;
     final hasMore = consumed < matched.length;
     return OrderHistoryPage(
@@ -120,13 +127,34 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
     throw const OrderHistoryException('order not found');
   }
 
+  /// Is this fixture order inside an absolute custom window?
+  ///
+  /// The fixtures carry `daysAgo` offsets, so the window is converted INTO
+  /// offsets rather than the order being converted into a date — one subtraction
+  /// per call instead of a date rebuild per order, and no per-day iteration.
+  /// Both bounds are inclusive, matching the server.
+  bool _withinCustom(DemoOrder o, CustomAnalyticsWindow w) {
+    final today = CustomAnalyticsWindow.normalizeDay(_clock());
+    // startDay is the OLDER date, so it is the LARGER offset.
+    final oldest = today.difference(w.startDay).inDays;
+    final newest = today.difference(w.endDay).inDays;
+    return o.daysAgo >= newest && o.daysAgo <= oldest;
+  }
+
   bool _matches(DemoOrder o, OrderHistoryQuery q) {
-    final within = switch (q.range) {
-      OrderHistoryRange.today => o.daysAgo == 0,
-      OrderHistoryRange.yesterday => o.daysAgo == 1,
-      OrderHistoryRange.last7 => o.daysAgo >= 0 && o.daysAgo <= 6,
-      OrderHistoryRange.last30 => o.daysAgo >= 0 && o.daysAgo <= 29,
-    };
+    // A committed CUSTOM window wins over the preset token, exactly as the RPC
+    // resolves it: supplying both dates selects custom and p_range is not read.
+    final custom = q.customWindow;
+    final within = custom != null
+        ? _withinCustom(o, custom)
+        : switch (q.range) {
+            OrderHistoryRange.today => o.daysAgo == 0,
+            OrderHistoryRange.yesterday => o.daysAgo == 1,
+            OrderHistoryRange.last7 => o.daysAgo >= 0 && o.daysAgo <= 6,
+            OrderHistoryRange.last30 => o.daysAgo >= 0 && o.daysAgo <= 29,
+            OrderHistoryRange.last60 => o.daysAgo >= 0 && o.daysAgo <= 59,
+            OrderHistoryRange.last90 => o.daysAgo >= 0 && o.daysAgo <= 89,
+          };
     if (!within) return false;
     final d = o.detail;
     if (q.status.wire != null && d.status != q.status.wire) return false;

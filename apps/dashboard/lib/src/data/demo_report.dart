@@ -9,6 +9,8 @@
 /// there is no floating-point money. Single currency (ILS) for the demo.
 library;
 
+import 'order_history_models.dart' show OrderHistoryRow;
+
 /// ISO 4217 currency for the demo, locked to ILS / ₪.
 const String kDemoCurrencyCode = 'ILS';
 
@@ -21,7 +23,9 @@ enum ReportRange {
   today('today'),
   yesterday('yesterday'),
   last7('last7'),
-  last30('last30');
+  last30('last30'),
+  last60('last60'),
+  last90('last90');
 
   const ReportRange(this.wire);
 
@@ -65,13 +69,31 @@ class TopItem {
     required this.quantity,
     required this.lineRevenueMinor,
     required this.currencyCode,
+    this.menuItemId,
+    this.orderCount,
   });
 
+  /// F3 — the STABLE identity the server groups by.
+  ///
+  /// `public.owner_top_items` aggregates on `menu_item_id` and its migration is
+  /// explicit that grouping by name is the wrong identity: it merges two
+  /// products that share a label and splits one product across a rename. Null
+  /// only for the demo dataset, which predates this field.
+  final String? menuItemId;
+
   /// Display name (data, not localized chrome).
+  ///
+  /// From the server this is the most recently CAPTURED snapshot in the window,
+  /// never a live catalog lookup — so a renamed or deleted product still shows
+  /// the name it was sold under.
   final String name;
   final int quantity;
   final int lineRevenueMinor;
   final String currencyCode;
+
+  /// How many distinct orders contained this item. Null when the source does
+  /// not report it (the demo dataset).
+  final int? orderCount;
 }
 
 /// One recent-orders row (order number, time, type/table, status, paid flag and
@@ -101,6 +123,25 @@ class RecentOrderRow {
   final bool isPaid;
   final int totalMinor;
   final String currencyCode;
+
+  /// F3 — the same row, built from a real order-history row.
+  ///
+  /// One tile widget serves both sources, so demo and real cannot drift
+  /// visually. Every field is COPIED, never derived: `createdAtLabel` is the
+  /// server's already-formatted BRANCH-LOCAL time (this client does not know the
+  /// branch's timezone and must not guess one), and paid-ness comes from
+  /// [SettlementState.isSettled] — the same settlement rule the server applies,
+  /// not the mere presence of a payment row.
+  factory RecentOrderRow.fromHistory(OrderHistoryRow row) => RecentOrderRow(
+    orderNumber: row.receiptNumber ?? row.orderCode,
+    timeLabel: row.createdAtLabel,
+    isDineIn: row.orderType == 'dine_in',
+    tableLabel: row.tableLabel,
+    status: row.status,
+    isPaid: row.settlement.isSettled,
+    totalMinor: row.grandTotalMinor,
+    currencyCode: row.currencyCode,
+  );
 }
 
 /// DESIGN-002 — one hour's net sales for the sales-by-hour chart. Money is

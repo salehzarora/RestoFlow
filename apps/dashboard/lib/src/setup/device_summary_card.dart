@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
-    show AdminDevice, AdminRepository, DeviceLifecycleStatus;
+    show DeviceLifecycleStatus;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+import '../state/setup_device_providers.dart';
 
 /// Dashboard V2 — the honest device readiness card for the Overview's lower
 /// operational row: `active/configured` counts read from the SAME real devices
@@ -14,58 +17,34 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// grid keeps its full row — no ghost slot — and the Devices navigation action
 /// stays available. Loading shows a static skeleton tile. Tapping opens the
 /// Devices tab through the existing shell navigation callback.
-class DashboardDeviceSummaryCard extends StatefulWidget {
-  const DashboardDeviceSummaryCard({
-    required this.repository,
-    this.onOpenDevices,
-    super.key,
-  });
-
-  final AdminRepository repository;
+class DashboardDeviceSummaryCard extends ConsumerWidget {
+  const DashboardDeviceSummaryCard({this.onOpenDevices, super.key});
 
   /// The existing shell navigation callback to the Devices tab (index 2).
   final VoidCallback? onOpenDevices;
 
-  @override
-  State<DashboardDeviceSummaryCard> createState() =>
-      _DashboardDeviceSummaryCardState();
-}
-
-class _DashboardDeviceSummaryCardState
-    extends State<DashboardDeviceSummaryCard> {
-  late Future<List<AdminDevice>?> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load(widget.repository);
-  }
+  // V2.1 — the device list is no longer fetched here.
+  //
+  // This card used to call `repository.loadDevices()` in `initState`, and the
+  // Setup Center above it called the SAME method on the SAME repository
+  // instance, so one Overview mount cost two identical requests. Both now read
+  // ONE canonical provider entry, which also means the shell tearing this
+  // subtree down on a tab switch no longer re-fetches anything.
+  //
+  // The `didUpdateWidget` identity guard that used to live here is gone with
+  // it: it never fired in production anyway, because the shell holds the
+  // repository in a `late final` and the instance was always identical. Scope
+  // changes are now expressed by the KEY instead, which is value-based.
 
   @override
-  void didUpdateWidget(DashboardDeviceSummaryCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // A different repository means a different data source: reload from it.
-    // The FutureBuilder below keys its rendering on connectionState, so the
-    // skeleton shows while the NEW source loads — the previous repository's
-    // counts are never presented as the new one's.
-    if (!identical(oldWidget.repository, widget.repository)) {
-      _future = _load(widget.repository);
-    }
-  }
-
-  Future<List<AdminDevice>?> _load(AdminRepository repository) async {
-    List<AdminDevice>? devices;
-    (await repository.loadDevices()).fold((value) => devices = value, (_) {});
-    return devices;
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return FutureBuilder<List<AdminDevice>?>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
+    final async = ref.watch(
+      setupDevicesProvider(ref.watch(currentSetupScopeKeyProvider)),
+    );
+    return Builder(
+      builder: (context) {
+        if (async.isLoading) {
           // Static (pumpAndSettle-safe) skeleton while the real counts load.
           return const Card(
             child: Padding(
@@ -82,7 +61,10 @@ class _DashboardDeviceSummaryCardState
             ),
           );
         }
-        final devices = snap.data;
+        // An ERROR is treated exactly as a null result was before: the
+        // repository already folds its failures to null, so this arm only
+        // catches a thrown one, and both mean the same honest thing.
+        final devices = async.hasError ? null : async.value;
         if (devices == null) {
           // Load failed: an honest "status unavailable" card — never a fake
           // zero count, and never an empty ghost slot in the operational grid.
@@ -94,7 +76,7 @@ class _DashboardDeviceSummaryCardState
             value: l10n.setupMetricUnavailable,
             caption: l10n.dashboardDevicesUnavailable,
             icon: Icons.devices_outlined,
-            onTap: widget.onOpenDevices,
+            onTap: onOpenDevices,
           );
         }
         // LIVE-UX-001: a revoked device is not part of the working setup.
@@ -121,7 +103,7 @@ class _DashboardDeviceSummaryCardState
           value: '$active/$total',
           caption: l10n.dashboardDevicesActiveOfConfigured,
           icon: Icons.devices_outlined,
-          onTap: widget.onOpenDevices,
+          onTap: onOpenDevices,
         );
       },
     );

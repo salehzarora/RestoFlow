@@ -599,31 +599,56 @@ class _PrinterCard extends StatelessWidget {
                 ),
               ],
             ),
+            // V2.2 — the action row REFLOWS instead of clipping.
+            //
+            // It used to be a Row of a Switch, a Spacer and three inflexible
+            // actions. A Spacer takes whatever is left, which is fine until
+            // there is nothing left: below roughly 560px the three actions
+            // wanted more than the card could give and the row overflowed —
+            // 8px at 540, 118px at 430, 158px at 390 — so the delete control
+            // was painted under a striped bar or off the card entirely. The
+            // enable switch stays anchored at the reading start (it is the
+            // printer's state, not an action); the actions become a Wrap
+            // bounded by an Expanded, so they drop to a second line when they
+            // no longer fit and stay tappable at every width and text scale.
+            // Deliberately NOT a FittedBox: shrinking the controls would keep
+            // the layout "working" while making them too small to hit.
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Switch(value: printer.isEnabled, onChanged: onToggleEnabled),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: onRoute,
-                  icon: const Icon(
-                    Icons.route_outlined,
-                    size: RestoflowIconSizes.sm,
+                const SizedBox(width: RestoflowSpacing.xs),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: RestoflowSpacing.xs,
+                    runSpacing: RestoflowSpacing.xs,
+                    children: [
+                      TextButton.icon(
+                        onPressed: onRoute,
+                        icon: const Icon(
+                          Icons.route_outlined,
+                          size: RestoflowIconSizes.sm,
+                        ),
+                        label: Text(l10n.printersRoute),
+                      ),
+                      TextButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: RestoflowIconSizes.sm,
+                        ),
+                        label: Text(l10n.printersEdit),
+                      ),
+                      IconButton(
+                        tooltip: l10n.printersDelete,
+                        style: RestoflowButtonStyles.dangerGhost(context),
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
                   ),
-                  label: Text(l10n.printersRoute),
-                ),
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    size: RestoflowIconSizes.sm,
-                  ),
-                  label: Text(l10n.printersEdit),
-                ),
-                IconButton(
-                  tooltip: l10n.printersDelete,
-                  style: RestoflowButtonStyles.dangerGhost(context),
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
                 ),
               ],
             ),

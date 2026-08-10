@@ -15,6 +15,7 @@
 /// [RestoflowButtonStyles], [RestoflowInlineSpinner]).
 library;
 
+export 'src/brand_palette.dart';
 export 'src/buttons.dart';
 export 'src/category_palette.dart';
 export 'src/components/area_chart.dart';

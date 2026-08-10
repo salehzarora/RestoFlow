@@ -16,6 +16,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
     show MenuManagementScreen;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// RF-132 — visual-fidelity corrections against the approved Overview
 /// reference: the cohesive segmented range control (stable keys + behavior
@@ -50,6 +51,7 @@ class _LimitedRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
@@ -104,13 +106,23 @@ void main() {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // One segmented control replaces the detached chips.
+    // F2 replaced the four-value segmented control with a seven-choice pill
+    // group — six presets plus Custom, which a `SegmentedControl<ReportRange>`
+    // could not express because Custom is not a ReportRange. The filter itself
+    // is still ONE cohesive group under the same key.
     expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
-    expect(find.byType(RestoflowSegmentedControl<ReportRange>), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
 
-    // The four stable keys survive, inside the control.
-    for (final wire in const ['today', 'yesterday', 'last7', 'last30']) {
+    // The stable keys survive, inside the group — now including 60/90/custom.
+    for (final wire in const [
+      'today',
+      'yesterday',
+      'last7',
+      'last30',
+      'last60',
+      'last90',
+      'custom',
+    ]) {
       expect(
         find.descendant(
           of: find.byKey(const Key('reports-range-filter')),
@@ -255,7 +267,14 @@ void main() {
     // Nothing fabricated: no chart, no analytics sections.
     expect(find.byType(RestoflowAreaChart), findsNothing);
     expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
-    expect(find.byKey(const Key('top-items-card')), findsNothing);
+    // F3 — the top-items card is now ALWAYS mounted, because it loads from its
+    // own RPC rather than being a projection of this report, and a card that
+    // disappears cannot tell an owner why it has nothing to show. What must
+    // still hold is the honesty rule this test exists for: it renders one of
+    // its own non-fabricating states, never a ranked list.
+    expect(find.byKey(const Key('top-items-card')), findsOneWidget);
+    expect(find.byKey(const Key('top-items-list')), findsNothing);
+    expect(find.byType(RestoflowRankRow), findsNothing);
 
     // The limited panel sits in the analytics position: below the primary
     // KPIs, above the secondary operational cards, and above the legacy
@@ -483,10 +502,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
-        expect(
-          find.byType(RestoflowSegmentedControl<ReportRange>),
-          findsOneWidget,
-        );
+        // Every choice stays laid out and reachable at this width — the reason
+        // F2 wraps rather than horizontally scrolling.
+        expect(find.byKey(const Key('range-chip-custom')), findsOneWidget);
+        expect(find.byKey(const Key('range-chip-last90')), findsOneWidget);
       },
     );
   }

@@ -7,6 +7,16 @@
 /// the UI never branches on the source.
 library;
 
+import '../analytics/analytics_window.dart' show CustomAnalyticsWindow;
+
+/// The Orders screen's page size, and the default for [OrderHistoryQuery.limit].
+///
+/// The Overview's Recent Orders card overrides it with [kOverviewRecentOrdersLimit].
+const int kOrderHistoryPageSize = 25;
+
+/// How many rows the Overview's Recent Orders card shows.
+const int kOverviewRecentOrdersLimit = 8;
+
 /// Which Orders sub-view is showing: the live operations centre or the
 /// historical list.
 ///
@@ -17,12 +27,19 @@ library;
 enum OrdersTab { active, history }
 
 /// The date window for the history list — mirrors the backend `p_range` and the
-/// reports' ranges (today / yesterday / last7 / last30).
+/// reports' ranges (today / yesterday / last7 / last30 / last60 / last90).
+///
+/// A CUSTOM window is deliberately NOT a case here. It has no fixed length, so
+/// it cannot answer `days`, and it would have to be a value with mutable dates
+/// inside an enum. It lives in [AnalyticsWindow] instead, and reaches this
+/// surface through [OrderHistoryQuery.startDay] / [OrderHistoryQuery.endDay].
 enum OrderHistoryRange {
   today('today'),
   yesterday('yesterday'),
   last7('last7'),
-  last30('last30');
+  last30('last30'),
+  last60('last60'),
+  last90('last90');
 
   const OrderHistoryRange(this.wire);
 
@@ -95,6 +112,8 @@ class OrderHistoryQuery {
     this.status = OrderStatusFilter.all,
     this.orderType = OrderTypeFilter.all,
     this.payment = PaymentFilter.all,
+    this.customWindow,
+    this.limit = kOrderHistoryPageSize,
   });
 
   final OrderHistoryRange range;
@@ -103,18 +122,48 @@ class OrderHistoryQuery {
   final OrderTypeFilter orderType;
   final PaymentFilter payment;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — a committed CUSTOM window, or null when
+  /// [range] is the selection.
+  ///
+  /// When set it WINS over [range], mirroring the RPC: supplying both dates
+  /// selects custom and `p_range` is not read at all. [range] is deliberately
+  /// left at whatever it was rather than being blanked, so returning to a preset
+  /// restores the previous one instead of silently resetting to today.
+  final CustomAnalyticsWindow? customWindow;
+
+  /// F3 — how many rows this request asks for.
+  ///
+  /// ON THE QUERY rather than on the repository, because it is on the WIRE
+  /// (`p_limit`) and therefore part of what makes two requests different: the
+  /// Overview's eight-row Recent Orders card and the Orders screen's 25-row page
+  /// are not the same request and must not share a cached answer.
+  final int limit;
+
+  /// True when this query is a custom From/To window.
+  bool get isCustomWindow => customWindow != null;
+
   OrderHistoryQuery copyWith({
     OrderHistoryRange? range,
     String? search,
     OrderStatusFilter? status,
     OrderTypeFilter? orderType,
     PaymentFilter? payment,
+    CustomAnalyticsWindow? customWindow,
+    bool clearCustomWindow = false,
+    int? limit,
   }) => OrderHistoryQuery(
+    limit: limit ?? this.limit,
     range: range ?? this.range,
     search: search ?? this.search,
     status: status ?? this.status,
     orderType: orderType ?? this.orderType,
     payment: payment ?? this.payment,
+    // An explicit flag, because `customWindow: null` is indistinguishable from
+    // "not passed" in a named-optional copyWith — the classic way a field
+    // silently refuses to be cleared.
+    customWindow: clearCustomWindow
+        ? null
+        : (customWindow ?? this.customWindow),
   );
 
   /// The trimmed search, or null when blank (so the RPC skips the filter).

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import '../brand_palette.dart';
 import 'package:flutter/services.dart';
 
 import '../tokens.dart';
@@ -21,7 +23,7 @@ class RestoflowAreaDatum {
 }
 
 /// A calm, single-hue filled area/line chart for a time series (RF-127): a soft
-/// brand-tinted area under a brand-green line, faint gridlines + baseline,
+/// brand-tinted area under a brand navy line, faint gridlines + baseline,
 /// the peak point marked and value-labelled, and a subsampled row of x-axis
 /// labels (so a 24-hour series never clips its labels on a phone).
 ///
@@ -178,6 +180,7 @@ class _RestoflowAreaChartState extends State<RestoflowAreaChart> {
     if (widget.points.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final brand = RestoflowBrandPalette.from(context);
     final line = widget.lineColor ?? scheme.primary;
     final textScaler = MediaQuery.textScalerOf(context);
     final labelStyle = theme.textTheme.bodySmall!.copyWith(
@@ -224,7 +227,12 @@ class _RestoflowAreaChartState extends State<RestoflowAreaChart> {
             peakIndex: peakIndex,
             peakValueLabel: widget.peakValueLabel,
             line: line,
-            grid: scheme.outlineVariant,
+            // V1: an explicit chart-grid ink rather than the card outline. A
+            // grid sits UNDER data and must not compete with a card edge
+            // drawn at full border weight.
+            grid: theme.brightness == Brightness.dark
+                ? brand.chartGridDark
+                : brand.chartGridLight,
             maxLabels: widget.maxLabels < 2 ? 2 : widget.maxLabels,
             labelStyle: labelStyle,
             peakLabelStyle: peakLabelStyle,

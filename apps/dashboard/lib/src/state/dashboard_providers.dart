@@ -24,6 +24,16 @@ import 'analytics_branch_providers.dart'
     show analyticsBranchAnswerProvider, resolvedLiveAnalyticsBranchProvider;
 import 'audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'dashboard_membership_identity.dart';
+import '../analytics/analytics_window.dart';
+import '../analytics/custom_range_draft.dart';
+import '../analytics/owner_top_items_query_key.dart';
+import '../analytics/overview_recent_orders_query_key.dart';
+import '../data/owner_top_items.dart';
+import '../data/owner_top_items_repository.dart';
+import '../data/real_owner_top_items_repository.dart';
+import '../data/order_history_models.dart';
+import 'order_history_providers.dart';
+import 'setup_device_providers.dart';
 
 /// The active dashboard membership scope (org/restaurant/branch), overridden by
 /// the shell's Overview scope for real mode (sprint). Null in demo mode (the
@@ -95,6 +105,72 @@ final ownerReportsRepositoryProvider = Provider<OwnerReportsRepository>(
 /// `loadReport` for the new window. Defaults to today.
 final reportRangeProvider = StateProvider<ReportRange>(
   (ref) => ReportRange.today,
+);
+
+/// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — the committed CUSTOM window, or null when
+/// a preset is selected.
+///
+/// ONLY EVER HOLDS A VALID WINDOW. [CustomAnalyticsWindow] cannot be constructed
+/// out of range, so an incomplete or reversed draft is unrepresentable here and
+/// therefore can never become query state. Draft dates live in F2's picker,
+/// never in this provider.
+final customAnalyticsWindowProvider = StateProvider<CustomAnalyticsWindow?>(
+  (ref) => null,
+);
+
+/// The ONE committed analytics window — the canonical selection every analytics
+/// request is built from.
+///
+/// DERIVED, not a third source of truth: a custom window wins when one is
+/// committed, otherwise the preset does. [reportRangeProvider] stays the preset
+/// channel so the existing chips and the thirteen suites that drive them keep
+/// working unchanged, and this reads DOWNSTREAM of it — one direction only.
+///
+/// Commit through [commitAnalyticsPreset] / [commitCustomAnalyticsWindow] rather
+/// than writing either channel directly; selecting a preset must also clear a
+/// committed custom window, and doing that in one place is what stops the two
+/// channels from disagreeing about what is selected.
+final analyticsWindowProvider = Provider<AnalyticsWindow>((ref) {
+  final custom = ref.watch(customAnalyticsWindowProvider);
+  if (custom != null) return custom;
+  return AnalyticsWindow.preset(
+    AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+  );
+}, dependencies: [reportRangeProvider, customAnalyticsWindowProvider]);
+
+/// Commits a PRESET, clearing any committed custom window.
+void commitAnalyticsPreset(WidgetRef ref, ReportRange range) {
+  ref.read(customAnalyticsWindowProvider.notifier).state = null;
+  ref.read(reportRangeProvider.notifier).state = range;
+}
+
+/// Commits a validated CUSTOM window. [window] is already valid by construction.
+///
+/// Also remembers it in [lastCustomAnalyticsWindowProvider] so reopening the
+/// sheet after a detour through a preset starts from what the owner last chose.
+void commitCustomAnalyticsWindow(WidgetRef ref, CustomAnalyticsWindow window) {
+  ref.read(lastCustomAnalyticsWindowProvider.notifier).state = window;
+  ref.read(customAnalyticsWindowProvider.notifier).state = window;
+}
+
+/// DASHBOARD-VISUAL-RANGE-REFRESH-F2 — the custom-range DRAFT.
+///
+/// Deliberately NOT part of any query key, and deliberately not the committed
+/// window: this is what the owner is typing, and typing a From date must not
+/// issue a request. It reaches [customAnalyticsWindowProvider] only through
+/// Apply.
+final customRangeDraftProvider = StateProvider<CustomRangeDraft>(
+  (ref) => CustomRangeDraft.empty,
+);
+
+/// The last custom window committed THIS SESSION, for reopening the sheet.
+///
+/// Memory, not truth: selecting a preset clears the committed custom window but
+/// leaves this alone, so returning to Custom offers the previous dates instead
+/// of an empty sheet. Nothing reads it to build a request, which is what keeps
+/// it from becoming a second source of truth.
+final lastCustomAnalyticsWindowProvider = StateProvider<CustomAnalyticsWindow?>(
+  (ref) => null,
 );
 
 /// CLIENT-E1 — the BROADEST scope the current membership is authorized to
@@ -240,16 +316,24 @@ final analyticsTransportScopeProvider = Provider<DashboardAnalyticsScope?>(
 /// scope. The key space is unchanged — same three ids, same cache — so two
 /// branches, or a branch and "all permitted", remain two entries that can never
 /// satisfy each other.
-final currentOwnerReportKeyProvider = Provider<OwnerReportQueryKey>((ref) {
-  final scope = ref.watch(dashboardAnalyticsScopeProvider);
-  return OwnerReportQueryKey(
-    organizationId: scope?.organizationId,
-    restaurantId: scope?.restaurantId,
-    branchId: scope?.branchId,
-    range: ref.watch(reportRangeProvider),
-    isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
-  );
-}, dependencies: [dashboardAnalyticsScopeProvider, reportRangeProvider]);
+final currentOwnerReportKeyProvider = Provider<OwnerReportQueryKey>(
+  (ref) {
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    return OwnerReportQueryKey(
+      organizationId: scope?.organizationId,
+      restaurantId: scope?.restaurantId,
+      branchId: scope?.branchId,
+      range: ref.watch(reportRangeProvider),
+      customWindow: ref.watch(customAnalyticsWindowProvider),
+      isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+    );
+  },
+  dependencies: [
+    dashboardAnalyticsScopeProvider,
+    reportRangeProvider,
+    customAnalyticsWindowProvider,
+  ],
+);
 
 /// F0.6 — the owner report FOR ONE EXACT REQUEST IDENTITY.
 ///
@@ -273,7 +357,11 @@ final ownerReportForKeyProvider =
       // drift apart — including for a retained entry re-run after a rebuild.
       return ref
           .watch(ownerReportsRepositoryProvider)
-          .loadReport(range: key.range, analyticsScope: key.analyticsScope);
+          .loadReport(
+            range: key.range,
+            analyticsScope: key.analyticsScope,
+            customWindow: key.customWindow,
+          );
     }, dependencies: [ownerReportsRepositoryProvider]);
 
 /// The owner dashboard report for the CURRENT key.
@@ -335,20 +423,32 @@ final ownerSalesSeriesRepositoryProvider = Provider<OwnerSalesSeriesRepository>(
 /// The single-day gate still comes FIRST: changing the selected branch on
 /// today or yesterday still produces no key, and therefore still issues no
 /// `owner_sales_series` request at all.
-final currentOwnerSalesSeriesKeyProvider = Provider<OwnerSalesSeriesQueryKey?>((
-  ref,
-) {
-  final range = AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider));
-  if (range.isSingleDay) return null;
-  final scope = ref.watch(dashboardAnalyticsScopeProvider);
-  return OwnerSalesSeriesQueryKey(
-    organizationId: scope?.organizationId,
-    restaurantId: scope?.restaurantId,
-    branchId: scope?.branchId,
-    range: range,
-    isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
-  );
-}, dependencies: [dashboardAnalyticsScopeProvider, reportRangeProvider]);
+final currentOwnerSalesSeriesKeyProvider = Provider<OwnerSalesSeriesQueryKey?>(
+  (ref) {
+    final custom = ref.watch(customAnalyticsWindowProvider);
+    final range = AnalyticsRange.fromReportRange(
+      ref.watch(reportRangeProvider),
+    );
+    // A custom window ALWAYS has a series: it is a date range, not a single-day
+    // view, so the hourly-curve shortcut that suppresses the trend for
+    // today/yesterday must not suppress it here.
+    if (custom == null && range.isSingleDay) return null;
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    return OwnerSalesSeriesQueryKey(
+      organizationId: scope?.organizationId,
+      restaurantId: scope?.restaurantId,
+      branchId: scope?.branchId,
+      range: range,
+      customWindow: custom,
+      isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+    );
+  },
+  dependencies: [
+    dashboardAnalyticsScopeProvider,
+    reportRangeProvider,
+    customAnalyticsWindowProvider,
+  ],
+);
 
 /// CLIENT-A — the sales series FOR ONE EXACT REQUEST IDENTITY.
 ///
@@ -366,8 +466,117 @@ final ownerSalesSeriesForKeyProvider =
       // scope into its own request.
       return ref
           .watch(ownerSalesSeriesRepositoryProvider)
-          .loadSeries(range: key.range, analyticsScope: key.analyticsScope);
+          .loadSeries(
+            range: key.range,
+            analyticsScope: key.analyticsScope,
+            customWindow: key.customWindow,
+          );
     }, dependencies: [ownerSalesSeriesRepositoryProvider]);
+
+// ===========================================================================
+// F3 — Top Selling Items and Recent Orders, on the committed window.
+// ===========================================================================
+
+/// F3 — the top-items data seam (`owner_top_items`).
+///
+/// The same demo/real switch the report and series use, so the three owner
+/// surfaces can never read different sources at once. Demo is the DEFAULT, which
+/// also means a bare `ProviderScope` in a widget test gets deterministic data
+/// rather than a pending real request.
+final ownerTopItemsRepositoryProvider = Provider<OwnerTopItemsRepository>(
+  (ref) {
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const DemoOwnerTopItemsRepository();
+    }
+    return RealOwnerTopItemsRepository(
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
+
+/// F3 — the identity of the top-items request the Overview currently needs.
+///
+/// Unlike the sales series this is NEVER null: "what sold best" is a real
+/// question for a single day as much as for ninety, so there is no gate.
+final currentOwnerTopItemsKeyProvider = Provider<OwnerTopItemsQueryKey>(
+  (ref) {
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    return OwnerTopItemsQueryKey(
+      organizationId: scope?.organizationId,
+      restaurantId: scope?.restaurantId,
+      branchId: scope?.branchId,
+      range: AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+      customWindow: ref.watch(customAnalyticsWindowProvider),
+      isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+    );
+  },
+  dependencies: [
+    dashboardAnalyticsScopeProvider,
+    reportRangeProvider,
+    customAnalyticsWindowProvider,
+  ],
+);
+
+/// F3 — the top items FOR ONE EXACT REQUEST IDENTITY.
+///
+/// Keyed like the report and series families, and for the same reason: two
+/// scopes, or two windows, are two entries that can never satisfy each other.
+/// Not `autoDispose` — leaving Overview and returning must not refetch.
+final ownerTopItemsForKeyProvider =
+    FutureProvider.family<OwnerTopItems, OwnerTopItemsQueryKey>((ref, key) {
+      return ref
+          .watch(ownerTopItemsRepositoryProvider)
+          .loadTopItems(
+            range: key.range,
+            analyticsScope: key.analyticsScope,
+            customWindow: key.customWindow,
+            limit: key.limit,
+          );
+    }, dependencies: [ownerTopItemsRepositoryProvider]);
+
+/// F3 — the identity of the Overview's Recent Orders request.
+///
+/// Built from the SAME committed window and analytics scope as everything else
+/// on the page, so the card can never describe a different window from the KPIs
+/// above it — which is exactly what it did before F3, when it showed whatever
+/// the demo dataset held and nothing at all in real mode.
+final currentOverviewRecentOrdersKeyProvider =
+    Provider<OverviewRecentOrdersQueryKey>(
+      (ref) {
+        final scope = ref.watch(dashboardAnalyticsScopeProvider);
+        return OverviewRecentOrdersQueryKey(
+          organizationId: scope?.organizationId,
+          restaurantId: scope?.restaurantId,
+          branchId: scope?.branchId,
+          range: AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+          customWindow: ref.watch(customAnalyticsWindowProvider),
+          isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+        );
+      },
+      dependencies: [
+        dashboardAnalyticsScopeProvider,
+        reportRangeProvider,
+        customAnalyticsWindowProvider,
+      ],
+    );
+
+/// F3 — the Overview's newest orders for one exact identity.
+///
+/// Reuses the EXISTING order-history repository rather than adding a second
+/// client for `owner_order_history`: two callers of one RPC drift, and the
+/// repository already carries the analytics scope and the F1 window.
+final overviewRecentOrdersForKeyProvider =
+    FutureProvider.family<OrderHistoryPage, OverviewRecentOrdersQueryKey>((
+      ref,
+      key,
+    ) {
+      return ref.watch(orderHistoryRepositoryProvider).loadHistory(key.query);
+    }, dependencies: [orderHistoryRepositoryProvider]);
 
 /// Refreshes ONLY the currently selected report entry — and the daily series
 /// beside it, when the selected range has one.
@@ -470,6 +679,25 @@ class DashboardRefreshController extends StateNotifier<bool> {
     if (seriesKey != null) {
       _ref.invalidate(ownerSalesSeriesForKeyProvider(seriesKey));
     }
+    // F3 — the two card surfaces refresh with everything else, for the CURRENT
+    // key only. The refresh button sits above all four; leaving top items or
+    // recent orders stale while the KPIs updated would make the page
+    // self-contradictory, with no way for an owner to tell which half is now.
+    _ref.invalidate(
+      ownerTopItemsForKeyProvider(_ref.read(currentOwnerTopItemsKeyProvider)),
+    );
+    _ref.invalidate(
+      overviewRecentOrdersForKeyProvider(
+        _ref.read(currentOverviewRecentOrdersKeyProvider),
+      ),
+    );
+    // V2.1 — the Overview's setup block refreshes with the rest of the page.
+    // CURRENT key only: refreshing the branch on screen must not throw away
+    // another branch's cached readiness counts.
+    invalidateSetupSourcesFromRef(
+      _ref,
+      _ref.read(currentSetupScopeKeyProvider),
+    );
   }
 }
 
@@ -485,6 +713,15 @@ final dashboardRefreshControllerProvider =
         currentOwnerSalesSeriesKeyProvider,
         ownerReportForKeyProvider,
         ownerSalesSeriesForKeyProvider,
+        currentOwnerTopItemsKeyProvider,
+        ownerTopItemsForKeyProvider,
+        currentOverviewRecentOrdersKeyProvider,
+        overviewRecentOrdersForKeyProvider,
+        currentSetupScopeKeyProvider,
+        setupDevicesProvider,
+        setupPrintersProvider,
+        setupStaffProvider,
+        setupMenuProvider,
       ],
     );
 

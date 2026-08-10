@@ -3454,6 +3454,12 @@ abstract class AppLocalizations {
   /// **'No report data for this day.'**
   String get dashboardNoReportData;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F3: honest empty state for the Overview's Top items and Recent orders cards when the SELECTED WINDOW genuinely contains nothing. Period-neutral on purpose: the older dashboardNoReportData says "for this day", which became wrong once last60/last90/custom windows existed.
+  ///
+  /// In en, this message translates to:
+  /// **'No data for the selected period.'**
+  String get dashboardNoDataForRange;
+
   /// Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend.
   ///
   /// In en, this message translates to:
@@ -3573,6 +3579,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recent orders'**
   String get dashboardRecentOrders;
+
+  /// Owner dashboard action on the recent-orders card that opens the full order history on the currently selected reporting window.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get dashboardRecentOrdersViewAll;
 
   /// Owner dashboard recent-orders chip for a paid order.
   ///
@@ -5716,6 +5728,24 @@ abstract class AppLocalizations {
   /// **'Compared with the previous 30 days'**
   String get dashboardComparedVsPrev30;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for the LAST 60 DAYS range (compared with the immediately preceding equal-length 60-day window).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 60 days'**
+  String get dashboardComparedVsPrev60;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for the LAST 90 DAYS range (compared with the immediately preceding equal-length 90-day window).
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous 90 days'**
+  String get dashboardComparedVsPrev90;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1: heading of the Overview period-comparison strip for a CUSTOM From/To window. The server compares it against the immediately preceding window of the SAME length, so the length is stated rather than a preset name. days is the inclusive day count.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with the previous {days} days'**
+  String dashboardComparedVsPrevDays(int days);
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:
@@ -5746,6 +5776,96 @@ abstract class AppLocalizations {
   /// **'Last 30 days'**
   String get dashboardRangeLast30;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range chip: the rolling last 60 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 60 days'**
+  String get dashboardRangeLast60;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range chip: the rolling last 90 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 90 days'**
+  String get dashboardRangeLast90;
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 reporting-range label for a CUSTOM From/To window chosen by the owner.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get dashboardRangeCustom;
+
+  /// F2: title of the custom From/To range picker sheet on the Dashboard Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom range'**
+  String get dashboardRangeCustomTitle;
+
+  /// F2: button inside the custom-range sheet that opens the platform date-range picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose dates'**
+  String get dashboardRangeCustomChoose;
+
+  /// F2: label for the START date of a custom analytics range.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dashboardRangeCustomFrom;
+
+  /// F2: label for the END date of a custom analytics range.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dashboardRangeCustomTo;
+
+  /// F2: commits the drafted custom range. Disabled until the draft is valid.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get dashboardRangeCustomApply;
+
+  /// F2: discards the drafted custom range and leaves the committed window unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dashboardRangeCustomCancel;
+
+  /// F2: clears the DRAFT dates inside the custom-range sheet. It does not change the committed range — only Apply does.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear dates'**
+  String get dashboardRangeCustomClear;
+
+  /// F2: hint shown while the custom-range draft is incomplete. Both bounds are required, matching the server (supplying one raises 22023).
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a start and end date'**
+  String get dashboardRangeCustomEmpty;
+
+  /// F2: validation message when a custom range is reversed. The dates are NEVER silently swapped.
+  ///
+  /// In en, this message translates to:
+  /// **'The end date cannot be before the start date'**
+  String get dashboardRangeCustomReversed;
+
+  /// F2: validation message when a custom range exceeds the maximum inclusive span the server accepts. Never silently truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at most {max} days'**
+  String dashboardRangeCustomTooLong(int max);
+
+  /// F2: the committed custom range shown beneath the Custom chip. start and end are already locale-formatted short dates.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String dashboardRangeCustomSelected(String start, String end);
+
+  /// F2: accessibility/semantic label describing the length of the committed custom range.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}-day range'**
+  String dashboardRangeCustomDays(int days);
+
   /// RF-REPORT-004 honest state shown when the owner_report_range RPC isn't deployed yet and the chosen range isn't today.
   ///
   /// In en, this message translates to:
@@ -5769,6 +5889,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{percent}% vs previous 30 days'**
   String dashboardDeltaVsPrev30(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for the Last 60 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 60 days'**
+  String dashboardDeltaVsPrev60(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for the Last 90 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 90 days'**
+  String dashboardDeltaVsPrev90(int percent);
+
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 KPI trend delta suffix for a CUSTOM From/To window, compared against the immediately preceding window of the same length. percent is the absolute integer percentage change; days is the inclusive day count.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous {days} days'**
+  String dashboardDeltaVsPrevDays(int percent, int days);
 
   /// RF-REPORT-004 Shift & cash pill: count of shifts closed in the selected (non-today) range.
   ///

@@ -402,7 +402,7 @@ class _KdsMaterialApp extends ConsumerWidget {
       // Design-polish sprint: the kitchen display runs the DARK high-contrast
       // variant of the shared theme (glare-free at a distance). Semantic
       // status colours come from RestoflowSemanticColors.dark via the tones.
-      theme: restoflowBaseTheme(brightness: Brightness.dark),
+      theme: restoflowKdsDarkBrandTheme(),
       // RF-118: the staff PIN-session expiry observer wraps the WHOLE home so it
       // survives the live/non-live swap (the gate — and any observer inside it —
       // is unmounted when the live board mounts). It ends a stale session on

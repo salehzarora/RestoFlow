@@ -26,6 +26,8 @@ library;
 
 import '../data/demo_report.dart' show ReportRange;
 
+import 'analytics_range.dart';
+import 'analytics_window.dart';
 import 'dashboard_analytics_scope.dart';
 
 /// A value-equal, hash-stable identity for one owner-report request.
@@ -36,6 +38,7 @@ class OwnerReportQueryKey {
     required this.branchId,
     required this.range,
     required this.isDemoMode,
+    this.customWindow,
   });
 
   /// Null when no membership is resolved yet (demo mode, or before the shell
@@ -50,9 +53,25 @@ class OwnerReportQueryKey {
 
   final ReportRange range;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — the committed CUSTOM window, or null
+  /// when [range] is the selection.
+  ///
+  /// PART OF IDENTITY, which is the whole point. Two different custom windows
+  /// are two different requests; without this they would be the same key and one
+  /// would be served from the other's cache under the wrong dates. And because a
+  /// preset key carries null here, `last60` can never equal a hand-picked 60-day
+  /// window — they are genuinely different requests, since the preset is
+  /// re-resolved per branch at midnight and the custom window is not.
+  final CustomAnalyticsWindow? customWindow;
+
   /// Demo and real are different data sources on the same provider path; a
   /// demo result must never satisfy a real request.
   final bool isDemoMode;
+
+  /// This key's selection as the canonical domain type.
+  AnalyticsWindow get window =>
+      customWindow ??
+      AnalyticsWindow.preset(AnalyticsRange.fromReportRange(range));
 
   /// CODEX F-1A — the exact scope this key identifies, for the REQUEST it
   /// identifies.
@@ -79,14 +98,21 @@ class OwnerReportQueryKey {
           other.restaurantId == restaurantId &&
           other.branchId == branchId &&
           other.range == range &&
+          other.customWindow == customWindow &&
           other.isDemoMode == isDemoMode;
 
   @override
-  int get hashCode =>
-      Object.hash(organizationId, restaurantId, branchId, range, isDemoMode);
+  int get hashCode => Object.hash(
+    organizationId,
+    restaurantId,
+    branchId,
+    range,
+    customWindow,
+    isDemoMode,
+  );
 
   @override
   String toString() =>
       'OwnerReportQueryKey(org: $organizationId, restaurant: $restaurantId, '
-      'branch: $branchId, range: ${range.wire}, demo: $isDemoMode)';
+      'branch: $branchId, window: $window, demo: $isDemoMode)';
 }

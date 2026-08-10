@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
@@ -10,6 +11,7 @@ import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
 
 /// A devices repo stub: only [loadDevices] matters for the setup center.
 class _DevicesStub extends DemoAdminStore {
@@ -129,20 +131,30 @@ Future<void> _pump(
       supportedLocales: kSupportedLocales,
       home: Scaffold(
         body: SingleChildScrollView(
-          child: DashboardSetupCenter(
-            devicesRepository: _DevicesStub(devices),
-            printersRepository: printers == null
-                ? _EmptyPrinters()
-                : _PrintersStub(printers),
-            staffRepository: _StaffStub(staff),
-            menuReadSource: menuItems == null
-                ? null
-                : _MenuStub(MenuSnapshot(items: menuItems)),
-            menuScope: menuItems == null ? null : demoMenuScope,
-            onOpenMenu: () => onOpen?.call('menu'),
-            onOpenDevices: () => onOpen?.call('devices'),
-            onOpenPrinters: () => onOpen?.call('printers'),
-            onOpenStaff: () => onOpen?.call('staff'),
+          child: ProviderScope(
+            overrides: [
+              setupDevicesRepositoryProvider.overrideWithValue(
+                _DevicesStub(devices),
+              ),
+              setupPrintersRepositoryProvider.overrideWithValue(
+                printers == null ? _EmptyPrinters() : _PrintersStub(printers),
+              ),
+              setupStaffRepositoryProvider.overrideWithValue(_StaffStub(staff)),
+              setupMenuSourceProvider.overrideWithValue(
+                menuItems == null
+                    ? null
+                    : _MenuStub(MenuSnapshot(items: menuItems)),
+              ),
+              setupMenuScopeProvider.overrideWithValue(
+                menuItems == null ? null : demoMenuScope,
+              ),
+            ],
+            child: DashboardSetupCenter(
+              onOpenMenu: () => onOpen?.call('menu'),
+              onOpenDevices: () => onOpen?.call('devices'),
+              onOpenPrinters: () => onOpen?.call('printers'),
+              onOpenStaff: () => onOpen?.call('staff'),
+            ),
           ),
         ),
       ),

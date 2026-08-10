@@ -125,9 +125,18 @@ class KdsEmptyColumnPlaceholder extends StatelessWidget {
         children: [
           Icon(Icons.inbox_outlined, size: RestoflowIconSizes.sm, color: muted),
           const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            l10n.kdsColumnEmpty,
-            style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+          // Flexible: the label was a NON-FLEX child, so it measured its full
+          // width however narrow the column was and the row ran past it — 48px
+          // in English and 44 in Arabic at 2x text scale, which is exactly the
+          // setting a wall-mounted board is likely to be running. It wraps
+          // rather than ellipsising: this is chrome, not order content, and
+          // there is no reason to truncate it when a second line is free.
+          Flexible(
+            child: Text(
+              l10n.kdsColumnEmpty,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+            ),
           ),
         ],
       ),

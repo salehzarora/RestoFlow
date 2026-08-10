@@ -228,7 +228,7 @@ void main() {
   });
 
   // ── 2. the cart tone ─────────────────────────────────────────────────────
-  group('B. the cart reads as a lighter, muted deep green', () {
+  group('B. the cart reads as a lighter, muted deep navy', () {
     test('008-B1. the operational surface is lighter than the old near-black '
         'ink, and still clearly darker than the menu canvas', () {
       // Lighter than the previous #17201B...
@@ -236,18 +236,22 @@ void main() {
         kPosCartHeaderInk.computeLuminance(),
         greaterThan(kRestoflowInk.computeLuminance()),
       );
-      // ...but still an unmistakably dark surface against the warm canvas.
+      // ...but still an unmistakably dark surface against the canvas.
       expect(
         kPosCartHeaderInk.computeLuminance(),
         lessThan(kRestoflowCanvas.computeLuminance() - 0.4),
       );
-      // Green-tinted, not neutral black: green channel leads.
+      // GLOBAL-BRAND-POS-V4: tinted, not neutral black — and the tint is now
+      // the brand NAVY rather than the Warm/Bento green this test was written
+      // for. Only the hue claim changed; the two lightness claims above are the
+      // 008 contract verbatim, and 008-B2's 4.5:1 guarantee is untouched and
+      // re-verified against this surface.
       expect(
-        (kPosCartHeaderInk.g * 255).round(),
-        greaterThan((kPosCartHeaderInk.b * 255).round()),
+        (kPosCartHeaderInk.b * 255).round(),
+        greaterThan((kPosCartHeaderInk.g * 255).round()),
       );
       expect(
-        (kPosCartHeaderInk.g * 255).round(),
+        (kPosCartHeaderInk.b * 255).round(),
         greaterThan((kPosCartHeaderInk.r * 255).round()),
       );
     });

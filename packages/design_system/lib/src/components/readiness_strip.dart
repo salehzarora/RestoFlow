@@ -175,24 +175,50 @@ class _CompletionCluster extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        // SHARED-READINESS-STRIP-TEXTSCALE-001.
+        //
+        // This was a `Row(mainAxisSize: min)`. The headline was already
+        // Flexible, but the percent and the trailing action were NOT — and a
+        // Row lays a non-flex child out with an unbounded main axis, so each
+        // took its full intrinsic width however little the cluster's column
+        // share had left. At a doubled text scale the hero percent and a
+        // 2x-sized icon button together outgrew that share and the row ran past
+        // the card by 27px, in every locale.
+        //
+        // Only 700px failed, which is what made it easy to miss: below 640 the
+        // strip stacks and the cluster gets the full width, and above ~834 the
+        // 3/8 share is wide enough. 700 is the unlucky band in between — a
+        // tablet, which is exactly what an owner reads a setup checklist on.
+        //
+        // A Wrap lets the percent and the action take a second line instead of
+        // overflowing. At ordinary text sizes everything still fits on one line,
+        // so nothing that renders today moves; the headline keeps its own
+        // Flexible so a long branch phrase still ellipsises rather than pushing
+        // the figure it belongs to onto its own row prematurely.
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
           children: [
-            Icon(
-              ready ? Icons.check_circle : Icons.pending_outlined,
-              size: RestoflowIconSizes.md,
-              color: ready ? successStyle.accent : kRestoflowInk3,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  ready ? Icons.check_circle : Icons.pending_outlined,
+                  size: RestoflowIconSizes.md,
+                  color: ready ? successStyle.accent : kRestoflowInk3,
+                ),
+                const SizedBox(width: RestoflowSpacing.xs),
+                Flexible(
+                  child: Text(
+                    headline,
+                    style: theme.textTheme.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: RestoflowSpacing.xs),
-            Flexible(
-              child: Text(
-                headline,
-                style: theme.textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: RestoflowSpacing.sm),
             // V2: the completion percent is the cluster's hero figure.
             Text(
               '$percent%',
@@ -201,10 +227,7 @@ class _CompletionCluster extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            if (trailing case final t?) ...[
-              const SizedBox(width: RestoflowSpacing.xs),
-              t,
-            ],
+            if (trailing case final t?) t,
           ],
         ),
         const SizedBox(height: RestoflowSpacing.sm),

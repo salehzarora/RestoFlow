@@ -31,6 +31,7 @@ import '../analytics/analytics_range.dart';
 import '../analytics/dashboard_analytics_scope.dart';
 import 'owner_sales_series.dart';
 import 'owner_sales_series_repository.dart';
+import '../analytics/analytics_window.dart';
 
 /// Reads [OwnerSalesSeries] from `public.owner_sales_series`.
 class RealOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
@@ -47,6 +48,7 @@ class RealOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     final t = transport;
     final m = scope;
@@ -80,7 +82,7 @@ class RealOwnerSalesSeriesRepository implements OwnerSalesSeriesRepository {
         'p_organization_id': m.organizationId,
         'p_restaurant_id': selected.restaurantId,
         'p_branch_id': selected.branchId,
-        'p_range': range.wire,
+        ...analyticsWindowParams(customWindow ?? AnalyticsWindow.preset(range)),
       });
     } on SyncTransportException catch (e) {
       if (_isMissingRpc(e)) return OwnerSalesSeries.unavailable(range.wire);

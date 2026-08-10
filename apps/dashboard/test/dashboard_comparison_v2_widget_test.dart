@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-B) — the Overview comparison layer.
 ///
@@ -26,6 +27,7 @@ class _FixedRepository implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async => report;
 }
 
@@ -81,21 +83,29 @@ const _serverBComparison = ReportComparison(
   discountTotalMinor: 1200,
 );
 
-Widget _wrap(DashboardReport report, {Locale locale = const Locale('en')}) =>
-    ProviderScope(
-      overrides: [
-        ownerReportsRepositoryProvider.overrideWithValue(
-          _FixedRepository(report),
-        ),
-      ],
-      child: MaterialApp(
-        locale: locale,
-        localizationsDelegates: restoflowLocalizationsDelegates,
-        supportedLocales: kSupportedLocales,
-        theme: restoflowBaseTheme(),
-        home: const DashboardHomeScreen(),
-      ),
-    );
+/// F2.1 — [selected] is the COMMITTED window, which is what the comparison
+/// wording now follows. Previously the heading was read off the report's echoed
+/// `range`, so these fixtures only had to set that; a custom window has no such
+/// token, which is exactly the bug (a 14-day range announcing "previous 30
+/// days"). Passing the selection explicitly keeps the fixture honest about which
+/// window the owner actually picked.
+Widget _wrap(
+  DashboardReport report, {
+  Locale locale = const Locale('en'),
+  ReportRange? selected,
+}) => ProviderScope(
+  overrides: [
+    ownerReportsRepositoryProvider.overrideWithValue(_FixedRepository(report)),
+    if (selected != null) reportRangeProvider.overrideWith((ref) => selected),
+  ],
+  child: MaterialApp(
+    locale: locale,
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    theme: restoflowBaseTheme(),
+    home: const DashboardHomeScreen(),
+  ),
+);
 
 void _size(WidgetTester tester, [Size size = const Size(1320, 3200)]) {
   tester.view.physicalSize = size;
@@ -397,7 +407,10 @@ void main() {
           'window', (tester) async {
         _size(tester);
         await tester.pumpWidget(
-          _wrap(_report(comparison: _serverBComparison, range: range)),
+          _wrap(
+            _report(comparison: _serverBComparison, range: range),
+            selected: range,
+          ),
         );
         await tester.pumpAndSettle();
 

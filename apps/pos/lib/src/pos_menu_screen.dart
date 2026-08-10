@@ -262,23 +262,40 @@ class _MenuDeck extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(
-                  l10n.posMenuHeading,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: kRestoflowInk,
+                // THE HEADING CLUSTER CAN GIVE GROUND.
+                //
+                // The heading and the live item count were both NON-FLEX
+                // children beside an Expanded search field, so each measured
+                // its full intrinsic width however little the deck had left —
+                // and at 2x text scale in Arabic and Hebrew the row ran past
+                // the deck (50px and 37px). A Flexible-bounded Wrap caps the
+                // pair and lets the count drop under the heading instead of
+                // pushing the search off the screen. Nothing is ellipsised at
+                // ordinary sizes, and the count never disappears.
+                Flexible(
+                  child: Wrap(
+                    spacing: RestoflowSpacing.sm,
+                    runSpacing: RestoflowSpacing.xxs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        l10n.posMenuHeading,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: kRestoflowInk,
+                        ),
+                      ),
+                      if (itemCount != null)
+                        Text(
+                          l10n.posMenuItemCount(itemCount!),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: kRestoflowInk3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (itemCount != null) ...[
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Text(
-                    l10n.posMenuItemCount(itemCount!),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: kRestoflowInk3,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
                 const SizedBox(width: RestoflowSpacing.md),
                 // The search never stretches the full deck on a wide screen —
                 // a 900px-wide input reads as a banner, not a field.

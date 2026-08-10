@@ -1823,6 +1823,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardNoReportData => 'لا توجد بيانات تقرير لهذا اليوم.';
 
   @override
+  String get dashboardNoDataForRange => 'لا توجد بيانات للفترة المحددة.';
+
+  @override
   String get dashboardDemoReportsNotice =>
       'تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم.';
 
@@ -1888,6 +1891,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardRecentOrders => 'أحدث الطلبات';
+
+  @override
+  String get dashboardRecentOrdersViewAll => 'عرض الكل';
 
   @override
   String get dashboardPaid => 'مدفوع';
@@ -3036,6 +3042,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardComparedVsPrev30 => 'مقارنةً بالـ٣٠ يومًا السابقة';
 
   @override
+  String get dashboardComparedVsPrev60 => 'مقارنةً بالـ٦٠ يومًا السابقة';
+
+  @override
+  String get dashboardComparedVsPrev90 => 'مقارنةً بالـ٩٠ يومًا السابقة';
+
+  @override
+  String dashboardComparedVsPrevDays(int days) {
+    return 'مقارنةً بالـ$days يومًا السابقة';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent٪ مقارنةً بكامل يوم أمس';
   }
@@ -3051,6 +3068,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardRangeLast30 => 'آخر ٣٠ يومًا';
+
+  @override
+  String get dashboardRangeLast60 => 'آخر ٦٠ يومًا';
+
+  @override
+  String get dashboardRangeLast90 => 'آخر ٩٠ يومًا';
+
+  @override
+  String get dashboardRangeCustom => 'مخصّص';
+
+  @override
+  String get dashboardRangeCustomTitle => 'نطاق مخصّص';
+
+  @override
+  String get dashboardRangeCustomChoose => 'اختر التواريخ';
+
+  @override
+  String get dashboardRangeCustomFrom => 'من';
+
+  @override
+  String get dashboardRangeCustomTo => 'إلى';
+
+  @override
+  String get dashboardRangeCustomApply => 'تطبيق';
+
+  @override
+  String get dashboardRangeCustomCancel => 'إلغاء';
+
+  @override
+  String get dashboardRangeCustomClear => 'مسح التواريخ';
+
+  @override
+  String get dashboardRangeCustomEmpty => 'اختر تاريخ البداية والنهاية';
+
+  @override
+  String get dashboardRangeCustomReversed =>
+      'لا يمكن أن يسبق تاريخ النهاية تاريخ البداية';
+
+  @override
+  String dashboardRangeCustomTooLong(int max) {
+    return 'اختر $max يومًا كحد أقصى';
+  }
+
+  @override
+  String dashboardRangeCustomSelected(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String dashboardRangeCustomDays(int days) {
+    return 'نطاق $days يومًا';
+  }
 
   @override
   String get dashboardRangeUnavailable =>
@@ -3069,6 +3138,21 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String dashboardDeltaVsPrev30(int percent) {
     return '$percent٪ مقارنةً بالـ٣٠ يومًا السابقة';
+  }
+
+  @override
+  String dashboardDeltaVsPrev60(int percent) {
+    return '$percent٪ مقارنةً بالـ٦٠ يومًا السابقة';
+  }
+
+  @override
+  String dashboardDeltaVsPrev90(int percent) {
+    return '$percent٪ مقارنةً بالـ٩٠ يومًا السابقة';
+  }
+
+  @override
+  String dashboardDeltaVsPrevDays(int percent, int days) {
+    return '$percent٪ مقارنةً بالـ$days يومًا السابقة';
   }
 
   @override

@@ -9,6 +9,7 @@ import 'package:restoflow_dashboard/src/data/owner_sales_series_repository.dart'
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// DASHBOARD-OWNER-ANALYTICS-PHASE-A (CLIENT-A) — the Overview daily sales trend.
 ///
@@ -37,6 +38,7 @@ class _StubSeriesRepository implements OwnerSalesSeriesRepository {
   Future<OwnerSalesSeries> loadSeries({
     required AnalyticsRange range,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) async {
     calls.add(range);
     if (fail) throw const OwnerSalesSeriesException('boom');

@@ -25,6 +25,7 @@
 library;
 
 import 'analytics_range.dart';
+import 'analytics_window.dart';
 import 'dashboard_analytics_scope.dart';
 
 /// A value-equal, hash-stable identity for one sales-series request.
@@ -35,6 +36,7 @@ class OwnerSalesSeriesQueryKey {
     required this.branchId,
     required this.range,
     required this.isDemoMode,
+    this.customWindow,
   });
 
   /// Null when no membership is resolved yet. A null-scope key is still a valid,
@@ -53,7 +55,16 @@ class OwnerSalesSeriesQueryKey {
   /// this stays a plain identity rather than a validator.
   final AnalyticsRange range;
 
+  /// DASHBOARD-VISUAL-RANGE-REFRESH-F1 — the committed CUSTOM window, or null
+  /// when [range] is the selection. This is the `p_start`/`p_end` growth this
+  /// key's header predicted, and it is part of identity: two different custom
+  /// windows must never share one cache entry.
+  final CustomAnalyticsWindow? customWindow;
+
   final bool isDemoMode;
+
+  /// This key's selection as the canonical domain type.
+  AnalyticsWindow get window => customWindow ?? AnalyticsWindow.preset(range);
 
   /// CODEX F-1A — the exact scope this key identifies, for the REQUEST it
   /// identifies.
@@ -80,15 +91,22 @@ class OwnerSalesSeriesQueryKey {
           other.restaurantId == restaurantId &&
           other.branchId == branchId &&
           other.range == range &&
+          other.customWindow == customWindow &&
           other.isDemoMode == isDemoMode;
 
   @override
-  int get hashCode =>
-      Object.hash(organizationId, restaurantId, branchId, range, isDemoMode);
+  int get hashCode => Object.hash(
+    organizationId,
+    restaurantId,
+    branchId,
+    range,
+    customWindow,
+    isDemoMode,
+  );
 
   @override
   String toString() =>
       'OwnerSalesSeriesQueryKey(org: $organizationId, restaurant: '
-      '$restaurantId, branch: $branchId, range: ${range.wire}, '
+      '$restaurantId, branch: $branchId, window: $window, '
       'demo: $isDemoMode)';
 }

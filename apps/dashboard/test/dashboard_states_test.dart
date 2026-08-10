@@ -10,6 +10,7 @@ import 'package:restoflow_dashboard/src/data/report_calculator.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_dashboard/src/analytics/analytics_window.dart';
 
 /// A repository whose [loadReport] resolves after a delay (to observe loading).
 class _DelayedRepo implements OwnerReportsRepository {
@@ -17,6 +18,7 @@ class _DelayedRepo implements OwnerReportsRepository {
   Future<DashboardReport> loadReport({
     ReportRange range = ReportRange.today,
     DashboardAnalyticsScope? analyticsScope,
+    CustomAnalyticsWindow? customWindow,
   }) => Future.delayed(
     const Duration(milliseconds: 50),
     () => computeOwnerReport(demoOwnerReportDataset(), range: range),

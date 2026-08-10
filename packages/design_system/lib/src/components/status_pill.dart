@@ -53,7 +53,39 @@ class RestoflowStatusPill extends StatelessWidget {
             Icon(icon, size: dense ? 14 : 16, color: style.onContainer),
             const SizedBox(width: RestoflowSpacing.xs),
           ],
-          Text(label, style: textStyle),
+          // A PILL MAY NEVER BE WIDER THAN THE BOX IT IS GIVEN.
+          //
+          // A horizontal RenderFlex lays its NON-FLEX children out with an
+          // unbounded main-axis constraint, so a plain `Text` here measured its
+          // full single-line width however narrow the pill actually was: the
+          // Container clamped itself to the parent's bound, this Row did not,
+          // and the Row overflowed its own box. That is why bounding the pill
+          // from OUTSIDE never helped — the bound stops at the Container and
+          // never reaches the label.
+          //
+          // The label is the only part of a chip that may give ground, so it is
+          // the only flexible child. `Flexible`, never `Expanded`: a loose fit
+          // keeps the natural intrinsic width whenever there is room, so the
+          // pill still hugs its label — call sites put it in Wraps, Aligns and
+          // trailing slots that depend on that — and under an UNBOUNDED parent
+          // a loose flex child in a MainAxisSize.min row asserts nothing, while
+          // a tight one would throw at every trailing-chip Row in the repo.
+          Flexible(
+            child: Text(
+              label,
+              style: textStyle,
+              softWrap: true,
+              // Two lines of chrome is still a chip. Wrapping is the honest
+              // refusal: the whole label survives at the text scale the user
+              // asked for, which shrinking it would silently undo.
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              // Size to the longest WRAPPED line rather than to the width on
+              // offer, so a two-line pill stays a chip instead of stretching
+              // into a full-width coloured bar.
+              textWidthBasis: TextWidthBasis.longestLine,
+            ),
+          ),
         ],
       ),
     );

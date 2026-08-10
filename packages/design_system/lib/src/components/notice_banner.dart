@@ -56,6 +56,7 @@ class RestoflowNoticeBanner extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 if (titleText != null) ...[
                   Text(
@@ -73,13 +74,40 @@ class RestoflowNoticeBanner extends StatelessWidget {
                     color: style.onContainer,
                   ),
                 ),
+                // THE ACTION SITS UNDER THE MESSAGE, NOT BESIDE IT.
+                //
+                // It used to be a NON-FLEX child of the outer Row, so it
+                // measured its full intrinsic width however little the banner
+                // had left. Measured with a realistic "Create kitchen display"
+                // action, the first failing text scale per width was:
+                //
+                //     1280 never · 834 never · 700 at 2.0 · 540 at 1.5
+                //     430 at 1.15 · 390 at 1.0
+                //
+                // 390 at 1.0 is the part that matters — a shipping defect at
+                // ordinary text on any phone-width surface, and a banner is
+                // exactly where the product tells someone what to do next.
+                //
+                // A button cannot ellipsise (its label belongs to the caller),
+                // so the layout has to become vertical. It does so
+                // UNCONDITIONALLY rather than by measuring, because the natural
+                // way to measure — LayoutBuilder — cannot be used here: dialogs
+                // size their content by asking for intrinsic dimensions and
+                // LayoutBuilder refuses to answer that, and this banner is
+                // rendered inside dialogs. Unconditional also matches
+                // MaterialBanner's own convention of putting actions below the
+                // content, and it keeps one layout to reason about instead of
+                // two that differ by a threshold.
+                if (action case final action?) ...[
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: action,
+                  ),
+                ],
               ],
             ),
           ),
-          if (action case final action?) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
-            action,
-          ],
         ],
       ),
     );

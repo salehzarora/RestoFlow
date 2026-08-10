@@ -26,6 +26,7 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'state/setup_device_providers.dart';
 import 'analytics/dashboard_destination.dart';
 import 'widgets/language_selector.dart';
 import 'tables/tables_repository.dart';
@@ -65,6 +66,47 @@ AdminScope dashboardAdminScopeFor(
   );
 }
 
+/// GLOBAL-BRAND-DASHBOARD-V2-1 — the identity that must recreate the shell.
+///
+/// [DashboardShell] builds its admin scope and its real repositories ONCE, in
+/// `late final` fields, so they live exactly as long as the State does. That is
+/// the right lifetime for a session — and the wrong one across a membership
+/// change, because Flutter will happily reuse the State when only the widget's
+/// arguments change. The repositories would then still be scoped, and
+/// authorized, to the PREVIOUS membership.
+///
+/// Value-based provider keys defend the CACHE against that; they cannot defend
+/// the repository objects. Putting this string in a [ValueKey] closes the gap:
+/// a different identity is a different widget, the old State is disposed, and
+/// every `late final` is rebuilt for the membership actually signed in.
+///
+/// WHAT IS IN IT, and why each field earns its place:
+///   * membership id + org / restaurant / branch — the scope the repositories
+///     are constructed from (`dashboardAdminScopeFor`);
+///   * role — authorization. A downgrade must not keep a State whose
+///     repositories were built for the stronger role;
+///   * currencyCode — `AdminScope` embeds it, so a resolved currency change
+///     produces a genuinely different scope.
+///
+/// What is deliberately NOT in it: display labels, the selected analytics
+/// range, and the repository instances themselves. Those change for cosmetic
+/// or local reasons, and rebuilding the whole shell for them would throw away
+/// scroll positions and in-flight work for nothing.
+String dashboardShellIdentity(
+  MembershipContext? membership, {
+  String? currencyCode,
+}) {
+  if (membership == null) return 'demo';
+  return [
+    membership.id,
+    membership.organizationId,
+    membership.restaurantId ?? '-',
+    membership.branchId ?? '-',
+    membership.role.name,
+    currencyCode ?? '-',
+  ].join('|');
+}
+
 /// The owner/manager dashboard shell: a branded navigation
 /// (Overview · Menu · Devices · Printers · Staff · Tables · Users · Settings)
 /// with a persistent context bar (active restaurant/branch + an honest
@@ -90,6 +132,7 @@ class DashboardShell extends StatefulWidget {
     this.tablesRepository,
     this.reportsTransport,
     this.onSignOut,
+    this.debugOnSetupInvalidation,
     super.key,
   });
 
@@ -144,6 +187,17 @@ class DashboardShell extends StatefulWidget {
   /// Signs the current user out (real mode). Null => no sign-out affordance
   /// (demo mode / legacy tests).
   final Future<void> Function()? onSignOut;
+
+  /// V2.1 FINAL — the leave-writer invalidation's OWN [WidgetRef], published
+  /// for tests. Null in production, where nothing reads it.
+  ///
+  /// It exists because the defect it guards against was invisible to every
+  /// count-based test: the invalidation ran, on the wrong container, and looked
+  /// exactly like a working one from the outside. Publishing the ref the path
+  /// actually uses lets a test assert the ONE property that was violated — that
+  /// this code resolves through the overrides below, not past them.
+  @visibleForTesting
+  final void Function(WidgetRef ref)? debugOnSetupInvalidation;
 
   /// Dashboard "1c" responsive breakpoints (§9). Below [_railBreakpoint] the
   /// shell shows a phone bottom nav; from there the side rail stays on the
@@ -307,18 +361,102 @@ class _DashboardShellState extends State<DashboardShell> {
   bool get _staffDemo => widget.staffRepository == null;
   bool get _tablesDemo => widget.tablesRepository == null;
 
-  void _select(int value) => setState(() => _index = value);
+  /// V2.1 — leaving a destination where the user could have CHANGED setup data
+  /// invalidates exactly the read model that destination writes to.
+  ///
+  /// Caching the Overview's setup counts bought a free return trip, but it also
+  /// meant a device created on the Devices tab would not show up in the
+  /// readiness checklist until a manual refresh — the counts would sit there
+  /// looking authoritative and be wrong. This is the smallest truthful
+  /// correction: not a global wipe, not a reload on every navigation, and not a
+  /// reload for destinations that cannot write setup data at all (Overview,
+  /// Orders, Activity, Users, Tables, Settings all leave the counts untouched).
+  ///
+  /// It is coarser than invalidating at each mutation call site, which lives in
+  /// the shared admin package. The trade is deliberate: at most one reload per
+  /// visit to a writing tab, in exchange for never showing a stale count.
+  ///
+  /// V2.1 FINAL — WHY THIS TAKES A [WidgetRef] INSTEAD OF LOOKING ONE UP.
+  ///
+  /// The first attempt at this method resolved its container itself, with
+  /// `ProviderScope.containerOf(context)`. That `context` is the State's own —
+  /// the shell element — and the ProviderScope carrying the setup overrides is
+  /// something `build` RETURNS, so it is a descendant. The lookup therefore
+  /// walked straight past every override and found the ROOT container, where
+  /// `setupDevicesRepositoryProvider` is null, `dashboardMembershipProvider` is
+  /// null, and [currentSetupScopeKeyProvider] is consequently an all-null key
+  /// that no surface watches. Every invalidation landed on an entry nobody
+  /// reads, so the whole leave-writer refresh was inert while looking, from any
+  /// count of repository calls, exactly like a working one.
+  ///
+  /// [ref] comes from a `Consumer` placed immediately BELOW that ProviderScope,
+  /// so it resolves THROUGH the overrides: the same container the Overview
+  /// reads, the same repositories the tabs use, the same key. No second
+  /// container is created and no repository is built twice — the point is to
+  /// reach the one that already exists rather than to make another.
+  void _invalidateSetupSourcesFor(int leavingIndex, WidgetRef ref) {
+    widget.debugOnSetupInvalidation?.call(ref);
+    final key = ref.read(currentSetupScopeKeyProvider);
+    switch (DashboardDestination.fromIndex(leavingIndex)) {
+      case DashboardDestination.devices:
+        ref.invalidate(setupDevicesProvider(key));
+      case DashboardDestination.printers:
+        ref.invalidate(setupPrintersProvider(key));
+      case DashboardDestination.staff:
+        ref.invalidate(setupStaffProvider(key));
+      case DashboardDestination.menu:
+        ref.invalidate(setupMenuProvider(key));
+      default:
+        break;
+    }
+  }
+
+  void _select(int value, WidgetRef ref) {
+    if (value == _index) return;
+    _invalidateSetupSourcesFor(_index, ref);
+    setState(() => _index = value);
+  }
 
   /// F0.3 — the ONE named navigation seam.
   ///
   /// Call sites say where they want to go by name instead of by magic number,
   /// so inserting a destination can no longer silently re-point an existing
   /// jump at the wrong surface.
-  void _goTo(DashboardDestination destination) => _select(destination.tabIndex);
+  void _goTo(DashboardDestination destination, WidgetRef ref) =>
+      _select(destination.tabIndex, ref);
 
+  /// V2.1 FINAL — the override scope, and immediately beneath it the [Consumer]
+  /// that gives every navigating callback a ref INSIDE it.
+  ///
+  /// The whole shell body is built in that builder deliberately: navigation is
+  /// triggered from the rail, from the bottom bar, from the Setup Center's
+  /// stats and from the Overview's KPI drill-downs, and a ref that only some of
+  /// those could reach would be a fix that holds for some routes and not
+  /// others.
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+        // V2.1 — the setup/device repositories reach their providers HERE,
+        // above the KeyedSubtree, so the loads survive the destination
+        // teardown. These are the SAME instances the Devices / Printers /
+        // Staff tabs use; nothing is constructed twice.
+        setupDevicesRepositoryProvider.overrideWithValue(_realDeviceRepo),
+        setupPrintersRepositoryProvider.overrideWithValue(_printersRepo),
+        setupStaffRepositoryProvider.overrideWithValue(_staffRepo),
+        setupMenuSourceProvider.overrideWithValue(widget.menuReadSource),
+        setupMenuScopeProvider.overrideWithValue(_menuScope),
+      ],
+      child: Consumer(builder: (context, ref, _) => _body(context, l10n, ref)),
+    );
+  }
+
+  Widget _body(BuildContext context, AppLocalizations l10n, WidgetRef ref) {
     // KeyedSubtree: each tab gets a FRESH subtree, so the per-surface
     // ProviderScopes are recreated instead of reused with different override
     // types across tabs (Riverpod forbids changing an override's type in
@@ -351,7 +489,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final content = KeyedSubtree(
       key: ValueKey('dashboard-tab-$_index'),
       child: switch (_index) {
-        0 => _overview(),
+        0 => _overview(ref),
         1 => _menuSurface(context, l10n),
         2 => _adminSurface(
           const AdminDevicesScreen(),
@@ -407,79 +545,71 @@ class _DashboardShellState extends State<DashboardShell> {
       onSignOut: widget.onSignOut,
     );
 
-    return ProviderScope(
-      overrides: [
-        dashboardMembershipProvider.overrideWithValue(widget.membership),
-        dashboardAuthTransportProvider.overrideWithValue(
-          widget.reportsTransport,
-        ),
-      ],
-      child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            // Dashboard "1c" responsive rules (§9): the labelled/icon rail
-            // stays on the reading-start side (right in RTL) for every
-            // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
-            final width = constraints.maxWidth;
-            if (width >= DashboardShell._railBreakpoint) {
-              final compact = width < DashboardShell._fullRailBreakpoint;
-              final railWidth = width >= DashboardShell._desktopBreakpoint
-                  ? 232.0
-                  : (compact ? 72.0 : 212.0);
-              return Row(
-                children: [
-                  _SideNav(
-                    destinations: _destinations(l10n),
-                    selectedIndex: _index,
-                    onSelected: _select,
-                    membership: widget.membership,
-                    width: railWidth,
-                    compact: compact,
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        header,
-                        const Divider(height: 1),
-                        Expanded(child: content),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }
-            return Column(
+    return Scaffold(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+          // stays on the reading-start side (right in RTL) for every
+          // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+          final width = constraints.maxWidth;
+          if (width >= DashboardShell._railBreakpoint) {
+            final compact = width < DashboardShell._fullRailBreakpoint;
+            final railWidth = width >= DashboardShell._desktopBreakpoint
+                ? 232.0
+                : (compact ? 72.0 : 212.0);
+            return Row(
               children: [
-                header,
-                const Divider(height: 1),
-                Expanded(child: content),
-                NavigationBar(
-                  key: const Key('dashboard-bottom-nav'),
+                _SideNav(
+                  destinations: _destinations(l10n),
                   selectedIndex: _index,
-                  onDestinationSelected: _select,
-                  // RF-132 (Codex review): ten destinations at phone width
-                  // leave no room to render any label unclipped, so the bar
-                  // is deliberately ICON-ONLY. NavigationBar keeps each
-                  // destination's label + selected state in its semantics
-                  // ("<label>, Tab N of 10") even with the label hidden,
-                  // and the tooltip covers hover/long-press; selection
-                  // stays visible via the filled icon + indicator pill.
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                  destinations: _destinations(l10n)
-                      .map(
-                        (d) => NavigationDestination(
-                          icon: Icon(d.icon),
-                          selectedIcon: Icon(d.selectedIcon),
-                          label: d.label,
-                          tooltip: d.label,
-                        ),
-                      )
-                      .toList(),
+                  onSelected: (value) => _select(value, ref),
+                  membership: widget.membership,
+                  width: railWidth,
+                  compact: compact,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      header,
+                      const Divider(height: 1),
+                      Expanded(child: content),
+                    ],
+                  ),
                 ),
               ],
             );
-          },
-        ),
+          }
+          return Column(
+            children: [
+              header,
+              const Divider(height: 1),
+              Expanded(child: content),
+              NavigationBar(
+                key: const Key('dashboard-bottom-nav'),
+                selectedIndex: _index,
+                onDestinationSelected: (value) => _select(value, ref),
+                // RF-132 (Codex review): ten destinations at phone width
+                // leave no room to render any label unclipped, so the bar
+                // is deliberately ICON-ONLY. NavigationBar keeps each
+                // destination's label + selected state in its semantics
+                // ("<label>, Tab N of 10") even with the label hidden,
+                // and the tooltip covers hover/long-press; selection
+                // stays visible via the filled icon + indicator pill.
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                destinations: _destinations(l10n)
+                    .map(
+                      (d) => NavigationDestination(
+                        icon: Icon(d.icon),
+                        selectedIcon: Icon(d.selectedIcon),
+                        label: d.label,
+                        tooltip: d.label,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -493,7 +623,7 @@ class _DashboardShellState extends State<DashboardShell> {
   /// chrome), instead of a wrapping Column. Repository ownership, the menu params,
   /// the `_select` navigation callbacks, and the report ProviderScope overrides
   /// are all unchanged.
-  Widget _overview() {
+  Widget _overview(WidgetRef ref) {
     final devices = _realDeviceRepo;
     // The direct null-check promotes `devices` to non-null inside the branch.
     final Widget? setupPanel;
@@ -501,17 +631,13 @@ class _DashboardShellState extends State<DashboardShell> {
         widget.printersRepository != null &&
         widget.staffRepository != null) {
       setupPanel = DashboardSetupCenter(
-        devicesRepository: devices,
-        printersRepository: _printersRepo,
-        staffRepository: _staffRepo,
-        // The guided checklist counts the REAL menu when its seams are
-        // wired (sprint); a null scope/read source just omits the card.
-        menuReadSource: widget.menuReadSource,
-        menuScope: _menuScope,
-        onOpenMenu: () => _goTo(DashboardDestination.menu),
-        onOpenDevices: () => _goTo(DashboardDestination.devices),
-        onOpenPrinters: () => _goTo(DashboardDestination.printers),
-        onOpenStaff: () => _goTo(DashboardDestination.staff),
+        // V2.1 — no repositories here any more: the panel reads the four
+        // provider entries keyed by the current setup scope, so returning to
+        // Overview costs nothing.
+        onOpenMenu: () => _goTo(DashboardDestination.menu, ref),
+        onOpenDevices: () => _goTo(DashboardDestination.devices, ref),
+        onOpenPrinters: () => _goTo(DashboardDestination.printers, ref),
+        onOpenStaff: () => _goTo(DashboardDestination.staff, ref),
       );
     } else {
       setupPanel = null;
@@ -522,8 +648,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final Widget? deviceSummary = devices == null
         ? null
         : DashboardDeviceSummaryCard(
-            repository: devices,
-            onOpenDevices: () => _goTo(DashboardDestination.devices),
+            onOpenDevices: () => _goTo(DashboardDestination.devices, ref),
           );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
@@ -538,7 +663,7 @@ class _DashboardShellState extends State<DashboardShell> {
       // seam. The Overview binds it to a WidgetRef and executes typed
       // drill-downs; the shell learns nothing about filters, and no magic
       // number crosses this boundary.
-      onNavigate: _goTo,
+      onNavigate: (destination) => _goTo(destination, ref),
     );
   }
 
@@ -877,14 +1002,24 @@ class _ShellHeaderBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: RestoflowSpacing.sm),
-          RestoflowStatusPill(
-            // DESIGN-002: user-facing data-source wording (was the developer
-            // "Demo" / "Real" jargon).
-            label: isReal
-                ? l10n.dashboardModeLiveData
-                : l10n.dashboardModeDemoData,
-            tone: isReal ? RestoflowTone.success : RestoflowTone.info,
-            icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
+          // Flexible, because this Row is the one place a hardened pill still
+          // cannot save itself. A non-flex child of a horizontal RenderFlex is
+          // laid out with an UNBOUNDED width, so the pill keeps its full
+          // intrinsic size, starves the Expanded context label beside it, and
+          // the HEADER overflows rather than the pill. Arabic and Hebrew reach
+          // that point at 390px / 2x where English does not. Giving the pill a
+          // finite share is the call-site half of the fix; the component owns
+          // the other half.
+          Flexible(
+            child: RestoflowStatusPill(
+              // DESIGN-002: user-facing data-source wording (was the developer
+              // "Demo" / "Real" jargon).
+              label: isReal
+                  ? l10n.dashboardModeLiveData
+                  : l10n.dashboardModeDemoData,
+              tone: isReal ? RestoflowTone.success : RestoflowTone.info,
+              icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
+            ),
           ),
           const SizedBox(width: RestoflowSpacing.xs),
           // Sprint (I): the language switcher lives on the persistent header,
@@ -1019,18 +1154,34 @@ class _SideNav extends StatelessWidget {
   }
 }
 
-/// One rail destination: brand-green fill + white foreground when selected,
-/// muted ink otherwise, with a warm hover on inactive rows. Icon-only when
-/// [compact] (label moves to a tooltip). The Row fills the rail width so the
-/// active fill spans it and the icon centres in compact mode.
+/// One rail destination: a navy fill + white foreground when selected, muted ink
+/// otherwise, with a cool brand hover on every row. Icon-only when [compact]
+/// (label moves to a tooltip). The Row fills the rail width so the active fill
+/// spans it and the icon centres in compact mode.
 ///
 /// Accessibility (RF-125): each tile is one merged semantic node — a selectable
 /// button carrying the destination [item.label] even when the visual is
 /// icon-only ([compact]) — so selection is announced (not conveyed by colour
 /// alone; the icon also switches to its filled variant) and screen readers read
-/// a label for every destination. Keyboard focus is visible via [InkWell]'s
-/// focus highlight.
-class _SideNavTile extends StatelessWidget {
+/// a label for every destination.
+///
+/// V2.2 — WHY THE FILL MOVED, AND WHY FOCUS IS A RING.
+///
+/// The selected fill used to be painted by an [AnimatedContainer] that was the
+/// InkWell's CHILD. Material draws ink — hover, focus and splash overlays —
+/// between its own surface and that child, so on a selected tile every one of
+/// those overlays was painted UNDERNEATH an opaque navy rectangle. The result
+/// was a destination that gave no hover feedback and, worse, showed no keyboard
+/// focus at all: a keyboard user tabbing along the rail could not see where they
+/// were. The fill is now the [Material]'s own colour, which puts the ink layer
+/// back on top of it where the whole feedback system expects to be.
+///
+/// Focus is a RING rather than a wash, and that is deliberate: a wash is a
+/// colour-only signal, and on the navy bed there is no wash light enough to read
+/// reliably at a glance. The ring is drawn as a non-participating overlay, so
+/// gaining focus changes nothing about the tile's size or position — a focus
+/// indicator that nudges the layout is its own bug.
+class _SideNavTile extends StatefulWidget {
   const _SideNavTile({
     required this.item,
     required this.selected,
@@ -1044,11 +1195,32 @@ class _SideNavTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_SideNavTile> createState() => _SideNavTileState();
+}
+
+class _SideNavTileState extends State<_SideNavTile> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final selected = widget.selected;
+    final compact = widget.compact;
     final radius = BorderRadius.circular(RestoflowRadii.md);
     final iconColor = selected ? Colors.white : kRestoflowInk3;
     final labelColor = selected ? Colors.white : kRestoflowInk2;
+
+    // Hover/focus overlays, each read against the bed they actually land on.
+    // On the navy pill only a light film is legible; on the white rail the quiet
+    // brand tint is a real step (the previous hover was the page canvas, barely
+    // 3% off white, which is why the rail felt inert under the mouse).
+    final hoverColor = selected
+        ? Colors.white.withValues(alpha: 0.14)
+        : kRestoflowNavyContainer;
+    final focusWash = selected
+        ? Colors.white.withValues(alpha: 0.20)
+        : kRestoflowNavyContainer;
+    final focusRing = selected ? Colors.white : kRestoflowSeedColor;
 
     final row = Row(
       mainAxisAlignment: compact
@@ -1056,7 +1228,7 @@ class _SideNavTile extends StatelessWidget {
           : MainAxisAlignment.start,
       children: [
         Icon(
-          selected ? item.selectedIcon : item.icon,
+          selected ? widget.item.selectedIcon : widget.item.icon,
           size: RestoflowIconSizes.md,
           color: iconColor,
         ),
@@ -1064,7 +1236,7 @@ class _SideNavTile extends StatelessWidget {
           const SizedBox(width: RestoflowSpacing.md),
           Expanded(
             child: Text(
-              item.label,
+              widget.item.label,
               style: theme.textTheme.labelLarge?.copyWith(color: labelColor),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1074,28 +1246,75 @@ class _SideNavTile extends StatelessWidget {
       ],
     );
 
-    final tile = AnimatedContainer(
-      duration: RestoflowDurations.fast,
-      decoration: BoxDecoration(
-        color: selected ? kRestoflowSeedColor : Colors.transparent,
-        borderRadius: radius,
-        // RF-132: the active pill's soft shadow is brand-green tinted (the
-        // reference's restrained glow) rather than the neutral card shadow.
-        boxShadow: selected
-            ? const [
-                BoxShadow(
-                  color: Color(0x521B7A52),
-                  offset: Offset(0, 4),
-                  blurRadius: 12,
-                ),
-              ]
-            : null,
-      ),
+    final body = Padding(
       padding: EdgeInsetsDirectional.symmetric(
         horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
         vertical: RestoflowSpacing.md,
       ),
       child: row,
+    );
+
+    final interactive = Material(
+      // THE FILL. Being the Material's colour rather than a child decoration is
+      // the whole fix — the ink layer now sits above it.
+      color: selected ? kRestoflowSeedColor : Colors.transparent,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: widget.onTap,
+        onFocusChange: (value) {
+          if (value != _focused) setState(() => _focused = value);
+        },
+        borderRadius: radius,
+        hoverColor: hoverColor,
+        focusColor: focusWash,
+        child: ExcludeSemantics(
+          child: compact
+              ? Tooltip(message: widget.item.label, child: body)
+              : body,
+        ),
+      ),
+    );
+
+    final tile = AnimatedContainer(
+      duration: RestoflowDurations.fast,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        // RF-132: the active pill's soft shadow is BRAND tinted (the reference's
+        // restrained glow) rather than the neutral card shadow.
+        //
+        // V1: derived from the painted brand colour instead of a hardcoded
+        // green alpha, so the glow follows the identity instead of outliving it.
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: kRestoflowSeedColor.withValues(alpha: 0.32),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ]
+            : null,
+      ),
+      child: Stack(
+        children: [
+          interactive,
+          if (_focused)
+            // Positioned.fill + IgnorePointer: the ring is painted INSIDE the
+            // tile's existing bounds and takes part in neither layout nor hit
+            // testing, so focus cannot move anything or steal a tap.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const Key('rail-focus-ring'),
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: focusRing, width: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
 
     return Padding(
@@ -1108,26 +1327,8 @@ class _SideNavTile extends StatelessWidget {
         child: Semantics(
           selected: selected,
           button: true,
-          label: item.label,
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: radius,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: radius,
-              // Inactive rows show a warm hover; the active row's opaque green
-              // fill sits above the ink so it stays solid.
-              hoverColor: kRestoflowCanvas,
-              // Visible keyboard focus on the white rail — a light brand tint,
-              // distinct from the warm hover.
-              focusColor: kRestoflowSeedColor.withValues(alpha: 0.12),
-              child: ExcludeSemantics(
-                child: compact
-                    ? Tooltip(message: item.label, child: tile)
-                    : tile,
-              ),
-            ),
-          ),
+          label: widget.item.label,
+          child: tile,
         ),
       ),
     );

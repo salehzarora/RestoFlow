@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../semantic_colors.dart';
+import '../brand_palette.dart';
 import '../tokens.dart';
 
 /// A ranked "top sellers" row (Dashboard "1c"): a small numbered badge (the top
@@ -33,14 +33,16 @@ class RestoflowRankRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
-    final accent = semantic.accent;
+    final brand = RestoflowBrandPalette.from(context);
+    // V1: a BRAND ORDINAL ramp, not a status ramp. Rank 1 was brand green and
+    // rank 2 a lighter green, which read as "good/less good" — a ranking is not
+    // a state, and success green here competes with the real success semantics
+    // elsewhere on the same screen. Navy -> mid navy -> orange accent, then
+    // neutral, so position is legible without borrowing meaning.
     final rankColor = switch (rank) {
-      1 => kRestoflowSeedColor,
-      2 => const Color(0xFF2AA46E),
-      3 => accent,
+      1 => brand.primaryNavy,
+      2 => Color.lerp(brand.primaryNavy, brand.surfaceLight, 0.38)!,
+      3 => brand.accentOrange,
       _ => scheme.surfaceContainerHighest,
     };
     final onBadge = rank <= 3 ? Colors.white : scheme.onSurfaceVariant;

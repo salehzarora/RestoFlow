@@ -439,7 +439,7 @@ void main() {
           .where(
             (d) =>
                 (d.decoration as BoxDecoration).boxShadow?.any(
-                  (s) => s.color == kPosGreenGlow.first.color,
+                  (s) => s.color == kPosPrimaryGlow.first.color,
                 ) ??
                 false,
           );

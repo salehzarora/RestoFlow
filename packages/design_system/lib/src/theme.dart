@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'brand_palette.dart';
 import 'semantic_colors.dart';
 import 'tokens.dart';
 
@@ -18,6 +19,25 @@ import 'tokens.dart';
 /// RTL/LTR remains handled by the localization delegates (DECISION D-014),
 /// not the theme.
 ThemeData? _cachedDefaultTheme;
+ThemeData? _cachedKdsDarkTheme;
+
+/// RESTOFLOW-GLOBAL-VISUAL-V0 — the LIGHT brand theme: navy on white, cool
+/// neutrals. Used by Dashboard, POS and Admin.
+///
+/// Prefer this over calling [restoflowBaseTheme] directly at an app entry point:
+/// the name states which brand mode the app is in, so a reader of `main.dart`
+/// does not have to infer it from a default argument.
+ThemeData restoflowLightBrandTheme() =>
+    restoflowBaseTheme(brightness: Brightness.light);
+
+/// RESTOFLOW-GLOBAL-VISUAL-V0 — the DARK brand theme for the kitchen board:
+/// deep navy surfaces, strong off-white text, semantic tones kept vivid.
+///
+/// KDS is dark on purpose (a bright board in a kitchen is unreadable and
+/// unpleasant at a glance), so it is a first-class brand mode rather than the
+/// light theme with `brightness` flipped at the call site.
+ThemeData restoflowKdsDarkBrandTheme() => _cachedKdsDarkTheme ??=
+    _buildRestoflowTheme(kRestoflowSeedColor, Brightness.dark);
 
 ThemeData restoflowBaseTheme({
   Color seedColor = kRestoflowSeedColor,
@@ -34,9 +54,26 @@ ThemeData restoflowBaseTheme({
 }
 
 ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
-  final colorScheme = ColorScheme.fromSeed(
+  final seeded = ColorScheme.fromSeed(
     seedColor: seedColor,
     brightness: brightness,
+  );
+  final brand = RestoflowBrandPalette.of(brightness);
+  // PIN THE BRAND PRIMARY, DERIVE THE REST. `fromSeed` tone-maps the seed, so a
+  // #16335E seed comes back as a noticeably lighter, less saturated primary —
+  // close enough to look intentional and wrong enough that buttons would not
+  // match the brand. Only the primary family is pinned; secondary, tertiary and
+  // the neutrals stay Material-derived so the scheme remains internally
+  // harmonious instead of a set of hand-picked colours that clash on hover.
+  final colorScheme = seeded.copyWith(
+    primary: brand.primaryNavy,
+    onPrimary: brightness == Brightness.dark
+        ? const Color(0xFF0B1526)
+        : const Color(0xFFFFFFFF),
+    primaryContainer: brand.primaryNavyContainer,
+    onPrimaryContainer: brightness == Brightness.dark
+        ? const Color(0xFFE8EDF5)
+        : kRestoflowNavyDeep,
   );
   final base = ThemeData(colorScheme: colorScheme);
   final semantic = RestoflowSemanticColors.of(brightness);
@@ -61,9 +98,9 @@ ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
       )
       .apply(fontFamilyFallback: fontFallbacks);
 
-  // Dashboard "1c": a warm off-white canvas + a warm hairline on cards, for the
-  // LIGHT theme only (the dark KDS theme keeps its own surfaces). The warm
-  // neutrals are brand values shared with the gradient header / side rail.
+  // V0: a cool near-white canvas + a cool hairline on cards, for the LIGHT
+  // theme only (the dark KDS theme keeps its own surfaces). These neutrals are
+  // brand values shared with the rail and the shared components.
   final isDark = brightness == Brightness.dark;
   final scaffoldBackground = isDark ? colorScheme.surface : kRestoflowCanvas;
   final cardBorder = isDark ? colorScheme.outlineVariant : kRestoflowHairline;
@@ -80,7 +117,7 @@ ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
   const buttonMinSize = Size(64, 44);
 
   return base.copyWith(
-    extensions: <ThemeExtension<dynamic>>[semantic],
+    extensions: <ThemeExtension<dynamic>>[semantic, brand],
     textTheme: textTheme,
     scaffoldBackgroundColor: scaffoldBackground,
     appBarTheme: AppBarTheme(

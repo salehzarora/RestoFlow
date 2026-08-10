@@ -10,7 +10,7 @@ import '../tokens.dart';
 /// surfaces (Admin/Menu via their wrappers, Orders, Activity), replacing the
 /// full-bleed brand-gradient header as default page chrome. It is deliberately
 /// NOT a card: it sits on the page surface and — when [bordered] — adds a single
-/// warm hairline ([kRestoflowHairline]) along its bottom edge so the header band
+/// cool hairline ([kRestoflowHairline]) along its bottom edge so the header band
 /// reads as distinct from the scrolling body, without wrapping every heading in
 /// another framed surface.
 ///
@@ -41,7 +41,7 @@ class RestoflowPageHeader extends StatelessWidget {
 
   final EdgeInsetsGeometry padding;
 
-  /// When true, draws a single warm hairline ([kRestoflowHairline]) along the
+  /// When true, draws a single cool hairline ([kRestoflowHairline]) along the
   /// bottom edge so the header reads as a distinct band above the page body.
   /// Off by default so existing bare consumers are unchanged.
   final bool bordered;

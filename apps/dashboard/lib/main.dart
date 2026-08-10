@@ -233,7 +233,7 @@ class DashboardApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      theme: restoflowBaseTheme(),
+      theme: restoflowLightBrandTheme(),
       home: _home(),
     );
   }
@@ -273,6 +273,16 @@ class DashboardApp extends ConsumerWidget {
             currencyCode: resolved.currencyCode,
           );
           return DashboardShell(
+            // V2.1 — a membership change must DISPOSE this shell, not reuse it.
+            // The shell's admin scope and real repositories are `late final`,
+            // so without a changing key they would stay bound to the previous
+            // membership even though the provider keys had already moved on.
+            key: ValueKey(
+              dashboardShellIdentity(
+                resolved.membership,
+                currencyCode: resolved.currencyCode,
+              ),
+            ),
             membership: resolved.membership,
             currencyCode: resolved.currencyCode,
             deviceRepositoryFor: deviceRepositoryFor,
