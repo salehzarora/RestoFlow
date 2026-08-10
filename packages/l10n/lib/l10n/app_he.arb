@@ -581,6 +581,7 @@
   "dashboardPaymentMethods": "אמצעי תשלום",
   "dashboardPaymentMethodCash": "מזומן",
   "dashboardRecentOrders": "הזמנות אחרונות",
+  "dashboardRecentOrdersViewAll": "הצג הכול",
   "dashboardPaid": "שולם",
   "dashboardUnpaid": "לא שולם",
   "authLoadingAccount": "טוען חשבון…",

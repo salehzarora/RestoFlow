@@ -3580,6 +3580,12 @@ abstract class AppLocalizations {
   /// **'Recent orders'**
   String get dashboardRecentOrders;
 
+  /// Owner dashboard action on the recent-orders card that opens the full order history on the currently selected reporting window.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get dashboardRecentOrdersViewAll;
+
   /// Owner dashboard recent-orders chip for a paid order.
   ///
   /// In en, this message translates to:

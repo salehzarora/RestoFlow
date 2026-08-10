@@ -1893,6 +1893,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardRecentOrders => 'أحدث الطلبات';
 
   @override
+  String get dashboardRecentOrdersViewAll => 'عرض الكل';
+
+  @override
   String get dashboardPaid => 'مدفوع';
 
   @override

@@ -581,6 +581,7 @@
   "dashboardPaymentMethods": "طرق الدفع",
   "dashboardPaymentMethodCash": "نقدًا",
   "dashboardRecentOrders": "أحدث الطلبات",
+  "dashboardRecentOrdersViewAll": "عرض الكل",
   "dashboardPaid": "مدفوع",
   "dashboardUnpaid": "غير مدفوع",
   "authLoadingAccount": "جارٍ تحميل الحساب…",

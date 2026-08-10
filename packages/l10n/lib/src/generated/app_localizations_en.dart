@@ -1906,6 +1906,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardRecentOrders => 'Recent orders';
 
   @override
+  String get dashboardRecentOrdersViewAll => 'View all';
+
+  @override
   String get dashboardPaid => 'Paid';
 
   @override

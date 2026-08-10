@@ -643,7 +643,12 @@ class _TopItemsCard extends ConsumerWidget {
 /// empty window is an empty STATE here, never an error: "no orders in these
 /// dates" is a fact about the business, not a failure of the dashboard.
 class _RecentOrdersCard extends ConsumerWidget {
-  const _RecentOrdersCard();
+  const _RecentOrdersCard({this.onViewAll});
+
+  /// V2.2 — opens the full order history. Null (tests / demo harnesses that
+  /// mount the Overview without a navigation seam) hides the action entirely
+  /// rather than offering a control that goes nowhere.
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -653,9 +658,22 @@ class _RecentOrdersCard extends ConsumerWidget {
         ref.watch(currentOverviewRecentOrdersKeyProvider),
       ),
     );
+    final viewAll = onViewAll;
     return RestoflowSectionCard(
       key: const Key('recent-orders-card'),
       title: l10n.dashboardRecentOrders,
+      // The card shows the newest eight; this is where the other ones are.
+      // It travels through the SAME typed drill-down the KPI cards use, whose
+      // `applyFilters` already carries the committed analytics window — so the
+      // list that opens describes the window the card was describing, and the
+      // two can never disagree about which dates are on screen.
+      action: viewAll == null
+          ? null
+          : TextButton(
+              key: const Key('recent-orders-view-all'),
+              onPressed: viewAll,
+              child: Text(l10n.dashboardRecentOrdersViewAll),
+            ),
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
         async.when(
@@ -962,6 +980,10 @@ class _ReportContent extends StatelessWidget {
     ];
 
     final summary = DailySummaryCard(
+      // V2.2: a stable key, matching the sibling `payment-summary-card`, so the
+      // "nothing was removed" guard can name it instead of matching localized
+      // prose that a translation pass would quietly break.
+      key: const Key('daily-summary-card'),
       title: l10n.dashboardDailySummary,
       rows: [
         SummaryRow(
@@ -1073,7 +1095,14 @@ class _ReportContent extends StatelessWidget {
     // They used to be projections of DashboardReport, which meant they were
     // EMPTY in real mode and empty for every demo range except today.
     const topItems = _TopItemsCard();
-    const recentOrders = _RecentOrdersCard();
+    final recentOrders = _RecentOrdersCard(
+      // The unfiltered history on the CURRENT window: `OrdersHistoryDrillDown`
+      // with every filter left at "all". No new navigation path, and no chance
+      // of the list landing on a different window from the card.
+      onViewAll: drill == null
+          ? null
+          : () => drill(const OrdersHistoryDrillDown()),
+    );
 
     // RF-127: the sales-by-hour curve is the DOMINANT visualization. It renders
     // only when the report carries hourly data (demo mode / RF-REPORT-002); real
@@ -1233,7 +1262,7 @@ class _ReportContent extends StatelessWidget {
     // sold nothing" indistinguishable from "this never loaded", and it made the
     // pair's position in the page depend on the data. Each card now answers for
     // itself.
-    const strongPair = <Widget>[topItems, recentOrders];
+    final strongPair = <Widget>[topItems, recentOrders];
     // CLIENT-D: the dine-in / takeaway split joins the secondary grid beside
     // "Sales by branch", its closest sibling — a compact breakdown of the same
     // window, not a second analytics page. Present only for the multi-day
@@ -1317,20 +1346,43 @@ class _ReportContent extends StatelessWidget {
     // and now there is one.
     final analyticsStart =
         salesByHour ?? salesByDay ?? (showLimitedNote ? limitedNote : null);
-    final blocks = <Widget>[
-      banner,
-      _KpiGrid(cards: primaryKpis),
-      if (comparisonStrip != null) comparisonStrip,
-      if (analyticsStart != null || paymentMix != null)
-        _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
-      _KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length),
-      if (strongPair.isNotEmpty) _PairRow(sections: strongPair),
-      if (remaining.isNotEmpty) _TwoColumn(sections: remaining),
+
+    // V2.2 — THE PAGE IS A SEQUENCE OF ZONES, NOT A STACK OF CARDS.
+    //
+    // Every block used to be separated by the same gap, so eleven cards of
+    // differing importance arrived as one undifferentiated column: the eye had
+    // to read each title to work out where one idea ended and the next began.
+    // Grouping them and giving the BOUNDARIES more air than the gaps inside a
+    // group is the whole change — no card is added, removed, resized or
+    // restyled by it.
+    //
+    // The one ORDER change is the comparison strip, which used to sit between
+    // the KPIs and the chart. That put the supporting figure above the thing it
+    // supports, and pushed the page's dominant visualization down out of the
+    // first viewport. It now reads directly under the trend it belongs to,
+    // which is also what makes them one zone rather than two neighbours.
+    final zones = <List<Widget>>[
+      // ZONE 1 — what this page is describing.
+      [banner],
+      // ZONE 2 — the headline figures.
+      [_KpiGrid(cards: primaryKpis)],
+      // ZONE 3 — the trend, then the comparison that reads it.
+      [
+        if (analyticsStart != null || paymentMix != null)
+          _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
+        if (comparisonStrip != null) comparisonStrip,
+      ],
+      // ZONE 4 — live operational state.
+      [_KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length)],
+      // ZONE 5 — what sold, and what just happened.
+      [if (strongPair.isNotEmpty) _PairRow(sections: strongPair)],
+      // ZONE 6 — the supporting detail an owner goes looking for.
+      [if (remaining.isNotEmpty) _TwoColumn(sections: remaining)],
     ];
 
     return ListView(
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
-      children: _verticallySpaced(blocks),
+      children: _zoned(zones),
     );
   }
 
@@ -1796,6 +1848,26 @@ List<Widget> _verticallySpaced(List<Widget> items) => [
     items[i],
   ],
 ];
+
+/// V2.2 — flattens [zones] into one column, spacing WITHIN a zone at the normal
+/// rhythm and BETWEEN zones at the wider one.
+///
+/// The wide step is what makes the grouping legible; without it the zones exist
+/// only in this source file. Empty zones are skipped entirely — a range with no
+/// comparison, or a real-mode report with no per-branch rows, must not leave a
+/// double gap where a group would have been (the same LIVE-UX-001 rule
+/// [_verticallySpaced] follows, one level up).
+List<Widget> _zoned(List<List<Widget>> zones) {
+  final out = <Widget>[];
+  for (final zone in zones) {
+    if (zone.isEmpty) continue;
+    if (out.isNotEmpty) {
+      out.add(const SizedBox(height: RestoflowSpacing.xxl));
+    }
+    out.addAll(_verticallySpaced(zone));
+  }
+  return out;
+}
 
 /// RF-REPORT-003 — the Overview's "Shift & cash" card: TODAY's closed-shift cash
 /// reconciliation (counts + expected/counted/variance aggregate) and the last
@@ -2271,10 +2343,14 @@ class _PaymentMixCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final m in analytics)
+        for (final (i, m) in analytics.indexed)
           Padding(
-            padding: const EdgeInsetsDirectional.only(
-              bottom: RestoflowSpacing.sm,
+            // V2.2: the gap goes BETWEEN legend rows, not after the last one.
+            // A trailing 8px left the legend floating above the tender trend
+            // and the recorded-tenders note, so the card's internal rhythm
+            // disagreed with every other card on the page.
+            padding: EdgeInsetsDirectional.only(
+              bottom: i == analytics.length - 1 ? 0 : RestoflowSpacing.sm,
             ),
             child: _MaybeTappableRow(
               key: Key('payment-mix-row-${m.method}'),

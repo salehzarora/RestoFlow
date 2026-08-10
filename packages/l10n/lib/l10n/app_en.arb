@@ -1514,6 +1514,10 @@
     "description": "Owner dashboard payment-method label for cash."
   },
   "dashboardRecentOrders": "Recent orders",
+  "dashboardRecentOrdersViewAll": "View all",
+  "@dashboardRecentOrdersViewAll": {
+    "description": "Owner dashboard action on the recent-orders card that opens the full order history on the currently selected reporting window."
+  },
   "@dashboardRecentOrders": {
     "description": "Owner dashboard heading for the recent-orders list."
   },

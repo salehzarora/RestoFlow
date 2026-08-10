@@ -1875,6 +1875,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardRecentOrders => 'הזמנות אחרונות';
 
   @override
+  String get dashboardRecentOrdersViewAll => 'הצג הכול';
+
+  @override
   String get dashboardPaid => 'שולם';
 
   @override
