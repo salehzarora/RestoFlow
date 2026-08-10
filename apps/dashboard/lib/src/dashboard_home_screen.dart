@@ -18,6 +18,7 @@ import 'analytics/dashboard_drilldown.dart';
 import 'analytics/order_type_analytics.dart';
 import 'analytics/owner_sales_series_query_key.dart';
 import 'analytics/payment_method_analytics.dart';
+import 'analytics/payment_tender_colors.dart';
 import 'data/audit_log_models.dart' show AuditBranchOption;
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
@@ -507,12 +508,25 @@ class _RangeChip extends StatelessWidget {
                   color: selected ? scheme.primary : kRestoflowHairline,
                 ),
               ),
-              alignment: Alignment.center,
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: fg,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              // Align with a widthFactor, NOT `Container(alignment:)`.
+              //
+              // A Container given a non-null `alignment` wraps its child in a
+              // bare `Align`, and an `Align` with no widthFactor expands to
+              // fill whatever bounded width it is offered. Inside the selector
+              // Wrap that is the FULL row, so all seven pills claimed a line
+              // each and the range control ate the entire first viewport at
+              // every width — a chip that fills its row is not a chip. The
+              // widthFactor makes the box hug its label again while still
+              // centring the text inside the 44px touch target.
+              child: Align(
+                alignment: Alignment.center,
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -2215,15 +2229,13 @@ class _PaymentMixCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
-    Color colorFor(String m) => switch (m) {
-      'cash' => kRestoflowSeedColor,
-      'card' => semantic.accent,
-      'bit' => semantic.info,
-      _ => semantic.warning,
-    };
+    // V2 — the deferred categorical tender mapping, owned by
+    // `paymentTenderColor` beside the shared label mapper. ONE closure still
+    // feeds both the donut segment and the legend swatch, so the two can never
+    // drift (the F0.5 defect); the mapping itself is now a pure function so
+    // every wire token can be asserted, including the ones no demo fixture
+    // produces — which is exactly where the old semantic-tone leak hid.
+    Color colorFor(String m) => paymentTenderColorOf(context, m);
     // F0.5: the donut legend had its own cash-only mapper, so a card / bit /
     // external slice was labelled with its raw wire token right next to a
     // correctly-labelled cash slice. One shared mapper now serves the legend,
