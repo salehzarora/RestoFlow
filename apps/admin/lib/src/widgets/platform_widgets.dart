@@ -26,9 +26,13 @@ class PlatformSectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final value = trailingValue;
+    final trailingWidget = trailing;
+    final hasTrailing = value != null || trailingWidget != null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -50,19 +54,39 @@ class PlatformSectionRow extends StatelessWidget {
               ],
             ),
           ),
-          if (trailingValue != null) ...[
+          // THE TRAILING CLUSTER CAN GIVE GROUND; IT USED TO BE UNABLE TO.
+          //
+          // The plan value and the status pill were both NON-FLEX children of
+          // this Row, so each measured its full intrinsic width however little
+          // the row had left, and the row overflowed instead — up to 272px at
+          // 390 / 2x, painting the striped bar across an organization's status.
+          // A Flexible-bounded Wrap caps the pair at half the row and lets the
+          // pill drop under the value when the two no longer fit side by side.
+          // The label keeps its Expanded, so the cluster still sits at the
+          // reading end at every width that has room for it.
+          if (hasTrailing) ...[
             const SizedBox(width: RestoflowSpacing.md),
-            Text(
-              trailingValue!,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.primary,
+            Flexible(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.xs,
+                children: [
+                  if (value != null)
+                    Text(
+                      value,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.primary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (trailingWidget != null) trailingWidget,
+                ],
               ),
             ),
-          ],
-          if (trailing != null) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
-            trailing!,
           ],
         ],
       ),
@@ -95,22 +119,29 @@ class PlatformActivityTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: RestoflowSpacing.xs),
-          Row(
+          // A Wrap, not a Row. The action key is a RAW WIRE IDENTIFIER
+          // (`device.enrollment_code.issued`), deliberately untranslated and
+          // arbitrarily long, and it sat in a non-flex pill beside an Expanded
+          // timestamp — so the pill took its full intrinsic width and the row
+          // overflowed by up to 148px at 390 / 2x. Wrapping lets the timestamp
+          // move under the pill instead, which keeps BOTH readable; shortening
+          // either would be hiding audit information to save a line.
+          Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               RestoflowStatusPill(
                 label: event.action,
                 tone: warn ? RestoflowTone.danger : RestoflowTone.neutral,
               ),
-              const SizedBox(width: RestoflowSpacing.sm),
-              Expanded(
-                child: Text(
-                  event.timestampLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                event.timestampLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

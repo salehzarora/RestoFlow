@@ -62,7 +62,19 @@ class PlatformAdminScreen extends ConsumerWidget {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(width: RestoflowSpacing.sm),
-            Text(l10n.adminAppTitle),
+            // The title yields before the bar does. An AppBar gives its title a
+            // BOUNDED width (whatever the actions leave), but a Row lays a
+            // non-flex child out with an unbounded main axis — so this Text
+            // measured its full width and the Row ran past the bar: 22px at
+            // 390 in Arabic, 51px at 390 / 2x. The console's own name was the
+            // thing being clipped.
+            Flexible(
+              child: Text(
+                l10n.adminAppTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
