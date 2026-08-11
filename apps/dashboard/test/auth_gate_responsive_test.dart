@@ -37,8 +37,11 @@ import 'package:restoflow_dashboard/src/auth/login_signup_screen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// A silent auth seam: the gate must render without contacting anything.
+/// It can never succeed, and it counts every call so a test can prove the gate
+/// reached no seam at all (REAL-MODE-ENTRY-SURFACE-SMOKE-001).
 class _StubAuthRepository implements DashboardAuthRepository {
   final _controller = StreamController<AuthSessionStatus>.broadcast();
+  int calls = 0;
 
   @override
   AuthSessionStatus get status => AuthSessionStatus.signedOut;
@@ -50,16 +53,22 @@ class _StubAuthRepository implements DashboardAuthRepository {
   Future<AuthOutcome> signIn({
     required String email,
     required String password,
-  }) async => const AuthError(AuthErrorKind.network);
+  }) async {
+    calls++;
+    return const AuthError(AuthErrorKind.network);
+  }
 
   @override
   Future<AuthOutcome> signUp({
     required String email,
     required String password,
-  }) async => const AuthError(AuthErrorKind.network);
+  }) async {
+    calls++;
+    return const AuthError(AuthErrorKind.network);
+  }
 
   @override
-  Future<void> signOut() async {}
+  Future<void> signOut() async => calls++;
 }
 
 /// Mounts the REAL auth gate — the shipped composition, not a stand-in.
@@ -68,6 +77,7 @@ Future<AppLocalizations> _pumpGate(
   required String language,
   required Size size,
   double textScale = 1.0,
+  _StubAuthRepository? repository,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -85,7 +95,7 @@ Future<AppLocalizations> _pumpGate(
           child: child!,
         ),
         home: LoginSignupScreen(
-          authRepository: _StubAuthRepository(),
+          authRepository: repository ?? _StubAuthRepository(),
           onSignedUpWithSession: (_, _) {},
         ),
       ),
@@ -346,6 +356,27 @@ void main() {
         expect(find.text(l10n.authWelcomeTitle), findsOneWidget);
       });
     }
+
+    // REAL-MODE-ENTRY-SURFACE-SMOKE-001: the same non-mutation axis the POS and
+    // KDS pairing gates assert, so all three entry surfaces are covered alike.
+    testWidgets('rendering the gate reaches no auth seam', (tester) async {
+      final repository = _StubAuthRepository();
+      await _pumpGate(
+        tester,
+        language: 'ar',
+        size: const Size(430, 932),
+        repository: repository,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(
+        repository.calls,
+        0,
+        reason:
+            'Mounting the auth gate must never sign in, sign up or sign out — '
+            'it is a form, not an action.',
+      );
+    });
 
     testWidgets('the gate never renders money (it is pre-tenant)', (
       tester,
