@@ -16,6 +16,7 @@ import 'src/auth/dashboard_auth_repository.dart';
 import 'src/branding/restaurant_logo_storage.dart';
 import 'src/auth/onboarding_repository.dart';
 import 'src/auth/supabase_dashboard_auth.dart';
+import 'src/auth/web_session_isolation.dart';
 import 'src/context/device_context.dart';
 import 'src/context/selected_context_store.dart';
 import 'src/context/tenant_context_resolver.dart';
@@ -83,10 +84,22 @@ Future<void> main() async {
   // public.* RPC calls (identity server-derived from auth.uid()).
   // `publishableKey` is the current name for the PUBLIC anon key (the config
   // already rejects any service-role/secret key — DECISION D-011).
+  // WEB-AUTH-SESSION-ISOLATION-001: the Dashboard persists into its OWN slot
+  // rather than the SDK default (`sb-<project-ref>-auth-token`), which every
+  // surface on this origin would otherwise share. Anything a browser already
+  // has under the old key is classified before it is trusted — a real staff
+  // session carries over, an anonymous (device) one is dropped — so an
+  // already-poisoned browser recovers without the operator clearing site data.
+  await migrateLegacySharedSession(supabaseUrl: supabase.url);
   try {
     await Supabase.initialize(
       url: supabase.url,
       publishableKey: supabase.anonKey,
+      authOptions: FlutterAuthClientOptions(
+        localStorage: SharedPreferencesLocalStorage(
+          persistSessionKey: kDashboardPersistSessionKey,
+        ),
+      ),
     );
   } catch (_) {
     // Fail-closed: a backend bootstrap failure (malformed URL, storage error)
@@ -100,6 +113,10 @@ Future<void> main() async {
     );
     return;
   }
+  // WEB-AUTH-SESSION-ISOLATION-001: a restored session that turns out to be a
+  // device (anonymous) principal is discarded here, so the operator lands on
+  // sign-in instead of a shell whose every request is refused.
+  await discardUnusableSession(Supabase.instance.client.auth);
   final real = buildDashboardRealAuth(Supabase.instance.client);
   runApp(
     ProviderScope(

@@ -24,6 +24,7 @@ import '../staff/staff_repository.dart';
 import '../tables/tables_repository.dart';
 import 'dashboard_auth_repository.dart';
 import 'onboarding_repository.dart';
+import 'web_session_isolation.dart';
 
 /// The real, Supabase-backed dashboard auth + onboarding implementations
 /// (RF-151). This is the ONLY app file that imports the `supabase` SDK; the
@@ -131,15 +132,26 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
 
   final SupabaseClient _client;
 
+  // WEB-AUTH-SESSION-ISOLATION-001: "there is a session" is NOT the same as
+  // "this dashboard is signed in". On one origin, GoTrue's cross-tab broadcast
+  // could hand this client the ANONYMOUS session a POS/KDS tab just created, and
+  // treating that as signed-in produced a shell whose every tenant RPC returned
+  // 403 — the permanent generic error the operator could only escape by clearing
+  // site data. A device principal can never be a staff identity, so it reads as
+  // signed OUT and the operator gets an honest sign-in screen instead.
   @override
-  AuthSessionStatus get status => _client.auth.currentSession != null
+  AuthSessionStatus get status =>
+      isUsableDashboardSession(_client.auth.currentSession)
       ? AuthSessionStatus.signedIn
       : AuthSessionStatus.signedOut;
 
   @override
-  Stream<AuthSessionStatus> get statusChanges =>
-      _client.auth.onAuthStateChange.map(
-        (event) => event.session != null
+  Stream<AuthSessionStatus> get statusChanges => _client.auth.onAuthStateChange
+      // Another tab's device sign-in is not a Dashboard event. Its own events,
+      // and genuine staff events broadcast by another DASHBOARD tab, still pass.
+      .where(isOwnDashboardAuthEvent)
+      .map(
+        (event) => isUsableDashboardSession(event.session)
             ? AuthSessionStatus.signedIn
             : AuthSessionStatus.signedOut,
       );
