@@ -12,6 +12,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_menu.dart';
 import '../data/demo_tables.dart';
 import '../design/pos_motion.dart';
+import '../design/pos_visual_tokens.dart';
 import '../data/kitchen_mode_readiness.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
@@ -203,6 +204,13 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     // when the cashier edits a cart line. Null (still loading) falls back to a
     // note-only edit built from the line itself.
     final menu = ref.watch(posMenuProvider).valueOrNull;
+    // POS-REFERENCE-REDESIGN-002: presentation-only thumbnail lookup for the
+    // order rows (reference anatomy: small photo, name, meta, total). Purely
+    // visual — the line's own snapshots stay the data of record.
+    final thumbByItemId = <String, String?>{
+      if (menu != null)
+        for (final item in menu.items) item.id: item.imageUrl,
+    };
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
@@ -493,6 +501,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                         line: line,
                         l10n: l10n,
                         dense: dense,
+                        thumbnailUrl: thumbByItemId[line.menuItemId],
                         onIncrease: locked
                             ? null
                             : () => controller.increaseQuantity(line.lineId),
@@ -1415,7 +1424,10 @@ class _CartHeader extends StatelessWidget {
     const glyph = Icon(Icons.shopping_cart, color: kPosOnDarkAccent, size: 20);
 
     return SizedBox(
-      height: 56,
+      // REFERENCE-REDESIGN-002: a slim navy band, not a slab — the header
+      // keeps every operational element (title, count, sync chip, Park,
+      // Clear) at 48px; the shift strip below is unchanged.
+      height: 48,
       child: Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(
           14,
@@ -1574,29 +1586,42 @@ class _EmptyCart extends StatelessWidget {
     // NOT modified. The l10n message is still rendered verbatim so the existing
     // text finders keep working, and the business condition is untouched.
     final theme = Theme.of(context);
+    // REFERENCE-REDESIGN-002: a deliberate, compact empty state — a small
+    // dashed "plate" card instead of a lone icon adrift in white space. The
+    // l10n message renders verbatim (existing text finders keep working) and
+    // the business condition is untouched.
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8EDF4),
-              shape: BoxShape.circle,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.lg),
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          RestoflowSpacing.lg,
+          RestoflowSpacing.lg,
+          RestoflowSpacing.lg,
+          RestoflowSpacing.lg,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          border: Border.all(color: kPosStepperTrackEdge),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE8EDF4),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.remove_shopping_cart_outlined,
+                size: 26,
+                color: Color(0xFF98A4B6),
+              ),
             ),
-            child: const Icon(
-              Icons.remove_shopping_cart_outlined,
-              size: 32,
-              color: Color(0xFF98A4B6),
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: RestoflowSpacing.lg,
-            ),
-            child: Text(
+            const SizedBox(height: RestoflowSpacing.sm),
+            Text(
               message,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -1604,8 +1629,8 @@ class _EmptyCart extends StatelessWidget {
                 color: kRestoflowInk2,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1627,10 +1652,16 @@ class _CartLineTile extends StatelessWidget {
     required this.onRemove,
     required this.onEdit,
     this.dense = false,
+    this.thumbnailUrl,
   });
 
   final CartLineView line;
   final AppLocalizations l10n;
+
+  /// POS-REFERENCE-REDESIGN-002: the product photo for the row's leading
+  /// thumbnail (presentation only; a quiet tinted glyph stands in when the
+  /// item has no photo or it fails to load).
+  final String? thumbnailUrl;
 
   /// Null = the control is DISABLED (cart-safety: a frozen addition attempt
   /// owns the cart and the visible lines are its immutable payload).
@@ -1690,7 +1721,13 @@ class _CartLineTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // REFERENCE-REDESIGN-002 row anatomy: small photo, then name +
+              // meta, then the line total. The thumbnail is presentation
+              // only and never displaces the name (Expanded owns the width).
+              _LineThumb(url: thumbnailUrl, dense: dense),
+              SizedBox(width: dense ? RestoflowSpacing.sm : 10),
               Expanded(
                 child: Text(
                   line.name,
@@ -1799,6 +1836,49 @@ class _CartLineTile extends StatelessWidget {
 
 /// A compact >=40/44dp cart-line action (edit / remove). Dense trims the tap
 /// target to 40dp so the controls row stays tidy in the narrow side cart.
+/// POS-REFERENCE-REDESIGN-002 — the order row's leading thumbnail: the
+/// product photo when one exists, else a quiet navy-tinted dish glyph. Fixed
+/// square, smaller than the row, purely decorative (ExcludeSemantics — the
+/// row already announces the item by name).
+class _LineThumb extends StatelessWidget {
+  const _LineThumb({required this.url, required this.dense});
+
+  final String? url;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = dense ? 32.0 : 36.0;
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        color: kPosSelectedTint,
+        borderRadius: BorderRadius.circular(kPosTrackRadius),
+      ),
+      child: Icon(
+        Icons.restaurant_menu,
+        size: RestoflowIconSizes.sm,
+        color: kRestoflowInk3,
+      ),
+    );
+    return ExcludeSemantics(
+      child: SizedBox(
+        width: side,
+        height: side,
+        child: url == null
+            ? fallback
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(kPosTrackRadius),
+                child: Image.network(
+                  url!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => fallback,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 class _LineActionButton extends StatelessWidget {
   const _LineActionButton({
     required this.buttonKey,
@@ -2033,46 +2113,61 @@ class _CartFooter extends StatelessWidget {
               tableLabel: tableLabel,
             ),
             const SizedBox(height: RestoflowSpacing.sm),
-            // POS-PREMIUM-VISUAL-POLISH-001: money rows count up/down on
-            // change and ALWAYS settle on the exact formatted amount
-            // (integer minor units throughout — D-007). Keys and the final
-            // plain text are byte-identical to the static rendering.
-            if (taxMinor > 0) ...[
-              PosAnimatedAmount(
-                minor: subtotalMinor,
-                builder: (context, minor) => _SummaryRow(
-                  label: l10n.posCartSubtotal,
-                  value: MoneyFormatter.formatMinor(minor, currencyCode),
-                  valueKey: const Key('cart-subtotal'),
-                ),
+            // REFERENCE-REDESIGN-002: the money block is ONE visually grouped
+            // panel (quiet track fill) so subtotal/tax/total read as a unit.
+            // POS-PREMIUM-VISUAL-POLISH-001: rows count up/down on change and
+            // ALWAYS settle on the exact formatted amount (integer minor
+            // units throughout — D-007). Keys and the final plain text are
+            // byte-identical to the static rendering.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: kPosCartTrack,
+                borderRadius: BorderRadius.circular(RestoflowRadii.md),
               ),
-              const SizedBox(height: RestoflowSpacing.xs),
-              PosAnimatedAmount(
-                minor: taxMinor,
-                builder: (context, minor) => _SummaryRow(
-                  label: taxLineLabel(l10n, taxRateBp),
-                  value: MoneyFormatter.formatMinor(minor, currencyCode),
-                  valueKey: const Key('cart-tax'),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (taxMinor > 0) ...[
+                    PosAnimatedAmount(
+                      minor: subtotalMinor,
+                      builder: (context, minor) => _SummaryRow(
+                        label: l10n.posCartSubtotal,
+                        value: MoneyFormatter.formatMinor(minor, currencyCode),
+                        valueKey: const Key('cart-subtotal'),
+                      ),
+                    ),
+                    const SizedBox(height: RestoflowSpacing.xs),
+                    PosAnimatedAmount(
+                      minor: taxMinor,
+                      builder: (context, minor) => _SummaryRow(
+                        label: taxLineLabel(l10n, taxRateBp),
+                        value: MoneyFormatter.formatMinor(minor, currencyCode),
+                        valueKey: const Key('cart-tax'),
+                      ),
+                    ),
+                    const SizedBox(height: RestoflowSpacing.xs),
+                    PosAnimatedAmount(
+                      minor: subtotalMinor + taxMinor,
+                      builder: (context, minor) => _TotalRow(
+                        label: l10n.posGrandTotal,
+                        value: MoneyFormatter.formatMinor(minor, currencyCode),
+                        valueKey: const Key('cart-grand-total'),
+                      ),
+                    ),
+                  ] else
+                    PosAnimatedAmount(
+                      minor: subtotalMinor,
+                      builder: (context, minor) => _TotalRow(
+                        label: l10n.posCartSubtotal,
+                        value: MoneyFormatter.formatMinor(minor, currencyCode),
+                        valueKey: const Key('cart-subtotal'),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: RestoflowSpacing.xs),
-              PosAnimatedAmount(
-                minor: subtotalMinor + taxMinor,
-                builder: (context, minor) => _TotalRow(
-                  label: l10n.posGrandTotal,
-                  value: MoneyFormatter.formatMinor(minor, currencyCode),
-                  valueKey: const Key('cart-grand-total'),
-                ),
-              ),
-            ] else
-              PosAnimatedAmount(
-                minor: subtotalMinor,
-                builder: (context, minor) => _TotalRow(
-                  label: l10n.posCartSubtotal,
-                  value: MoneyFormatter.formatMinor(minor, currencyCode),
-                  valueKey: const Key('cart-subtotal'),
-                ),
-              ),
+            ),
             const SizedBox(height: RestoflowSpacing.sm),
             if (showNeedsTableHint) ...[
               Row(
@@ -2173,8 +2268,11 @@ class _CartFooter extends StatelessWidget {
                           minimumSize: WidgetStateProperty.all(
                             const Size.fromHeight(kPosSendHeight),
                           ),
+                          // REFERENCE-REDESIGN-002: extend the THEME label
+                          // style (a bare TextStyle dropped the display
+                          // family, so Send never wore Tajawal).
                           textStyle: WidgetStateProperty.all(
-                            const TextStyle(
+                            theme.textTheme.labelLarge?.copyWith(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
                             ),
@@ -2227,7 +2325,7 @@ class _CartFooter extends StatelessWidget {
                   icon: const Icon(Icons.inventory_2_outlined, size: 17),
                   label: Text(
                     l10n.posParkOrder,
-                    style: const TextStyle(
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
                     ),

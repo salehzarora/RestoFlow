@@ -394,11 +394,13 @@ void main() {
       );
       expect(posLayoutModeFor(width: 390, height: 844), PosLayoutMode.phone);
 
-      expect(posMenuColumnsFor(PosLayoutMode.desktop), 5);
-      expect(posMenuColumnsFor(PosLayoutMode.tablet), 4);
+      // POS-REFERENCE-REDESIGN-002: the food-first grid trades a column for
+      // imagery and the summary panel slims to the 320-360 band.
+      expect(posMenuColumnsFor(PosLayoutMode.desktop), 4);
+      expect(posMenuColumnsFor(PosLayoutMode.tablet), 3);
       expect(posMenuColumnsFor(PosLayoutMode.phone), 2);
 
-      expect(posCartWidthFor(PosLayoutMode.desktop), 400);
+      expect(posCartWidthFor(PosLayoutMode.desktop), 360);
       expect(posCartWidthFor(PosLayoutMode.phone), 0);
     });
 

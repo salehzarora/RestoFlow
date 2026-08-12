@@ -89,8 +89,15 @@ const List<BoxShadow> kPosChipSelectedShadow = [
   BoxShadow(color: Color(0x4716335E), offset: Offset(0, 3), blurRadius: 10),
 ];
 
-/// Product-card corner radius (spec §5 — the biggest object on screen).
-const double kPosCardRadius = 14;
+/// Product-card corner radius (the biggest object on screen;
+/// POS-REFERENCE-REDESIGN-002 refined it from 14 with the food-first card).
+const double kPosCardRadius = 16;
+
+/// POS-REFERENCE-REDESIGN-002: the image band's height as a fraction of the
+/// card cell width. 0.9 (a 10:9 crop) makes the photograph the top ~60% of
+/// the card — the reference's food-first proportion — where the old 4:3 band
+/// stopped at ~53%.
+const double kPosMenuCardImageHeightFactor = 0.9;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
 ///
@@ -199,16 +206,16 @@ const List<BoxShadow> kPosPrimaryGlow = [
 /// the platform. Keeps `RestoflowBreakpoints.posTwoPane` (820) as the phone
 /// cutoff so the existing wide-viewport widget tests still see two panes.
 enum PosLayoutMode {
-  /// >= 1360: menu pane + 400px side cart, 5 product columns.
+  /// >= 1360: menu pane + 360px side cart, 4 product columns.
   desktop,
 
-  /// 1100-1359: menu pane + 360px side cart, 4 product columns.
+  /// 1100-1359: menu pane + 360px side cart, 3 product columns.
   tablet,
 
-  /// 900-1099: menu pane + 340px side cart, 3 product columns.
+  /// 900-1099: menu pane + 320px side cart, 3 product columns.
   smallTablet,
 
-  /// 820-899: menu pane + 320px side cart, 3 product columns.
+  /// 820-899: menu pane + 320px side cart, 2 product columns.
   narrowTablet,
 
   /// Short or narrow LANDSCAPE (1024x600): 320px side cart, 3 columns and the
@@ -219,20 +226,19 @@ enum PosLayoutMode {
   phone,
 }
 
-/// POS-VISUAL-REDESIGN-PHASE-1-007 — the approved product-column count per
-/// mode (spec §3).
+/// POS-REFERENCE-REDESIGN-002 — the approved product-column count per mode.
 ///
-/// This replaces a max-cross-axis-extent formula that could not express the
-/// approved layout at all: a single 230px extent yields 4 columns at BOTH 1440
-/// and 1280, so desktop could never reach 5 while the tablet stayed at 4.
-/// 5 columns are deliberately NOT forced at 1280 — a 213px cell keeps the photo
-/// band 160px tall, and five 168px cells would cost more legibility than the
-/// extra column buys.
+/// The reference-led composition trades a column for IMAGERY: the grid is one
+/// column DENSER in food, not in cells. Desktop drops 5 → 4 (a ~250px cell
+/// carries a ~225px-tall photo — the food is the hero), the 1100–1359 band
+/// drops 4 → 3, and the 820–899 band drops 3 → 2 (two ~235px cards read
+/// instantly; three 150px cards read as thumbnails). Compact landscape keeps
+/// 3 (1024×600 has no height to spare for taller cells); phones keep 2.
 int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
-  PosLayoutMode.desktop => 5,
-  PosLayoutMode.tablet => 4,
+  PosLayoutMode.desktop => 4,
+  PosLayoutMode.tablet => 3,
   PosLayoutMode.smallTablet => 3,
-  PosLayoutMode.narrowTablet => 3,
+  PosLayoutMode.narrowTablet => 2,
   PosLayoutMode.compactLandscape => 3,
   PosLayoutMode.phone => 2,
 };
@@ -243,10 +249,15 @@ int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
 const double kPosCompactHeight = 640;
 
 /// Side-cart width for a two-pane [mode]; 0 for [PosLayoutMode.phone].
+///
+/// POS-REFERENCE-REDESIGN-002: the summary panel slims to the reference's
+/// 320–360 band and the menu workspace takes ~72% of the width at 1280+.
+/// 360 stays ≥ the 352 paired-fields threshold on desktop/tablet (name and
+/// phone share a row); 320 stacks them — unchanged behaviour, narrower home.
 double posCartWidthFor(PosLayoutMode mode) => switch (mode) {
-  PosLayoutMode.desktop => 400,
+  PosLayoutMode.desktop => 360,
   PosLayoutMode.tablet => 360,
-  PosLayoutMode.smallTablet => 340,
+  PosLayoutMode.smallTablet => 320,
   PosLayoutMode.narrowTablet => 320,
   PosLayoutMode.compactLandscape => 320,
   PosLayoutMode.phone => 0,

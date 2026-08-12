@@ -206,15 +206,15 @@ void main() {
 
       // POS-VISUAL-REDESIGN-PHASE-1-007 split the old 820-1099 "tablet" band
       // into tablet (1100-1359) / smallTablet (900-1099) / narrowTablet
-      // (820-899), so 1024 now resolves to smallTablet. Its cart is still 340 —
-      // the width this test has always pinned — and the reachability contract
-      // below is unchanged.
+      // (820-899), so 1024 resolves to smallTablet. POS-REFERENCE-REDESIGN-002
+      // slims its cart to 320 (the reference's summary-panel band); the
+      // reachability contract below is unchanged.
       final cart = tester.getSize(find.byType(CartPanel));
       expect(cart.width, posCartWidthFor(PosLayoutMode.smallTablet));
-      expect(cart.width, 340, reason: 'small-tablet cart width is 340');
+      expect(cart.width, 320, reason: 'small-tablet cart width is 320');
 
       // The menu pane keeps the remaining width — nothing scrolls sideways.
-      expect(tester.getSize(find.byType(GridView).last).width, 1024 - 340);
+      expect(tester.getSize(find.byType(GridView).last).width, 1024 - 320);
 
       final send = find.widgetWithText(FilledButton, l10n.posSendOrder);
       expect(send, findsOneWidget);
@@ -321,10 +321,11 @@ void main() {
         posLayoutModeFor(width: 1024, height: 1200),
         PosLayoutMode.smallTablet,
       );
-      // The approved 007 two-pane widths.
-      expect(posCartWidthFor(PosLayoutMode.desktop), 400);
+      // The approved REFERENCE-REDESIGN-002 two-pane widths (the reference's
+      // 320-360 summary-panel band).
+      expect(posCartWidthFor(PosLayoutMode.desktop), 360);
       expect(posCartWidthFor(PosLayoutMode.tablet), 360);
-      expect(posCartWidthFor(PosLayoutMode.smallTablet), 340);
+      expect(posCartWidthFor(PosLayoutMode.smallTablet), 320);
       expect(posCartWidthFor(PosLayoutMode.narrowTablet), 320);
       expect(posCartWidthFor(PosLayoutMode.compactLandscape), 320);
       expect(posCartWidthFor(PosLayoutMode.phone), 0);

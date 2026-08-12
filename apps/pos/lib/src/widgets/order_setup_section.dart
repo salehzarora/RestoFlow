@@ -175,13 +175,26 @@ class _CustomerNameFieldState extends ConsumerState<_CustomerNameField> {
       maxLength: kCustomerNameMaxLength,
       textInputAction: TextInputAction.done,
       onChanged: widget.controller.setCustomerName,
+      // REFERENCE-REDESIGN-002: the optional customer fields wear the same
+      // quiet filled treatment as the menu search (decoration ONLY — the
+      // field widgets, focus behaviour and 008 keyboard identity are
+      // untouched).
       decoration: InputDecoration(
         isDense: true,
         counterText: '',
         prefixIcon: const Icon(Icons.person_outline),
         labelText: l10n.customerNameLabel,
         hintText: l10n.customerNamePlaceholder,
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: kPosInnerSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
       ),
     );
   }
@@ -253,6 +266,8 @@ class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
       maxLength: kCustomerPhoneMaxLength,
       textInputAction: TextInputAction.done,
       onChanged: widget.controller.setCustomerPhone,
+      // REFERENCE-REDESIGN-002: same quiet filled treatment (decoration
+      // ONLY; behaviour, validation and identity untouched).
       decoration: InputDecoration(
         isDense: true,
         counterText: '',
@@ -260,7 +275,16 @@ class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
         labelText: l10n.customerPhoneLabel,
         hintText: l10n.customerPhonePlaceholder,
         errorText: _errorFor(widget.setup.customerPhoneError, l10n),
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: kPosInnerSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
       ),
     );
   }

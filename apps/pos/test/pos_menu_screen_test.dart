@@ -86,7 +86,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Classic Burger'), findsOneWidget);
-    expect(find.text('Espresso'), findsOneWidget);
+    // (Espresso sits below the built viewport in the taller food-first grid
+    // — REFERENCE-REDESIGN-002; the filter assertions below prove it renders
+    // the moment Coffee is selected.)
 
     // Filter to Coffee only.
     await tester.tap(find.text('Coffee'));

@@ -12,6 +12,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
@@ -303,7 +304,9 @@ void main() {
             alignment: Alignment.topLeft,
             child: SizedBox(
               width: 260,
-              height: 300,
+              // The REAL grid extent for this cell width (the old hardcoded
+              // 300 predates the REFERENCE-REDESIGN-002 food-first card).
+              height: posMenuCardExtent(260),
               child: MenuItemCard(
                 item: unavailable
                     ? item.copyWith(availability: 'unavailable')

@@ -260,9 +260,11 @@ class _MenuDeck extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
+            // REFERENCE-REDESIGN-002: a calmer, denser control strip — the
+            // deck is chrome above the merchandise, not a hero band.
             padding: const EdgeInsetsDirectional.fromSTEB(
               RestoflowSpacing.lg,
-              RestoflowSpacing.md,
+              10,
               RestoflowSpacing.lg,
               0,
             ),
@@ -309,7 +311,9 @@ class _MenuDeck extends StatelessWidget {
                   child: Align(
                     alignment: AlignmentDirectional.centerEnd,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
+                      // REFERENCE-REDESIGN-002: a compact field, not a
+                      // banner — the strip stays quiet beside the food.
+                      constraints: const BoxConstraints(maxWidth: 400),
                       child: const _MenuSearchField(),
                     ),
                   ),
@@ -420,12 +424,20 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
 /// Cards stay a FIXED height — no IntrinsicHeight, no variable extents — so the
 /// grid keeps scanning cleanly in rows.
 const double kPosMenuCardMaxExtent = 230;
-const double kPosMenuCardBodyHeight = 140;
 
-/// The cell height for a card [cellWidth] wide: the fixed 4:3 image band plus
-/// the card body.
+/// POS-REFERENCE-REDESIGN-002: the card's FIXED content zone (name, optional
+/// description, the price/action row). Measured: 10 top pad + up to two
+/// 19px name lines + 2 + one 15px description line + 6 + 44px action row +
+/// 9 bottom pad = 124, with 4px headroom. The text-scale ladder inside the
+/// card sheds the description first and the name's second line next, so the
+/// price and the add action never compress (see MenuItemCard).
+const double kPosMenuCardBodyHeight = 128;
+
+/// The cell height for a card [cellWidth] wide: the fixed 10:9 image band
+/// (see [kPosMenuCardImageHeightFactor] in pos_palette.dart) plus the fixed
+/// content zone.
 double posMenuCardExtent(double cellWidth) =>
-    cellWidth * 3 / 4 + kPosMenuCardBodyHeight;
+    cellWidth * kPosMenuCardImageHeightFactor + kPosMenuCardBodyHeight;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the ONE resolved grid geometry, derived
 /// from the layout mode rather than from a max-extent formula, and shared

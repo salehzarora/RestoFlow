@@ -137,11 +137,12 @@ void main() {
   // ── A. layout-mode resolution ────────────────────────────────────────────
   group('A. the approved mode table', () {
     final table = <(String, double, double, PosLayoutMode, double, int)>[
-      ('1440x900', 1440, 900, PosLayoutMode.desktop, 400, 5),
-      ('1280x800', 1280, 800, PosLayoutMode.tablet, 360, 4),
-      ('1024x768', 1024, 768, PosLayoutMode.smallTablet, 340, 3),
+      // POS-REFERENCE-REDESIGN-002 tables (mode RESOLUTION unchanged).
+      ('1440x900', 1440, 900, PosLayoutMode.desktop, 360, 4),
+      ('1280x800', 1280, 800, PosLayoutMode.tablet, 360, 3),
+      ('1024x768', 1024, 768, PosLayoutMode.smallTablet, 320, 3),
       ('1024x600', 1024, 600, PosLayoutMode.compactLandscape, 320, 3),
-      ('860x1200', 860, 1200, PosLayoutMode.narrowTablet, 320, 3),
+      ('860x1200', 860, 1200, PosLayoutMode.narrowTablet, 320, 2),
       ('390x844', 390, 844, PosLayoutMode.phone, 0, 2),
     ];
 
@@ -181,9 +182,10 @@ void main() {
   // ── B. combined menu + cart geometry ─────────────────────────────────────
   group('B. the two halves are one screen', () {
     for (final (label, size, cols, cartWidth) in const [
-      ('1440x900', Size(1440, 900), 5, 400.0),
-      ('1280x800', Size(1280, 800), 4, 360.0),
-      ('1024x768', Size(1024, 768), 3, 340.0),
+      // POS-REFERENCE-REDESIGN-002 tables (food-first grid, 320-360 cart).
+      ('1440x900', Size(1440, 900), 4, 360.0),
+      ('1280x800', Size(1280, 800), 3, 360.0),
+      ('1024x768', Size(1024, 768), 3, 320.0),
       ('1024x600', Size(1024, 600), 3, 320.0),
     ]) {
       testWidgets('P1-B1. $label — deck, grid, cart and footer all hold', (

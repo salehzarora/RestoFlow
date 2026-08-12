@@ -166,24 +166,20 @@ class MenuItemCard extends StatelessWidget {
     /// Already trimmed and proven non-empty by [build]; null = render nothing.
     String? description,
   ) {
-    // THE DESCRIPTION YIELDS TO TEXT SCALE; THE NAME AND PRICE NEVER DO.
+    // THE DESCRIPTION AND THE NAME'S SECOND LINE YIELD TO TEXT SCALE; THE
+    // PRICE AND THE ACTION ROW NEVER DO.
     //
-    // The card body is a FIXED [kPosMenuCardBodyHeight] (140) because the grid
-    // computes cell height from it, but everything inside it scales with the
-    // user's text setting. At 2x the name, two description lines and the
-    // price/add row wanted 174px, so the body overflowed by 34 on EVERY card —
-    // a striped bar across the whole menu for any cashier who had turned text
-    // size up.
-    //
-    // The description is the only element on the card that is purely
-    // presentational (POS-PRODUCT-DESCRIPTIONS-001 says so: no tap target, no
-    // tooltip, no placeholder when absent). So it is the element that gives
-    // ground: two lines at ordinary sizes, one when text grows, none when it
-    // grows further. The product NAME and the PRICE are what a cashier reads to
-    // ring an order and are never reduced — and nothing is shrunk, which would
-    // silently undo the setting the user asked for.
+    // The card content zone is a FIXED [kPosMenuCardBodyHeight] because the
+    // grid computes cell height from it, but everything inside it scales with
+    // the user's text setting, so larger scales must shed presentational
+    // lines instead of overflowing (POS-PRODUCT-DESCRIPTIONS-001: the
+    // description has no tap target, no tooltip, no placeholder when absent).
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final descriptionLines = textScale <= 1.15 ? 2 : (textScale <= 1.6 ? 1 : 0);
+    // POS-REFERENCE-REDESIGN-002 ladder: the description (max ONE subdued
+    // line now) yields first, the name's SECOND line yields next; the price
+    // and the 44px action row never compress.
+    final descriptionLines = textScale <= 1.15 ? 1 : 0;
+    final nameLines = textScale <= 1.4 ? 2 : 1;
     final hasDescription = description != null && descriptionLines > 0;
     // POS-VISUAL-REDESIGN-PHASE-1-007: a WHITE card, not `colorScheme.surface`
     // — the green-tinted surface sat within three values of the hairline and
@@ -204,10 +200,12 @@ class MenuItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // The fixed 4:3 image band: cover-fit photo (with cacheWidth) that
-            // never stretches, or the tinted category band on null/error.
+            // The fixed 10:9 image band (REFERENCE-REDESIGN-002: the
+            // photograph is the top ~60% of the card): cover-fit photo (with
+            // cacheWidth) that never stretches, or the tinted category band
+            // on null/error.
             AspectRatio(
-              aspectRatio: 4 / 3,
+              aspectRatio: 1 / kPosMenuCardImageHeightFactor,
               child: _ImageBand(
                 item: item,
                 category: category,
@@ -234,8 +232,12 @@ class MenuItemCard extends StatelessWidget {
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: kRestoflowInk,
+                            height: 1.25,
                           ),
-                          maxLines: 1,
+                          // REFERENCE-REDESIGN-002: up to TWO confident name
+                          // lines (the ladder drops the second at large text
+                          // scales — never the price row).
+                          maxLines: nameLines,
                           overflow: TextOverflow.ellipsis,
                         ),
                         // POS-PRODUCT-DESCRIPTIONS-001: the description sits

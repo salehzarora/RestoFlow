@@ -122,10 +122,12 @@ void main() {
   group('A. layout-mode resolution and the approved column counts', () {
     // Pure-function contract — no pumping, so a breakpoint regression is
     // reported as a breakpoint failure rather than a layout failure.
+    // POS-REFERENCE-REDESIGN-002 tables: one column traded for imagery per
+    // band; the summary panel slims to 320-360. Mode RESOLUTION is unchanged.
     final cases = <(String, double, double, PosLayoutMode, int, double)>[
-      ('1440x900 desktop', 1440, 900, PosLayoutMode.desktop, 5, 400),
-      ('1280x800 tablet', 1280, 800, PosLayoutMode.tablet, 4, 360),
-      ('1024x768 smallTablet', 1024, 768, PosLayoutMode.smallTablet, 3, 340),
+      ('1440x900 desktop', 1440, 900, PosLayoutMode.desktop, 4, 360),
+      ('1280x800 tablet', 1280, 800, PosLayoutMode.tablet, 3, 360),
+      ('1024x768 smallTablet', 1024, 768, PosLayoutMode.smallTablet, 3, 320),
       (
         '1024x600 compactLandscape',
         1024,
@@ -134,7 +136,7 @@ void main() {
         3,
         320,
       ),
-      ('860x1200 narrowTablet', 860, 1200, PosLayoutMode.narrowTablet, 3, 320),
+      ('860x1200 narrowTablet', 860, 1200, PosLayoutMode.narrowTablet, 2, 320),
       (
         '760x600 compactLandscape',
         760,
@@ -180,11 +182,12 @@ void main() {
 
   group('B. the product grid takes its column count from the mode', () {
     const viewports = <(String, Size, int)>[
-      ('desktop 1440x900', Size(1440, 900), 5),
-      ('tablet 1280x800', Size(1280, 800), 4),
+      // POS-REFERENCE-REDESIGN-002 column tables (food-first grid).
+      ('desktop 1440x900', Size(1440, 900), 4),
+      ('tablet 1280x800', Size(1280, 800), 3),
       ('smallTablet 1024x768', Size(1024, 768), 3),
       ('compactLandscape 1024x600', Size(1024, 600), 3),
-      ('narrowTablet 860x1200', Size(860, 1200), 3),
+      ('narrowTablet 860x1200', Size(860, 1200), 2),
       ('phone 390x844', Size(390, 844), 2),
     ];
 
@@ -199,15 +202,16 @@ void main() {
       });
     }
 
-    testWidgets('007-B2. the card extent stays the 4:3 band plus the FIXED '
-        '140px body', (tester) async {
+    testWidgets('007-B2. the card extent stays the 10:9 band plus the FIXED '
+        'content zone (REFERENCE-REDESIGN-002)', (tester) async {
       await _pumpScreen(tester, size: const Size(1440, 900));
       final delegate = _productGridDelegate(tester);
-      expect(kPosMenuCardBodyHeight, 140);
-      // extent = cellWidth * 3/4 + 140, so the implied cell width must be the
-      // grid's real cell width.
+      expect(kPosMenuCardBodyHeight, 128);
+      // extent = cellWidth * imageFactor + content, so the implied cell width
+      // must be the grid's real cell width.
       final cellWidth =
-          (delegate.mainAxisExtent! - kPosMenuCardBodyHeight) * 4 / 3;
+          (delegate.mainAxisExtent! - kPosMenuCardBodyHeight) /
+          kPosMenuCardImageHeightFactor;
       expect(delegate.mainAxisExtent, posMenuCardExtent(cellWidth));
     });
   });
@@ -285,13 +289,16 @@ void main() {
         tester.element(find.byType(PosMenuScreen)),
       );
       expect(container.read(selectedCategoryProvider), kAllCategoriesId);
-      expect(find.byType(MenuItemCard), findsNWidgets(12));
+      // REFERENCE-REDESIGN-002: the food-first cells are taller, so the lazy
+      // grid BUILDS fewer of the 12 fixture items at once — the behavioural
+      // contract is the PROVIDER + the filter, not a built-widget census.
+      expect(find.byType(MenuItemCard), findsWidgets);
 
       await tester.tap(find.text('Sides'));
       await tester.pumpAndSettle();
 
       expect(container.read(selectedCategoryProvider), 'sides');
-      // 6 of the 12 fixture items are in `sides`.
+      // 6 of the 12 fixture items are in `sides`; all six fit the viewport.
       expect(find.byType(MenuItemCard), findsNWidgets(6));
     });
 
@@ -482,12 +489,14 @@ void main() {
           reason: 'overflowed in ${locale.languageCode}',
         );
 
+        // REFERENCE-REDESIGN-002 anatomy: up to TWO confident name lines,
+        // ONE subdued description line.
         final nameText = tester.widget<Text>(find.text(name));
-        expect(nameText.maxLines, 1);
+        expect(nameText.maxLines, 2);
         final desc = tester.widget<Text>(
           find.text('Slow-roasted lamb with tahini and sumac onion.'),
         );
-        expect(desc.maxLines, 2);
+        expect(desc.maxLines, 1);
 
         // The description never sits on top of the price row.
         expect(
@@ -576,8 +585,8 @@ void main() {
     testWidgets('007-E1. the skeleton grid uses the SAME column count and the '
         'SAME cell extent as the loaded grid', (tester) async {
       for (final (size, columns) in const [
-        (Size(1440, 900), 5),
-        (Size(1280, 800), 4),
+        (Size(1440, 900), 4),
+        (Size(1280, 800), 3),
         (Size(1024, 600), 3),
       ]) {
         await _pumpScreen(tester, size: size, loading: true);

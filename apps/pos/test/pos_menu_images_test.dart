@@ -10,6 +10,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
@@ -238,7 +239,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 220,
-            height: 264,
+            height: posMenuCardExtent(220),
             child: MenuItemCard(item: item, onAdd: () => added++),
           ),
         ),
@@ -282,7 +283,7 @@ void main() {
             home: Scaffold(
               body: SizedBox(
                 width: 220,
-                height: 264,
+                height: posMenuCardExtent(220),
                 child: MenuItemCard(item: item, onAdd: () {}),
               ),
             ),
@@ -364,7 +365,7 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               width: 220,
-              height: 264,
+              height: posMenuCardExtent(220),
               child: MenuItemCard(item: item, onAdd: () {}),
             ),
           ),

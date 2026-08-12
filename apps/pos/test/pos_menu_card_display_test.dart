@@ -30,9 +30,11 @@ Widget _wrapCard(Widget card) => MaterialApp(
   locale: const Locale('en'),
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
-  // DESIGN-004: the card is taller now (a fixed 4:3 image band over the body),
-  // so the isolated-card harness gives it room for that band + the body.
-  home: Scaffold(body: SizedBox(width: 220, height: 264, child: card)),
+  // The REAL grid extent for this cell width (REFERENCE-REDESIGN-002: a
+  // fixed 10:9 image band over the fixed content zone).
+  home: Scaffold(
+    body: SizedBox(width: 220, height: posMenuCardExtent(220), child: card),
+  ),
 );
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 renders the cart's LOUD figure as a
