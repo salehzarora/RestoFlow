@@ -13,6 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
+import 'package:restoflow_pos/src/data/payment.dart';
+import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// Paint-time overflow never reaches [WidgetTester.takeException]; the handler
@@ -397,6 +399,147 @@ void main() {
       );
       expect(rect.width, greaterThanOrEqualTo(44));
       expect(rect.height, greaterThanOrEqualTo(44));
+    });
+  });
+
+  group('F. the chosen tender is marked in orange AND without colour', () {
+    Widget tenderHost({
+      required PaymentMethod selected,
+      ValueChanged<PaymentMethod>? onSelect,
+      String language = 'ar',
+      double width = 430,
+      double scale = 1.0,
+    }) => MaterialApp(
+      locale: Locale(language),
+      localizationsDelegates: restoflowLocalizationsDelegates,
+      supportedLocales: kSupportedLocales,
+      theme: restoflowLightBrandTheme(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(scale)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: SizedBox(
+          width: width,
+          child: PosTenderSelectorProbe(selected: selected, onSelect: onSelect),
+        ),
+      ),
+    );
+
+    ChoiceChip chipFor(WidgetTester tester, String key) =>
+        tester.widget<ChoiceChip>(find.byKey(Key(key)));
+
+    testWidgets('only the selected tender carries the orange edge', (
+      tester,
+    ) async {
+      await tester.pumpWidget(tenderHost(selected: PaymentMethod.card));
+      await tester.pumpAndSettle();
+      final accent = RestoflowBrandPalette.of(Brightness.light).accentOrange;
+
+      expect(chipFor(tester, 'tender-card').side?.color, accent);
+      for (final other in ['tender-cash', 'tender-bit', 'tender-external']) {
+        expect(
+          chipFor(tester, other).side,
+          isNull,
+          reason: '$other is not chosen and must stay neutral.',
+        );
+      }
+    });
+
+    testWidgets('the selected tender also has a NON-COLOUR cue', (
+      tester,
+    ) async {
+      await tester.pumpWidget(tenderHost(selected: PaymentMethod.cash));
+      await tester.pumpAndSettle();
+      expect(
+        chipFor(tester, 'tender-cash').showCheckmark,
+        isTrue,
+        reason:
+            'The app theme turns the chip checkmark off, which left the chosen '
+            'tender distinguished by colour alone — on the one surface where '
+            'getting it wrong means taking money the wrong way.',
+      );
+    });
+
+    testWidgets('choosing a tender fires the existing callback once', (
+      tester,
+    ) async {
+      final picked = <PaymentMethod>[];
+      await tester.pumpWidget(
+        tenderHost(selected: PaymentMethod.cash, onSelect: picked.add),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tender-card')));
+      await tester.pumpAndSettle();
+      expect(picked, [PaymentMethod.card]);
+    });
+
+    testWidgets('selecting does not change the chip HEIGHT', (tester) async {
+      await tester.pumpWidget(tenderHost(selected: PaymentMethod.cash));
+      await tester.pumpAndSettle();
+      final unselected = tester.getRect(find.byKey(const Key('tender-card')));
+
+      await tester.pumpWidget(tenderHost(selected: PaymentMethod.card));
+      await tester.pumpAndSettle();
+      final selected = tester.getRect(find.byKey(const Key('tender-card')));
+
+      expect(
+        selected.height,
+        closeTo(unselected.height, 0.5),
+        reason:
+            'The edge is a colour change at the theme border width, not a '
+            'thicker one, so a tender cannot grow taller when chosen.',
+      );
+    });
+
+    testWidgets('orange never stands in for a payment OUTCOME', (tester) async {
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final semantic = RestoflowSemanticColors.of(Brightness.light);
+      // Approved, declined and pending are what tell a cashier whether money
+      // actually moved. None of them may be confusable with the brand mark
+      // that merely says which tender is chosen.
+      expect(semantic.success, isNot(brand.accentOrange));
+      expect(semantic.danger, isNot(brand.accentOrange));
+      expect(semantic.info, isNot(brand.accentOrange));
+      expect(semantic.warning, isNot(brand.accentOrange));
+    });
+
+    for (final width in [430.0, 390.0]) {
+      for (final language in ['ar', 'he', 'en']) {
+        testWidgets('${width.toInt()} $language tenders are overflow-free', (
+          tester,
+        ) async {
+          final overflows = await overflowsDuring(() async {
+            tester.view.physicalSize = Size(width, 900);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+            await tester.pumpWidget(
+              tenderHost(
+                selected: PaymentMethod.card,
+                language: language,
+                width: width,
+              ),
+            );
+            await tester.pumpAndSettle();
+          });
+          expect(overflows, isEmpty);
+        });
+      }
+    }
+
+    testWidgets('430 @2x tenders are overflow-free', (tester) async {
+      final overflows = await overflowsDuring(() async {
+        tester.view.physicalSize = const Size(430, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          tenderHost(selected: PaymentMethod.card, scale: 2.0),
+        );
+        await tester.pumpAndSettle();
+      });
+      expect(overflows, isEmpty);
     });
   });
 }
