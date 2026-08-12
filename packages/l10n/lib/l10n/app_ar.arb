@@ -1749,5 +1749,8 @@
   "posDeviceAccentPomegranate": "رمّان",
   "posDeviceAccentAubergine": "باذنجاني",
   "posItemAddedToast": "تمت إضافة {name}",
-  "posAddMore": "إضافة المزيد"
+  "posAddMore": "إضافة المزيد",
+  "posMenuItemAvailable": "متوفر",
+  "posCartEmptyHint": "اختر أصنافًا من القائمة لبدء طلب جديد",
+  "posSending": "جارٍ الإرسال…"
 }

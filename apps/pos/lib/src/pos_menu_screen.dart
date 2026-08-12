@@ -490,19 +490,22 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
 /// grid keeps scanning cleanly in rows.
 const double kPosMenuCardMaxExtent = 230;
 
-/// POS-REFERENCE-VISUAL-SURGERY-003: the card's FIXED content zone — name,
-/// optional description, the start-aligned price line, and the FULL-WIDTH
-/// 44px action footer. Measured at scale 1: 10 + 38 (two 19px name lines) +
-/// 2 + 15 (one description line) + ~24 (price) + 6 + 44 (action) + 10 = 149,
-/// and at 2x with the ladder (one name line, no description, 48px price) =
-/// 158 — so 160 holds both without compressing the price or the action.
-const double kPosMenuCardBodyHeight = 160;
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card's FIXED content zone —
+/// the one-baseline name+price row, the fixed description slot, and the
+/// FULL-WIDTH 44px action footer (approved v4 anatomy, component specs §3).
+/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 15 (the
+/// description slot) + 8 + 44 (action) + 10 = 108; at 2x the ladder drops
+/// the description slot and the row grows to ~35 → 8 + 35 + 8 + 44 + 10 =
+/// 105 — so 118 holds both with headroom.
+const double kPosMenuCardBodyHeight = 118;
 
-/// The cell height for a card [cellWidth] wide: the fixed 10:9 image band
-/// (see [kPosMenuCardImageHeightFactor] in pos_palette.dart) plus the fixed
-/// content zone.
+/// The cell height for a card [cellWidth] wide: the INSET 4:3 image band
+/// (see [kPosCardImageInset] / [kPosCardImageAspect] in pos_palette.dart)
+/// plus the fixed content zone.
 double posMenuCardExtent(double cellWidth) =>
-    cellWidth * kPosMenuCardImageHeightFactor + kPosMenuCardBodyHeight;
+    (cellWidth - 2 * kPosCardImageInset) / kPosCardImageAspect +
+    kPosCardImageInset +
+    kPosMenuCardBodyHeight;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the ONE resolved grid geometry, derived
 /// from the layout mode rather than from a max-extent formula, and shared

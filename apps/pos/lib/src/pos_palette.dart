@@ -98,10 +98,13 @@ const List<BoxShadow> kPosChipSelectedShadow = [
 /// cool outline and an INSET photo).
 const double kPosCardRadius = 14;
 
-/// POS-REFERENCE-VISUAL-SURGERY-003: the image band's height as a fraction
-/// of the card cell width. A SQUARE crop (1.0) keeps the photograph ~58-60%
-/// of the taller footer-action card.
-const double kPosMenuCardImageHeightFactor = 1.0;
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 card carries an
+/// INSET photo — a 4:3 band floated [kPosCardImageInset] px inside the card
+/// edge on an r10 clip (component specs §7), no longer edge-to-edge.
+const double kPosCardImageInset = 6;
+
+/// The photo band's width:height ratio (4:3).
+const double kPosCardImageAspect = 4 / 3;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
 ///

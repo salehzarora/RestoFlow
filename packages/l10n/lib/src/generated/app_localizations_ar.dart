@@ -5646,4 +5646,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posAddMore => 'إضافة المزيد';
+
+  @override
+  String get posMenuItemAvailable => 'متوفر';
+
+  @override
+  String get posCartEmptyHint => 'اختر أصنافًا من القائمة لبدء طلب جديد';
+
+  @override
+  String get posSending => 'جارٍ الإرسال…';
 }

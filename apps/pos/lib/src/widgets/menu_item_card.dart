@@ -175,12 +175,12 @@ class MenuItemCard extends StatelessWidget {
     // lines instead of overflowing (POS-PRODUCT-DESCRIPTIONS-001: the
     // description has no tap target, no tooltip, no placeholder when absent).
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    // POS-REFERENCE-REDESIGN-002 ladder: the description (max ONE subdued
-    // line now) yields first, the name's SECOND line yields next; the price
-    // and the 44px action row never compress.
-    final descriptionLines = textScale <= 1.15 ? 1 : 0;
-    final nameLines = textScale <= 1.4 ? 2 : 1;
-    final hasDescription = description != null && descriptionLines > 0;
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 ladder: the fixed description
+    // slot yields first; the name is ONE ellipsizing line beside the price on
+    // the approved shared baseline row; the price and the 44px action row
+    // never compress.
+    final showDescriptionSlot = textScale <= 1.15;
+    final hasDescription = description != null && showDescriptionSlot;
     // POS-VISUAL-REDESIGN-PHASE-1-007: a WHITE card, not `colorScheme.surface`
     // — the green-tinted surface sat within three values of the hairline and
     // dissolved the card's own edge. r14 (the biggest object on screen) and the
@@ -200,25 +200,36 @@ class MenuItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // The fixed 10:9 image band (REFERENCE-REDESIGN-002: the
-            // photograph is the top ~60% of the card): cover-fit photo (with
-            // cacheWidth) that never stretches, or the tinted category band
-            // on null/error.
-            AspectRatio(
-              aspectRatio: 1 / kPosMenuCardImageHeightFactor,
-              child: _ImageBand(
-                item: item,
-                category: category,
-                l10n: l10n,
-                bandTags: bandTags,
-                inCartQuantity: inCartQuantity,
-                optionGroupCount: optionGroupCount,
-                unavailable: unavailable,
+            // 004: the approved INSET 4:3 photo band — floated 6px inside the
+            // card edge on its own r10 clip (no longer edge-to-edge). Cover-
+            // fit photo (with cacheWidth) that never stretches, or the tinted
+            // category scene on null/error.
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                kPosCardImageInset,
+                kPosCardImageInset,
+                kPosCardImageInset,
+                0,
+              ),
+              child: AspectRatio(
+                aspectRatio: kPosCardImageAspect,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(kPosTrackRadius),
+                  child: _ImageBand(
+                    item: item,
+                    category: category,
+                    l10n: l10n,
+                    bandTags: bandTags,
+                    inCartQuantity: inCartQuantity,
+                    optionGroupCount: optionGroupCount,
+                    unavailable: unavailable,
+                  ),
+                ),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(10, 10, 10, 9),
+                padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 10, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -227,69 +238,94 @@ class MenuItemCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          item.name,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: kRestoflowInk,
-                            height: 1.25,
+                        // 004: the approved shared baseline row — a one-line
+                        // ellipsizing name at the start, the ember price at
+                        // the end — so every card in a row aligns at image,
+                        // title+price and action.
+                        LayoutBuilder(
+                          builder: (context, rowBox) => Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // The NAME takes the true remainder and
+                              // ellipsizes (the approved mockup truncates
+                              // long names the same way). The PRICE is never
+                              // truncated: it keeps its intrinsic width up
+                              // to 55% of the row, and only when genuinely
+                              // starved (extreme text scales) the complete
+                              // figure scales down inside that cap.
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsetsDirectional.only(
+                                    end: RestoflowSpacing.sm,
+                                  ),
+                                  child: Text(
+                                    item.name,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: kRestoflowInk,
+                                      fontSize: 13.5,
+                                      height: 1.25,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: rowBox.maxWidth * 0.55,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: AlignmentDirectional.centerEnd,
+                                  child: _PriceText(
+                                    priceKey: Key('menu-item-price-${item.id}'),
+                                    formatted: priceText,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          // REFERENCE-REDESIGN-002: up to TWO confident name
-                          // lines (the ladder drops the second at large text
-                          // scales — never the price row).
-                          maxLines: nameLines,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        // POS-PRODUCT-DESCRIPTIONS-001: the description sits
-                        // directly under the name, in the secondary ink, and is
-                        // purely presentational — no tap target, no tooltip, no
-                        // placeholder when absent. `letterSpacing` is
-                        // deliberately left alone: forcing one breaks
-                        // Arabic/Hebrew shaping. Ambient Directionality and the
-                        // directional start alignment handle RTL.
-                        if (hasDescription) ...[
+                        // POS-PRODUCT-DESCRIPTIONS-001 → 004: ONE subdued
+                        // description line in a FIXED-HEIGHT slot (empty when
+                        // the item has none) so all cards in a row keep their
+                        // action footers aligned. No tap target, no tooltip.
+                        // `letterSpacing: 0` — the ambient tracking breaks
+                        // Arabic/Hebrew shaping.
+                        if (showDescriptionSlot) ...[
                           const SizedBox(height: RestoflowSpacing.xxs),
-                          Text(
-                            description,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: kPosMutedBodyInk,
-                              height: 1.25,
-                              // EXPLICITLY zero: the ambient bodySmall carries
-                              // a 0.4 tracking that pulls Arabic and Hebrew
-                              // glyphs apart and breaks their shaping.
-                              letterSpacing: 0,
-                            ),
-                            maxLines: descriptionLines,
-                            overflow: TextOverflow.ellipsis,
+                          SizedBox(
+                            height: 15,
+                            child: hasDescription
+                                ? Text(
+                                    description,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: kPosMutedBodyInk,
+                                      fontSize: 11,
+                                      height: 1.3,
+                                      letterSpacing: 0,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : null,
                           ),
                         ],
                       ],
                     ),
-                    // SURGERY-003 anatomy: a start-aligned price line, then
-                    // the FULL-WIDTH action footer — Add / Add more /
-                    // unavailable bar all occupy the same fixed zone, so
-                    // every card in a row aligns at image, title, price and
-                    // action.
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _PriceText(
-                          priceKey: Key('menu-item-price-${item.id}'),
-                          formatted: priceText,
-                        ),
-                        const SizedBox(height: 6),
-                        _CardAction(
-                          onAdd: unavailable ? null : onAdd,
-                          l10n: l10n,
-                          itemId: item.id,
-                          inCart: inCartQuantity > 0,
-                          unavailableLabel: unavailable
-                              ? _unavailableLabel(l10n, item.availabilityReason)
-                              : null,
-                          interactionAccent: interactionAccent,
-                        ),
-                      ],
+                    // The FULL-WIDTH action footer — Add / Add more /
+                    // unavailable bar all occupy the same fixed zone.
+                    _CardAction(
+                      onAdd: unavailable ? null : onAdd,
+                      l10n: l10n,
+                      itemId: item.id,
+                      inCart: inCartQuantity > 0,
+                      inCartQuantity: inCartQuantity,
+                      unavailableLabel: unavailable
+                          ? _unavailableLabel(l10n, item.availabilityReason)
+                          : null,
+                      interactionAccent: interactionAccent,
                     ),
                   ],
                 ),
@@ -338,11 +374,11 @@ class _CardShellState extends State<_CardShell> {
           elevation: 0,
           color: Colors.white,
           clipBehavior: Clip.antiAlias,
+          // 004: the approved thin COOL outline (#DEE5F0) — constant across
+          // rest and hover; the hover cue is the lift shadow alone.
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kPosCardRadius),
-            side: BorderSide(
-              color: hover ? kPosInputBorder : kRestoflowHairline,
-            ),
+            side: const BorderSide(color: kPosCardOutline),
           ),
           child: widget.child,
         ),
@@ -372,19 +408,27 @@ class _PriceText extends StatelessWidget {
     // the split. Step 2 added the identical POS-local helper for the cart, so
     // both surfaces now share ONE implementation. The output is unchanged —
     // lead + core + trail still reconstruct the MoneyFormatter string exactly.
+    //
+    // 004: the digits are the approved EMBER action figures in Inter tabular
+    // (tokens §8/§10); the demoted symbol stays muted ink. Values/formatting
+    // are untouched — MoneyFormatter output remains byte-identical.
     final (lead, core, trail) = posSplitFormattedMoney(formatted);
     const symbolStyle = TextStyle(
-      fontSize: 12,
+      fontSize: 10.5,
       fontWeight: FontWeight.w700,
       color: kRestoflowInk3,
       letterSpacing: 0,
+      fontFamily: kPosMoneyFontFamily,
+      fontFamilyFallback: kPosMoneyFontFallbacks,
     );
-    const digitStyle = TextStyle(
-      fontSize: 18,
+    final digitStyle = TextStyle(
+      fontSize: 15.5,
       fontWeight: FontWeight.w800,
-      color: kRestoflowInk,
+      color: PosThemePair.of(context).action,
       letterSpacing: -0.2,
-      fontFeatures: [FontFeature.tabularFigures()],
+      fontFeatures: const [FontFeature.tabularFigures()],
+      fontFamily: kPosMoneyFontFamily,
+      fontFamilyFallback: kPosMoneyFontFallbacks,
     );
     return Text.rich(
       TextSpan(
@@ -461,54 +505,56 @@ class _ImageBand extends StatelessWidget {
               ),
             ),
           ),
-        // Spec §12/§16.4: tag pills at the band's inline-START, the in-cart
-        // badge at the inline-END, the options chip at the bottom inline-END.
-        // The tags and the badge share ONE top row rather than being placed
-        // independently, so on a narrow cell the tags yield width instead of
-        // running under the badge — no magic reservation, no overlap.
-        if (bandTags.isNotEmpty || inCartQuantity > 0)
-          PositionedDirectional(
-            top: RestoflowSpacing.sm,
-            start: RestoflowSpacing.sm,
-            end: RestoflowSpacing.sm,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  // A pill cannot shrink below its own label, so on the very
-                  // narrowest approved cell (148px) a long tag beside the
-                  // in-cart badge could still overrun the band by a fraction of
-                  // a pixel. scaleDown is self-limiting — it does nothing while
-                  // the pill fits, and shrinks it only by the margin actually
-                  // missing, so the label never wraps, clips or overflows.
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Wrap(
-                      spacing: RestoflowSpacing.xs,
-                      runSpacing: RestoflowSpacing.xs,
-                      children: [
-                        // When the in-cart badge shares this row the band shows
-                        // the single highest-priority tag instead of squeezing
-                        // two. Priority order and the unknown-tag skip are
-                        // unchanged.
-                        for (final tag
-                            in inCartQuantity > 0 ? bandTags.take(1) : bandTags)
-                          RestoflowStatusPill(
-                            label: _tagLabel(l10n, tag),
-                            tone: _tagTone(tag),
-                          ),
-                      ],
-                    ),
+        // 004 band overlays (component specs §3/§8): the always-on
+        // availability pill leads the band's inline-START beside at most one
+        // tag pill; the ember ×N in-cart mark holds the inline-END; the
+        // options chip keeps the bottom inline-END. One shared top row, so on
+        // a narrow cell the pills yield width instead of overlapping.
+        PositionedDirectional(
+          top: RestoflowSpacing.sm,
+          start: RestoflowSpacing.sm,
+          end: RestoflowSpacing.sm,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                // A pill cannot shrink below its own label, so on the very
+                // narrowest approved cell a long tag beside the in-cart mark
+                // could still overrun the band by a fraction of a pixel.
+                // scaleDown is self-limiting — it does nothing while the pill
+                // fits, and shrinks it only by the margin actually missing.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Wrap(
+                    spacing: RestoflowSpacing.xs,
+                    runSpacing: RestoflowSpacing.xs,
+                    children: [
+                      // The approved always-on reassurance on SELLABLE cards
+                      // (presentation-only; the sale gate is unchanged).
+                      if (!unavailable)
+                        RestoflowStatusPill(
+                          label: l10n.posMenuItemAvailable,
+                          tone: RestoflowTone.success,
+                        ),
+                      // One highest-priority tag beside it. Priority order and
+                      // the unknown-tag skip are unchanged.
+                      for (final tag in bandTags.take(1))
+                        RestoflowStatusPill(
+                          label: _tagLabel(l10n, tag),
+                          tone: _tagTone(tag),
+                        ),
+                    ],
                   ),
                 ),
-                if (inCartQuantity > 0) ...[
-                  const SizedBox(width: RestoflowSpacing.xs),
-                  _InCartBadge(quantity: inCartQuantity),
-                ],
+              ),
+              if (inCartQuantity > 0) ...[
+                const SizedBox(width: RestoflowSpacing.xs),
+                _InCartBadge(quantity: inCartQuantity),
               ],
-            ),
+            ],
           ),
+        ),
         if (optionGroupCount > 0)
           PositionedDirectional(
             bottom: RestoflowSpacing.sm,
@@ -518,17 +564,37 @@ class _ImageBand extends StatelessWidget {
               tooltip: l10n.menuModifierGroupCount(optionGroupCount),
             ),
           ),
-        // RESTAURANT-OPERATIONS-V1-001 → SURGERY-003: the not-sellable
-        // treatment keeps the dimming scrim on the photo; the keyed reason
-        // pill now lives in the card's full-width footer bar (one place,
-        // text never colour alone).
-        if (unavailable) const ColoredBox(color: Color(0x99FFFFFF)),
+        // RESTAURANT-OPERATIONS-V1-001 → 004: the approved not-sellable
+        // treatment (states board 1e) — an ivory 62% scrim with the KEYED
+        // danger reason pill centered ON the photo, echoed by the muted
+        // footer bar below. Text, never colour alone; the sale gate is the
+        // same server-backed refusal.
+        if (unavailable) ...[
+          const ColoredBox(color: Color(0x9EF7F5F1)),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.xs,
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: RestoflowStatusPill(
+                  key: Key('menu-item-unavailable-${item.id}'),
+                  label: _unavailableLabel(l10n, item.availabilityReason),
+                  tone: RestoflowTone.danger,
+                  icon: Icons.do_not_disturb_on_outlined,
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-/// The dark in-cart badge (cart icon + ×N) on the band's bottom-start corner.
+/// 004: the approved EMBER ×N in-cart mark on the band's top inline-END
+/// (tokens §8: r8, Inter 800, forced-LTR run). Presentation-only count.
 class _InCartBadge extends StatelessWidget {
   const _InCartBadge({required this.quantity});
 
@@ -544,8 +610,8 @@ class _InCartBadge extends StatelessWidget {
         RestoflowSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: kRestoflowBrandDark,
-        borderRadius: BorderRadius.circular(7),
+        color: PosThemePair.of(context).actionMark,
+        borderRadius: BorderRadius.circular(8),
         boxShadow: const [
           BoxShadow(
             color: Color(0x470B1526),
@@ -554,24 +620,17 @@ class _InCartBadge extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.shopping_cart,
-            size: RestoflowIconSizes.xs,
-            color: Colors.white,
-          ),
-          const SizedBox(width: RestoflowSpacing.xxs),
-          Text(
-            '×$quantity',
-            textDirection: TextDirection.ltr,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+      child: Text(
+        '×$quantity',
+        textDirection: TextDirection.ltr,
+        style: const TextStyle(
+          fontSize: 11,
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontFamily: kPosMoneyFontFamily,
+          fontFamilyFallback: kPosMoneyFontFallbacks,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
@@ -624,11 +683,12 @@ class _OptionsIndicator extends StatelessWidget {
   }
 }
 
-/// POS-REFERENCE-VISUAL-SURGERY-003 — the card's FULL-WIDTH action footer,
-/// the signature element:
-///  * available          → filled NAVY bar, white icon + label (Add);
-///  * already in cart    → TONAL bar (navy container, navy label — Add more;
-///                          the band badge carries the count);
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the card's FULL-WIDTH action
+/// footer, the signature element (approved v4, tokens §10):
+///  * available          → PRIMARY GRADIENT bar + soft primary glow, white
+///                          icon + Alexandria 700 label (Add);
+///  * already in cart    → TONAL bar (cool tonal bed, navy label — Add more
+///                          with the ×N chip; shadowless);
 ///  * cart-locked        → the same bar, disabled (onAdd == null);
 ///  * unavailable        → a muted disabled BAR carrying the reason text —
 ///                          no icon, no tap (the canonical add glyph never
@@ -641,6 +701,7 @@ class _CardAction extends StatelessWidget {
     required this.l10n,
     required this.itemId,
     required this.inCart,
+    required this.inCartQuantity,
     required this.unavailableLabel,
     this.interactionAccent,
   });
@@ -649,6 +710,9 @@ class _CardAction extends StatelessWidget {
   final AppLocalizations l10n;
   final String itemId;
   final bool inCart;
+
+  /// The ×N chip inside the tonal "Add more" treatment (0 hides it).
+  final int inCartQuantity;
 
   /// Non-null = the item cannot be sold; the footer renders the reason.
   final String? unavailableLabel;
@@ -662,89 +726,151 @@ class _CardAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (unavailableLabel != null) {
-      // The keyed reason pill (danger tone + icon — text never colour alone)
-      // rides inside the muted full-width bar; scale-down keeps the longest
-      // ar/he wording inside the narrowest cell.
+      // The muted full-width bar echoing the band's keyed reason pill
+      // (states board 1e). Plain text — the pill on the photo carries the
+      // key + danger tone + icon; this bar keeps the reason beside where the
+      // add action would be, so the footer zone never reads as tappable.
       return Container(
         height: 44,
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.xs),
         decoration: BoxDecoration(
-          color: kPosDisabledBg,
+          color: const Color(0xFFF1EEE7),
           borderRadius: BorderRadius.circular(RestoflowRadii.md),
         ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
-          child: RestoflowStatusPill(
-            key: Key('menu-item-unavailable-$itemId'),
-            label: unavailableLabel!,
-            tone: RestoflowTone.danger,
-            icon: Icons.do_not_disturb_on_outlined,
+          child: Text(
+            unavailableLabel!,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF8A8377),
+            ),
           ),
         ),
       );
     }
+    final pair = PosThemePair.of(context);
     final accent =
         interactionAccent ??
         RestoflowBrandPalette.of(theme.brightness).accentOrange;
-    // Add stays NAVY (or tonal once in cart) and earns the terminal accent
-    // only on interaction — an orange wash on hover, a deeper one on press,
-    // and an accent focus ring. Send keeps the single dominant CTA role.
-    return SizedBox(
-      width: double.infinity,
-      height: 44,
-      child: FilledButton.icon(
-        onPressed: onAdd,
-        icon: const Icon(
-          Icons.add_shopping_cart,
-          size: RestoflowIconSizes.sm + 2,
-        ),
-        label: Text(
-          inCart ? l10n.posAddMore : l10n.posAddToCart,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        style:
-            FilledButton.styleFrom(
-              backgroundColor: inCart
-                  ? kRestoflowNavyContainer
-                  : theme.colorScheme.primary,
-              foregroundColor: inCart
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onPrimary,
-              disabledBackgroundColor: const Color(0xFFE9EEF5),
-              disabledForegroundColor: const Color(0xFFA8B2C1),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: const EdgeInsets.symmetric(
-                horizontal: RestoflowSpacing.sm,
+    final enabled = onAdd != null;
+    // The gradient + glow live on a wrapper (a FilledButton cannot paint a
+    // gradient); the button itself goes transparent over it. Tonal and
+    // disabled bars are flat and shadowless per the approved spec.
+    final showGradient = enabled && !inCart;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        gradient: showGradient ? pair.primaryGradient : null,
+        color: showGradient
+            ? null
+            : !enabled
+            ? kPosDisabledBg
+            : kPosTonalAddBg,
+        boxShadow: showGradient
+            ? [
+                BoxShadow(
+                  color: pair.primary.withValues(alpha: 0.22),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ]
+            : null,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 44,
+        child: FilledButton(
+          onPressed: onAdd,
+          // A custom child instead of FilledButton.icon: the stock icon
+          // variant lays its label out INFLEXIBLY, which overflows the
+          // narrow approved cells at 2x text scale. Same canonical glyph,
+          // same label strings — the label just ellipsizes honestly.
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.add_shopping_cart,
+                size: RestoflowIconSizes.sm + 2,
               ),
-              textStyle: theme.textTheme.labelLarge?.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(
-                  Radius.circular(RestoflowRadii.md),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  inCart ? l10n.posAddMore : l10n.posAddToCart,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              animationDuration: RestoflowDurations.fast,
-            ).copyWith(
-              overlayColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.pressed)) {
-                  return accent.withValues(alpha: 0.30);
-                }
-                if (states.contains(WidgetState.hovered)) {
-                  return accent.withValues(alpha: 0.18);
-                }
-                return null;
-              }),
-              side: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.focused)) {
-                  return BorderSide(color: accent, width: 2);
-                }
-                return null;
-              }),
-            ),
+              if (inCart && inCartQuantity > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '×$inCartQuantity',
+                    textDirection: TextDirection.ltr,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: pair.primary,
+                      fontFamily: kPosMoneyFontFamily,
+                      fontFamilyFallback: kPosMoneyFontFallbacks,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          style:
+              FilledButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: inCart ? pair.primary : Colors.white,
+                shadowColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                disabledForegroundColor: kPosDisabledFg,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: RestoflowSpacing.sm,
+                ),
+                textStyle: theme.textTheme.labelLarge?.copyWith(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(RestoflowRadii.md),
+                  ),
+                ),
+                animationDuration: RestoflowDurations.fast,
+              ).copyWith(
+                overlayColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return accent.withValues(alpha: 0.30);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return inCart
+                        ? accent.withValues(alpha: 0.12)
+                        : pair.primaryDeep.withValues(alpha: 0.55);
+                  }
+                  return null;
+                }),
+                side: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.focused)) {
+                    return BorderSide(color: accent, width: 2);
+                  }
+                  return null;
+                }),
+              ),
+        ),
       ),
     );
   }

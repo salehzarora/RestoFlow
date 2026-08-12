@@ -260,10 +260,10 @@ const List<String> kPosMoneyFontFallbacks = <String>[
   'sans-serif',
 ];
 
-/// Hover lift for product cards (e2). Navy-inked like every POS shadow
-/// (`kRestoflowShadowInk` family — b >= g holds).
+/// Hover lift for product cards — the approved v4 value (states/motion §7:
+/// 0 12 26 @14%, navy-inked like every POS shadow).
 const List<BoxShadow> kPosCardHoverShadow = <BoxShadow>[
-  BoxShadow(color: Color(0x1A0B1526), offset: Offset(0, 6), blurRadius: 18),
+  BoxShadow(color: Color(0x2416263B), offset: Offset(0, 12), blurRadius: 26),
 ];
 
 /// The spring toast's shadow.

@@ -5608,4 +5608,13 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posAddMore => 'הוסף עוד';
+
+  @override
+  String get posMenuItemAvailable => 'זמין';
+
+  @override
+  String get posCartEmptyHint => 'בחרו פריטים מהתפריט כדי להתחיל הזמנה חדשה';
+
+  @override
+  String get posSending => 'שולח…';
 }

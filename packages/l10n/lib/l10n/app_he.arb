@@ -1749,5 +1749,8 @@
   "posDeviceAccentPomegranate": "רימון",
   "posDeviceAccentAubergine": "חציל",
   "posItemAddedToast": "{name} נוסף",
-  "posAddMore": "הוסף עוד"
+  "posAddMore": "הוסף עוד",
+  "posMenuItemAvailable": "זמין",
+  "posCartEmptyHint": "בחרו פריטים מהתפריט כדי להתחיל הזמנה חדשה",
+  "posSending": "שולח…"
 }

@@ -69,8 +69,11 @@ void main() {
       final l10n = await pump(tester, soldOut, onAdd: () => added++);
 
       // Visible with the reason — staff must see WHY it cannot be sold.
+      // 004 (approved v4 states board): the reason renders TWICE by design —
+      // the keyed danger pill on the photo band AND the muted footer bar
+      // where the add action would be. Still text, never colour alone.
       expect(find.text('Onion Rings'), findsOneWidget);
-      expect(find.text(l10n.posMenuItemSoldOut), findsOneWidget);
+      expect(find.text(l10n.posMenuItemSoldOut), findsNWidgets(2));
       // No add button, and the tile tap is dead.
       expect(find.byIcon(Icons.add_shopping_cart), findsNothing);
       await tester.tap(find.byKey(const Key('menu-item-x-soldout')));
@@ -89,7 +92,8 @@ void main() {
         availabilityReason: 'paused',
       );
       final l10n = await pump(tester, paused, onAdd: () {});
-      expect(find.text(l10n.posMenuItemPaused), findsOneWidget);
+      // 004: band pill + footer echo (see A1) — distinct wording throughout.
+      expect(find.text(l10n.posMenuItemPaused), findsNWidgets(2));
       expect(find.text(l10n.posMenuItemSoldOut), findsNothing);
     });
 

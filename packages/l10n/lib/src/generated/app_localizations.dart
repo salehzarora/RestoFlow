@@ -10383,6 +10383,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add more'**
   String get posAddMore;
+
+  /// Always-on availability pill on a SELLABLE product card's image band (POS-DESIGN-HANDOFF-IMPLEMENTATION-004, approved v4 design). Presentation-only reassurance; unavailable items keep their existing reason pills.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posMenuItemAvailable;
+
+  /// One helper line under the empty-cart message (approved v4 empty state), telling the cashier how to begin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick items from the menu to start a new order'**
+  String get posCartEmptyHint;
+
+  /// Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get posSending;
 }
 
 class _AppLocalizationsDelegate

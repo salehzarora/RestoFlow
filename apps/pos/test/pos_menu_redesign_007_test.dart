@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
+    show PosThemePair;
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/pos_palette.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
@@ -204,17 +205,23 @@ void main() {
       });
     }
 
-    testWidgets('007-B2. the card extent stays the SQUARE band plus the FIXED '
-        'content zone (REFERENCE-VISUAL-SURGERY-003)', (tester) async {
+    testWidgets('007-B2. the card extent is the INSET 4:3 band plus the FIXED '
+        'content zone (POS-DESIGN-HANDOFF-IMPLEMENTATION-004)', (tester) async {
       await _pumpScreen(tester, size: const Size(1440, 900));
       final delegate = _productGridDelegate(tester);
-      expect(kPosMenuCardBodyHeight, 160);
-      // extent = cellWidth * imageFactor + content, so the implied cell width
-      // must be the grid's real cell width.
+      expect(kPosMenuCardBodyHeight, 118);
+      // extent = (cellWidth - 2*inset)/aspect + inset + content, so the
+      // implied cell width must be the grid's real cell width.
       final cellWidth =
-          (delegate.mainAxisExtent! - kPosMenuCardBodyHeight) /
-          kPosMenuCardImageHeightFactor;
-      expect(delegate.mainAxisExtent, posMenuCardExtent(cellWidth));
+          (delegate.mainAxisExtent! -
+                  kPosMenuCardBodyHeight -
+                  kPosCardImageInset) *
+              kPosCardImageAspect +
+          2 * kPosCardImageInset;
+      expect(
+        delegate.mainAxisExtent,
+        moreOrLessEquals(posMenuCardExtent(cellWidth), epsilon: 0.001),
+      );
     });
   });
 
@@ -411,7 +418,9 @@ void main() {
       final digits = parts.firstWhere((s) => s.text == '54.00');
       expect(digits.style!.fontSize, greaterThan(symbol.style!.fontSize!));
       expect(digits.style!.fontWeight, FontWeight.w800);
-      expect(digits.style!.color, kRestoflowInk);
+      // 004: price digits wear the approved EMBER action colour (tokens §8)
+      // through the two-token restaurant theme.
+      expect(digits.style!.color, PosThemePair.navyEmber.action);
     });
 
     testWidgets('007-D3. the card add button keeps a >=44px target and loses '
@@ -492,22 +501,23 @@ void main() {
           reason: 'overflowed in ${locale.languageCode}',
         );
 
-        // REFERENCE-REDESIGN-002 anatomy: up to TWO confident name lines,
-        // ONE subdued description line.
+        // 004 anatomy: ONE ellipsizing name line on the shared baseline row
+        // beside the price, ONE subdued description line below.
         final nameText = tester.widget<Text>(find.text(name));
-        expect(nameText.maxLines, 2);
+        expect(nameText.maxLines, 1);
         final desc = tester.widget<Text>(
           find.text('Slow-roasted lamb with tahini and sumac onion.'),
         );
         expect(desc.maxLines, 1);
 
-        // The description never sits on top of the price row.
-        expect(
-          tester.getRect(find.text(name)).bottom,
-          lessThanOrEqualTo(
-            tester.getRect(find.byKey(const Key('menu-item-price-i-1'))).top,
-          ),
+        // The name and the price share ONE row (approved baseline row):
+        // vertically overlapping, never stacked.
+        final nameRect = tester.getRect(find.text(name));
+        final priceRect = tester.getRect(
+          find.byKey(const Key('menu-item-price-i-1')),
         );
+        expect(nameRect.top, lessThan(priceRect.bottom));
+        expect(priceRect.top, lessThan(nameRect.bottom));
       }
     });
 

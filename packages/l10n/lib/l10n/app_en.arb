@@ -3840,5 +3840,11 @@
   "posItemAddedToast": "{name} added",
   "@posItemAddedToast": {"description": "Transient bottom toast on PHONE layouts confirming an item was added to the cart (the cart itself is off-screen there). {name} is the product name (data, rendered as-is).", "placeholders": {"name": {"type": "String"}}},
   "posAddMore": "Add more",
-  "@posAddMore": {"description": "Label of the product card's full-width action once the item is already in the cart (POS-REFERENCE-VISUAL-SURGERY-003): same add action, tonal treatment. The in-cart quantity badge on the image carries the count."}
+  "@posAddMore": {"description": "Label of the product card's full-width action once the item is already in the cart (POS-REFERENCE-VISUAL-SURGERY-003): same add action, tonal treatment. The in-cart quantity badge on the image carries the count."},
+  "posMenuItemAvailable": "Available",
+  "@posMenuItemAvailable": {"description": "Always-on availability pill on a SELLABLE product card's image band (POS-DESIGN-HANDOFF-IMPLEMENTATION-004, approved v4 design). Presentation-only reassurance; unavailable items keep their existing reason pills."},
+  "posCartEmptyHint": "Pick items from the menu to start a new order",
+  "@posCartEmptyHint": {"description": "One helper line under the empty-cart message (approved v4 empty state), telling the cashier how to begin."},
+  "posSending": "Sending…",
+  "@posSending": {"description": "Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable."}
 }

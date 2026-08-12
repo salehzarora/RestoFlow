@@ -227,12 +227,15 @@ void main() {
         );
         expect(skeleton.crossAxisCount, loaded.crossAxisCount);
         expect(loaded.crossAxisCount, posMenuColumnsFor(mode));
-        // The extent really is image band + the shared body height
-        // (REFERENCE-REDESIGN-002: the band is 10:9 — see
-        // kPosMenuCardImageHeightFactor).
+        // The extent really is the INSET 4:3 band + the shared body height
+        // (POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — see kPosCardImageInset /
+        // kPosCardImageAspect).
         final cellWidth =
-            (loaded.mainAxisExtent! - kPosMenuCardBodyHeight) /
-            kPosMenuCardImageHeightFactor;
+            (loaded.mainAxisExtent! -
+                    kPosMenuCardBodyHeight -
+                    kPosCardImageInset) *
+                kPosCardImageAspect +
+            2 * kPosCardImageInset;
         expect(
           posMenuCardExtent(cellWidth),
           closeTo(loaded.mainAxisExtent!, 0.01),
@@ -320,7 +323,13 @@ void main() {
 
       expect(find.byIcon(Icons.tune), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
-      expect(find.text('\u00d72'), findsOneWidget, reason: 'the in-cart badge');
+      // 004: the in-cart count renders TWICE by design \u2014 the ember \u00d7N band
+      // mark AND the chip inside the tonal "Add more" footer.
+      expect(
+        find.text('\u00d72'),
+        findsNWidgets(2),
+        reason: 'band mark + Add-more chip',
+      );
       expect(find.text(_ar), findsOneWidget);
       expect(find.byIcon(Icons.add_shopping_cart), findsOneWidget);
       expect(tester.takeException(), isNull);

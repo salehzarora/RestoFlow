@@ -5692,4 +5692,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posAddMore => 'Add more';
+
+  @override
+  String get posMenuItemAvailable => 'Available';
+
+  @override
+  String get posCartEmptyHint =>
+      'Pick items from the menu to start a new order';
+
+  @override
+  String get posSending => 'Sending…';
 }

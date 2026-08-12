@@ -330,22 +330,35 @@ void main() {
     testWidgets('the Add fill is the structural navy, never the accent', (
       tester,
     ) async {
+      // 004: the Add footer paints the approved PRIMARY GRADIENT on a wrapper
+      // DecoratedBox (a FilledButton cannot paint a gradient); the button
+      // itself goes transparent over it. The doctrine is unchanged — the Add
+      // fill is the STRUCTURAL primary family, never the accent orange.
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
-      final button = tester.widget<FilledButton>(
-        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
+      final button = find.widgetWithIcon(FilledButton, Icons.add_shopping_cart);
+      final wrapper = tester.widget<DecoratedBox>(
+        find.ancestor(of: button, matching: find.byType(DecoratedBox)).first,
       );
+      final gradient =
+          (wrapper.decoration as BoxDecoration).gradient as LinearGradient;
       final brand = RestoflowBrandPalette.of(Brightness.light);
-      final scheme = restoflowLightBrandTheme().colorScheme;
-      final fill = button.style?.backgroundColor?.resolve(const {});
-      expect(fill, scheme.primary);
-      expect(
-        fill,
-        isNot(brand.accentOrange),
-        reason:
-            'A grid of orange Adds would compete with Send Order, the one '
-            'control that is actually the next step.',
-      );
+      const pair = PosThemePair.navyEmber;
+      expect(gradient.colors, [pair.primaryHi, pair.primary]);
+      for (final color in gradient.colors) {
+        expect(
+          color,
+          isNot(brand.accentOrange),
+          reason:
+              'A grid of orange Adds would compete with Send Order, the one '
+              'control that is actually the next step.',
+        );
+        expect(
+          color.b,
+          greaterThan(color.r),
+          reason: 'the Add gradient stays the navy structural family',
+        );
+      }
     });
 
     testWidgets('Add gains an orange hover, press and focus edge', (
