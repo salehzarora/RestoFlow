@@ -65,6 +65,7 @@ class PosBottomBar extends ConsumerWidget {
       cart.currencyCode,
     );
     final label = submitted ? l10n.posCartBarSent : l10n.posCartTitle;
+    final accent = RestoflowBrandPalette.of(theme.brightness).accentOrange;
 
     return SafeArea(
       top: false,
@@ -87,6 +88,25 @@ class PosBottomBar extends ConsumerWidget {
               key: const Key('pos-bottom-cart-bar'),
               borderRadius: BorderRadius.circular(RestoflowRadii.lg),
               onTap: () => showPosCartSheet(context),
+              // UI-ORANGE-BALANCE-POLISH-001: interaction feedback only — this
+              // bar deliberately does NOT become an orange CTA.
+              //
+              // The whole bar is one tap target that OPENS the cart sheet, and
+              // Send Order — the actual next step — lives inside that sheet
+              // and already holds the single orange primary. Painting this bar
+              // orange would put two competing primaries one tap apart, and
+              // the one that means "commit the order" would be the one further
+              // away.
+              //
+              // What the audit did find missing is feedback: the bar had no
+              // hover, no pressed tone and no visible focus at all. It now has
+              // all three in brand orange, at the shared 120ms token. The navy
+              // plane, the 58px height, the safe area and every content
+              // position are untouched, so nothing moves.
+              hoverColor: accent.withValues(alpha: 0.14),
+              splashColor: accent.withValues(alpha: 0.22),
+              highlightColor: accent.withValues(alpha: 0.12),
+              focusColor: accent.withValues(alpha: 0.18),
               child: Container(
                 height: 58,
                 padding: const EdgeInsets.symmetric(

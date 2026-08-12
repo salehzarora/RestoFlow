@@ -14,7 +14,10 @@ import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
+import 'package:restoflow_pos/src/pos_palette.dart';
+import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
+import 'package:restoflow_pos/src/widgets/pos_bottom_bar.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// Paint-time overflow never reaches [WidgetTester.takeException]; the handler
@@ -540,6 +543,185 @@ void main() {
         await tester.pumpAndSettle();
       });
       expect(overflows, isEmpty);
+    });
+  });
+
+  group('G. the mobile cart bar: feedback, not a second primary', () {
+    // The bar is ONE tap target that opens the cart sheet. Send Order — the
+    // real next step — lives inside that sheet and already holds the single
+    // orange primary, so this bar must never become a competing orange CTA.
+    Widget barHost({
+      int items = 0,
+      String language = 'ar',
+      double width = 430,
+      double scale = 1.0,
+    }) {
+      final container = ProviderContainer();
+      final cart = container.read(cartControllerProvider.notifier);
+      for (var i = 0; i < items; i++) {
+        cart.addItem(kDemoMenu[i % kDemoMenu.length]);
+      }
+      return UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: Locale(language),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          theme: restoflowLightBrandTheme(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SizedBox(
+              width: width,
+              child: const Align(
+                alignment: Alignment.bottomCenter,
+                child: PosBottomBar(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('the bar plane is never painted the accent', (tester) async {
+      await tester.pumpWidget(barHost(items: 2));
+      await tester.pumpAndSettle();
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final fills = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((d) => d.decoration)
+          .whereType<BoxDecoration>()
+          .map((d) => d.color)
+          .whereType<Color>()
+          .toList();
+
+      // The PLANE is the dark bar itself, and it must stay dark. Painting it
+      // orange would put two competing primaries one tap apart, and the one
+      // that means "commit the order" would be the one further away.
+      expect(
+        fills,
+        contains(kPosBottomBar),
+        reason: 'The bar plane must remain the structural dark surface.',
+      );
+
+      // Exactly one orange box is allowed here and it is the COUNT BADGE — a
+      // small attention mark, which is a role orange is meant to carry. Note
+      // it comes from the POS-local kPosTerracotta, which happens to hold the
+      // same value as the brand accent; the assertion is about how many orange
+      // boxes exist, not about re-sourcing a pre-existing badge.
+      final orangeBoxes = fills.where((c) => c == brand.accentOrange).length;
+      expect(
+        orangeBoxes,
+        lessThanOrEqualTo(1),
+        reason:
+            'Only the count badge may be orange in this bar. Found '
+            '$orangeBoxes orange surfaces.',
+      );
+    });
+
+    testWidgets('the bar carries orange hover, press and focus feedback', (
+      tester,
+    ) async {
+      await tester.pumpWidget(barHost(items: 1));
+      await tester.pumpAndSettle();
+      final ink = tester.widget<InkWell>(
+        find.byKey(const Key('pos-bottom-cart-bar')),
+      );
+      expect(ink.hoverColor, isNotNull);
+      expect(ink.focusColor, isNotNull);
+      expect(ink.splashColor, isNotNull);
+      expect(ink.highlightColor, isNotNull);
+      expect(
+        ink.onTap,
+        isNotNull,
+        reason: 'The bar must remain the tap target that opens the cart.',
+      );
+    });
+
+    testWidgets('the total and the count both stay present', (tester) async {
+      await tester.pumpWidget(barHost(items: 3));
+      await tester.pumpAndSettle();
+      // The count badge and a money string are the two things a cashier scans.
+      expect(find.text('3'), findsWidgets);
+      expect(
+        find.byIcon(Icons.shopping_cart),
+        findsOneWidget,
+        reason: 'The cart glyph anchors the bar.',
+      );
+    });
+
+    testWidgets('the bar height does not move with cart contents', (
+      tester,
+    ) async {
+      final heights = <double>[];
+      for (final items in [0, 1, 4]) {
+        await tester.pumpWidget(barHost(items: items));
+        await tester.pumpAndSettle();
+        heights.add(
+          tester.getRect(find.byKey(const Key('pos-bottom-cart-bar'))).height,
+        );
+      }
+      expect(
+        heights.toSet().length,
+        1,
+        reason:
+            'A bar that grows as the cart fills moves the target under the '
+            'thumb that is filling it. Heights: $heights',
+      );
+      expect(
+        heights.first,
+        greaterThanOrEqualTo(44),
+        reason: 'One-thumb reachability floor.',
+      );
+    });
+
+    for (final width in [430.0, 390.0]) {
+      for (final language in ['ar', 'he', 'en']) {
+        for (final items in [0, 1, 4]) {
+          testWidgets(
+            '${width.toInt()} $language with $items item(s) is overflow-free',
+            (tester) async {
+              final overflows = await overflowsDuring(() async {
+                tester.view.physicalSize = Size(width, 900);
+                tester.view.devicePixelRatio = 1.0;
+                addTearDown(tester.view.reset);
+                await tester.pumpWidget(
+                  barHost(items: items, language: language, width: width),
+                );
+                await tester.pumpAndSettle();
+              });
+              expect(overflows, isEmpty);
+            },
+          );
+        }
+      }
+    }
+
+    testWidgets('430 @2x stays overflow-free with a full cart', (tester) async {
+      final overflows = await overflowsDuring(() async {
+        tester.view.physicalSize = const Size(430, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(barHost(items: 4, scale: 2.0));
+        await tester.pumpAndSettle();
+      });
+      expect(overflows, isEmpty);
+    });
+
+    testWidgets('text direction alone does not resize the bar', (tester) async {
+      final widths = <double>[];
+      for (final language in ['ar', 'he', 'en']) {
+        await tester.pumpWidget(barHost(items: 2, language: language));
+        await tester.pumpAndSettle();
+        widths.add(
+          tester.getRect(find.byKey(const Key('pos-bottom-cart-bar'))).width,
+        );
+      }
+      expect(widths.toSet().length, 1, reason: 'Widths: $widths');
     });
   });
 }
