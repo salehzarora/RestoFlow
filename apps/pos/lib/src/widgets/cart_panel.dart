@@ -104,11 +104,16 @@ class PosAmountText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (lead, core, trail) = posSplitFormattedMoney(formatted);
+    // 004: money digits render in Inter (true tabular figures) per the
+    // approved type trio — the STRING stays byte-identical MoneyFormatter
+    // output; only the rendering family changed.
     final symbolStyle = TextStyle(
       fontSize: symbolSize,
       fontWeight: FontWeight.w700,
       color: kRestoflowInk3,
       letterSpacing: 0,
+      fontFamily: kPosMoneyFontFamily,
+      fontFamilyFallback: kPosMoneyFontFallbacks,
     );
     final digitStyle = TextStyle(
       fontSize: digitSize,
@@ -116,6 +121,8 @@ class PosAmountText extends StatelessWidget {
       color: color,
       letterSpacing: letterSpacing,
       fontFeatures: const [FontFeature.tabularFigures()],
+      fontFamily: kPosMoneyFontFamily,
+      fontFamilyFallback: kPosMoneyFontFallbacks,
     );
     return Text.rich(
       TextSpan(
@@ -231,17 +238,20 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       // always visible before Step 2 moved it into the cart's dark block, and
       // the drawer figure is exactly what a cashier checks straight after
       // taking payment. Same widget, same provider reads, same key.
+      // 004: the approved cart chrome is LIGHT — the shift context rides its
+      // own warm status pill on the white panel (same widget, same provider
+      // reads, same key).
       body = widget.withShiftContext
           ? Column(
               key: const ValueKey('order-confirmation-view-wrapper'),
               children: [
-                const DecoratedBox(
-                  decoration: BoxDecoration(color: kPosCartHeaderInk),
+                const ColoredBox(
+                  color: Colors.white,
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
                       padding: EdgeInsets.only(top: RestoflowSpacing.sm),
-                      child: ShiftContextBar(onDark: true),
+                      child: ShiftContextBar(),
                     ),
                   ),
                 ),
@@ -403,13 +413,14 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ONE dark ink block heads the cart: title, live count, the
-                  // operational sync chip, Clear and the shift/drawer strip.
-                  // It replaces the old grey-slab + divider stack as the
-                  // separator, so the white body below reads as the order.
+                  // 004: ONE LIGHT operational block heads the cart (the
+                  // approved v4 screens moved the dark plane to the top app
+                  // bar): title + ember glyph + count chip + the sync chip +
+                  // Clear, with the collapsible shift-status pill below.
+                  // Same key, same operational elements, same gating.
                   DecoratedBox(
                     key: const Key('pos-cart-operational-header'),
-                    decoration: const BoxDecoration(color: kPosCartHeaderInk),
+                    decoration: const BoxDecoration(color: Colors.white),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -429,8 +440,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                               ? null
                               : controller.clear,
                         ),
-                        if (widget.withShiftContext)
-                          const ShiftContextBar(onDark: true),
+                        if (widget.withShiftContext) const ShiftContextBar(),
                       ],
                     ),
                   ),
@@ -1426,12 +1436,15 @@ class _CartHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const glyph = Icon(Icons.shopping_cart, color: kPosOnDarkAccent, size: 20);
+    final pair = PosThemePair.of(context);
+    // 004: the approved LIGHT header — the cart glyph wears the action ember,
+    // the title reads in ink, and the live count is an ember chip.
+    final glyph = Icon(Icons.shopping_cart, color: pair.action, size: 20);
 
     return SizedBox(
-      // REFERENCE-REDESIGN-002: a slim navy band, not a slab — the header
-      // keeps every operational element (title, count, sync chip, Park,
-      // Clear) at 48px; the shift strip below is unchanged.
+      // A slim band, not a slab — the header keeps every operational element
+      // (title, count, sync chip, Park, Clear) at 48px; the shift-status
+      // pill below is its own row.
       height: 48,
       child: Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(
@@ -1454,7 +1467,7 @@ class _CartHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: kRestoflowInk,
                 ),
               ),
             ),
@@ -1467,7 +1480,7 @@ class _CartHeader extends StatelessWidget {
                   vertical: RestoflowSpacing.xxs,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
+                  color: pair.action,
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
@@ -1492,8 +1505,8 @@ class _CartHeader extends StatelessWidget {
             // hides itself at zero, so a till that never parks sees no new
             // chrome.
             const ParkedOrdersButton(compact: true),
-            // Destructive, so rank 4: a ghost at white-68%, never filled and
-            // never louder than the title.
+            // Destructive, so rank 4: a quiet ghost, never filled and never
+            // louder than the title.
             //
             // ABSENT, not disabled, when it does not apply (empty cart, or a
             // frozen addition owning the cart) — that is the existing gating
@@ -1504,8 +1517,7 @@ class _CartHeader extends StatelessWidget {
               TextButton.icon(
                 onPressed: onClear,
                 style: TextButton.styleFrom(
-                  foregroundColor: kPosOnDarkGhost,
-                  disabledForegroundColor: kPosOnDarkGhostDisabled,
+                  foregroundColor: kRestoflowInk2,
                   padding: const EdgeInsets.symmetric(
                     horizontal: RestoflowSpacing.sm,
                   ),
@@ -1538,9 +1550,11 @@ class _PendingSyncChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // POS-LOCAL on-dark styling AROUND the existing pending-sync presentation —
-    // no shared status component is modified. It is never hidden while work is
-    // outstanding, and it keeps its localized tooltip + semantic label.
+    // 004: the header is LIGHT now, so the pending chip reads in the shared
+    // semantic WARNING tone — no shared status component is modified. It is
+    // never hidden while work is outstanding, and it keeps its localized
+    // tooltip + semantic label.
+    final warning = RestoflowTone.warning.styleOf(Theme.of(context));
     return Tooltip(
       message: tooltip,
       child: Semantics(
@@ -1551,24 +1565,24 @@ class _PendingSyncChip extends StatelessWidget {
             vertical: RestoflowSpacing.xxs,
           ),
           decoration: BoxDecoration(
-            color: kPosSyncPendingBg,
+            color: warning.container,
             borderRadius: BorderRadius.circular(7),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.cloud_queue,
                 size: RestoflowIconSizes.xs,
-                color: kPosSyncPendingFg,
+                color: warning.onContainer,
               ),
               const SizedBox(width: RestoflowSpacing.xxs),
               Text(
                 count.toString(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: kPosSyncPendingFg,
+                  color: warning.onContainer,
                 ),
               ),
             ],
@@ -1586,52 +1600,48 @@ class _EmptyCart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // POS-LOCAL restyle of the empty cart — a quiet 68px warm circle instead of
-    // the shared view's default treatment. `RestoflowStateView` defaults are
-    // NOT modified. The l10n message is still rendered verbatim so the existing
-    // text finders keep working, and the business condition is untouched.
+    // 004: the approved empty state — a 64px rounded-ivory glyph, the l10n
+    // message (rendered verbatim so existing text finders keep working) and
+    // ONE helper line telling the cashier how to begin. No large void, no
+    // bordered card; the business condition is untouched.
     final theme = Theme.of(context);
-    // REFERENCE-REDESIGN-002: a deliberate, compact empty state — a small
-    // dashed "plate" card instead of a lone icon adrift in white space. The
-    // l10n message renders verbatim (existing text finders keep working) and
-    // the business condition is untouched.
+    final l10n = AppLocalizations.of(context);
     return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.lg),
-        padding: const EdgeInsetsDirectional.fromSTEB(
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          border: Border.all(color: kPosStepperTrackEdge),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 64,
+              height: 64,
               decoration: const BoxDecoration(
-                color: Color(0xFFE8EDF4),
+                color: Color(0xFFF4F2EC),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.remove_shopping_cart_outlined,
-                size: 26,
-                color: Color(0xFF98A4B6),
+                Icons.shopping_cart_outlined,
+                size: 28,
+                color: Color(0xFFB4AD9F),
               ),
             ),
-            const SizedBox(height: RestoflowSpacing.sm),
+            const SizedBox(height: RestoflowSpacing.md),
             Text(
               message,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: kRestoflowInk2,
+                fontSize: 14.5,
+                color: kRestoflowInk,
+              ),
+            ),
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              l10n.posCartEmptyHint,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: kRestoflowInk3,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -1739,12 +1749,14 @@ class _CartLineTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: RestoflowSpacing.sm),
-              // Prominent, but a step below the subtotal's 26px so the line
-              // total never competes with the figure the cashier says aloud.
+              // Prominent, but a step below the grand total's figure — 004:
+              // the line total reads in the approved EMBER action colour
+              // (money string byte-identical; only the ink changed).
               PosAmountText(
                 formatted: lineTotalText,
                 digitSize: 15,
                 symbolSize: 11,
+                color: PosThemePair.of(context).action,
               ),
             ],
           ),
@@ -1806,9 +1818,10 @@ class _CartLineTile extends StatelessWidget {
                 Expanded(child: qtyUnit),
               ] else
                 const Spacer(),
-              // Neutral at rest: destructive intent is revealed on approach,
-              // not advertised. Both stay visible and tappable — they simply
-              // stop dominating the line.
+              // 004: edit stays a neutral ghost; remove earns the approved
+              // danger-TINTED bed (still quiet — a tint, not a filled danger
+              // button). Both stay visible and tappable at their existing
+              // targets.
               _LineActionButton(
                 buttonKey: Key('cart-edit-${line.lineId}'),
                 icon: Icons.edit_outlined,
@@ -1821,7 +1834,8 @@ class _CartLineTile extends StatelessWidget {
                 buttonKey: Key('cart-remove-${line.lineId}'),
                 icon: Icons.delete_outline,
                 tooltip: l10n.posRemoveItem,
-                color: kPosGhostIconQuiet,
+                color: RestoflowTone.danger.styleOf(theme).onContainer,
+                background: RestoflowTone.danger.styleOf(theme).container,
                 dense: dense,
                 onPressed: onRemove,
               ),
@@ -1847,8 +1861,8 @@ class _LineThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // SURGERY-003: reference-sized row thumbnails.
-    final side = dense ? 44.0 : 52.0;
+    // 004: the approved 46px row thumbnail (48 in the roomier phone sheet).
+    final side = dense ? 46.0 : 48.0;
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
         color: kPosSelectedTint,
@@ -1886,6 +1900,7 @@ class _LineActionButton extends StatelessWidget {
     required this.tooltip,
     required this.color,
     required this.onPressed,
+    this.background,
     this.dense = false,
   });
 
@@ -1893,6 +1908,11 @@ class _LineActionButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final Color color;
+
+  /// 004: an optional tinted bed (the approved danger-tinted trash). The tap
+  /// target and key are unchanged.
+  final Color? background;
+
   final VoidCallback? onPressed;
   final bool dense;
 
@@ -1905,6 +1925,14 @@ class _LineActionButton extends StatelessWidget {
       icon: Icon(icon, size: RestoflowIconSizes.md),
       tooltip: tooltip,
       color: color,
+      style: background == null
+          ? null
+          : IconButton.styleFrom(
+              backgroundColor: background,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+              ),
+            ),
       visualDensity: VisualDensity.compact,
       constraints: BoxConstraints(minWidth: side, minHeight: side),
       padding: EdgeInsets.zero,
@@ -2123,21 +2151,28 @@ class _CartFooter extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
               decoration: BoxDecoration(
-                color: kPosCartTrack,
+                color: kPosTotalsBed,
                 borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                border: Border.all(color: kPosRowSeparator),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (taxMinor > 0) ...[
-                    PosAnimatedAmount(
-                      minor: subtotalMinor,
-                      builder: (context, minor) => _SummaryRow(
-                        label: l10n.posCartSubtotal,
-                        value: MoneyFormatter.formatMinor(minor, currencyCode),
-                        valueKey: const Key('cart-subtotal'),
-                      ),
+                  // 004: the approved totals hierarchy — quiet subtotal (and
+                  // tax when the branch adds one), a hairline rule, then ONE
+                  // dominant الإجمالي row. The grand total is always present
+                  // and always EQUALS subtotal+tax from the same integer
+                  // math; with tax off that is exactly the subtotal (no
+                  // invented figures — see tax_display_test).
+                  PosAnimatedAmount(
+                    minor: subtotalMinor,
+                    builder: (context, minor) => _SummaryRow(
+                      label: l10n.posCartSubtotal,
+                      value: MoneyFormatter.formatMinor(minor, currencyCode),
+                      valueKey: const Key('cart-subtotal'),
                     ),
+                  ),
+                  if (taxMinor > 0) ...[
                     const SizedBox(height: RestoflowSpacing.xs),
                     PosAnimatedAmount(
                       minor: taxMinor,
@@ -2147,24 +2182,20 @@ class _CartFooter extends StatelessWidget {
                         valueKey: const Key('cart-tax'),
                       ),
                     ),
-                    const SizedBox(height: RestoflowSpacing.xs),
-                    PosAnimatedAmount(
-                      minor: subtotalMinor + taxMinor,
-                      builder: (context, minor) => _TotalRow(
-                        label: l10n.posGrandTotal,
-                        value: MoneyFormatter.formatMinor(minor, currencyCode),
-                        valueKey: const Key('cart-grand-total'),
-                      ),
+                  ],
+                  const Divider(
+                    height: 13,
+                    thickness: 1,
+                    color: kPosRowSeparator,
+                  ),
+                  PosAnimatedAmount(
+                    minor: subtotalMinor + taxMinor,
+                    builder: (context, minor) => _TotalRow(
+                      label: l10n.posGrandTotal,
+                      value: MoneyFormatter.formatMinor(minor, currencyCode),
+                      valueKey: const Key('cart-grand-total'),
                     ),
-                  ] else
-                    PosAnimatedAmount(
-                      minor: subtotalMinor,
-                      builder: (context, minor) => _TotalRow(
-                        label: l10n.posCartSubtotal,
-                        value: MoneyFormatter.formatMinor(minor, currencyCode),
-                        valueKey: const Key('cart-subtotal'),
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),
@@ -2234,11 +2265,19 @@ class _CartFooter extends StatelessWidget {
               child: PosShimmerSweep(
                 trigger: onSend != null,
                 borderRadius: BorderRadius.circular(kPosSendRadius),
-                // SURGERY-003: no glow — the reference CTA is a calm
-                // dominant block; shadow lives on hover surfaces only.
+                // 004: the approved EMBER GRADIENT + glow — the ONE glowing
+                // control on screen (states/motion §4). Disabled drops both
+                // for the flat muted bed.
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(kPosSendRadius),
+                    gradient: onSend != null
+                        ? PosThemePair.of(context).actionGradient
+                        : null,
+                    color: onSend != null ? null : kPosDisabledBg,
+                    boxShadow: onSend != null
+                        ? PosThemePair.of(context).actionGlow
+                        : null,
                   ),
                   child: FilledButton.icon(
                     onPressed: onSend,
@@ -2285,22 +2324,20 @@ class _CartFooter extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // SURGERY-003: the resolveWith below used to return
-                          // NULL for enabled states, which OVERRODE the merged
-                          // accent style entirely (copyWith replaces the whole
-                          // property) — Send silently rendered NAVY. It now
-                          // resolves the brand orange explicitly, making Send
-                          // the one genuinely ORANGE dominant CTA.
-                          backgroundColor: WidgetStateProperty.resolveWith(
-                            (states) => states.contains(WidgetState.disabled)
-                                ? kPosDisabledBg
-                                : RestoflowBrandPalette.of(
-                                    theme.brightness,
-                                  ).accentOrange,
+                          // 004: the fill moved to the GRADIENT wrapper (a
+                          // FilledButton cannot paint a gradient), so the
+                          // button itself is transparent in every state —
+                          // the wrapper's decoration is what swaps between
+                          // the ember gradient and the disabled bed.
+                          backgroundColor: WidgetStateProperty.all(
+                            Colors.transparent,
+                          ),
+                          shadowColor: WidgetStateProperty.all(
+                            Colors.transparent,
                           ),
                           foregroundColor: WidgetStateProperty.resolveWith(
                             (states) => states.contains(WidgetState.disabled)
-                                ? const Color(0xFF8B97A9)
+                                ? kPosDisabledFg
                                 : Colors.white,
                           ),
                         ),
@@ -2378,16 +2415,16 @@ class _TotalRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: RestoflowSpacing.sm),
-        // Ink, not brand green: green now marks exactly four things, and the
-        // amount the cashier says aloud is not one of them. The digits carry
-        // the size; the currency symbol is demoted. The formatted string itself
-        // is unchanged.
+        // 004: the ONE dominant figure — 21/800 EMBER digits per the
+        // approved totals hierarchy. The formatted string itself is
+        // unchanged (byte-identical MoneyFormatter output).
         PosAmountText(
           formatted: value,
           amountKey: valueKey,
-          digitSize: 26,
-          symbolSize: 15,
-          letterSpacing: -0.5,
+          digitSize: 21,
+          symbolSize: 13,
+          letterSpacing: -0.4,
+          color: PosThemePair.of(context).action,
         ),
       ],
     );
@@ -2417,11 +2454,17 @@ class _SummaryRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: RestoflowSpacing.sm),
+        // Money stays an LTR island whatever the ambient direction (the
+        // formatted string is byte-identical MoneyFormatter output).
         Text(
           value,
           key: valueKey,
+          textDirection: TextDirection.ltr,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
+            fontFamily: kPosMoneyFontFamily,
+            fontFamilyFallback: kPosMoneyFontFallbacks,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],

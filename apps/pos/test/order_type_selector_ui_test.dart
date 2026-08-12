@@ -62,17 +62,6 @@ Future<ProviderContainer> _pump(
   );
 }
 
-/// The decorated surface of one segment — the thing whose fill the cashier
-/// reads. Found through the segment's stable key, so it is locale-independent.
-BoxDecoration _decorationOf(WidgetTester tester, Key key) {
-  final container = tester.widget<Container>(
-    find
-        .descendant(of: find.byKey(key), matching: find.byType(Container))
-        .first,
-  );
-  return container.decoration! as BoxDecoration;
-}
-
 Size _hitTargetOf(WidgetTester tester, Key key) => tester.getSize(
   find.descendant(of: find.byKey(key), matching: find.byType(InkWell)),
 );
@@ -174,48 +163,48 @@ void main() {
   });
 
   group('order-type selector — the selected state is unmistakable', () {
-    testWidgets('001-B1. the SELECTED segment carries a solid brand fill while '
-        'the unselected one does not', (tester) async {
+    testWidgets('001-B1. the sliding THUMB carries the solid primary fill and '
+        'sits under the SELECTED segment', (tester) async {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved control is a
+      // sliding-thumb segmented — ONE navy-gradient thumb under the active
+      // cell instead of per-cell fills. The contract's spirit is unchanged:
+      // the active choice is the filled one and it is never the same white
+      // as the panel behind it.
       await _pump(tester);
 
-      final takeaway = _decorationOf(tester, _takeawayKey); // selected
-      final dineIn = _decorationOf(tester, _dineInKey); // unselected
-
-      expect(
-        takeaway.color,
-        kRestoflowSeedColor,
-        reason: 'the active choice must be the filled one',
-      );
-      expect(
-        dineIn.color,
-        isNot(kRestoflowSeedColor),
-        reason: 'the inactive choice must not compete with the active fill',
-      );
-      // The regression being fixed: the selected surface must never be the same
-      // white as the cart panel behind it.
-      expect(takeaway.color, isNot(Colors.white));
+      final thumb = find.byKey(const Key('order-type-thumb'));
+      expect(thumb, findsOneWidget);
+      final decoration =
+          tester.widget<Container>(thumb).decoration! as BoxDecoration;
+      final gradient = decoration.gradient! as LinearGradient;
+      for (final color in gradient.colors) {
+        expect(color, isNot(Colors.white));
+        expect(
+          color.b,
+          greaterThan(color.r),
+          reason: 'the thumb is the navy structural family',
+        );
+      }
+      // The thumb sits under the SELECTED (takeaway) segment.
+      final thumbRect = tester.getRect(thumb);
+      final takeawayRect = tester.getRect(find.byKey(_takeawayKey));
+      expect((thumbRect.center.dx - takeawayRect.center.dx).abs(), lessThan(2));
     });
 
     testWidgets(
-      '001-B2. selection is distinguished by more than colour — fill, '
-      'elevation, icon presence and weight',
+      '001-B2. selection is distinguished by more than colour — thumb '
+      'geometry, icon presence and weight',
       (tester) async {
         final l10n = await _l10n(const Locale('en'));
         await _pump(tester);
 
-        // 1. Fill + 2. elevation.
-        final selected = _decorationOf(tester, _takeawayKey);
-        final unselected = _decorationOf(tester, _dineInKey);
-        expect(selected.color, isNot(unselected.color));
-        expect(selected.boxShadow, isNotNull);
-        expect(unselected.boxShadow, isNull);
-
-        // 3. The icon appears ONLY on the active option (the old control showed
-        // both icons, so the glyph carried no signal).
+        // 1. The thumb's GEOMETRY marks the active cell (asserted in B1/B3).
+        // 2. The icon appears ONLY on the active option (the old control
+        // showed both icons, so the glyph carried no signal).
         expect(find.byIcon(Icons.takeout_dining), findsOneWidget);
         expect(find.byIcon(Icons.restaurant), findsNothing);
 
-        // 4. Typographic weight.
+        // 3. Typographic weight + 4. label colour.
         final selectedText = tester.widget<Text>(
           find.text(l10n.posOrderTypeTakeaway),
         );
@@ -237,13 +226,13 @@ void main() {
         await tester.tap(find.text(l10n.posOrderTypeDineIn));
         await tester.pumpAndSettle();
 
-        // Everything inverts: fill, shadow and icon move to Dine-in.
-        expect(_decorationOf(tester, _dineInKey).color, kRestoflowSeedColor);
-        expect(
-          _decorationOf(tester, _takeawayKey).color,
-          isNot(kRestoflowSeedColor),
+        // Everything moves: the thumb slides under Dine-in and the icon
+        // follows the active option.
+        final thumbRect = tester.getRect(
+          find.byKey(const Key('order-type-thumb')),
         );
-        expect(_decorationOf(tester, _dineInKey).boxShadow, isNotNull);
+        final dineInRect = tester.getRect(find.byKey(_dineInKey));
+        expect((thumbRect.center.dx - dineInRect.center.dx).abs(), lessThan(2));
         expect(find.byIcon(Icons.restaurant), findsOneWidget);
         expect(find.byIcon(Icons.takeout_dining), findsNothing);
       },

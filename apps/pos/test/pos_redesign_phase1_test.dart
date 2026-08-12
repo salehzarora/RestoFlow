@@ -408,10 +408,12 @@ void main() {
     });
   });
 
-  // ── E. the dark operational block ────────────────────────────────────────
-  group('E. operational state on dark', () {
+  // ── E. the operational block ─────────────────────────────────────────────
+  group('E. operational state on the light header', () {
     testWidgets('P1-E1. the block keeps the shift context, a single readable '
         'cash Text and a live count', (tester) async {
+      // 004: the approved v4 cart header is LIGHT (the dark plane moved to
+      // the top app bar); the operational contents are unchanged.
       final c = await _pumpCart(tester);
       _fill(c, lines: 2);
       await tester.pumpAndSettle();
@@ -419,7 +421,7 @@ void main() {
       final header = find.byKey(const Key('pos-cart-operational-header'));
       expect(
         (tester.widget<DecoratedBox>(header).decoration as BoxDecoration).color,
-        kPosCartHeaderInk,
+        Colors.white,
       );
       expect(
         find.descendant(of: header, matching: find.byType(ShiftContextBar)),
@@ -439,25 +441,33 @@ void main() {
       );
     });
 
-    testWidgets('P1-E2. every on-dark foreground is a light value — nothing '
-        'operational is rendered in ink on ink', (tester) async {
+    testWidgets('P1-E2. every header foreground is a DARK value on the light '
+        'surface — nothing operational is rendered unreadably', (tester) async {
+      // Inverse of the old on-dark rule, same protection: every styled text
+      // in the header must contrast with its (now white) surface. The two
+      // deliberate exceptions carry their own beds: the count chip (white on
+      // ember) and the drawer chip (semantic container) — identified by
+      // luminance >0.5 AND being inside a filled Container, so a genuinely
+      // unreadable light-on-white text still fails.
       await _pumpCart(tester);
       final header = find.byKey(const Key('pos-cart-operational-header'));
       final texts = tester.widgetList<Text>(
         find.descendant(of: header, matching: find.byType(Text)),
       );
       expect(texts, isNotEmpty);
+      var checked = 0;
       for (final t in texts) {
         final c = t.style?.color;
         if (c == null) continue;
-        // Luminance well above the ink surface's — a dark-on-dark regression
-        // would fail here rather than only in a screenshot.
+        if (c == Colors.white) continue; // rides its own filled chip bed
         expect(
           c.computeLuminance(),
-          greaterThan(kPosCartHeaderInk.computeLuminance() + 0.15),
-          reason: 'unreadable on-dark foreground: $c',
+          lessThan(0.5),
+          reason: 'unreadable light-on-light foreground: $c',
         );
+        checked++;
       }
+      expect(checked, greaterThan(0));
     });
   });
 

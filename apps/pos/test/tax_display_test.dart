@@ -59,13 +59,23 @@ String _money(WidgetTester tester, Key key) {
 
 void main() {
   testWidgets(
-    'tax OFF (default): only the subtotal shows, no tax/grand lines',
+    'tax OFF (default): no tax line, and the grand total EQUALS the subtotal',
     (tester) async {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved totals block
+      // always shows الإجمالي as the one dominant figure. The MONEY honesty
+      // this test protects is unchanged and now asserted directly: with tax
+      // OFF there is NO tax row and NO invented figure — the grand total is
+      // byte-identical to the subtotal (same integer, same formatter).
       await _pump(tester);
       await _addBurger(tester);
       expect(find.byKey(const Key('cart-subtotal')), findsOneWidget);
       expect(find.byKey(const Key('cart-tax')), findsNothing);
-      expect(find.byKey(const Key('cart-grand-total')), findsNothing);
+      expect(find.byKey(const Key('cart-grand-total')), findsOneWidget);
+      expect(
+        _money(tester, const Key('cart-grand-total')),
+        _money(tester, const Key('cart-subtotal')),
+        reason: 'tax off: the grand total must be exactly the subtotal',
+      );
     },
   );
 

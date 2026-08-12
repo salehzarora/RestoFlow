@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../design/pos_motion.dart';
+import '../design/pos_visual_tokens.dart' show PosThemePair;
 import '../format/money_format.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
@@ -206,8 +207,10 @@ class _CartIconWithBadge extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               padding: const EdgeInsets.symmetric(horizontal: 4),
+              // 004: the approved EMBER count badge with the navy ring
+              // (component specs §5); interactions keep the device accent.
               decoration: BoxDecoration(
-                color: accent,
+                color: PosThemePair.of(context).action,
                 borderRadius: BorderRadius.circular(RestoflowRadii.pill),
                 border: Border.all(color: kPosBottomBar, width: 1.5),
               ),
