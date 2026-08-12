@@ -724,4 +724,31 @@ void main() {
       expect(widths.toSet().length, 1, reason: 'Widths: $widths');
     });
   });
+
+  group('H. POS brand attention orange follows the brand palette', () {
+    test('the terracotta accent DERIVES from the brand role', () {
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      // Not "happens to equal" — sourced. The bottom bar's count badge is the
+      // only production user and it is a brand attention mark, so a rebrand
+      // that moves the accent must move this too rather than leaving one of
+      // three independent declarations behind.
+      expect(kPosTerracotta, brand.accentOrange);
+      expect(kPosTerracottaContainer, brand.accentOrangeContainer);
+    });
+
+    test('semantic POS colours stay independently sourced', () {
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final semantic = RestoflowSemanticColors.of(Brightness.light);
+      // The cleanup unified a BRAND duplicate only. Status colours keep their
+      // own source and must not collapse into the brand role.
+      expect(semantic.success, isNot(brand.accentOrange));
+      expect(semantic.danger, isNot(brand.accentOrange));
+      expect(
+        kPosTerracottaText,
+        isNot(brand.accentOrange),
+        reason:
+            'The on-container ink has no brand counterpart and stays explicit.',
+      );
+    });
+  });
 }

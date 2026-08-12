@@ -25,12 +25,33 @@ const Color kPosDisabledBg = Color(0xFFE3E8EF);
 /// The dark phone bottom-cart bar (== `kRestoflowInk`).
 const Color kPosBottomBar = kRestoflowInk;
 
-/// The warm terracotta brand accent + its container/text (handoff §4). These
-/// match `RestoflowSemanticColors.light.accent/accentContainer/onAccentContainer`
-/// exactly; kept as plain constants so widgets can use them without a theme
-/// extension lookup (safe in bare test themes).
-const Color kPosTerracotta = Color(0xFFC2410C);
-const Color kPosTerracottaContainer = Color(0xFFFFEDD5);
+/// The warm terracotta brand accent + its container/text (handoff §4).
+///
+/// UI-ORANGE-BALANCE-POLISH-001-C: these now DERIVE from the brand palette
+/// instead of repeating its hex.
+///
+/// The values are unchanged — this is a sourcing fix, not a recolour. They were
+/// a third independent declaration of the same orange, alongside the brand role
+/// and the semantic one, and the only production user is the bottom bar's cart
+/// count badge: a small attention mark, which is a BRAND role. A rebrand that
+/// moved the accent would have moved two of the three and quietly left this
+/// badge behind.
+///
+/// Still usable without a theme lookup: `RestoflowBrandPalette.of` is a pure
+/// static preset, not a `Theme.of` extension read, so these stay safe in bare
+/// test themes exactly as the plain constants were. They are `final` rather
+/// than `const` only because that call is not a constant expression.
+final Color kPosTerracotta = RestoflowBrandPalette.of(
+  Brightness.light,
+).accentOrange;
+final Color kPosTerracottaContainer = RestoflowBrandPalette.of(
+  Brightness.light,
+).accentOrangeContainer;
+
+/// Reading ink for text ON [kPosTerracottaContainer]. This one has NO brand
+/// counterpart — the brand palette carries no on-accent-container ink — so it
+/// stays an explicit value rather than being forced into a role that does not
+/// exist.
 const Color kPosTerracottaText = Color(0xFF7C2D12);
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the three warm surface values and the
