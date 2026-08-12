@@ -1874,6 +1874,9 @@ class _LineThumb extends StatelessWidget {
         color: kRestoflowInk3,
       ),
     );
+    // cacheWidth caps the decode at the thumbnail's device-pixel size (same
+    // rule as the menu card's band image).
+    final cacheW = (side * MediaQuery.devicePixelRatioOf(context)).round();
     return ExcludeSemantics(
       child: SizedBox(
         width: side,
@@ -1885,6 +1888,7 @@ class _LineThumb extends StatelessWidget {
                 child: Image.network(
                   url!,
                   fit: BoxFit.cover,
+                  cacheWidth: cacheW > 0 ? cacheW : null,
                   errorBuilder: (context, error, stackTrace) => fallback,
                 ),
               ),

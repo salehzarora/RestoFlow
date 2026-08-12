@@ -107,35 +107,55 @@ class PosMenuScreen extends StatelessWidget {
           // one translucent bed. IconTheme above lights their glyphs for the
           // dark bar; each widget's behavior, tooltip and keys are untouched.
           Container(
+            // Vertical margin 5, not 7: the 54dp phone toolbar must leave the
+            // five operational actions a >=44dp touch height (54-10=44;
+            // 58-10=48; 64-10=54) — the approved bar heights never buy their
+            // looks with sub-floor targets.
             margin: const EdgeInsetsDirectional.only(
               end: RestoflowSpacing.sm,
-              top: 7,
-              bottom: 7,
+              top: 5,
+              bottom: 5,
             ),
             decoration: BoxDecoration(
               color: kPosNavbarBed,
               borderRadius: BorderRadius.circular(11),
             ),
-            // The approved nav-icon hover wash (states/motion §7: white-16%)
-            // — a theme-level ink tint; every action keeps its own widget,
-            // tooltip, keys and behavior.
-            child: Theme(
-              data: theme.copyWith(
-                hoverColor: Colors.white.withValues(alpha: 0.16),
-                highlightColor: Colors.white.withValues(alpha: 0.10),
-                splashColor: Colors.white.withValues(alpha: 0.14),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // PSC-001A: the ready-notification bell leads the action
-                  // group.
-                  ReadyNotificationBell(),
-                  RecentOrdersButton(),
-                  OutboxStatusIndicator(),
-                  LanguageSelector(),
-                  DeviceSettingsMenu(),
-                ],
+            // Light glyph ink for the dark bar, applied INSIDE the cluster
+            // (a plain Theme wrapper here re-installed the ambient dark
+            // IconTheme and silently defeated `actionsIconTheme`), plus the
+            // approved white-16% hover wash where M3 IconButtons actually
+            // read it: their ButtonStyle overlay. Every action keeps its own
+            // widget, tooltip, keys and behavior.
+            child: IconTheme.merge(
+              data: const IconThemeData(color: kPosNavbarInk),
+              child: IconButtonTheme(
+                data: IconButtonThemeData(
+                  style: ButtonStyle(
+                    foregroundColor: const WidgetStatePropertyAll(
+                      kPosNavbarInk,
+                    ),
+                    overlayColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.pressed)
+                          ? Colors.white.withValues(alpha: 0.14)
+                          : states.contains(WidgetState.hovered) ||
+                                states.contains(WidgetState.focused)
+                          ? Colors.white.withValues(alpha: 0.16)
+                          : null,
+                    ),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // PSC-001A: the ready-notification bell leads the action
+                    // group.
+                    ReadyNotificationBell(),
+                    RecentOrdersButton(),
+                    OutboxStatusIndicator(),
+                    LanguageSelector(),
+                    DeviceSettingsMenu(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -479,28 +499,6 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
   }
 }
 
-/// POS-PRODUCT-DESCRIPTIONS-001 — the ONE grid geometry, shared by the loaded
-/// grid and the loading skeleton so the two can never drift apart (a skeleton
-/// that is a different height than the cards it stands in for makes the whole
-/// grid jump the moment the menu arrives).
-///
-/// [kPosMenuCardBodyHeight] rose from 104 to 140 to fit up to TWO description
-/// lines under the product name.
-///
-/// MEASURED, not guessed. At the narrowest real cell (173px, a 390px viewport)
-/// the body content is 120px in en, ar AND he alike: 12+12 padding, a 20px
-/// title line, a 2px gap, a 30px two-line description (bodySmall at height
-/// 1.25) and the unchanged 44px price/add row. 140 keeps ~20px of headroom, so
-/// a larger accessibility text scale does not immediately clip the price row
-/// and the description is not jammed against it. Note that a too-small value
-/// would NOT throw: the body uses `spaceBetween`, which quietly compresses
-/// rather than overflowing — which is exactly why this number is measured from
-/// the rendered content instead of inferred from the absence of an exception.
-///
-/// Cards stay a FIXED height — no IntrinsicHeight, no variable extents — so the
-/// grid keeps scanning cleanly in rows.
-const double kPosMenuCardMaxExtent = 230;
-
 /// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card's FIXED content zone —
 /// the one-baseline name+price row, the fixed description slot, and the
 /// FULL-WIDTH 44px action footer (approved v4 anatomy, component specs §3).
@@ -794,8 +792,19 @@ class _MenuGrid extends ConsumerWidget {
                             ? null
                             : groups.isEmpty
                             ? () {
-                                controller.addItem(item);
-                                _celebrateAdd(context, l10n, item.name, accent);
+                                // Celebrate ONLY an APPLIED mutation: if the
+                                // addition freeze lands between frame build
+                                // and tap, the controller refuses — no fly
+                                // ghost, no "added" toast for a refused add.
+                                if (controller.addItem(item) ==
+                                    CartMutationResult.applied) {
+                                  _celebrateAdd(
+                                    context,
+                                    l10n,
+                                    item.name,
+                                    accent,
+                                  );
+                                }
                               }
                             : () => ModifierSelectionSheet.show(
                                 context,
@@ -804,18 +813,20 @@ class _MenuGrid extends ConsumerWidget {
                                 currencyCode: menu.currencyCode,
                                 category: menu.categoryOf(item.categoryId),
                                 onConfirm: (selections, note, quantity) {
-                                  controller.addItemWithModifiers(
-                                    item,
-                                    selections,
-                                    note: note,
-                                    quantity: quantity,
-                                  );
-                                  _celebrateAdd(
-                                    context,
-                                    l10n,
-                                    item.name,
-                                    accent,
-                                  );
+                                  if (controller.addItemWithModifiers(
+                                        item,
+                                        selections,
+                                        note: note,
+                                        quantity: quantity,
+                                      ) ==
+                                      CartMutationResult.applied) {
+                                    _celebrateAdd(
+                                      context,
+                                      l10n,
+                                      item.name,
+                                      accent,
+                                    );
+                                  }
                                 },
                               ),
                       ),

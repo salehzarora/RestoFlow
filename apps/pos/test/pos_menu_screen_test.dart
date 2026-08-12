@@ -32,12 +32,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Classic Burger'), findsOneWidget);
-    // ('Cola' sits below the built viewport in the taller footer-action
-    // grid — SURGERY-003; the add/search/cart contracts below are the
-    // behavioural claims.)
     expect(find.byIcon(Icons.add_shopping_cart), findsWidgets);
     expect(find.text('Your cart is empty'), findsOneWidget);
     expect(find.text('Send Order'), findsOneWidget);
+
+    // 004 (audit restoration): a below-the-fold item still renders — the
+    // taller lazy grid builds it once scrolled into view, so the "whole demo
+    // menu is reachable" claim stays pinned instead of deleted.
+    await tester.scrollUntilVisible(
+      find.text('Cola'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(GridView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('Cola'), findsOneWidget);
   });
 
   testWidgets('tapping add puts the item in the cart and shows the subtotal', (

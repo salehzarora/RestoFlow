@@ -444,30 +444,53 @@ void main() {
     testWidgets('P1-E2. every header foreground is a DARK value on the light '
         'surface — nothing operational is rendered unreadably', (tester) async {
       // Inverse of the old on-dark rule, same protection: every styled text
-      // in the header must contrast with its (now white) surface. The two
-      // deliberate exceptions carry their own beds: the count chip (white on
-      // ember) and the drawer chip (semantic container) — identified by
-      // luminance >0.5 AND being inside a filled Container, so a genuinely
-      // unreadable light-on-white text still fails.
-      await _pumpCart(tester);
+      // in the header must contrast with its (now white) surface. A LIGHT
+      // text is tolerated ONLY when it demonstrably rides its own filled
+      // dark/saturated bed (the ember count chip) — asserted, not assumed,
+      // so a genuine white-on-white regression still fails.
+      final c = await _pumpCart(tester);
+      _fill(c, lines: 1);
+      await tester.pumpAndSettle();
       final header = find.byKey(const Key('pos-cart-operational-header'));
-      final texts = tester.widgetList<Text>(
-        find.descendant(of: header, matching: find.byType(Text)),
-      );
-      expect(texts, isNotEmpty);
+      final texts = find.descendant(of: header, matching: find.byType(Text));
+      expect(texts, findsWidgets);
       var checked = 0;
-      for (final t in texts) {
-        final c = t.style?.color;
-        if (c == null) continue;
-        if (c == Colors.white) continue; // rides its own filled chip bed
-        expect(
-          c.computeLuminance(),
-          lessThan(0.5),
-          reason: 'unreadable light-on-light foreground: $c',
-        );
-        checked++;
+      var lightOnBed = 0;
+      for (final el in texts.evaluate()) {
+        final t = el.widget as Text;
+        final color = t.style?.color;
+        if (color == null) continue;
+        if (color.computeLuminance() >= 0.5) {
+          // Must sit on its OWN filled dark/saturated bed.
+          final bed = find
+              .ancestor(
+                of: find.byWidget(t),
+                matching: find.byWidgetPredicate(
+                  (w) =>
+                      w is Container &&
+                      w.decoration is BoxDecoration &&
+                      ((w.decoration! as BoxDecoration).color
+                                  ?.computeLuminance() ??
+                              1) <
+                          0.45,
+                ),
+              )
+              .evaluate();
+          expect(
+            bed,
+            isNotEmpty,
+            reason:
+                'light foreground $color must ride a filled dark bed, '
+                'never the white header itself',
+          );
+          lightOnBed++;
+        } else {
+          checked++;
+        }
       }
       expect(checked, greaterThan(0));
+      // The one expected light-on-bed text is the ember count chip.
+      expect(lightOnBed, greaterThanOrEqualTo(1));
     });
   });
 

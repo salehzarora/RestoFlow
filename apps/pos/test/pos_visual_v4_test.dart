@@ -262,6 +262,10 @@ void main() {
         ('disabled background', kPosDisabledBg),
         ('input border', kPosInputBorder),
         ('stepper track', kPosStepperTrack),
+        // Audit restoration: the two remaining live edges joined the warm
+        // family too, so the whole neutral set is covered again.
+        ('setup edge', kPosSetupEdge),
+        ('stepper track edge', kPosStepperTrackEdge),
       ]) {
         // Warm family: red never below blue, and NEVER green-dominant.
         expect(

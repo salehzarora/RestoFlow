@@ -26,9 +26,10 @@ import '../state/payment_controller.dart';
 class ShiftContextBar extends ConsumerStatefulWidget {
   const ShiftContextBar({this.onDark = false, super.key});
 
-  /// Legacy on-dark placement (kept for API compatibility; the approved v4
-  /// cart header is light, so the POS passes false now, and the on-dark
-  /// foregrounds remain correct if a dark host ever uses it again).
+  /// Legacy on-dark FOREGROUNDS (kept for API compatibility; the approved v4
+  /// cart header is light and the POS passes false now). NOTE: the container
+  /// beds are always the light warm pill — a dark host would need its own
+  /// bed treatment before flipping this back on.
   final bool onDark;
 
   @override
@@ -98,66 +99,74 @@ class _ShiftContextBarState extends ConsumerState<ShiftContextBar> {
             .styleOf(theme);
 
     // The COLLAPSED status row; always visible, tap toggles the details.
-    final collapsed = InkWell(
-      key: const Key('shift-context-toggle'),
-      borderRadius: BorderRadius.circular(RestoflowRadii.md),
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(10, 7, 6, 7),
-        child: Row(
-          children: [
-            Expanded(
-              child: Wrap(
-                spacing: RestoflowSpacing.md,
-                runSpacing: RestoflowSpacing.xs,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _ShiftItem(
-                    icon: Icons.badge_outlined,
-                    label: l10n.posShiftDemoName,
-                    onDark: widget.onDark,
-                  ),
-                  // The drawer state as a compact semantic chip.
-                  Container(
-                    padding: const EdgeInsetsDirectional.fromSTEB(6, 1, 6, 1),
-                    decoration: BoxDecoration(
-                      color: drawerStyle.container,
-                      borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+    // Semantics: a real BUTTON with an expanded state, so a screen-reader
+    // user knows more shift context is one activation away.
+    final collapsed = Semantics(
+      button: true,
+      expanded: _expanded,
+      child: InkWell(
+        key: const Key('shift-context-toggle'),
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(10, 7, 6, 7),
+          child: Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: RestoflowSpacing.md,
+                  runSpacing: RestoflowSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _ShiftItem(
+                      icon: Icons.badge_outlined,
+                      label: l10n.posShiftDemoName,
+                      onDark: widget.onDark,
                     ),
-                    child: Text(
-                      drawerLine,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: drawerStyle.onContainer,
-                        fontWeight: FontWeight.w600,
+                    // The drawer state as a compact semantic chip.
+                    Container(
+                      padding: const EdgeInsetsDirectional.fromSTEB(6, 1, 6, 1),
+                      decoration: BoxDecoration(
+                        color: drawerStyle.container,
+                        borderRadius: BorderRadius.circular(
+                          RestoflowRadii.pill,
+                        ),
+                      ),
+                      child: Text(
+                        drawerLine,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: drawerStyle.onContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  // The figure a cashier actually checks: prominent, ONE
-                  // readable Text under its frozen key, always visible even
-                  // while collapsed (approved v4 rule).
-                  _ShiftItem(
-                    key: const Key('cash-in-drawer'),
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: cashLine,
-                    strong: true,
-                    prominent: true,
-                    onDark: widget.onDark,
-                  ),
-                ],
+                    // The figure a cashier actually checks: prominent, ONE
+                    // readable Text under its frozen key, always visible even
+                    // while collapsed (approved v4 rule).
+                    _ShiftItem(
+                      key: const Key('cash-in-drawer'),
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: cashLine,
+                      strong: true,
+                      prominent: true,
+                      onDark: widget.onDark,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            AnimatedRotation(
-              turns: _expanded ? 0.5 : 0,
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : RestoflowDurations.base,
-              child: Icon(
-                Icons.expand_more,
-                size: RestoflowIconSizes.md,
-                color: theme.colorScheme.onSurfaceVariant,
+              AnimatedRotation(
+                turns: _expanded ? 0.5 : 0,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : RestoflowDurations.base,
+                child: Icon(
+                  Icons.expand_more,
+                  size: RestoflowIconSizes.md,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

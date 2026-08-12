@@ -162,4 +162,39 @@ void main() {
     // The pending label text is visible in normal mode.
     expect(find.textContaining('pending'), findsOneWidget);
   });
+
+  testWidgets('the action-cluster glyphs read LIGHT on the navy bar and every '
+      'action keeps a >=44dp touch height', (tester) async {
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 regression guards (found by the
+    // pre-PR audit): (1) a Theme wrapper around the cluster once re-installed
+    // the ambient DARK IconTheme, silently overriding `actionsIconTheme` and
+    // painting near-black glyphs on the #16263B bar; (2) the 54dp phone
+    // toolbar + the bed's vertical margins once compressed the actions to a
+    // 40dp hit box. Both must hold at desktop AND phone widths.
+    for (final width in const [1280.0, 430.0]) {
+      await _pump(tester, width: width, locale: const Locale('en'));
+      final ambient = IconTheme.of(
+        tester.element(find.byType(ReadyNotificationBell)),
+      );
+      expect(
+        ambient.color!.computeLuminance(),
+        greaterThan(0.5),
+        reason:
+            'at ${width}px the cluster ink must be the light navbar ink, '
+            'never the ambient dark IconTheme',
+      );
+      for (final action in <Finder>[
+        find.byType(ReadyNotificationBell),
+        find.byType(RecentOrdersButton),
+        find.byType(LanguageSelector),
+        find.byType(DeviceSettingsMenu),
+      ]) {
+        expect(
+          tester.getSize(action).height,
+          greaterThanOrEqualTo(44),
+          reason: 'a ${width}px bar action fell under the 44dp floor',
+        );
+      }
+    }
+  });
 }

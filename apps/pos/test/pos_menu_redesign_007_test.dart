@@ -298,10 +298,11 @@ void main() {
         tester.element(find.byType(PosMenuScreen)),
       );
       expect(container.read(selectedCategoryProvider), kAllCategoriesId);
-      // REFERENCE-REDESIGN-002: the food-first cells are taller, so the lazy
-      // grid BUILDS fewer of the 12 fixture items at once — the behavioural
-      // contract is the PROVIDER + the filter, not a built-widget census.
-      expect(find.byType(MenuItemCard), findsWidgets);
+      // 004 (audit restoration): the unfiltered census is pinned again — the
+      // lazy grid builds fewer TALL cells, so the bound is what the 1440x900
+      // viewport genuinely builds, not an unqualified findsWidgets that a
+      // one-card regression would satisfy.
+      expect(find.byType(MenuItemCard), findsAtLeastNWidgets(10));
 
       await tester.tap(find.text('Sides'));
       await tester.pumpAndSettle();

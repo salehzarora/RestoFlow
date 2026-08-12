@@ -70,8 +70,8 @@ const Color kPosTerracottaText = Color(0xFF7C2D12);
 /// field still reads as interactive on a warm fill (004: warm #EAE6DD).
 const Color kPosInputBorder = Color(0xFFEAE6DD);
 
-/// The quiet count-badge fill behind a category chip's number.
-const Color kPosCountBadgeBg = Color(0xFFE3E8EF);
+// (kPosCountBadgeBg was retired with the v4 icon pills — counts render as
+// bare text with no badge box.)
 
 /// Body ink between ink2 and ink3 — product descriptions.
 const Color kPosMutedBodyInk = Color(0xFF616B7B);
@@ -151,17 +151,17 @@ const Color kPosSyncSyncedFg = Color(0xFF6EE7B7);
 const Color kPosSyncOfflineBg = Color(0x1AFFFFFF);
 const Color kPosSyncOfflineFg = Color(0xB3FFFFFF);
 
-/// The order-setup block's soft bottom edge — the dark header above already
-/// does the separating, so this is quieter than a full hairline.
-const Color kPosSetupEdge = Color(0xFFE8EDF4);
+/// The order-setup block's soft bottom edge (004: on the warm ivory family,
+/// like every other POS surface neutral).
+const Color kPosSetupEdge = Color(0xFFEFECE5);
 
 /// The warm track the white cart lines sit on, and the line's own edge.
 const Color kPosCartTrack = kPosInnerSurface;
 
 /// The quantity stepper's own track, so minus/plus read as ONE control
-/// (004: the approved warm track fill).
+/// (004: the approved warm track fill + warm edge).
 const Color kPosStepperTrack = Color(0xFFF4F2EC);
-const Color kPosStepperTrackEdge = kRestoflowHairline;
+const Color kPosStepperTrackEdge = Color(0xFFEAE6DD);
 
 /// Neutral ghost icons on a cart line — destructive intent is revealed on
 /// approach, not advertised at rest.

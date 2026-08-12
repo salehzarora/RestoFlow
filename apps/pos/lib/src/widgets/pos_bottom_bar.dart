@@ -124,7 +124,6 @@ class PosBottomBar extends ConsumerWidget {
                     _CartIconWithBadge(
                       count: cart.itemCount,
                       submitted: submitted,
-                      accent: accent,
                     ),
                     const SizedBox(width: RestoflowSpacing.md),
                     Expanded(
@@ -175,19 +174,15 @@ class PosBottomBar extends ConsumerWidget {
   }
 }
 
-/// The cart glyph with the terminal-accent count badge (hidden when empty /
+/// The cart glyph with the approved EMBER count badge (hidden when empty /
 /// after a submitted order shows a receipt glyph instead). The count tweens
-/// up/down and always settles on the exact value.
+/// up/down and always settles on the exact value. The DEVICE accent stays on
+/// the bar's interaction layers only.
 class _CartIconWithBadge extends StatelessWidget {
-  const _CartIconWithBadge({
-    required this.count,
-    required this.submitted,
-    required this.accent,
-  });
+  const _CartIconWithBadge({required this.count, required this.submitted});
 
   final int count;
   final bool submitted;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {

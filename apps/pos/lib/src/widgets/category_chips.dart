@@ -35,8 +35,9 @@ class CategoryChips extends ConsumerWidget {
     void select(String id) =>
         ref.read(selectedCategoryProvider.notifier).state = id;
 
-    // The 56px rail keeps 40px chips centred, so the effective touch target
-    // stays >= 44 while the chip itself reads lighter (spec §14).
+    // The 56px rail centres the 34px pills; each pill's InkWell carries a
+    // 5px transparent vertical pad, so the touch target stays 44dp while
+    // the pill reads compact (approved v4 icon pills).
     return SizedBox(
       height: 56,
       child: ListView(
@@ -121,45 +122,53 @@ class _CategoryChip extends StatelessWidget {
       // 6px between tabs — the rail is a set, not a row of cards.
       padding: const EdgeInsetsDirectional.only(end: 6),
       child: Center(
-        child: DecoratedBox(
-          key: selected ? const Key('category-chip-active-marker') : null,
-          decoration: BoxDecoration(
-            color: selected ? accent.withValues(alpha: 0.13) : kPosTabPillBg,
+        // The InkWell wraps a transparent 5px vertical pad around the 34px
+        // pill, so the TOUCH target stays 44dp while the pill keeps the
+        // approved compact silhouette.
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onSelected,
+            hoverColor: kPosChipBg,
             borderRadius: BorderRadius.circular(kPosTrackRadius),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: onSelected,
-              hoverColor: kPosChipBg,
-              borderRadius: BorderRadius.circular(kPosTrackRadius),
-              child: Container(
-                height: 34,
-                constraints: const BoxConstraints(minWidth: 44),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: RestoflowIconSizes.sm, color: iconColor),
-                    const SizedBox(width: 6),
-                    // The label Text stays the tap target the tests use
-                    // (find.text(<category name>)).
-                    Text(
-                      label,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: foreground,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (count != null) ...[
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: DecoratedBox(
+                key: selected ? const Key('category-chip-active-marker') : null,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? accent.withValues(alpha: 0.13)
+                      : kPosTabPillBg,
+                  borderRadius: BorderRadius.circular(kPosTrackRadius),
+                ),
+                child: Container(
+                  height: 34,
+                  constraints: const BoxConstraints(minWidth: 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: RestoflowIconSizes.sm, color: iconColor),
                       const SizedBox(width: 6),
-                      _CountBadge(
-                        count: count!,
-                        selected: selected,
-                        accent: accent,
+                      // The label Text stays the tap target the tests use
+                      // (find.text(<category name>)).
+                      Text(
+                        label,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
+                      if (count != null) ...[
+                        const SizedBox(width: 6),
+                        _CountBadge(
+                          count: count!,
+                          selected: selected,
+                          accent: accent,
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

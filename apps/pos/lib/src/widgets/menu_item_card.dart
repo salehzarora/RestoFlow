@@ -17,8 +17,10 @@ const List<String> _kTagPillPriority = [
   'new',
 ];
 
-/// At most this many tag pills fit tastefully on the card's image band.
-const int _kMaxTagPills = 2;
+/// 004: ONE prioritized tag renders beside the always-on availability pill
+/// (the band's start slot is shared now); priority order and the unknown-tag
+/// skip are unchanged.
+const int _kMaxTagPills = 1;
 
 /// The localized display label for a KNOWN tag wire value.
 String _tagLabel(AppLocalizations l10n, String tag) => switch (tag) {
@@ -39,11 +41,11 @@ RestoflowTone _tagTone(String tag) => switch (tag) {
   _ => RestoflowTone.neutral,
 };
 
-/// A POS menu tile (DESIGN-004 Warm/Bento): a white [Card] with a fixed 4:3
-/// cover-image band (tinted category fallback on null/error), up to two tag
-/// pills, an in-cart badge, the item name, an options indicator when
-/// configurable, a brand-green price, and a 44px filled add button. The whole
-/// tile is tappable.
+/// A POS menu tile (approved v4 anatomy): a white [Card] with an INSET 4:3
+/// cover-image band (tinted category fallback on null/error), the always-on
+/// availability pill beside one prioritized tag pill, an ember in-cart mark,
+/// the name+price baseline row, an options indicator when configurable, and
+/// the full-width gradient add footer. The whole tile is tappable.
 ///
 /// Pure presentation — the add action is delegated to [onAdd]. FROZEN contracts
 /// (widget-test corpus): the tile is a [Card]; tag pills are

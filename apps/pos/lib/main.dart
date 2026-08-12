@@ -700,8 +700,9 @@ class PosApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      // POS-PREMIUM-VISUAL-POLISH-001: the shared light brand theme + the
-      // bundled Tajawal / IBM Plex Sans Arabic pairing (POS-scoped).
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the shared light brand theme
+      // + the bundled Alexandria / Rubik / Inter pairing and the two-token
+      // restaurant theme (POS-scoped).
       theme: posPremiumTheme(),
       home: home,
     );

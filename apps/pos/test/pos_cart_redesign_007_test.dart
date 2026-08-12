@@ -334,6 +334,14 @@ void main() {
       expect(digits.style!.fontSize, 21);
       expect(digits.style!.fontWeight, FontWeight.w800);
       expect(digits.style!.fontSize, greaterThan(symbol.style!.fontSize!));
+      // The HIERARCHY claim in this test's title, made testable (audit
+      // restoration): the grand total's digits must render LARGER than the
+      // quiet subtotal row's figure.
+      expect(
+        digits.style!.fontSize,
+        greaterThan(subtotalText.style?.fontSize ?? 16),
+        reason: 'الإجمالي must be the loud figure, the subtotal the quiet row',
+      );
     });
 
     testWidgets('007S2-D2. Send is the one prominent action at ~54px and Park '
