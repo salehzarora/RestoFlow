@@ -21,9 +21,15 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 import 'pos_visual_tokens.dart';
 
-ThemeData posPremiumTheme() => _cached ??= _build();
+/// POS-THEME-NAVBAR-POLISH-001: the theme is built per device-selected
+/// [PosThemePair] (cached per pair). The pair's PRIMARY also becomes the
+/// theme's primary role, so themed Material controls (filled buttons,
+/// selections, focus, spinners) follow the device identity — a green-led
+/// preset genuinely reads green-led, not navy-with-green-corners.
+ThemeData posPremiumTheme({PosThemePair pair = PosThemePair.navyEmber}) =>
+    _cached[pair.wire] ??= _build(pair);
 
-ThemeData? _cached;
+final Map<String, ThemeData> _cached = {};
 
 TextStyle? _display(TextStyle? s) => s?.copyWith(
   fontFamily: kPosDisplayFontFamily,
@@ -35,13 +41,18 @@ TextStyle? _body(TextStyle? s) => s?.copyWith(
   fontFamilyFallback: kPosFontFallbacks,
 );
 
-ThemeData _build() {
+ThemeData _build(PosThemePair pair) {
   final base = restoflowLightBrandTheme();
   final t = base.textTheme;
   return base.copyWith(
-    // The approved two-token restaurant identity (default navy+ember). Only
-    // rf-primary/rf-action consumers recolor when a restaurant swaps the pair.
-    extensions: [...base.extensions.values, PosThemePair.navyEmber],
+    // The two-token device identity. rf-primary/rf-action consumers read the
+    // extension; the colorScheme primary follows the pair so every themed
+    // Material control (buttons, selections, focus, progress) recolors too.
+    extensions: [...base.extensions.values, pair],
+    colorScheme: base.colorScheme.copyWith(
+      primary: pair.primary,
+      onPrimary: Colors.white,
+    ),
     textTheme: t.copyWith(
       // Display voice: screen/section headings + prominent action labels.
       displayLarge: _display(t.displayLarge),

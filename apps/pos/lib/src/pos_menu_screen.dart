@@ -76,20 +76,42 @@ class PosMenuScreen extends StatelessWidget {
                 size: RestoflowIconSizes.md,
               ),
             ),
-            // PSC-001A compact app bar: on narrow phones the TEXT title yields
+            // PSC-001A compact app bar: on narrow phones the TEXT brand yields
             // its width to the five operational actions (the brand tile keeps
-            // the identity); wider bars keep the ellipsizing title.
+            // the identity); wider bars carry the STACKED wordmark
+            // (POS-THEME-NAVBAR-POLISH-001): the brand name over a smaller
+            // product line, deliberate and uncrowded.
             if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) ...[
-              const SizedBox(width: RestoflowSpacing.sm),
+              const SizedBox(width: 10),
               Flexible(
-                child: Text(
-                  l10n.posAppTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.posBrandName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        height: 1.1,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      l10n.posBrandTagline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10.5,
+                        height: 1.2,
+                        letterSpacing: 0,
+                        color: PosThemePair.of(context).actionSoft,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -228,12 +250,14 @@ class PosMenuScreen extends StatelessWidget {
   }
 }
 
-/// The approved top-bar height ladder (responsive spec §9: 64 / 58 / 54).
+/// The top-bar height ladder. POS-THEME-NAVBAR-POLISH-001 raises it a step
+/// (68 / 62 / 56) so the stacked brand and the identity chip breathe; the
+/// action cluster's 5px vertical margins keep every action ≥46dp tall.
 double _posTopBarHeight(double width) => width >= 1100
-    ? 64
+    ? 68
     : width >= RestoflowBreakpoints.posTwoPane
-    ? 58
-    : 54;
+    ? 62
+    : 56;
 
 /// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — one floating rounded white surface
 /// of the two-plane shell. BORDERLESS per the approved v4 panels: r18 on a

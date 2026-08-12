@@ -5655,4 +5655,29 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posSending => 'جارٍ الإرسال…';
+
+  @override
+  String get posBrandName => 'ريستوفلو';
+
+  @override
+  String get posBrandTagline => 'نقطة بيع';
+
+  @override
+  String get posDeviceThemeTitle => 'مظهر هذا الجهاز';
+
+  @override
+  String get posDeviceThemeHelp =>
+      'اختر هوية الألوان لهذا الجهاز. يغيّر ذلك الشريط والأزرار والتمييزات على هذا الجهاز فقط — ولا يؤثر على الطلبات أو الحالات أو الإيصالات.';
+
+  @override
+  String get posDeviceThemeNavyEmber => 'كحلي ونحاسي';
+
+  @override
+  String get posDeviceThemeForestCharcoal => 'أخضر غابي ونحاسي';
+
+  @override
+  String get posDeviceThemeAubergineSlate => 'باذنجاني وطوبي';
+
+  @override
+  String get posDeviceThemeSaffronGold => 'فحمي وذهبي';
 }

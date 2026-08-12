@@ -1752,5 +1752,13 @@
   "posAddMore": "إضافة المزيد",
   "posMenuItemAvailable": "متوفر",
   "posCartEmptyHint": "اختر أصنافًا من القائمة لبدء طلب جديد",
-  "posSending": "جارٍ الإرسال…"
+  "posSending": "جارٍ الإرسال…",
+  "posBrandName": "ريستوفلو",
+  "posBrandTagline": "نقطة بيع",
+  "posDeviceThemeTitle": "مظهر هذا الجهاز",
+  "posDeviceThemeHelp": "اختر هوية الألوان لهذا الجهاز. يغيّر ذلك الشريط والأزرار والتمييزات على هذا الجهاز فقط — ولا يؤثر على الطلبات أو الحالات أو الإيصالات.",
+  "posDeviceThemeNavyEmber": "كحلي ونحاسي",
+  "posDeviceThemeForestCharcoal": "أخضر غابي ونحاسي",
+  "posDeviceThemeAubergineSlate": "باذنجاني وطوبي",
+  "posDeviceThemeSaffronGold": "فحمي وذهبي"
 }

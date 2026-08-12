@@ -7,7 +7,6 @@ import '../design/pos_motion.dart';
 import '../design/pos_visual_tokens.dart'
     show PosThemePair, kPosMoneyFontFamily, kPosMoneyFontFallbacks;
 import '../format/money_format.dart';
-import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_device_accent.dart';
 import 'cart_panel.dart';
@@ -84,8 +83,11 @@ class PosBottomBar extends ConsumerWidget {
           RestoflowSpacing.md,
         ),
         child: DecoratedBox(
+          // POS-THEME-NAVBAR-POLISH-001: the bar is the STRUCTURAL primary of
+          // this device's theme pair (it matched the navbar when both were
+          // hardcoded navy; it keeps matching under every preset).
           decoration: BoxDecoration(
-            color: kPosBottomBar,
+            color: PosThemePair.of(context).primary,
             borderRadius: BorderRadius.circular(RestoflowRadii.lg),
             boxShadow: RestoflowShadows.lg,
           ),
@@ -207,12 +209,15 @@ class _CartIconWithBadge extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              // 004: the approved EMBER count badge with the navy ring
-              // (component specs §5); interactions keep the device accent.
+              // 004: the approved action-colored count badge, ringed with the
+              // bar's own primary so it stays legible on every preset.
               decoration: BoxDecoration(
                 color: PosThemePair.of(context).action,
                 borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-                border: Border.all(color: kPosBottomBar, width: 1.5),
+                border: Border.all(
+                  color: PosThemePair.of(context).primary,
+                  width: 1.5,
+                ),
               ),
               child: PosAnimatedCount(
                 value: count,

@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/design/pos_theme.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
+    show PosThemePair;
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 
 /// POS-REFERENCE-REDESIGN-002 — LOCAL screenshot generator, not a regression
@@ -24,6 +26,13 @@ const bool _enabled = bool.fromEnvironment('POS_SCREENSHOTS');
 const String _phase = String.fromEnvironment(
   'POS_SHOT_PHASE',
   defaultValue: 'shot',
+);
+
+/// Optional device-theme wire name (POS-THEME-NAVBAR-POLISH-001), e.g.
+/// 'forest_charcoal' — renders the shots under that preset.
+const String _themeWire = String.fromEnvironment(
+  'POS_SHOT_THEME',
+  defaultValue: 'navy_ember',
 );
 
 Future<void> _loadRealFonts() async {
@@ -85,7 +94,7 @@ Widget _app(Locale locale) => ProviderScope(
     supportedLocales: kSupportedLocales,
     locale: locale,
     debugShowCheckedModeBanner: false,
-    theme: posPremiumTheme(),
+    theme: posPremiumTheme(pair: PosThemePair.fromWire(_themeWire)),
     home: const PosMenuScreen(),
   ),
 );

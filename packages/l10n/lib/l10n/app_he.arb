@@ -1752,5 +1752,13 @@
   "posAddMore": "הוסף עוד",
   "posMenuItemAvailable": "זמין",
   "posCartEmptyHint": "בחרו פריטים מהתפריט כדי להתחיל הזמנה חדשה",
-  "posSending": "שולח…"
+  "posSending": "שולח…",
+  "posBrandName": "רסטופלו",
+  "posBrandTagline": "נקודת מכירה",
+  "posDeviceThemeTitle": "מראה המכשיר הזה",
+  "posDeviceThemeHelp": "בחרו את זהות הצבעים של הקופה הזו. השינוי חל על הסרגל, הכפתורים וההדגשות במכשיר זה בלבד — ואינו משפיע על הזמנות, סטטוסים או קבלות.",
+  "posDeviceThemeNavyEmber": "כחול כהה ונחושת",
+  "posDeviceThemeForestCharcoal": "ירוק יער ונחושת",
+  "posDeviceThemeAubergineSlate": "חציל ולבנה",
+  "posDeviceThemeSaffronGold": "פחם וזהב"
 }

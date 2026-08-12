@@ -31,6 +31,7 @@ import 'src/state/order_sync_controller.dart';
 import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
+import 'src/state/pos_device_theme.dart' show posDeviceThemePairProvider;
 import 'src/state/pos_offline_state.dart'
     show
         kPosOfflineReconnectProbeInterval,
@@ -700,10 +701,12 @@ class PosApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the shared light brand theme
-      // + the bundled Alexandria / Rubik / Inter pairing and the two-token
-      // restaurant theme (POS-scoped).
-      theme: posPremiumTheme(),
+      // POS-THEME-NAVBAR-POLISH-001: the shared light brand theme + the
+      // bundled Alexandria / Rubik / Inter pairing, built for THIS device's
+      // chosen theme pair (persisted per device; default Navy + Ember). The
+      // MaterialApp rebuilds when the choice changes, so every surface —
+      // including modal sheets on the root navigator — follows it.
+      theme: posPremiumTheme(pair: ref.watch(posDeviceThemePairProvider)),
       home: home,
     );
   }

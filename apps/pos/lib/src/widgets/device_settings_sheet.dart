@@ -13,8 +13,10 @@ import '../print/print_bridge.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
 import '../state/pos_auto_print_prefs.dart';
+import '../design/pos_visual_tokens.dart' show PosThemePair;
 import '../state/pos_device_accent.dart';
 import '../state/pos_device_context.dart';
+import '../state/pos_device_theme.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
@@ -548,12 +550,17 @@ class _ReprintLastReceiptButton extends ConsumerWidget {
   }
 }
 
-/// POS-PREMIUM-VISUAL-POLISH-001: the per-terminal secondary-accent picker.
+/// POS-THEME-NAVBAR-POLISH-001: «مظهر هذا الجهاز» — the per-terminal THEME.
 ///
-/// Four curated swatches; the choice colours NON-CRITICAL highlights only
-/// (selected-category marker, focus rings, hover tints, cart count badge) and
-/// persists per device. Selection is communicated by a ring + check glyph +
-/// the semantics selected flag — never by colour alone.
+/// Two rows under one section:
+///  1. the THEME pair (primary + action) — recolors the structural navy and
+///     the action family across the whole POS surface of this device;
+///  2. the existing SECONDARY accent — the supporting highlight colour
+///     (selected-category tint, focus rings, hover tints), unchanged in
+///     meaning, keys and persistence.
+/// Both are appearance preferences; neither may ever carry a semantic
+/// meaning. Selection is communicated by a ring + check glyph + the
+/// semantics selected flag — never by colour alone.
 class _DeviceAccentSection extends ConsumerWidget {
   const _DeviceAccentSection({required this.l10n});
 
@@ -566,14 +573,53 @@ class _DeviceAccentSection extends ConsumerWidget {
     PosDeviceAccent.aubergine => l10n.posDeviceAccentAubergine,
   };
 
+  String _themeLabel(PosThemePair pair) => switch (pair.wire) {
+    'forest_charcoal' => l10n.posDeviceThemeForestCharcoal,
+    'aubergine_slate' => l10n.posDeviceThemeAubergineSlate,
+    'saffron_gold' => l10n.posDeviceThemeSaffronGold,
+    _ => l10n.posDeviceThemeNavyEmber,
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final selected =
         ref.watch(posDeviceAccentProvider).valueOrNull ?? PosDeviceAccent.mint;
+    final selectedPair = ref.watch(posDeviceThemePairProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          l10n.posDeviceThemeTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xxs),
+        Text(
+          l10n.posDeviceThemeHelp,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.sm,
+          children: [
+            for (final pair in PosThemePair.presets)
+              _ThemeSwatch(
+                key: Key('device-theme-${pair.wire}'),
+                pair: pair,
+                label: _themeLabel(pair),
+                selected: pair.wire == selectedPair.wire,
+                onTap: () =>
+                    ref.read(posDeviceThemeProvider.notifier).setTheme(pair),
+              ),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        // The SUPPORTING highlight colour — the second half of the theme.
         Text(
           l10n.posDeviceAccentTitle,
           style: theme.textTheme.titleSmall?.copyWith(
@@ -605,6 +651,112 @@ class _DeviceAccentSection extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// A theme-pair swatch: the two identity colours side by side (primary +
+/// action), a name, and the standard ring/check/selected-semantics
+/// treatment. ≥44dp target, same anatomy as the accent swatches.
+class _ThemeSwatch extends StatelessWidget {
+  const _ThemeSwatch({
+    super.key,
+    required this.pair,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PosThemePair pair;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? pair.primary.withValues(alpha: 0.08)
+            : theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.sm,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.md,
+              RestoflowSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(
+                color: selected ? pair.primary : kRestoflowHairline,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The pair, shown honestly as its two colours.
+                SizedBox(
+                  width: 34,
+                  height: 22,
+                  child: Stack(
+                    children: [
+                      PositionedDirectional(
+                        start: 0,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: pair.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: selected
+                                ? const Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                      PositionedDirectional(
+                        start: 14,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: pair.action,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const SizedBox(width: 20, height: 20),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
