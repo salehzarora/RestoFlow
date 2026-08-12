@@ -479,17 +479,22 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                 ),
               )
             else ...[
+              // SURGERY-003: order rows are FLAT rows on the white panel,
+              // separated by subtle hairline dividers — no more warm track
+              // with a card per line.
               DecoratedSliver(
-                decoration: const BoxDecoration(color: kPosCartTrack),
+                decoration: const BoxDecoration(color: Colors.white),
                 sliver: SliverPadding(
                   padding: EdgeInsets.symmetric(
-                    vertical: dense ? RestoflowSpacing.sm : RestoflowSpacing.md,
+                    vertical: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
                     horizontal: dense ? 10 : RestoflowSpacing.md,
                   ),
                   sliver: SliverList.separated(
                     itemCount: cart.lines.length,
-                    separatorBuilder: (_, _) => SizedBox(
-                      height: dense ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+                    separatorBuilder: (_, _) => const Divider(
+                      height: 9,
+                      thickness: 1,
+                      color: kRestoflowHairline,
                     ),
                     itemBuilder: (context, index) {
                       final line = cart.lines[index];
@@ -1693,28 +1698,22 @@ class _CartLineTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
     );
 
-    // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: a WHITE line card on the warm
-    // track (the track is the sliver behind it), r12 with the one hairline
-    // weight and the single-layer e1 rest shadow.
+    // SURGERY-003: a FLAT order row (reference anatomy) — thumbnail, name +
+    // meta, line total — with no card chrome of its own; the list's hairline
+    // separators carry the rhythm.
     final summary = posCartModifierSummary(line.modifiers, line.currencyCode);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: Border.all(color: kRestoflowHairline),
-        boxShadow: kPosCardShadow,
-      ),
+    return Padding(
       padding: dense
           ? const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.sm,
               RestoflowSpacing.xs,
               RestoflowSpacing.xs,
+              2,
               RestoflowSpacing.xs,
             )
           : const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.md,
               RestoflowSpacing.sm,
               RestoflowSpacing.sm,
+              RestoflowSpacing.xs,
               RestoflowSpacing.sm,
             ),
       child: Column(
@@ -1848,7 +1847,8 @@ class _LineThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final side = dense ? 32.0 : 36.0;
+    // SURGERY-003: reference-sized row thumbnails.
+    final side = dense ? 44.0 : 52.0;
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
         color: kPosSelectedTint,
@@ -2234,10 +2234,11 @@ class _CartFooter extends StatelessWidget {
               child: PosShimmerSweep(
                 trigger: onSend != null,
                 borderRadius: BorderRadius.circular(kPosSendRadius),
+                // SURGERY-003: no glow — the reference CTA is a calm
+                // dominant block; shadow lives on hover surfaces only.
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(kPosSendRadius),
-                    boxShadow: onSend == null ? null : kPosPrimaryGlow,
                   ),
                   child: FilledButton.icon(
                     onPressed: onSend,
@@ -2284,15 +2285,23 @@ class _CartFooter extends StatelessWidget {
                               ),
                             ),
                           ),
+                          // SURGERY-003: the resolveWith below used to return
+                          // NULL for enabled states, which OVERRODE the merged
+                          // accent style entirely (copyWith replaces the whole
+                          // property) — Send silently rendered NAVY. It now
+                          // resolves the brand orange explicitly, making Send
+                          // the one genuinely ORANGE dominant CTA.
                           backgroundColor: WidgetStateProperty.resolveWith(
                             (states) => states.contains(WidgetState.disabled)
                                 ? kPosDisabledBg
-                                : null,
+                                : RestoflowBrandPalette.of(
+                                    theme.brightness,
+                                  ).accentOrange,
                           ),
                           foregroundColor: WidgetStateProperty.resolveWith(
                             (states) => states.contains(WidgetState.disabled)
                                 ? const Color(0xFF8B97A9)
-                                : null,
+                                : Colors.white,
                           ),
                         ),
                   ),
