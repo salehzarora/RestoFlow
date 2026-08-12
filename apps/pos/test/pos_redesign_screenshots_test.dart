@@ -31,9 +31,7 @@ Future<void> _loadRealFonts() async {
   // relative path does not resolve there; probe both working directories
   // (the generator itself only ever runs locally, but setUpAll must never
   // throw on CI either way).
-  final fontsDir = Directory(
-    'assets/fonts',
-  ).existsSync()
+  final fontsDir = Directory('assets/fonts').existsSync()
       ? 'assets/fonts'
       : 'apps/pos/assets/fonts';
   Future<void> load(String family, List<String> files) async {
