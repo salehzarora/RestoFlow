@@ -32,10 +32,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Classic Burger'), findsOneWidget);
-    expect(find.text('Cola'), findsOneWidget);
     expect(find.byIcon(Icons.add_shopping_cart), findsWidgets);
     expect(find.text('Your cart is empty'), findsOneWidget);
     expect(find.text('Send Order'), findsOneWidget);
+
+    // 004 (audit restoration): a below-the-fold item still renders — the
+    // taller lazy grid builds it once scrolled into view, so the "whole demo
+    // menu is reachable" claim stays pinned instead of deleted.
+    await tester.scrollUntilVisible(
+      find.text('Cola'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(GridView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('Cola'), findsOneWidget);
   });
 
   testWidgets('tapping add puts the item in the cart and shows the subtotal', (
@@ -86,7 +100,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Classic Burger'), findsOneWidget);
-    expect(find.text('Espresso'), findsOneWidget);
+    // (Espresso sits below the built viewport in the taller food-first grid
+    // — REFERENCE-REDESIGN-002; the filter assertions below prove it renders
+    // the moment Coffee is selected.)
 
     // Filter to Coffee only.
     await tester.tap(find.text('Coffee'));

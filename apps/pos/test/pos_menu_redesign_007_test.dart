@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
+    show PosThemePair;
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/pos_palette.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
@@ -122,6 +123,9 @@ void main() {
   group('A. layout-mode resolution and the approved column counts', () {
     // Pure-function contract — no pumping, so a breakpoint regression is
     // reported as a breakpoint failure rather than a layout failure.
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 tables (approved responsive spec
+    // §1): columns 5/4/3/3/3/2, cart 400/360/340/320/320. Mode RESOLUTION is
+    // unchanged (the frozen breakpoints).
     final cases = <(String, double, double, PosLayoutMode, int, double)>[
       ('1440x900 desktop', 1440, 900, PosLayoutMode.desktop, 5, 400),
       ('1280x800 tablet', 1280, 800, PosLayoutMode.tablet, 4, 360),
@@ -180,6 +184,8 @@ void main() {
 
   group('B. the product grid takes its column count from the mode', () {
     const viewports = <(String, Size, int)>[
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 column tables (approved
+      // responsive spec §1 — the 1280 reference frame renders 4 columns).
       ('desktop 1440x900', Size(1440, 900), 5),
       ('tablet 1280x800', Size(1280, 800), 4),
       ('smallTablet 1024x768', Size(1024, 768), 3),
@@ -199,16 +205,23 @@ void main() {
       });
     }
 
-    testWidgets('007-B2. the card extent stays the 4:3 band plus the FIXED '
-        '140px body', (tester) async {
+    testWidgets('007-B2. the card extent is the INSET 4:3 band plus the FIXED '
+        'content zone (POS-DESIGN-HANDOFF-IMPLEMENTATION-004)', (tester) async {
       await _pumpScreen(tester, size: const Size(1440, 900));
       final delegate = _productGridDelegate(tester);
-      expect(kPosMenuCardBodyHeight, 140);
-      // extent = cellWidth * 3/4 + 140, so the implied cell width must be the
-      // grid's real cell width.
+      expect(kPosMenuCardBodyHeight, 118);
+      // extent = (cellWidth - 2*inset)/aspect + inset + content, so the
+      // implied cell width must be the grid's real cell width.
       final cellWidth =
-          (delegate.mainAxisExtent! - kPosMenuCardBodyHeight) * 4 / 3;
-      expect(delegate.mainAxisExtent, posMenuCardExtent(cellWidth));
+          (delegate.mainAxisExtent! -
+                  kPosMenuCardBodyHeight -
+                  kPosCardImageInset) *
+              kPosCardImageAspect +
+          2 * kPosCardImageInset;
+      expect(
+        delegate.mainAxisExtent,
+        moreOrLessEquals(posMenuCardExtent(cellWidth), epsilon: 0.001),
+      );
     });
   });
 
@@ -285,13 +298,17 @@ void main() {
         tester.element(find.byType(PosMenuScreen)),
       );
       expect(container.read(selectedCategoryProvider), kAllCategoriesId);
-      expect(find.byType(MenuItemCard), findsNWidgets(12));
+      // 004 (audit restoration): the unfiltered census is pinned again — the
+      // lazy grid builds fewer TALL cells, so the bound is what the 1440x900
+      // viewport genuinely builds, not an unqualified findsWidgets that a
+      // one-card regression would satisfy.
+      expect(find.byType(MenuItemCard), findsAtLeastNWidgets(10));
 
       await tester.tap(find.text('Sides'));
       await tester.pumpAndSettle();
 
       expect(container.read(selectedCategoryProvider), 'sides');
-      // 6 of the 12 fixture items are in `sides`.
+      // 6 of the 12 fixture items are in `sides`; all six fit the viewport.
       expect(find.byType(MenuItemCard), findsNWidgets(6));
     });
 
@@ -402,7 +419,9 @@ void main() {
       final digits = parts.firstWhere((s) => s.text == '54.00');
       expect(digits.style!.fontSize, greaterThan(symbol.style!.fontSize!));
       expect(digits.style!.fontWeight, FontWeight.w800);
-      expect(digits.style!.color, kRestoflowInk);
+      // 004: price digits wear the approved EMBER action colour (tokens §8)
+      // through the two-token restaurant theme.
+      expect(digits.style!.color, PosThemePair.navyEmber.action);
     });
 
     testWidgets('007-D3. the card add button keeps a >=44px target and loses '
@@ -426,9 +445,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // SURGERY-003: the add action is the FULL-WIDTH footer button.
       final add = find.byIcon(Icons.add_shopping_cart);
       final size = tester.getSize(
-        find.ancestor(of: add, matching: find.byType(IconButton)).first,
+        find.ancestor(of: add, matching: find.byType(FilledButton)).first,
       );
       expect(size.width, greaterThanOrEqualTo(44));
       expect(size.height, greaterThanOrEqualTo(44));
@@ -482,20 +502,23 @@ void main() {
           reason: 'overflowed in ${locale.languageCode}',
         );
 
+        // 004 anatomy: ONE ellipsizing name line on the shared baseline row
+        // beside the price, ONE subdued description line below.
         final nameText = tester.widget<Text>(find.text(name));
         expect(nameText.maxLines, 1);
         final desc = tester.widget<Text>(
           find.text('Slow-roasted lamb with tahini and sumac onion.'),
         );
-        expect(desc.maxLines, 2);
+        expect(desc.maxLines, 1);
 
-        // The description never sits on top of the price row.
-        expect(
-          tester.getRect(find.text(name)).bottom,
-          lessThanOrEqualTo(
-            tester.getRect(find.byKey(const Key('menu-item-price-i-1'))).top,
-          ),
+        // The name and the price share ONE row (approved baseline row):
+        // vertically overlapping, never stacked.
+        final nameRect = tester.getRect(find.text(name));
+        final priceRect = tester.getRect(
+          find.byKey(const Key('menu-item-price-i-1')),
         );
+        expect(nameRect.top, lessThan(priceRect.bottom));
+        expect(priceRect.top, lessThan(nameRect.bottom));
       }
     });
 
@@ -556,11 +579,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final button = tester.widget<IconButton>(
+      // SURGERY-003: the add action is a FilledButton footer now — the
+      // disabled gate is the same (a locked cart hands the card a null
+      // callback and the button renders disabled).
+      final button = tester.widget<FilledButton>(
         find
             .ancestor(
               of: find.byIcon(Icons.add_shopping_cart),
-              matching: find.byType(IconButton),
+              matching: find.byType(FilledButton),
             )
             .first,
       );
@@ -576,6 +602,7 @@ void main() {
     testWidgets('007-E1. the skeleton grid uses the SAME column count and the '
         'SAME cell extent as the loaded grid', (tester) async {
       for (final (size, columns) in const [
+        // 004: approved columns 5/4/3 at these frames.
         (Size(1440, 900), 5),
         (Size(1280, 800), 4),
         (Size(1024, 600), 3),

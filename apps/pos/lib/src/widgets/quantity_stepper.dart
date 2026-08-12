@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../design/pos_visual_tokens.dart' show PosThemePair;
 import '../pos_palette.dart';
 
 /// A minus (white/hairline) + qty + plus (filled green) stepper (DESIGN-004).
@@ -120,7 +121,6 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     // A control inside a >=40/44dp tap target (fast, gloved cashier fingers);
     // dense trims it a touch so the landscape side cart packs more lines.
     final tap = dense ? 40.0 : 44.0;
@@ -140,15 +140,20 @@ class _StepButton extends StatelessWidget {
             child: Container(
               width: inner,
               height: inner,
+              // 004: the FILLED (plus) edge wears the approved EMBER action
+              // mark (tokens §8) — the "add one more" gesture is an action
+              // accent, matching the ×N marks; the minus stays quiet.
               decoration: BoxDecoration(
-                color: filled ? theme.colorScheme.primary : Colors.white,
+                color: filled
+                    ? PosThemePair.of(context).actionMark
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),
                 border: filled ? null : Border.all(color: kRestoflowHairline),
               ),
               child: Icon(
                 icon,
                 size: RestoflowIconSizes.md,
-                color: filled ? theme.colorScheme.onPrimary : kRestoflowInk,
+                color: filled ? Colors.white : kRestoflowInk,
               ),
             ),
           ),

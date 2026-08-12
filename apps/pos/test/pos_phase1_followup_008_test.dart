@@ -286,13 +286,16 @@ void main() {
 
     testWidgets('008-B3. the header still carries its title, count and shift '
         'context on the new surface', (tester) async {
+      // 004: the approved v4 header surface is the LIGHT panel (the dark
+      // plane moved to the top app bar); the operational carriage below is
+      // the contract that survives.
       final l10n = await _l10n(const Locale('en'));
       await _pumpPos(tester, locale: const Locale('en'));
       final header = find.byKey(const Key('pos-cart-operational-header'));
       expect(header, findsOneWidget);
       expect(
         (tester.widget<DecoratedBox>(header).decoration as BoxDecoration).color,
-        kPosCartHeaderInk,
+        Colors.white,
       );
       expect(
         find.descendant(of: header, matching: find.text(l10n.posCartTitle)),

@@ -148,7 +148,9 @@ void main() {
           reason: 'the description inherits ambient direction',
         );
         final text = tester.widget<Text>(finder);
-        expect(text.maxLines, 2);
+        // REFERENCE-REDESIGN-002: the description is ONE subdued line on the
+        // food-first card (it sheds entirely at large text scales).
+        expect(text.maxLines, 1);
         expect(text.overflow, TextOverflow.ellipsis);
         expect(
           text.style?.letterSpacing,
@@ -186,8 +188,21 @@ void main() {
         _expectCleanFrame(tester);
         final loaded = _gridDelegate(tester);
 
-        // The described demo item is on screen with its description, the image
-        // band has not collapsed, and the add target is still real.
+        // The described demo item renders with its description (the
+        // REFERENCE-REDESIGN-002 cells are taller, so scroll it into the
+        // lazy grid's viewport first), the image band has not collapsed,
+        // and the add target is still real.
+        await tester.scrollUntilVisible(
+          find.text('Margherita Pizza'),
+          240,
+          scrollable: find
+              .descendant(
+                of: find.byType(GridView).last,
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
         expect(find.text('Margherita Pizza'), findsWidgets);
         expect(
           find.text('San Marzano tomato, fresh mozzarella and basil.'),
@@ -212,9 +227,15 @@ void main() {
         );
         expect(skeleton.crossAxisCount, loaded.crossAxisCount);
         expect(loaded.crossAxisCount, posMenuColumnsFor(mode));
-        // The extent really is image band + the shared body height.
+        // The extent really is the INSET 4:3 band + the shared body height
+        // (POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — see kPosCardImageInset /
+        // kPosCardImageAspect).
         final cellWidth =
-            (loaded.mainAxisExtent! - kPosMenuCardBodyHeight) * 4 / 3;
+            (loaded.mainAxisExtent! -
+                    kPosMenuCardBodyHeight -
+                    kPosCardImageInset) *
+                kPosCardImageAspect +
+            2 * kPosCardImageInset;
         expect(
           posMenuCardExtent(cellWidth),
           closeTo(loaded.mainAxisExtent!, 0.01),
@@ -302,7 +323,13 @@ void main() {
 
       expect(find.byIcon(Icons.tune), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
-      expect(find.text('\u00d72'), findsOneWidget, reason: 'the in-cart badge');
+      // 004: the in-cart count renders TWICE by design \u2014 the ember \u00d7N band
+      // mark AND the chip inside the tonal "Add more" footer.
+      expect(
+        find.text('\u00d72'),
+        findsNWidgets(2),
+        reason: 'band mark + Add-more chip',
+      );
       expect(find.text(_ar), findsOneWidget);
       expect(find.byIcon(Icons.add_shopping_cart), findsOneWidget);
       expect(tester.takeException(), isNull);

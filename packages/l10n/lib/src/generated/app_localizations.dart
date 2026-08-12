@@ -10335,6 +10335,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment recorded — cash drawer did not open'**
   String get posCashDrawerOpenFailed;
+
+  /// Title of the per-device appearance setting choosing this terminal's secondary accent color (POS-PREMIUM-VISUAL-POLISH-001). The accent colors small highlights only (selected-category marker, focus rings, hover tints, cart count badge) — never semantic states, prices, or the primary action.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal accent color'**
+  String get posDeviceAccentTitle;
+
+  /// Subtitle under the terminal accent picker stating the accent's non-critical scope: it is a local appearance preference per device and never encodes state or money.
+  ///
+  /// In en, this message translates to:
+  /// **'Colors small highlights on this terminal only — never statuses or prices.'**
+  String get posDeviceAccentHelp;
+
+  /// Name of the default terminal accent swatch (#4E8B7A).
+  ///
+  /// In en, this message translates to:
+  /// **'Mint Leaf'**
+  String get posDeviceAccentMint;
+
+  /// Name of the saffron terminal accent swatch (#D89A2B).
+  ///
+  /// In en, this message translates to:
+  /// **'Saffron Gold'**
+  String get posDeviceAccentSaffron;
+
+  /// Name of the pomegranate terminal accent swatch (#C65A4B).
+  ///
+  /// In en, this message translates to:
+  /// **'Pomegranate'**
+  String get posDeviceAccentPomegranate;
+
+  /// Name of the aubergine terminal accent swatch (#6E5BD3).
+  ///
+  /// In en, this message translates to:
+  /// **'Aubergine'**
+  String get posDeviceAccentAubergine;
+
+  /// Transient bottom toast on PHONE layouts confirming an item was added to the cart (the cart itself is off-screen there). {name} is the product name (data, rendered as-is).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} added'**
+  String posItemAddedToast(String name);
+
+  /// Label of the product card's full-width action once the item is already in the cart (POS-REFERENCE-VISUAL-SURGERY-003): same add action, tonal treatment. The in-cart quantity badge on the image carries the count.
+  ///
+  /// In en, this message translates to:
+  /// **'Add more'**
+  String get posAddMore;
+
+  /// Always-on availability pill on a SELLABLE product card's image band (POS-DESIGN-HANDOFF-IMPLEMENTATION-004, approved v4 design). Presentation-only reassurance; unavailable items keep their existing reason pills.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posMenuItemAvailable;
+
+  /// One helper line under the empty-cart message (approved v4 empty state), telling the cashier how to begin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick items from the menu to start a new order'**
+  String get posCartEmptyHint;
+
+  /// Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get posSending;
 }
 
 class _AppLocalizationsDelegate

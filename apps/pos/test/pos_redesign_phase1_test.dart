@@ -137,6 +137,8 @@ void main() {
   // ── A. layout-mode resolution ────────────────────────────────────────────
   group('A. the approved mode table', () {
     final table = <(String, double, double, PosLayoutMode, double, int)>[
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 tables (approved responsive
+      // spec §1; mode RESOLUTION unchanged).
       ('1440x900', 1440, 900, PosLayoutMode.desktop, 400, 5),
       ('1280x800', 1280, 800, PosLayoutMode.tablet, 360, 4),
       ('1024x768', 1024, 768, PosLayoutMode.smallTablet, 340, 3),
@@ -181,6 +183,8 @@ void main() {
   // ── B. combined menu + cart geometry ─────────────────────────────────────
   group('B. the two halves are one screen', () {
     for (final (label, size, cols, cartWidth) in const [
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 tables (approved responsive
+      // spec §1).
       ('1440x900', Size(1440, 900), 5, 400.0),
       ('1280x800', Size(1280, 800), 4, 360.0),
       ('1024x768', Size(1024, 768), 3, 340.0),
@@ -404,10 +408,12 @@ void main() {
     });
   });
 
-  // ── E. the dark operational block ────────────────────────────────────────
-  group('E. operational state on dark', () {
+  // ── E. the operational block ─────────────────────────────────────────────
+  group('E. operational state on the light header', () {
     testWidgets('P1-E1. the block keeps the shift context, a single readable '
         'cash Text and a live count', (tester) async {
+      // 004: the approved v4 cart header is LIGHT (the dark plane moved to
+      // the top app bar); the operational contents are unchanged.
       final c = await _pumpCart(tester);
       _fill(c, lines: 2);
       await tester.pumpAndSettle();
@@ -415,7 +421,7 @@ void main() {
       final header = find.byKey(const Key('pos-cart-operational-header'));
       expect(
         (tester.widget<DecoratedBox>(header).decoration as BoxDecoration).color,
-        kPosCartHeaderInk,
+        Colors.white,
       );
       expect(
         find.descendant(of: header, matching: find.byType(ShiftContextBar)),
@@ -435,25 +441,56 @@ void main() {
       );
     });
 
-    testWidgets('P1-E2. every on-dark foreground is a light value — nothing '
-        'operational is rendered in ink on ink', (tester) async {
-      await _pumpCart(tester);
+    testWidgets('P1-E2. every header foreground is a DARK value on the light '
+        'surface — nothing operational is rendered unreadably', (tester) async {
+      // Inverse of the old on-dark rule, same protection: every styled text
+      // in the header must contrast with its (now white) surface. A LIGHT
+      // text is tolerated ONLY when it demonstrably rides its own filled
+      // dark/saturated bed (the ember count chip) — asserted, not assumed,
+      // so a genuine white-on-white regression still fails.
+      final c = await _pumpCart(tester);
+      _fill(c, lines: 1);
+      await tester.pumpAndSettle();
       final header = find.byKey(const Key('pos-cart-operational-header'));
-      final texts = tester.widgetList<Text>(
-        find.descendant(of: header, matching: find.byType(Text)),
-      );
-      expect(texts, isNotEmpty);
-      for (final t in texts) {
-        final c = t.style?.color;
-        if (c == null) continue;
-        // Luminance well above the ink surface's — a dark-on-dark regression
-        // would fail here rather than only in a screenshot.
-        expect(
-          c.computeLuminance(),
-          greaterThan(kPosCartHeaderInk.computeLuminance() + 0.15),
-          reason: 'unreadable on-dark foreground: $c',
-        );
+      final texts = find.descendant(of: header, matching: find.byType(Text));
+      expect(texts, findsWidgets);
+      var checked = 0;
+      var lightOnBed = 0;
+      for (final el in texts.evaluate()) {
+        final t = el.widget as Text;
+        final color = t.style?.color;
+        if (color == null) continue;
+        if (color.computeLuminance() >= 0.5) {
+          // Must sit on its OWN filled dark/saturated bed.
+          final bed = find
+              .ancestor(
+                of: find.byWidget(t),
+                matching: find.byWidgetPredicate(
+                  (w) =>
+                      w is Container &&
+                      w.decoration is BoxDecoration &&
+                      ((w.decoration! as BoxDecoration).color
+                                  ?.computeLuminance() ??
+                              1) <
+                          0.45,
+                ),
+              )
+              .evaluate();
+          expect(
+            bed,
+            isNotEmpty,
+            reason:
+                'light foreground $color must ride a filled dark bed, '
+                'never the white header itself',
+          );
+          lightOnBed++;
+        } else {
+          checked++;
+        }
       }
+      expect(checked, greaterThan(0));
+      // The one expected light-on-bed text is the ember count chip.
+      expect(lightOnBed, greaterThanOrEqualTo(1));
     });
   });
 
@@ -583,13 +620,14 @@ void main() {
           find.descendant(of: band, matching: find.byIcon(Icons.tune)),
         );
         expect(badge.overlaps(chip), isFalse);
+        // SURGERY-003: the add action is the FULL-WIDTH footer button now.
         expect(
           tester
               .getSize(
                 find
                     .ancestor(
                       of: find.byIcon(Icons.add_shopping_cart),
-                      matching: find.byType(IconButton),
+                      matching: find.byType(FilledButton),
                     )
                     .first,
               )

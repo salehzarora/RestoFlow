@@ -6,6 +6,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
@@ -148,7 +149,10 @@ Widget _wrapCard(Widget card, {Locale locale = const Locale('en')}) =>
       locale: locale,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: Scaffold(body: SizedBox(width: 220, height: 300, child: card)),
+      home: Scaffold(
+        // The REAL grid extent for this cell width (REFERENCE-REDESIGN-002).
+        body: SizedBox(width: 220, height: posMenuCardExtent(220), child: card),
+      ),
     );
 
 DemoMenuItem _item({String? description, String name = 'Classic Burger'}) =>
@@ -426,7 +430,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final text = tester.widget<Text>(find.text(long));
-      expect(text.maxLines, 2);
+      // REFERENCE-REDESIGN-002: ONE subdued description line on the
+      // food-first card.
+      expect(text.maxLines, 1);
       expect(text.overflow, TextOverflow.ellipsis);
       expect(
         text.style?.letterSpacing ?? 0,

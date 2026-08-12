@@ -30,9 +30,11 @@ Widget _wrapCard(Widget card) => MaterialApp(
   locale: const Locale('en'),
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
-  // DESIGN-004: the card is taller now (a fixed 4:3 image band over the body),
-  // so the isolated-card harness gives it room for that band + the body.
-  home: Scaffold(body: SizedBox(width: 220, height: 264, child: card)),
+  // The REAL grid extent for this cell width (REFERENCE-REDESIGN-002: a
+  // fixed 10:9 image band over the fixed content zone).
+  home: Scaffold(
+    body: SizedBox(width: 220, height: posMenuCardExtent(220), child: card),
+  ),
 );
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 renders the cart's LOUD figure as a
@@ -79,8 +81,11 @@ void main() {
     );
     expect(find.byTooltip(l10n.menuModifierGroupCount(3)), findsOneWidget);
 
-    // Classic Burger: no tags, no groups -> nothing extra, and it keeps the
-    // canonical single add icon (the .first add-tap corpus relies on it).
+    // Classic Burger: no tags, no groups -> no options chip and no TAG pill.
+    // 004: every SELLABLE card now carries the approved always-on
+    // availability pill (متوفر/Available), so the only pill here is that one.
+    // It keeps the canonical single add icon (the .first add-tap corpus
+    // relies on it).
     final classic = find.widgetWithText(Card, 'Classic Burger').first;
     expect(
       find.descendant(of: classic, matching: find.byIcon(Icons.tune)),
@@ -88,7 +93,14 @@ void main() {
     );
     expect(
       find.descendant(of: classic, matching: find.byType(RestoflowStatusPill)),
-      findsNothing,
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: classic,
+        matching: find.text(l10n.posMenuItemAvailable),
+      ),
+      findsOneWidget,
     );
     expect(
       find.descendant(
@@ -111,9 +123,11 @@ void main() {
     expect(_plain(subtotal), '₪42.00');
   });
 
-  testWidgets('tag pills cap at TWO with spicy/popular prioritized', (
-    tester,
-  ) async {
+  testWidgets('tag pills cap at ONE (highest priority) beside the always-on '
+      'availability pill; unknown wire values never render', (tester) async {
+    // 004 (approved v4 band): the availability pill leads the band start, so
+    // the tag slot narrows to the SINGLE highest-priority tag. Priority order
+    // and the unknown-tag skip are unchanged.
     final l10n = await _en();
     const item = DemoMenuItem(
       id: 'loaded',
@@ -129,11 +143,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.menuTagSpicy), findsOneWidget);
-    expect(find.text(l10n.menuTagPopular), findsOneWidget);
+    expect(find.text(l10n.menuTagPopular), findsNothing);
     expect(find.text(l10n.menuTagVegetarian), findsNothing);
     expect(find.text(l10n.menuTagNew), findsNothing);
     expect(find.text('mystery-tag'), findsNothing);
+    // Exactly two pills: the availability pill + the one prioritized tag.
     expect(find.byType(RestoflowStatusPill), findsNWidgets(2));
+    expect(find.text(l10n.posMenuItemAvailable), findsOneWidget);
   });
 
   testWidgets('an imaged card keeps pills + indicator over the fallback band '

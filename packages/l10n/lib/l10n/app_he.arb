@@ -1741,5 +1741,16 @@
   "posPaymentAwaitingOrderSync": "ההזמנה עדיין מסתנכרנת — התשלום ייפתח ברגע שהשרת יאשר אותה.",
   "posCashDrawerAutoOpenTitle": "פתיחת מגירת המזומנים אוטומטית לאחר תשלום במזומן",
   "posCashDrawerAutoOpenHelp": "משתמש ביציאת המגירה של מדפסת הקבלות.",
-  "posCashDrawerOpenFailed": "התשלום נרשם — מגירת המזומנים לא נפתחה"
+  "posCashDrawerOpenFailed": "התשלום נרשם — מגירת המזומנים לא נפתחה",
+  "posDeviceAccentTitle": "צבע הדגשה למסוף זה",
+  "posDeviceAccentHelp": "צובע הדגשות קטנות במסוף זה בלבד — לא סטטוסים ולא מחירים.",
+  "posDeviceAccentMint": "מנטה",
+  "posDeviceAccentSaffron": "זעפרן",
+  "posDeviceAccentPomegranate": "רימון",
+  "posDeviceAccentAubergine": "חציל",
+  "posItemAddedToast": "{name} נוסף",
+  "posAddMore": "הוסף עוד",
+  "posMenuItemAvailable": "זמין",
+  "posCartEmptyHint": "בחרו פריטים מהתפריט כדי להתחיל הזמנה חדשה",
+  "posSending": "שולח…"
 }

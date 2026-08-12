@@ -46,12 +46,15 @@ Future<void> _pump(
 /// Taps the add affordance on the Cheeseburger card (has modifier groups:
 /// Toppings = optional multi, Doneness = required single, Extras = steppers).
 Future<void> _openBurgerSheet(WidgetTester tester) async {
-  await tester.tap(
-    find.descendant(
-      of: find.widgetWithText(Card, 'Cheeseburger').first,
-      matching: find.byIcon(Icons.add_shopping_cart),
-    ),
+  // SURGERY-003: the footer-action cards are taller — bring the target add
+  // affordance on screen the way a user would before tapping it.
+  final add = find.descendant(
+    of: find.widgetWithText(Card, 'Cheeseburger').first,
+    matching: find.byIcon(Icons.add_shopping_cart),
   );
+  await tester.ensureVisible(add);
+  await tester.pumpAndSettle();
+  await tester.tap(add);
   await tester.pumpAndSettle();
   expect(find.byType(ModifierSelectionSheet), findsOneWidget);
 }

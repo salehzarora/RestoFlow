@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
+import 'design/pos_visual_tokens.dart';
+
 /// POS-local warm surface tints (DESIGN-004 Warm/Bento handoff §4).
 ///
 /// The core warm palette — canvas, hairline, ink ramp, brand green/dark,
@@ -10,20 +12,26 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 /// POS-only surface fills the handoff calls out that had no shared token yet.
 /// Kept here (not in design_system) so the redesign stays scoped to `apps/pos`.
 
-/// Inner surface for line cards / amount strips (a hair warmer than white).
-const Color kPosInnerSurface = Color(0xFFFAFBFD);
+/// Inner surface for amount strips / filled fields (a hair warmer than
+/// white; 004 moves it onto the approved warm bed #FBFAF7).
+const Color kPosInnerSurface = Color(0xFFFBFAF7);
 
 /// Chip / segmented-track / neutral pill background.
-const Color kPosChipBg = Color(0xFFEDF1F7);
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: WARM per the approved v4 tokens —
+/// the search/stepper track fill (#F4F2EC) sits on the ivory family now.
+const Color kPosChipBg = Color(0xFFF4F2EC);
 
 /// Selected-option tint (paired with a 1.5px brand-green border).
 const Color kPosSelectedTint = kRestoflowNavyContainer;
 
 /// Disabled control background (a CTA the cashier can't use yet).
-const Color kPosDisabledBg = Color(0xFFE3E8EF);
+/// 004: warm disabled bed per the approved tokens (#EFECE5, fg #A8B0BC).
+const Color kPosDisabledBg = Color(0xFFEFECE5);
+const Color kPosDisabledFg = Color(0xFFA8B0BC);
 
-/// The dark phone bottom-cart bar (== `kRestoflowInk`).
-const Color kPosBottomBar = kRestoflowInk;
+/// The dark phone bottom-cart bar — the same Midnight Navy plane as the cart
+/// header (POS-PREMIUM-VISUAL-POLISH-001: one piece of dark furniture).
+const Color kPosBottomBar = kPosMidnightNavy;
 
 /// The warm terracotta brand accent + its container/text (handoff §4).
 ///
@@ -59,11 +67,11 @@ const Color kPosTerracottaText = Color(0xFF7C2D12);
 /// not touch `packages/design_system`.
 
 /// Input / search-field border — a hair darker than the hairline so a FILLED
-/// field still reads as interactive on a warm fill.
-const Color kPosInputBorder = Color(0xFFDDE3EC);
+/// field still reads as interactive on a warm fill (004: warm #EAE6DD).
+const Color kPosInputBorder = Color(0xFFEAE6DD);
 
-/// The quiet count-badge fill behind a category chip's number.
-const Color kPosCountBadgeBg = Color(0xFFE3E8EF);
+// (kPosCountBadgeBg was retired with the v4 icon pills — counts render as
+// bare text with no badge box.)
 
 /// Body ink between ink2 and ink3 — product descriptions.
 const Color kPosMutedBodyInk = Color(0xFF616B7B);
@@ -86,8 +94,17 @@ const List<BoxShadow> kPosChipSelectedShadow = [
   BoxShadow(color: Color(0x4716335E), offset: Offset(0, 3), blurRadius: 10),
 ];
 
-/// Product-card corner radius (spec §5 — the biggest object on screen).
+/// Product-card corner radius (004: the approved v4 card is r14 with a thin
+/// cool outline and an INSET photo).
 const double kPosCardRadius = 14;
+
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 card carries an
+/// INSET photo — a 4:3 band floated [kPosCardImageInset] px inside the card
+/// edge on an r10 clip (component specs §7), no longer edge-to-edge.
+const double kPosCardImageInset = 6;
+
+/// The photo band's width:height ratio (4:3).
+const double kPosCardImageAspect = 4 / 3;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
 ///
@@ -99,14 +116,13 @@ const double kPosCardRadius = 14;
 
 /// The cart's dark operational surface.
 ///
-/// POS-PHASE1-FOLLOWUP-FIXES-008: this was `kRestoflowInk` (#17201B), which
-/// read as near-black beside the warm menu canvas — harsher than the rest of
-/// the Phase-1 palette. It is now a lighter, muted deep GREEN drawn from the
-/// same brand family: still unmistakably the operational plane, still far
-/// darker than the canvas, but no longer a black slab. Every on-dark pair below
-/// is re-checked against THIS value (see the 008 contrast test), and the muted
-/// tone was lightened to keep its 4.5:1.
-const Color kPosCartHeaderInk = Color(0xFF1F2E4A);
+/// POS-PHASE1-FOLLOWUP-FIXES-008 established the principle (a muted dark
+/// plane from the brand family, never a black slab); the global rebrand made
+/// it navy; POS-PREMIUM-VISUAL-POLISH-001 deepens it to the Midnight Navy
+/// token so the cart header and the phone bottom bar read as ONE piece of
+/// structural furniture. Deeper than the 008 value, so every on-dark pair
+/// below only GAINS contrast (re-checked by the 008 contrast test).
+const Color kPosCartHeaderInk = kPosMidnightNavy;
 
 /// Primary on-dark body text (shift name, drawer figures).
 const Color kPosOnDarkPrimary = Color(0xFFC6D4E8);
@@ -135,16 +151,17 @@ const Color kPosSyncSyncedFg = Color(0xFF6EE7B7);
 const Color kPosSyncOfflineBg = Color(0x1AFFFFFF);
 const Color kPosSyncOfflineFg = Color(0xB3FFFFFF);
 
-/// The order-setup block's soft bottom edge — the dark header above already
-/// does the separating, so this is quieter than a full hairline.
-const Color kPosSetupEdge = Color(0xFFE8EDF4);
+/// The order-setup block's soft bottom edge (004: on the warm ivory family,
+/// like every other POS surface neutral).
+const Color kPosSetupEdge = Color(0xFFEFECE5);
 
 /// The warm track the white cart lines sit on, and the line's own edge.
 const Color kPosCartTrack = kPosInnerSurface;
 
-/// The quantity stepper's own track, so minus/plus read as ONE control.
-const Color kPosStepperTrack = Color(0xFFF4F7FB);
-const Color kPosStepperTrackEdge = kRestoflowHairline;
+/// The quantity stepper's own track, so minus/plus read as ONE control
+/// (004: the approved warm track fill + warm edge).
+const Color kPosStepperTrack = Color(0xFFF4F2EC);
+const Color kPosStepperTrackEdge = Color(0xFFEAE6DD);
 
 /// Neutral ghost icons on a cart line — destructive intent is revealed on
 /// approach, not advertised at rest.
@@ -217,15 +234,10 @@ enum PosLayoutMode {
   phone,
 }
 
-/// POS-VISUAL-REDESIGN-PHASE-1-007 — the approved product-column count per
-/// mode (spec §3).
-///
-/// This replaces a max-cross-axis-extent formula that could not express the
-/// approved layout at all: a single 230px extent yields 4 columns at BOTH 1440
-/// and 1280, so desktop could never reach 5 while the tablet stayed at 4.
-/// 5 columns are deliberately NOT forced at 1280 — a 213px cell keeps the photo
-/// band 160px tall, and five 168px cells would cost more legibility than the
-/// extra column buys.
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the APPROVED column table
+/// (responsive spec §1): 5 / 4 / 3 / 3 / 3 / 2. The 1280 reference frame is
+/// the TABLET mode (4 columns, ~205px cells — the mockup's hero grid); 834
+/// renders 3; phones keep 2.
 int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
   PosLayoutMode.desktop => 5,
   PosLayoutMode.tablet => 4,
@@ -241,6 +253,11 @@ int posMenuColumnsFor(PosLayoutMode mode) => switch (mode) {
 const double kPosCompactHeight = 640;
 
 /// Side-cart width for a two-pane [mode]; 0 for [PosLayoutMode.phone].
+///
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the APPROVED cart-width table
+/// (responsive spec §1): 400 / 360 / 340 / 320 / 320. Desktop/tablet stay ≥
+/// the 352 paired-fields threshold (name and phone share a row); the
+/// narrower homes stack them — unchanged behaviour.
 double posCartWidthFor(PosLayoutMode mode) => switch (mode) {
   PosLayoutMode.desktop => 400,
   PosLayoutMode.tablet => 360,
@@ -258,6 +275,9 @@ double posCartWidthFor(PosLayoutMode mode) => switch (mode) {
 /// - `>= 1360` → desktop (400) · `1100..1359` → tablet (360)
 /// - `900..1099` → small tablet (340) · `820..899` → narrow tablet (320)
 /// - otherwise → phone (bottom bar + slide-up sheet)
+///
+/// The breakpoints themselves are FROZEN (responsive spec: "restyle, don't
+/// re-derive"); 004 only re-valued the per-mode columns/widths above.
 ///
 /// The compact test runs FIRST and on height as well as width, because a short
 /// landscape tablet (1024x600) needs the compact paddings even though its width
@@ -283,6 +303,13 @@ PosLayoutMode posLayoutModeFor({
   }
   return PosLayoutMode.phone;
 }
+
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved floating two-surface
+/// shell (tokens §5/§6/§8): page pad 16, panel gap 14, r18 borderless panels
+/// on a soft floating shadow.
+const double kPosShellGutter = 16;
+const double kPosShellGap = 14;
+const double kPosShellRadius = 18;
 
 /// PSC-001A: below this width the POS app bar goes COMPACT — the textual
 /// title hides (the brand tile stays) and the outbox indicator collapses to

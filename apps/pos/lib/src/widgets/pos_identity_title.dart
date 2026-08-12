@@ -27,10 +27,10 @@ const double kPosIdentityMinWidth = 104;
 /// even when the free space is wide.
 const double kPosIdentityMaxWidth = 340;
 
-/// The logo box. POS-TOPBAR-QUICK-TWEAK-010 doubled this from 26dp so the
-/// restaurant's own mark is readable across the counter. It stays under the
-/// 56dp toolbar height, so the bar does not grow.
-const double kPosIdentityLogoSize = 52;
+/// The logo box. 010 grew it to 52 on the old white bar; the approved v4
+/// identity CHIP carries a compact white logo box instead (component specs
+/// §8), sized to ride inside the 54–64dp primary bar with the chip's padding.
+const double kPosIdentityLogoSize = 34;
 
 /// POS-TOPBAR-QUICK-TWEAK-010: in RTL the block sits left of centre.
 ///
@@ -71,41 +71,51 @@ class PosIdentityTitle extends ConsumerWidget {
         }
         // POS-TOPBAR-QUICK-TWEAK-010: centred in LTR, nudged left in RTL.
         final rtl = Directionality.of(context) == TextDirection.rtl;
+        // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the identity rides the navy
+        // bar as the approved translucent chip (white-9% bed) with light
+        // text. Still DERIVED-only — the chip adds no tap, no configuration.
         return Align(
           alignment: rtl
               ? const Alignment(kPosIdentityRtlAlignX, 0)
               : Alignment.center,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
-            child: Row(
-              key: const Key('pos-topbar-identity'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (logo != null) ...[
-                  _IdentityLogo(bytes: logo.sourceBytes),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                ],
-                // Flexible + ellipsis: a long Arabic/Hebrew/English name stays
-                // on ONE line and truncates instead of pushing the bar.
-                Flexible(
-                  child: Text(
-                    label,
-                    key: const Key('pos-topbar-identity-name'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: kRestoflowInk,
-                      // 010: +10% on whatever the theme resolves to, so the
-                      // tweak rides the theme instead of pinning a literal.
-                      fontSize:
-                          (theme.textTheme.titleSmall?.fontSize ?? 14) *
-                          kPosIdentityNameScale,
+            child: Container(
+              padding: const EdgeInsetsDirectional.fromSTEB(8, 5, 12, 5),
+              decoration: BoxDecoration(
+                color: const Color(0x17FFFFFF),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Row(
+                key: const Key('pos-topbar-identity'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (logo != null) ...[
+                    _IdentityLogo(bytes: logo.sourceBytes),
+                    const SizedBox(width: RestoflowSpacing.sm),
+                  ],
+                  // Flexible + ellipsis: a long Arabic/Hebrew/English name stays
+                  // on ONE line and truncates instead of pushing the bar.
+                  Flexible(
+                    child: Text(
+                      label,
+                      key: const Key('pos-topbar-identity-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        // 010: +10% on whatever the theme resolves to, so the
+                        // tweak rides the theme instead of pinning a literal.
+                        fontSize:
+                            (theme.textTheme.titleSmall?.fontSize ?? 14) *
+                            kPosIdentityNameScale,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

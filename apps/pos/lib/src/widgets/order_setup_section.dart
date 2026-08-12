@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/customer_phone.dart';
 import '../data/order_submission.dart' show kCustomerNameMaxLength;
+import '../design/pos_visual_tokens.dart' show PosThemePair;
 import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
 import 'table_picker_sheet.dart';
@@ -43,41 +44,18 @@ class OrderSetupSection extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: RestoflowSpacing.xs),
-          // POS-ORDER-TYPE-SELECTOR-UI-001: the Material 3 SegmentedButton read
-          // BACKWARDS — the unselected side carried the warm filled surface
-          // while the selected side turned white and dissolved into the white
-          // cart panel, with the icon on both sides and only a subtle
-          // foreground-colour difference to tell them apart. The shared RF-132
-          // control inverts that correctly: a solid brand-green fill with a
-          // white label, heavier weight, and the icon ONLY on the active
-          // option, so selection is carried by four independent signals rather
-          // than colour alone. minSegmentHeight keeps the 44dp touch target the
-          // old `minimumSize` provided (the control's own default is 38).
-          SizedBox(
-            width: double.infinity,
-            child: RestoflowSegmentedControl<OrderType>(
-              expand: true,
-              minSegmentHeight: 44,
-              segments: [
-                RestoflowSegment<OrderType>(
-                  key: const Key('order-type-dine-in'),
-                  value: OrderType.dineIn,
-                  icon: Icons.restaurant,
-                  label: l10n.posOrderTypeDineIn,
-                ),
-                RestoflowSegment<OrderType>(
-                  key: const Key('order-type-takeaway'),
-                  value: OrderType.takeaway,
-                  icon: Icons.takeout_dining,
-                  label: l10n.posOrderTypeTakeaway,
-                ),
-              ],
-              selected: setup.orderType,
-              // Re-tapping the active option is already a no-op in the
-              // controller (setOrderType returns early on an equal value), so
-              // the table/name/phone state is untouched.
-              onSelected: controller.setOrderType,
-            ),
+          // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved SLIDING-THUMB
+          // segmented control (tokens §10) — a warm track whose navy-gradient
+          // thumb slides to the active option. Selection is still carried by
+          // ≥3 non-colour signals (thumb geometry, icon only on the active
+          // option, label weight) and the full POS-ORDER-TYPE-SELECTOR-UI-001
+          // semantics contract (button + selected state per segment).
+          // Re-tapping the active option is already a no-op in the controller
+          // (setOrderType returns early on an equal value).
+          _PosOrderTypeSegmented(
+            l10n: l10n,
+            selected: setup.orderType,
+            onSelected: controller.setOrderType,
           ),
           const SizedBox(height: RestoflowSpacing.sm),
           if (setup.orderType == OrderType.dineIn)
@@ -132,6 +110,158 @@ class OrderSetupSection extends ConsumerWidget {
   }
 }
 
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved sliding-thumb
+/// order-type control (tokens §10): warm track (#F1EFE9, r14, 4px pad),
+/// h46 cells, a navy-gradient thumb that slides to the active option on the
+/// approved spring curve (320ms; instant under reduced motion).
+///
+/// The POS-ORDER-TYPE-SELECTOR-UI-001 contract is preserved: each segment is
+/// a real button with `selected` semantics under its frozen key, the icon
+/// renders ONLY on the active option, the active label is w700 vs w600, and
+/// every cell keeps a ≥44dp target. Only the fill MECHANISM changed (a
+/// sliding thumb instead of per-cell fills).
+class _PosOrderTypeSegmented extends StatelessWidget {
+  const _PosOrderTypeSegmented({
+    required this.l10n,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final AppLocalizations l10n;
+  final OrderType selected;
+  final ValueChanged<OrderType> onSelected;
+
+  static const _trackColor = Color(0xFFF1EFE9);
+
+  @override
+  Widget build(BuildContext context) {
+    final pair = PosThemePair.of(context);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final dineInSelected = selected == OrderType.dineIn;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _trackColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: SizedBox(
+        height: 46,
+        child: Stack(
+          children: [
+            // The sliding thumb — dine-in is the FIRST (inline-start) cell.
+            AnimatedAlign(
+              alignment: dineInSelected
+                  ? AlignmentDirectional.centerStart
+                  : AlignmentDirectional.centerEnd,
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 320),
+              curve: const Cubic(0.34, 1.56, 0.64, 1),
+              child: FractionallySizedBox(
+                widthFactor: 0.5,
+                heightFactor: 1,
+                child: Container(
+                  key: const Key('order-type-thumb'),
+                  decoration: BoxDecoration(
+                    gradient: pair.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: pair.primary.withValues(alpha: 0.28),
+                        offset: const Offset(0, 3),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _SegmentCell(
+                    key: const Key('order-type-dine-in'),
+                    label: l10n.posOrderTypeDineIn,
+                    icon: Icons.restaurant,
+                    selected: dineInSelected,
+                    onTap: () => onSelected(OrderType.dineIn),
+                  ),
+                ),
+                Expanded(
+                  child: _SegmentCell(
+                    key: const Key('order-type-takeaway'),
+                    label: l10n.posOrderTypeTakeaway,
+                    icon: Icons.takeout_dining,
+                    selected: !dineInSelected,
+                    onTap: () => onSelected(OrderType.takeaway),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentCell extends StatelessWidget {
+  const _SegmentCell({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final foreground = selected ? Colors.white : kRestoflowInk2;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The icon renders ONLY on the active option — one of the
+              // pinned non-colour selection signals.
+              if (selected) ...[
+                Icon(icon, size: RestoflowIconSizes.sm, color: foreground),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: ExcludeSemantics(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The OPTIONAL customer-name input (ORDER-CUSTOMER-001). A stateful field so it
 /// owns a [TextEditingController] whose text is cleared when the order-setup
 /// state resets (customer name -> null) after a successful submit / new order.
@@ -175,13 +305,26 @@ class _CustomerNameFieldState extends ConsumerState<_CustomerNameField> {
       maxLength: kCustomerNameMaxLength,
       textInputAction: TextInputAction.done,
       onChanged: widget.controller.setCustomerName,
+      // REFERENCE-REDESIGN-002: the optional customer fields wear the same
+      // quiet filled treatment as the menu search (decoration ONLY — the
+      // field widgets, focus behaviour and 008 keyboard identity are
+      // untouched).
       decoration: InputDecoration(
         isDense: true,
         counterText: '',
         prefixIcon: const Icon(Icons.person_outline),
         labelText: l10n.customerNameLabel,
         hintText: l10n.customerNamePlaceholder,
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: kPosInnerSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
       ),
     );
   }
@@ -253,6 +396,8 @@ class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
       maxLength: kCustomerPhoneMaxLength,
       textInputAction: TextInputAction.done,
       onChanged: widget.controller.setCustomerPhone,
+      // REFERENCE-REDESIGN-002: same quiet filled treatment (decoration
+      // ONLY; behaviour, validation and identity untouched).
       decoration: InputDecoration(
         isDense: true,
         counterText: '',
@@ -260,7 +405,16 @@ class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
         labelText: l10n.customerPhoneLabel,
         hintText: l10n.customerPhonePlaceholder,
         errorText: _errorFor(widget.setup.customerPhoneError, l10n),
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: kPosInnerSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          borderSide: const BorderSide(color: kPosInputBorder),
+        ),
       ),
     );
   }
@@ -284,11 +438,48 @@ class _TableRow extends StatelessWidget {
         children: [
           _WarningRow(message: l10n.posTableRequiredWarning),
           const SizedBox(height: RestoflowSpacing.sm),
-          OutlinedButton.icon(
-            key: const Key('assign-table-button'),
-            onPressed: () => TablePickerSheet.show(context),
-            icon: const Icon(Icons.table_restaurant),
-            label: Text(l10n.posAssignTable),
+          // 004: the approved amber assign-table CTA (tokens §10) — the
+          // SEMANTIC WARNING family as a gradient (#C4670E→#B45309, the
+          // shared warning accent), never the brand/action orange. Same key,
+          // same TablePickerSheet flow, ≥44dp target.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+                colors: [Color(0xFFC4670E), Color(0xFFB45309)],
+              ),
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x40B45309),
+                  offset: Offset(0, 3),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: FilledButton.icon(
+              key: const Key('assign-table-button'),
+              onPressed: () => TablePickerSheet.show(context),
+              icon: const Icon(Icons.table_restaurant, size: 18),
+              label: Text(
+                l10n.posAssignTable,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shadowColor: Colors.transparent,
+                minimumSize: const Size(44, 44),
+                textStyle: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                ),
+              ),
+            ),
           ),
         ],
       );

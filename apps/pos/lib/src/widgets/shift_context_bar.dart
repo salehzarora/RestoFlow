@@ -5,50 +5,57 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../design/pos_visual_tokens.dart' show kPosTotalsBed, kPosRowSeparator;
 import '../format/money_format.dart';
 import '../pos_palette.dart';
 import '../state/payment_controller.dart';
 
-/// A slim, persistent shift / cash-drawer context bar at the top of the cart
-/// panel (RF-116). DEMO shows the demo shift, drawer state, running cash and
-/// last payment — clearly labelled demo. REAL mode shows the honest truth: a
-/// real shift was opened on the server at PIN sign-in (RF-055 auto-open), and
-/// cash totals live THERE — this bar never invents local drawer figures for a
-/// real shift (the reconciliation UI is a later ticket).
-class ShiftContextBar extends ConsumerWidget {
+/// The shift / cash-drawer context at the top of the cart panel (RF-116).
+///
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 presentation is a
+/// COLLAPSED status pill (shift name + drawer chip + the prominent cash
+/// figure + chevron) that expands in place into the context block with the
+/// remaining facts (last payment + demo note). ALL previous facts stay one
+/// tap away and the cash figure never leaves the collapsed row.
+/// PRESENTATION ONLY: the provider reads, the demo/real split and the frozen
+/// `cash-in-drawer` key (one readable Text) are untouched.
+///
+/// DEMO shows the demo shift; REAL mode shows the honest truth: a real shift
+/// was opened on the server at PIN sign-in (RF-055 auto-open) and cash totals
+/// live THERE. This bar never invents local drawer figures for a real shift.
+class ShiftContextBar extends ConsumerStatefulWidget {
   const ShiftContextBar({this.onDark = false, super.key});
 
-  /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: render for the cart's dark
-  /// operational block — transparent container, on-dark foregrounds, tighter
-  /// vertical padding. PRESENTATION ONLY: the provider reads, the demo/real
-  /// split, the `cash-in-drawer` key and the single-Text label are untouched,
-  /// and the default keeps every other placement byte-identical.
+  /// Legacy on-dark FOREGROUNDS (kept for API compatibility; the approved v4
+  /// cart header is light and the POS passes false now). NOTE: the container
+  /// beds are always the light warm pill — a dark host would need its own
+  /// bed treatment before flipping this back on.
   final bool onDark;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShiftContextBar> createState() => _ShiftContextBarState();
+}
+
+class _ShiftContextBarState extends ConsumerState<ShiftContextBar> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+
     if (!isDemo) {
+      // REAL mode: name + honest note; nothing to expand.
       return Container(
         width: double.infinity,
-        color: onDark
-            ? Colors.transparent
-            : theme.colorScheme.surfaceContainerHigh,
-        padding: onDark
-            ? const EdgeInsetsDirectional.fromSTEB(
-                14,
-                0,
-                14,
-                RestoflowSpacing.sm,
-              )
-            : const EdgeInsetsDirectional.fromSTEB(
-                RestoflowSpacing.lg,
-                RestoflowSpacing.sm,
-                RestoflowSpacing.lg,
-                RestoflowSpacing.sm,
-              ),
+        margin: const EdgeInsetsDirectional.fromSTEB(12, 2, 12, 8),
+        padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: kPosTotalsBed,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          border: Border.all(color: kPosRowSeparator),
+        ),
         child: Wrap(
           spacing: RestoflowSpacing.md,
           runSpacing: RestoflowSpacing.xs,
@@ -58,12 +65,12 @@ class ShiftContextBar extends ConsumerWidget {
               icon: Icons.badge_outlined,
               label: l10n.posShiftRealName,
               strong: true,
-              onDark: onDark,
+              onDark: widget.onDark,
             ),
             Text(
               l10n.posShiftRealNote,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: onDark
+                color: widget.onDark
                     ? kPosOnDarkMuted
                     : theme.colorScheme.onSurfaceVariant,
               ),
@@ -87,58 +94,133 @@ class ShiftContextBar extends ConsumerWidget {
         : '${l10n.posLastCashPayment}: '
               '${MoneyFormatter.formatMinor(shift.lastPaymentMinor!, currency)}';
 
-    return Container(
-      width: double.infinity,
-      color: onDark
-          ? Colors.transparent
-          : theme.colorScheme.surfaceContainerHigh,
-      padding: onDark
-          ? const EdgeInsetsDirectional.fromSTEB(14, 0, 14, RestoflowSpacing.sm)
-          : const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.lg,
-              RestoflowSpacing.sm,
-              RestoflowSpacing.lg,
-              RestoflowSpacing.sm,
-            ),
-      child: Wrap(
-        spacing: RestoflowSpacing.md,
-        runSpacing: RestoflowSpacing.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
+    final drawerStyle =
+        (shift.drawerOpen ? RestoflowTone.success : RestoflowTone.neutral)
+            .styleOf(theme);
+
+    // The COLLAPSED status row; always visible, tap toggles the details.
+    // Semantics: a real BUTTON with an expanded state, so a screen-reader
+    // user knows more shift context is one activation away.
+    final collapsed = Semantics(
+      button: true,
+      expanded: _expanded,
+      child: InkWell(
+        key: const Key('shift-context-toggle'),
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(10, 7, 6, 7),
+          child: Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: RestoflowSpacing.md,
+                  runSpacing: RestoflowSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _ShiftItem(
+                      icon: Icons.badge_outlined,
+                      label: l10n.posShiftDemoName,
+                      onDark: widget.onDark,
+                    ),
+                    // The drawer state as a compact semantic chip.
+                    Container(
+                      padding: const EdgeInsetsDirectional.fromSTEB(6, 1, 6, 1),
+                      decoration: BoxDecoration(
+                        color: drawerStyle.container,
+                        borderRadius: BorderRadius.circular(
+                          RestoflowRadii.pill,
+                        ),
+                      ),
+                      child: Text(
+                        drawerLine,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: drawerStyle.onContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    // The figure a cashier actually checks: prominent, ONE
+                    // readable Text under its frozen key, always visible even
+                    // while collapsed (approved v4 rule).
+                    _ShiftItem(
+                      key: const Key('cash-in-drawer'),
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: cashLine,
+                      strong: true,
+                      prominent: true,
+                      onDark: widget.onDark,
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedRotation(
+                turns: _expanded ? 0.5 : 0,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : RestoflowDurations.base,
+                child: Icon(
+                  Icons.expand_more,
+                  size: RestoflowIconSizes.md,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // The EXPANDED details: the remaining facts, one tap away.
+    final expandedGrid = Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ShiftItem(
-            icon: Icons.badge_outlined,
-            label: l10n.posShiftDemoName,
-            onDark: onDark,
-          ),
-          _ShiftItem(
-            icon: Icons.point_of_sale,
-            label: drawerLine,
-            onDark: onDark,
-          ),
-          // Design-polish: the figure a cashier actually checks reads at a
-          // glance (larger, heavier type) instead of matching the meta rows.
-          _ShiftItem(
-            key: const Key('cash-in-drawer'),
-            icon: Icons.account_balance_wallet_outlined,
-            label: cashLine,
-            strong: true,
-            prominent: true,
-            onDark: onDark,
-          ),
-          if (lastLine != null)
+          const Divider(height: 10, thickness: 1, color: kPosRowSeparator),
+          if (lastLine != null) ...[
             _ShiftItem(
               icon: Icons.payments_outlined,
               label: lastLine,
-              onDark: onDark,
+              onDark: widget.onDark,
             ),
+            const SizedBox(height: RestoflowSpacing.xxs),
+          ],
           Text(
             l10n.posShiftDemoNote,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: onDark
+              color: widget.onDark
                   ? kPosOnDarkMuted
                   : theme.colorScheme.onSurfaceVariant,
               fontStyle: FontStyle.italic,
             ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsetsDirectional.fromSTEB(12, 2, 12, 8),
+      decoration: BoxDecoration(
+        color: kPosTotalsBed,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: kPosRowSeparator),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          collapsed,
+          // AnimatedSize keeps the reveal finite and reduced-motion safe.
+          AnimatedSize(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : RestoflowDurations.base,
+            curve: Curves.easeOutCubic,
+            alignment: AlignmentDirectional.topCenter,
+            child: _expanded
+                ? expandedGrid
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
@@ -171,9 +253,7 @@ class _ShiftItem extends StatelessWidget {
     final theme = Theme.of(context);
     final color = onDark
         ? (strong ? kPosOnDarkPrimary : kPosOnDarkMuted)
-        : (strong
-              ? theme.colorScheme.primary
-              : theme.colorScheme.onSurfaceVariant);
+        : (strong ? kRestoflowInk : theme.colorScheme.onSurfaceVariant);
     final textStyle = prominent
         ? theme.textTheme.titleSmall?.copyWith(
             color: color,
@@ -194,16 +274,12 @@ class _ShiftItem extends StatelessWidget {
         const SizedBox(width: RestoflowSpacing.xs),
         // FINAL-NEW-MODIFICATIONS-COMBINED-001: the label MUST be flexible.
         // The enclosing Wrap offers each item the panel's width as a maximum,
-        // but a Row whose Text is inflexible keeps its full intrinsic width and
-        // overflows whatever it is given. The cash-in-drawer line intrinsically
-        // wants ~344px, so it overflowed by ~36px in EVERY side cart narrower
-        // than that — the whole tablet band (340px cart), not just 1024px, and
-        // the compact-landscape cart (304px) by even more. Flexible lets the
-        // label reflow inside the width the panel actually has, at every width
-        // and in every locale: nothing is width-special-cased, nothing is
-        // clipped, and the text is not ellipsised (it softwraps), so the figure
-        // a cashier reads is never truncated. It stays ONE Text so descendant
-        // text-equality finders keep working.
+        // but a Row whose Text is inflexible keeps its full intrinsic width
+        // and overflows whatever it is given. Flexible lets the label reflow
+        // inside the width the panel actually has, at every width and in
+        // every locale: nothing is clipped, and the text is not ellipsised
+        // (it softwraps), so the figure a cashier reads is never truncated.
+        // It stays ONE Text so descendant text-equality finders keep working.
         Flexible(child: Text(label, style: textStyle)),
       ],
     );

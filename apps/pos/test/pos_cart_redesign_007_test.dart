@@ -5,7 +5,6 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show KitchenMeat;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
-import 'package:restoflow_pos/src/pos_palette.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/widgets/cart_panel.dart';
 import 'package:restoflow_pos/src/widgets/order_setup_section.dart';
@@ -86,17 +85,21 @@ Color? _boxColor(WidgetTester tester, Finder f) {
 }
 
 void main() {
-  group('A. the dark operational cart header', () {
-    testWidgets('007S2-A1. one dark ink block heads the cart and carries the '
-        'title, the count and Clear', (tester) async {
+  group('A. the operational cart header', () {
+    testWidgets('007S2-A1. one operational block heads the cart and carries '
+        'the title, the count and Clear', (tester) async {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 screens moved
+      // the dark plane to the top app bar — the cart header is LIGHT now.
+      // The contract that matters is unchanged: ONE keyed operational block
+      // heads the cart and carries every operational element.
       final l10n = await _en();
       await _pumpCart(tester);
 
       expect(_darkHeader(), findsOneWidget);
       expect(
         _boxColor(tester, _darkHeader()),
-        kPosCartHeaderInk,
-        reason: 'the operational block is the ink surface, not white',
+        Colors.white,
+        reason: 'the approved v4 cart header is the light panel surface',
       );
 
       // Everything operational lives inside that one block.
@@ -293,8 +296,12 @@ void main() {
   });
 
   group('D. footer hierarchy and the empty cart', () {
-    testWidgets('007S2-D1. the subtotal reads as the loud figure and keeps its '
-        'exact formatted string', (tester) async {
+    testWidgets('007S2-D1. the GRAND TOTAL reads as the loud figure and both '
+        'rows keep their exact formatted strings', (tester) async {
+      // 004: the approved totals hierarchy — the subtotal is a quiet
+      // breakdown row and الإجمالي is the ONE dominant figure (always
+      // present; equal to the subtotal while tax is off, from the same
+      // integer math).
       final c = await _pumpCart(tester);
       c
           .read(cartControllerProvider.notifier)
@@ -311,14 +318,30 @@ void main() {
 
       final subtotal = find.byKey(const Key('cart-subtotal'));
       expect(subtotal, findsOneWidget);
-      final text = tester.widget<Text>(subtotal);
+      final subtotalText = tester.widget<Text>(subtotal);
+      expect(
+        subtotalText.data ?? subtotalText.textSpan!.toPlainText(),
+        '₪40.00',
+      );
+
+      final grand = find.byKey(const Key('cart-grand-total'));
+      expect(grand, findsOneWidget);
+      final text = tester.widget<Text>(grand);
       expect(text.textSpan!.toPlainText(), '₪40.00');
       final spans = (text.textSpan! as TextSpan).children!.cast<TextSpan>();
       final digits = spans.firstWhere((s) => s.text == '40.00');
       final symbol = spans.firstWhere((s) => s.text == '₪');
-      expect(digits.style!.fontSize, 26);
+      expect(digits.style!.fontSize, 21);
       expect(digits.style!.fontWeight, FontWeight.w800);
       expect(digits.style!.fontSize, greaterThan(symbol.style!.fontSize!));
+      // The HIERARCHY claim in this test's title, made testable (audit
+      // restoration): the grand total's digits must render LARGER than the
+      // quiet subtotal row's figure.
+      expect(
+        digits.style!.fontSize,
+        greaterThan(subtotalText.style?.fontSize ?? 16),
+        reason: 'الإجمالي must be the loud figure, the subtotal the quiet row',
+      );
     });
 
     testWidgets('007S2-D2. Send is the one prominent action at ~54px and Park '

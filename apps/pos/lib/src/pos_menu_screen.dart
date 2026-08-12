@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'design/pos_motion.dart';
+import 'design/pos_visual_tokens.dart';
 import 'pos_palette.dart';
 import 'state/cart_controller.dart';
 import 'state/discount_controller.dart' show staffCapabilitiesProvider;
 import 'state/menu_filter.dart';
+import 'state/pos_device_accent.dart';
 import 'state/pos_menu_provider.dart';
 import 'state/pos_offline_state.dart';
 import 'widgets/category_chips.dart';
@@ -38,27 +41,38 @@ class PosMenuScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: kRestoflowCanvas,
+      // POS-PREMIUM-VISUAL-POLISH-001: the menu canvas is the one warm note
+      // on the screen (ivory — restaurant, not SaaS). Controls stay on the
+      // white deck and cool fills; the cart paints its own white plane.
+      backgroundColor: kPosIvorySurface,
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved CONNECTED brand
+      // navbar (component specs §8): one full-bleed primary bar carrying the
+      // white brand tile, the centered restaurant-identity chip and the
+      // action cluster on a translucent bed. Same five action widgets, same
+      // order, same behaviors — only the clothing changed.
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: PosThemePair.of(context).primary,
+        surfaceTintColor: PosThemePair.of(context).primary,
         scrolledUnderElevation: 0,
-        shape: const Border(bottom: BorderSide(color: kRestoflowHairline)),
+        toolbarHeight: _posTopBarHeight(MediaQuery.sizeOf(context).width),
+        iconTheme: const IconThemeData(color: kPosNavbarInk),
+        actionsIconTheme: const IconThemeData(color: kPosNavbarInk),
         titleSpacing: RestoflowSpacing.lg,
         title: Row(
           children: [
-            // The gradient brand tile (§6.1) — always visible, every width.
+            // The brand tile — WHITE with the action-colored POS mark (v4),
+            // always visible, every width.
             Container(
               key: const Key('pos-brand-tile'),
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                gradient: kRestoflowBrandGradient,
-                borderRadius: BorderRadius.circular(RestoflowRadii.md),
-              ),
-              child: const Icon(
-                Icons.point_of_sale,
                 color: Colors.white,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                Icons.point_of_sale,
+                color: PosThemePair.of(context).action,
                 size: RestoflowIconSizes.md,
               ),
             ),
@@ -74,7 +88,7 @@ class PosMenuScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: kRestoflowInk,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -88,13 +102,63 @@ class PosMenuScreen extends StatelessWidget {
             const Expanded(child: PosIdentityTitle()),
           ],
         ),
-        actions: const [
-          // PSC-001A: the ready-notification bell leads the action group.
-          ReadyNotificationBell(),
-          RecentOrdersButton(),
-          OutboxStatusIndicator(),
-          LanguageSelector(),
-          DeviceSettingsMenu(),
+        actions: [
+          // The v4 action cluster: the SAME five operational actions riding
+          // one translucent bed. IconTheme above lights their glyphs for the
+          // dark bar; each widget's behavior, tooltip and keys are untouched.
+          Container(
+            // Vertical margin 5, not 7: the 54dp phone toolbar must leave the
+            // five operational actions a >=44dp touch height (54-10=44;
+            // 58-10=48; 64-10=54) — the approved bar heights never buy their
+            // looks with sub-floor targets.
+            margin: const EdgeInsetsDirectional.only(
+              end: RestoflowSpacing.sm,
+              top: 5,
+              bottom: 5,
+            ),
+            decoration: BoxDecoration(
+              color: kPosNavbarBed,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            // Light glyph ink for the dark bar, applied INSIDE the cluster
+            // (a plain Theme wrapper here re-installed the ambient dark
+            // IconTheme and silently defeated `actionsIconTheme`), plus the
+            // approved white-16% hover wash where M3 IconButtons actually
+            // read it: their ButtonStyle overlay. Every action keeps its own
+            // widget, tooltip, keys and behavior.
+            child: IconTheme.merge(
+              data: const IconThemeData(color: kPosNavbarInk),
+              child: IconButtonTheme(
+                data: IconButtonThemeData(
+                  style: ButtonStyle(
+                    foregroundColor: const WidgetStatePropertyAll(
+                      kPosNavbarInk,
+                    ),
+                    overlayColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.pressed)
+                          ? Colors.white.withValues(alpha: 0.14)
+                          : states.contains(WidgetState.hovered) ||
+                                states.contains(WidgetState.focused)
+                          ? Colors.white.withValues(alpha: 0.16)
+                          : null,
+                    ),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // PSC-001A: the ready-notification bell leads the action
+                    // group.
+                    ReadyNotificationBell(),
+                    RecentOrdersButton(),
+                    OutboxStatusIndicator(),
+                    LanguageSelector(),
+                    DeviceSettingsMenu(),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       // PSC-001A: the body hosts the ONE ready-alert banner above whichever
@@ -134,20 +198,62 @@ class PosMenuScreen extends StatelessWidget {
               }
 
               final compact = mode == PosLayoutMode.compactLandscape;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Expanded(child: _MenuPane()),
-                  SizedBox(
-                    width: posCartWidthFor(mode),
-                    child: CartPanel(compact: compact),
-                  ),
-                ],
+              // POS-REFERENCE-VISUAL-SURGERY-003: TWO floating surfaces on
+              // the ivory canvas — the rounded white menu WORKSPACE and the
+              // rounded white ORDER SUMMARY panel — separated by real
+              // gutters. The SizedBox still measures exactly
+              // posCartWidthFor(mode) (frozen width contract).
+              final gutter = compact ? 12.0 : kPosShellGutter;
+              final gap = compact ? 10.0 : kPosShellGap;
+              return Padding(
+                padding: EdgeInsets.all(gutter),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Expanded(child: _ShellSurface(child: _MenuPane())),
+                    SizedBox(width: gap),
+                    SizedBox(
+                      width: posCartWidthFor(mode),
+                      child: _ShellSurface(child: CartPanel(compact: compact)),
+                    ),
+                  ],
+                ),
               );
             },
           ),
           const ReadyAlertOverlay(),
         ],
+      ),
+    );
+  }
+}
+
+/// The approved top-bar height ladder (responsive spec §9: 64 / 58 / 54).
+double _posTopBarHeight(double width) => width >= 1100
+    ? 64
+    : width >= RestoflowBreakpoints.posTwoPane
+    ? 58
+    : 54;
+
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — one floating rounded white surface
+/// of the two-plane shell. BORDERLESS per the approved v4 panels: r18 on a
+/// soft floating shadow instead of a warm hairline. Purely presentational.
+class _ShellSurface extends StatelessWidget {
+  const _ShellSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kPosShellRadius),
+        boxShadow: kPosPanelFloatShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(kPosShellRadius),
+        child: child,
       ),
     );
   }
@@ -240,6 +346,9 @@ class _MenuDeck extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // SURGERY-003: the deck lives INSIDE the floating workspace surface now —
+    // no shadow of its own; a soft bottom seam separates controls from
+    // merchandise.
     return DecoratedBox(
       key: const Key('pos-menu-deck'),
       decoration: const BoxDecoration(
@@ -247,19 +356,14 @@ class _MenuDeck extends StatelessWidget {
         border: BorderDirectional(
           bottom: BorderSide(color: kRestoflowHairline),
         ),
-        boxShadow: kPosDeckShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.lg,
-              RestoflowSpacing.md,
-              RestoflowSpacing.lg,
-              0,
-            ),
+            // 004: the approved deck inner padding (tokens §5: deck inner 18).
+            padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 18, 0),
             child: Row(
               children: [
                 // THE HEADING CLUSTER CAN GIVE GROUND.
@@ -303,6 +407,8 @@ class _MenuDeck extends StatelessWidget {
                   child: Align(
                     alignment: AlignmentDirectional.centerEnd,
                     child: ConstrainedBox(
+                      // 004: a compact field, not a banner (spec §2: search
+                      // ~300 wide, max 520) — quiet beside the food.
                       constraints: const BoxConstraints(maxWidth: 520),
                       child: const _MenuSearchField(),
                     ),
@@ -341,6 +447,9 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final hasText = _controller.text.isNotEmpty;
+    // POS-PREMIUM-VISUAL-POLISH-001: the focus ring wears this terminal's
+    // secondary accent (a non-critical highlight by contract).
+    final accent = ref.watch(posDeviceAccentColorProvider);
     return SizedBox(
       height: 44,
       child: TextField(
@@ -380,39 +489,32 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
             borderSide: const BorderSide(color: kPosInputBorder),
           ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            borderSide: BorderSide(color: accent, width: 2),
+          ),
         ),
       ),
     );
   }
 }
 
-/// POS-PRODUCT-DESCRIPTIONS-001 — the ONE grid geometry, shared by the loaded
-/// grid and the loading skeleton so the two can never drift apart (a skeleton
-/// that is a different height than the cards it stands in for makes the whole
-/// grid jump the moment the menu arrives).
-///
-/// [kPosMenuCardBodyHeight] rose from 104 to 140 to fit up to TWO description
-/// lines under the product name.
-///
-/// MEASURED, not guessed. At the narrowest real cell (173px, a 390px viewport)
-/// the body content is 120px in en, ar AND he alike: 12+12 padding, a 20px
-/// title line, a 2px gap, a 30px two-line description (bodySmall at height
-/// 1.25) and the unchanged 44px price/add row. 140 keeps ~20px of headroom, so
-/// a larger accessibility text scale does not immediately clip the price row
-/// and the description is not jammed against it. Note that a too-small value
-/// would NOT throw: the body uses `spaceBetween`, which quietly compresses
-/// rather than overflowing — which is exactly why this number is measured from
-/// the rendered content instead of inferred from the absence of an exception.
-///
-/// Cards stay a FIXED height — no IntrinsicHeight, no variable extents — so the
-/// grid keeps scanning cleanly in rows.
-const double kPosMenuCardMaxExtent = 230;
-const double kPosMenuCardBodyHeight = 140;
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card's FIXED content zone —
+/// the one-baseline name+price row, the fixed description slot, and the
+/// FULL-WIDTH 44px action footer (approved v4 anatomy, component specs §3).
+/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 15 (the
+/// description slot) + 8 + 44 (action) + 10 = 108; at 2x the ladder drops
+/// the description slot and the row grows to ~35 → 8 + 35 + 8 + 44 + 10 =
+/// 105 — so 118 holds both with headroom.
+const double kPosMenuCardBodyHeight = 118;
 
-/// The cell height for a card [cellWidth] wide: the fixed 4:3 image band plus
-/// the card body.
+/// The cell height for a card [cellWidth] wide: the INSET 4:3 image band
+/// (see [kPosCardImageInset] / [kPosCardImageAspect] in pos_palette.dart)
+/// plus the fixed content zone.
 double posMenuCardExtent(double cellWidth) =>
-    cellWidth * 3 / 4 + kPosMenuCardBodyHeight;
+    (cellWidth - 2 * kPosCardImageInset) / kPosCardImageAspect +
+    kPosCardImageInset +
+    kPosMenuCardBodyHeight;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the ONE resolved grid geometry, derived
 /// from the layout mode rather than from a max-extent formula, and shared
@@ -640,6 +742,9 @@ class _MenuGrid extends ConsumerWidget {
         message: l10n.posMenuEmptyBody,
       );
     }
+    // POS-PREMIUM-VISUAL-POLISH-001: this terminal's secondary accent, for
+    // the add button's interaction layer (hover/press wash + focus ring).
+    final accent = ref.watch(posDeviceAccentColorProvider);
     // The category rail now lives in the deck (`_MenuPane`); the grid is only
     // the merchandise plane.
     final Widget grid = items.isEmpty
@@ -662,33 +767,70 @@ class _MenuGrid extends ConsumerWidget {
                 itemBuilder: (context, index) {
                   final item = items[index];
                   final groups = menu.groupsForItem(item.id);
-                  return MenuItemCard(
-                    item: item,
-                    category: menu.categoryOf(item.categoryId),
-                    currencyCode: menu.currencyCode,
-                    optionGroupCount: groups.length,
-                    inCartQuantity: inCart[item.id] ?? 0,
-                    onManageAvailability: canManageAvailability
-                        ? () => MenuAvailabilitySheet.show(context, item: item)
-                        : null,
-                    onAdd: cartLocked
-                        ? null
-                        : groups.isEmpty
-                        ? () => controller.addItem(item)
-                        : () => ModifierSelectionSheet.show(
-                            context,
-                            item: item,
-                            groups: groups,
-                            currencyCode: menu.currencyCode,
-                            category: menu.categoryOf(item.categoryId),
-                            onConfirm: (selections, note, quantity) =>
-                                controller.addItemWithModifiers(
-                                  item,
-                                  selections,
-                                  note: note,
-                                  quantity: quantity,
-                                ),
-                          ),
+                  // Entrance stagger + tap bump are paint-only (opacity /
+                  // transform): the grid's measured geometry, the card's keys
+                  // and every tap target are untouched, and both render the
+                  // final state immediately under reduced motion.
+                  return PosEntrance(
+                    index: index,
+                    child: PosTapBump(
+                      enabled: !cartLocked && !item.isUnavailable,
+                      child: MenuItemCard(
+                        item: item,
+                        category: menu.categoryOf(item.categoryId),
+                        currencyCode: menu.currencyCode,
+                        optionGroupCount: groups.length,
+                        inCartQuantity: inCart[item.id] ?? 0,
+                        interactionAccent: accent,
+                        onManageAvailability: canManageAvailability
+                            ? () => MenuAvailabilitySheet.show(
+                                context,
+                                item: item,
+                              )
+                            : null,
+                        onAdd: cartLocked
+                            ? null
+                            : groups.isEmpty
+                            ? () {
+                                // Celebrate ONLY an APPLIED mutation: if the
+                                // addition freeze lands between frame build
+                                // and tap, the controller refuses — no fly
+                                // ghost, no "added" toast for a refused add.
+                                if (controller.addItem(item) ==
+                                    CartMutationResult.applied) {
+                                  _celebrateAdd(
+                                    context,
+                                    l10n,
+                                    item.name,
+                                    accent,
+                                  );
+                                }
+                              }
+                            : () => ModifierSelectionSheet.show(
+                                context,
+                                item: item,
+                                groups: groups,
+                                currencyCode: menu.currencyCode,
+                                category: menu.categoryOf(item.categoryId),
+                                onConfirm: (selections, note, quantity) {
+                                  if (controller.addItemWithModifiers(
+                                        item,
+                                        selections,
+                                        note: note,
+                                        quantity: quantity,
+                                      ) ==
+                                      CartMutationResult.applied) {
+                                    _celebrateAdd(
+                                      context,
+                                      l10n,
+                                      item.name,
+                                      accent,
+                                    );
+                                  }
+                                },
+                              ),
+                      ),
+                    ),
                   );
                 },
               );
@@ -701,8 +843,12 @@ class _MenuGrid extends ConsumerWidget {
     // treatment: the cache exists precisely so the cashier keeps the ordinary
     // grid. The lead line names the mode; the body names the data's age from
     // the snapshot's server fetch time (locale-formatted, never hand-rolled).
+    // SURGERY-003: the grid sits directly on the white workspace surface;
+    // the ivory canvas (the ambience) lives in the shell gutters around it.
     final offline = ref.watch(posOfflineModeProvider);
-    if (offline.phase != PosOfflinePhase.offlineCached) return grid;
+    if (offline.phase != PosOfflinePhase.offlineCached) {
+      return grid;
+    }
     final fetchedAt = offline.snapshotFetchedAt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -738,6 +884,33 @@ class _MenuGrid extends ConsumerWidget {
     );
   }
 
+  /// POS-PREMIUM-VISUAL-POLISH-001: the add celebration — a FLIP ghost flying
+  /// from the tapped card to the cart glyph, plus (phones only, where the
+  /// cart itself is off-screen) a spring toast naming what was added. Both
+  /// are fire-and-forget, finite, and reduced-motion-aware; the add already
+  /// happened through the ordinary controller path either way.
+  static void _celebrateAdd(
+    BuildContext cardContext,
+    AppLocalizations l10n,
+    String itemName,
+    Color accent,
+  ) {
+    if (!cardContext.mounted) return;
+    posFlyToCart(cardContext, color: accent);
+    final size = MediaQuery.sizeOf(cardContext);
+    final phone =
+        posLayoutModeFor(width: size.width, height: size.height) ==
+        PosLayoutMode.phone;
+    if (phone) {
+      showPosSpringToast(
+        cardContext,
+        message: l10n.posItemAddedToast(itemName),
+        icon: Icons.add_shopping_cart,
+        accent: accent,
+      );
+    }
+  }
+
   /// The locale-formatted moment the served snapshot was fetched: the time of
   /// day when it was saved today, otherwise the (medium) date — both through
   /// [MaterialLocalizations], so ar/he/en each read their own convention.
@@ -754,3 +927,7 @@ class _MenuGrid extends ConsumerWidget {
         : material.formatMediumDate(local);
   }
 }
+
+// (SURGERY-003 removed the ambient grid washes: the ivory canvas now lives
+// in the shell gutters AROUND the floating white surfaces, which carries the
+// warmth without painting under merchandise.)

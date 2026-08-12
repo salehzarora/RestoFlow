@@ -11,6 +11,8 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
@@ -109,53 +111,96 @@ void main() {
   });
 
   group('B. the selected category is navy + an orange mark', () {
-    testWidgets('the selected chip carries exactly one orange marker', (
+    testWidgets('the selected chip carries exactly one accent marker', (
       tester,
     ) async {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 rail uses
+      // icon PILLS — the active marker is now the device-accent TINT PILL
+      // itself (the old 2px underline is retired; the frozen marker key
+      // rides the pill). Same doctrine: the marker wears the TERMINAL'S
+      // secondary accent (default Mint Leaf), never a semantic colour and
+      // never the brand orange.
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       expect(find.byKey(_marker), findsOneWidget);
-      final container = tester.widget<Container>(find.byKey(_marker));
+      final box = tester.widget<DecoratedBox>(find.byKey(_marker));
+      final fill = (box.decoration as BoxDecoration).color!;
       expect(
-        (container.decoration! as BoxDecoration).color,
-        RestoflowBrandPalette.of(Brightness.light).accentOrange,
-        reason: 'The marker must be the BRAND accent, not a semantic colour.',
+        fill.withValues(alpha: 1),
+        kPosDefaultSecondaryAccent.withValues(alpha: 1),
+        reason:
+            'The active pill tint must be the DEVICE accent hue (default '
+            'mint), never a semantic colour.',
+      );
+      expect(
+        fill.a,
+        lessThan(0.5),
+        reason: 'a TINT, not a solid accent fill — the rail stays quiet',
       );
     });
 
-    testWidgets('the chip BODY stays navy — orange never becomes the fill', (
-      tester,
-    ) async {
+    testWidgets('the chip BODY stays quiet — accents never become a solid '
+        'fill', (tester) async {
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       final brand = RestoflowBrandPalette.of(Brightness.light);
-      // Every orange box on this rail must BE the marker. A Container with a
-      // decoration builds a DecoratedBox of its own, so the marker shows up
-      // here too — counting is what separates "the mark is orange" from "the
-      // chip turned orange".
+      // 004: the rail is warm quiet pills; the SINGLE accent surface is the
+      // active pill's TINT (<50% alpha). No SOLID accent fill may exist —
+      // that is what separates "the active pill is tinted" from "the chip
+      // turned accent-coloured".
+      final solidAccentBoxes = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((d) => d.decoration)
+          .whereType<BoxDecoration>()
+          .where(
+            (d) =>
+                d.color != null &&
+                d.color!.withValues(alpha: 1) ==
+                    kPosDefaultSecondaryAccent.withValues(alpha: 1) &&
+                d.color!.a >= 0.5,
+          )
+          .length;
+      expect(
+        solidAccentBoxes,
+        0,
+        reason: 'the accent appears only as the active pill TINT, never solid',
+      );
+      final tintBoxes = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((d) => d.decoration)
+          .whereType<BoxDecoration>()
+          .where(
+            (d) =>
+                d.color != null &&
+                d.color!.withValues(alpha: 1) ==
+                    kPosDefaultSecondaryAccent.withValues(alpha: 1) &&
+                d.color!.a < 0.5,
+          )
+          .length;
+      expect(tintBoxes, 1, reason: 'exactly ONE active tint pill');
+      // And the BRAND orange fills nothing here at all.
       final orangeBoxes = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
           .whereType<BoxDecoration>()
           .where((d) => d.color == brand.accentOrange)
           .length;
-      expect(
-        orangeBoxes,
-        1,
-        reason:
-            'Exactly one orange box: the 2px marker. Anything more means the '
-            'chip body itself went orange, and navy is the structure.',
-      );
+      expect(orangeBoxes, 0);
 
-      // And the chip body is the theme primary — navy.
+      // No STRUCTURAL NAVY fills on the rail either — the primary lives on
+      // the card actions and the top bar, not on the filter pills.
       final scheme = restoflowLightBrandTheme().colorScheme;
-      final bodyFills = tester
+      final primaryFills = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
           .whereType<BoxDecoration>()
-          .where((d) => d.boxShadow != null)
-          .map((d) => d.color);
-      expect(bodyFills, contains(scheme.primary));
+          .where((d) => d.color == scheme.primary)
+          .length;
+      expect(
+        primaryFills,
+        0,
+        reason: 'No navy tab bodies on the rail — the pills are quiet.',
+      );
     });
 
     testWidgets('selection does not change the chip geometry', (tester) async {
@@ -288,7 +333,9 @@ void main() {
             alignment: Alignment.topLeft,
             child: SizedBox(
               width: 260,
-              height: 300,
+              // The REAL grid extent for this cell width (the old hardcoded
+              // 300 predates the REFERENCE-REDESIGN-002 food-first card).
+              height: posMenuCardExtent(260),
               child: MenuItemCard(
                 item: unavailable
                     ? item.copyWith(availability: 'unavailable')
@@ -305,22 +352,35 @@ void main() {
     testWidgets('the Add fill is the structural navy, never the accent', (
       tester,
     ) async {
+      // 004: the Add footer paints the approved PRIMARY GRADIENT on a wrapper
+      // DecoratedBox (a FilledButton cannot paint a gradient); the button
+      // itself goes transparent over it. The doctrine is unchanged — the Add
+      // fill is the STRUCTURAL primary family, never the accent orange.
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
-      final button = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      final button = find.widgetWithIcon(FilledButton, Icons.add_shopping_cart);
+      final wrapper = tester.widget<DecoratedBox>(
+        find.ancestor(of: button, matching: find.byType(DecoratedBox)).first,
       );
+      final gradient =
+          (wrapper.decoration as BoxDecoration).gradient as LinearGradient;
       final brand = RestoflowBrandPalette.of(Brightness.light);
-      final scheme = restoflowLightBrandTheme().colorScheme;
-      final fill = button.style?.backgroundColor?.resolve(const {});
-      expect(fill, scheme.primary);
-      expect(
-        fill,
-        isNot(brand.accentOrange),
-        reason:
-            'A grid of orange Adds would compete with Send Order, the one '
-            'control that is actually the next step.',
-      );
+      const pair = PosThemePair.navyEmber;
+      expect(gradient.colors, [pair.primaryHi, pair.primary]);
+      for (final color in gradient.colors) {
+        expect(
+          color,
+          isNot(brand.accentOrange),
+          reason:
+              'A grid of orange Adds would compete with Send Order, the one '
+              'control that is actually the next step.',
+        );
+        expect(
+          color.b,
+          greaterThan(color.r),
+          reason: 'the Add gradient stays the navy structural family',
+        );
+      }
     });
 
     testWidgets('Add gains an orange hover, press and focus edge', (
@@ -328,8 +388,8 @@ void main() {
     ) async {
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
-      final button = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      final button = tester.widget<FilledButton>(
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       final style = button.style!;
       expect(style.overlayColor?.resolve(const {}), isNull);
@@ -360,11 +420,11 @@ void main() {
       // must never happen is an enabled control, and certainly not one wearing
       // the action colour.
       final addFinder = find.widgetWithIcon(
-        IconButton,
+        FilledButton,
         Icons.add_shopping_cart,
       );
       if (addFinder.evaluate().isNotEmpty) {
-        final button = tester.widget<IconButton>(addFinder);
+        final button = tester.widget<FilledButton>(addFinder);
         expect(button.onPressed, isNull);
         expect(
           button.style?.backgroundColor?.resolve({WidgetState.disabled}),
@@ -388,7 +448,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       await tester.pumpAndSettle();
       expect(added, 1);
@@ -398,7 +458,7 @@ void main() {
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
       final rect = tester.getRect(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       expect(rect.width, greaterThanOrEqualTo(44));
       expect(rect.height, greaterThanOrEqualTo(44));

@@ -487,14 +487,15 @@ void main() {
 
     // The healthy sibling still offers its add button — so a missing button on
     // the burger means "blocked", not "this screen renders no buttons".
+    // (SURGERY-003: the add affordance is the full-width FilledButton footer.)
     expect(
-      find.descendant(of: colaCard, matching: find.byType(IconButton)),
+      find.descendant(of: colaCard, matching: find.byType(FilledButton)),
       findsOneWidget,
       reason:
           'the control case proves the add affordance exists on this screen',
     );
     expect(
-      find.descendant(of: burgerCard, matching: find.byType(IconButton)),
+      find.descendant(of: burgerCard, matching: find.byType(FilledButton)),
       findsNothing,
       reason: 'no add button is offered for a product we cannot price',
     );

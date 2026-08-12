@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 — A1 regression.
@@ -229,7 +230,8 @@ void main() {
             home: Scaffold(
               body: SizedBox(
                 width: 240,
-                height: 320,
+                // The REAL grid extent for this cell width (SURGERY-003).
+                height: posMenuCardExtent(240),
                 child: MenuItemCard(
                   item: item,
                   // Non-zero option groups: proves the variant/modifier entry is
