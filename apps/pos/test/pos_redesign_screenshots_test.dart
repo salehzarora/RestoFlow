@@ -27,10 +27,19 @@ const String _phase = String.fromEnvironment(
 );
 
 Future<void> _loadRealFonts() async {
+  // CI runs `flutter test apps/pos` from the REPOSITORY ROOT, so a bare
+  // relative path does not resolve there; probe both working directories
+  // (the generator itself only ever runs locally, but setUpAll must never
+  // throw on CI either way).
+  final fontsDir = Directory(
+    'assets/fonts',
+  ).existsSync()
+      ? 'assets/fonts'
+      : 'apps/pos/assets/fonts';
   Future<void> load(String family, List<String> files) async {
     final loader = FontLoader(family);
     for (final f in files) {
-      final bytes = File('assets/fonts/$f').readAsBytesSync();
+      final bytes = File('$fontsDir/$f').readAsBytesSync();
       loader.addFont(Future.value(ByteData.view(bytes.buffer)));
     }
     await loader.load();
@@ -114,7 +123,13 @@ Future<void> _shot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(_loadRealFonts);
+  // setUpAll runs even when every test in the file is skipped — on CI (where
+  // POS_SCREENSHOTS is never defined) it must be a no-op, not a font load
+  // that can fail the suite (the branch's one CI red came from exactly that).
+  setUpAll(() async {
+    if (!_enabled) return;
+    await _loadRealFonts();
+  });
 
   testWidgets('1280 ar empty', skip: !_enabled, (tester) async {
     await _shot(
