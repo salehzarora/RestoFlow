@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../brand_palette.dart';
 import '../tokens.dart';
 import '../tone.dart';
 
@@ -324,8 +325,21 @@ class _KpiTile extends StatelessWidget {
     final iconData = icon;
     final captionText = caption;
     final d = delta;
-    final tileBg = toneStyle?.container ?? scheme.primaryContainer;
-    final tileFg = toneStyle?.accent ?? scheme.primary;
+    // UI-ORANGE-BALANCE-POLISH-001: a TONELESS KPI gets the brand accent tint.
+    //
+    // A card with a tone is saying something semantic — success, info, warning
+    // — and keeps that colour untouched, because a delta that means "down" must
+    // never be repainted as brand. A card with NO tone was previously a second
+    // navy block in a navy-heavy view, so the neutral, highest-value metrics
+    // (gross sales, average order value) take the orange tint instead. Only the
+    // 36px icon tile is tinted; the card stays white and the value stays ink.
+    //
+    // Sourced from the BRAND palette, never RestoflowSemanticColors.accent:
+    // the two hold the same value today but are independent roles, and reading
+    // the semantic one here is how a rebrand repaints an attention state.
+    final brand = RestoflowBrandPalette.of(theme.brightness);
+    final tileBg = toneStyle?.container ?? brand.accentOrangeContainer;
+    final tileFg = toneStyle?.accent ?? brand.accentOrange;
     final valueInk = theme.brightness == Brightness.light
         ? kRestoflowInk
         : scheme.onSurface;

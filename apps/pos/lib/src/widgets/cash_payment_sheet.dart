@@ -680,6 +680,33 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
 
 /// The RF-117 tender selector: a Wrap of choice chips (Cash / Card / Bit /
 /// External) so the row wraps on a narrow sheet instead of overflowing. Each
+/// UI-ORANGE-BALANCE-POLISH-001: reaches the REAL tender selector from a test.
+///
+/// The selector is private because nothing outside this sheet builds one. The
+/// tests that hold its selected-state accent and its non-colour cue still have
+/// to exercise the shipped widget rather than a copy of it.
+@visibleForTesting
+class PosTenderSelectorProbe extends StatelessWidget {
+  const PosTenderSelectorProbe({
+    required this.selected,
+    this.onSelect,
+    this.enabled = true,
+    super.key,
+  });
+
+  final PaymentMethod selected;
+  final ValueChanged<PaymentMethod>? onSelect;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => _TenderSelector(
+    l10n: AppLocalizations.of(context),
+    selected: selected,
+    enabled: enabled,
+    onSelect: onSelect ?? (_) {},
+  );
+}
+
 /// chip carries a stable Key for tests.
 class _TenderSelector extends StatelessWidget {
   const _TenderSelector({
@@ -704,6 +731,9 @@ class _TenderSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tenderAccent = RestoflowBrandPalette.of(
+      theme.brightness,
+    ).accentOrange;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -718,12 +748,34 @@ class _TenderSelector extends StatelessWidget {
           spacing: RestoflowSpacing.sm,
           runSpacing: RestoflowSpacing.xs,
           children: [
+            // UI-ORANGE-BALANCE-POLISH-001: the chosen tender gets an orange
+            // edge AND a checkmark.
+            //
+            // The app theme turns Material's chip checkmark off, so before this
+            // the selected tender was distinguished by fill colour ALONE — on
+            // the one surface where getting the answer wrong means taking money
+            // the wrong way. The checkmark restores a non-colour cue; the orange
+            // edge is the brand accent marking an active choice.
+            //
+            // The edge is a COLOUR change at the theme's existing border width,
+            // not a thicker one, so selecting a tender cannot resize its chip
+            // and shove the neighbouring tenders sideways mid-tap.
+            //
+            // Orange marks the CHOICE only. It never touches the outcome:
+            // approved stays semantic success and declined stays semantic
+            // danger, which is what a cashier reads to know whether money
+            // actually moved.
             for (final method in PaymentMethod.values)
               ChoiceChip(
                 key: Key(_keys[method]!),
                 label: Text(paymentMethodLabel(l10n, method)),
                 selected: selected == method,
                 onSelected: enabled ? (_) => onSelect(method) : null,
+                showCheckmark: true,
+                checkmarkColor: tenderAccent,
+                side: selected == method
+                    ? BorderSide(color: tenderAccent)
+                    : null,
               ),
           ],
         ),

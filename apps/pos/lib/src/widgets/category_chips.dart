@@ -104,24 +104,64 @@ class _CategoryChip extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: RestoflowSpacing.md,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Stack(
                   children: [
-                    Icon(icon, size: RestoflowIconSizes.sm, color: foreground),
-                    const SizedBox(width: 6),
-                    // The label Text stays the tap target the tests use
-                    // (find.text(<category name>)).
-                    Text(
-                      label,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: foreground,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: RestoflowIconSizes.sm,
+                          color: foreground,
+                        ),
+                        const SizedBox(width: 6),
+                        // The label Text stays the tap target the tests use
+                        // (find.text(<category name>)).
+                        Text(
+                          label,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (count != null) ...[
+                          const SizedBox(width: 6),
+                          _CountBadge(count: count!, selected: selected),
+                        ],
+                      ],
                     ),
-                    if (count != null) ...[
-                      const SizedBox(width: 6),
-                      _CountBadge(count: count!, selected: selected),
-                    ],
+                    // UI-ORANGE-BALANCE-POLISH-001: the active filter earns a
+                    // thin orange underline.
+                    //
+                    // The chip already had TWO non-colour signals — a shadow no
+                    // other chip carries, and a w700 label — so this is a third
+                    // cue rather than the only one, and the filter stays legible
+                    // for anyone who cannot separate navy from navy-with-orange.
+                    //
+                    // Positioned, so it contributes nothing to the measured
+                    // size: the rail is a horizontally scrolling set and a chip
+                    // that grew on selection would shove its neighbours sideways
+                    // under the cashier's finger mid-tap.
+                    if (selected)
+                      PositionedDirectional(
+                        start: 0,
+                        end: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            key: const Key('category-chip-active-marker'),
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: RestoflowBrandPalette.of(
+                                Brightness.light,
+                              ).accentOrange,
+                              borderRadius: BorderRadius.circular(
+                                RestoflowRadii.pill,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

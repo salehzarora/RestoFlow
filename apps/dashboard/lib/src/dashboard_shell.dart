@@ -1298,6 +1298,36 @@ class _SideNavTileState extends State<_SideNavTile> {
       child: Stack(
         children: [
           interactive,
+          // UI-ORANGE-BALANCE-POLISH-001: a narrow orange marker on the
+          // selected tile's leading edge.
+          //
+          // The rail stays navy — that is the structure — but navy-on-navy made
+          // "which page am I on" a brightness comparison. The marker adds a
+          // second, non-colour signal (an edge that is either there or not), so
+          // selection no longer depends on telling two navies apart. Directional
+          // start, so it mirrors to the right edge under RTL.
+          //
+          // It rides INSIDE the tile bounds like the focus ring, taking part in
+          // neither layout nor hit testing, so nothing shifts when selection
+          // moves.
+          if (widget.selected)
+            PositionedDirectional(
+              start: 0,
+              top: RestoflowSpacing.sm,
+              bottom: RestoflowSpacing.sm,
+              child: IgnorePointer(
+                child: Container(
+                  key: const Key('rail-active-marker'),
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: RestoflowBrandPalette.of(
+                      Brightness.light,
+                    ).accentOrange,
+                    borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+                  ),
+                ),
+              ),
+            ),
           if (_focused)
             // Positioned.fill + IgnorePointer: the ring is painted INSIDE the
             // tile's existing bounds and takes part in neither layout nor hit

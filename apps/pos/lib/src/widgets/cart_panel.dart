@@ -2123,32 +2123,42 @@ class _CartFooter extends StatelessWidget {
                   // modified — Send is simply the one control on this screen
                   // with a 54px height, an 800 weight and a glow, so it reads
                   // as the primary path without diluting the shared style.
-                  style: RestoflowButtonStyles.big(context).copyWith(
-                    minimumSize: WidgetStateProperty.all(
-                      const Size.fromHeight(kPosSendHeight),
-                    ),
-                    textStyle: WidgetStateProperty.all(
-                      const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                  //
+                  // UI-ORANGE-BALANCE-POLISH-001: Send is THE next step on this
+                  // screen, so it takes the brand accent fill. It is the only
+                  // orange fill in the cart — Park stays a ghost, and the
+                  // payment actions live on a different surface — which is what
+                  // keeps the accent meaning "do this next" rather than merely
+                  // "this is a button". Disabled still resolves to the POS grey
+                  // below, so an unsendable cart never looks actionable.
+                  style: RestoflowButtonStyles.accent(context)
+                      .merge(RestoflowButtonStyles.big(context))
+                      .copyWith(
+                        minimumSize: WidgetStateProperty.all(
+                          const Size.fromHeight(kPosSendHeight),
+                        ),
+                        textStyle: WidgetStateProperty.all(
+                          const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        shape: WidgetStateProperty.all(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kPosSendRadius),
+                          ),
+                        ),
+                        backgroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.disabled)
+                              ? kPosDisabledBg
+                              : null,
+                        ),
+                        foregroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.disabled)
+                              ? const Color(0xFF8B97A9)
+                              : null,
+                        ),
                       ),
-                    ),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(kPosSendRadius),
-                      ),
-                    ),
-                    backgroundColor: WidgetStateProperty.resolveWith(
-                      (states) => states.contains(WidgetState.disabled)
-                          ? kPosDisabledBg
-                          : null,
-                    ),
-                    foregroundColor: WidgetStateProperty.resolveWith(
-                      (states) => states.contains(WidgetState.disabled)
-                          ? const Color(0xFF8B97A9)
-                          : null,
-                    ),
-                  ),
                 ),
               ),
             ),
