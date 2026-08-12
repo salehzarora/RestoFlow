@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../design/pos_motion.dart';
 import '../format/money_format.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
+import '../state/pos_device_accent.dart';
 import 'cart_panel.dart';
 
 /// Opens the phone slide-up cart sheet (DESIGN-004 §6.8): a rounded-top white
@@ -65,7 +67,10 @@ class PosBottomBar extends ConsumerWidget {
       cart.currencyCode,
     );
     final label = submitted ? l10n.posCartBarSent : l10n.posCartTitle;
-    final accent = RestoflowBrandPalette.of(theme.brightness).accentOrange;
+    // POS-PREMIUM-VISUAL-POLISH-001: interaction feedback + the count badge
+    // wear THIS terminal's secondary accent (non-critical highlights by
+    // contract). The bar itself stays the Midnight Navy plane.
+    final accent = ref.watch(posDeviceAccentColorProvider);
 
     return SafeArea(
       top: false,
@@ -117,6 +122,7 @@ class PosBottomBar extends ConsumerWidget {
                     _CartIconWithBadge(
                       count: cart.itemCount,
                       submitted: submitted,
+                      accent: accent,
                     ),
                     const SizedBox(width: RestoflowSpacing.md),
                     Expanded(
@@ -131,13 +137,23 @@ class PosBottomBar extends ConsumerWidget {
                       ),
                     ),
                     if (!submitted)
-                      Text(
-                        totalText,
-                        textDirection: TextDirection.ltr,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                      // Count-up tween (settles on the exact final amount;
+                      // integer minor units only — D-007).
+                      PosAnimatedAmount(
+                        minor: cart.subtotalMinor,
+                        builder: (context, minor) => Text(
+                          minor == cart.subtotalMinor
+                              ? totalText
+                              : MoneyFormatter.formatMinor(
+                                  minor,
+                                  cart.currencyCode,
+                                ),
+                          textDirection: TextDirection.ltr,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ),
                     const SizedBox(width: RestoflowSpacing.sm),
@@ -153,13 +169,19 @@ class PosBottomBar extends ConsumerWidget {
   }
 }
 
-/// The cart glyph with a terracotta count badge (hidden when empty / after a
-/// submitted order shows a receipt glyph instead).
+/// The cart glyph with the terminal-accent count badge (hidden when empty /
+/// after a submitted order shows a receipt glyph instead). The count tweens
+/// up/down and always settles on the exact value.
 class _CartIconWithBadge extends StatelessWidget {
-  const _CartIconWithBadge({required this.count, required this.submitted});
+  const _CartIconWithBadge({
+    required this.count,
+    required this.submitted,
+    required this.accent,
+  });
 
   final int count;
   final bool submitted;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -167,10 +189,15 @@ class _CartIconWithBadge extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(
-          submitted ? Icons.receipt_long : Icons.shopping_cart,
-          color: Colors.white,
-          size: RestoflowIconSizes.lg,
+        // The PHONE fly-to-cart landing point (the side cart is not mounted
+        // on phone layouts, so the GlobalKey stays unique).
+        KeyedSubtree(
+          key: posCartFlyTargetKey,
+          child: Icon(
+            submitted ? Icons.receipt_long : Icons.shopping_cart,
+            color: Colors.white,
+            size: RestoflowIconSizes.lg,
+          ),
         ),
         if (!submitted && count > 0)
           PositionedDirectional(
@@ -180,17 +207,20 @@ class _CartIconWithBadge extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               padding: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                color: kPosTerracotta,
+                color: accent,
                 borderRadius: BorderRadius.circular(RestoflowRadii.pill),
                 border: Border.all(color: kPosBottomBar, width: 1.5),
               ),
-              child: Text(
-                count.toString(),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1,
+              child: PosAnimatedCount(
+                value: count,
+                builder: (context, value) => Text(
+                  value.toString(),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
                 ),
               ),
             ),

@@ -5684,4 +5684,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceAccentAubergine => 'Aubergine';
+
+  @override
+  String posItemAddedToast(String name) {
+    return '$name added';
+  }
 }

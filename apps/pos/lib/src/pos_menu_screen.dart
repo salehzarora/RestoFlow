@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'design/pos_motion.dart';
+import 'design/pos_visual_tokens.dart';
 import 'pos_palette.dart';
 import 'state/cart_controller.dart';
 import 'state/discount_controller.dart' show staffCapabilitiesProvider;
 import 'state/menu_filter.dart';
+import 'state/pos_device_accent.dart';
 import 'state/pos_menu_provider.dart';
 import 'state/pos_offline_state.dart';
 import 'widgets/category_chips.dart';
@@ -38,7 +41,10 @@ class PosMenuScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: kRestoflowCanvas,
+      // POS-PREMIUM-VISUAL-POLISH-001: the menu canvas is the one warm note
+      // on the screen (ivory — restaurant, not SaaS). Controls stay on the
+      // white deck and cool fills; the cart paints its own white plane.
+      backgroundColor: kPosIvorySurface,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
@@ -341,6 +347,9 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final hasText = _controller.text.isNotEmpty;
+    // POS-PREMIUM-VISUAL-POLISH-001: the focus ring wears this terminal's
+    // secondary accent (a non-critical highlight by contract).
+    final accent = ref.watch(posDeviceAccentColorProvider);
     return SizedBox(
       height: 44,
       child: TextField(
@@ -379,6 +388,10 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
             borderSide: const BorderSide(color: kPosInputBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            borderSide: BorderSide(color: accent, width: 2),
           ),
         ),
       ),
@@ -640,6 +653,9 @@ class _MenuGrid extends ConsumerWidget {
         message: l10n.posMenuEmptyBody,
       );
     }
+    // POS-PREMIUM-VISUAL-POLISH-001: this terminal's secondary accent, for
+    // the add button's interaction layer (hover/press wash + focus ring).
+    final accent = ref.watch(posDeviceAccentColorProvider);
     // The category rail now lives in the deck (`_MenuPane`); the grid is only
     // the merchandise plane.
     final Widget grid = items.isEmpty
@@ -662,33 +678,57 @@ class _MenuGrid extends ConsumerWidget {
                 itemBuilder: (context, index) {
                   final item = items[index];
                   final groups = menu.groupsForItem(item.id);
-                  return MenuItemCard(
-                    item: item,
-                    category: menu.categoryOf(item.categoryId),
-                    currencyCode: menu.currencyCode,
-                    optionGroupCount: groups.length,
-                    inCartQuantity: inCart[item.id] ?? 0,
-                    onManageAvailability: canManageAvailability
-                        ? () => MenuAvailabilitySheet.show(context, item: item)
-                        : null,
-                    onAdd: cartLocked
-                        ? null
-                        : groups.isEmpty
-                        ? () => controller.addItem(item)
-                        : () => ModifierSelectionSheet.show(
-                            context,
-                            item: item,
-                            groups: groups,
-                            currencyCode: menu.currencyCode,
-                            category: menu.categoryOf(item.categoryId),
-                            onConfirm: (selections, note, quantity) =>
-                                controller.addItemWithModifiers(
-                                  item,
-                                  selections,
-                                  note: note,
-                                  quantity: quantity,
-                                ),
-                          ),
+                  // Entrance stagger + tap bump are paint-only (opacity /
+                  // transform): the grid's measured geometry, the card's keys
+                  // and every tap target are untouched, and both render the
+                  // final state immediately under reduced motion.
+                  return PosEntrance(
+                    index: index,
+                    child: PosTapBump(
+                      enabled: !cartLocked && !item.isUnavailable,
+                      child: MenuItemCard(
+                        item: item,
+                        category: menu.categoryOf(item.categoryId),
+                        currencyCode: menu.currencyCode,
+                        optionGroupCount: groups.length,
+                        inCartQuantity: inCart[item.id] ?? 0,
+                        interactionAccent: accent,
+                        onManageAvailability: canManageAvailability
+                            ? () => MenuAvailabilitySheet.show(
+                                context,
+                                item: item,
+                              )
+                            : null,
+                        onAdd: cartLocked
+                            ? null
+                            : groups.isEmpty
+                            ? () {
+                                controller.addItem(item);
+                                _celebrateAdd(context, l10n, item.name, accent);
+                              }
+                            : () => ModifierSelectionSheet.show(
+                                context,
+                                item: item,
+                                groups: groups,
+                                currencyCode: menu.currencyCode,
+                                category: menu.categoryOf(item.categoryId),
+                                onConfirm: (selections, note, quantity) {
+                                  controller.addItemWithModifiers(
+                                    item,
+                                    selections,
+                                    note: note,
+                                    quantity: quantity,
+                                  );
+                                  _celebrateAdd(
+                                    context,
+                                    l10n,
+                                    item.name,
+                                    accent,
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
                   );
                 },
               );
@@ -702,7 +742,9 @@ class _MenuGrid extends ConsumerWidget {
     // grid. The lead line names the mode; the body names the data's age from
     // the snapshot's server fetch time (locale-formatted, never hand-rolled).
     final offline = ref.watch(posOfflineModeProvider);
-    if (offline.phase != PosOfflinePhase.offlineCached) return grid;
+    if (offline.phase != PosOfflinePhase.offlineCached) {
+      return _AmbientCanvas(child: grid);
+    }
     final fetchedAt = offline.snapshotFetchedAt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -733,9 +775,36 @@ class _MenuGrid extends ConsumerWidget {
                 : l10n.posOfflineDataAge(_snapshotAgeLabel(context, fetchedAt)),
           ),
         ),
-        Expanded(child: grid),
+        Expanded(child: _AmbientCanvas(child: grid)),
       ],
     );
+  }
+
+  /// POS-PREMIUM-VISUAL-POLISH-001: the add celebration — a FLIP ghost flying
+  /// from the tapped card to the cart glyph, plus (phones only, where the
+  /// cart itself is off-screen) a spring toast naming what was added. Both
+  /// are fire-and-forget, finite, and reduced-motion-aware; the add already
+  /// happened through the ordinary controller path either way.
+  static void _celebrateAdd(
+    BuildContext cardContext,
+    AppLocalizations l10n,
+    String itemName,
+    Color accent,
+  ) {
+    if (!cardContext.mounted) return;
+    posFlyToCart(cardContext, color: accent);
+    final size = MediaQuery.sizeOf(cardContext);
+    final phone =
+        posLayoutModeFor(width: size.width, height: size.height) ==
+        PosLayoutMode.phone;
+    if (phone) {
+      showPosSpringToast(
+        cardContext,
+        message: l10n.posItemAddedToast(itemName),
+        icon: Icons.add_shopping_cart,
+        accent: accent,
+      );
+    }
   }
 
   /// The locale-formatted moment the served snapshot was fetched: the time of
@@ -752,5 +821,50 @@ class _MenuGrid extends ConsumerWidget {
     return sameDay
         ? material.formatTimeOfDay(TimeOfDay.fromDateTime(local))
         : material.formatMediumDate(local);
+  }
+}
+
+/// POS-PREMIUM-VISUAL-POLISH-001 — the ambient merchandise canvas: two very
+/// soft warm washes (ember at the top-start, navy at the bottom-end) behind
+/// the product grid, fading in once on mount. Purely decorative, zero timers
+/// (one finite entrance), zero hit-testing (IgnorePointer), zero layout
+/// impact (the child paints above the washes at its own size).
+class _AmbientCanvas extends StatelessWidget {
+  const _AmbientCanvas({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: PosEntrance(
+              index: 4,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: AlignmentDirectional(-1.2, -1.2),
+                    radius: 1.4,
+                    colors: [Color(0x0FC96A2B), Color(0x00C96A2B)],
+                  ),
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: AlignmentDirectional(1.3, 1.4),
+                      radius: 1.5,
+                      colors: [Color(0x0A16335E), Color(0x0016335E)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(child: child),
+      ],
+    );
   }
 }

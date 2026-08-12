@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
+import 'design/pos_visual_tokens.dart';
+
 /// POS-local warm surface tints (DESIGN-004 Warm/Bento handoff §4).
 ///
 /// The core warm palette — canvas, hairline, ink ramp, brand green/dark,
@@ -22,8 +24,9 @@ const Color kPosSelectedTint = kRestoflowNavyContainer;
 /// Disabled control background (a CTA the cashier can't use yet).
 const Color kPosDisabledBg = Color(0xFFE3E8EF);
 
-/// The dark phone bottom-cart bar (== `kRestoflowInk`).
-const Color kPosBottomBar = kRestoflowInk;
+/// The dark phone bottom-cart bar — the same Midnight Navy plane as the cart
+/// header (POS-PREMIUM-VISUAL-POLISH-001: one piece of dark furniture).
+const Color kPosBottomBar = kPosMidnightNavy;
 
 /// The warm terracotta brand accent + its container/text (handoff §4).
 ///
@@ -99,14 +102,13 @@ const double kPosCardRadius = 14;
 
 /// The cart's dark operational surface.
 ///
-/// POS-PHASE1-FOLLOWUP-FIXES-008: this was `kRestoflowInk` (#17201B), which
-/// read as near-black beside the warm menu canvas — harsher than the rest of
-/// the Phase-1 palette. It is now a lighter, muted deep GREEN drawn from the
-/// same brand family: still unmistakably the operational plane, still far
-/// darker than the canvas, but no longer a black slab. Every on-dark pair below
-/// is re-checked against THIS value (see the 008 contrast test), and the muted
-/// tone was lightened to keep its 4.5:1.
-const Color kPosCartHeaderInk = Color(0xFF1F2E4A);
+/// POS-PHASE1-FOLLOWUP-FIXES-008 established the principle (a muted dark
+/// plane from the brand family, never a black slab); the global rebrand made
+/// it navy; POS-PREMIUM-VISUAL-POLISH-001 deepens it to the Midnight Navy
+/// token so the cart header and the phone bottom bar read as ONE piece of
+/// structural furniture. Deeper than the 008 value, so every on-dark pair
+/// below only GAINS contrast (re-checked by the 008 contrast test).
+const Color kPosCartHeaderInk = kPosMidnightNavy;
 
 /// Primary on-dark body text (shift name, drawer figures).
 const Color kPosOnDarkPrimary = Color(0xFFC6D4E8);

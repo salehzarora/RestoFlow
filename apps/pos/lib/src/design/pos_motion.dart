@@ -13,6 +13,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 import 'pos_visual_tokens.dart';
 
@@ -248,6 +249,223 @@ class _PosShimmerSweepState extends State<PosShimmerSweep> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The cart glyph the fly-to-cart ghost lands on. Attached to EXACTLY ONE
+/// mounted widget at a time: the side-cart header icon on two-pane layouts,
+/// the bottom-bar icon on phones (the sheet header never carries it).
+final GlobalKey posCartFlyTargetKey = GlobalKey(
+  debugLabel: 'pos-cart-fly-target',
+);
+
+/// FLIP fly-to-cart: measure the tapped card (First), the cart glyph (Last),
+/// and play a small ghost along an arced path between them (Invert/Play).
+/// Fire-and-forget and safe by construction: any missing/detached geometry,
+/// missing overlay, or reduced-motion setting simply skips the flight — the
+/// add itself already happened through the ordinary controller path.
+void posFlyToCart(BuildContext fromContext, {Color? color}) {
+  if (!posMotionEnabled(fromContext)) return;
+  final overlay = Overlay.maybeOf(fromContext);
+  final fromBox = fromContext.findRenderObject();
+  final targetContext = posCartFlyTargetKey.currentContext;
+  final toBox = targetContext?.findRenderObject();
+  if (overlay == null ||
+      fromBox is! RenderBox ||
+      !fromBox.attached ||
+      toBox is! RenderBox ||
+      !toBox.attached) {
+    return;
+  }
+  final from = fromBox.localToGlobal(fromBox.size.center(Offset.zero));
+  final to = toBox.localToGlobal(toBox.size.center(Offset.zero));
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => _FlyGhost(
+      from: from,
+      to: to,
+      color: color ?? kPosDefaultSecondaryAccent,
+      onDone: () => entry.remove(),
+    ),
+  );
+  overlay.insert(entry);
+}
+
+class _FlyGhost extends StatelessWidget {
+  const _FlyGhost({
+    required this.from,
+    required this.to,
+    required this.color,
+    required this.onDone,
+  });
+
+  final Offset from;
+  final Offset to;
+  final Color color;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 28.0;
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: PosMotionDurations.flight,
+        curve: Curves.easeInOutCubic,
+        onEnd: onDone,
+        builder: (context, t, _) {
+          // A gentle arc: linear interpolation lifted by a parabolic bump.
+          final lift = 36 * (1 - (2 * t - 1) * (2 * t - 1));
+          final pos = Offset.lerp(from, to, t)! - Offset(0, lift);
+          final scale = 1 - 0.45 * t;
+          final opacity = t < 0.85 ? 1.0 : (1 - (t - 0.85) / 0.15);
+          return Stack(
+            children: [
+              Positioned(
+                left: pos.dx - size / 2,
+                top: pos.dy - size / 2,
+                child: Opacity(
+                  opacity: opacity.clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        boxShadow: kPosToastShadow,
+                      ),
+                      child: const Icon(
+                        Icons.shopping_cart,
+                        size: 15,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+OverlayEntry? _activeToast;
+
+/// A bottom spring toast for lightweight confirmations. One at a time; a new
+/// toast replaces the current one. Driven by a SINGLE finite tween (enter ->
+/// hold -> exit phases of one 2s timeline) — no Timer, so tests never trip
+/// the pending-timer guard and `pumpAndSettle` always settles. Reduced motion
+/// keeps the toast (it is information) but drops the slide.
+void showPosSpringToast(
+  BuildContext context, {
+  required String message,
+  IconData icon = Icons.check_circle_outline,
+  Color? accent,
+}) {
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) return;
+  final reduced = !posMotionEnabled(context);
+  _activeToast?.remove();
+  _activeToast = null;
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => _SpringToast(
+      message: message,
+      icon: icon,
+      accent: accent ?? kPosDefaultSecondaryAccent,
+      reduced: reduced,
+      onDone: () {
+        if (identical(_activeToast, entry)) _activeToast = null;
+        entry.remove();
+      },
+    ),
+  );
+  _activeToast = entry;
+  overlay.insert(entry);
+}
+
+class _SpringToast extends StatelessWidget {
+  const _SpringToast({
+    required this.message,
+    required this.icon,
+    required this.accent,
+    required this.reduced,
+    required this.onDone,
+  });
+
+  final String message;
+  final IconData icon;
+  final Color accent;
+  final bool reduced;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 2000),
+      onEnd: onDone,
+      builder: (context, t, child) {
+        final enter = reduced
+            ? 1.0
+            : kPosSpring.transform((t / 0.16).clamp(0.0, 1.0));
+        final exit = t < 0.86 ? 1.0 : 1 - ((t - 0.86) / 0.14);
+        return PositionedDirectional(
+          start: RestoflowSpacing.xl,
+          end: RestoflowSpacing.xl,
+          bottom: bottomInset + 24 + (reduced ? 0 : 16 * (1 - enter)),
+          child: Opacity(
+            opacity: (enter * exit).clamp(0.0, 1.0),
+            child: child!,
+          ),
+        );
+      },
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Material(
+            color: kPosSlateInk,
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            child: Container(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.md,
+                RestoflowSpacing.sm,
+                RestoflowSpacing.lg,
+                RestoflowSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                boxShadow: kPosToastShadow,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: RestoflowIconSizes.md, color: accent),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

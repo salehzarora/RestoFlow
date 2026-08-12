@@ -11,6 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../data/demo_tables.dart';
+import '../design/pos_motion.dart';
 import '../data/kitchen_mode_readiness.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
@@ -408,6 +409,11 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                           l10n: l10n,
                           itemCount: cart.itemCount,
                           pendingSync: pendingSync,
+                          // POS-PREMIUM-VISUAL-POLISH-001: the SIDE cart's
+                          // glyph is the fly-to-cart landing point; the phone
+                          // sheet never carries it (the bottom bar does), so
+                          // the GlobalKey stays unique by construction.
+                          attachFlyTarget: !widget.isSheet,
                           // Cart-safety: a frozen addition attempt owns the
                           // cart — the Clear control is disabled (the
                           // controller refuses regardless).
@@ -1392,6 +1398,7 @@ class _CartHeader extends StatelessWidget {
     required this.itemCount,
     required this.pendingSync,
     required this.onClear,
+    this.attachFlyTarget = false,
   });
 
   final AppLocalizations l10n;
@@ -1399,9 +1406,13 @@ class _CartHeader extends StatelessWidget {
   final int pendingSync;
   final VoidCallback? onClear;
 
+  /// True on the SIDE cart only: its glyph carries [posCartFlyTargetKey].
+  final bool attachFlyTarget;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    const glyph = Icon(Icons.shopping_cart, color: kPosOnDarkAccent, size: 20);
 
     return SizedBox(
       height: 56,
@@ -1414,7 +1425,10 @@ class _CartHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.shopping_cart, color: kPosOnDarkAccent, size: 20),
+            if (attachFlyTarget)
+              KeyedSubtree(key: posCartFlyTargetKey, child: glyph)
+            else
+              glyph,
             const SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -2019,32 +2033,45 @@ class _CartFooter extends StatelessWidget {
               tableLabel: tableLabel,
             ),
             const SizedBox(height: RestoflowSpacing.sm),
+            // POS-PREMIUM-VISUAL-POLISH-001: money rows count up/down on
+            // change and ALWAYS settle on the exact formatted amount
+            // (integer minor units throughout — D-007). Keys and the final
+            // plain text are byte-identical to the static rendering.
             if (taxMinor > 0) ...[
-              _SummaryRow(
-                label: l10n.posCartSubtotal,
-                value: MoneyFormatter.formatMinor(subtotalMinor, currencyCode),
-                valueKey: const Key('cart-subtotal'),
-              ),
-              const SizedBox(height: RestoflowSpacing.xs),
-              _SummaryRow(
-                label: taxLineLabel(l10n, taxRateBp),
-                value: MoneyFormatter.formatMinor(taxMinor, currencyCode),
-                valueKey: const Key('cart-tax'),
-              ),
-              const SizedBox(height: RestoflowSpacing.xs),
-              _TotalRow(
-                label: l10n.posGrandTotal,
-                value: MoneyFormatter.formatMinor(
-                  subtotalMinor + taxMinor,
-                  currencyCode,
+              PosAnimatedAmount(
+                minor: subtotalMinor,
+                builder: (context, minor) => _SummaryRow(
+                  label: l10n.posCartSubtotal,
+                  value: MoneyFormatter.formatMinor(minor, currencyCode),
+                  valueKey: const Key('cart-subtotal'),
                 ),
-                valueKey: const Key('cart-grand-total'),
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+              PosAnimatedAmount(
+                minor: taxMinor,
+                builder: (context, minor) => _SummaryRow(
+                  label: taxLineLabel(l10n, taxRateBp),
+                  value: MoneyFormatter.formatMinor(minor, currencyCode),
+                  valueKey: const Key('cart-tax'),
+                ),
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+              PosAnimatedAmount(
+                minor: subtotalMinor + taxMinor,
+                builder: (context, minor) => _TotalRow(
+                  label: l10n.posGrandTotal,
+                  value: MoneyFormatter.formatMinor(minor, currencyCode),
+                  valueKey: const Key('cart-grand-total'),
+                ),
               ),
             ] else
-              _TotalRow(
-                label: l10n.posCartSubtotal,
-                value: MoneyFormatter.formatMinor(subtotalMinor, currencyCode),
-                valueKey: const Key('cart-subtotal'),
+              PosAnimatedAmount(
+                minor: subtotalMinor,
+                builder: (context, minor) => _TotalRow(
+                  label: l10n.posCartSubtotal,
+                  value: MoneyFormatter.formatMinor(minor, currencyCode),
+                  valueKey: const Key('cart-subtotal'),
+                ),
               ),
             const SizedBox(height: RestoflowSpacing.sm),
             if (showNeedsTableHint) ...[
@@ -2105,60 +2132,72 @@ class _CartFooter extends StatelessWidget {
             ],
             SizedBox(
               width: double.infinity,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(kPosSendRadius),
-                  boxShadow: onSend == null ? null : kPosPrimaryGlow,
-                ),
-                child: FilledButton.icon(
-                  onPressed: onSend,
-                  // POS-SUBMIT-GUARD-001: an explicit primary-tinted spinner (the
-                  // disabled foreground would otherwise wash it out) marks the
-                  // in-flight submit until the confirmation replaces the cart.
-                  icon: submitting
-                      ? RestoflowInlineSpinner(color: theme.colorScheme.primary)
-                      : const Icon(Icons.send),
-                  label: Text(sendLabelOverride ?? l10n.posSendOrder),
-                  // POS-LOCAL: the shared `RestoflowButtonStyles.big` is NOT
-                  // modified — Send is simply the one control on this screen
-                  // with a 54px height, an 800 weight and a glow, so it reads
-                  // as the primary path without diluting the shared style.
-                  //
-                  // UI-ORANGE-BALANCE-POLISH-001: Send is THE next step on this
-                  // screen, so it takes the brand accent fill. It is the only
-                  // orange fill in the cart — Park stays a ghost, and the
-                  // payment actions live on a different surface — which is what
-                  // keeps the accent meaning "do this next" rather than merely
-                  // "this is a button". Disabled still resolves to the POS grey
-                  // below, so an unsendable cart never looks actionable.
-                  style: RestoflowButtonStyles.accent(context)
-                      .merge(RestoflowButtonStyles.big(context))
-                      .copyWith(
-                        minimumSize: WidgetStateProperty.all(
-                          const Size.fromHeight(kPosSendHeight),
-                        ),
-                        textStyle: WidgetStateProperty.all(
-                          const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+              // POS-PREMIUM-VISUAL-POLISH-001: ONE shimmer on this screen —
+              // a single sweep each time Send becomes actionable. One-shot
+              // (never looping), clipped to Send's own radius, and skipped
+              // entirely under reduced motion.
+              child: PosShimmerSweep(
+                trigger: onSend != null,
+                borderRadius: BorderRadius.circular(kPosSendRadius),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(kPosSendRadius),
+                    boxShadow: onSend == null ? null : kPosPrimaryGlow,
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: onSend,
+                    // POS-SUBMIT-GUARD-001: an explicit primary-tinted spinner (the
+                    // disabled foreground would otherwise wash it out) marks the
+                    // in-flight submit until the confirmation replaces the cart.
+                    icon: submitting
+                        ? RestoflowInlineSpinner(
+                            color: theme.colorScheme.primary,
+                          )
+                        : const Icon(Icons.send),
+                    label: Text(sendLabelOverride ?? l10n.posSendOrder),
+                    // POS-LOCAL: the shared `RestoflowButtonStyles.big` is NOT
+                    // modified — Send is simply the one control on this screen
+                    // with a 54px height, an 800 weight and a glow, so it reads
+                    // as the primary path without diluting the shared style.
+                    //
+                    // UI-ORANGE-BALANCE-POLISH-001: Send is THE next step on this
+                    // screen, so it takes the brand accent fill. It is the only
+                    // orange fill in the cart — Park stays a ghost, and the
+                    // payment actions live on a different surface — which is what
+                    // keeps the accent meaning "do this next" rather than merely
+                    // "this is a button". Disabled still resolves to the POS grey
+                    // below, so an unsendable cart never looks actionable.
+                    style: RestoflowButtonStyles.accent(context)
+                        .merge(RestoflowButtonStyles.big(context))
+                        .copyWith(
+                          minimumSize: WidgetStateProperty.all(
+                            const Size.fromHeight(kPosSendHeight),
+                          ),
+                          textStyle: WidgetStateProperty.all(
+                            const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          shape: WidgetStateProperty.all(
+                            RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                kPosSendRadius,
+                              ),
+                            ),
+                          ),
+                          backgroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.disabled)
+                                ? kPosDisabledBg
+                                : null,
+                          ),
+                          foregroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.disabled)
+                                ? const Color(0xFF8B97A9)
+                                : null,
                           ),
                         ),
-                        shape: WidgetStateProperty.all(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(kPosSendRadius),
-                          ),
-                        ),
-                        backgroundColor: WidgetStateProperty.resolveWith(
-                          (states) => states.contains(WidgetState.disabled)
-                              ? kPosDisabledBg
-                              : null,
-                        ),
-                        foregroundColor: WidgetStateProperty.resolveWith(
-                          (states) => states.contains(WidgetState.disabled)
-                              ? const Color(0xFF8B97A9)
-                              : null,
-                        ),
-                      ),
+                  ),
                 ),
               ),
             ),

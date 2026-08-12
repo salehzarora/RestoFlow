@@ -3836,5 +3836,7 @@
   "posDeviceAccentPomegranate": "Pomegranate",
   "@posDeviceAccentPomegranate": {"description": "Name of the pomegranate terminal accent swatch (#C65A4B)."},
   "posDeviceAccentAubergine": "Aubergine",
-  "@posDeviceAccentAubergine": {"description": "Name of the aubergine terminal accent swatch (#6E5BD3)."}
+  "@posDeviceAccentAubergine": {"description": "Name of the aubergine terminal accent swatch (#6E5BD3)."},
+  "posItemAddedToast": "{name} added",
+  "@posItemAddedToast": {"description": "Transient bottom toast on PHONE layouts confirming an item was added to the cart (the cart itself is off-screen there). {name} is the product name (data, rendered as-is).", "placeholders": {"name": {"type": "String"}}}
 }

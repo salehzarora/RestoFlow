@@ -5638,4 +5638,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDeviceAccentAubergine => 'باذنجاني';
+
+  @override
+  String posItemAddedToast(String name) {
+    return 'تمت إضافة $name';
+  }
 }

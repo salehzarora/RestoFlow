@@ -11,6 +11,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
@@ -109,43 +110,57 @@ void main() {
   });
 
   group('B. the selected category is navy + an orange mark', () {
-    testWidgets('the selected chip carries exactly one orange marker', (
+    testWidgets('the selected chip carries exactly one accent marker', (
       tester,
     ) async {
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       expect(find.byKey(_marker), findsOneWidget);
       final container = tester.widget<Container>(find.byKey(_marker));
+      // POS-PREMIUM-VISUAL-POLISH-001: the marker wears the TERMINAL'S
+      // secondary accent (default Mint Leaf) — a configurable, non-critical
+      // highlight. It must never be a semantic status colour, and the brand
+      // orange no longer fills anything on this rail.
       expect(
         (container.decoration! as BoxDecoration).color,
-        RestoflowBrandPalette.of(Brightness.light).accentOrange,
-        reason: 'The marker must be the BRAND accent, not a semantic colour.',
+        kPosDefaultSecondaryAccent,
+        reason:
+            'The marker must be the DEVICE accent (default mint), never a '
+            'semantic colour and never the chip fill.',
       );
     });
 
-    testWidgets('the chip BODY stays navy — orange never becomes the fill', (
+    testWidgets('the chip BODY stays navy — accents never become the fill', (
       tester,
     ) async {
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       final brand = RestoflowBrandPalette.of(Brightness.light);
-      // Every orange box on this rail must BE the marker. A Container with a
+      // Every accent box on this rail must BE the marker. A Container with a
       // decoration builds a DecoratedBox of its own, so the marker shows up
-      // here too — counting is what separates "the mark is orange" from "the
-      // chip turned orange".
+      // here too — counting is what separates "the mark is accented" from
+      // "the chip turned accent-coloured".
+      final accentBoxes = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((d) => d.decoration)
+          .whereType<BoxDecoration>()
+          .where((d) => d.color == kPosDefaultSecondaryAccent)
+          .length;
+      expect(
+        accentBoxes,
+        1,
+        reason:
+            'Exactly one accent box: the 2px marker. Anything more means the '
+            'chip body itself took the accent, and navy is the structure.',
+      );
+      // And the BRAND orange fills nothing here at all now.
       final orangeBoxes = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
           .whereType<BoxDecoration>()
           .where((d) => d.color == brand.accentOrange)
           .length;
-      expect(
-        orangeBoxes,
-        1,
-        reason:
-            'Exactly one orange box: the 2px marker. Anything more means the '
-            'chip body itself went orange, and navy is the structure.',
-      );
+      expect(orangeBoxes, 0);
 
       // And the chip body is the theme primary — navy.
       final scheme = restoflowLightBrandTheme().colorScheme;

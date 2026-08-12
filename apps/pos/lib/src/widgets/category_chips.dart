@@ -4,8 +4,10 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
+import '../design/pos_motion.dart';
 import '../pos_palette.dart';
 import '../state/menu_filter.dart';
+import '../state/pos_device_accent.dart';
 
 /// Horizontal category filter chips (DESIGN-004): All + each category of the
 /// ACTIVE menu. 44px pills — icon + name + a count badge — selected fills brand
@@ -24,6 +26,9 @@ class CategoryChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final selected = ref.watch(selectedCategoryProvider);
+    // POS-PREMIUM-VISUAL-POLISH-001: the active-filter marker wears THIS
+    // terminal's secondary accent (a non-critical highlight by contract).
+    final accent = ref.watch(posDeviceAccentColorProvider);
     final counts = itemCounts;
 
     void select(String id) =>
@@ -37,20 +42,32 @@ class CategoryChips extends ConsumerWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.lg),
         children: [
-          _CategoryChip(
-            label: l10n.posCategoryAll,
-            icon: Icons.apps,
-            count: counts?[kAllCategoriesId],
-            selected: selected == kAllCategoriesId,
-            onSelected: () => select(kAllCategoriesId),
+          PosEntrance(
+            index: 0,
+            child: PosTapBump(
+              child: _CategoryChip(
+                label: l10n.posCategoryAll,
+                icon: Icons.apps,
+                count: counts?[kAllCategoriesId],
+                selected: selected == kAllCategoriesId,
+                accent: accent,
+                onSelected: () => select(kAllCategoriesId),
+              ),
+            ),
           ),
-          for (final category in categories)
-            _CategoryChip(
-              label: category.name,
-              icon: category.icon,
-              count: counts?[category.id],
-              selected: selected == category.id,
-              onSelected: () => select(category.id),
+          for (final (i, category) in categories.indexed)
+            PosEntrance(
+              index: i + 1,
+              child: PosTapBump(
+                child: _CategoryChip(
+                  label: category.name,
+                  icon: category.icon,
+                  count: counts?[category.id],
+                  selected: selected == category.id,
+                  accent: accent,
+                  onSelected: () => select(category.id),
+                ),
+              ),
             ),
         ],
       ),
@@ -64,6 +81,7 @@ class _CategoryChip extends StatelessWidget {
     required this.icon,
     required this.count,
     required this.selected,
+    required this.accent,
     required this.onSelected,
   });
 
@@ -71,6 +89,10 @@ class _CategoryChip extends StatelessWidget {
   final IconData icon;
   final int? count;
   final bool selected;
+
+  /// This terminal's secondary accent — the active-marker colour.
+  final Color accent;
+
   final VoidCallback onSelected;
 
   @override
@@ -130,13 +152,15 @@ class _CategoryChip extends StatelessWidget {
                         ],
                       ],
                     ),
-                    // UI-ORANGE-BALANCE-POLISH-001: the active filter earns a
-                    // thin orange underline.
+                    // UI-ORANGE-BALANCE-POLISH-001 → POS-PREMIUM-VISUAL-POLISH:
+                    // the active filter earns a thin underline in THIS
+                    // terminal's secondary accent (a non-critical highlight —
+                    // the device-accent contract).
                     //
                     // The chip already had TWO non-colour signals — a shadow no
                     // other chip carries, and a w700 label — so this is a third
                     // cue rather than the only one, and the filter stays legible
-                    // for anyone who cannot separate navy from navy-with-orange.
+                    // for anyone who cannot separate the hues.
                     //
                     // Positioned, so it contributes nothing to the measured
                     // size: the rail is a horizontally scrolling set and a chip
@@ -152,9 +176,7 @@ class _CategoryChip extends StatelessWidget {
                             key: const Key('category-chip-active-marker'),
                             height: 2,
                             decoration: BoxDecoration(
-                              color: RestoflowBrandPalette.of(
-                                Brightness.light,
-                              ).accentOrange,
+                              color: accent,
                               borderRadius: BorderRadius.circular(
                                 RestoflowRadii.pill,
                               ),

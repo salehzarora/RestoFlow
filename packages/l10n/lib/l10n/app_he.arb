@@ -1747,5 +1747,6 @@
   "posDeviceAccentMint": "מנטה",
   "posDeviceAccentSaffron": "זעפרן",
   "posDeviceAccentPomegranate": "רימון",
-  "posDeviceAccentAubergine": "חציל"
+  "posDeviceAccentAubergine": "חציל",
+  "posItemAddedToast": "{name} נוסף"
 }

@@ -10371,6 +10371,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Aubergine'**
   String get posDeviceAccentAubergine;
+
+  /// Transient bottom toast on PHONE layouts confirming an item was added to the cart (the cart itself is off-screen there). {name} is the product name (data, rendered as-is).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} added'**
+  String posItemAddedToast(String name);
 }
 
 class _AppLocalizationsDelegate
