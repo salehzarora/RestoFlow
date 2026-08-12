@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/menu_filter.dart';
 import 'package:restoflow_pos/src/widgets/category_chips.dart';
+import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// Paint-time overflow never reaches [WidgetTester.takeException]; the handler
 /// is restored BEFORE returning so the caller's `expect` runs with the
@@ -261,6 +262,141 @@ void main() {
         _secondId,
         reason: 'The marker is decoration; it must not swallow or alter taps.',
       );
+    });
+  });
+
+  group('E. Add stays navy and earns orange only on interaction', () {
+    // Sixteen cards fit a full menu. The card file records what happened the
+    // last time this surface repeated one accent nineteen times — the colour
+    // stopped meaning anything — and Send Order already holds the single
+    // orange primary for this view. So Add keeps the structural fill and gains
+    // the tactile layer instead.
+    Widget cardHost({required bool unavailable, VoidCallback? onAdd}) {
+      final item = kDemoMenu.first;
+      return MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        theme: restoflowLightBrandTheme(),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 260,
+              height: 300,
+              child: MenuItemCard(
+                item: unavailable
+                    ? item.copyWith(availability: 'unavailable')
+                    : item,
+                currencyCode: 'ILS',
+                onAdd: onAdd ?? () {},
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('the Add fill is the structural navy, never the accent', (
+      tester,
+    ) async {
+      await tester.pumpWidget(cardHost(unavailable: false));
+      await tester.pumpAndSettle();
+      final button = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      );
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final scheme = restoflowLightBrandTheme().colorScheme;
+      final fill = button.style?.backgroundColor?.resolve(const {});
+      expect(fill, scheme.primary);
+      expect(
+        fill,
+        isNot(brand.accentOrange),
+        reason:
+            'A grid of orange Adds would compete with Send Order, the one '
+            'control that is actually the next step.',
+      );
+    });
+
+    testWidgets('Add gains an orange hover, press and focus edge', (
+      tester,
+    ) async {
+      await tester.pumpWidget(cardHost(unavailable: false));
+      await tester.pumpAndSettle();
+      final button = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      );
+      final style = button.style!;
+      expect(style.overlayColor?.resolve(const {}), isNull);
+      expect(style.overlayColor?.resolve({WidgetState.hovered}), isNotNull);
+      expect(style.overlayColor?.resolve({WidgetState.pressed}), isNotNull);
+      expect(
+        style.overlayColor?.resolve({WidgetState.hovered}),
+        isNot(style.overlayColor?.resolve({WidgetState.pressed})),
+      );
+      expect(
+        style.side?.resolve({WidgetState.focused})?.color,
+        RestoflowBrandPalette.of(Brightness.light).accentOrange,
+      );
+      expect(style.side?.resolve(const {}), isNull);
+    });
+
+    testWidgets('an unavailable item is never orange-actionable', (
+      tester,
+    ) async {
+      var added = 0;
+      await tester.pumpWidget(
+        cardHost(unavailable: true, onAdd: () => added++),
+      );
+      await tester.pumpAndSettle();
+
+      // The card does not merely DISABLE the action when an item is
+      // unavailable — it withholds it. Either shape is acceptable here; what
+      // must never happen is an enabled control, and certainly not one wearing
+      // the action colour.
+      final addFinder = find.widgetWithIcon(
+        IconButton,
+        Icons.add_shopping_cart,
+      );
+      if (addFinder.evaluate().isNotEmpty) {
+        final button = tester.widget<IconButton>(addFinder);
+        expect(button.onPressed, isNull);
+        expect(
+          button.style?.backgroundColor?.resolve({WidgetState.disabled}),
+          isNot(RestoflowBrandPalette.of(Brightness.light).accentOrange),
+          reason: 'A disabled control must never wear the action colour.',
+        );
+        await tester.tap(addFinder, warnIfMissed: false);
+        await tester.pumpAndSettle();
+      }
+      expect(
+        added,
+        0,
+        reason: 'A sold-out item must never reach the add callback.',
+      );
+    });
+
+    testWidgets('the add callback still fires exactly once', (tester) async {
+      var added = 0;
+      await tester.pumpWidget(
+        cardHost(unavailable: false, onAdd: () => added++),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      );
+      await tester.pumpAndSettle();
+      expect(added, 1);
+    });
+
+    testWidgets('the interaction styling changes no geometry', (tester) async {
+      await tester.pumpWidget(cardHost(unavailable: false));
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(
+        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      );
+      expect(rect.width, greaterThanOrEqualTo(44));
+      expect(rect.height, greaterThanOrEqualTo(44));
     });
   });
 }

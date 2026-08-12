@@ -1546,6 +1546,7 @@ class _OptionQuantityStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final quantityText = quantity.toString();
+    final qtyAccent = RestoflowBrandPalette.of(theme.brightness).accentOrange;
 
     // The pill swallows every tap it receives (including on a DISABLED −/+
     // at a bound): otherwise the tap falls through to the tile's InkWell and
@@ -1573,6 +1574,31 @@ class _OptionQuantityStepper extends StatelessWidget {
               icon: const Icon(Icons.remove, size: RestoflowIconSizes.sm),
               tooltip: l10n.posDecreaseQuantity,
               padding: EdgeInsets.zero,
+              // UI-ORANGE-BALANCE-POLISH-001: the stepper gains an orange
+              // interaction wash and focus ring. Fill, size, padding and the
+              // 44dp floor are untouched, and disabled keeps Material's own
+              // disabled treatment — a decrement that is off must still look
+              // off. Nothing is animated beyond the 120ms token, because a
+              // cashier taps + repeatedly and a lagging control is worse than
+              // a plain one.
+              style: ButtonStyle(
+                animationDuration: RestoflowDurations.fast,
+                overlayColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return qtyAccent.withValues(alpha: 0.28);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return qtyAccent.withValues(alpha: 0.16);
+                  }
+                  return null;
+                }),
+                side: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.focused)) {
+                    return BorderSide(color: qtyAccent, width: 2);
+                  }
+                  return null;
+                }),
+              ),
               // DESIGN-001: raised to the product's 44dp touch floor (was 40).
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
@@ -1592,6 +1618,31 @@ class _OptionQuantityStepper extends StatelessWidget {
               icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
               tooltip: l10n.posIncreaseQuantity,
               padding: EdgeInsets.zero,
+              // UI-ORANGE-BALANCE-POLISH-001: the stepper gains an orange
+              // interaction wash and focus ring. Fill, size, padding and the
+              // 44dp floor are untouched, and disabled keeps Material's own
+              // disabled treatment — a decrement that is off must still look
+              // off. Nothing is animated beyond the 120ms token, because a
+              // cashier taps + repeatedly and a lagging control is worse than
+              // a plain one.
+              style: ButtonStyle(
+                animationDuration: RestoflowDurations.fast,
+                overlayColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return qtyAccent.withValues(alpha: 0.28);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return qtyAccent.withValues(alpha: 0.16);
+                  }
+                  return null;
+                }),
+                side: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.focused)) {
+                    return BorderSide(color: qtyAccent, width: 2);
+                  }
+                  return null;
+                }),
+              ),
               // DESIGN-001: raised to the product's 44dp touch floor (was 40).
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),

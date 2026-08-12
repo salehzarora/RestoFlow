@@ -585,6 +585,7 @@ class _AddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final accent = RestoflowBrandPalette.of(theme.brightness).accentOrange;
     // POS-VISUAL-REDESIGN-PHASE-1-007: NO glow. Nineteen glowing green add
     // buttons made green mean nothing; the glow now marks Send alone. The
     // canonical add gesture, its 44px target and its disabled gate are
@@ -596,16 +597,51 @@ class _AddButton extends StatelessWidget {
       // constraint below, which quietly rendered this 44px target at 36.
       visualDensity: VisualDensity.standard,
       constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-      style: IconButton.styleFrom(
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: theme.colorScheme.onPrimary,
-        disabledBackgroundColor: const Color(0xFFE9EEF5),
-        disabledForegroundColor: const Color(0xFFA8B2C1),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(RestoflowRadii.md)),
-        ),
-      ),
+      // UI-ORANGE-BALANCE-POLISH-001: Add stays NAVY and earns orange only on
+      // interaction.
+      //
+      // It is deliberately not an orange fill. There are sixteen of these on a
+      // full menu, and the comment above records what happened last time this
+      // surface repeated one accent nineteen times: the colour stopped meaning
+      // anything. Send Order already holds the single orange primary for this
+      // view, so a grid of orange Adds would compete with the one control that
+      // is actually the next step.
+      //
+      // What it gains instead is the tactile layer the brief asked for: an
+      // orange wash on hover, a deeper one on press, and an orange focus ring —
+      // the same navyPrimary language the shared button role uses, so the two
+      // read as one system. Disabled keeps its existing greys untouched, so an
+      // unavailable item still cannot look actionable.
+      style:
+          IconButton.styleFrom(
+            backgroundColor: theme.colorScheme.primary,
+            foregroundColor: theme.colorScheme.onPrimary,
+            disabledBackgroundColor: const Color(0xFFE9EEF5),
+            disabledForegroundColor: const Color(0xFFA8B2C1),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(
+                Radius.circular(RestoflowRadii.md),
+              ),
+            ),
+            animationDuration: RestoflowDurations.fast,
+          ).copyWith(
+            overlayColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.pressed)) {
+                return accent.withValues(alpha: 0.30);
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return accent.withValues(alpha: 0.18);
+              }
+              return null;
+            }),
+            side: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.focused)) {
+                return BorderSide(color: accent, width: 2);
+              }
+              return null;
+            }),
+          ),
       icon: const Icon(Icons.add_shopping_cart, size: RestoflowIconSizes.md),
     );
   }
