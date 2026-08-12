@@ -114,47 +114,71 @@ void main() {
     testWidgets('the selected chip carries exactly one accent marker', (
       tester,
     ) async {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 rail uses
+      // icon PILLS — the active marker is now the device-accent TINT PILL
+      // itself (the old 2px underline is retired; the frozen marker key
+      // rides the pill). Same doctrine: the marker wears the TERMINAL'S
+      // secondary accent (default Mint Leaf), never a semantic colour and
+      // never the brand orange.
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       expect(find.byKey(_marker), findsOneWidget);
-      final container = tester.widget<Container>(find.byKey(_marker));
-      // POS-PREMIUM-VISUAL-POLISH-001: the marker wears the TERMINAL'S
-      // secondary accent (default Mint Leaf) — a configurable, non-critical
-      // highlight. It must never be a semantic status colour, and the brand
-      // orange no longer fills anything on this rail.
+      final box = tester.widget<DecoratedBox>(find.byKey(_marker));
+      final fill = (box.decoration as BoxDecoration).color!;
       expect(
-        (container.decoration! as BoxDecoration).color,
-        kPosDefaultSecondaryAccent,
+        fill.withValues(alpha: 1),
+        kPosDefaultSecondaryAccent.withValues(alpha: 1),
         reason:
-            'The marker must be the DEVICE accent (default mint), never a '
-            'semantic colour and never the chip fill.',
+            'The active pill tint must be the DEVICE accent hue (default '
+            'mint), never a semantic colour.',
+      );
+      expect(
+        fill.a,
+        lessThan(0.5),
+        reason: 'a TINT, not a solid accent fill — the rail stays quiet',
       );
     });
 
-    testWidgets('the chip BODY stays navy — accents never become the fill', (
-      tester,
-    ) async {
+    testWidgets('the chip BODY stays quiet — accents never become a solid '
+        'fill', (tester) async {
       await tester.pumpWidget(_scoped(selected: _firstId));
       await tester.pumpAndSettle();
       final brand = RestoflowBrandPalette.of(Brightness.light);
-      // Every accent box on this rail must BE the marker. A Container with a
-      // decoration builds a DecoratedBox of its own, so the marker shows up
-      // here too — counting is what separates "the mark is accented" from
-      // "the chip turned accent-coloured".
-      final accentBoxes = tester
+      // 004: the rail is warm quiet pills; the SINGLE accent surface is the
+      // active pill's TINT (<50% alpha). No SOLID accent fill may exist —
+      // that is what separates "the active pill is tinted" from "the chip
+      // turned accent-coloured".
+      final solidAccentBoxes = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
           .whereType<BoxDecoration>()
-          .where((d) => d.color == kPosDefaultSecondaryAccent)
+          .where(
+            (d) =>
+                d.color != null &&
+                d.color!.withValues(alpha: 1) ==
+                    kPosDefaultSecondaryAccent.withValues(alpha: 1) &&
+                d.color!.a >= 0.5,
+          )
           .length;
       expect(
-        accentBoxes,
-        1,
-        reason:
-            'Exactly one accent box: the 2px marker. Anything more means the '
-            'chip body itself took the accent, and navy is the structure.',
+        solidAccentBoxes,
+        0,
+        reason: 'the accent appears only as the active pill TINT, never solid',
       );
-      // And the BRAND orange fills nothing here at all now.
+      final tintBoxes = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((d) => d.decoration)
+          .whereType<BoxDecoration>()
+          .where(
+            (d) =>
+                d.color != null &&
+                d.color!.withValues(alpha: 1) ==
+                    kPosDefaultSecondaryAccent.withValues(alpha: 1) &&
+                d.color!.a < 0.5,
+          )
+          .length;
+      expect(tintBoxes, 1, reason: 'exactly ONE active tint pill');
+      // And the BRAND orange fills nothing here at all.
       final orangeBoxes = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
@@ -163,10 +187,8 @@ void main() {
           .length;
       expect(orangeBoxes, 0);
 
-      // SURGERY-003: tabs, not filled pills — NO tab body carries a filled
-      // decoration at all any more (selection reads through stronger ink +
-      // the accent marker). The structural navy lives on the card actions
-      // and the summary band, not on the filter rail.
+      // No STRUCTURAL NAVY fills on the rail either — the primary lives on
+      // the card actions and the top bar, not on the filter pills.
       final scheme = restoflowLightBrandTheme().colorScheme;
       final primaryFills = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
@@ -177,7 +199,7 @@ void main() {
       expect(
         primaryFills,
         0,
-        reason: 'No filled tab bodies on the rail — the tabs are quiet.',
+        reason: 'No navy tab bodies on the rail — the pills are quiet.',
       );
     });
 

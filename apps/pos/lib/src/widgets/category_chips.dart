@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../design/pos_motion.dart';
+import '../design/pos_visual_tokens.dart' show kPosTabPillBg, kPosTrackRadius;
 import '../pos_palette.dart';
 import '../state/menu_filter.dart';
 import '../state/pos_device_accent.dart';
@@ -65,6 +66,9 @@ class CategoryChips extends ConsumerWidget {
                   count: counts?[category.id],
                   selected: selected == category.id,
                   accent: accent,
+                  // v4: the unselected pill's icon carries the category's
+                  // own hue (existing per-category palette data).
+                  categoryTint: category.color,
                   onSelected: () => select(category.id),
                 ),
               ),
@@ -83,6 +87,7 @@ class _CategoryChip extends StatelessWidget {
     required this.selected,
     required this.accent,
     required this.onSelected,
+    this.categoryTint,
   });
 
   final String label;
@@ -90,98 +95,70 @@ class _CategoryChip extends StatelessWidget {
   final int? count;
   final bool selected;
 
-  /// This terminal's secondary accent — the active-marker colour.
+  /// This terminal's secondary accent — the active-pill tint colour.
   final Color accent;
 
   final VoidCallback onSelected;
 
+  /// The category's own hue for the unselected duotone icon (v4: category-
+  /// colored icon pills). Falls back to the muted ink for the "All" tab.
+  final Color? categoryTint;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // SURGERY-003: TABS, not filled pills. Unselected is quiet (transparent
-    // chrome, muted ink); selected reads through STRONGER INK + the terminal
-    // accent marker — never a heavy filled body. The label weight is
-    // deliberately CONSTANT so selection never changes tab geometry under
-    // the cashier's finger (the frozen width-stability contract).
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 ICON PILLS
+    // (tokens §10) — unselected is a quiet warm pill with the CATEGORY-
+    // colored icon; selected is the device-accent TINT pill (replaces the
+    // old underline marker; the frozen marker key now rides the tint pill).
+    // The label weight is deliberately CONSTANT so selection never changes
+    // tab geometry under the cashier's finger (the frozen width-stability
+    // contract), and the pill fill is identical in size either way.
     final foreground = selected ? kRestoflowInk : kRestoflowInk2;
+    final iconColor = selected ? accent : (categoryTint ?? kRestoflowInk2);
 
     return Padding(
       // 6px between tabs — the rail is a set, not a row of cards.
       padding: const EdgeInsetsDirectional.only(end: 6),
       child: Center(
         child: DecoratedBox(
+          key: selected ? const Key('category-chip-active-marker') : null,
           decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            color: selected ? accent.withValues(alpha: 0.13) : kPosTabPillBg,
+            borderRadius: BorderRadius.circular(kPosTrackRadius),
           ),
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
               onTap: onSelected,
               hoverColor: kPosChipBg,
-              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              borderRadius: BorderRadius.circular(kPosTrackRadius),
               child: Container(
-                height: 40,
+                height: 34,
                 constraints: const BoxConstraints(minWidth: 44),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Stack(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          icon,
-                          size: RestoflowIconSizes.sm,
-                          color: foreground,
-                        ),
-                        const SizedBox(width: 6),
-                        // The label Text stays the tap target the tests use
-                        // (find.text(<category name>)).
-                        Text(
-                          label,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: foreground,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (count != null) ...[
-                          const SizedBox(width: 6),
-                          _CountBadge(count: count!, selected: selected),
-                        ],
-                      ],
-                    ),
-                    // UI-ORANGE-BALANCE-POLISH-001 → POS-PREMIUM-VISUAL-POLISH:
-                    // the active filter earns a thin underline in THIS
-                    // terminal's secondary accent (a non-critical highlight —
-                    // the device-accent contract).
-                    //
-                    // The chip already had TWO non-colour signals — a shadow no
-                    // other chip carries, and a w700 label — so this is a third
-                    // cue rather than the only one, and the filter stays legible
-                    // for anyone who cannot separate the hues.
-                    //
-                    // Positioned, so it contributes nothing to the measured
-                    // size: the rail is a horizontally scrolling set and a chip
-                    // that grew on selection would shove its neighbours sideways
-                    // under the cashier's finger mid-tap.
-                    if (selected)
-                      PositionedDirectional(
-                        start: 0,
-                        end: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            key: const Key('category-chip-active-marker'),
-                            height: 2,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(
-                                RestoflowRadii.pill,
-                              ),
-                            ),
-                          ),
-                        ),
+                    Icon(icon, size: RestoflowIconSizes.sm, color: iconColor),
+                    const SizedBox(width: 6),
+                    // The label Text stays the tap target the tests use
+                    // (find.text(<category name>)).
+                    Text(
+                      label,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                    if (count != null) ...[
+                      const SizedBox(width: 6),
+                      _CountBadge(
+                        count: count!,
+                        selected: selected,
+                        accent: accent,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -194,17 +171,24 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _CountBadge extends StatelessWidget {
-  const _CountBadge({required this.count, required this.selected});
+  const _CountBadge({
+    required this.count,
+    required this.selected,
+    required this.accent,
+  });
 
   final int count;
   final bool selected;
 
+  /// The device accent — v4: the selected pill's count reads in the accent.
+  final Color accent;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // SURGERY-003: a compact bare count — no badge box at all. Selected
-    // counts sharpen to the primary ink; unselected stay muted.
-    final fg = selected ? theme.colorScheme.primary : kRestoflowInk3;
+    // A compact bare count — no badge box. Selected counts read in the
+    // device accent (v4 tokens §10); unselected stay muted.
+    final fg = selected ? accent : kRestoflowInk3;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       child: Text(
