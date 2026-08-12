@@ -462,13 +462,13 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
 /// grid keeps scanning cleanly in rows.
 const double kPosMenuCardMaxExtent = 230;
 
-/// POS-REFERENCE-REDESIGN-002: the card's FIXED content zone (name, optional
-/// description, the price/action row). Measured: 10 top pad + up to two
-/// 19px name lines + 2 + one 15px description line + 6 + 44px action row +
-/// 9 bottom pad = 124, with 4px headroom. The text-scale ladder inside the
-/// card sheds the description first and the name's second line next, so the
-/// price and the add action never compress (see MenuItemCard).
-const double kPosMenuCardBodyHeight = 128;
+/// POS-REFERENCE-VISUAL-SURGERY-003: the card's FIXED content zone — name,
+/// optional description, the start-aligned price line, and the FULL-WIDTH
+/// 44px action footer. Measured at scale 1: 10 + 38 (two 19px name lines) +
+/// 2 + 15 (one description line) + ~24 (price) + 6 + 44 (action) + 10 = 149,
+/// and at 2x with the ladder (one name line, no description, 48px price) =
+/// 158 — so 160 holds both without compressing the price or the action.
+const double kPosMenuCardBodyHeight = 160;
 
 /// The cell height for a card [cellWidth] wide: the fixed 10:9 image band
 /// (see [kPosMenuCardImageHeightFactor] in pos_palette.dart) plus the fixed

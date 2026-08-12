@@ -1748,5 +1748,6 @@
   "posDeviceAccentSaffron": "زعفران",
   "posDeviceAccentPomegranate": "رمّان",
   "posDeviceAccentAubergine": "باذنجاني",
-  "posItemAddedToast": "تمت إضافة {name}"
+  "posItemAddedToast": "تمت إضافة {name}",
+  "posAddMore": "إضافة المزيد"
 }

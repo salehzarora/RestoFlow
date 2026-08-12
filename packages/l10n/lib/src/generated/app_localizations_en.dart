@@ -5689,4 +5689,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String posItemAddedToast(String name) {
     return '$name added';
   }
+
+  @override
+  String get posAddMore => 'Add more';
 }

@@ -90,14 +90,13 @@ const List<BoxShadow> kPosChipSelectedShadow = [
 ];
 
 /// Product-card corner radius (the biggest object on screen;
-/// POS-REFERENCE-REDESIGN-002 refined it from 14 with the food-first card).
-const double kPosCardRadius = 16;
+/// POS-REFERENCE-VISUAL-SURGERY-003 sets the reference's 20).
+const double kPosCardRadius = 20;
 
-/// POS-REFERENCE-REDESIGN-002: the image band's height as a fraction of the
-/// card cell width. 0.9 (a 10:9 crop) makes the photograph the top ~60% of
-/// the card — the reference's food-first proportion — where the old 4:3 band
-/// stopped at ~53%.
-const double kPosMenuCardImageHeightFactor = 0.9;
+/// POS-REFERENCE-VISUAL-SURGERY-003: the image band's height as a fraction
+/// of the card cell width. A SQUARE crop (1.0) keeps the photograph ~58-60%
+/// of the taller footer-action card.
+const double kPosMenuCardImageHeightFactor = 1.0;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
 ///

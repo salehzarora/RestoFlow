@@ -5605,4 +5605,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String posItemAddedToast(String name) {
     return '$name נוסף';
   }
+
+  @override
+  String get posAddMore => 'הוסף עוד';
 }

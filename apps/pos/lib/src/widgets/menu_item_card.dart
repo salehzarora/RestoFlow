@@ -265,27 +265,29 @@ class MenuItemCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    Row(
+                    // SURGERY-003 anatomy: a start-aligned price line, then
+                    // the FULL-WIDTH action footer — Add / Add more /
+                    // unavailable bar all occupy the same fixed zone, so
+                    // every card in a row aligns at image, title, price and
+                    // action.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // The options chip and the in-cart badge moved ONTO the
-                        // band: they are facts about the product, and clearing
-                        // them out leaves the body row to price + add alone.
-                        Expanded(
-                          child: _PriceText(
-                            priceKey: Key('menu-item-price-${item.id}'),
-                            formatted: priceText,
-                          ),
+                        _PriceText(
+                          priceKey: Key('menu-item-price-${item.id}'),
+                          formatted: priceText,
                         ),
-                        if (!unavailable) ...[
-                          const SizedBox(width: RestoflowSpacing.sm),
-                          // The canonical add gesture: a 44px filled
-                          // button (disabled while the cart is locked).
-                          _AddButton(
-                            onAdd: onAdd,
-                            tooltip: l10n.posAddToCart,
-                            interactionAccent: interactionAccent,
-                          ),
-                        ],
+                        const SizedBox(height: 6),
+                        _CardAction(
+                          onAdd: unavailable ? null : onAdd,
+                          l10n: l10n,
+                          inCart: inCartQuantity > 0,
+                          unavailableLabel: unavailable
+                              ? _unavailableLabel(l10n, item.availabilityReason)
+                              : null,
+                          interactionAccent: interactionAccent,
+                        ),
                       ],
                     ),
                   ],
@@ -325,9 +327,11 @@ class _CardShellState extends State<_CardShell> {
       child: AnimatedContainer(
         duration: PosMotionDurations.base,
         curve: Curves.easeOutCubic,
+        // SURGERY-003: shadow ON HOVER ONLY — at rest the card is a calm
+        // white surface with a 1px border, like the reference.
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(kPosCardRadius),
-          boxShadow: hover ? kPosCardHoverShadow : kPosCardShadow,
+          boxShadow: hover ? kPosCardHoverShadow : null,
         ),
         child: Card(
           elevation: 0,
@@ -638,16 +642,32 @@ class _OptionsIndicator extends StatelessWidget {
   }
 }
 
-/// The 44px filled add button (navy fill; accent only on interaction).
-class _AddButton extends StatelessWidget {
-  const _AddButton({
+/// POS-REFERENCE-VISUAL-SURGERY-003 — the card's FULL-WIDTH action footer,
+/// the signature element:
+///  * available          → filled NAVY bar, white icon + label (Add);
+///  * already in cart    → TONAL bar (navy container, navy label — Add more;
+///                          the band badge carries the count);
+///  * cart-locked        → the same bar, disabled (onAdd == null);
+///  * unavailable        → a muted disabled BAR carrying the reason text —
+///                          no icon, no tap (the canonical add glyph never
+///                          renders on an unsellable card).
+/// The add gesture, its 44px floor and its single `Icons.add_shopping_cart`
+/// per card are the frozen contracts; only the clothing changed.
+class _CardAction extends StatelessWidget {
+  const _CardAction({
     required this.onAdd,
-    required this.tooltip,
+    required this.l10n,
+    required this.inCart,
+    required this.unavailableLabel,
     this.interactionAccent,
   });
 
   final VoidCallback? onAdd;
-  final String tooltip;
+  final AppLocalizations l10n;
+  final bool inCart;
+
+  /// Non-null = the item cannot be sold; the footer renders the reason.
+  final String? unavailableLabel;
 
   /// POS-PREMIUM-VISUAL-POLISH-001: the terminal's secondary accent for
   /// hover/pressed washes and the focus ring. Null keeps the shared brand
@@ -657,66 +677,88 @@ class _AddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (unavailableLabel != null) {
+      return Container(
+        height: 44,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.sm),
+        decoration: BoxDecoration(
+          color: kPosDisabledBg,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        ),
+        child: Text(
+          unavailableLabel!,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF8B97A9),
+          ),
+        ),
+      );
+    }
     final accent =
         interactionAccent ??
         RestoflowBrandPalette.of(theme.brightness).accentOrange;
-    // POS-VISUAL-REDESIGN-PHASE-1-007: NO glow. Nineteen glowing green add
-    // buttons made green mean nothing; the glow now marks Send alone. The
-    // canonical add gesture, its 44px target and its disabled gate are
-    // unchanged.
-    return IconButton.filled(
-      onPressed: onAdd,
-      tooltip: tooltip,
-      // STANDARD, not compact: a compact density subtracts 8px from the
-      // constraint below, which quietly rendered this 44px target at 36.
-      visualDensity: VisualDensity.standard,
-      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-      // UI-ORANGE-BALANCE-POLISH-001: Add stays NAVY and earns orange only on
-      // interaction.
-      //
-      // It is deliberately not an orange fill. There are sixteen of these on a
-      // full menu, and the comment above records what happened last time this
-      // surface repeated one accent nineteen times: the colour stopped meaning
-      // anything. Send Order already holds the single orange primary for this
-      // view, so a grid of orange Adds would compete with the one control that
-      // is actually the next step.
-      //
-      // What it gains instead is the tactile layer the brief asked for: an
-      // orange wash on hover, a deeper one on press, and an orange focus ring —
-      // the same navyPrimary language the shared button role uses, so the two
-      // read as one system. Disabled keeps its existing greys untouched, so an
-      // unavailable item still cannot look actionable.
-      style:
-          IconButton.styleFrom(
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: theme.colorScheme.onPrimary,
-            disabledBackgroundColor: const Color(0xFFE9EEF5),
-            disabledForegroundColor: const Color(0xFFA8B2C1),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(
-                Radius.circular(RestoflowRadii.md),
+    // Add stays NAVY (or tonal once in cart) and earns the terminal accent
+    // only on interaction — an orange wash on hover, a deeper one on press,
+    // and an accent focus ring. Send keeps the single dominant CTA role.
+    return SizedBox(
+      width: double.infinity,
+      height: 44,
+      child: FilledButton.icon(
+        onPressed: onAdd,
+        icon: const Icon(
+          Icons.add_shopping_cart,
+          size: RestoflowIconSizes.sm + 2,
+        ),
+        label: Text(
+          inCart ? l10n.posAddMore : l10n.posAddToCart,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        style:
+            FilledButton.styleFrom(
+              backgroundColor: inCart
+                  ? kRestoflowNavyContainer
+                  : theme.colorScheme.primary,
+              foregroundColor: inCart
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onPrimary,
+              disabledBackgroundColor: const Color(0xFFE9EEF5),
+              disabledForegroundColor: const Color(0xFFA8B2C1),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.sm,
               ),
+              textStyle: theme.textTheme.labelLarge?.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(RestoflowRadii.md),
+                ),
+              ),
+              animationDuration: RestoflowDurations.fast,
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.pressed)) {
+                  return accent.withValues(alpha: 0.30);
+                }
+                if (states.contains(WidgetState.hovered)) {
+                  return accent.withValues(alpha: 0.18);
+                }
+                return null;
+              }),
+              side: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.focused)) {
+                  return BorderSide(color: accent, width: 2);
+                }
+                return null;
+              }),
             ),
-            animationDuration: RestoflowDurations.fast,
-          ).copyWith(
-            overlayColor: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.pressed)) {
-                return accent.withValues(alpha: 0.30);
-              }
-              if (states.contains(WidgetState.hovered)) {
-                return accent.withValues(alpha: 0.18);
-              }
-              return null;
-            }),
-            side: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.focused)) {
-                return BorderSide(color: accent, width: 2);
-              }
-              return null;
-            }),
-          ),
-      icon: const Icon(Icons.add_shopping_cart, size: RestoflowIconSizes.md),
+      ),
     );
   }
 }
@@ -730,14 +772,60 @@ class _CategoryBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // SURGERY-003: no flat pastel slab — the imageless band is a composed
+    // tinted scene: two soft offset discs in the category hue behind the
+    // category glyph. Same data, same fallback semantics, premium at rest.
+    final tint = category.color;
     return Ink(
-      color: category.color.withValues(alpha: 0.10),
-      child: Center(
-        child: Icon(
-          category.icon,
-          size: RestoflowIconSizes.xl,
-          color: category.color.withValues(alpha: 0.85),
-        ),
+      color: tint.withValues(alpha: 0.08),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              PositionedDirectional(
+                top: -w * 0.28,
+                end: -w * 0.22,
+                child: Container(
+                  width: w * 0.78,
+                  height: w * 0.78,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              PositionedDirectional(
+                bottom: -w * 0.16,
+                start: -w * 0.10,
+                child: Container(
+                  width: w * 0.42,
+                  height: w * 0.42,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Center(
+                child: Container(
+                  width: w * 0.30,
+                  height: w * 0.30,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    category.icon,
+                    size: RestoflowIconSizes.xl,
+                    color: tint.withValues(alpha: 0.9),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

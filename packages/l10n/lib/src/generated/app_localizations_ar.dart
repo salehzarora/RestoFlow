@@ -5643,4 +5643,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String posItemAddedToast(String name) {
     return 'تمت إضافة $name';
   }
+
+  @override
+  String get posAddMore => 'إضافة المزيد';
 }

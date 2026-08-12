@@ -10377,6 +10377,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} added'**
   String posItemAddedToast(String name);
+
+  /// Label of the product card's full-width action once the item is already in the cart (POS-REFERENCE-VISUAL-SURGERY-003): same add action, tonal treatment. The in-cart quantity badge on the image carries the count.
+  ///
+  /// In en, this message translates to:
+  /// **'Add more'**
+  String get posAddMore;
 }
 
 class _AppLocalizationsDelegate
