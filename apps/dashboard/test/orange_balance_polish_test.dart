@@ -434,4 +434,99 @@ void main() {
       }
     });
   });
+
+  group('F. KPI icon tiles: brand tint only where there is no semantics', () {
+    Widget kpiHost({RestoflowTone? tone, RestoflowMetricDelta? delta}) =>
+        MaterialApp(
+          theme: restoflowLightBrandTheme(),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 260,
+                child: RestoflowMetricCard(
+                  style: RestoflowMetricCardStyle.kpi,
+                  label: 'Gross sales',
+                  value: '626.00',
+                  icon: Icons.point_of_sale_outlined,
+                  tone: tone,
+                  delta: delta,
+                ),
+              ),
+            ),
+          ),
+        );
+
+    Color tileColour(WidgetTester tester) {
+      final container = tester
+          .widgetList<Container>(find.byType(Container))
+          .firstWhere((c) {
+            final d = c.decoration;
+            return d is BoxDecoration &&
+                d.borderRadius != null &&
+                d.color != null;
+          });
+      return (container.decoration! as BoxDecoration).color!;
+    }
+
+    testWidgets('a TONELESS KPI takes the brand accent tint', (tester) async {
+      await tester.pumpWidget(kpiHost());
+      await tester.pumpAndSettle();
+      expect(
+        tileColour(tester),
+        RestoflowBrandPalette.of(Brightness.light).accentOrangeContainer,
+        reason:
+            'The neutral, highest-value KPI is where orange earns its place — '
+            'it was a second navy block in a navy-heavy view.',
+      );
+    });
+
+    testWidgets('a TONED KPI keeps its semantic tint', (tester) async {
+      for (final tone in [
+        RestoflowTone.success,
+        RestoflowTone.info,
+        RestoflowTone.danger,
+      ]) {
+        await tester.pumpWidget(kpiHost(tone: tone));
+        await tester.pumpAndSettle();
+        expect(
+          tileColour(tester),
+          isNot(
+            RestoflowBrandPalette.of(Brightness.light).accentOrangeContainer,
+          ),
+          reason: '$tone carries meaning and must not be repainted as brand.',
+        );
+      }
+    });
+
+    testWidgets('a negative delta stays danger, never orange', (tester) async {
+      await tester.pumpWidget(
+        kpiHost(
+          delta: const RestoflowMetricDelta(
+            label: '6% vs yesterday',
+            positive: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final semantic = RestoflowSemanticColors.of(Brightness.light);
+      final texts = tester.widgetList<Text>(find.byType(Text));
+      final deltaText = texts.firstWhere((t) => (t.data ?? '').contains('6%'));
+      expect(deltaText.style?.color, isNot(brand.accentOrange));
+      expect(
+        deltaText.style?.color,
+        semantic.danger,
+        reason: 'A metric that went DOWN must read as danger, not as brand.',
+      );
+    });
+
+    testWidgets('the tint does not change the card geometry', (tester) async {
+      await tester.pumpWidget(kpiHost());
+      await tester.pumpAndSettle();
+      final neutral = tester.getRect(find.byType(RestoflowMetricCard));
+      await tester.pumpWidget(kpiHost(tone: RestoflowTone.success));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(RestoflowMetricCard)), neutral);
+    });
+  });
 }

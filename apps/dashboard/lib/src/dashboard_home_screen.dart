@@ -733,10 +733,26 @@ class _RecentOrdersCard extends ConsumerWidget {
       // two can never disagree about which dates are on screen.
       action: viewAll == null
           ? null
-          : TextButton(
+          // UI-ORANGE-BALANCE-POLISH-001: the ONE action on this card gets a
+          // small orange chevron and an orange label.
+          //
+          // Nothing new becomes clickable — this is the same `viewAll` callback
+          // and the same typed drill-down that already existed. It is an
+          // affordance change only: an action that read as body text now reads
+          // as an action. The rows themselves stay inert; row-level navigation
+          // is DASHBOARD-RECENT-ORDER-ROW-DRILLDOWN-001 and is NOT in this
+          // ticket.
+          : TextButton.icon(
               key: const Key('recent-orders-view-all'),
               onPressed: viewAll,
-              child: Text(l10n.dashboardRecentOrdersViewAll),
+              style: TextButton.styleFrom(
+                foregroundColor: RestoflowBrandPalette.of(
+                  Brightness.light,
+                ).accentOrange,
+              ),
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.arrow_forward, size: 18),
+              label: Text(l10n.dashboardRecentOrdersViewAll),
             ),
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
