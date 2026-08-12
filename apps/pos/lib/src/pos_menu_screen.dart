@@ -140,20 +140,55 @@ class PosMenuScreen extends StatelessWidget {
               }
 
               final compact = mode == PosLayoutMode.compactLandscape;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Expanded(child: _MenuPane()),
-                  SizedBox(
-                    width: posCartWidthFor(mode),
-                    child: CartPanel(compact: compact),
-                  ),
-                ],
+              // POS-REFERENCE-VISUAL-SURGERY-003: TWO floating surfaces on
+              // the ivory canvas — the rounded white menu WORKSPACE and the
+              // rounded white ORDER SUMMARY panel — separated by real
+              // gutters. The SizedBox still measures exactly
+              // posCartWidthFor(mode) (frozen width contract).
+              final gutter = compact ? 12.0 : kPosShellGutter;
+              final gap = compact ? 10.0 : kPosShellGap;
+              return Padding(
+                padding: EdgeInsets.all(gutter),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Expanded(child: _ShellSurface(child: _MenuPane())),
+                    SizedBox(width: gap),
+                    SizedBox(
+                      width: posCartWidthFor(mode),
+                      child: _ShellSurface(child: CartPanel(compact: compact)),
+                    ),
+                  ],
+                ),
               );
             },
           ),
           const ReadyAlertOverlay(),
         ],
+      ),
+    );
+  }
+}
+
+/// POS-REFERENCE-VISUAL-SURGERY-003 — one floating rounded white surface of
+/// the two-plane shell. Purely presentational: a rounded clip + hairline
+/// border around its child.
+class _ShellSurface extends StatelessWidget {
+  const _ShellSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kPosShellRadius),
+        border: Border.all(color: kRestoflowHairline),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(kPosShellRadius),
+        child: child,
       ),
     );
   }
@@ -246,6 +281,9 @@ class _MenuDeck extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // SURGERY-003: the deck lives INSIDE the floating workspace surface now —
+    // no shadow of its own; a soft bottom seam separates controls from
+    // merchandise.
     return DecoratedBox(
       key: const Key('pos-menu-deck'),
       decoration: const BoxDecoration(
@@ -253,7 +291,6 @@ class _MenuDeck extends StatelessWidget {
         border: BorderDirectional(
           bottom: BorderSide(color: kRestoflowHairline),
         ),
-        boxShadow: kPosDeckShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -753,9 +790,11 @@ class _MenuGrid extends ConsumerWidget {
     // treatment: the cache exists precisely so the cashier keeps the ordinary
     // grid. The lead line names the mode; the body names the data's age from
     // the snapshot's server fetch time (locale-formatted, never hand-rolled).
+    // SURGERY-003: the grid sits directly on the white workspace surface;
+    // the ivory canvas (the ambience) lives in the shell gutters around it.
     final offline = ref.watch(posOfflineModeProvider);
     if (offline.phase != PosOfflinePhase.offlineCached) {
-      return _AmbientCanvas(child: grid);
+      return grid;
     }
     final fetchedAt = offline.snapshotFetchedAt;
     return Column(
@@ -787,7 +826,7 @@ class _MenuGrid extends ConsumerWidget {
                 : l10n.posOfflineDataAge(_snapshotAgeLabel(context, fetchedAt)),
           ),
         ),
-        Expanded(child: _AmbientCanvas(child: grid)),
+        Expanded(child: grid),
       ],
     );
   }
@@ -836,47 +875,6 @@ class _MenuGrid extends ConsumerWidget {
   }
 }
 
-/// POS-PREMIUM-VISUAL-POLISH-001 — the ambient merchandise canvas: two very
-/// soft warm washes (ember at the top-start, navy at the bottom-end) behind
-/// the product grid, fading in once on mount. Purely decorative, zero timers
-/// (one finite entrance), zero hit-testing (IgnorePointer), zero layout
-/// impact (the child paints above the washes at its own size).
-class _AmbientCanvas extends StatelessWidget {
-  const _AmbientCanvas({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: PosEntrance(
-              index: 4,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: AlignmentDirectional(-1.2, -1.2),
-                    radius: 1.4,
-                    colors: [Color(0x0FC96A2B), Color(0x00C96A2B)],
-                  ),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: AlignmentDirectional(1.3, 1.4),
-                      radius: 1.5,
-                      colors: [Color(0x0A16335E), Color(0x0016335E)],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        Positioned.fill(child: child),
-      ],
-    );
-  }
-}
+// (SURGERY-003 removed the ambient grid washes: the ivory canvas now lives
+// in the shell gutters AROUND the floating white surfaces, which carries the
+// warmth without painting under merchandise.)

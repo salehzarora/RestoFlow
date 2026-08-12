@@ -297,6 +297,14 @@ PosLayoutMode posLayoutModeFor({
   return PosLayoutMode.phone;
 }
 
+/// POS-REFERENCE-VISUAL-SURGERY-003 — the floating two-surface shell: the
+/// menu workspace and the order summary are two distinct rounded white
+/// panels on the ivory canvas, separated by real gutters (the reference's
+/// composition), instead of a full-bleed grid beside an attached cart.
+const double kPosShellGutter = 20;
+const double kPosShellGap = 16;
+const double kPosShellRadius = 20;
+
 /// PSC-001A: below this width the POS app bar goes COMPACT — the textual
 /// title hides (the brand tile stays) and the outbox indicator collapses to
 /// its icon (tooltip + full semantics retained), so the five operational

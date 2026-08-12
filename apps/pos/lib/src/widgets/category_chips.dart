@@ -98,34 +98,32 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final foreground = selected ? scheme.onPrimary : kRestoflowInk2;
+    // SURGERY-003: TABS, not filled pills. Unselected is quiet (transparent
+    // chrome, muted ink); selected reads through STRONGER INK + the terminal
+    // accent marker — never a heavy filled body. The label weight is
+    // deliberately CONSTANT so selection never changes tab geometry under
+    // the cashier's finger (the frozen width-stability contract).
+    final foreground = selected ? kRestoflowInk : kRestoflowInk2;
 
     return Padding(
-      // 6px between chips (spec §14) — the rail is a set, not a row of cards.
+      // 6px between tabs — the rail is a set, not a row of cards.
       padding: const EdgeInsetsDirectional.only(end: 6),
       child: Center(
         child: DecoratedBox(
-          // POS-VISUAL-REDESIGN-PHASE-1-007: an UNSELECTED chip carries no
-          // border and no shadow — it is a filter, not a card. The selected
-          // chip is then the only chip on the rail with any elevation, which
-          // is what makes the active filter unmistakable at a glance.
           decoration: BoxDecoration(
-            color: selected ? scheme.primary : kPosChipBg,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            boxShadow: selected ? kPosChipSelectedShadow : null,
           ),
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
               onTap: onSelected,
+              hoverColor: kPosChipBg,
               borderRadius: BorderRadius.circular(RestoflowRadii.md),
               child: Container(
                 height: 40,
                 constraints: const BoxConstraints(minWidth: 44),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: RestoflowSpacing.md,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Stack(
                   children: [
                     Row(
@@ -204,27 +202,18 @@ class _CountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = selected
-        ? Colors.white.withValues(alpha: 0.24)
-        : kPosCountBadgeBg;
-    final fg = selected ? theme.colorScheme.onPrimary : kRestoflowInk3;
-    return Container(
-      constraints: const BoxConstraints(minWidth: 20),
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.xs,
-        vertical: 1,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        // 7px, not a full pill — the spec's "excessive rounded pills" note.
-        borderRadius: BorderRadius.circular(7),
-      ),
+    // SURGERY-003: a compact bare count — no badge box at all. Selected
+    // counts sharpen to the primary ink; unselected stay muted.
+    final fg = selected ? theme.colorScheme.primary : kRestoflowInk3;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       child: Text(
         count.toString(),
         textAlign: TextAlign.center,
         style: theme.textTheme.labelSmall?.copyWith(
           color: fg,
           fontWeight: FontWeight.w700,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );

@@ -87,11 +87,11 @@ Future<void> _shot(
   await tester.pumpWidget(_app(locale));
   await tester.pumpAndSettle();
   for (var i = 0; i < addFirstItemTaps; i++) {
-    final card = find.byWidgetPredicate(
-      (w) => w.key.toString().contains('menu-item-i-'),
-    );
-    if (card.evaluate().isNotEmpty) {
-      await tester.tap(card.first, warnIfMissed: false);
+    // The FIRST add action is the plain Classic Burger one-tap add (a frozen
+    // corpus fact) — no modifier sheet in the way.
+    final add = find.byIcon(Icons.add_shopping_cart);
+    if (add.evaluate().isNotEmpty) {
+      await tester.tap(add.first, warnIfMissed: false);
       await tester.pumpAndSettle();
     }
   }
@@ -106,13 +106,22 @@ void main() {
 
   setUpAll(_loadRealFonts);
 
+  testWidgets('1280 ar empty', skip: !_enabled, (tester) async {
+    await _shot(
+      tester,
+      size: const Size(1280, 800),
+      locale: const Locale('ar'),
+      name: '1280_ar_empty',
+    );
+  });
+
   testWidgets('1280 ar populated', skip: !_enabled, (tester) async {
     await _shot(
       tester,
       size: const Size(1280, 800),
       locale: const Locale('ar'),
       name: '1280_ar',
-      addFirstItemTaps: 2,
+      addFirstItemTaps: 3,
     );
   });
 

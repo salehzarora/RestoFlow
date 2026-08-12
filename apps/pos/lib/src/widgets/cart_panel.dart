@@ -141,11 +141,11 @@ class CartPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: BorderDirectional(start: BorderSide(color: kRestoflowHairline)),
-      ),
+    // SURGERY-003: the panel's frame (rounded white surface + hairline) is
+    // owned by the shell's _ShellSurface wrapper now — no attached-edge
+    // border of its own.
+    return ColoredBox(
+      color: Colors.white,
       // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: the shift/drawer strip is no
       // longer a separate slab above a divider — it rides INSIDE the cart's one
       // dark operational block, which the content builds. It is still a real
