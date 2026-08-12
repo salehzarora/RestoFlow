@@ -5665,4 +5665,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posCashDrawerOpenFailed =>
       'Payment recorded — cash drawer did not open';
+
+  @override
+  String get posDeviceAccentTitle => 'Terminal accent color';
+
+  @override
+  String get posDeviceAccentHelp =>
+      'Colors small highlights on this terminal only — never statuses or prices.';
+
+  @override
+  String get posDeviceAccentMint => 'Mint Leaf';
+
+  @override
+  String get posDeviceAccentSaffron => 'Saffron Gold';
+
+  @override
+  String get posDeviceAccentPomegranate => 'Pomegranate';
+
+  @override
+  String get posDeviceAccentAubergine => 'Aubergine';
 }

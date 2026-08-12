@@ -13,6 +13,7 @@ import '../print/print_bridge.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
 import '../state/pos_auto_print_prefs.dart';
+import '../state/pos_device_accent.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
@@ -185,6 +186,14 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       // local unpair) — no owner login, no owner/admin scope.
                       _ConnectionControls(l10n: l10n),
                     ],
+                    // POS-PREMIUM-VISUAL-POLISH-001: the per-terminal secondary
+                    // accent. An APPEARANCE preference (like language) available
+                    // in every pairing state, demo included — placed LAST so the
+                    // operational sections keep their long-standing geometry.
+                    const SizedBox(height: RestoflowSpacing.md),
+                    const Divider(height: 1),
+                    const SizedBox(height: RestoflowSpacing.md),
+                    _DeviceAccentSection(l10n: l10n),
                   ],
                 ),
               ),
@@ -534,6 +543,143 @@ class _ReprintLastReceiptButton extends ConsumerWidget {
               },
         icon: const Icon(Icons.receipt_long_outlined),
         label: Text(l10n.posReprintLastReceiptAction),
+      ),
+    );
+  }
+}
+
+/// POS-PREMIUM-VISUAL-POLISH-001: the per-terminal secondary-accent picker.
+///
+/// Four curated swatches; the choice colours NON-CRITICAL highlights only
+/// (selected-category marker, focus rings, hover tints, cart count badge) and
+/// persists per device. Selection is communicated by a ring + check glyph +
+/// the semantics selected flag — never by colour alone.
+class _DeviceAccentSection extends ConsumerWidget {
+  const _DeviceAccentSection({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  String _label(PosDeviceAccent accent) => switch (accent) {
+    PosDeviceAccent.mint => l10n.posDeviceAccentMint,
+    PosDeviceAccent.saffron => l10n.posDeviceAccentSaffron,
+    PosDeviceAccent.pomegranate => l10n.posDeviceAccentPomegranate,
+    PosDeviceAccent.aubergine => l10n.posDeviceAccentAubergine,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final selected =
+        ref.watch(posDeviceAccentProvider).valueOrNull ?? PosDeviceAccent.mint;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.posDeviceAccentTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xxs),
+        Text(
+          l10n.posDeviceAccentHelp,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.sm,
+          children: [
+            for (final accent in PosDeviceAccent.values)
+              _AccentSwatch(
+                key: Key('device-accent-${accent.wire}'),
+                accent: accent,
+                label: _label(accent),
+                selected: accent == selected,
+                onTap: () => ref
+                    .read(posDeviceAccentProvider.notifier)
+                    .setAccent(accent),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AccentSwatch extends StatelessWidget {
+  const _AccentSwatch({
+    super.key,
+    required this.accent,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PosDeviceAccent accent;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? accent.color.withValues(alpha: 0.10)
+            : theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.sm,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.md,
+              RestoflowSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(
+                color: selected ? accent.color : kRestoflowHairline,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: accent.color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: selected
+                        ? const Icon(Icons.check, size: 16, color: Colors.white)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

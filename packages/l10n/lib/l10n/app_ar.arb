@@ -1741,5 +1741,11 @@
   "posPaymentAwaitingOrderSync": "الطلب بانتظار المزامنة قبل استلام الدفعة — سيتاح الدفع فور قبول الخادم للطلب.",
   "posCashDrawerAutoOpenTitle": "فتح درج النقود تلقائيًا بعد الدفع نقدًا",
   "posCashDrawerAutoOpenHelp": "يستخدم منفذ الدرج في طابعة الفواتير.",
-  "posCashDrawerOpenFailed": "تم تسجيل الدفعة — لم يُفتح درج النقود"
+  "posCashDrawerOpenFailed": "تم تسجيل الدفعة — لم يُفتح درج النقود",
+  "posDeviceAccentTitle": "لون التمييز لهذا الجهاز",
+  "posDeviceAccentHelp": "يلوّن لمسات صغيرة على هذا الجهاز فقط — لا يغيّر ألوان الحالات أو الأسعار.",
+  "posDeviceAccentMint": "نعناع",
+  "posDeviceAccentSaffron": "زعفران",
+  "posDeviceAccentPomegranate": "رمّان",
+  "posDeviceAccentAubergine": "باذنجاني"
 }

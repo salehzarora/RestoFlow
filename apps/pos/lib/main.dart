@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
-import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
@@ -12,6 +11,7 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/draft_recovery_store.dart';
+import 'src/design/pos_theme.dart';
 import 'src/data/durable_outbox_store.dart';
 import 'src/state/addition_controller.dart' show additionJournalStoreProvider;
 import 'src/data/parked_carts_store.dart';
@@ -700,7 +700,9 @@ class PosApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      theme: restoflowLightBrandTheme(),
+      // POS-PREMIUM-VISUAL-POLISH-001: the shared light brand theme + the
+      // bundled Tajawal / IBM Plex Sans Arabic pairing (POS-scoped).
+      theme: posPremiumTheme(),
       home: home,
     );
   }

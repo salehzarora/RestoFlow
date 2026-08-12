@@ -10335,6 +10335,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment recorded — cash drawer did not open'**
   String get posCashDrawerOpenFailed;
+
+  /// Title of the per-device appearance setting choosing this terminal's secondary accent color (POS-PREMIUM-VISUAL-POLISH-001). The accent colors small highlights only (selected-category marker, focus rings, hover tints, cart count badge) — never semantic states, prices, or the primary action.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal accent color'**
+  String get posDeviceAccentTitle;
+
+  /// Subtitle under the terminal accent picker stating the accent's non-critical scope: it is a local appearance preference per device and never encodes state or money.
+  ///
+  /// In en, this message translates to:
+  /// **'Colors small highlights on this terminal only — never statuses or prices.'**
+  String get posDeviceAccentHelp;
+
+  /// Name of the default terminal accent swatch (#4E8B7A).
+  ///
+  /// In en, this message translates to:
+  /// **'Mint Leaf'**
+  String get posDeviceAccentMint;
+
+  /// Name of the saffron terminal accent swatch (#D89A2B).
+  ///
+  /// In en, this message translates to:
+  /// **'Saffron Gold'**
+  String get posDeviceAccentSaffron;
+
+  /// Name of the pomegranate terminal accent swatch (#C65A4B).
+  ///
+  /// In en, this message translates to:
+  /// **'Pomegranate'**
+  String get posDeviceAccentPomegranate;
+
+  /// Name of the aubergine terminal accent swatch (#6E5BD3).
+  ///
+  /// In en, this message translates to:
+  /// **'Aubergine'**
+  String get posDeviceAccentAubergine;
 }
 
 class _AppLocalizationsDelegate

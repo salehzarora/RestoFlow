@@ -5581,4 +5581,23 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posCashDrawerOpenFailed => 'התשלום נרשם — מגירת המזומנים לא נפתחה';
+
+  @override
+  String get posDeviceAccentTitle => 'צבע הדגשה למסוף זה';
+
+  @override
+  String get posDeviceAccentHelp =>
+      'צובע הדגשות קטנות במסוף זה בלבד — לא סטטוסים ולא מחירים.';
+
+  @override
+  String get posDeviceAccentMint => 'מנטה';
+
+  @override
+  String get posDeviceAccentSaffron => 'זעפרן';
+
+  @override
+  String get posDeviceAccentPomegranate => 'רימון';
+
+  @override
+  String get posDeviceAccentAubergine => 'חציל';
 }

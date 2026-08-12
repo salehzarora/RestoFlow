@@ -3824,5 +3824,17 @@
   "posCashDrawerAutoOpenHelp": "Uses the receipt printer's drawer port.",
   "@posCashDrawerAutoOpenHelp": {"description": "Subtitle under the cash-drawer auto-open toggle explaining that the drawer pulse goes through the CUSTOMER receipt printer's drawer (RJ11) port — no separate drawer device is configured."},
   "posCashDrawerOpenFailed": "Payment recorded — cash drawer did not open",
-  "@posCashDrawerOpenFailed": {"description": "POS snackbar shown when a cash payment was recorded successfully but the automatic drawer-kick send to the receipt printer failed. Honest and non-blocking: the payment/receipt are unaffected and the kick is never retried (the cashier uses the manual drawer release)."}
+  "@posCashDrawerOpenFailed": {"description": "POS snackbar shown when a cash payment was recorded successfully but the automatic drawer-kick send to the receipt printer failed. Honest and non-blocking: the payment/receipt are unaffected and the kick is never retried (the cashier uses the manual drawer release)."},
+  "posDeviceAccentTitle": "Terminal accent color",
+  "@posDeviceAccentTitle": {"description": "Title of the per-device appearance setting choosing this terminal's secondary accent color (POS-PREMIUM-VISUAL-POLISH-001). The accent colors small highlights only (selected-category marker, focus rings, hover tints, cart count badge) — never semantic states, prices, or the primary action."},
+  "posDeviceAccentHelp": "Colors small highlights on this terminal only — never statuses or prices.",
+  "@posDeviceAccentHelp": {"description": "Subtitle under the terminal accent picker stating the accent's non-critical scope: it is a local appearance preference per device and never encodes state or money."},
+  "posDeviceAccentMint": "Mint Leaf",
+  "@posDeviceAccentMint": {"description": "Name of the default terminal accent swatch (#4E8B7A)."},
+  "posDeviceAccentSaffron": "Saffron Gold",
+  "@posDeviceAccentSaffron": {"description": "Name of the saffron terminal accent swatch (#D89A2B)."},
+  "posDeviceAccentPomegranate": "Pomegranate",
+  "@posDeviceAccentPomegranate": {"description": "Name of the pomegranate terminal accent swatch (#C65A4B)."},
+  "posDeviceAccentAubergine": "Aubergine",
+  "@posDeviceAccentAubergine": {"description": "Name of the aubergine terminal accent swatch (#6E5BD3)."}
 }

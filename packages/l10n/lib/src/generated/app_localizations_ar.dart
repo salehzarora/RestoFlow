@@ -5619,4 +5619,23 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posCashDrawerOpenFailed => 'تم تسجيل الدفعة — لم يُفتح درج النقود';
+
+  @override
+  String get posDeviceAccentTitle => 'لون التمييز لهذا الجهاز';
+
+  @override
+  String get posDeviceAccentHelp =>
+      'يلوّن لمسات صغيرة على هذا الجهاز فقط — لا يغيّر ألوان الحالات أو الأسعار.';
+
+  @override
+  String get posDeviceAccentMint => 'نعناع';
+
+  @override
+  String get posDeviceAccentSaffron => 'زعفران';
+
+  @override
+  String get posDeviceAccentPomegranate => 'رمّان';
+
+  @override
+  String get posDeviceAccentAubergine => 'باذنجاني';
 }
