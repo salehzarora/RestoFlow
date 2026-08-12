@@ -521,12 +521,54 @@ class _RangeChip extends StatelessWidget {
               child: Align(
                 alignment: Alignment.center,
                 widthFactor: 1,
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: fg,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  ),
+                child: Stack(
+                  children: [
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    // UI-ORANGE-BALANCE-POLISH-001: the selected range earns a
+                    // thin orange underline under its label.
+                    //
+                    // WHY IT IS DRAWN, NOT LAID OUT. This chip's width is
+                    // load-bearing: the `Align(widthFactor: 1)` above exists
+                    // because an unbounded Align made all seven pills claim a
+                    // row each and swallow the first viewport. So the marker
+                    // rides in a Stack as a POSITIONED child — it contributes
+                    // nothing to the measured size, and selected and
+                    // unselected chips stay byte-identical in geometry. The
+                    // alternative, a thicker bottom border on the decoration,
+                    // would inset the child and move the label.
+                    //
+                    // Orange is the second signal, not the only one: the label
+                    // already thickens to w600 when selected, so selection
+                    // survives for anyone who cannot separate the two hues.
+                    if (selected)
+                      PositionedDirectional(
+                        start: 0,
+                        end: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            key: const Key('range-chip-active-marker'),
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: RestoflowBrandPalette.of(
+                                Brightness.light,
+                              ).accentOrange,
+                              borderRadius: BorderRadius.circular(
+                                RestoflowRadii.pill,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -535,6 +577,28 @@ class _RangeChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// UI-ORANGE-BALANCE-POLISH-001: reaches the REAL range chip from a test.
+///
+/// The chip is private because nothing outside this screen may build one. The
+/// tests that hold its geometry and its orange marker still have to exercise
+/// the shipped widget rather than a copy of it, so this exposes it without
+/// widening the public surface.
+@visibleForTesting
+class DashboardRangeChipProbe extends StatelessWidget {
+  const DashboardRangeChipProbe({
+    required this.label,
+    required this.selected,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) =>
+      _RangeChip(label: label, selected: selected, onTap: () {});
 }
 
 /// F3 — Top Selling Items, on the committed analytics window.

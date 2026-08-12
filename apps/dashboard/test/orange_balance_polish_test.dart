@@ -9,6 +9,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 /// Collects paint-time overflow, which never reaches [WidgetTester.takeException].
@@ -289,6 +290,148 @@ void main() {
             'Elevation and overlay may change on hover; geometry may not — a '
             'control that moves under the cursor is a control you miss.',
       );
+    });
+  });
+
+  group('E. the range selector earns orange without moving', () {
+    // The chip is rendered through the real overview, so these assertions run
+    // against the shipped composition rather than a stand-in.
+    Widget rangeHost({required bool selected, double scale = 1.0}) {
+      return MaterialApp(
+        theme: restoflowLightBrandTheme(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Center(
+            child: DashboardRangeChipProbe(label: 'Today', selected: selected),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('the selected chip carries an orange marker', (tester) async {
+      await tester.pumpWidget(rangeHost(selected: true));
+      await tester.pumpAndSettle();
+      final marker = find.byKey(const Key('range-chip-active-marker'));
+      expect(marker, findsOneWidget);
+      final container = tester.widget<Container>(marker);
+      final decoration = container.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        RestoflowBrandPalette.of(Brightness.light).accentOrange,
+        reason: 'The marker must be the BRAND accent, not a semantic colour.',
+      );
+    });
+
+    testWidgets('an unselected chip carries no marker', (tester) async {
+      await tester.pumpWidget(rangeHost(selected: false));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('range-chip-active-marker')), findsNothing);
+    });
+
+    testWidgets('selection does not change the chip geometry', (tester) async {
+      await tester.pumpWidget(rangeHost(selected: false));
+      await tester.pumpAndSettle();
+      final unselected = tester.getRect(find.text('Today'));
+
+      await tester.pumpWidget(rangeHost(selected: true));
+      await tester.pumpAndSettle();
+      final selected = tester.getRect(find.text('Today'));
+
+      expect(
+        selected.size.width,
+        closeTo(unselected.size.width, 0.5),
+        reason:
+            'This chip width is load-bearing — an unbounded Align once made '
+            'every pill claim its own row. The marker must add nothing to it.',
+      );
+      expect(selected.size.height, closeTo(unselected.size.height, 0.5));
+    });
+
+    testWidgets('the selected body stays navy, orange is only the marker', (
+      tester,
+    ) async {
+      await tester.pumpWidget(rangeHost(selected: true));
+      await tester.pumpAndSettle();
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final materials = tester
+          .widgetList<Material>(find.byType(Material))
+          .where((m) => m.color != null && m.color != Colors.transparent);
+      expect(
+        materials.any((m) => m.color == brand.accentOrange),
+        isFalse,
+        reason: 'Orange must never become the chip FILL — navy is structural.',
+      );
+    });
+
+    for (final width in [1280.0, 1024.0, 834.0, 700.0, 430.0, 390.0]) {
+      testWidgets('${width.toInt()} keeps the chip overflow-free', (
+        tester,
+      ) async {
+        final overflows = await overflowsDuring(() async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(rangeHost(selected: true));
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
+      });
+    }
+
+    for (final width in [1280.0, 700.0, 430.0]) {
+      testWidgets('${width.toInt()} @2x keeps the chip overflow-free', (
+        tester,
+      ) async {
+        final overflows = await overflowsDuring(() async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(rangeHost(selected: true, scale: 2.0));
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
+      });
+    }
+
+    testWidgets('the marker mirrors to the trailing edge under RTL', (
+      tester,
+    ) async {
+      // A directional marker on a centred underline must span the label in
+      // both directions; the assertion is that it stays inside the chip and
+      // spans it, not that it sits on one hardcoded side.
+      for (final direction in [TextDirection.rtl, TextDirection.ltr]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: restoflowLightBrandTheme(),
+            home: Directionality(
+              textDirection: direction,
+              child: const Scaffold(
+                body: Center(
+                  child: DashboardRangeChipProbe(
+                    label: 'Today',
+                    selected: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final label = tester.getRect(find.text('Today'));
+        final marker = tester.getRect(
+          find.byKey(const Key('range-chip-active-marker')),
+        );
+        expect(
+          marker.left >= label.left - 0.5 && marker.right <= label.right + 0.5,
+          isTrue,
+          reason: 'The marker must track the label in $direction.',
+        );
+      }
     });
   });
 }
