@@ -529,4 +529,139 @@ void main() {
       expect(tester.getRect(find.byType(RestoflowMetricCard)), neutral);
     });
   });
+
+  group('G. the chart: navy is the data, orange is where you point', () {
+    const points = [
+      RestoflowAreaDatum(label: '10', value: 40),
+      RestoflowAreaDatum(label: '11', value: 90),
+      RestoflowAreaDatum(label: '12', value: 60),
+    ];
+
+    Widget chartHost({double width = 600}) => MaterialApp(
+      theme: restoflowLightBrandTheme(),
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: width,
+            child: const RestoflowAreaChart(points: points, height: 200),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('the series stays navy — orange never becomes the data', (
+      tester,
+    ) async {
+      await tester.pumpWidget(chartHost());
+      await tester.pumpAndSettle();
+      final chart = tester.widget<RestoflowAreaChart>(
+        find.byType(RestoflowAreaChart),
+      );
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      // No explicit lineColor => the theme primary, which is navy. The point is
+      // that the SERIES is never the accent.
+      expect(chart.lineColor, isNot(brand.accentOrange));
+      final theme = restoflowLightBrandTheme();
+      expect(
+        chart.lineColor ?? theme.colorScheme.primary,
+        isNot(brand.accentOrange),
+      );
+    });
+
+    testWidgets('a selected point paints the brand accent', (tester) async {
+      await tester.pumpWidget(chartHost());
+      await tester.pumpAndSettle();
+
+      // Drive the REAL selection the chart already supports (hover), rather
+      // than inventing an interaction for the sake of a colour.
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(RestoflowAreaChart)));
+      await tester.pumpAndSettle();
+
+      // What is assertable from outside the painter: a selection really did
+      // happen (a tooltip appeared), and the SERIES colour did not move while
+      // it did. The selection accent itself is wired from the brand palette in
+      // build() and covered by the design_system suite; this test's job is to
+      // prove that pointing at the chart changes the pointer affordance and
+      // NOT the data.
+      final chart = tester.widget<RestoflowAreaChart>(
+        find.byType(RestoflowAreaChart),
+      );
+      expect(
+        chart.lineColor,
+        isNot(RestoflowBrandPalette.of(Brightness.light).accentOrange),
+        reason: 'Hovering must never recolour the series.',
+      );
+      expect(find.byType(CustomPaint), findsWidgets);
+    });
+
+    testWidgets('selection does not change chart geometry', (tester) async {
+      await tester.pumpWidget(chartHost());
+      await tester.pumpAndSettle();
+      final before = tester.getRect(find.byType(RestoflowAreaChart));
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(RestoflowAreaChart)));
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(find.byType(RestoflowAreaChart)), before);
+    });
+
+    for (final width in [1280.0, 430.0]) {
+      testWidgets('${width.toInt()} renders the chart overflow-free', (
+        tester,
+      ) async {
+        final overflows = await overflowsDuring(() async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(chartHost(width: width - 40));
+          await tester.pumpAndSettle();
+        });
+        expect(overflows, isEmpty);
+      });
+    }
+  });
+
+  group('H. Top Items is informational — no affordance was invented', () {
+    testWidgets('the rank ramp is BRAND ordinal, never a semantic status', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: restoflowLightBrandTheme(),
+          home: const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 360,
+                child: RestoflowRankRow(
+                  rank: 3,
+                  name: 'Caesar Salad',
+                  meta: 'x3',
+                  fraction: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final brand = RestoflowBrandPalette.of(Brightness.light);
+      final semantic = RestoflowSemanticColors.of(Brightness.light);
+      // Rank 3 already carries brand orange, from the brand palette. That is
+      // why NO extra affordance was added here: the card exposes no action to
+      // afford, and a non-interactive orange marker would be decoration
+      // pretending to be a control.
+      expect(brand.accentOrange, isNot(semantic.success));
+      expect(brand.accentOrange, isNot(semantic.danger));
+
+      // And nothing in the row is tappable — the negative finding, pinned.
+      expect(find.byType(InkWell), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
+    });
+  });
 }

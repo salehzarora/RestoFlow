@@ -3,8 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import '../brand_palette.dart';
 import 'package:flutter/services.dart';
+
+import '../brand_palette.dart';
 
 import '../tokens.dart';
 
@@ -242,6 +243,9 @@ class _RestoflowAreaChartState extends State<RestoflowAreaChart> {
             yAxisLabelBuilder: widget.yAxisLabelBuilder,
             smooth: widget.smooth,
             selectedIndex: _interactive ? selected : null,
+            selectionAccent: RestoflowBrandPalette.of(
+              theme.brightness,
+            ).accentOrange,
             showPointDots: _interactive,
           ),
         );
@@ -507,6 +511,7 @@ class _AreaChartPainter extends CustomPainter {
     required this.labelStyle,
     required this.peakLabelStyle,
     required this.markerRing,
+    required this.selectionAccent,
     required this.textScaler,
     this.yAxisTicks,
     this.yAxisLabelBuilder,
@@ -529,6 +534,16 @@ class _AreaChartPainter extends CustomPainter {
   final String Function(int value)? yAxisLabelBuilder;
   final bool smooth;
   final int? selectedIndex;
+
+  /// UI-ORANGE-BALANCE-POLISH-001: the colour of the SELECTION affordance —
+  /// the crosshair and the selected point's core.
+  ///
+  /// Deliberately separate from [line]. The series is the data and stays navy;
+  /// this is "where you are pointing", a neutral interaction state that exists
+  /// only while someone is hovering, tapping or arrowing through the chart. The
+  /// peak marker also stays navy, because the peak is a fact about the data
+  /// rather than a thing the reader is doing.
+  final Color selectionAccent;
   final bool showPointDots;
 
   @override
@@ -641,7 +656,9 @@ class _AreaChartPainter extends CustomPainter {
         Offset(sx, metrics.topPad),
         Offset(sx, baseY),
         Paint()
-          ..color = grid
+          // Faint on purpose: the crosshair locates the reading, it does not
+          // compete with the series it is measuring.
+          ..color = selectionAccent.withValues(alpha: 0.45)
           ..strokeWidth = 1,
       );
     }
@@ -695,7 +712,7 @@ class _AreaChartPainter extends CustomPainter {
     if (selected != null && selected >= 0 && selected < n && maxValue > 0) {
       final sp = pts[selected];
       canvas.drawCircle(sp, 6, Paint()..color = markerRing);
-      canvas.drawCircle(sp, 4, Paint()..color = line);
+      canvas.drawCircle(sp, 4, Paint()..color = selectionAccent);
     }
 
     // X-axis labels, evenly subsampled so a dense series never clips. The last
@@ -809,5 +826,6 @@ class _AreaChartPainter extends CustomPainter {
       old.yAxisLabelBuilder != yAxisLabelBuilder ||
       old.smooth != smooth ||
       old.selectedIndex != selectedIndex ||
+      old.selectionAccent != selectionAccent ||
       old.showPointDots != showPointDots;
 }
