@@ -130,18 +130,19 @@ class PosAnimatedCount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!posMotionEnabled(context)) return builder(context, value);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: value.toDouble(), end: value.toDouble()),
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(begin: value, end: value),
       duration: PosMotionDurations.base,
       curve: Curves.easeOutCubic,
-      builder: (context, v, _) => builder(context, v.round()),
+      builder: (context, v, _) => builder(context, v),
     );
   }
 }
 
-/// Count-up tween for a money amount in integer minor units (D-007: the
-/// tweened value is rounded back to an int before formatting — no float money
-/// ever reaches a formatter). Settles on exactly [minor].
+/// Count-up tween for a money amount in integer minor units. The tween is an
+/// [IntTween], so every intermediate frame is itself an integer minor amount
+/// (DECISION D-007 holds at every frame, not only at rest) and the animation
+/// settles on exactly [minor].
 class PosAnimatedAmount extends StatelessWidget {
   const PosAnimatedAmount({
     super.key,
@@ -155,11 +156,11 @@ class PosAnimatedAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!posMotionEnabled(context)) return builder(context, minor);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: minor.toDouble(), end: minor.toDouble()),
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(begin: minor, end: minor),
       duration: PosMotionDurations.base,
       curve: Curves.easeOutCubic,
-      builder: (context, v, _) => builder(context, v.round()),
+      builder: (context, v, _) => builder(context, v),
     );
   }
 }
