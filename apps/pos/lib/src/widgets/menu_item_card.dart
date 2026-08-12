@@ -3,7 +3,6 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
-import '../design/pos_motion.dart';
 import '../design/pos_visual_tokens.dart';
 import '../format/money_format.dart';
 import '../pos_palette.dart';
@@ -362,7 +361,8 @@ class _CardShellState extends State<_CardShell> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: PosMotionDurations.base,
+        // 004: the approved hover-lift timing (states/motion §7: 220ms).
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         // SURGERY-003: shadow ON HOVER ONLY — at rest the card is a calm
         // white surface with a 1px border, like the reference.

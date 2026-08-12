@@ -4,7 +4,8 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../design/pos_motion.dart';
-import '../design/pos_visual_tokens.dart' show PosThemePair;
+import '../design/pos_visual_tokens.dart'
+    show PosThemePair, kPosMoneyFontFamily, kPosMoneyFontFallbacks;
 import '../format/money_format.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
@@ -139,7 +140,9 @@ class PosBottomBar extends ConsumerWidget {
                     ),
                     if (!submitted)
                       // Count-up tween (settles on the exact final amount;
-                      // integer minor units only — D-007).
+                      // integer minor units only — D-007). 004: the running
+                      // total reads in the approved ember-sand on the navy
+                      // bar (tokens §8); string unchanged.
                       PosAnimatedAmount(
                         minor: cart.subtotalMinor,
                         builder: (context, minor) => Text(
@@ -151,8 +154,10 @@ class PosBottomBar extends ConsumerWidget {
                                 ),
                           textDirection: TextDirection.ltr,
                           style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
+                            color: PosThemePair.of(context).actionSoft,
                             fontWeight: FontWeight.w800,
+                            fontFamily: kPosMoneyFontFamily,
+                            fontFamilyFallback: kPosMoneyFontFallbacks,
                             fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),

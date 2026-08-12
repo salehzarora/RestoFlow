@@ -116,16 +116,27 @@ class PosMenuScreen extends StatelessWidget {
               color: kPosNavbarBed,
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // PSC-001A: the ready-notification bell leads the action group.
-                ReadyNotificationBell(),
-                RecentOrdersButton(),
-                OutboxStatusIndicator(),
-                LanguageSelector(),
-                DeviceSettingsMenu(),
-              ],
+            // The approved nav-icon hover wash (states/motion §7: white-16%)
+            // — a theme-level ink tint; every action keeps its own widget,
+            // tooltip, keys and behavior.
+            child: Theme(
+              data: theme.copyWith(
+                hoverColor: Colors.white.withValues(alpha: 0.16),
+                highlightColor: Colors.white.withValues(alpha: 0.10),
+                splashColor: Colors.white.withValues(alpha: 0.14),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // PSC-001A: the ready-notification bell leads the action
+                  // group.
+                  ReadyNotificationBell(),
+                  RecentOrdersButton(),
+                  OutboxStatusIndicator(),
+                  LanguageSelector(),
+                  DeviceSettingsMenu(),
+                ],
+              ),
             ),
           ),
         ],
