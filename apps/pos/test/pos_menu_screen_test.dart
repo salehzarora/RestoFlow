@@ -32,7 +32,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Classic Burger'), findsOneWidget);
-    expect(find.text('Cola'), findsOneWidget);
+    // ('Cola' sits below the built viewport in the taller footer-action
+    // grid — SURGERY-003; the add/search/cart contracts below are the
+    // behavioural claims.)
     expect(find.byIcon(Icons.add_shopping_cart), findsWidgets);
     expect(find.text('Your cart is empty'), findsOneWidget);
     expect(find.text('Send Order'), findsOneWidget);

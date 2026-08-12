@@ -10,6 +10,7 @@ import 'package:restoflow_pos/src/data/menu_availability_repository.dart';
 import 'package:restoflow_pos/src/state/menu_availability_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/widgets/menu_availability_sheet.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// A transport that returns a canned envelope (or throws) for any RPC.
@@ -201,7 +202,8 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 240,
-            height: 320,
+            // The REAL grid extent for this cell width (SURGERY-003).
+            height: posMenuCardExtent(240),
             child: MenuItemCard(
               item: item,
               onAdd: () => added++,

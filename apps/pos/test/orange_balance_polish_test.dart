@@ -163,15 +163,22 @@ void main() {
           .length;
       expect(orangeBoxes, 0);
 
-      // And the chip body is the theme primary — navy.
+      // SURGERY-003: tabs, not filled pills — NO tab body carries a filled
+      // decoration at all any more (selection reads through stronger ink +
+      // the accent marker). The structural navy lives on the card actions
+      // and the summary band, not on the filter rail.
       final scheme = restoflowLightBrandTheme().colorScheme;
-      final bodyFills = tester
+      final primaryFills = tester
           .widgetList<DecoratedBox>(find.byType(DecoratedBox))
           .map((d) => d.decoration)
           .whereType<BoxDecoration>()
-          .where((d) => d.boxShadow != null)
-          .map((d) => d.color);
-      expect(bodyFills, contains(scheme.primary));
+          .where((d) => d.color == scheme.primary)
+          .length;
+      expect(
+        primaryFills,
+        0,
+        reason: 'No filled tab bodies on the rail — the tabs are quiet.',
+      );
     });
 
     testWidgets('selection does not change the chip geometry', (tester) async {
@@ -325,8 +332,8 @@ void main() {
     ) async {
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
-      final button = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      final button = tester.widget<FilledButton>(
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       final brand = RestoflowBrandPalette.of(Brightness.light);
       final scheme = restoflowLightBrandTheme().colorScheme;
@@ -346,8 +353,8 @@ void main() {
     ) async {
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
-      final button = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+      final button = tester.widget<FilledButton>(
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       final style = button.style!;
       expect(style.overlayColor?.resolve(const {}), isNull);
@@ -378,11 +385,11 @@ void main() {
       // must never happen is an enabled control, and certainly not one wearing
       // the action colour.
       final addFinder = find.widgetWithIcon(
-        IconButton,
+        FilledButton,
         Icons.add_shopping_cart,
       );
       if (addFinder.evaluate().isNotEmpty) {
-        final button = tester.widget<IconButton>(addFinder);
+        final button = tester.widget<FilledButton>(addFinder);
         expect(button.onPressed, isNull);
         expect(
           button.style?.backgroundColor?.resolve({WidgetState.disabled}),
@@ -406,7 +413,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       await tester.pumpAndSettle();
       expect(added, 1);
@@ -416,7 +423,7 @@ void main() {
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
       final rect = tester.getRect(
-        find.widgetWithIcon(IconButton, Icons.add_shopping_cart),
+        find.widgetWithIcon(FilledButton, Icons.add_shopping_cart),
       );
       expect(rect.width, greaterThanOrEqualTo(44));
       expect(rect.height, greaterThanOrEqualTo(44));

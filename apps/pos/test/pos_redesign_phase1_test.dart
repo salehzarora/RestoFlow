@@ -585,13 +585,14 @@ void main() {
           find.descendant(of: band, matching: find.byIcon(Icons.tune)),
         );
         expect(badge.overlaps(chip), isFalse);
+        // SURGERY-003: the add action is the FULL-WIDTH footer button now.
         expect(
           tester
               .getSize(
                 find
                     .ancestor(
                       of: find.byIcon(Icons.add_shopping_cart),
-                      matching: find.byType(IconButton),
+                      matching: find.byType(FilledButton),
                     )
                     .first,
               )

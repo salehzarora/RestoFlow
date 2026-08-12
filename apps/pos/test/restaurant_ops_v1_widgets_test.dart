@@ -5,6 +5,7 @@ import 'package:restoflow_domain/restoflow_domain.dart' show DiningTable;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/data/demo_tables.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/table_move_repository.dart';
@@ -37,7 +38,8 @@ void main() {
                 body: Center(
                   child: SizedBox(
                     width: 220,
-                    height: 280,
+                    // The REAL grid extent for this cell width (SURGERY-003).
+                    height: posMenuCardExtent(220),
                     child: MenuItemCard(item: item, onAdd: onAdd),
                   ),
                 ),

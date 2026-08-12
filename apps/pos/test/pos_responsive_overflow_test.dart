@@ -214,7 +214,12 @@ void main() {
       expect(cart.width, 320, reason: 'small-tablet cart width is 320');
 
       // The menu pane keeps the remaining width — nothing scrolls sideways.
-      expect(tester.getSize(find.byType(GridView).last).width, 1024 - 320);
+      // SURGERY-003: the workspace floats inside the shell gutters with a
+      // 1px surface border on each side.
+      expect(
+        tester.getSize(find.byType(GridView).last).width,
+        1024 - 320 - 2 * kPosShellGutter - kPosShellGap,
+      );
 
       final send = find.widgetWithText(FilledButton, l10n.posSendOrder);
       expect(send, findsOneWidget);

@@ -202,11 +202,11 @@ void main() {
       });
     }
 
-    testWidgets('007-B2. the card extent stays the 10:9 band plus the FIXED '
-        'content zone (REFERENCE-REDESIGN-002)', (tester) async {
+    testWidgets('007-B2. the card extent stays the SQUARE band plus the FIXED '
+        'content zone (REFERENCE-VISUAL-SURGERY-003)', (tester) async {
       await _pumpScreen(tester, size: const Size(1440, 900));
       final delegate = _productGridDelegate(tester);
-      expect(kPosMenuCardBodyHeight, 128);
+      expect(kPosMenuCardBodyHeight, 160);
       // extent = cellWidth * imageFactor + content, so the implied cell width
       // must be the grid's real cell width.
       final cellWidth =
@@ -433,9 +433,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // SURGERY-003: the add action is the FULL-WIDTH footer button.
       final add = find.byIcon(Icons.add_shopping_cart);
       final size = tester.getSize(
-        find.ancestor(of: add, matching: find.byType(IconButton)).first,
+        find.ancestor(of: add, matching: find.byType(FilledButton)).first,
       );
       expect(size.width, greaterThanOrEqualTo(44));
       expect(size.height, greaterThanOrEqualTo(44));
@@ -565,11 +566,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final button = tester.widget<IconButton>(
+      // SURGERY-003: the add action is a FilledButton footer now — the
+      // disabled gate is the same (a locked cart hands the card a null
+      // callback and the button renders disabled).
+      final button = tester.widget<FilledButton>(
         find
             .ancestor(
               of: find.byIcon(Icons.add_shopping_cart),
-              matching: find.byType(IconButton),
+              matching: find.byType(FilledButton),
             )
             .first,
       );

@@ -282,6 +282,7 @@ class MenuItemCard extends StatelessWidget {
                         _CardAction(
                           onAdd: unavailable ? null : onAdd,
                           l10n: l10n,
+                          itemId: item.id,
                           inCart: inCartQuantity > 0,
                           unavailableLabel: unavailable
                               ? _unavailableLabel(l10n, item.availabilityReason)
@@ -517,30 +518,11 @@ class _ImageBand extends StatelessWidget {
               tooltip: l10n.menuModifierGroupCount(optionGroupCount),
             ),
           ),
-        // RESTAURANT-OPERATIONS-V1-001: the not-sellable treatment — a dimming
-        // scrim + a centred reason pill (Sold out / Temporarily unavailable).
-        // Text, never colour alone.
-        if (unavailable) ...[
-          const ColoredBox(color: Color(0x99FFFFFF)),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: RestoflowSpacing.sm,
-              ),
-              // Scale down rather than overflow: "Temporarily unavailable" (and
-              // its ar/he translations) must survive the narrowest tile.
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: RestoflowStatusPill(
-                  key: Key('menu-item-unavailable-${item.id}'),
-                  label: _unavailableLabel(l10n, item.availabilityReason),
-                  tone: RestoflowTone.danger,
-                  icon: Icons.do_not_disturb_on_outlined,
-                ),
-              ),
-            ),
-          ),
-        ],
+        // RESTAURANT-OPERATIONS-V1-001 → SURGERY-003: the not-sellable
+        // treatment keeps the dimming scrim on the photo; the keyed reason
+        // pill now lives in the card's full-width footer bar (one place,
+        // text never colour alone).
+        if (unavailable) const ColoredBox(color: Color(0x99FFFFFF)),
       ],
     );
   }
@@ -657,6 +639,7 @@ class _CardAction extends StatelessWidget {
   const _CardAction({
     required this.onAdd,
     required this.l10n,
+    required this.itemId,
     required this.inCart,
     required this.unavailableLabel,
     this.interactionAccent,
@@ -664,6 +647,7 @@ class _CardAction extends StatelessWidget {
 
   final VoidCallback? onAdd;
   final AppLocalizations l10n;
+  final String itemId;
   final bool inCart;
 
   /// Non-null = the item cannot be sold; the footer renders the reason.
@@ -678,21 +662,24 @@ class _CardAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (unavailableLabel != null) {
+      // The keyed reason pill (danger tone + icon — text never colour alone)
+      // rides inside the muted full-width bar; scale-down keeps the longest
+      // ar/he wording inside the narrowest cell.
       return Container(
         height: 44,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.sm),
+        padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.xs),
         decoration: BoxDecoration(
           color: kPosDisabledBg,
           borderRadius: BorderRadius.circular(RestoflowRadii.md),
         ),
-        child: Text(
-          unavailableLabel!,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF8B97A9),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: RestoflowStatusPill(
+            key: Key('menu-item-unavailable-$itemId'),
+            label: unavailableLabel!,
+            tone: RestoflowTone.danger,
+            icon: Icons.do_not_disturb_on_outlined,
           ),
         ),
       );
