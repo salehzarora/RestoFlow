@@ -36,6 +36,16 @@ Future<void> _loadRealFonts() async {
     await loader.load();
   }
 
+  // 004: the approved v4 pairing (Alexandria display / Rubik body / Inter
+  // money) plus the previous families that remain in the fallback chain.
+  await load('Alexandria', ['Alexandria-Bold.ttf', 'Alexandria-ExtraBold.ttf']);
+  await load('Rubik', [
+    'Rubik-Regular.ttf',
+    'Rubik-Medium.ttf',
+    'Rubik-SemiBold.ttf',
+    'Rubik-Bold.ttf',
+  ]);
+  await load('Inter', ['Inter-Bold.ttf', 'Inter-ExtraBold.ttf']);
   await load('Tajawal', [
     'Tajawal-Medium.ttf',
     'Tajawal-Bold.ttf',

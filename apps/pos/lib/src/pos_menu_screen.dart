@@ -45,26 +45,34 @@ class PosMenuScreen extends StatelessWidget {
       // on the screen (ivory — restaurant, not SaaS). Controls stay on the
       // white deck and cool fills; the cart paints its own white plane.
       backgroundColor: kPosIvorySurface,
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved CONNECTED brand
+      // navbar (component specs §8): one full-bleed primary bar carrying the
+      // white brand tile, the centered restaurant-identity chip and the
+      // action cluster on a translucent bed. Same five action widgets, same
+      // order, same behaviors — only the clothing changed.
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: PosThemePair.of(context).primary,
+        surfaceTintColor: PosThemePair.of(context).primary,
         scrolledUnderElevation: 0,
-        shape: const Border(bottom: BorderSide(color: kRestoflowHairline)),
+        toolbarHeight: _posTopBarHeight(MediaQuery.sizeOf(context).width),
+        iconTheme: const IconThemeData(color: kPosNavbarInk),
+        actionsIconTheme: const IconThemeData(color: kPosNavbarInk),
         titleSpacing: RestoflowSpacing.lg,
         title: Row(
           children: [
-            // The gradient brand tile (§6.1) — always visible, every width.
+            // The brand tile — WHITE with the action-colored POS mark (v4),
+            // always visible, every width.
             Container(
               key: const Key('pos-brand-tile'),
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                gradient: kRestoflowBrandGradient,
-                borderRadius: BorderRadius.circular(RestoflowRadii.md),
-              ),
-              child: const Icon(
-                Icons.point_of_sale,
                 color: Colors.white,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                Icons.point_of_sale,
+                color: PosThemePair.of(context).action,
                 size: RestoflowIconSizes.md,
               ),
             ),
@@ -80,7 +88,7 @@ class PosMenuScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: kRestoflowInk,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -94,13 +102,32 @@ class PosMenuScreen extends StatelessWidget {
             const Expanded(child: PosIdentityTitle()),
           ],
         ),
-        actions: const [
-          // PSC-001A: the ready-notification bell leads the action group.
-          ReadyNotificationBell(),
-          RecentOrdersButton(),
-          OutboxStatusIndicator(),
-          LanguageSelector(),
-          DeviceSettingsMenu(),
+        actions: [
+          // The v4 action cluster: the SAME five operational actions riding
+          // one translucent bed. IconTheme above lights their glyphs for the
+          // dark bar; each widget's behavior, tooltip and keys are untouched.
+          Container(
+            margin: const EdgeInsetsDirectional.only(
+              end: RestoflowSpacing.sm,
+              top: 7,
+              bottom: 7,
+            ),
+            decoration: BoxDecoration(
+              color: kPosNavbarBed,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // PSC-001A: the ready-notification bell leads the action group.
+                ReadyNotificationBell(),
+                RecentOrdersButton(),
+                OutboxStatusIndicator(),
+                LanguageSelector(),
+                DeviceSettingsMenu(),
+              ],
+            ),
+          ),
         ],
       ),
       // PSC-001A: the body hosts the ONE ready-alert banner above whichever
@@ -170,9 +197,16 @@ class PosMenuScreen extends StatelessWidget {
   }
 }
 
-/// POS-REFERENCE-VISUAL-SURGERY-003 — one floating rounded white surface of
-/// the two-plane shell. Purely presentational: a rounded clip + hairline
-/// border around its child.
+/// The approved top-bar height ladder (responsive spec §9: 64 / 58 / 54).
+double _posTopBarHeight(double width) => width >= 1100
+    ? 64
+    : width >= RestoflowBreakpoints.posTwoPane
+    ? 58
+    : 54;
+
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — one floating rounded white surface
+/// of the two-plane shell. BORDERLESS per the approved v4 panels: r18 on a
+/// soft floating shadow instead of a warm hairline. Purely presentational.
 class _ShellSurface extends StatelessWidget {
   const _ShellSurface({required this.child});
 
@@ -184,7 +218,7 @@ class _ShellSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(kPosShellRadius),
-        border: Border.all(color: kRestoflowHairline),
+        boxShadow: kPosPanelFloatShadow,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(kPosShellRadius),
@@ -297,14 +331,8 @@ class _MenuDeck extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            // REFERENCE-REDESIGN-002: a calmer, denser control strip — the
-            // deck is chrome above the merchandise, not a hero band.
-            padding: const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.lg,
-              10,
-              RestoflowSpacing.lg,
-              0,
-            ),
+            // 004: the approved deck inner padding (tokens §5: deck inner 18).
+            padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 18, 0),
             child: Row(
               children: [
                 // THE HEADING CLUSTER CAN GIVE GROUND.
@@ -348,9 +376,9 @@ class _MenuDeck extends StatelessWidget {
                   child: Align(
                     alignment: AlignmentDirectional.centerEnd,
                     child: ConstrainedBox(
-                      // REFERENCE-REDESIGN-002: a compact field, not a
-                      // banner — the strip stays quiet beside the food.
-                      constraints: const BoxConstraints(maxWidth: 400),
+                      // 004: a compact field, not a banner (spec §2: search
+                      // ~300 wide, max 520) — quiet beside the food.
+                      constraints: const BoxConstraints(maxWidth: 520),
                       child: const _MenuSearchField(),
                     ),
                   ),

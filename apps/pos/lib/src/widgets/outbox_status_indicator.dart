@@ -46,7 +46,12 @@ class OutboxStatusIndicator extends ConsumerWidget {
     );
 
     final label = summary.label(l10n);
-    final color = summary.toneOf(theme);
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the indicator rides the navy
+    // bar now (the approved v4 sync pill). The semantic tone survives as the
+    // pill's STATE DOT/ICON — brightened onto the dark plane so the hue stays
+    // legible — while the prose reads in the navbar ink. Never colour alone:
+    // the words are always in the label/tooltip/semantics, unchanged.
+    final color = _onDarkTone(summary.toneOf(theme));
 
     // PSC-001A compact app bar: below the compact width the TEXT label yields
     // (the five actions must all fit); the icon, spinner, colors and the FULL
@@ -60,10 +65,10 @@ class OutboxStatusIndicator extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (summary.syncing > 0)
-            const SizedBox(
+            SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           else
             Icon(summary.icon, size: 18, color: color),
@@ -77,7 +82,9 @@ class OutboxStatusIndicator extends ConsumerWidget {
                 key: const Key('outbox-status-label'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(color: color),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFFE5EBF4),
+                ),
               ),
             ),
           ],
@@ -126,4 +133,12 @@ class OutboxStatusIndicator extends ConsumerWidget {
       ),
     );
   }
+
+  /// Brightens a semantic tone accent for the dark navbar, so the state hue
+  /// stays readable on navy (the approved on-dark dot colors: green #4ADE80 /
+  /// amber #FCD34D / red #FCA5A5 family). Pure presentation — the SEMANTIC
+  /// tone selection in [PosOutboxStatusSummary.toneOf] is untouched, and
+  /// unknown tones pass through toward white rather than being re-mapped.
+  static Color _onDarkTone(Color accent) =>
+      Color.lerp(accent, Colors.white, 0.45)!;
 }

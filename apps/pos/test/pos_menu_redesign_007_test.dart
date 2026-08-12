@@ -122,12 +122,13 @@ void main() {
   group('A. layout-mode resolution and the approved column counts', () {
     // Pure-function contract — no pumping, so a breakpoint regression is
     // reported as a breakpoint failure rather than a layout failure.
-    // POS-REFERENCE-REDESIGN-002 tables: one column traded for imagery per
-    // band; the summary panel slims to 320-360. Mode RESOLUTION is unchanged.
+    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 tables (approved responsive spec
+    // §1): columns 5/4/3/3/3/2, cart 400/360/340/320/320. Mode RESOLUTION is
+    // unchanged (the frozen breakpoints).
     final cases = <(String, double, double, PosLayoutMode, int, double)>[
-      ('1440x900 desktop', 1440, 900, PosLayoutMode.desktop, 4, 360),
-      ('1280x800 tablet', 1280, 800, PosLayoutMode.tablet, 3, 360),
-      ('1024x768 smallTablet', 1024, 768, PosLayoutMode.smallTablet, 3, 320),
+      ('1440x900 desktop', 1440, 900, PosLayoutMode.desktop, 5, 400),
+      ('1280x800 tablet', 1280, 800, PosLayoutMode.tablet, 4, 360),
+      ('1024x768 smallTablet', 1024, 768, PosLayoutMode.smallTablet, 3, 340),
       (
         '1024x600 compactLandscape',
         1024,
@@ -136,7 +137,7 @@ void main() {
         3,
         320,
       ),
-      ('860x1200 narrowTablet', 860, 1200, PosLayoutMode.narrowTablet, 2, 320),
+      ('860x1200 narrowTablet', 860, 1200, PosLayoutMode.narrowTablet, 3, 320),
       (
         '760x600 compactLandscape',
         760,
@@ -182,12 +183,13 @@ void main() {
 
   group('B. the product grid takes its column count from the mode', () {
     const viewports = <(String, Size, int)>[
-      // POS-REFERENCE-REDESIGN-002 column tables (food-first grid).
-      ('desktop 1440x900', Size(1440, 900), 4),
-      ('tablet 1280x800', Size(1280, 800), 3),
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 column tables (approved
+      // responsive spec §1 — the 1280 reference frame renders 4 columns).
+      ('desktop 1440x900', Size(1440, 900), 5),
+      ('tablet 1280x800', Size(1280, 800), 4),
       ('smallTablet 1024x768', Size(1024, 768), 3),
       ('compactLandscape 1024x600', Size(1024, 600), 3),
-      ('narrowTablet 860x1200', Size(860, 1200), 2),
+      ('narrowTablet 860x1200', Size(860, 1200), 3),
       ('phone 390x844', Size(390, 844), 2),
     ];
 
@@ -589,8 +591,9 @@ void main() {
     testWidgets('007-E1. the skeleton grid uses the SAME column count and the '
         'SAME cell extent as the loaded grid', (tester) async {
       for (final (size, columns) in const [
-        (Size(1440, 900), 4),
-        (Size(1280, 800), 3),
+        // 004: approved columns 5/4/3 at these frames.
+        (Size(1440, 900), 5),
+        (Size(1280, 800), 4),
         (Size(1024, 600), 3),
       ]) {
         await _pumpScreen(tester, size: size, loading: true);

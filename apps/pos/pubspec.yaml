@@ -85,12 +85,38 @@ flutter:
   # Bundles the Material Icons font so `Icon(Icons.*)` renders glyphs (not the
   # missing-glyph "tofu" boxes). Required for any app that uses Material icons.
   uses-material-design: true
-  # POS-PREMIUM-VISUAL-POLISH-001: bundled display/body pairing (OFL licenses
-  # sit beside the files). BUNDLED, not fetched — the POS is offline-first and
-  # a till must render identically with no network. Hebrew glyphs are not in
-  # either family and deliberately fall through to the system stack (see
-  # kPosFontFallbacks). Tajawal ships no 600 cut: w600 resolves to Bold(700).
+  # POS-PREMIUM-VISUAL-POLISH-001 → POS-DESIGN-HANDOFF-IMPLEMENTATION-004:
+  # bundled type per the approved Claude Design package (tokens §10 FINAL) —
+  # Alexandria 700/800 display, Rubik 400–700 body (covers Arabic AND Hebrew),
+  # Inter 700/800 for money digits (true tabular figures). BUNDLED, not
+  # fetched — the POS is offline-first and a till must render identically
+  # with no network (the handoff's google_fonts suggestion is a mechanism the
+  # offline canon forbids; the FAMILIES are implemented faithfully). Tajawal /
+  # IBM Plex stay bundled as the fallback chain so no glyph ever regresses to
+  # tofu. All OFL; licenses sit beside the files.
   fonts:
+    - family: Alexandria
+      fonts:
+        - asset: assets/fonts/Alexandria-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Alexandria-ExtraBold.ttf
+          weight: 800
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Rubik-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Rubik-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Rubik-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
     - family: Tajawal
       fonts:
         - asset: assets/fonts/Tajawal-Medium.ttf

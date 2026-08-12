@@ -6,11 +6,14 @@
 /// system stack untouched. Colors, component themes and semantics all come
 /// from [restoflowLightBrandTheme] unchanged.
 ///
-/// Pairing (owner brief): Tajawal for display — headings and action labels —
-/// and IBM Plex Sans Arabic for body text, including money digits (IBM Plex
-/// carries true tabular figures; `FontFeature.tabularFigures()` call sites
-/// keep working). Hebrew falls through [kPosFontFallbacks] to the system
-/// stack, and the receipt rasterizer's 'Roboto' path is untouched.
+/// Pairing (POS-DESIGN-HANDOFF-IMPLEMENTATION-004, approved v4 tokens §10):
+/// Alexandria for display — headings, panel titles and primary action labels —
+/// and Rubik for body text (one family covering Arabic, Hebrew AND Latin).
+/// Money digits get Inter at their call sites ([kPosMoneyFontFamily]); the
+/// receipt rasterizer's 'Roboto' path is untouched. The approved two-token
+/// restaurant theme ([PosThemePair]) is registered here as a ThemeExtension —
+/// colours on the shared colorScheme are deliberately NOT re-valued, so the
+/// PIN/pairing surfaces (out of this phase's scope) keep today's exact look.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,6 +39,9 @@ ThemeData _build() {
   final base = restoflowLightBrandTheme();
   final t = base.textTheme;
   return base.copyWith(
+    // The approved two-token restaurant identity (default navy+ember). Only
+    // rf-primary/rf-action consumers recolor when a restaurant swaps the pair.
+    extensions: [...base.extensions.values, PosThemePair.navyEmber],
     textTheme: t.copyWith(
       // Display voice: screen/section headings + prominent action labels.
       displayLarge: _display(t.displayLarge),

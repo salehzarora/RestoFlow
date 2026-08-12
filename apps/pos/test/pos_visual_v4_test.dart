@@ -248,24 +248,37 @@ void main() {
   group('D. the POS palette is the global brand', () {
     const brand = RestoflowBrandPalette.light;
 
-    test('structural surfaces are COOL, not warm cream', () {
-      // A warm surface has more red than blue; a cool one does not. Asserted as
-      // a RELATION rather than a hex so a future palette revision does not have
-      // to edit this test to stay true.
+    test('surface neutrals are the APPROVED warm ivory family; structural '
+        'darks stay navy', () {
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 intentionally SUPERSEDES the
+      // old cool-law for the POS surface NEUTRALS: the approved Claude Design
+      // v4 tokens put the fills on the warm ivory family (§1/§8). What the
+      // old contract was really protecting — that the POS never regresses to
+      // the pre-rebrand GREEN identity, and that its structural darks stay
+      // navy — is asserted directly instead.
       for (final entry in <(String, Color)>[
         ('inner surface', kPosInnerSurface),
         ('chip background', kPosChipBg),
         ('disabled background', kPosDisabledBg),
         ('input border', kPosInputBorder),
-        ('count badge', kPosCountBadgeBg),
-        ('setup edge', kPosSetupEdge),
         ('stepper track', kPosStepperTrack),
-        ('stepper track edge', kPosStepperTrackEdge),
       ]) {
+        // Warm family: red never below blue, and NEVER green-dominant.
         expect(
-          entry.$2.b,
-          greaterThanOrEqualTo(entry.$2.r),
-          reason: '${entry.$1} must not be a warm cream any more',
+          entry.$2.r,
+          greaterThanOrEqualTo(entry.$2.b),
+          reason: '${entry.$1} sits on the approved warm ivory family',
+        );
+        expect(
+          entry.$2.g,
+          lessThanOrEqualTo(entry.$2.r),
+          reason: '${entry.$1} must never drift toward the retired green',
+        );
+        // Still a near-white NEUTRAL, not a saturated tint.
+        expect(
+          entry.$2.computeLuminance(),
+          greaterThan(0.75),
+          reason: '${entry.$1} stays a quiet neutral',
         );
       }
     });
@@ -394,13 +407,15 @@ void main() {
       );
       expect(posLayoutModeFor(width: 390, height: 844), PosLayoutMode.phone);
 
-      // POS-REFERENCE-REDESIGN-002: the food-first grid trades a column for
-      // imagery and the summary panel slims to the 320-360 band.
-      expect(posMenuColumnsFor(PosLayoutMode.desktop), 4);
-      expect(posMenuColumnsFor(PosLayoutMode.tablet), 3);
+      // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the APPROVED per-mode tables
+      // (design package, responsive spec §1) — columns 5/4/3/3/3/2, cart
+      // 400/360/340/320/320. The breakpoints above are the frozen contract;
+      // these are the approved visual values inside them.
+      expect(posMenuColumnsFor(PosLayoutMode.desktop), 5);
+      expect(posMenuColumnsFor(PosLayoutMode.tablet), 4);
       expect(posMenuColumnsFor(PosLayoutMode.phone), 2);
 
-      expect(posCartWidthFor(PosLayoutMode.desktop), 360);
+      expect(posCartWidthFor(PosLayoutMode.desktop), 400);
       expect(posCartWidthFor(PosLayoutMode.phone), 0);
     });
 
