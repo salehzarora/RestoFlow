@@ -1759,6 +1759,16 @@
   "posDeviceThemeHelp": "בחרו את זהות הצבעים של הקופה הזו. השינוי חל על הסרגל, הכפתורים וההדגשות במכשיר זה בלבד — ואינו משפיע על הזמנות, סטטוסים או קבלות.",
   "posDeviceThemeNavyEmber": "כחול כהה ונחושת",
   "posDeviceThemeForestCharcoal": "ירוק יער ונחושת",
+  "posDeviceThemeCustom": "מותאם אישית",
+  "posDeviceThemeCustomHelp": "בחרו שני צבעים בפורמט ‎#RRGGBB — הם משנים את מראה המכשיר הזה בלבד.",
+  "posDeviceThemeCustomPrimaryLabel": "הצבע הראשי",
+  "posDeviceThemeCustomSecondaryLabel": "הצבע המשני",
+  "posDeviceThemeCustomHexHint": "#RRGGBB",
+  "posDeviceThemeCustomInvalidHex": "פורמט לא תקין — נדרש ‎#RRGGBB",
+  "posDeviceThemeCustomApply": "החלת הצבעים",
+  "posDeviceThemeCustomCancel": "ביטול",
+  "posDeviceThemeCustomReset": "חזרה לברירת המחדל",
+  "posDeviceThemeCustomPreviewTitle": "תצוגה מקדימה",
   "posDeviceThemeAubergineSlate": "חציל ולבנה",
   "posDeviceThemeSaffronGold": "פחם וזהב"
 }

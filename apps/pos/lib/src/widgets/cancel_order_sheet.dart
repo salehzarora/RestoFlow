@@ -331,8 +331,16 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
                           ? const RestoflowInlineSpinner()
                           : const Icon(Icons.block),
                       label: Text(l10n.posCancelOrderConfirm),
+                      // POS-CUSTOM-DEVICE-THEME-010: the ink is pinned — a
+                      // semantic DANGER bed must never inherit the device
+                      // theme's onPrimary (a light custom primary would turn
+                      // this destructive label near-black on red). White is
+                      // the shipped ink on every theme.
                       style: RestoflowButtonStyles.big(context).copyWith(
                         backgroundColor: WidgetStatePropertyAll(danger),
+                        foregroundColor: const WidgetStatePropertyAll(
+                          Colors.white,
+                        ),
                       ),
                     ),
             ),

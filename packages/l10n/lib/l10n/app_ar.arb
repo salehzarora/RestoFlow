@@ -1760,5 +1760,15 @@
   "posDeviceThemeNavyEmber": "كحلي ونحاسي",
   "posDeviceThemeForestCharcoal": "أخضر غابي ونحاسي",
   "posDeviceThemeAubergineSlate": "باذنجاني وطوبي",
-  "posDeviceThemeSaffronGold": "فحمي وذهبي"
+  "posDeviceThemeSaffronGold": "فحمي وذهبي",
+  "posDeviceThemeCustom": "مخصص",
+  "posDeviceThemeCustomHelp": "اختر أي لونين بصيغة ‎#RRGGBB — يغيّران مظهر هذا الجهاز فقط.",
+  "posDeviceThemeCustomPrimaryLabel": "اللون الأساسي",
+  "posDeviceThemeCustomSecondaryLabel": "اللون الثانوي",
+  "posDeviceThemeCustomHexHint": "#RRGGBB",
+  "posDeviceThemeCustomInvalidHex": "صيغة غير صالحة — المطلوب ‎#RRGGBB",
+  "posDeviceThemeCustomApply": "تطبيق الألوان",
+  "posDeviceThemeCustomCancel": "إلغاء",
+  "posDeviceThemeCustomReset": "إعادة للوضع الافتراضي",
+  "posDeviceThemeCustomPreviewTitle": "معاينة"
 }

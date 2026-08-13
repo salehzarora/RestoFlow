@@ -22,6 +22,8 @@ import 'package:flutter/material.dart';
 
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
+import 'pos_color_utils.dart';
+
 /// Midnight Navy — the POS structural dark: cart operational header and the
 /// phone bottom cart bar. Deeper than the brand navy so the dark plane reads
 /// as furniture, not as a giant button.
@@ -67,6 +69,7 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     required this.actionMark,
     required this.actionSoft,
     this.onAction = Colors.white,
+    this.onPrimary = Colors.white,
     this.wire = 'custom',
   });
 
@@ -76,6 +79,7 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     required Color primary,
     required Color action,
     Color onAction = Colors.white,
+    Color onPrimary = Colors.white,
     String wire = 'custom',
   }) => PosThemePair(
     primary: primary,
@@ -87,8 +91,48 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     actionMark: Color.lerp(action, Colors.white, 0.08)!,
     actionSoft: Color.lerp(action, Colors.white, 0.44)!,
     onAction: onAction,
+    onPrimary: onPrimary,
     wire: wire,
   );
+
+  /// POS-CUSTOM-DEVICE-THEME-010 — an OWNER-TYPED two-color identity.
+  ///
+  /// Same derived-tone recipe as the presets (hover/pressed/soft/mark steps
+  /// via the exact `derive()` lerps), with custom-only adjustments the
+  /// arbitrary inputs make necessary:
+  ///  * both foreground inks are DERIVED by actual contrast
+  ///    ([posReadableInkOn]) — the primary's ink at a 4.5:1 white floor
+  ///    (normal-size structural text), the action's at the shipped 3.6:1
+  ///    CTA baseline. The chosen hexes themselves are never altered;
+  ///  * [actionSoft] (the soft action note that sits ON the primary bed —
+  ///    navbar tagline, phone-bar running total) starts from the presets'
+  ///    exact lerp step and then KEEPS WALKING toward white/black until it
+  ///    measures 4.5:1 against the primary ([posToneForContrast]) — a light
+  ///    action on a light primary can otherwise land near-invisible.
+  /// The wire encodes both hexes ([wireForCustom]), so the existing
+  /// setTheme/fromWire persistence round-trips custom pairs with no schema
+  /// change.
+  factory PosThemePair.custom({required Color primary, required Color action}) {
+    final onPrimary = posReadableInkOn(primary, whiteFloor: 4.5);
+    final darkPrimaryBed = onPrimary == Colors.white;
+    return PosThemePair(
+      primary: primary,
+      primaryHi: Color.lerp(primary, Colors.white, 0.12)!,
+      primaryDeep: Color.lerp(primary, Colors.black, 0.16)!,
+      action: action,
+      actionHi: Color.lerp(action, Colors.white, 0.18)!,
+      actionDeep: Color.lerp(action, Colors.black, 0.14)!,
+      actionMark: Color.lerp(action, Colors.white, 0.08)!,
+      actionSoft: posToneForContrast(
+        action,
+        primary,
+        startT: darkPrimaryBed ? 0.44 : 0.30,
+      ),
+      onAction: posReadableInkOn(action),
+      onPrimary: onPrimary,
+      wire: wireForCustom(primary: primary, action: action),
+    );
+  }
 
   /// Structure: navbar, segmented thumb, Add buttons, phone bottom bar.
   final Color primary;
@@ -119,9 +163,80 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
   /// clears contrast.
   final Color onAction;
 
+  /// POS-CUSTOM-DEVICE-THEME-010 — the ink ON [primary] surfaces (navbar
+  /// text, thumb label, Add-button label, phone-bar text). White for every
+  /// curated preset (their primaries are all dark, so nothing repaints);
+  /// contrast-derived for custom pairs, where the primary may be light.
+  final Color onPrimary;
+
   /// Persisted preset identity (POS-THEME-NAVBAR-POLISH-001). Never rename a
-  /// wire value without an adoption path.
+  /// wire value without an adoption path. POS-CUSTOM-DEVICE-THEME-010: custom
+  /// pairs persist as `custom:RRGGBB:RRGGBB` through the SAME key.
   final String wire;
+
+  /// True for owner-typed pairs (both the encoded `custom:...` wires and the
+  /// legacy bare `custom` default of `derive`/`copyWith`). Custom pairs are
+  /// never theme-cached and get the custom swatch treatment in settings.
+  bool get isCustom => wire == 'custom' || wire.startsWith('custom:');
+
+  /// Whether the primary reads as a DARK bed (its ink is white) — the presets'
+  /// world, and the branch every navbar-chrome getter keeps byte-identical.
+  bool get _darkPrimaryBed => onPrimary == Colors.white;
+
+  /// The navbar chrome ink (icon cluster, appbar icons). Exactly
+  /// [kPosNavbarInk] whenever the primary is a dark bed — every preset — and
+  /// a primary-tinted dark ink on light custom bars.
+  Color get navInk =>
+      _darkPrimaryBed ? kPosNavbarInk : Color.lerp(onPrimary, primary, 0.18)!;
+
+  /// The translucent action-cluster bed on the navbar ([kPosNavbarBed] on
+  /// dark bars; a quiet dark wash on light custom bars).
+  Color get navBed => _darkPrimaryBed ? kPosNavbarBed : const Color(0x14000000);
+
+  /// The restaurant-identity chip bed on the navbar (white-12% on dark bars —
+  /// the approved values — mirrored to a dark wash on light custom bars).
+  Color get identityBed =>
+      _darkPrimaryBed ? const Color(0x1FFFFFFF) : const Color(0x1A000000);
+
+  /// The identity chip's hairline edge.
+  Color get identityEdge =>
+      _darkPrimaryBed ? const Color(0x24FFFFFF) : const Color(0x26000000);
+
+  /// The ink for the SMALL action-family marks — the cart count chip, the
+  /// phone-bar count badge and the stepper's filled plus. These shipped
+  /// WHITE on every curated preset (including saffron_gold, whose Send-CTA
+  /// [onAction] is dark — an owner-shipped look this appearance ticket must
+  /// not repaint), so presets keep the literal white and only CUSTOM pairs
+  /// derive it (POS-CUSTOM-DEVICE-THEME-010 audit finding).
+  Color get onActionMark => isCustom ? onAction : Colors.white;
+
+  /// [primary] used AS TEXT INK on the light control beds (the in-cart
+  /// "Add more" label on [kPosTonalAddBg]). Identical to [primary] for every
+  /// preset (all dark, all already ≥4.5:1 there); a light CUSTOM primary is
+  /// walked darker until it reads ([posToneForContrast]) instead of
+  /// disappearing tone-on-tone.
+  Color get primaryTextInk =>
+      isCustom ? posToneForContrast(primary, kPosTonalAddBg) : primary;
+
+  /// Canonical wire encoding for a custom pair: `custom:RRGGBB:RRGGBB`
+  /// (uppercase, no `#`). Lives beside the preset wires in the same persisted
+  /// key; [fromWire] decodes it and falls back to the default preset on any
+  /// corruption.
+  static String wireForCustom({required Color primary, required Color action}) {
+    String hex(Color c) => posFormatHexColor(c).substring(1);
+    return 'custom:${hex(primary)}:${hex(action)}';
+  }
+
+  /// Decodes a `custom:RRGGBB:RRGGBB` wire; `null` for anything malformed
+  /// (wrong part count, bad hex, alpha forms) — the caller falls back.
+  static PosThemePair? tryParseCustomWire(String wire) {
+    final parts = wire.split(':');
+    if (parts.length != 3 || parts[0] != 'custom') return null;
+    final primary = posParseHexColor(parts[1]);
+    final action = posParseHexColor(parts[2]);
+    if (primary == null || action == null) return null;
+    return PosThemePair.custom(primary: primary, action: action);
+  }
 
   /// The primary structural gradient (brand tile, Add buttons, thumb).
   LinearGradient get primaryGradient => LinearGradient(
@@ -194,10 +309,17 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     saffronGold,
   ];
 
-  /// Wire lookup for the persisted device choice. Unknown/absent tokens fall
-  /// back to the default pair — a bad stored value must never break a till.
-  static PosThemePair fromWire(String? wire) =>
-      presets.firstWhere((p) => p.wire == wire, orElse: () => navyEmber);
+  /// Wire lookup for the persisted device choice. Preset wires load exactly
+  /// as before; `custom:RRGGBB:RRGGBB` wires decode to the owner-typed pair
+  /// (POS-CUSTOM-DEVICE-THEME-010). Unknown/absent/corrupt tokens fall back
+  /// to the default pair — a bad stored value must never break a till.
+  static PosThemePair fromWire(String? wire) {
+    if (wire == null) return navyEmber;
+    for (final p in presets) {
+      if (p.wire == wire) return p;
+    }
+    return tryParseCustomWire(wire) ?? navyEmber;
+  }
 
   /// The active pair, falling back to [navyEmber] when the ambient theme does
   /// not carry the extension (bare test themes).
@@ -212,6 +334,7 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
           primary: primary ?? this.primary,
           action: action ?? this.action,
           onAction: onAction,
+          onPrimary: onPrimary,
           wire: wire,
         );
 
@@ -228,6 +351,7 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
       actionMark: Color.lerp(actionMark, other.actionMark, t)!,
       actionSoft: Color.lerp(actionSoft, other.actionSoft, t)!,
       onAction: Color.lerp(onAction, other.onAction, t)!,
+      onPrimary: Color.lerp(onPrimary, other.onPrimary, t)!,
       wire: t < 0.5 ? wire : other.wire,
     );
   }

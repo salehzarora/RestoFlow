@@ -1486,7 +1486,9 @@ class _CartHeader extends StatelessWidget {
                 child: Text(
                   itemCount.toString(),
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
+                    // 010: shipped WHITE on every preset (onActionMark);
+                    // contrast-derived only for custom pairs.
+                    color: pair.onActionMark,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

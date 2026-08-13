@@ -5680,4 +5680,36 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDeviceThemeSaffronGold => 'فحمي وذهبي';
+
+  @override
+  String get posDeviceThemeCustom => 'مخصص';
+
+  @override
+  String get posDeviceThemeCustomHelp =>
+      'اختر أي لونين بصيغة ‎#RRGGBB — يغيّران مظهر هذا الجهاز فقط.';
+
+  @override
+  String get posDeviceThemeCustomPrimaryLabel => 'اللون الأساسي';
+
+  @override
+  String get posDeviceThemeCustomSecondaryLabel => 'اللون الثانوي';
+
+  @override
+  String get posDeviceThemeCustomHexHint => '#RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomInvalidHex =>
+      'صيغة غير صالحة — المطلوب ‎#RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomApply => 'تطبيق الألوان';
+
+  @override
+  String get posDeviceThemeCustomCancel => 'إلغاء';
+
+  @override
+  String get posDeviceThemeCustomReset => 'إعادة للوضع الافتراضي';
+
+  @override
+  String get posDeviceThemeCustomPreviewTitle => 'معاينة';
 }

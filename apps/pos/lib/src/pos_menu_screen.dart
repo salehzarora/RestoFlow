@@ -55,8 +55,11 @@ class PosMenuScreen extends StatelessWidget {
         surfaceTintColor: PosThemePair.of(context).primary,
         scrolledUnderElevation: 0,
         toolbarHeight: _posTopBarHeight(MediaQuery.sizeOf(context).width),
-        iconTheme: const IconThemeData(color: kPosNavbarInk),
-        actionsIconTheme: const IconThemeData(color: kPosNavbarInk),
+        // POS-CUSTOM-DEVICE-THEME-010: the navbar chrome ink rides the pair —
+        // byte-identical kPosNavbarInk on every preset, a derived dark ink
+        // when a CUSTOM pair picks a light primary bar.
+        iconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
+        actionsIconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         titleSpacing: RestoflowSpacing.lg,
         title: Row(
           children: [
@@ -96,7 +99,7 @@ class PosMenuScreen extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
                         height: 1.1,
-                        color: Colors.white,
+                        color: PosThemePair.of(context).onPrimary,
                       ),
                     ),
                     Text(
@@ -140,7 +143,7 @@ class PosMenuScreen extends StatelessWidget {
               bottom: 5,
             ),
             decoration: BoxDecoration(
-              color: kPosNavbarBed,
+              color: PosThemePair.of(context).navBed,
               borderRadius: BorderRadius.circular(11),
             ),
             // Light glyph ink for the dark bar, applied INSIDE the cluster
@@ -149,20 +152,27 @@ class PosMenuScreen extends StatelessWidget {
             // approved white-16% hover wash where M3 IconButtons actually
             // read it: their ButtonStyle overlay. Every action keeps its own
             // widget, tooltip, keys and behavior.
+            // POS-CUSTOM-DEVICE-THEME-010: ink + washes ride the pair's
+            // onPrimary (white on every preset — identical bytes; dark on a
+            // light custom bar).
             child: IconTheme.merge(
-              data: const IconThemeData(color: kPosNavbarInk),
+              data: IconThemeData(color: PosThemePair.of(context).navInk),
               child: IconButtonTheme(
                 data: IconButtonThemeData(
                   style: ButtonStyle(
-                    foregroundColor: const WidgetStatePropertyAll(
-                      kPosNavbarInk,
+                    foregroundColor: WidgetStatePropertyAll(
+                      PosThemePair.of(context).navInk,
                     ),
                     overlayColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.pressed)
-                          ? Colors.white.withValues(alpha: 0.14)
+                          ? PosThemePair.of(
+                              context,
+                            ).onPrimary.withValues(alpha: 0.14)
                           : states.contains(WidgetState.hovered) ||
                                 states.contains(WidgetState.focused)
-                          ? Colors.white.withValues(alpha: 0.16)
+                          ? PosThemePair.of(
+                              context,
+                            ).onPrimary.withValues(alpha: 0.16)
                           : null,
                     ),
                   ),
