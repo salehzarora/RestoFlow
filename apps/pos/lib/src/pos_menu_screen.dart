@@ -129,10 +129,11 @@ class PosMenuScreen extends StatelessWidget {
           // one translucent bed. IconTheme above lights their glyphs for the
           // dark bar; each widget's behavior, tooltip and keys are untouched.
           Container(
-            // Vertical margin 5, not 7: the 54dp phone toolbar must leave the
-            // five operational actions a >=44dp touch height (54-10=44;
-            // 58-10=48; 64-10=54) — the approved bar heights never buy their
-            // looks with sub-floor targets.
+            // Vertical margin 5: the polished bar ladder (68/62/56) must
+            // leave the five operational actions a >=44dp touch height
+            // (56-10=46; 62-10=52; 68-10=58) — the bar heights never buy
+            // their looks with sub-floor targets (pinned in
+            // pos_appbar_compact_test).
             margin: const EdgeInsetsDirectional.only(
               end: RestoflowSpacing.sm,
               top: 5,

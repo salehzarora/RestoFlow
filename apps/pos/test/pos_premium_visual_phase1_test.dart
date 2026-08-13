@@ -294,17 +294,17 @@ void main() {
         semantic.info,
       };
       for (final p in PosThemePair.presets) {
-        // The Send label must clear the WCAG LARGE-TEXT floor (3:1) on the
-        // pair's action color — the CTA renders at 16/800 display type.
-        // HONEST BASELINE NOTE: the owner-approved merged design ships the
-        // default white-on-ember at 3.62:1, so 4.5 was never the shipped
-        // contract; this pins that no preset may ever fall BELOW the
-        // large-text floor, and the gold pair proves the dark-ink escape
-        // hatch works (its measured ratio is ~8+).
+        // HONEST BASELINE: the owner-approved merged design ships the
+        // default white-on-ember CTA at 3.62:1 — below the 4.5 nominal for
+        // its 16/800 label (WCAG's large-bold discount starts at 18.66px),
+        // an owner-accepted trade. The floor here is therefore pinned AT
+        // the shipped worst case: no preset may ever regress BELOW what has
+        // already shipped, and the gold pair proves the dark-ink escape
+        // hatch works (#231A08 on #D89A2B measures ~7.0:1).
         expect(
           contrast(p.onAction, p.action),
-          greaterThanOrEqualTo(3.0),
-          reason: '${p.wire}: CTA ink unreadable on its action color',
+          greaterThanOrEqualTo(3.6),
+          reason: '${p.wire}: CTA ink below the shipped worst-case floor',
         );
         // White structure labels must clear 4.5:1 on the pair's primary.
         expect(

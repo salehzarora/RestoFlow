@@ -10,10 +10,12 @@
 /// Alexandria for display — headings, panel titles and primary action labels —
 /// and Rubik for body text (one family covering Arabic, Hebrew AND Latin).
 /// Money digits get Inter at their call sites ([kPosMoneyFontFamily]); the
-/// receipt rasterizer's 'Roboto' path is untouched. The approved two-token
-/// restaurant theme ([PosThemePair]) is registered here as a ThemeExtension —
-/// colours on the shared colorScheme are deliberately NOT re-valued, so the
-/// PIN/pairing surfaces (out of this phase's scope) keep today's exact look.
+/// receipt rasterizer's 'Roboto' path is untouched.
+///
+/// POS-THEME-NAVBAR-POLISH-001: the device's [PosThemePair] is registered as
+/// a ThemeExtension AND the colorScheme's PRIMARY role follows the pair, so
+/// every POS surface — including PIN/pairing — re-leads under the selected
+/// device theme (colour-only; the owner-approved device-theme behaviour).
 library;
 
 import 'package:flutter/material.dart';
@@ -27,7 +29,10 @@ import 'pos_visual_tokens.dart';
 /// selections, focus, spinners) follow the device identity — a green-led
 /// preset genuinely reads green-led, not navy-with-green-corners.
 ThemeData posPremiumTheme({PosThemePair pair = PosThemePair.navyEmber}) =>
-    _cached[pair.wire] ??= _build(pair);
+    // Cache PRESET pairs only: 'custom' is not a faithful identity (derive/
+    // copyWith default to it), so two distinct custom pairs must never
+    // collide on one cache slot. Non-preset pairs simply build fresh.
+    pair.wire == 'custom' ? _build(pair) : _cached[pair.wire] ??= _build(pair);
 
 final Map<String, ThemeData> _cached = {};
 

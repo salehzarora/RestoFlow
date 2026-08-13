@@ -29,7 +29,8 @@ const double kPosIdentityMaxWidth = 340;
 
 /// The logo box. 010 grew it to 52 on the old white bar; the approved v4
 /// identity CHIP carries a compact white logo box instead (component specs
-/// §8), sized to ride inside the 54–64dp primary bar with the chip's padding.
+/// §8), sized to ride inside the 56–68dp primary bar with the chip's 6px
+/// vertical padding.
 const double kPosIdentityLogoSize = 34;
 
 /// POS-TOPBAR-QUICK-TWEAK-010: in RTL the block sits left of centre.
