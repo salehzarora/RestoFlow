@@ -134,7 +134,8 @@ class PosBottomBar extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                          // 010: bar ink rides the pair (white on presets).
+                          color: PosThemePair.of(context).onPrimary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -164,7 +165,10 @@ class PosBottomBar extends ConsumerWidget {
                         ),
                       ),
                     const SizedBox(width: RestoflowSpacing.sm),
-                    const Icon(Icons.keyboard_arrow_up, color: Colors.white),
+                    Icon(
+                      Icons.keyboard_arrow_up,
+                      color: PosThemePair.of(context).onPrimary,
+                    ),
                   ],
                 ),
               ),
@@ -198,7 +202,7 @@ class _CartIconWithBadge extends StatelessWidget {
           key: posCartFlyTargetKey,
           child: Icon(
             submitted ? Icons.receipt_long : Icons.shopping_cart,
-            color: Colors.white,
+            color: PosThemePair.of(context).onPrimary,
             size: RestoflowIconSizes.lg,
           ),
         ),
@@ -225,7 +229,9 @@ class _CartIconWithBadge extends StatelessWidget {
                   value.toString(),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
+                    // 010: shipped WHITE on every preset (onActionMark);
+                    // contrast-derived only for custom pairs.
+                    color: PosThemePair.of(context).onActionMark,
                     fontWeight: FontWeight.w800,
                     height: 1.1,
                   ),

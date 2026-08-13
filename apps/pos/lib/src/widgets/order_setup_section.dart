@@ -223,7 +223,11 @@ class _SegmentCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final foreground = selected ? Colors.white : kRestoflowInk2;
+    // 010: the selected label sits ON the pair-primary thumb — its ink is the
+    // pair's onPrimary (white on every preset; derived on custom pairs).
+    final foreground = selected
+        ? PosThemePair.of(context).onPrimary
+        : kRestoflowInk2;
     return Semantics(
       button: true,
       selected: selected,

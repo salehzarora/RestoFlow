@@ -114,6 +114,19 @@ void main() {
     expect(find.byKey(const Key('cancel-order-warning')), findsOneWidget);
     expect(find.text(l10n.posCancelOrderWarning), findsOneWidget);
 
+    // POS-CUSTOM-DEVICE-THEME-010: the destructive confirm's ink is PINNED
+    // white — a semantic DANGER bed must never inherit the device theme's
+    // onPrimary (a light custom primary would otherwise turn this label
+    // near-black on red at ~2.65:1).
+    final confirmStyle = tester
+        .widget<FilledButton>(find.byKey(const Key('cancel-confirm-button')))
+        .style;
+    expect(
+      confirmStyle?.foregroundColor?.resolve(const {}),
+      Colors.white,
+      reason: 'semantic danger ink must not follow the device theme',
+    );
+
     await tester.enterText(
       find.byKey(const Key('cancel-reason-field')),
       'wrong table',

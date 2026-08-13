@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DeviceSessionManager;
@@ -13,7 +14,8 @@ import '../print/print_bridge.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
 import '../state/pos_auto_print_prefs.dart';
-import '../design/pos_visual_tokens.dart' show PosThemePair;
+import '../design/pos_color_utils.dart';
+import '../design/pos_visual_tokens.dart';
 import '../state/pos_device_accent.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_device_theme.dart';
@@ -573,51 +575,15 @@ class _DeviceAccentSection extends ConsumerWidget {
     PosDeviceAccent.aubergine => l10n.posDeviceAccentAubergine,
   };
 
-  String _themeLabel(PosThemePair pair) => switch (pair.wire) {
-    'forest_charcoal' => l10n.posDeviceThemeForestCharcoal,
-    'aubergine_slate' => l10n.posDeviceThemeAubergineSlate,
-    'saffron_gold' => l10n.posDeviceThemeSaffronGold,
-    _ => l10n.posDeviceThemeNavyEmber,
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final selected =
         ref.watch(posDeviceAccentProvider).valueOrNull ?? PosDeviceAccent.mint;
-    final selectedPair = ref.watch(posDeviceThemePairProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l10n.posDeviceThemeTitle,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: RestoflowSpacing.xxs),
-        Text(
-          l10n.posDeviceThemeHelp,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: RestoflowSpacing.sm),
-        Wrap(
-          spacing: RestoflowSpacing.sm,
-          runSpacing: RestoflowSpacing.sm,
-          children: [
-            for (final pair in PosThemePair.presets)
-              _ThemeSwatch(
-                key: Key('device-theme-${pair.wire}'),
-                pair: pair,
-                label: _themeLabel(pair),
-                selected: pair.wire == selectedPair.wire,
-                onTap: () =>
-                    ref.read(posDeviceThemeProvider.notifier).setTheme(pair),
-              ),
-          ],
-        ),
+        _DeviceThemeSection(l10n: l10n),
         const SizedBox(height: RestoflowSpacing.md),
         // The SUPPORTING highlight colour — the second half of the theme.
         Text(
@@ -651,6 +617,546 @@ class _DeviceAccentSection extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// POS-CUSTOM-DEVICE-THEME-010 — the THEME half of the appearance section:
+/// the curated preset swatches plus the CUSTOM two-color option and its
+/// inline editor.
+///
+/// The editor is a DRAFT surface: typed values touch nothing until both parse
+/// as valid `#RRGGBB` colors AND the cashier taps Apply — partial/invalid
+/// input never reaches the live app theme. Least-invasive initialization
+/// (documented choice): the fields seed from the CURRENTLY ACTIVE pair
+/// (custom → its exact hexes; preset → that preset's two colors as a starting
+/// point); no second persistence key is introduced.
+class _DeviceThemeSection extends ConsumerStatefulWidget {
+  const _DeviceThemeSection({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  ConsumerState<_DeviceThemeSection> createState() =>
+      _DeviceThemeSectionState();
+}
+
+class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
+  final TextEditingController _primaryCtl = TextEditingController();
+  final TextEditingController _secondaryCtl = TextEditingController();
+
+  /// The cashier opened the editor from the custom swatch (a draft over a
+  /// preset). While the ACTIVE pair is custom the editor shows regardless.
+  bool _draftOpen = false;
+
+  /// The last pair the preview rendered — keeps the preview stable while a
+  /// field passes through invalid states mid-typing.
+  PosThemePair _lastPreview = PosThemePair.navyEmber;
+
+  @override
+  void initState() {
+    super.initState();
+    _seedFrom(ref.read(posDeviceThemePairProvider));
+    _primaryCtl.addListener(_onEdited);
+    _secondaryCtl.addListener(_onEdited);
+  }
+
+  @override
+  void dispose() {
+    _primaryCtl.dispose();
+    _secondaryCtl.dispose();
+    super.dispose();
+  }
+
+  void _onEdited() => setState(() {});
+
+  void _seedFrom(PosThemePair pair) {
+    _primaryCtl.text = posFormatHexColor(pair.primary);
+    _secondaryCtl.text = posFormatHexColor(pair.action);
+    _lastPreview = PosThemePair.custom(
+      primary: pair.primary,
+      action: pair.action,
+    );
+  }
+
+  String _themeLabel(PosThemePair pair) => switch (pair.wire) {
+    'forest_charcoal' => widget.l10n.posDeviceThemeForestCharcoal,
+    'aubergine_slate' => widget.l10n.posDeviceThemeAubergineSlate,
+    'saffron_gold' => widget.l10n.posDeviceThemeSaffronGold,
+    _ => widget.l10n.posDeviceThemeNavyEmber,
+  };
+
+  /// Both fields parsed, or null while either is invalid — the Apply gate.
+  PosThemePair? _candidate() {
+    final primary = posParseHexColor(_primaryCtl.text);
+    final action = posParseHexColor(_secondaryCtl.text);
+    if (primary == null || action == null) return null;
+    return PosThemePair.custom(primary: primary, action: action);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = widget.l10n;
+    final theme = Theme.of(context);
+    // The persisted pair loads asynchronously — when it arrives (or changes
+    // from elsewhere) and no draft is being typed, reseed the fields so the
+    // editor always shows the ACTUAL active colors (canonical uppercase).
+    ref.listen(posDeviceThemePairProvider, (previous, next) {
+      if (!_draftOpen && previous?.wire != next.wire) {
+        setState(() => _seedFrom(next));
+      }
+    });
+    final active = ref.watch(posDeviceThemePairProvider);
+    final editorVisible = active.isCustom || _draftOpen;
+    final candidate = _candidate();
+    if (candidate != null) _lastPreview = candidate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.posDeviceThemeTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xxs),
+        Text(
+          l10n.posDeviceThemeHelp,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.sm,
+          children: [
+            for (final pair in PosThemePair.presets)
+              _ThemeSwatch(
+                key: Key('device-theme-${pair.wire}'),
+                pair: pair,
+                label: _themeLabel(pair),
+                selected: pair.wire == active.wire,
+                onTap: () {
+                  ref.read(posDeviceThemeProvider.notifier).setTheme(pair);
+                  // A preset choice closes any custom draft.
+                  setState(() {
+                    _draftOpen = false;
+                    _seedFrom(pair);
+                  });
+                },
+              ),
+            _CustomThemeSwatch(
+              key: const Key('device-theme-custom'),
+              label: l10n.posDeviceThemeCustom,
+              selected: active.isCustom,
+              activePair: active.isCustom ? active : null,
+              onTap: () {
+                if (editorVisible) return;
+                setState(() {
+                  _draftOpen = true;
+                  _seedFrom(active);
+                });
+              },
+            ),
+          ],
+        ),
+        if (editorVisible) ...[
+          const SizedBox(height: RestoflowSpacing.sm),
+          Container(
+            key: const Key('custom-theme-editor'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(RestoflowSpacing.md),
+            decoration: BoxDecoration(
+              color: kPosTotalsBed,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(color: kRestoflowHairline),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.posDeviceThemeCustomHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                _HexColorField(
+                  key: const Key('custom-theme-primary-hex'),
+                  controller: _primaryCtl,
+                  label: l10n.posDeviceThemeCustomPrimaryLabel,
+                  hint: l10n.posDeviceThemeCustomHexHint,
+                  invalidText: l10n.posDeviceThemeCustomInvalidHex,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                _HexColorField(
+                  key: const Key('custom-theme-secondary-hex'),
+                  controller: _secondaryCtl,
+                  label: l10n.posDeviceThemeCustomSecondaryLabel,
+                  hint: l10n.posDeviceThemeCustomHexHint,
+                  invalidText: l10n.posDeviceThemeCustomInvalidHex,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                Text(
+                  l10n.posDeviceThemeCustomPreviewTitle,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: RestoflowSpacing.xs),
+                _CustomThemePreview(pair: _lastPreview),
+                const SizedBox(height: RestoflowSpacing.sm),
+                Wrap(
+                  spacing: RestoflowSpacing.sm,
+                  runSpacing: RestoflowSpacing.xs,
+                  children: [
+                    FilledButton(
+                      key: const Key('custom-theme-apply'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                      onPressed: candidate == null
+                          ? null
+                          : () {
+                              ref
+                                  .read(posDeviceThemeProvider.notifier)
+                                  .setTheme(candidate);
+                              setState(() => _draftOpen = false);
+                            },
+                      child: Text(l10n.posDeviceThemeCustomApply),
+                    ),
+                    TextButton(
+                      key: const Key('custom-theme-cancel'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                      onPressed: () => setState(() {
+                        _draftOpen = false;
+                        _seedFrom(ref.read(posDeviceThemePairProvider));
+                      }),
+                      child: Text(l10n.posDeviceThemeCustomCancel),
+                    ),
+                    TextButton(
+                      key: const Key('custom-theme-reset'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                      onPressed: () {
+                        ref
+                            .read(posDeviceThemeProvider.notifier)
+                            .setTheme(PosThemePair.navyEmber);
+                        setState(() {
+                          _draftOpen = false;
+                          _seedFrom(PosThemePair.navyEmber);
+                        });
+                      },
+                      child: Text(l10n.posDeviceThemeCustomReset),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The «مخصص» swatch beside the presets: when a custom pair is ACTIVE it
+/// honestly shows its two colours (same duo anatomy as [_ThemeSwatch]);
+/// otherwise a quiet palette glyph. Tapping reveals the editor — it never
+/// changes the applied theme by itself.
+class _CustomThemeSwatch extends StatelessWidget {
+  const _CustomThemeSwatch({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.activePair,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final PosThemePair? activePair;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ring = activePair?.primary ?? theme.colorScheme.primary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? ring.withValues(alpha: 0.08)
+            : theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.sm,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.md,
+              RestoflowSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(
+                color: selected ? ring : kRestoflowHairline,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (activePair case final pair?)
+                  SizedBox(
+                    width: 34,
+                    height: 22,
+                    child: Stack(
+                      children: [
+                        PositionedDirectional(
+                          start: 0,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: pair.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: selected
+                                  ? Icon(
+                                      Icons.check,
+                                      size: 16,
+                                      color: posReadableInkOn(pair.primary),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        PositionedDirectional(
+                          start: 14,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: pair.action,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const SizedBox(width: 20, height: 20),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: kRestoflowHairline),
+                    ),
+                    child: const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Center(
+                        child: Icon(Icons.palette_outlined, size: 14),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One `#RRGGBB` entry: a live swatch preview beside a forced-LTR text field.
+/// Invalid non-empty input shows the localized error; the value itself is
+/// only consumed by the section's Apply gate.
+class _HexColorField extends StatelessWidget {
+  const _HexColorField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.invalidText,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final String invalidText;
+
+  @override
+  Widget build(BuildContext context) {
+    final parsed = posParseHexColor(controller.text);
+    final invalid = controller.text.trim().isNotEmpty && parsed == null;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: parsed ?? Colors.transparent,
+            borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+            border: Border.all(color: kRestoflowHairline),
+          ),
+        ),
+        const SizedBox(width: RestoflowSpacing.sm),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            // Hex is Latin — a fixed LTR run keeps the caret sane in ar/he.
+            textDirection: TextDirection.ltr,
+            autocorrect: false,
+            enableSuggestions: false,
+            maxLength: 7,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp('[#0-9a-fA-F]')),
+            ],
+            style: const TextStyle(
+              fontFamily: kPosMoneyFontFamily,
+              fontFamilyFallback: kPosMoneyFontFallbacks,
+            ),
+            decoration: InputDecoration(
+              labelText: label,
+              hintText: hint,
+              counterText: '',
+              isDense: true,
+              errorText: invalid ? invalidText : null,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The live preview card: an abstract miniature of the four treatments the
+/// pair drives — navbar/structural bar, structural control, action pill, and
+/// the soft selected/tint treatment. Deliberately text-free.
+class _CustomThemePreview extends StatelessWidget {
+  const _CustomThemePreview({required this.pair});
+
+  final PosThemePair pair;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget bar(Color color, {double width = 18}) => Container(
+      width: width,
+      height: 5,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2.5),
+      ),
+    );
+    return Container(
+      key: const Key('custom-theme-preview'),
+      padding: const EdgeInsets.all(RestoflowSpacing.sm),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: kRestoflowHairline),
+      ),
+      child: Column(
+        children: [
+          // Navbar strip: primary bed, brand tile, onPrimary title bar and
+          // the translucent identity chip.
+          Container(
+            height: 30,
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: pair.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                bar(pair.onPrimary, width: 46),
+                const Spacer(),
+                Container(
+                  width: 34,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: pair.identityBed,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: pair.identityEdge),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.xs),
+          Row(
+            children: [
+              // Structural control (Add button / thumb).
+              Expanded(
+                child: Container(
+                  height: 24,
+                  decoration: BoxDecoration(
+                    gradient: pair.primaryGradient,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Center(child: bar(pair.onPrimary)),
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              // Action pill (Send CTA family).
+              Expanded(
+                child: Container(
+                  height: 24,
+                  decoration: BoxDecoration(
+                    gradient: pair.actionGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(child: bar(pair.onAction)),
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              // Soft selected/tint treatment.
+              Expanded(
+                child: Container(
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: pair.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: pair.primary, width: 1.5),
+                  ),
+                  child: Center(child: bar(pair.primary)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -722,10 +1228,12 @@ class _ThemeSwatch extends StatelessWidget {
                             width: 22,
                             height: 22,
                             child: selected
-                                ? const Icon(
+                                ? Icon(
                                     Icons.check,
                                     size: 16,
-                                    color: Colors.white,
+                                    // 010: readable on ANY primary (white on
+                                    // every dark preset, as before).
+                                    color: posReadableInkOn(pair.primary),
                                   )
                                 : null,
                           ),

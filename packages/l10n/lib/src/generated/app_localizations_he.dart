@@ -5642,4 +5642,35 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posDeviceThemeSaffronGold => 'פחם וזהב';
+
+  @override
+  String get posDeviceThemeCustom => 'מותאם אישית';
+
+  @override
+  String get posDeviceThemeCustomHelp =>
+      'בחרו שני צבעים בפורמט ‎#RRGGBB — הם משנים את מראה המכשיר הזה בלבד.';
+
+  @override
+  String get posDeviceThemeCustomPrimaryLabel => 'הצבע הראשי';
+
+  @override
+  String get posDeviceThemeCustomSecondaryLabel => 'הצבע המשני';
+
+  @override
+  String get posDeviceThemeCustomHexHint => '#RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomInvalidHex => 'פורמט לא תקין — נדרש ‎#RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomApply => 'החלת הצבעים';
+
+  @override
+  String get posDeviceThemeCustomCancel => 'ביטול';
+
+  @override
+  String get posDeviceThemeCustomReset => 'חזרה לברירת המחדל';
+
+  @override
+  String get posDeviceThemeCustomPreviewTitle => 'תצוגה מקדימה';
 }

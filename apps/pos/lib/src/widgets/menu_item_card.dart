@@ -895,7 +895,9 @@ class _CardAction extends StatelessWidget {
                       vertical: 1,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // 010: the chip bed is the pair's onPrimary (white on
+                      // presets), so it stays legible on light custom beds.
+                      color: pair.onPrimary,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -916,7 +918,12 @@ class _CardAction extends StatelessWidget {
             style:
                 FilledButton.styleFrom(
                   backgroundColor: Colors.transparent,
-                  foregroundColor: inCart ? pair.primary : Colors.white,
+                  // 010: primaryTextInk == primary on every preset; a light
+                  // CUSTOM primary is darkened until the tonal-bed label
+                  // reads instead of vanishing tone-on-tone.
+                  foregroundColor: inCart
+                      ? pair.primaryTextInk
+                      : pair.onPrimary,
                   shadowColor: Colors.transparent,
                   disabledBackgroundColor: Colors.transparent,
                   disabledForegroundColor: kPosDisabledFg,

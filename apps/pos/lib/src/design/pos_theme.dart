@@ -29,10 +29,11 @@ import 'pos_visual_tokens.dart';
 /// selections, focus, spinners) follow the device identity — a green-led
 /// preset genuinely reads green-led, not navy-with-green-corners.
 ThemeData posPremiumTheme({PosThemePair pair = PosThemePair.navyEmber}) =>
-    // Cache PRESET pairs only: 'custom' is not a faithful identity (derive/
-    // copyWith default to it), so two distinct custom pairs must never
-    // collide on one cache slot. Non-preset pairs simply build fresh.
-    pair.wire == 'custom' ? _build(pair) : _cached[pair.wire] ??= _build(pair);
+    // Cache PRESET pairs only: custom identities (bare 'custom' from derive/
+    // copyWith AND the encoded `custom:...` wires of
+    // POS-CUSTOM-DEVICE-THEME-010) build fresh, so two distinct custom pairs
+    // never collide on one cache slot.
+    pair.isCustom ? _build(pair) : _cached[pair.wire] ??= _build(pair);
 
 final Map<String, ThemeData> _cached = {};
 
@@ -56,7 +57,10 @@ ThemeData _build(PosThemePair pair) {
     extensions: [...base.extensions.values, pair],
     colorScheme: base.colorScheme.copyWith(
       primary: pair.primary,
-      onPrimary: Colors.white,
+      // White for every curated preset; contrast-derived for custom pairs so
+      // a light custom primary still gets readable control labels
+      // (POS-CUSTOM-DEVICE-THEME-010).
+      onPrimary: pair.onPrimary,
     ),
     textTheme: t.copyWith(
       // Display voice: screen/section headings + prominent action labels.

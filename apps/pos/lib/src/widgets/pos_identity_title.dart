@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
+import '../design/pos_visual_tokens.dart' show PosThemePair;
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_receipt_logo.dart';
 
@@ -88,10 +89,15 @@ class PosIdentityTitle extends ConsumerWidget {
             // padding, sized for the taller bar.
             child: Container(
               padding: const EdgeInsetsDirectional.fromSTEB(9, 6, 14, 6),
+              // POS-CUSTOM-DEVICE-THEME-010: bed/edge/ink ride the pair —
+              // identical white-wash bytes on every preset bar, a dark wash
+              // when a custom pair paints the bar light.
               decoration: BoxDecoration(
-                color: const Color(0x1FFFFFFF),
+                color: PosThemePair.of(context).identityBed,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x24FFFFFF)),
+                border: Border.all(
+                  color: PosThemePair.of(context).identityEdge,
+                ),
               ),
               child: Row(
                 key: const Key('pos-topbar-identity'),
@@ -112,7 +118,7 @@ class PosIdentityTitle extends ConsumerWidget {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: PosThemePair.of(context).onPrimary,
                         // 010: +10% on whatever the theme resolves to, so the
                         // tweak rides the theme instead of pinning a literal.
                         fontSize:

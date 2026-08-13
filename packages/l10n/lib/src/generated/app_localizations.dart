@@ -10449,6 +10449,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Charcoal & Gold'**
   String get posDeviceThemeSaffronGold;
+
+  /// POS-CUSTOM-DEVICE-THEME-010: the custom device-theme option beside the curated presets — the user types their own two #RRGGBB colors.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get posDeviceThemeCustom;
+
+  /// Helper line inside the custom-theme editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick any two colors as #RRGGBB. They restyle this device only.'**
+  String get posDeviceThemeCustomHelp;
+
+  /// Label for the custom theme's structural (first) color field.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary color'**
+  String get posDeviceThemeCustomPrimaryLabel;
+
+  /// Label for the custom theme's action (second) color field.
+  ///
+  /// In en, this message translates to:
+  /// **'Secondary color'**
+  String get posDeviceThemeCustomSecondaryLabel;
+
+  /// Hint showing the accepted hex format. Keep as #RRGGBB in every locale.
+  ///
+  /// In en, this message translates to:
+  /// **'#RRGGBB'**
+  String get posDeviceThemeCustomHexHint;
+
+  /// Error under a hex field whose value is not a valid #RRGGBB color.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid format — use #RRGGBB'**
+  String get posDeviceThemeCustomInvalidHex;
+
+  /// Button applying the two typed custom colors to this device's theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply colors'**
+  String get posDeviceThemeCustomApply;
+
+  /// Button discarding the typed custom colors.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get posDeviceThemeCustomCancel;
+
+  /// Button restoring the default preset theme from the custom editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get posDeviceThemeCustomReset;
+
+  /// Caption above the live custom-theme preview card.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get posDeviceThemeCustomPreviewTitle;
 }
 
 class _AppLocalizationsDelegate

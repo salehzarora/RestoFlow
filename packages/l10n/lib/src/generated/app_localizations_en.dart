@@ -5727,4 +5727,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeSaffronGold => 'Charcoal & Gold';
+
+  @override
+  String get posDeviceThemeCustom => 'Custom';
+
+  @override
+  String get posDeviceThemeCustomHelp =>
+      'Pick any two colors as #RRGGBB. They restyle this device only.';
+
+  @override
+  String get posDeviceThemeCustomPrimaryLabel => 'Primary color';
+
+  @override
+  String get posDeviceThemeCustomSecondaryLabel => 'Secondary color';
+
+  @override
+  String get posDeviceThemeCustomHexHint => '#RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomInvalidHex => 'Invalid format — use #RRGGBB';
+
+  @override
+  String get posDeviceThemeCustomApply => 'Apply colors';
+
+  @override
+  String get posDeviceThemeCustomCancel => 'Cancel';
+
+  @override
+  String get posDeviceThemeCustomReset => 'Reset to default';
+
+  @override
+  String get posDeviceThemeCustomPreviewTitle => 'Preview';
 }

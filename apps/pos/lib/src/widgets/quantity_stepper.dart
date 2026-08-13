@@ -153,7 +153,12 @@ class _StepButton extends StatelessWidget {
               child: Icon(
                 icon,
                 size: RestoflowIconSizes.md,
-                color: filled ? Colors.white : kRestoflowInk,
+                // 010: the plus sits ON the action mark. onActionMark keeps
+                // the shipped WHITE on every preset (saffron_gold's dark
+                // onAction must not repaint it) and derives only for custom.
+                color: filled
+                    ? PosThemePair.of(context).onActionMark
+                    : kRestoflowInk,
               ),
             ),
           ),
