@@ -77,9 +77,19 @@ Widget _card(
 /// count per layout mode. A single max-cross-axis-extent could not express the
 /// approved layout (it yields 4 columns at both 1440 and 1280), so the delegate
 /// type changed. The skeleton-parity contract these tests own is unchanged.
-SliverGridDelegateWithFixedCrossAxisCount _gridDelegate(WidgetTester tester) =>
-    tester.widget<GridView>(find.byType(GridView).last).gridDelegate
+/// POS-OPEN-ORDERS-SCROLL-POLISH-017: the LOADED product grid is now the keyed
+/// [SliverGrid] inside the shared menu scroll (`pos-menu-scroll`) — the strip
+/// scrolls away with the merchandise. The SKELETON placeholder is still a
+/// plain [GridView], so the parity tests read whichever state is on screen.
+SliverGridDelegateWithFixedCrossAxisCount _gridDelegate(WidgetTester tester) {
+  final keyed = find.byKey(const Key('pos-product-grid'));
+  if (keyed.evaluate().isNotEmpty) {
+    return tester.widget<SliverGrid>(keyed).gridDelegate
         as SliverGridDelegateWithFixedCrossAxisCount;
+  }
+  return tester.widget<GridView>(find.byType(GridView).last).gridDelegate
+      as SliverGridDelegateWithFixedCrossAxisCount;
+}
 
 /// FINAL-NEW-MODIFICATIONS-COMBINED-001 replaced the former
 /// `_drainPreExistingOverflow` helper: the screen-level horizontal overflow it
@@ -197,7 +207,7 @@ void main() {
           240,
           scrollable: find
               .descendant(
-                of: find.byType(GridView).last,
+                of: find.byKey(const Key('pos-menu-scroll')),
                 matching: find.byType(Scrollable),
               )
               .first,

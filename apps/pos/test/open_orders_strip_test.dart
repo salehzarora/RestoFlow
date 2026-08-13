@@ -12,6 +12,8 @@ import 'package:restoflow_pos/src/data/order_snapshot_repository.dart'
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart' show PosMenuScreen;
+import 'package:restoflow_pos/src/widgets/menu_item_card.dart'
+    show MenuItemCard;
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
@@ -260,7 +262,7 @@ void main() {
       await tester.pumpWidget(_app(store));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('open-orders-strip')), findsNothing);
-      expect(find.byType(GridView), findsWidgets);
+      expect(find.byKey(const Key('pos-product-grid')), findsOneWidget);
     });
 
     testWidgets('M4. an order leaving the open state disappears on the SAME '
@@ -782,4 +784,183 @@ void main() {
       );
     });
   });
+
+  group(
+    'S. Scroll-away polish (017) — the strip belongs to the menu scroll',
+    () {
+      // A short viewport guarantees the grid overflows vertically, so the
+      // scroll-away behaviour is actually exercised (a non-scrollable grid
+      // would make S2/S3 vacuous — the maxScrollExtent precondition guards it).
+      const shortViewport = Size(1280, 560);
+
+      Finder stripFinder() => find.byKey(const Key('open-orders-strip'));
+      Finder scrollFinder() => find.byKey(const Key('pos-menu-scroll'));
+
+      ScrollPosition position(WidgetTester tester) => tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: scrollFinder(),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+
+      testWidgets('S1. the strip is INSIDE the menu vertical scroll — a sliver '
+          'of the merchandise viewport, not a fixed sibling above it', (
+        tester,
+      ) async {
+        _size(tester);
+        final store = await _seeded([_order('#S1', status: 'submitted')]);
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(of: scrollFinder(), matching: stripFinder()),
+          findsOneWidget,
+          reason: 'the strip must live inside the shared menu scroll view',
+        );
+      });
+
+      testWidgets('S2/S3. scrolling down moves the strip OUT of the viewport '
+          'naturally; scrolling back restores it', (tester) async {
+        _size(tester, shortViewport);
+        final store = await _seeded([_order('#S2', status: 'submitted')]);
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+
+        final viewportTop = tester.getRect(scrollFinder()).top;
+        expect(
+          tester.getRect(stripFinder()).top,
+          moreOrLessEquals(viewportTop, epsilon: 0.01),
+          reason: 'at the top of the scroll the strip is fully visible',
+        );
+        expect(
+          position(tester).maxScrollExtent,
+          greaterThan(120),
+          reason: 'precondition: the grid must actually overflow this viewport',
+        );
+
+        // Scroll DOWN into the merchandise: the strip leaves with the content.
+        // A fully scrolled-out sliver child goes OFFSTAGE, so the default
+        // (onstage-only) finder losing it IS the "left the viewport" proof —
+        // while the skipOffstage:false finder proves it merely scrolled away
+        // (still mounted, never torn down).
+        await tester.drag(scrollFinder(), const Offset(0, -400));
+        await tester.pumpAndSettle();
+        expect(
+          stripFinder(),
+          findsNothing,
+          reason: 'scrolled down: the strip is no longer in the viewport',
+        );
+        expect(
+          find.byKey(const Key('open-orders-strip'), skipOffstage: false),
+          findsOneWidget,
+          reason: 'scrolled away — not unmounted: it is still scroll content',
+        );
+
+        // Scroll back UP: the strip returns exactly where it was.
+        await tester.drag(scrollFinder(), const Offset(0, 400));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(stripFinder()).top,
+          moreOrLessEquals(viewportTop, epsilon: 0.01),
+          reason: 'back at the top: the strip is fully visible again',
+        );
+      });
+
+      testWidgets('S4. zero open orders: no strip, no gap — the first product '
+          'row sits exactly where it sits with the band absent', (
+        tester,
+      ) async {
+        _size(tester);
+        // Baseline: a terminal-only store renders no band at all (M3 pins the
+        // absence; this pins the GEOMETRY: the grid starts at the viewport top).
+        final store = await _seeded([_order('#S4', status: 'completed')]);
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('open-orders-strip')), findsNothing);
+        final viewportTop = tester.getRect(scrollFinder()).top;
+        final firstCardTop = tester
+            .getRect(find.byType(MenuItemCard).first)
+            .top;
+        // The only space above the first card is the grid's own padding — the
+        // empty band contributes ZERO extent. (The padding itself is asserted
+        // indirectly: it must be well under the smallest band height.)
+        expect(firstCardTop - viewportTop, lessThan(74.0));
+      });
+
+      testWidgets('S5. the horizontal card list still scrolls sideways inside '
+          'the vertical menu scroll — no axis conflict', (tester) async {
+        _size(tester, shortViewport);
+        final store = await _seeded([
+          for (var i = 0; i < 14; i++)
+            _order(
+              '#H$i',
+              status: 'submitted',
+              age: Duration(minutes: i + 1),
+            ),
+        ]);
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+
+        // Newest-first: #H0 leads. Drag LESS than one card pitch so the anchor
+        // stays onstage (the lazy horizontal list disposes fully-scrolled-out
+        // cards, which would make a bigger drag unverifiable by rect).
+        expect(_card('#H0'), findsOneWidget);
+        final before = tester.getRect(_card('#H0')).left;
+        await tester.drag(stripFinder(), const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        // The horizontal recognizer wins the gesture arena (a small slop is
+        // consumed by the disambiguation itself — that IS the no-conflict
+        // proof): the cards clearly travel sideways.
+        expect(
+          tester.getRect(_card('#H0')).left,
+          lessThan(before - 80),
+          reason: 'a horizontal drag on the strip moves the cards sideways',
+        );
+        // And the VERTICAL scroll did not move at all.
+        expect(position(tester).pixels, 0);
+      });
+
+      testWidgets('S6. a band mount/unmount while scrolled into the grid keeps '
+          'the viewport visually stationary (no scroll jump)', (tester) async {
+        _size(tester, shortViewport);
+        final store = await _seeded([_order('#S6', status: 'submitted')]);
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+
+        // Deep enough that the whole band is off-screen above.
+        await tester.drag(scrollFinder(), const Offset(0, -300));
+        await tester.pumpAndSettle();
+        final anchor = find.byType(MenuItemCard).first;
+        final anchorBefore = tester.getRect(anchor).top;
+        final offsetBefore = position(tester).pixels;
+
+        // The order leaves the open state on the authoritative update (the same
+        // path a realtime terminal snapshot takes) — the band UNMOUNTS.
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(PosMenuScreen)),
+        );
+        container
+            .read(posRecentOrdersControllerProvider.notifier)
+            .markVoided(PosOrderIdentity.server('oid-#S6'), 'wrong order');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('open-orders-strip')), findsNothing);
+        expect(
+          tester.getRect(anchor).top,
+          moreOrLessEquals(anchorBefore, epsilon: 0.01),
+          reason: 'band unmount while scrolled: the products must not shift',
+        );
+        expect(
+          position(tester).pixels,
+          moreOrLessEquals(offsetBefore - 74.0, epsilon: 0.01),
+          reason:
+              'the offset was compensated by exactly the compact band height',
+        );
+      });
+    },
+  );
 }
