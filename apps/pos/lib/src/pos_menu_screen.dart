@@ -211,9 +211,20 @@ class PosMenuScreen extends StatelessWidget {
               );
 
               if (mode == PosLayoutMode.phone) {
+                // 007 FRAMELESS: the phone pane paints its own WHITE base.
+                // The frameless cards rely on the workspace surface being
+                // white; without this they would sit transparently on the
+                // ivory Scaffold (no hover exists on a touch phone to
+                // restore any boundary), and the muted unavailable bar
+                // would vanish into the canvas.
                 return const Column(
                   children: [
-                    Expanded(child: _MenuPane()),
+                    Expanded(
+                      child: ColoredBox(
+                        color: Colors.white,
+                        child: _MenuPane(),
+                      ),
+                    ),
                     PosBottomBar(),
                   ],
                 );
@@ -526,11 +537,12 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
 /// The card's FIXED content zone — the one-baseline name+price row, the
 /// fixed description slot, and the 44px action ZONE (006: the zone hosts a
 /// 38px VISIBLE bar with 3px transparent insets; the hit box stays 44).
-/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 30 (TWO
-/// description lines — the room the compact footer bought) + 44 (action
-/// zone) + 10 = 115; at 1.6 the slot drops to one 19px line with a taller
-/// row (~116); at 2x the slot is gone and the row grows to ~35 → 97 — so
-/// 122 holds every bucket with headroom.
+/// Measured at scale 1 (007 raised the image-to-title pad to 10):
+/// 10 + ~21 (name/price baseline row) + 2 + 30 (TWO description lines) +
+/// 44 (action zone) + 10 = 117; the tightest bucket is textScale 1.6 (one
+/// 19px line + a taller row, ~118); at 2x the slot is gone and the row
+/// grows to ~35 → 99 — so 122 holds every bucket (scale-bucket coverage in
+/// pos_card_polish_006_test A4).
 const double kPosMenuCardBodyHeight = 122;
 
 /// The cell height for a card [cellWidth] wide: the INSET 4:3 image band
@@ -564,7 +576,9 @@ class PosMenuGridGeometry {
     );
     final compact = mode == PosLayoutMode.compactLandscape;
     final padding = compact ? 12.0 : RestoflowSpacing.lg;
-    final spacing = compact ? 10.0 : RestoflowSpacing.md;
+    // 007 FRAMELESS: with the card box gone, the GAP is what separates
+    // products — one step wider (14) on roomy modes; compact keeps 10.
+    final spacing = compact ? 10.0 : 14.0;
     final columns = posMenuColumnsFor(mode);
     final content = availableWidth - 2 * padding;
     final cellWidth = (content - (columns - 1) * spacing) / columns;
@@ -604,7 +618,8 @@ PosMenuGridGeometry posMenuGridGeometryOf(
   final mode = posLayoutModeFor(width: size.width, height: size.height);
   final compact = mode == PosLayoutMode.compactLandscape;
   final padding = compact ? 12.0 : RestoflowSpacing.lg;
-  final spacing = compact ? 10.0 : RestoflowSpacing.md;
+  // 007: matches PosMenuGridGeometry.of — the gap separates products now.
+  final spacing = compact ? 10.0 : 14.0;
   final columns = posMenuColumnsFor(mode);
   final content = availableWidth - 2 * padding;
   return PosMenuGridGeometry(

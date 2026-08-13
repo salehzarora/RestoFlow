@@ -233,9 +233,9 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
   }
 }
 
-/// Approved warm neutrals (tokens doc §1/§8) — the card outline is the one
-/// deliberately COOL line left on the white surfaces so cards keep a crisp
-/// edge against the warm canvas.
+/// The deliberately COOL card edge (tokens doc §8). 007 FRAMELESS: no longer
+/// always-on — it appears only as the HOVER/FOCUS separation edge on the
+/// otherwise frameless tile.
 const Color kPosCardOutline = Color(0xFFDEE5F0);
 
 /// Cart row separators.
@@ -258,6 +258,27 @@ const Color kPosNavbarInk = Color(0xFFE5EBF4);
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).
 const List<BoxShadow> kPosPanelFloatShadow = <BoxShadow>[
   BoxShadow(color: Color(0x1416263B), offset: Offset(0, 8), blurRadius: 28),
+];
+
+/// POS-FRAMELESS-CARD-POLISH-007 — the product IMAGE TILE's signature
+/// silhouette: three 16px corners and ONE small 5px corner at the bottom
+/// inline-START (where the title begins). Directional, so it mirrors
+/// intentionally between RTL and LTR; restrained on purpose — a quiet
+/// asymmetric character, not a decorative cut.
+const BorderRadiusDirectional kPosImageTileRadius =
+    BorderRadiusDirectional.only(
+      topStart: Radius.circular(16),
+      topEnd: Radius.circular(16),
+      bottomStart: Radius.circular(5),
+      bottomEnd: Radius.circular(16),
+    );
+
+/// The image tile's soft RESTING shadow — the one floating element of the
+/// frameless card (the card shell itself carries no rest shadow). Sized to
+/// live inside the tile's 6px card insets: it reads as a soft under-tile
+/// cue, never a bleed into the neighbouring cell.
+const List<BoxShadow> kPosImageTileShadow = <BoxShadow>[
+  BoxShadow(color: Color(0x1716263B), offset: Offset(0, 2), blurRadius: 8),
 ];
 
 /// The default per-device secondary accent (Mint Leaf). The live value is a
@@ -312,8 +333,9 @@ const List<BoxShadow> kPosToastShadow = <BoxShadow>[
   BoxShadow(color: Color(0x2E0B1526), offset: Offset(0, 8), blurRadius: 24),
 ];
 
-/// Radius ranking (POS_MAIN_VISUAL_SPEC §5): card 14 > Send 13 > controls 12
-/// > track 10 > pills/badges 7. Card/Send/control values already live in
+/// Radius ranking: image tile 16 (007 — the floating hero outranks its
+/// hover-edge card) > card 14 > Send 13 > controls 12 > track 10 >
+/// pills/badges 7. Card/Send/control values already live in
 /// `pos_palette.dart` (`kPosCardRadius`, `kPosSendRadius`, `RestoflowRadii.md`);
 /// these two complete the published scale.
 const double kPosBadgeRadius = 7;

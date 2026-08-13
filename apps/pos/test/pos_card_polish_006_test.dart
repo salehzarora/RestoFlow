@@ -1,9 +1,11 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
-    show kPosTotalsBed;
+    show kPosTotalsBed, kPosImageTileRadius;
 import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
@@ -148,6 +150,20 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('A4. every ladder bucket fits the fixed body budget — the '
+        'tight 1.15 and 1.6 scales stay overflow-free', (tester) async {
+      // 007 verify finding: the tightest buckets (two 30px lines at 1.15;
+      // one 19px line + a taller row at 1.6) had no coverage.
+      for (final scale in const [1.0, 1.15, 1.3, 1.6, 2.0]) {
+        await pump(tester, item(), scale: scale);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'card overflowed at textScale $scale',
+        );
+      }
+    });
   });
 
   group('B. the full uncropped product image', () {
@@ -192,6 +208,100 @@ void main() {
       await pump(tester, item());
       expect(find.byType(AspectRatio), findsOneWidget);
       expect(find.byType(Image), findsNothing);
+    });
+  });
+
+  group('C. the frameless floating tile (POS-FRAMELESS-CARD-POLISH-007)', () {
+    Card cardOf(WidgetTester tester) =>
+        tester.widget<Card>(find.byType(Card).first);
+
+    BoxDecoration shellDecoration(WidgetTester tester) =>
+        tester
+                .widget<AnimatedContainer>(
+                  find
+                      .ancestor(
+                        of: find.byType(Card).first,
+                        matching: find.byType(AnimatedContainer),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
+
+    testWidgets('C1. REST state: no fill, no perimeter border, no shadow — '
+        'the workspace is the base', (tester) async {
+      await pump(tester, item());
+      final card = cardOf(tester);
+      expect(card.color, Colors.transparent);
+      final side = (card.shape! as RoundedRectangleBorder).side;
+      expect(side.color, Colors.transparent, reason: 'no always-on frame');
+      expect(shellDecoration(tester).boxShadow, isNull);
+    });
+
+    testWidgets('C2. HOVER introduces the lift + faint edge with ZERO '
+        'geometry change', (tester) async {
+      await pump(tester, item());
+      final before = tester.getSize(find.byType(Card).first);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(MenuItemCard)));
+      await tester.pumpAndSettle();
+
+      final card = cardOf(tester);
+      final side = (card.shape! as RoundedRectangleBorder).side;
+      expect(side.color, isNot(Colors.transparent), reason: 'faint edge');
+      expect(shellDecoration(tester).boxShadow, isNotNull, reason: 'lift');
+      expect(
+        tester.getSize(find.byType(Card).first),
+        before,
+        reason: 'hover must never move geometry under the finger',
+      );
+    });
+
+    testWidgets('C3. the image tile wears the asymmetric directional '
+        'silhouette + its own soft resting shadow, and the no-image fallback '
+        'shares it', (tester) async {
+      await pump(tester, item());
+      final clip = tester.widget<ClipRRect>(
+        find
+            .descendant(
+              of: find.byType(AspectRatio),
+              matching: find.byType(ClipRRect),
+            )
+            .first,
+      );
+      final radius = clip.borderRadius as BorderRadiusDirectional;
+      expect(radius.topStart, const Radius.circular(16));
+      expect(radius.topEnd, const Radius.circular(16));
+      expect(radius.bottomEnd, const Radius.circular(16));
+      expect(
+        radius.bottomStart,
+        const Radius.circular(5),
+        reason: 'ONE small corner at the bottom inline-START — the signature',
+      );
+      // The tile floats: a soft rest shadow on the band's own decoration.
+      final tile = tester.widget<DecoratedBox>(
+        find
+            .ancestor(
+              of: find.byWidget(clip),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      expect((tile.decoration as BoxDecoration).boxShadow, isNotNull);
+    });
+
+    testWidgets('C4. the asymmetry is DIRECTIONAL: the small corner sits on '
+        'the physical RIGHT in RTL and the LEFT in LTR', (tester) async {
+      const radius = kPosImageTileRadius;
+      final rtl = radius.resolve(TextDirection.rtl);
+      final ltr = radius.resolve(TextDirection.ltr);
+      expect(rtl.bottomRight, const Radius.circular(5));
+      expect(rtl.bottomLeft, const Radius.circular(16));
+      expect(ltr.bottomLeft, const Radius.circular(5));
+      expect(ltr.bottomRight, const Radius.circular(16));
     });
   });
 }

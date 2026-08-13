@@ -41,11 +41,13 @@ RestoflowTone _tagTone(String tag) => switch (tag) {
   _ => RestoflowTone.neutral,
 };
 
-/// A POS menu tile (approved v4 anatomy): a white [Card] with an INSET 4:3
-/// cover-image band (tinted category fallback on null/error), the always-on
-/// availability pill beside one prioritized tag pill, an ember in-cart mark,
-/// the name+price baseline row, an options indicator when configurable, and
-/// the full-width gradient add footer. The whole tile is tappable.
+/// A POS menu tile (007 frameless anatomy): a TRANSPARENT [Card] shell over
+/// the floating asymmetric 4:3 image tile (CONTAIN-fit full photo on a warm
+/// letterbox bed; tinted category fallback on null/error), the always-on
+/// availability pill beside one prioritized tag pill, an ember in-cart mark
+/// at the band's top inline-END, the name+price baseline row, an options
+/// indicator when configurable, and the compact full-width gradient add
+/// footer. The whole tile is tappable.
 ///
 /// Pure presentation — the add action is delegated to [onAdd]. FROZEN contracts
 /// (widget-test corpus): the tile is a [Card]; tag pills are
@@ -208,10 +210,14 @@ class MenuItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 004: the approved INSET 4:3 photo band — floated 6px inside the
-            // card edge on its own r10 clip (no longer edge-to-edge). Cover-
-            // fit photo (with cacheWidth) that never stretches, or the tinted
-            // category scene on null/error.
+            // 007 FRAMELESS: the 4:3 photo band IS the floating element now —
+            // it carries its own soft resting shadow and the tile's modern
+            // signature: a restrained ASYMMETRIC silhouette (three 16px
+            // corners, one small 5px corner at the bottom inline-START, where
+            // the title begins). Directional radii mirror intentionally in
+            // RTL. Inside it, nothing changed: contain-fit full photo on the
+            // quiet letterbox bed, or the tinted category scene on
+            // null/error, with the same overlays.
             Padding(
               padding: const EdgeInsetsDirectional.fromSTEB(
                 kPosCardImageInset,
@@ -221,23 +227,31 @@ class MenuItemCard extends StatelessWidget {
               ),
               child: AspectRatio(
                 aspectRatio: kPosCardImageAspect,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(kPosTrackRadius),
-                  child: _ImageBand(
-                    item: item,
-                    category: category,
-                    l10n: l10n,
-                    bandTags: bandTags,
-                    inCartQuantity: inCartQuantity,
-                    optionGroupCount: optionGroupCount,
-                    unavailable: unavailable,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    borderRadius: kPosImageTileRadius,
+                    boxShadow: kPosImageTileShadow,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: kPosImageTileRadius,
+                    child: _ImageBand(
+                      item: item,
+                      category: category,
+                      l10n: l10n,
+                      bandTags: bandTags,
+                      inCartQuantity: inCartQuantity,
+                      optionGroupCount: optionGroupCount,
+                      unavailable: unavailable,
+                    ),
                   ),
                 ),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 10, 10),
+                // 007: a touch more air between the floating image tile and
+                // the title; the content sits on the workspace, not in a box.
+                padding: const EdgeInsetsDirectional.fromSTEB(10, 10, 10, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -346,10 +360,13 @@ class MenuItemCard extends StatelessWidget {
   }
 }
 
-/// The card shell: white, r14, hairline, e1 at rest; on pointer hover it
-/// lifts to the premium hover shadow with a slightly firmer cool border.
-/// Purely decorative — layout, radius and the InkWell child are untouched,
-/// and touch-only devices simply never hover.
+/// The card shell (007 FRAMELESS): at rest it paints NOTHING of its own —
+/// the tile sits directly on the white workspace with only the image tile's
+/// soft shadow and the grid gap as separation. Pointer hover or keyboard
+/// focus re-introduce the white fill, the faint cool edge and the lift
+/// shadow, with zero geometry change. Purely decorative — layout, radius
+/// and the InkWell child are untouched; touch devices rely on the resting
+/// composition.
 class _CardShell extends StatefulWidget {
   const _CardShell({required this.hoverable, required this.child});
 
@@ -362,10 +379,14 @@ class _CardShell extends StatefulWidget {
 
 class _CardShellState extends State<_CardShell> {
   bool _hover = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
-    final hover = _hover && widget.hoverable;
+    // Hover OR keyboard focus re-introduce the separation — the always-on
+    // border this shell replaced was also the keyboard-visible boundary, so
+    // focus must restore an equivalent cue (007 verify finding).
+    final hover = (_hover || _focused) && widget.hoverable;
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -373,23 +394,40 @@ class _CardShellState extends State<_CardShell> {
         // 004: the approved hover-lift timing (states/motion §7: 220ms).
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        // SURGERY-003: shadow ON HOVER ONLY — at rest the card is a calm
-        // white surface with a 1px border, like the reference.
+        // 007 FRAMELESS: at rest the tile has NO box of its own — no fill,
+        // no border, no shadow; the workspace surface is the base and the
+        // IMAGE TILE below is the floating element. Hover/focus re-introduce
+        // separation (lift shadow + a faint cool edge) without any geometry
+        // change: the 1px edge is always laid out and merely swaps from
+        // transparent to visible.
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(kPosCardRadius),
           boxShadow: hover ? kPosCardHoverShadow : null,
         ),
-        child: Card(
-          elevation: 0,
-          color: Colors.white,
-          clipBehavior: Clip.antiAlias,
-          // 004: the approved thin COOL outline (#DEE5F0) — constant across
-          // rest and hover; the hover cue is the lift shadow alone.
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(kPosCardRadius),
-            side: const BorderSide(color: kPosCardOutline),
+        // Still a real [Card] — the widget-test corpus finds tiles by type —
+        // but a TRANSPARENT one: zero elevation, no fill, no tint. The zero
+        // margin matches the shared theme's cardTheme (bare test harnesses
+        // would otherwise re-inherit Flutter's 4px default and shrink the
+        // fixed body budget).
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          child: Card(
+            elevation: 0,
+            color: hover ? Colors.white : Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(kPosCardRadius),
+              side: BorderSide(
+                color: hover ? kPosCardOutline : Colors.transparent,
+              ),
+            ),
+            child: widget.child,
           ),
-          child: widget.child,
         ),
       ),
     );
@@ -456,9 +494,10 @@ class _PriceText extends StatelessWidget {
   }
 }
 
-/// The 4:3 band: cover photo (with a device-pixel `cacheWidth`) or the tinted
-/// category fallback, overlaid by up to two tag pills (top) and an in-cart
-/// badge (bottom-start).
+/// The 4:3 band: the CONTAIN-fit full photo on its warm letterbox bed (with
+/// a device-pixel `cacheWidth`) or the tinted category fallback, overlaid by
+/// the availability + tag pills (top inline-START), the ember ×N mark (top
+/// inline-END) and the options chip (bottom inline-END).
 class _ImageBand extends StatelessWidget {
   const _ImageBand({
     required this.item,
@@ -929,9 +968,16 @@ class _CategoryBand extends StatelessWidget {
     // SURGERY-003: no flat pastel slab — the imageless band is a composed
     // tinted scene: two soft offset discs in the category hue behind the
     // category glyph. Same data, same fallback semantics, premium at rest.
+    //
+    // 007: the base is an OPAQUE pre-blended ColoredBox, not an `Ink`. Ink
+    // painted on the ancestor Card's material layer, which (a) ignored the
+    // tile's rounded clip (square tint shoulders past the corners) and
+    // (b) let the tile shadow's filled interior grey the whole scene once
+    // the shadow arrived. An opaque child inside the clip fixes both while
+    // rendering the identical colour.
     final tint = category.color;
-    return Ink(
-      color: tint.withValues(alpha: 0.08),
+    return ColoredBox(
+      color: Color.alphaBlend(tint.withValues(alpha: 0.08), Colors.white),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final w = constraints.maxWidth;
