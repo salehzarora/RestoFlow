@@ -525,26 +525,48 @@ class _ImageBand extends StatelessWidget {
         if (item.imageUrl == null)
           _CategoryBand(category: category)
         else
-          // POS-THEME-NAVBAR-POLISH-006: the FULL uploaded photo, uncropped.
-          // `cover` silently cropped/zoomed any non-4:3 upload — the POS was
-          // the cropper, not storage. `contain` keeps the original aspect
-          // ratio and centers the complete image inside the uniform 4:3
-          // frame; a quiet warm neutral fills the letterbox bands (never
-          // generated content, never a recolored photo).
+          // POS-SMART-IMAGE-FIT-008 — "smart contain": the FOREGROUND stays
+          // the source of truth (006: the FULL uploaded photo, contain-fit,
+          // centered, never cropped/zoomed/stretched), and the bands contain
+          // would leave empty are filled by the SAME photo as a subordinate
+          // COVER background under a restrained warm scrim. No generated
+          // content, no second asset, no blur, no animation — two plain
+          // layers of one image. Both layers share the identical URL AND the
+          // identical cacheWidth, so they resolve to ONE cached decode.
           ColoredBox(
             color: kPosTotalsBed,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final dpr = MediaQuery.devicePixelRatioOf(context);
                 final cacheW = (constraints.maxWidth * dpr).round();
-                return Image.network(
-                  item.imageUrl!,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
-                  width: double.infinity,
-                  cacheWidth: cacheW > 0 ? cacheW : null,
-                  errorBuilder: (context, error, stackTrace) =>
-                      _CategoryBand(category: category),
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // The fill echo. If the image errors this layer renders
+                    // NOTHING (the foreground's fallback owns the error
+                    // state — never two fallbacks).
+                    Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      cacheWidth: cacheW > 0 ? cacheW : null,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
+                    // The subordination scrim: the warm bed at ~72%, so the
+                    // echo reads as quiet texture, never as a second photo.
+                    const ColoredBox(color: Color(0xB8FBFAF6)),
+                    // The crisp, complete, unmodified product photo.
+                    Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      width: double.infinity,
+                      cacheWidth: cacheW > 0 ? cacheW : null,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _CategoryBand(category: category),
+                    ),
+                  ],
                 );
               },
             ),
