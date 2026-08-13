@@ -3846,5 +3846,21 @@
   "posCartEmptyHint": "Pick items from the menu to start a new order",
   "@posCartEmptyHint": {"description": "One helper line under the empty-cart message (approved v4 empty state), telling the cashier how to begin."},
   "posSending": "Sending…",
-  "@posSending": {"description": "Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable."}
+  "@posSending": {"description": "Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable."},
+  "posBrandName": "RestoFlow",
+  "@posBrandName": {"description": "First line of the stacked top-bar wordmark (POS-THEME-NAVBAR-POLISH-001): the brand name alone."},
+  "posBrandTagline": "Point of Sale",
+  "@posBrandTagline": {"description": "Second, smaller line of the stacked top-bar wordmark: the product line under the brand name."},
+  "posDeviceThemeTitle": "This device's theme",
+  "@posDeviceThemeTitle": {"description": "Device-settings section header for the per-device THEME choice (primary + action color pair). Appearance only — recolors structure and action accents, never semantic states."},
+  "posDeviceThemeHelp": "Pick this till's color identity. It changes the bar, buttons and highlights on this device only — order flow, statuses and receipts are unaffected.",
+  "@posDeviceThemeHelp": {"description": "Helper line under the device-theme section header."},
+  "posDeviceThemeNavyEmber": "Navy & Ember",
+  "@posDeviceThemeNavyEmber": {"description": "Name of the default navy + ember orange theme preset."},
+  "posDeviceThemeForestCharcoal": "Forest & Ember",
+  "@posDeviceThemeForestCharcoal": {"description": "Name of the forest-green structural theme preset."},
+  "posDeviceThemeAubergineSlate": "Aubergine & Brick",
+  "@posDeviceThemeAubergineSlate": {"description": "Name of the aubergine structural theme preset."},
+  "posDeviceThemeSaffronGold": "Charcoal & Gold",
+  "@posDeviceThemeSaffronGold": {"description": "Name of the charcoal + saffron gold theme preset."}
 }

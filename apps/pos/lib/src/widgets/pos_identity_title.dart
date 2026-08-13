@@ -29,7 +29,8 @@ const double kPosIdentityMaxWidth = 340;
 
 /// The logo box. 010 grew it to 52 on the old white bar; the approved v4
 /// identity CHIP carries a compact white logo box instead (component specs
-/// §8), sized to ride inside the 54–64dp primary bar with the chip's padding.
+/// §8), sized to ride inside the 56–68dp primary bar with the chip's 6px
+/// vertical padding.
 const double kPosIdentityLogoSize = 34;
 
 /// POS-TOPBAR-QUICK-TWEAK-010: in RTL the block sits left of centre.
@@ -43,8 +44,10 @@ const double kPosIdentityLogoSize = 34;
 /// free width, it self-clamps to whatever is safely available.
 const double kPosIdentityRtlAlignX = -0.6;
 
-/// The name is 10% larger than the base title style (010).
-const double kPosIdentityNameScale = 1.1;
+/// The name's scale over the base title style (010 set 1.1;
+/// POS-THEME-NAVBAR-POLISH-001 raises it with the taller bar so the one
+/// fact a cashier verifies reads across the counter).
+const double kPosIdentityNameScale = 1.2;
 
 class PosIdentityTitle extends ConsumerWidget {
   const PosIdentityTitle({super.key});
@@ -80,11 +83,15 @@ class PosIdentityTitle extends ConsumerWidget {
               : Alignment.center,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
+            // POS-THEME-NAVBAR-POLISH-001: a stronger, easier-to-read chip —
+            // a firmer translucent bed with a hairline edge and roomier
+            // padding, sized for the taller bar.
             child: Container(
-              padding: const EdgeInsetsDirectional.fromSTEB(8, 5, 12, 5),
+              padding: const EdgeInsetsDirectional.fromSTEB(9, 6, 14, 6),
               decoration: BoxDecoration(
-                color: const Color(0x17FFFFFF),
-                borderRadius: BorderRadius.circular(11),
+                color: const Color(0x1FFFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x24FFFFFF)),
               ),
               child: Row(
                 key: const Key('pos-topbar-identity'),

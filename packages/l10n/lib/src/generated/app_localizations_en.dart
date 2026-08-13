@@ -5702,4 +5702,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posSending => 'Sending…';
+
+  @override
+  String get posBrandName => 'RestoFlow';
+
+  @override
+  String get posBrandTagline => 'Point of Sale';
+
+  @override
+  String get posDeviceThemeTitle => 'This device\'s theme';
+
+  @override
+  String get posDeviceThemeHelp =>
+      'Pick this till\'s color identity. It changes the bar, buttons and highlights on this device only — order flow, statuses and receipts are unaffected.';
+
+  @override
+  String get posDeviceThemeNavyEmber => 'Navy & Ember';
+
+  @override
+  String get posDeviceThemeForestCharcoal => 'Forest & Ember';
+
+  @override
+  String get posDeviceThemeAubergineSlate => 'Aubergine & Brick';
+
+  @override
+  String get posDeviceThemeSaffronGold => 'Charcoal & Gold';
 }

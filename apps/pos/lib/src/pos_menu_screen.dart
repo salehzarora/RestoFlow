@@ -76,20 +76,42 @@ class PosMenuScreen extends StatelessWidget {
                 size: RestoflowIconSizes.md,
               ),
             ),
-            // PSC-001A compact app bar: on narrow phones the TEXT title yields
+            // PSC-001A compact app bar: on narrow phones the TEXT brand yields
             // its width to the five operational actions (the brand tile keeps
-            // the identity); wider bars keep the ellipsizing title.
+            // the identity); wider bars carry the STACKED wordmark
+            // (POS-THEME-NAVBAR-POLISH-001): the brand name over a smaller
+            // product line, deliberate and uncrowded.
             if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) ...[
-              const SizedBox(width: RestoflowSpacing.sm),
+              const SizedBox(width: 10),
               Flexible(
-                child: Text(
-                  l10n.posAppTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.posBrandName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        height: 1.1,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      l10n.posBrandTagline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10.5,
+                        height: 1.2,
+                        letterSpacing: 0,
+                        color: PosThemePair.of(context).actionSoft,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -107,10 +129,11 @@ class PosMenuScreen extends StatelessWidget {
           // one translucent bed. IconTheme above lights their glyphs for the
           // dark bar; each widget's behavior, tooltip and keys are untouched.
           Container(
-            // Vertical margin 5, not 7: the 54dp phone toolbar must leave the
-            // five operational actions a >=44dp touch height (54-10=44;
-            // 58-10=48; 64-10=54) — the approved bar heights never buy their
-            // looks with sub-floor targets.
+            // Vertical margin 5: the polished bar ladder (68/62/56) must
+            // leave the five operational actions a >=44dp touch height
+            // (56-10=46; 62-10=52; 68-10=58) — the bar heights never buy
+            // their looks with sub-floor targets (pinned in
+            // pos_appbar_compact_test).
             margin: const EdgeInsetsDirectional.only(
               end: RestoflowSpacing.sm,
               top: 5,
@@ -189,9 +212,20 @@ class PosMenuScreen extends StatelessWidget {
               );
 
               if (mode == PosLayoutMode.phone) {
+                // 007 FRAMELESS: the phone pane paints its own WHITE base.
+                // The frameless cards rely on the workspace surface being
+                // white; without this they would sit transparently on the
+                // ivory Scaffold (no hover exists on a touch phone to
+                // restore any boundary), and the muted unavailable bar
+                // would vanish into the canvas.
                 return const Column(
                   children: [
-                    Expanded(child: _MenuPane()),
+                    Expanded(
+                      child: ColoredBox(
+                        color: Colors.white,
+                        child: _MenuPane(),
+                      ),
+                    ),
                     PosBottomBar(),
                   ],
                 );
@@ -228,12 +262,14 @@ class PosMenuScreen extends StatelessWidget {
   }
 }
 
-/// The approved top-bar height ladder (responsive spec §9: 64 / 58 / 54).
+/// The top-bar height ladder. POS-THEME-NAVBAR-POLISH-001 raises it a step
+/// (68 / 62 / 56) so the stacked brand and the identity chip breathe; the
+/// action cluster's 5px vertical margins keep every action ≥46dp tall.
 double _posTopBarHeight(double width) => width >= 1100
-    ? 64
+    ? 68
     : width >= RestoflowBreakpoints.posTwoPane
-    ? 58
-    : 54;
+    ? 62
+    : 56;
 
 /// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — one floating rounded white surface
 /// of the two-plane shell. BORDERLESS per the approved v4 panels: r18 on a
@@ -499,14 +535,16 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
   }
 }
 
-/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card's FIXED content zone —
-/// the one-baseline name+price row, the fixed description slot, and the
-/// FULL-WIDTH 44px action footer (approved v4 anatomy, component specs §3).
-/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 15 (the
-/// description slot) + 8 + 44 (action) + 10 = 108; at 2x the ladder drops
-/// the description slot and the row grows to ~35 → 8 + 35 + 8 + 44 + 10 =
-/// 105 — so 118 holds both with headroom.
-const double kPosMenuCardBodyHeight = 118;
+/// The card's FIXED content zone — the one-baseline name+price row, the
+/// fixed description slot, and the 44px action ZONE (006: the zone hosts a
+/// 38px VISIBLE bar with 3px transparent insets; the hit box stays 44).
+/// Measured at scale 1 (007 raised the image-to-title pad to 10):
+/// 10 + ~21 (name/price baseline row) + 2 + 30 (TWO description lines) +
+/// 44 (action zone) + 10 = 117; the tightest bucket is textScale 1.6 (one
+/// 19px line + a taller row, ~118); at 2x the slot is gone and the row
+/// grows to ~35 → 99 — so 122 holds every bucket (scale-bucket coverage in
+/// pos_card_polish_006_test A4).
+const double kPosMenuCardBodyHeight = 122;
 
 /// The cell height for a card [cellWidth] wide: the INSET 4:3 image band
 /// (see [kPosCardImageInset] / [kPosCardImageAspect] in pos_palette.dart)
@@ -539,7 +577,9 @@ class PosMenuGridGeometry {
     );
     final compact = mode == PosLayoutMode.compactLandscape;
     final padding = compact ? 12.0 : RestoflowSpacing.lg;
-    final spacing = compact ? 10.0 : RestoflowSpacing.md;
+    // 007 FRAMELESS: with the card box gone, the GAP is what separates
+    // products — one step wider (14) on roomy modes; compact keeps 10.
+    final spacing = compact ? 10.0 : 14.0;
     final columns = posMenuColumnsFor(mode);
     final content = availableWidth - 2 * padding;
     final cellWidth = (content - (columns - 1) * spacing) / columns;
@@ -579,7 +619,8 @@ PosMenuGridGeometry posMenuGridGeometryOf(
   final mode = posLayoutModeFor(width: size.width, height: size.height);
   final compact = mode == PosLayoutMode.compactLandscape;
   final padding = compact ? 12.0 : RestoflowSpacing.lg;
-  final spacing = compact ? 10.0 : RestoflowSpacing.md;
+  // 007: matches PosMenuGridGeometry.of — the gap separates products now.
+  final spacing = compact ? 10.0 : 14.0;
   final columns = posMenuColumnsFor(mode);
   final content = availableWidth - 2 * padding;
   return PosMenuGridGeometry(

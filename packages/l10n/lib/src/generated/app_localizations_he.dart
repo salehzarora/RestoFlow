@@ -5617,4 +5617,29 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posSending => 'שולח…';
+
+  @override
+  String get posBrandName => 'רסטופלו';
+
+  @override
+  String get posBrandTagline => 'נקודת מכירה';
+
+  @override
+  String get posDeviceThemeTitle => 'מראה המכשיר הזה';
+
+  @override
+  String get posDeviceThemeHelp =>
+      'בחרו את זהות הצבעים של הקופה הזו. השינוי חל על הסרגל, הכפתורים וההדגשות במכשיר זה בלבד — ואינו משפיע על הזמנות, סטטוסים או קבלות.';
+
+  @override
+  String get posDeviceThemeNavyEmber => 'כחול כהה ונחושת';
+
+  @override
+  String get posDeviceThemeForestCharcoal => 'ירוק יער ונחושת';
+
+  @override
+  String get posDeviceThemeAubergineSlate => 'חציל ולבנה';
+
+  @override
+  String get posDeviceThemeSaffronGold => 'פחם וזהב';
 }

@@ -387,13 +387,16 @@ void main() {
   // 5. EXISTING APP-BAR BEHAVIOUR PRESERVED.
   // ─────────────────────────────────────────────────────────────────────────
   group('009-5 existing behaviour preserved', () {
-    testWidgets('all five actions, the brand tile and the title survive', (
+    testWidgets('all five actions, the brand tile and the wordmark survive', (
       tester,
     ) async {
       await _pump(tester, width: 1280, logo: _logoAsset());
 
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      expect(find.text(l10n.posAppTitle), findsOneWidget);
+      // POS-THEME-NAVBAR-POLISH-001: the single title became the STACKED
+      // wordmark — brand name over the smaller product line.
+      expect(find.text(l10n.posBrandName), findsOneWidget);
+      expect(find.text(l10n.posBrandTagline), findsOneWidget);
       expect(find.byKey(kBrandTile), findsOneWidget);
       for (final neighbour in _neighbours()) {
         expect(neighbour, findsOneWidget);

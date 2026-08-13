@@ -10401,6 +10401,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sending…'**
   String get posSending;
+
+  /// First line of the stacked top-bar wordmark (POS-THEME-NAVBAR-POLISH-001): the brand name alone.
+  ///
+  /// In en, this message translates to:
+  /// **'RestoFlow'**
+  String get posBrandName;
+
+  /// Second, smaller line of the stacked top-bar wordmark: the product line under the brand name.
+  ///
+  /// In en, this message translates to:
+  /// **'Point of Sale'**
+  String get posBrandTagline;
+
+  /// Device-settings section header for the per-device THEME choice (primary + action color pair). Appearance only — recolors structure and action accents, never semantic states.
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s theme'**
+  String get posDeviceThemeTitle;
+
+  /// Helper line under the device-theme section header.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick this till\'s color identity. It changes the bar, buttons and highlights on this device only — order flow, statuses and receipts are unaffected.'**
+  String get posDeviceThemeHelp;
+
+  /// Name of the default navy + ember orange theme preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Navy & Ember'**
+  String get posDeviceThemeNavyEmber;
+
+  /// Name of the forest-green structural theme preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest & Ember'**
+  String get posDeviceThemeForestCharcoal;
+
+  /// Name of the aubergine structural theme preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Aubergine & Brick'**
+  String get posDeviceThemeAubergineSlate;
+
+  /// Name of the charcoal + saffron gold theme preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Charcoal & Gold'**
+  String get posDeviceThemeSaffronGold;
 }
 
 class _AppLocalizationsDelegate

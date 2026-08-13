@@ -2288,11 +2288,16 @@ class _CartFooter extends StatelessWidget {
                     // POS-SUBMIT-GUARD-001: an explicit primary-tinted spinner (the
                     // disabled foreground would otherwise wash it out) marks the
                     // in-flight submit until the confirmation replaces the cart.
+                    // POS-THEME-NAVBAR-POLISH-001: the rounded send glyph —
+                    // softer, matching the rounded visual system; still the
+                    // unmistakable "send" symbol, auto-mirrored inline-forward
+                    // in RTL exactly like the sharp variant. Spinner and
+                    // disabled states unchanged.
                     icon: submitting
                         ? RestoflowInlineSpinner(
                             color: theme.colorScheme.primary,
                           )
-                        : const Icon(Icons.send),
+                        : const Icon(Icons.send_rounded),
                     label: Text(sendLabelOverride ?? l10n.posSendOrder),
                     // POS-LOCAL: the shared `RestoflowButtonStyles.big` is NOT
                     // modified — Send is simply the one control on this screen
@@ -2339,10 +2344,13 @@ class _CartFooter extends StatelessWidget {
                           shadowColor: WidgetStateProperty.all(
                             Colors.transparent,
                           ),
+                          // The label ink comes from the PAIR: white on the
+                          // dark actions, near-black on the light gold — so
+                          // the CTA clears contrast under every preset.
                           foregroundColor: WidgetStateProperty.resolveWith(
                             (states) => states.contains(WidgetState.disabled)
                                 ? kPosDisabledFg
-                                : Colors.white,
+                                : PosThemePair.of(context).onAction,
                           ),
                         ),
                   ),

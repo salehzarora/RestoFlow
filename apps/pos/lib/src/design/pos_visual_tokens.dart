@@ -66,6 +66,8 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     required this.actionDeep,
     required this.actionMark,
     required this.actionSoft,
+    this.onAction = Colors.white,
+    this.wire = 'custom',
   });
 
   /// Derives the lightness steps from a bare {primary, action} pair — the
@@ -73,6 +75,8 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
   factory PosThemePair.derive({
     required Color primary,
     required Color action,
+    Color onAction = Colors.white,
+    String wire = 'custom',
   }) => PosThemePair(
     primary: primary,
     primaryHi: Color.lerp(primary, Colors.white, 0.12)!,
@@ -82,6 +86,8 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     actionDeep: Color.lerp(action, Colors.black, 0.14)!,
     actionMark: Color.lerp(action, Colors.white, 0.08)!,
     actionSoft: Color.lerp(action, Colors.white, 0.44)!,
+    onAction: onAction,
+    wire: wire,
   );
 
   /// Structure: navbar, segmented thumb, Add buttons, phone bottom bar.
@@ -107,6 +113,15 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
 
   /// Soft action accents on the navy bar (cart glyph, count-chip bed).
   final Color actionSoft;
+
+  /// The CTA/label ink ON [action] surfaces. White for the dark-enough
+  /// actions; a near-black ink for light golds, so the Send label always
+  /// clears contrast.
+  final Color onAction;
+
+  /// Persisted preset identity (POS-THEME-NAVBAR-POLISH-001). Never rename a
+  /// wire value without an adoption path.
+  final String wire;
 
   /// The primary structural gradient (brand tile, Add buttons, thumb).
   LinearGradient get primaryGradient => LinearGradient(
@@ -142,25 +157,47 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
     actionDeep: Color(0xFFBE531F),
     actionMark: Color(0xFFE8722C),
     actionSoft: Color(0xFFE8B98C),
+    wire: 'navy_ember',
   );
 
-  /// Shipped presets (handoff §v4): the default plus three alternates a
-  /// restaurant can adopt without any other surface changing.
+  /// POS-THEME-NAVBAR-POLISH-001 — Forest Green + Charcoal: deep green
+  /// structure, the shared ember action family (known-good CTA contrast).
+  static final PosThemePair forestCharcoal = PosThemePair.derive(
+    primary: const Color(0xFF1E4D3B),
+    action: const Color(0xFFD9642B),
+    wire: 'forest_charcoal',
+  );
+
+  /// Aubergine + Slate: deep aubergine structure with a warm brick action.
+  static final PosThemePair aubergineSlate = PosThemePair.derive(
+    primary: const Color(0xFF44264A),
+    action: const Color(0xFFC65A4B),
+    wire: 'aubergine_slate',
+  );
+
+  /// Saffron/Gold + Charcoal: charcoal structure, gold action — the one pair
+  /// whose action is light, so its CTA ink is a near-black ([onAction]).
+  static final PosThemePair saffronGold = PosThemePair.derive(
+    primary: const Color(0xFF33312C),
+    action: const Color(0xFFD89A2B),
+    onAction: const Color(0xFF231A08),
+    wire: 'saffron_gold',
+  );
+
+  /// The curated device-theme presets (POS-THEME-NAVBAR-POLISH-001): a small,
+  /// tasteful set. Semantic + device-accent colours are independent of every
+  /// one of them.
   static final List<PosThemePair> presets = [
     navyEmber,
-    PosThemePair.derive(
-      primary: const Color(0xFF14181D),
-      action: const Color(0xFF1F9D55),
-    ),
-    PosThemePair.derive(
-      primary: const Color(0xFF4A1F2B),
-      action: const Color(0xFFC9A227),
-    ),
-    PosThemePair.derive(
-      primary: const Color(0xFF0F4C4C),
-      action: const Color(0xFFE2725B),
-    ),
+    forestCharcoal,
+    aubergineSlate,
+    saffronGold,
   ];
+
+  /// Wire lookup for the persisted device choice. Unknown/absent tokens fall
+  /// back to the default pair — a bad stored value must never break a till.
+  static PosThemePair fromWire(String? wire) =>
+      presets.firstWhere((p) => p.wire == wire, orElse: () => navyEmber);
 
   /// The active pair, falling back to [navyEmber] when the ambient theme does
   /// not carry the extension (bare test themes).
@@ -174,6 +211,8 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
       : PosThemePair.derive(
           primary: primary ?? this.primary,
           action: action ?? this.action,
+          onAction: onAction,
+          wire: wire,
         );
 
   @override
@@ -188,13 +227,15 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
       actionDeep: Color.lerp(actionDeep, other.actionDeep, t)!,
       actionMark: Color.lerp(actionMark, other.actionMark, t)!,
       actionSoft: Color.lerp(actionSoft, other.actionSoft, t)!,
+      onAction: Color.lerp(onAction, other.onAction, t)!,
+      wire: t < 0.5 ? wire : other.wire,
     );
   }
 }
 
-/// Approved warm neutrals (tokens doc §1/§8) — the card outline is the one
-/// deliberately COOL line left on the white surfaces so cards keep a crisp
-/// edge against the warm canvas.
+/// The deliberately COOL card edge (tokens doc §8). 007 FRAMELESS: no longer
+/// always-on — it appears only as the HOVER/FOCUS separation edge on the
+/// otherwise frameless tile.
 const Color kPosCardOutline = Color(0xFFDEE5F0);
 
 /// Cart row separators.
@@ -217,6 +258,27 @@ const Color kPosNavbarInk = Color(0xFFE5EBF4);
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).
 const List<BoxShadow> kPosPanelFloatShadow = <BoxShadow>[
   BoxShadow(color: Color(0x1416263B), offset: Offset(0, 8), blurRadius: 28),
+];
+
+/// POS-FRAMELESS-CARD-POLISH-007 — the product IMAGE TILE's signature
+/// silhouette: three 16px corners and ONE small 5px corner at the bottom
+/// inline-START (where the title begins). Directional, so it mirrors
+/// intentionally between RTL and LTR; restrained on purpose — a quiet
+/// asymmetric character, not a decorative cut.
+const BorderRadiusDirectional kPosImageTileRadius =
+    BorderRadiusDirectional.only(
+      topStart: Radius.circular(16),
+      topEnd: Radius.circular(16),
+      bottomStart: Radius.circular(5),
+      bottomEnd: Radius.circular(16),
+    );
+
+/// The image tile's soft RESTING shadow — the one floating element of the
+/// frameless card (the card shell itself carries no rest shadow). Sized to
+/// live inside the tile's 6px card insets: it reads as a soft under-tile
+/// cue, never a bleed into the neighbouring cell.
+const List<BoxShadow> kPosImageTileShadow = <BoxShadow>[
+  BoxShadow(color: Color(0x1716263B), offset: Offset(0, 2), blurRadius: 8),
 ];
 
 /// The default per-device secondary accent (Mint Leaf). The live value is a
@@ -271,8 +333,9 @@ const List<BoxShadow> kPosToastShadow = <BoxShadow>[
   BoxShadow(color: Color(0x2E0B1526), offset: Offset(0, 8), blurRadius: 24),
 ];
 
-/// Radius ranking (POS_MAIN_VISUAL_SPEC §5): card 14 > Send 13 > controls 12
-/// > track 10 > pills/badges 7. Card/Send/control values already live in
+/// Radius ranking: image tile 16 (007 — the floating hero outranks its
+/// hover-edge card) > card 14 > Send 13 > controls 12 > track 10 >
+/// pills/badges 7. Card/Send/control values already live in
 /// `pos_palette.dart` (`kPosCardRadius`, `kPosSendRadius`, `RestoflowRadii.md`);
 /// these two complete the published scale.
 const double kPosBadgeRadius = 7;

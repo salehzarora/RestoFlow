@@ -8,9 +8,11 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/design/pos_motion.dart';
 import 'package:restoflow_pos/src/design/pos_theme.dart';
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart' show PosMenuScreen;
 import 'package:restoflow_pos/src/pos_palette.dart';
 import 'package:restoflow_pos/src/state/pos_device_accent.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
+import 'package:restoflow_pos/src/state/pos_device_theme.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -113,11 +115,20 @@ void main() {
       expect(t.titleLarge!.fontFamilyFallback, kPosFontFallbacks);
     });
 
-    test('B2. the theme is otherwise the shared light brand theme '
-        '(colors untouched)', () {
+    test('B2. the theme derives from the shared light brand theme; the '
+        'PRIMARY role follows the device pair '
+        '(POS-THEME-NAVBAR-POLISH-001)', () {
       final pos = posPremiumTheme();
       final base = restoflowLightBrandTheme();
-      expect(pos.colorScheme.primary, base.colorScheme.primary);
+      // Default pair: the primary role is the pair's midnight navy.
+      expect(pos.colorScheme.primary, PosThemePair.navyEmber.primary);
+      // A non-default pair genuinely re-leads the theme — a green preset
+      // makes the primary role green, not navy-with-green-corners.
+      expect(
+        posPremiumTheme(pair: PosThemePair.forestCharcoal).colorScheme.primary,
+        PosThemePair.forestCharcoal.primary,
+      );
+      // Everything else still derives from the shared brand theme.
       expect(pos.scaffoldBackgroundColor, base.scaffoldBackgroundColor);
       expect(
         pos.extension<RestoflowBrandPalette>(),
@@ -215,6 +226,128 @@ void main() {
         );
       },
     );
+  });
+
+  group('C2. Device THEME state (POS-THEME-NAVBAR-POLISH-001)', () {
+    test('T1. fromWire round-trips every preset and falls back to '
+        'navy+ember', () {
+      for (final p in PosThemePair.presets) {
+        expect(PosThemePair.fromWire(p.wire).wire, p.wire);
+      }
+      expect(PosThemePair.fromWire(null).wire, 'navy_ember');
+      expect(PosThemePair.fromWire('disco-zebra').wire, 'navy_ember');
+    });
+
+    test('T2. defaults to navy+ember; setTheme persists under the device '
+        'namespace and a fresh container reads it back', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          posPrinterScopeSegmentProvider.overrideWith((ref) => 'dev-9'),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(
+        (await container.read(posDeviceThemeProvider.future)).wire,
+        'navy_ember',
+      );
+      await container
+          .read(posDeviceThemeProvider.notifier)
+          .setTheme(PosThemePair.forestCharcoal);
+      expect(
+        container.read(posDeviceThemePairProvider).wire,
+        'forest_charcoal',
+      );
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString('restoflow.pos.device_theme.dev-9'),
+        'forest_charcoal',
+      );
+
+      final fresh = ProviderContainer(
+        overrides: [
+          posPrinterScopeSegmentProvider.overrideWith((ref) => 'dev-9'),
+        ],
+      );
+      addTearDown(fresh.dispose);
+      expect(
+        (await fresh.read(posDeviceThemeProvider.future)).wire,
+        'forest_charcoal',
+      );
+    });
+
+    test('T3. every preset keeps the CTA readable and never impersonates a '
+        'semantic status', () {
+      double contrast(Color a, Color b) {
+        final la = a.computeLuminance();
+        final lb = b.computeLuminance();
+        final hi = la > lb ? la : lb;
+        final lo = la > lb ? lb : la;
+        return (hi + 0.05) / (lo + 0.05);
+      }
+
+      final semantic = RestoflowSemanticColors.of(Brightness.light);
+      final statuses = {
+        semantic.success,
+        semantic.warning,
+        semantic.danger,
+        semantic.info,
+      };
+      for (final p in PosThemePair.presets) {
+        // HONEST BASELINE: the owner-approved merged design ships the
+        // default white-on-ember CTA at 3.62:1 — below the 4.5 nominal for
+        // its 16/800 label (WCAG's large-bold discount starts at 18.66px),
+        // an owner-accepted trade. The floor here is therefore pinned AT
+        // the shipped worst case: no preset may ever regress BELOW what has
+        // already shipped, and the gold pair proves the dark-ink escape
+        // hatch works (#231A08 on #D89A2B measures ~7.0:1).
+        expect(
+          contrast(p.onAction, p.action),
+          greaterThanOrEqualTo(3.6),
+          reason: '${p.wire}: CTA ink below the shipped worst-case floor',
+        );
+        // White structure labels must clear 4.5:1 on the pair's primary.
+        expect(
+          contrast(Colors.white, p.primary),
+          greaterThanOrEqualTo(4.5),
+          reason: '${p.wire}: white ink unreadable on its primary',
+        );
+        // The identity colours never equal a semantic status colour.
+        expect(statuses.contains(p.primary), isFalse, reason: p.wire);
+        expect(statuses.contains(p.action), isFalse, reason: p.wire);
+      }
+    });
+
+    testWidgets('T4. a non-default pair genuinely re-leads the screen: the '
+        'top bar paints the pair primary', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'restoflow.pos.device_theme.test-dev': 'forest_charcoal',
+      });
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            posPrinterScopeSegmentProvider.overrideWith((ref) => 'test-dev'),
+          ],
+          child: Consumer(
+            builder: (context, ref, _) => MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              theme: posPremiumTheme(
+                pair: ref.watch(posDeviceThemePairProvider),
+              ),
+              home: const PosMenuScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.backgroundColor, PosThemePair.forestCharcoal.primary);
+    });
   });
 
   group('D. Settings UI', () {
