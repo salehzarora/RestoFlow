@@ -27,16 +27,17 @@ import 'order_status_pills.dart';
 ///  * actions = the SAME [PosOrderActionsAssembly] verdicts the Orders sheet
 ///    renders; tapping a card opens the exact existing
 ///    [OrderDetailPreview.show] surface with them.
-///  * freshness = local writes repaint instantly (provider state); server
-///    truth arrives through the EXISTING resilience pull at its existing
-///    cadence, DEMAND-DRIVEN: the strip counts as a visible orders surface
-///    only while it is showing open orders AND the app is resumed (see
-///    [_OpenOrdersStripState._applyRegistration]). Event-driven invalidation
-///    (RF-058-style branch hints) is the intended primary freshness path but
-///    is BLOCKED on a backend authorization gate: the POS's anonymous device
-///    principal cannot pass the membership-only `realtime.messages` policy
-///    (rf058_kds_realtime_hints.sql), so the subscription requires an
-///    owner-approved migration. Nothing here may pretend otherwise.
+///  * freshness = local writes repaint instantly (provider state); REMOTE
+///    changes arrive event-driven through the branch-hint bridge
+///    (pos_orders_realtime_bridge.dart: RF-058 private broadcast hint →
+///    targeted authoritative refresh — never raw rows), which feeds the same
+///    collection this strip watches. The EXISTING resilience pull stays the
+///    fallback floor, DEMAND-DRIVEN: the strip counts as a visible orders
+///    surface only while it is showing open orders AND the app is resumed
+///    (see [_OpenOrdersStripState._applyRegistration]). NOTE: the device
+///    RECEIVE policy (pos_realtime_device_hints_013 migration) is LOCAL-ONLY
+///    until the owner approves the hosted apply — until then the hosted
+///    subscription authorizes nothing and polling remains the healer there.
 ///
 /// The strip hides COMPLETELY when no order is open (no empty-state band) and
 /// inherits the collection's operational window (today + yesterday) — the
