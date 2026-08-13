@@ -10509,6 +10509,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get posDeviceThemeCustomPreviewTitle;
+
+  /// POS-OPEN-ORDERS-STRIP-011: elapsed-open time under one minute on an open-order card.
+  ///
+  /// In en, this message translates to:
+  /// **'now'**
+  String get posOpenOrdersElapsedNow;
+
+  /// Compact elapsed-open time in minutes on an open-order card.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String posOpenOrdersElapsedMinutes(int minutes);
+
+  /// Compact elapsed-open time above one hour on an open-order card.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h {minutes}m'**
+  String posOpenOrdersElapsedHoursMinutes(int hours, int minutes);
 }
 
 class _AppLocalizationsDelegate

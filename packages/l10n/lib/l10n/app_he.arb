@@ -1769,6 +1769,9 @@
   "posDeviceThemeCustomCancel": "ביטול",
   "posDeviceThemeCustomReset": "חזרה לברירת המחדל",
   "posDeviceThemeCustomPreviewTitle": "תצוגה מקדימה",
+  "posOpenOrdersElapsedNow": "עכשיו",
+  "posOpenOrdersElapsedMinutes": "לפני {minutes} דק׳",
+  "posOpenOrdersElapsedHoursMinutes": "לפני {hours} שע׳ {minutes} דק׳",
   "posDeviceThemeAubergineSlate": "חציל ולבנה",
   "posDeviceThemeSaffronGold": "פחם וזהב"
 }

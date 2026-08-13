@@ -3882,5 +3882,11 @@
   "posDeviceThemeCustomReset": "Reset to default",
   "@posDeviceThemeCustomReset": {"description": "Button restoring the default preset theme from the custom editor."},
   "posDeviceThemeCustomPreviewTitle": "Preview",
-  "@posDeviceThemeCustomPreviewTitle": {"description": "Caption above the live custom-theme preview card."}
+  "@posDeviceThemeCustomPreviewTitle": {"description": "Caption above the live custom-theme preview card."},
+  "posOpenOrdersElapsedNow": "now",
+  "@posOpenOrdersElapsedNow": {"description": "POS-OPEN-ORDERS-STRIP-011: elapsed-open time under one minute on an open-order card."},
+  "posOpenOrdersElapsedMinutes": "{minutes} min",
+  "@posOpenOrdersElapsedMinutes": {"description": "Compact elapsed-open time in minutes on an open-order card.", "placeholders": {"minutes": {"type": "int"}}},
+  "posOpenOrdersElapsedHoursMinutes": "{hours}h {minutes}m",
+  "@posOpenOrdersElapsedHoursMinutes": {"description": "Compact elapsed-open time above one hour on an open-order card.", "placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
 }

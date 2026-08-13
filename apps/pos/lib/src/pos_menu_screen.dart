@@ -19,6 +19,7 @@ import 'widgets/language_selector.dart';
 import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
+import 'widgets/open_orders_strip.dart';
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_identity_title.dart';
 import 'widgets/pos_bottom_bar.dart';
@@ -326,6 +327,13 @@ class _MenuPane extends ConsumerWidget {
             itemCounts: _categoryCounts(menu),
           );
 
+    // POS-OPEN-ORDERS-STRIP-011: the strip needs the denser band exactly where
+    // the grid itself goes compact (the 1024x600 class of viewports).
+    final viewport = MediaQuery.sizeOf(context);
+    final compactStrip =
+        posLayoutModeFor(width: viewport.width, height: viewport.height) ==
+        PosLayoutMode.compactLandscape;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -333,6 +341,11 @@ class _MenuPane extends ConsumerWidget {
           itemCount: menu?.items.length,
           rail: menuAsync.isLoading ? const _CategoryRailSkeleton() : rail,
         ),
+        // POS-OPEN-ORDERS-STRIP-011: every currently-open order, one tap from
+        // its existing detail/actions surface. Renders NOTHING when no order
+        // is open, sits above every menu state (grid/skeleton/error), and
+        // never changes the grid's own geometry (width-driven only).
+        OpenOrdersStrip(compact: compactStrip),
         Expanded(
           child: menuAsync.when(
             loading: () => const _MenuSkeleton(),

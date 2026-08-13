@@ -43,6 +43,8 @@ import 'src/state/pos_shift_close_policy.dart';
 import 'src/state/draft_recovery_controller.dart';
 import 'src/state/ready_notifications_controller.dart';
 import 'src/state/recent_orders_controller.dart';
+import 'src/widgets/open_orders_strip.dart'
+    show posOpenOrdersElapsedTickProvider;
 import 'src/widgets/pos_sync_lifecycle.dart';
 
 Future<void> main() async {
@@ -214,6 +216,12 @@ List<Override> _posOverrides(
   if (includePeriodicWork)
     posSyncPollIntervalProvider.overrideWithValue(
       PosOrderSyncController.defaultPeriodicInterval,
+    ),
+  // POS-OPEN-ORDERS-STRIP-011: the strip's minute tick re-renders the
+  // ELAPSED text only — never a network pull. Null in tests.
+  if (includePeriodicWork)
+    posOpenOrdersElapsedTickProvider.overrideWithValue(
+      const Duration(minutes: 1),
     ),
   // PSC-001A: the persisted ready-notification envelope (cursor + records
   // + read state, one atomic write per scope key) and the ~7s foreground

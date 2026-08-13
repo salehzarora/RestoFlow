@@ -9,6 +9,8 @@ import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
+import 'package:restoflow_pos/src/widgets/order_confirmation.dart'
+    show OrderConfirmation;
 
 /// POS-SUBMIT-GUARD-001 harness: an outbox repo whose [enqueue] blocks on [_gate]
 /// so a submit can be held "in flight" while the test fires a second Send tap.
@@ -164,7 +166,16 @@ void main() {
 
     expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posOrderTypeDineIn), findsOneWidget); // type chip
-    expect(find.text('${l10n.posTableLabel} T1'), findsOneWidget); // table chip
+    // POS-OPEN-ORDERS-STRIP-011: the freshly-submitted OPEN order now also
+    // appears on the menu's open-orders strip with the same "Table T1" meta,
+    // so the CONFIRMATION chip is asserted within its own surface.
+    expect(
+      find.descendant(
+        of: find.byType(OrderConfirmation),
+        matching: find.text('${l10n.posTableLabel} T1'),
+      ),
+      findsOneWidget, // table chip
+    );
     expect(find.byKey(const Key('sync-status-card')), findsOneWidget);
   });
 

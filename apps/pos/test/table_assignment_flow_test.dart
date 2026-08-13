@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
+import 'package:restoflow_pos/src/widgets/order_confirmation.dart'
+    show OrderConfirmation;
 
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
@@ -233,7 +235,16 @@ void main() {
 
     expect(find.text(l10n.posOrderPendingTitle), findsOneWidget);
     expect(find.text(l10n.posOrderTypeDineIn), findsOneWidget); // the chip
-    expect(find.text('${l10n.posTableLabel} T1'), findsOneWidget); // table chip
+    // POS-OPEN-ORDERS-STRIP-011: the freshly-submitted OPEN order now also
+    // appears on the menu's open-orders strip with the same "Table T1" meta,
+    // so the CONFIRMATION chip is asserted within its own surface.
+    expect(
+      find.descendant(
+        of: find.byType(OrderConfirmation),
+        matching: find.text('${l10n.posTableLabel} T1'),
+      ),
+      findsOneWidget, // table chip
+    );
   });
 
   testWidgets('renders localized RTL chrome in Arabic', (tester) async {

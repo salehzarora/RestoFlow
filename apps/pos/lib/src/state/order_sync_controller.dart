@@ -310,7 +310,12 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// `outboxAutoSweepIntervalProvider` uses). That keeps a real repeating Timer out
   /// of the widget tests, where a live periodic timer makes `pumpAndSettle` hang
   /// forever waiting for a tick that never stops coming.
-  void addVisibleConsumer() {
+  /// POS-OPEN-ORDERS-STRIP-011: [syncImmediately] lets an ALWAYS-MOUNTED
+  /// surface (the open-orders strip) arm the periodic heal without firing the
+  /// startup push-sweep+pull a MODAL surface wants on open — at app start the
+  /// lifecycle owner already runs that exact sequence, and doubling it from
+  /// the strip's initState re-sweeps the outbox on every menu mount.
+  void addVisibleConsumer({bool syncImmediately = true}) {
     _visibleConsumers++;
     final interval = ref.read(posSyncPollIntervalProvider);
     if (_visibleConsumers == 1 && interval != null) {
@@ -320,7 +325,7 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         if (_inFlight == null) unawaited(syncNow(pushFirst: false));
       });
     }
-    unawaited(syncNow());
+    if (syncImmediately) unawaited(syncNow());
   }
 
   /// The surface went away. When the last one does, polling STOPS — a POS in a
