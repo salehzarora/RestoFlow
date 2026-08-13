@@ -167,19 +167,54 @@ void main() {
   });
 
   group('B. the full uncropped product image', () {
-    testWidgets('B1. the card photo uses CONTAIN — never cover/crop/zoom — '
-        'centered on a quiet letterbox bed', (tester) async {
+    testWidgets('B1. SMART CONTAIN (008): the crisp foreground stays the '
+        'complete CONTAIN-fit photo; the SAME source fills the bands as a '
+        'subordinate COVER echo under a scrim', (tester) async {
       await pump(tester, item(imageUrl: 'https://img.example/x.png'));
-      // (cacheWidth wraps the NetworkImage in a ResizeImage — find by type.)
-      final image = tester.widget<Image>(find.byType(Image));
-      expect(image.fit, BoxFit.contain, reason: 'the POS must not crop');
-      expect(image.alignment, Alignment.center);
-      // The letterbox bed behind the photo is the quiet warm neutral.
+      // Exactly TWO layers of the ONE image.
+      final images = tester
+          .widgetList<Image>(find.byType(Image))
+          .toList(growable: false);
+      expect(images, hasLength(2));
+      final background = images.first;
+      final foreground = images.last;
+      // Foreground = source of truth: contain, centered, never cropped.
+      expect(foreground.fit, BoxFit.contain, reason: 'the POS must not crop');
+      expect(foreground.alignment, Alignment.center);
+      // Background = the fill echo: cover, painted UNDER the foreground.
+      expect(background.fit, BoxFit.cover);
+      // Both layers resolve the SAME provider (same URL, same cacheWidth →
+      // one cached decode). cacheWidth wraps NetworkImage in ResizeImage.
+      String urlOf(Image i) {
+        final p = i.image;
+        return p is ResizeImage
+            ? (p.imageProvider as NetworkImage).url
+            : (p as NetworkImage).url;
+      }
+
+      expect(urlOf(background), urlOf(foreground));
+      expect(background.image, equals(foreground.image));
+      // The subordination scrim sits BETWEEN the two layers.
+      final stack = find
+          .ancestor(of: find.byType(Image).first, matching: find.byType(Stack))
+          .first;
+      expect(
+        find.descendant(
+          of: stack,
+          matching: find.byWidgetPredicate(
+            (w) => w is ColoredBox && w.color == const Color(0xB8FBFAF6),
+          ),
+        ),
+        findsOneWidget,
+      );
+      // The warm bed remains the base under everything.
       final bed = tester.widget<ColoredBox>(
         find
             .ancestor(
-              of: find.byWidget(image),
-              matching: find.byType(ColoredBox),
+              of: find.byWidget(foreground),
+              matching: find.byWidgetPredicate(
+                (w) => w is ColoredBox && w.color == kPosTotalsBed,
+              ),
             )
             .first,
       );
@@ -189,8 +224,10 @@ void main() {
     testWidgets('B2. a failed image still falls back to the designed '
         'category band (unchanged)', (tester) async {
       // The test HTTP client refuses every request, so the network image
-      // errors — the errorBuilder must render the tinted category scene
-      // (its composed soft circles), and the card stays healthy.
+      // errors — the FOREGROUND's errorBuilder must render the tinted
+      // category scene (its composed soft circles) while the BACKGROUND
+      // layer renders NOTHING (008: never two fallbacks), and the card
+      // stays healthy.
       await pump(tester, item(imageUrl: 'https://img.example/broken.png'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -202,6 +239,15 @@ void main() {
       );
       expect(circles, findsWidgets, reason: 'the designed fallback scene');
       expect(find.text('Lamb Shawarma'), findsOneWidget);
+      // Exactly ONE category glyph inside the band — the background layer
+      // must not have produced a duplicate fallback scene.
+      expect(
+        find.descendant(
+          of: find.byType(AspectRatio),
+          matching: find.byWidgetPredicate((w) => w is Icon),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('B3. the no-image fallback is untouched', (tester) async {

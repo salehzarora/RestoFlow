@@ -297,9 +297,11 @@ void main() {
       debugNetworkImageHttpClientProvider = null;
     }
 
-    // The photo painted (a RawImage frame exists) and the category-icon
-    // fallback did NOT render; the 220x188 cell lays out without overflow.
-    expect(find.byType(RawImage), findsOneWidget);
+    // The photo painted — 008 SMART CONTAIN renders it as TWO frames of the
+    // ONE decoded image (the subordinate cover echo + the crisp contain
+    // foreground) — and the category-icon fallback did NOT render; the cell
+    // lays out without overflow.
+    expect(find.byType(RawImage), findsNWidgets(2));
     expect(find.byIcon(Icons.lunch_dining), findsNothing);
     expect(find.text('Burger'), findsOneWidget);
     expect(tester.takeException(), isNull);
