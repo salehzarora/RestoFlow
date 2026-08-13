@@ -135,6 +135,13 @@ class _Header extends StatelessWidget {
             : l10n.posOrderTypeTakeaway,
       if (order.tableLabel case final t? when t.trim().isNotEmpty)
         '${l10n.posTableLabel} $t',
+      // POS-OPEN-ORDERS-STRIP-011: the locally-known customer joins the
+      // header meta (same order as the Orders-row meta line), so customer +
+      // table read together at a glance. The authoritative name (incl. for
+      // branch-discovered orders) still renders in the body's customer block
+      // after the detail fetch — this line invents nothing.
+      if (order.order?.customerName case final c? when c.trim().isNotEmpty)
+        c.trim(),
     ].join(' · ');
 
     return Padding(
