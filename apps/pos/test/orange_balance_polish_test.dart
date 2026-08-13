@@ -358,12 +358,26 @@ void main() {
       // fill is the STRUCTURAL primary family, never the accent orange.
       await tester.pumpWidget(cardHost(unavailable: false));
       await tester.pumpAndSettle();
+      // 006: the visible bar became a SIBLING of the transparent button
+      // inside the footer Stack (compact 38px bar + full 44px hit zone), so
+      // it is found through their shared Stack rather than as an ancestor.
       final button = find.widgetWithIcon(FilledButton, Icons.add_shopping_cart);
+      final zone = find.ancestor(of: button, matching: find.byType(Stack));
       final wrapper = tester.widget<DecoratedBox>(
-        find.ancestor(of: button, matching: find.byType(DecoratedBox)).first,
+        find
+            .descendant(
+              of: zone.first,
+              matching: find.byWidgetPredicate(
+                (w) =>
+                    w is DecoratedBox &&
+                    w.decoration is BoxDecoration &&
+                    (w.decoration as BoxDecoration).gradient != null,
+              ),
+            )
+            .first,
       );
       final gradient =
-          (wrapper.decoration as BoxDecoration).gradient as LinearGradient;
+          (wrapper.decoration as BoxDecoration).gradient! as LinearGradient;
       final brand = RestoflowBrandPalette.of(Brightness.light);
       const pair = PosThemePair.navyEmber;
       expect(gradient.colors, [pair.primaryHi, pair.primary]);

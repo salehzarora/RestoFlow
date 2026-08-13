@@ -148,9 +148,9 @@ void main() {
           reason: 'the description inherits ambient direction',
         );
         final text = tester.widget<Text>(finder);
-        // REFERENCE-REDESIGN-002: the description is ONE subdued line on the
-        // food-first card (it sheds entirely at large text scales).
-        expect(text.maxLines, 1);
+        // 006: up to TWO subdued lines at ordinary scales (the compact
+        // footer bought the room; the slot sheds at large text scales).
+        expect(text.maxLines, 2);
         expect(text.overflow, TextOverflow.ellipsis);
         expect(
           text.style?.letterSpacing,

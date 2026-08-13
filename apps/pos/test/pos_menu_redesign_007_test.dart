@@ -209,7 +209,8 @@ void main() {
         'content zone (POS-DESIGN-HANDOFF-IMPLEMENTATION-004)', (tester) async {
       await _pumpScreen(tester, size: const Size(1440, 900));
       final delegate = _productGridDelegate(tester);
-      expect(kPosMenuCardBodyHeight, 118);
+      // 006: +4 body budget for the two-line description slot.
+      expect(kPosMenuCardBodyHeight, 122);
       // extent = (cellWidth - 2*inset)/aspect + inset + content, so the
       // implied cell width must be the grid's real cell width.
       final cellWidth =
@@ -502,14 +503,15 @@ void main() {
           reason: 'overflowed in ${locale.languageCode}',
         );
 
-        // 004 anatomy: ONE ellipsizing name line on the shared baseline row
-        // beside the price, ONE subdued description line below.
+        // 006 anatomy: ONE ellipsizing name line on the shared baseline row
+        // beside the price, up to TWO subdued description lines below (the
+        // room the compact footer bought).
         final nameText = tester.widget<Text>(find.text(name));
         expect(nameText.maxLines, 1);
         final desc = tester.widget<Text>(
           find.text('Slow-roasted lamb with tahini and sumac onion.'),
         );
-        expect(desc.maxLines, 1);
+        expect(desc.maxLines, 2);
 
         // The name and the price share ONE row (approved baseline row):
         // vertically overlapping, never stacked.

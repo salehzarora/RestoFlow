@@ -430,9 +430,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final text = tester.widget<Text>(find.text(long));
-      // REFERENCE-REDESIGN-002: ONE subdued description line on the
-      // food-first card.
-      expect(text.maxLines, 1);
+      // 006: up to TWO subdued description lines (the compact footer bought
+      // the room) — the F1 title's original two-line contract is back.
+      expect(text.maxLines, 2);
       expect(text.overflow, TextOverflow.ellipsis);
       expect(
         text.style?.letterSpacing ?? 0,

@@ -176,11 +176,18 @@ class MenuItemCard extends StatelessWidget {
     // lines instead of overflowing (POS-PRODUCT-DESCRIPTIONS-001: the
     // description has no tap target, no tooltip, no placeholder when absent).
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 ladder: the fixed description
-    // slot yields first; the name is ONE ellipsizing line beside the price on
-    // the approved shared baseline row; the price and the 44px action row
-    // never compress.
-    final showDescriptionSlot = textScale <= 1.15;
+    // 006 ladder: the compact footer freed room for the description — up to
+    // TWO short lines at ordinary scales, one at large scales, none at the
+    // largest; the slot height is fixed PER BUCKET so every card in a row
+    // stays aligned at image/title/description/price/action. The name+price
+    // baseline row and the 44px action zone never compress.
+    final descriptionLines = textScale <= 1.15
+        ? 2
+        : textScale <= 1.6
+        ? 1
+        : 0;
+    final descriptionSlotHeight = textScale <= 1.15 ? 30.0 : 19.0;
+    final showDescriptionSlot = descriptionLines > 0;
     final hasDescription = description != null && showDescriptionSlot;
     // POS-VISUAL-REDESIGN-PHASE-1-007: a WHITE card, not `colorScheme.surface`
     // — the green-tinted surface sat within three values of the hairline and
@@ -297,7 +304,7 @@ class MenuItemCard extends StatelessWidget {
                         if (showDescriptionSlot) ...[
                           const SizedBox(height: RestoflowSpacing.xxs),
                           SizedBox(
-                            height: 15,
+                            height: descriptionSlotHeight,
                             child: hasDescription
                                 ? Text(
                                     description,
@@ -307,7 +314,7 @@ class MenuItemCard extends StatelessWidget {
                                       height: 1.3,
                                       letterSpacing: 0,
                                     ),
-                                    maxLines: 1,
+                                    maxLines: descriptionLines,
                                     overflow: TextOverflow.ellipsis,
                                   )
                                 : null,
@@ -479,19 +486,29 @@ class _ImageBand extends StatelessWidget {
         if (item.imageUrl == null)
           _CategoryBand(category: category)
         else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final dpr = MediaQuery.devicePixelRatioOf(context);
-              final cacheW = (constraints.maxWidth * dpr).round();
-              return Image.network(
-                item.imageUrl!,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                cacheWidth: cacheW > 0 ? cacheW : null,
-                errorBuilder: (context, error, stackTrace) =>
-                    _CategoryBand(category: category),
-              );
-            },
+          // POS-THEME-NAVBAR-POLISH-006: the FULL uploaded photo, uncropped.
+          // `cover` silently cropped/zoomed any non-4:3 upload — the POS was
+          // the cropper, not storage. `contain` keeps the original aspect
+          // ratio and centers the complete image inside the uniform 4:3
+          // frame; a quiet warm neutral fills the letterbox bands (never
+          // generated content, never a recolored photo).
+          ColoredBox(
+            color: kPosTotalsBed,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final dpr = MediaQuery.devicePixelRatioOf(context);
+                final cacheW = (constraints.maxWidth * dpr).round();
+                return Image.network(
+                  item.imageUrl!,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  width: double.infinity,
+                  cacheWidth: cacheW > 0 ? cacheW : null,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _CategoryBand(category: category),
+                );
+              },
+            ),
           ),
         // POS-PREMIUM-VISUAL-POLISH-001: a soft navy-ink top scrim over real
         // photos only, so tag pills and the in-cart badge stay legible on a
@@ -732,22 +749,31 @@ class _CardAction extends StatelessWidget {
       // (states board 1e). Plain text — the pill on the photo carries the
       // key + danger tone + icon; this bar keeps the reason beside where the
       // add action would be, so the footer zone never reads as tappable.
-      return Container(
+      // 006: same 44px zone as the action, with the same COMPACT 38px
+      // visible bar, so every card in a row keeps one footer geometry.
+      return SizedBox(
         height: 44,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.xs),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1EEE7),
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            unavailableLabel!,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF8A8377),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(
+              horizontal: RestoflowSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1EEE7),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                unavailableLabel!,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF8A8377),
+                ),
+              ),
             ),
           ),
         ),
@@ -761,118 +787,131 @@ class _CardAction extends StatelessWidget {
     // The gradient + glow live on a wrapper (a FilledButton cannot paint a
     // gradient); the button itself goes transparent over it. Tonal and
     // disabled bars are flat and shadowless per the approved spec.
+    //
+    // 006: COMPACT footer — the VISIBLE bar slims to 38px (3px transparent
+    // insets) while the FilledButton keeps the full 44px layout box, so the
+    // effective touch target never drops below the pinned floor. Same
+    // full-width action, same callbacks and gates.
     final showGradient = enabled && !inCart;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        gradient: showGradient ? pair.primaryGradient : null,
-        color: showGradient
-            ? null
-            : !enabled
-            ? kPosDisabledBg
-            : kPosTonalAddBg,
-        boxShadow: showGradient
-            ? [
-                BoxShadow(
-                  color: pair.primary.withValues(alpha: 0.22),
-                  offset: const Offset(0, 4),
-                  blurRadius: 12,
-                ),
-              ]
-            : null,
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 44,
-        child: FilledButton(
-          onPressed: onAdd,
-          // A custom child instead of FilledButton.icon: the stock icon
-          // variant lays its label out INFLEXIBLY, which overflows the
-          // narrow approved cells at 2x text scale. Same canonical glyph,
-          // same label strings — the label just ellipsizes honestly.
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.add_shopping_cart,
-                size: RestoflowIconSizes.sm + 2,
+    return SizedBox(
+      width: double.infinity,
+      height: 44,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(11),
+                gradient: showGradient ? pair.primaryGradient : null,
+                color: showGradient
+                    ? null
+                    : !enabled
+                    ? kPosDisabledBg
+                    : kPosTonalAddBg,
+                boxShadow: showGradient
+                    ? [
+                        BoxShadow(
+                          color: pair.primary.withValues(alpha: 0.22),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                        ),
+                      ]
+                    : null,
               ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  inCart ? l10n.posAddMore : l10n.posAddToCart,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          FilledButton(
+            onPressed: onAdd,
+            // A custom child instead of FilledButton.icon: the stock icon
+            // variant lays its label out INFLEXIBLY, which overflows the
+            // narrow approved cells at 2x text scale. Same canonical glyph,
+            // same label strings — the label just ellipsizes honestly.
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.add_shopping_cart,
+                  size: RestoflowIconSizes.sm + 2,
                 ),
-              ),
-              if (inCart && inCartQuantity > 0) ...[
                 const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+                Flexible(
                   child: Text(
-                    '×$inCartQuantity',
-                    textDirection: TextDirection.ltr,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      color: pair.primary,
-                      fontFamily: kPosMoneyFontFamily,
-                      fontFamilyFallback: kPosMoneyFontFallbacks,
+                    inCart ? l10n.posAddMore : l10n.posAddToCart,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (inCart && inCartQuantity > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '×$inCartQuantity',
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: pair.primary,
+                        fontFamily: kPosMoneyFontFamily,
+                        fontFamilyFallback: kPosMoneyFontFallbacks,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
-          ),
-          style:
-              FilledButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: inCart ? pair.primary : Colors.white,
-                shadowColor: Colors.transparent,
-                disabledBackgroundColor: Colors.transparent,
-                disabledForegroundColor: kPosDisabledFg,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: RestoflowSpacing.sm,
-                ),
-                textStyle: theme.textTheme.labelLarge?.copyWith(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(RestoflowRadii.md),
+            ),
+            style:
+                FilledButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: inCart ? pair.primary : Colors.white,
+                  shadowColor: Colors.transparent,
+                  disabledBackgroundColor: Colors.transparent,
+                  disabledForegroundColor: kPosDisabledFg,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: RestoflowSpacing.sm,
                   ),
+                  textStyle: theme.textTheme.labelLarge?.copyWith(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(RestoflowRadii.md),
+                    ),
+                  ),
+                  animationDuration: RestoflowDurations.fast,
+                ).copyWith(
+                  overlayColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.pressed)) {
+                      return accent.withValues(alpha: 0.30);
+                    }
+                    if (states.contains(WidgetState.hovered)) {
+                      return inCart
+                          ? accent.withValues(alpha: 0.12)
+                          : pair.primaryDeep.withValues(alpha: 0.55);
+                    }
+                    return null;
+                  }),
+                  side: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.focused)) {
+                      return BorderSide(color: accent, width: 2);
+                    }
+                    return null;
+                  }),
                 ),
-                animationDuration: RestoflowDurations.fast,
-              ).copyWith(
-                overlayColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.pressed)) {
-                    return accent.withValues(alpha: 0.30);
-                  }
-                  if (states.contains(WidgetState.hovered)) {
-                    return inCart
-                        ? accent.withValues(alpha: 0.12)
-                        : pair.primaryDeep.withValues(alpha: 0.55);
-                  }
-                  return null;
-                }),
-                side: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.focused)) {
-                    return BorderSide(color: accent, width: 2);
-                  }
-                  return null;
-                }),
-              ),
-        ),
+          ),
+        ],
       ),
     );
   }

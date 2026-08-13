@@ -523,14 +523,15 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
   }
 }
 
-/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card's FIXED content zone —
-/// the one-baseline name+price row, the fixed description slot, and the
-/// FULL-WIDTH 44px action footer (approved v4 anatomy, component specs §3).
-/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 15 (the
-/// description slot) + 8 + 44 (action) + 10 = 108; at 2x the ladder drops
-/// the description slot and the row grows to ~35 → 8 + 35 + 8 + 44 + 10 =
-/// 105 — so 118 holds both with headroom.
-const double kPosMenuCardBodyHeight = 118;
+/// The card's FIXED content zone — the one-baseline name+price row, the
+/// fixed description slot, and the 44px action ZONE (006: the zone hosts a
+/// 38px VISIBLE bar with 3px transparent insets; the hit box stays 44).
+/// Measured at scale 1: 8 + ~21 (name/price baseline row) + 2 + 30 (TWO
+/// description lines — the room the compact footer bought) + 44 (action
+/// zone) + 10 = 115; at 1.6 the slot drops to one 19px line with a taller
+/// row (~116); at 2x the slot is gone and the row grows to ~35 → 97 — so
+/// 122 holds every bucket with headroom.
+const double kPosMenuCardBodyHeight = 122;
 
 /// The cell height for a card [cellWidth] wide: the INSET 4:3 image band
 /// (see [kPosCardImageInset] / [kPosCardImageAspect] in pos_palette.dart)
