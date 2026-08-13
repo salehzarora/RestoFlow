@@ -7,6 +7,7 @@ import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
     show kPosTotalsBed, kPosImageTileRadius;
 import 'package:restoflow_pos/src/pos_menu_screen.dart' show posMenuCardExtent;
+import 'package:restoflow_pos/src/pos_palette.dart' show kPosCardImageAspect;
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// POS-THEME-NAVBAR-POLISH-006 — the two product-card refinements:
@@ -167,51 +168,34 @@ void main() {
   });
 
   group('B. the full uncropped product image', () {
-    testWidgets('B1. SMART CONTAIN (008): the crisp foreground stays the '
-        'complete CONTAIN-fit photo; the SAME source fills the bands as a '
-        'subordinate COVER echo under a scrim', (tester) async {
+    testWidgets('B1. PRODUCT CARD V2 (009): exactly ONE real photo layer — '
+        'centered COVER in the near-square 1.1:1 media frame, no duplicated '
+        'backdrop, no echo, no scrim layer', (tester) async {
       await pump(tester, item(imageUrl: 'https://img.example/x.png'));
-      // Exactly TWO layers of the ONE image.
+      // ONE image, full stop — the 008 duplicate-echo is gone.
       final images = tester
           .widgetList<Image>(find.byType(Image))
           .toList(growable: false);
-      expect(images, hasLength(2));
-      final background = images.first;
-      final foreground = images.last;
-      // Foreground = source of truth: contain, centered, never cropped.
-      expect(foreground.fit, BoxFit.contain, reason: 'the POS must not crop');
-      expect(foreground.alignment, Alignment.center);
-      // Background = the fill echo: cover, painted UNDER the foreground.
-      expect(background.fit, BoxFit.cover);
-      // Both layers resolve the SAME provider (same URL, same cacheWidth →
-      // one cached decode). cacheWidth wraps NetworkImage in ResizeImage.
-      String urlOf(Image i) {
-        final p = i.image;
-        return p is ResizeImage
-            ? (p.imageProvider as NetworkImage).url
-            : (p as NetworkImage).url;
-      }
-
-      expect(urlOf(background), urlOf(foreground));
-      expect(background.image, equals(foreground.image));
-      // The subordination scrim sits BETWEEN the two layers.
-      final stack = find
-          .ancestor(of: find.byType(Image).first, matching: find.byType(Stack))
-          .first;
+      expect(images, hasLength(1));
+      final photo = images.single;
+      expect(photo.fit, BoxFit.cover, reason: 'single-image fill, mild crop');
+      expect(photo.alignment, Alignment.center);
+      // The 008 subordination scrim no longer exists anywhere in the card.
       expect(
-        find.descendant(
-          of: stack,
-          matching: find.byWidgetPredicate(
-            (w) => w is ColoredBox && w.color == const Color(0xB8FBFAF6),
-          ),
+        find.byWidgetPredicate(
+          (w) => w is ColoredBox && w.color == const Color(0xB8FBFAF6),
         ),
-        findsOneWidget,
+        findsNothing,
       );
-      // The warm bed remains the base under everything.
+      // The near-square media frame (mild-crop geometry).
+      expect(kPosCardImageAspect, 1.1);
+      final frame = tester.widget<AspectRatio>(find.byType(AspectRatio));
+      expect(frame.aspectRatio, kPosCardImageAspect);
+      // The warm bed remains the loading-frame base.
       final bed = tester.widget<ColoredBox>(
         find
             .ancestor(
-              of: find.byWidget(foreground),
+              of: find.byWidget(photo),
               matching: find.byWidgetPredicate(
                 (w) => w is ColoredBox && w.color == kPosTotalsBed,
               ),

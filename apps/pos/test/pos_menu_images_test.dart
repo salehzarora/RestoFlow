@@ -297,11 +297,10 @@ void main() {
       debugNetworkImageHttpClientProvider = null;
     }
 
-    // The photo painted — 008 SMART CONTAIN renders it as TWO frames of the
-    // ONE decoded image (the subordinate cover echo + the crisp contain
-    // foreground) — and the category-icon fallback did NOT render; the cell
-    // lays out without overflow.
-    expect(find.byType(RawImage), findsNWidgets(2));
+    // The photo painted as exactly ONE frame (009: the duplicate-echo
+    // experiment is removed) and the category-icon fallback did NOT render;
+    // the cell lays out without overflow.
+    expect(find.byType(RawImage), findsOneWidget);
     expect(find.byIcon(Icons.lunch_dining), findsNothing);
     expect(find.text('Burger'), findsOneWidget);
     expect(tester.takeException(), isNull);
