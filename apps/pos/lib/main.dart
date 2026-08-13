@@ -36,6 +36,8 @@ import 'src/state/pos_offline_state.dart'
     show
         kPosOfflineReconnectProbeInterval,
         posOfflineReconnectProbeIntervalProvider;
+import 'src/state/pos_orders_realtime_bridge.dart'
+    show posInvalidationSourceFactoryProvider;
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_receipt_logo.dart' show posReceiptLogoReaderProvider;
 import 'src/state/pos_session.dart';
@@ -271,6 +273,14 @@ List<Override> _posOverrides(
   // default-OFF if unread — never invents a tax the owner did not set).
   if (seams != null)
     posBranchTaxReaderProvider.overrideWithValue(seams.branchTax),
+  // POS-OPEN-ORDERS-REALTIME-GATE-013: the branch-hint listener factory
+  // over the SAME authenticated session (Disabled in degraded boots via the
+  // seam itself; demo/tests never reach this override and keep the provider
+  // default, which is Disabled too — zero sockets either way).
+  if (seams != null)
+    posInvalidationSourceFactoryProvider.overrideWithValue(
+      seams.invalidationSourceFactory,
+    ),
   // Device settings sprint (Part G): the pairing repo IS the device
   // session manager (unpair = best-effort server self-revoke + local
   // clear) — exposed to the settings sheet's Unpair control.
@@ -347,6 +357,9 @@ typedef PosDeviceSeams = ({
   DeviceShiftClosePolicyReader shiftClosePolicy,
   DeviceBranchTaxReader branchTax,
   UpgradableSyncTransport? upgradable,
+  // POS-OPEN-ORDERS-REALTIME-GATE-013: builds the branch-hint listener over
+  // the SAME authenticated client (Disabled in degraded/demo boots).
+  InvalidationSource Function(RealtimeScope scope) invalidationSourceFactory,
 });
 
 /// A settled POS boot result: seams (real or degraded) and/or the honest
@@ -362,6 +375,7 @@ typedef PosAnonymousDeviceSession = ({
   SyncRpcTransport transport,
   DeviceImageUrlResolver imageUrlResolver,
   DeviceReceiptLogoReader receiptLogoReader,
+  InvalidationSource Function(RealtimeScope scope) invalidationSourceFactory,
 });
 
 /// RF-161 + sprint + [POS-OFFLINE-OPERATIONS-002] Pass A: the POS device-auth
@@ -541,6 +555,9 @@ class PosBootCoordinator {
         secretStore: store,
       ),
       upgradable: upgradable,
+      // …and realtime is absent too (no authenticated client until the next
+      // full boot) — polling remains the resilience floor (D-010).
+      invalidationSourceFactory: (_) => const DisabledInvalidationSource(),
     );
   }
 
@@ -581,6 +598,9 @@ class PosBootCoordinator {
         secretStore: store,
       ),
       upgradable: null,
+      // POS-OPEN-ORDERS-REALTIME-GATE-013: branch-hint listener over the same
+      // anonymous session (server-gated by the device RECEIVE policy).
+      invalidationSourceFactory: session.invalidationSourceFactory,
     );
   }
 }

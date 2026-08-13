@@ -29,7 +29,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
-    show SyncRpcTransport;
+    show DisabledInvalidationSource, SyncRpcTransport;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/main.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart'
@@ -261,6 +261,9 @@ void main() {
           transport: realTransport,
           imageUrlResolver: FakeDeviceImageUrlResolver(),
           receiptLogoReader: _NullLogoReader(),
+          // 013: the scripted session exposes a disabled realtime factory —
+          // cold-boot behavior is identical with realtime absent.
+          invalidationSourceFactory: (_) => const DisabledInvalidationSource(),
         );
       },
     );
