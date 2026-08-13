@@ -7,6 +7,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
+import 'package:restoflow_pos/src/data/order_snapshot_repository.dart'
+    show PosSnapshotPage;
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart' show PosMenuScreen;
@@ -117,6 +119,48 @@ void _size(WidgetTester tester, [Size size = const Size(1400, 1000)]) {
 }
 
 Finder _card(String number) => find.byKey(Key('open-strip-order-$number'));
+
+/// Counts every snapshot RPC — F3 proves the strip's registration makes NONE
+/// of them by itself.
+class _CountingSnapshotRepo extends DemoOrderSnapshotRepository {
+  int windowCalls = 0;
+  int changeCalls = 0;
+  int orderCalls = 0;
+
+  @override
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
+    int limit = 50,
+    int windowDays = 2,
+  }) {
+    windowCalls++;
+    return super.fetchWindow(
+      before: before,
+      limit: limit,
+      windowDays: windowDays,
+    );
+  }
+
+  @override
+  Future<PosSnapshotPage> fetchChanges({
+    PosSyncCursor? cursor,
+    int limit = 50,
+    int windowDays = 2,
+  }) {
+    changeCalls++;
+    return super.fetchChanges(
+      cursor: cursor,
+      limit: limit,
+      windowDays: windowDays,
+    );
+  }
+
+  @override
+  Future<PosSnapshotPage> fetchOrders(List<String> orderIds) {
+    orderCalls++;
+    return super.fetchOrders(orderIds);
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -478,6 +522,146 @@ void main() {
       // binding here.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 2));
+    });
+  });
+
+  group('F. Freshness fallback — demand-driven, never an always-on poll', () {
+    ProviderContainer containerOf(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(PosMenuScreen)));
+
+    testWidgets('F1. the 30s heal poll is armed ONLY while the strip shows '
+        'open orders — an emptied strip disarms it', (tester) async {
+      _size(tester);
+      final store = await _seeded([_order('#U1', status: 'submitted')]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            posRecentOrdersStoreProvider.overrideWithValue(store),
+            orderSnapshotRepositoryProvider.overrideWithValue(
+              DemoOrderSnapshotRepository(),
+            ),
+            // A REAL interval, so arming is observable via isPolling. Never
+            // pumpAndSettle while it is armed — a periodic timer makes that
+            // wait forever; explicit pumps only.
+            posSyncPollIntervalProvider.overrideWithValue(
+              const Duration(seconds: 30),
+            ),
+            posSyncClockProvider.overrideWithValue(_clock),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: const PosMenuScreen(),
+          ),
+        ),
+      );
+      // Let recovery load + the post-frame registration run (explicit pumps,
+      // not pumpAndSettle).
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      final sync = containerOf(
+        tester,
+      ).read(posOrderSyncControllerProvider.notifier);
+      expect(_card('#U1'), findsOneWidget);
+      expect(sync.isPolling, isTrue, reason: 'open order -> heal poll armed');
+
+      // The order leaves the open state -> the strip empties -> the poll
+      // DISARMS (a parked idle till must not hit the server all night).
+      containerOf(tester)
+          .read(posRecentOrdersControllerProvider.notifier)
+          .markVoided(PosOrderIdentity.server('oid-#U1'), 'done');
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byKey(const Key('open-orders-strip')), findsNothing);
+      expect(sync.isPolling, isFalse, reason: 'empty strip -> poll released');
+
+      // Unmount cleanly so no timer leaks into the binding check.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('F2. backgrounding releases the poll; resuming re-arms it '
+        '(same rule as the other periodic work)', (tester) async {
+      _size(tester);
+      final store = await _seeded([_order('#U1', status: 'submitted')]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            posRecentOrdersStoreProvider.overrideWithValue(store),
+            orderSnapshotRepositoryProvider.overrideWithValue(
+              DemoOrderSnapshotRepository(),
+            ),
+            posSyncPollIntervalProvider.overrideWithValue(
+              const Duration(seconds: 30),
+            ),
+            posSyncClockProvider.overrideWithValue(_clock),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: const PosMenuScreen(),
+          ),
+        ),
+      );
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      final sync = containerOf(
+        tester,
+      ).read(posOrderSyncControllerProvider.notifier);
+      expect(sync.isPolling, isTrue);
+
+      // Walk the LEGAL transition chain down to paused and back.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        sync.isPolling,
+        isFalse,
+        reason: 'a backgrounded till must not sit there hitting the server',
+      );
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(sync.isPolling, isTrue, reason: 'resume re-arms the heal poll');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('F3. mounting the strip fires NO immediate order fetch '
+        '(syncImmediately: false — startup sync is the lifecycle owner\'s '
+        'job)', (tester) async {
+      _size(tester);
+      final repo = _CountingSnapshotRepo();
+      final store = await _seeded([_order('#U1', status: 'submitted')]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            posRecentOrdersStoreProvider.overrideWithValue(store),
+            orderSnapshotRepositoryProvider.overrideWithValue(repo),
+            posSyncPollIntervalProvider.overrideWithValue(null),
+            posSyncClockProvider.overrideWithValue(_clock),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: const PosMenuScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_card('#U1'), findsOneWidget);
+      expect(
+        repo.windowCalls + repo.changeCalls + repo.orderCalls,
+        0,
+        reason: 'the strip alone must trigger zero snapshot RPCs on mount',
+      );
     });
   });
 

@@ -28,14 +28,15 @@ import 'order_status_pills.dart';
 ///    renders; tapping a card opens the exact existing
 ///    [OrderDetailPreview.show] surface with them.
 ///  * freshness = local writes repaint instantly (provider state); server
-///    truth arrives through the EXISTING resilience pull —
-///    `addVisibleConsumer()` — at its existing cadence. Event-driven
-///    invalidation (RF-058-style branch hints) is the intended primary
-///    freshness path but is BLOCKED on a backend authorization gate: the
-///    POS's anonymous device principal cannot pass the membership-only
-///    `realtime.messages` policy (rf058_kds_realtime_hints.sql), so the
-///    subscription requires an owner-approved migration. Nothing here may
-///    pretend otherwise.
+///    truth arrives through the EXISTING resilience pull at its existing
+///    cadence, DEMAND-DRIVEN: the strip counts as a visible orders surface
+///    only while it is showing open orders AND the app is resumed (see
+///    [_OpenOrdersStripState._applyRegistration]). Event-driven invalidation
+///    (RF-058-style branch hints) is the intended primary freshness path but
+///    is BLOCKED on a backend authorization gate: the POS's anonymous device
+///    principal cannot pass the membership-only `realtime.messages` policy
+///    (rf058_kds_realtime_hints.sql), so the subscription requires an
+///    owner-approved migration. Nothing here may pretend otherwise.
 ///
 /// The strip hides COMPLETELY when no order is open (no empty-state band) and
 /// inherits the collection's operational window (today + yesterday) — the
@@ -58,26 +59,40 @@ class OpenOrdersStrip extends ConsumerStatefulWidget {
 /// `pumpAndSettle` can never hang on it.
 final posOpenOrdersElapsedTickProvider = Provider<Duration?>((ref) => null);
 
-class _OpenOrdersStripState extends ConsumerState<OpenOrdersStrip> {
+class _OpenOrdersStripState extends ConsumerState<OpenOrdersStrip>
+    with WidgetsBindingObserver {
   Timer? _elapsedTick;
+
+  /// DEMAND-DRIVEN visible-consumer registration (011 audit finding).
+  ///
+  /// The strip is NOT the modal the visible-consumer protocol was designed
+  /// for — it lives as long as the menu screen. Registering unconditionally
+  /// would arm the 30s heal pull for the whole session, backgrounded
+  /// included, violating the controller's own invariant ("a POS in a drawer
+  /// must not sit there hitting the server all night"). So the strip counts
+  /// as a visible orders surface ONLY while BOTH hold:
+  ///  * it is actually SHOWING open orders (an empty strip renders nothing
+  ///    and has nothing to heal), and
+  ///  * the app is RESUMED (same rule the ready poller / readiness heartbeat
+  ///    / reconnect probe already follow on background).
+  /// Registration never fires the immediate push-sweep+pull
+  /// (syncImmediately: false): startup/resume sync stays PosSyncLifecycle's
+  /// job; the sheet's own open-time sync is unchanged.
+  bool _registered = false;
+  bool _resumed = true;
+  bool _hasOpenOrders = false;
+
+  /// Captured at registration time — `ref` is not usable inside [dispose],
+  /// so the release path holds the notifier the way the Orders sheet does.
   PosOrderSyncController? _sync;
 
   @override
   void initState() {
     super.initState();
-    // Register as a VISIBLE consumer of the order-snapshot pull, like the
-    // Orders sheet: the existing resilience refresh (unchanged cadence) runs
-    // while the strip is mounted, and reference counting keeps sheet+strip
-    // to one timer. This is the FALLBACK healing path, not the primary
-    // freshness contract (see the class doc). Unlike the modal sheet, the
-    // strip does NOT fire the immediate push-sweep+pull: it mounts at app
-    // start, where PosSyncLifecycle already runs that exact sequence.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final sync = ref.read(posOrderSyncControllerProvider.notifier);
-      _sync = sync;
-      sync.addVisibleConsumer(syncImmediately: false);
-    });
+    WidgetsBinding.instance.addObserver(this);
+    _resumed =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     final tick = ref.read(posOpenOrdersElapsedTickProvider);
     if (tick != null) {
       _elapsedTick = Timer.periodic(tick, (_) {
@@ -87,9 +102,37 @@ class _OpenOrdersStripState extends ConsumerState<OpenOrdersStrip> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    _applyRegistration();
+  }
+
+  /// Reconciles the actual consumer registration with the wanted state.
+  /// Never called during build — build schedules it post-frame.
+  void _applyRegistration() {
+    if (!mounted) {
+      return;
+    }
+    final want = _resumed && _hasOpenOrders;
+    if (want == _registered) return;
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    if (want) {
+      sync.addVisibleConsumer(syncImmediately: false);
+      _sync = sync;
+    } else {
+      sync.removeVisibleConsumer();
+    }
+    _registered = want;
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _elapsedTick?.cancel();
-    _sync?.removeVisibleConsumer();
+    if (_registered) {
+      _sync?.removeVisibleConsumer();
+      _registered = false;
+    }
     super.dispose();
   }
 
@@ -103,6 +146,13 @@ class _OpenOrdersStripState extends ConsumerState<OpenOrdersStrip> {
       for (final o in orders)
         if (sectionContains(PosOrderSection.open, o)) o,
     ];
+    // Registration follows CONTENT: the heal pull is armed only while the
+    // strip is showing something to heal (applied post-frame — provider
+    // mutation is illegal during build).
+    if (_hasOpenOrders != open.isNotEmpty) {
+      _hasOpenOrders = open.isNotEmpty;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _applyRegistration());
+    }
     if (open.isEmpty) return const SizedBox.shrink();
 
     final assembly = PosOrderActionsAssembly.watch(ref, orders);
