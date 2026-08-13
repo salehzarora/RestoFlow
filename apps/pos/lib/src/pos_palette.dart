@@ -98,13 +98,18 @@ const List<BoxShadow> kPosChipSelectedShadow = [
 /// cool outline and an INSET photo).
 const double kPosCardRadius = 14;
 
-/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the approved v4 card carries an
-/// INSET photo — a 4:3 band floated [kPosCardImageInset] px inside the card
-/// edge on an r10 clip (component specs §7), no longer edge-to-edge.
+/// POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the card carries an INSET photo
+/// floated [kPosCardImageInset] px inside the card edge on its own clip.
 const double kPosCardImageInset = 6;
 
-/// The photo band's width:height ratio (4:3).
-const double kPosCardImageAspect = 4 / 3;
+/// The media frame's width:height ratio. POS-PRODUCT-CARD-V2-009: 1.1:1 —
+/// near-square, slightly landscape — replacing the wide 4:3 banner. Chosen
+/// from the crop geometry of the restaurant's portrait-leaning uploads: a
+/// single centered COVER render in this frame shaves at most ~17% (split
+/// across two edges) for any source between 3:4 portrait and 4:3 landscape,
+/// so the food stays naturally whole with no duplicated backdrop and no
+/// empty bands.
+const double kPosCardImageAspect = 1.1;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 Step 2 — the cart's operational plane.
 ///
