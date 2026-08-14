@@ -3828,6 +3828,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get floorElementDelete => 'حذف العنصر';
 
   @override
+  String get floorElementDeleteConfirmTitle => 'حذف العنصر؟';
+
+  @override
+  String floorElementDeleteConfirmBody(String kind) {
+    return 'ستتم إزالة $kind من مخطط الصالة.';
+  }
+
+  @override
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label) {
+    return 'ستتم إزالة $kind \"$label\" من مخطط الصالة.';
+  }
+
+  @override
   String get floorElementWidth => 'العرض';
 
   @override

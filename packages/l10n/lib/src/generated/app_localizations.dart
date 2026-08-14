@@ -7138,6 +7138,24 @@ abstract class AppLocalizations {
   /// **'Delete element'**
   String get floorElementDelete;
 
+  /// Fixture delete confirmation dialog title (028).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete element?'**
+  String get floorElementDeleteConfirmTitle;
+
+  /// Fixture delete confirmation body naming the kind (unlabelled fixture).
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} will be removed from the floor map.'**
+  String floorElementDeleteConfirmBody(String kind);
+
+  /// Fixture delete confirmation body naming the kind AND its label.
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} \"{label}\" will be removed from the floor map.'**
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label);
+
   /// Resize dialog field: footprint width.
   ///
   /// In en, this message translates to:

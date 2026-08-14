@@ -851,13 +851,51 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
               ),
               onTap: () {
                 Navigator.of(sheetContext).pop();
-                widget.onDeleteElement(element);
+                // 028: never a one-tap delete — an arranged floor takes time
+                // to build, so the write happens only after confirmation.
+                _confirmDeleteElement(element);
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// 028: the fixture delete confirmation — names the kind (and the label
+  /// when one exists). Cancel, the barrier and system back all close with
+  /// ZERO write; only an explicit confirm runs the existing delete flow.
+  Future<void> _confirmDeleteElement(DashboardFloorElement element) async {
+    final l10n = AppLocalizations.of(context);
+    final kind = _kindLabel(l10n, element.kind);
+    final label = element.label;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('floor-element-delete-confirm'),
+        title: Text(l10n.floorElementDeleteConfirmTitle),
+        content: Text(
+          label == null || label.isEmpty
+              ? l10n.floorElementDeleteConfirmBody(kind)
+              : l10n.floorElementDeleteConfirmBodyLabeled(kind, label),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('floor-element-delete-cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.adminCancel),
+          ),
+          FilledButton(
+            key: const Key('floor-element-delete-confirm-action'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.floorElementDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      widget.onDeleteElement(element);
+    }
   }
 
   Future<void> _resizeElementDialog(DashboardFloorElement element) async {

@@ -8,7 +8,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart'
 import 'package:restoflow_domain/restoflow_domain.dart'
     show floorElementRoomRect, floorTableRoomRect;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
-    show AdminResult;
+    show AdminResult, AdminTransient;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 
@@ -58,11 +58,14 @@ const _wallX1 = DashboardFloorElement(
 );
 
 class _MatrixRepo extends InMemoryTablesStore {
-  _MatrixRepo({this.elements = const [_wallX1]});
+  _MatrixRepo({this.elements = const [_wallX1], this.failDelete = false});
 
   /// 027: this run's fixture catalog + write recorders (the matrix asserts
   /// WHAT was persisted, not the in-memory demo store's internals).
   final List<DashboardFloorElement> elements;
+
+  /// 028: force the delete RPC seam to fail (the failed-confirm test).
+  final bool failDelete;
   final saved = <DashboardFloorElement>[];
   final deletedIds = <String>[];
 
@@ -77,7 +80,7 @@ class _MatrixRepo extends InMemoryTablesStore {
   @override
   Future<AdminResult<void>> deleteFloorElement(String id) async {
     deletedIds.add(id);
-    return const Success(null);
+    return failDelete ? const Failure(AdminTransient()) : const Success(null);
   }
 
   @override
@@ -430,6 +433,13 @@ void main() {
       expect(find.byKey(const Key('floor-element-label')), findsNothing);
       await tester.tap(find.byKey(const Key('floor-element-delete')));
       await tester.pumpAndSettle();
+      // 028: delete is CONFIRMED, never one-tap — the write happens only
+      // after the dialog's explicit confirm.
+      expect(repo.deletedIds, isEmpty);
+      await tester.tap(
+        find.byKey(const Key('floor-element-delete-confirm-action')),
+      );
+      await tester.pumpAndSettle();
       expect(repo.deletedIds, ['x1']);
     });
 
@@ -489,6 +499,162 @@ void main() {
       // auto-moved, no dialog interrupts.
       expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);
       expect(find.byKey(const Key('floor-element-x2')), findsOneWidget);
+    });
+  });
+
+  group('028 fixture delete confirmation', () {
+    /// Arrange -> Elements submode -> tap the fixture -> tap Delete: the
+    /// confirmation dialog is now open (and nothing was written).
+    Future<void> openDeleteDialog(
+      WidgetTester tester,
+      _MatrixRepo repo, {
+      String elementId = 'x1',
+      Locale locale = const Locale('en'),
+    }) async {
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: locale,
+        arrange: true,
+        repo: repo,
+      );
+      _expectClean(errors, 'delete confirm setup');
+      await tester.tap(find.byKey(const Key('floor-submode-elements')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('floor-element-drag-$elementId')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('floor-element-delete')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('floor-element-delete-confirm')),
+        findsOneWidget,
+      );
+      expect(repo.deletedIds, isEmpty);
+    }
+
+    testWidgets('cancel keeps the fixture and writes NOTHING; the AR-rendered '
+        'body names the kind', (tester) async {
+      final repo = _MatrixRepo();
+      // Rendered in ARABIC: the dialog itself (not just the ARB) is localized.
+      await openDeleteDialog(tester, repo, locale: const Locale('ar'));
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      expect(
+        find.text(l10n.floorElementDeleteConfirmBody(l10n.floorElementWall)),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('floor-element-delete-cancel')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('floor-element-delete-confirm')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('floor-element-x1')), findsOneWidget);
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('the BARRIER and system BACK both dismiss with zero write', (
+      tester,
+    ) async {
+      final repo = _MatrixRepo();
+      await openDeleteDialog(tester, repo);
+      // Barrier tap (far outside the dialog).
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('floor-element-delete-confirm')),
+        findsNothing,
+      );
+      expect(repo.deletedIds, isEmpty);
+      // Re-open, then the system back button.
+      await tester.tap(find.byKey(const Key('floor-element-drag-x1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('floor-element-delete')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('floor-element-delete-confirm')),
+        findsOneWidget,
+      );
+      // The system back reaches the root navigator as a maybePop.
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      await navigator.maybePop();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('floor-element-delete-confirm')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('floor-element-x1')), findsOneWidget);
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('confirm performs exactly ONE delete through the existing '
+        'flow', (tester) async {
+      final repo = _MatrixRepo();
+      await openDeleteDialog(tester, repo);
+      await tester.tap(
+        find.byKey(const Key('floor-element-delete-confirm-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, ['x1']);
+      // The existing _run flow: success snackbar + reload (the reloaded
+      // snapshot still lists x1 because the recorder repo never mutates).
+      expect(find.byType(SnackBar), findsOneWidget);
+    });
+
+    testWidgets('a FAILED confirmed delete surfaces the failure and keeps the '
+        'fixture; the labeled body names kind AND label', (tester) async {
+      final repo = _MatrixRepo(
+        failDelete: true,
+        elements: const [
+          DashboardFloorElement(
+            id: 'x2',
+            sectionId: 's1',
+            kind: 'cashier',
+            layoutX: 9500,
+            layoutY: 9500,
+            widthNorm: 900,
+            heightNorm: 900,
+            label: 'POS',
+          ),
+        ],
+      );
+      await openDeleteDialog(tester, repo, elementId: 'x2');
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(
+        find.text(
+          l10n.floorElementDeleteConfirmBodyLabeled(
+            l10n.floorElementCashier,
+            'POS',
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('floor-element-delete-confirm-action')),
+      );
+      await tester.pumpAndSettle();
+      // The write was attempted once, failed, and the existing error path
+      // showed its snackbar; the fixture stays on the canvas.
+      expect(repo.deletedIds, ['x2']);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.byKey(const Key('floor-element-x2')), findsOneWidget);
+    });
+
+    test('the confirmation copy exists and differs across AR/HE/EN', () async {
+      final en = await AppLocalizations.delegate.load(const Locale('en'));
+      final ar = await AppLocalizations.delegate.load(const Locale('ar'));
+      final he = await AppLocalizations.delegate.load(const Locale('he'));
+      for (final l in [en, ar, he]) {
+        expect(l.floorElementDeleteConfirmTitle, isNotEmpty);
+        expect(l.floorElementDeleteConfirmBody('x'), isNotEmpty);
+        expect(l.floorElementDeleteConfirmBodyLabeled('x', 'y'), isNotEmpty);
+      }
+      expect({
+        en.floorElementDeleteConfirmTitle,
+        ar.floorElementDeleteConfirmTitle,
+        he.floorElementDeleteConfirmTitle,
+      }, hasLength(3));
     });
   });
 }

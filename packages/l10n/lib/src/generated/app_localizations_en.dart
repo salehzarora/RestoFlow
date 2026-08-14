@@ -3849,6 +3849,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get floorElementDelete => 'Delete element';
 
   @override
+  String get floorElementDeleteConfirmTitle => 'Delete element?';
+
+  @override
+  String floorElementDeleteConfirmBody(String kind) {
+    return 'The $kind will be removed from the floor map.';
+  }
+
+  @override
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label) {
+    return 'The $kind \"$label\" will be removed from the floor map.';
+  }
+
+  @override
   String get floorElementWidth => 'Width';
 
   @override

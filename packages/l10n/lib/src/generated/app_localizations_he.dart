@@ -3797,6 +3797,19 @@ class AppLocalizationsHe extends AppLocalizations {
   String get floorElementDelete => 'מחיקת אלמנט';
 
   @override
+  String get floorElementDeleteConfirmTitle => 'למחוק את האלמנט?';
+
+  @override
+  String floorElementDeleteConfirmBody(String kind) {
+    return '$kind יוסר ממפת הרצפה.';
+  }
+
+  @override
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label) {
+    return '$kind \"$label\" יוסר ממפת הרצפה.';
+  }
+
+  @override
   String get floorElementWidth => 'רוחב';
 
   @override
