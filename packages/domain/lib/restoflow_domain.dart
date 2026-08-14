@@ -82,6 +82,7 @@ export 'src/shift/shift_exceptions.dart';
 export 'src/shift/shift_state_machine.dart';
 export 'src/shift/shift_status.dart';
 export 'src/table/dining_table.dart';
+export 'src/table/floor_layout_geometry.dart';
 export 'src/table/order_placement.dart';
 export 'src/table/table_assignment_service.dart';
 export 'src/table/table_group_aggregation.dart';

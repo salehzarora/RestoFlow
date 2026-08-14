@@ -3770,6 +3770,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tablesSaved => 'Table saved';
 
   @override
+  String get tablesSectionsTitle => 'Floor sections';
+
+  @override
+  String get tablesSectionAdd => 'Add section';
+
+  @override
+  String get tablesSectionName => 'Section name';
+
+  @override
+  String get tablesSectionEdit => 'Rename section';
+
+  @override
+  String get tablesSectionDelete => 'Delete section';
+
+  @override
+  String get tablesSectionDeleteConfirm =>
+      'Delete this section? Its tables are kept and become unassigned.';
+
+  @override
+  String get tablesArrange => 'Arrange tables';
+
+  @override
+  String get tablesArrangeDone => 'Done arranging';
+
+  @override
+  String get tablesSetSection => 'Set section';
+
+  @override
+  String get tablesSectionNone => 'No section';
+
+  @override
+  String get tablesUnassignedZone => 'Unassigned tables';
+
+  @override
+  String get tablesNotPlaced => 'Not placed yet';
+
+  @override
+  String get tablesPlaceOnMap => 'Place on map';
+
+  @override
+  String get tablesOverlapWarning => 'Some tables overlap on the map.';
+
+  @override
   String get adminRevokeConfirm =>
       'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.';
 
