@@ -310,11 +310,13 @@ select is(
   1, 'the session branch has exactly ONE live active table (inactive/tombstoned/other-branch/other-org excluded)');
 -- PILOT-OPERATIONS-CORRECTIONS-001 expanded the pos_tables row contract with two
 -- keys: effective_state (manual status fused with derived occupancy) + group_id
--- (the active link group, null when ungrouped). Eight keys now, both new ones present.
+-- (the active link group, null when ungrouped). TABLE-FLOOR-LAYOUT-021 added five
+-- more: section_id/section_name/section_display_order + layout_x/layout_y
+-- (nullable; legacy rows carry nulls). Thirteen keys now.
 select is(
   (select count(*) from (select jsonb_object_keys(
      app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0) as k) s)::int,
-  8, 'a pos_tables row carries the eight keys {id,label,seats,area,status,active_order_count,effective_state,group_id}');
+  13, 'a pos_tables row carries the thirteen keys (eight prior + the five 021 layout keys)');
 select ok(
   (select (r ? 'effective_state') and (r ? 'group_id')
    from (select app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0 as r) s),
