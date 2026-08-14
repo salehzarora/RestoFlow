@@ -3,7 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import 'package:restoflow_domain/restoflow_domain.dart' show floorFractionOf;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show
+        FloorPoint,
+        floorClusterSeamRect,
+        floorFractionOf,
+        floorTableRoomRect,
+        packLinkedCluster;
 
 import '../data/demo_tables.dart';
 import '../data/recent_order.dart';
@@ -12,7 +18,8 @@ import '../state/order_setup_controller.dart' show tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import '../state/table_move_controller.dart';
-import 'table_picker_sheet.dart' show splitTablesBySection;
+import 'table_picker_sheet.dart'
+    show compareTablesByLabelThenId, splitTablesBySection;
 
 /// RESTAURANT-OPERATIONS-V1-001: the "Move to another table" sheet for an
 /// ACTIVE DINE-IN order.
@@ -378,7 +385,6 @@ class _MoveSectionZone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tileSize = RestoflowFloorTable.sizeFor(compact: true);
     final placed = <DemoTable>[];
     final unplaced = <DemoTable>[];
     for (final t in section.tables) {
@@ -387,13 +393,14 @@ class _MoveSectionZone extends StatelessWidget {
       );
     }
 
-    Widget tile(DemoTable t) => _MoveFloorTile(
+    Widget tile(DemoTable t, {bool inStrip = false}) => _MoveFloorTile(
       l10n: l10n,
       table: t,
       isCurrent: currentLabel != null && t.label == currentLabel,
       selected: t.tableId == selectedId,
       enabled: enabled,
       onSelect: onSelect,
+      inStrip: inStrip,
     );
 
     return Padding(
@@ -424,24 +431,56 @@ class _MoveSectionZone extends StatelessWidget {
           ),
           const SizedBox(height: RestoflowSpacing.sm),
           if (placed.isNotEmpty)
-            RestoflowFloorSectionCanvas(
-              key: Key('move-table-section-canvas-${section.sectionId}'),
-              tileSize: tileSize,
-              placed: [
-                for (final t in placed)
-                  RestoflowFloorPlacedTile(
-                    fractionX: floorFractionOf(t.layoutX, t.layoutY)!.x,
-                    fractionY: floorFractionOf(t.layoutX, t.layoutY)!.y,
-                    child: tile(t),
-                  ),
-              ],
+            Builder(
+              builder: (context) {
+                // 027: the same DERIVED per-section clustering the picker and
+                // the Dashboard use (base coordinates never written).
+                final derived = <String, FloorPoint>{};
+                final seams = <RestoflowFloorPlacedTile>[];
+                final byGroup = <String, List<DemoTable>>{};
+                for (final t in placed) {
+                  final g = t.groupId;
+                  if (g != null) (byGroup[g] ??= []).add(t);
+                }
+                for (final members in byGroup.values) {
+                  if (members.length < 2) continue;
+                  members.sort(compareTablesByLabelThenId);
+                  final packed = packLinkedCluster([
+                    for (final t in members)
+                      (id: t.tableId, x: t.layoutX!, y: t.layoutY!),
+                  ]);
+                  derived.addAll(packed);
+                  seams.add(
+                    RestoflowFloorPlacedTile(
+                      room: floorClusterSeamRect(packed.values),
+                      child: const RestoflowFloorClusterSeam(),
+                    ),
+                  );
+                }
+                return RestoflowFloorSectionCanvas(
+                  key: Key('move-table-section-canvas-${section.sectionId}'),
+                  background: seams,
+                  placed: [
+                    for (final t in placed)
+                      RestoflowFloorPlacedTile(
+                        room: derived[t.tableId] != null
+                            ? floorTableRoomRect(
+                                derived[t.tableId]!.x,
+                                derived[t.tableId]!.y,
+                              )
+                            : floorTableRoomRect(t.layoutX!, t.layoutY!),
+                        child: tile(t),
+                      ),
+                  ],
+                );
+              },
             ),
           if (unplaced.isNotEmpty) ...[
             if (placed.isNotEmpty) const SizedBox(height: RestoflowSpacing.sm),
             Wrap(
               spacing: RestoflowSpacing.sm,
               runSpacing: RestoflowSpacing.sm,
-              children: [for (final t in unplaced) tile(t)],
+              children: [for (final t in unplaced) tile(t, inStrip: true)],
             ),
           ],
         ],
@@ -461,6 +500,7 @@ class _MoveFloorTile extends StatelessWidget {
     required this.selected,
     required this.enabled,
     required this.onSelect,
+    this.inStrip = false,
   });
 
   final AppLocalizations l10n;
@@ -469,6 +509,9 @@ class _MoveFloorTile extends StatelessWidget {
   final bool selected;
   final bool enabled;
   final ValueChanged<DemoTable> onSelect;
+
+  /// 027: strip tiles take the fixed reference footprint (no canvas).
+  final bool inStrip;
 
   @override
   Widget build(BuildContext context) {
@@ -493,26 +536,35 @@ class _MoveFloorTile extends StatelessWidget {
         key: Key('move-table-tile-${table.tableId}'),
         behavior: HitTestBehavior.opaque,
         onTap: canPick ? () => onSelect(table) : null,
-        child: RestoflowFloorTable(
-          compact: true,
-          label: table.label,
-          seats: table.seats,
-          fill: selected
-              ? scheme.primaryContainer
-              : isCurrent
-              ? scheme.surfaceContainerHighest
-              : scheme.surface,
-          onFill: selected
-              ? scheme.onPrimaryContainer
-              : canPick
-              ? scheme.onSurface
-              : scheme.onSurfaceVariant,
-          border: selected ? scheme.primary : scheme.outlineVariant,
-          borderWidth: selected ? 2 : 1,
-          statusIcon: selected
-              ? Icon(Icons.check_circle, size: 14, color: scheme.primary)
-              : null,
-          footnote: footnote,
+        child: Builder(
+          builder: (context) {
+            final floorTile = RestoflowFloorTable(
+              label: table.label,
+              seats: table.seats,
+              fill: selected
+                  ? scheme.primaryContainer
+                  : isCurrent
+                  ? scheme.surfaceContainerHighest
+                  : scheme.surface,
+              onFill: selected
+                  ? scheme.onPrimaryContainer
+                  : canPick
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant,
+              border: selected ? scheme.primary : scheme.outlineVariant,
+              borderWidth: selected ? 2 : 1,
+              statusIcon: selected
+                  ? Icon(Icons.check_circle, size: 14, color: scheme.primary)
+                  : null,
+              footnote: footnote,
+            );
+            return inStrip
+                ? SizedBox.fromSize(
+                    size: kRestoflowFloorStripTileSize,
+                    child: floorTile,
+                  )
+                : floorTile;
+          },
         ),
       ),
     );

@@ -4,10 +4,17 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
+        floorClusterSeamRect,
         floorFractionOf,
         floorPlacementsOverlap,
         floorPointFromFractions,
-        initialFloorPlacement;
+        floorTableRoomRect,
+        initialFloorPlacement,
+        kFloorTableW,
+        kFloorTableH,
+        kFloorUsableW,
+        kFloorUsableH,
+        packLinkedCluster;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'table_models.dart';
@@ -135,7 +142,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _floorTile(context, t),
+                    _floorTile(context, t, inStrip: true),
                     if (widget.arrange)
                       TextButton(
                         key: Key('floor-set-section-${t.id}'),
@@ -245,7 +252,6 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
   ) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final tileSize = RestoflowFloorTable.sizeFor(compact: false);
     final placed = <DashboardTable>[];
     final unplaced = <DashboardTable>[];
     for (final t in tables) {
@@ -259,16 +265,47 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
           return f == null ? (0.0, 0.0) : (f.x, f.y);
         })();
 
-    // Informational overlap check over the CURRENT on-screen placements.
+    // 027: DERIVED per-section clustering for operationally linked tables —
+    // read-only on the Dashboard (linking is POS-owned). Base coordinates are
+    // never written; unlink restores exactly by construction.
+    final derived = <String, FloorPoint>{};
+    final seams = <RestoflowFloorPlacedTile>[];
+    final byGroup = <String, List<DashboardTable>>{};
+    for (final t in placed) {
+      final g = t.groupId;
+      if (g != null) (byGroup[g] ??= []).add(t);
+    }
+    for (final members in byGroup.values) {
+      if (members.length < 2) continue;
+      members.sort(
+        (a, b) => a.label.compareTo(b.label) != 0
+            ? a.label.compareTo(b.label)
+            : a.id.compareTo(b.id),
+      );
+      final packed = packLinkedCluster([
+        for (final t in members) (id: t.id, x: t.layoutX!, y: t.layoutY!),
+      ]);
+      derived.addAll(packed);
+      seams.add(
+        RestoflowFloorPlacedTile(
+          room: floorClusterSeamRect(packed.values),
+          child: const RestoflowFloorClusterSeam(),
+        ),
+      );
+    }
+
+    FloorPoint pointOf(DashboardTable t) {
+      final d = derived[t.id];
+      if (d != null) return d;
+      final f = fractionsOf(t);
+      return floorPointFromFractions(f.$1, f.$2);
+    }
+
+    // Informational overlap check over the CURRENT on-screen placements
+    // (derived positions for linked members — what is actually visible).
     var overlaps = false;
     if (widget.arrange) {
-      final points = <FloorPoint>[
-        for (final t in placed)
-          () {
-            final f = fractionsOf(t);
-            return floorPointFromFractions(f.$1, f.$2);
-          }(),
-      ];
+      final points = <FloorPoint>[for (final t in placed) pointOf(t)];
       outer:
       for (var a = 0; a < points.length; a++) {
         for (var b = a + 1; b < points.length; b++) {
@@ -308,20 +345,42 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
           ),
         LayoutBuilder(
           builder: (context, constraints) {
+            // 027: the SHARED contract — the canvas maps room units to pixels
+            // itself; drags convert through the same usable-span constants.
+            final canvasWidth =
+                constraints.maxWidth < kRestoflowFloorMinCanvasWidth
+                ? kRestoflowFloorMinCanvasWidth
+                : constraints.maxWidth;
             final canvas = Size(
-              constraints.maxWidth,
-              constraints.maxWidth / kRestoflowFloorSectionAspect,
+              canvasWidth,
+              canvasWidth / kRestoflowFloorSectionAspect,
             );
+            ({double left, double top, double width, double height}) roomOf(
+              DashboardTable t,
+            ) {
+              final d = derived[t.id];
+              if (d != null) return floorTableRoomRect(d.x, d.y);
+              final f = fractionsOf(t);
+              return (
+                left: f.$1 * kFloorUsableW,
+                top: f.$2 * kFloorUsableH,
+                width: kFloorTableW.toDouble(),
+                height: kFloorTableH.toDouble(),
+              );
+            }
+
             return RestoflowFloorSectionCanvas(
               key: Key('floor-canvas-${section.id}'),
-              tileSize: tileSize,
+              background: seams,
               placed: [
                 for (final t in placed)
                   RestoflowFloorPlacedTile(
-                    fractionX: fractionsOf(t).$1,
-                    fractionY: fractionsOf(t).$2,
-                    child: widget.arrange
-                        ? _draggableTile(context, t, canvas, tileSize)
+                    room: roomOf(t),
+                    // 027: a LINKED member renders at its derived cluster
+                    // slot and is not draggable while linked — its base
+                    // position is preserved for the unlink restore.
+                    child: widget.arrange && t.groupId == null
+                        ? _draggableTile(context, t, canvas)
                         : _floorTile(context, t),
                   ),
               ],
@@ -349,7 +408,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _floorTile(context, t),
+                          _floorTile(context, t, inStrip: true),
                           if (widget.arrange)
                             TextButton(
                               key: Key('floor-place-${t.id}'),
@@ -397,7 +456,6 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
     BuildContext context,
     DashboardTable table,
     Size canvas,
-    Size tileSize,
   ) {
     void onUpdate(DragUpdateDetails details) {
       final current =
@@ -406,8 +464,11 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
             final f = floorFractionOf(table.layoutX, table.layoutY);
             return f == null ? (0.0, 0.0) : (f.x, f.y);
           })();
-      final usableW = canvas.width - tileSize.width;
-      final usableH = canvas.height - tileSize.height;
+      // 027: the usable anchor span in PIXELS comes from the SHARED room-unit
+      // contract, so a 1px pointer move maps to the same fraction on every
+      // surface at this canvas size.
+      final usableW = canvas.width * kFloorUsableW / 10000;
+      final usableH = canvas.height * kFloorUsableH / 10000;
       setState(() {
         _overrides[table.id] = (
           (current.$1 + (usableW <= 0 ? 0 : details.delta.dx / usableW)).clamp(
@@ -449,12 +510,16 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
     );
   }
 
-  Widget _floorTile(BuildContext context, DashboardTable table) {
+  Widget _floorTile(
+    BuildContext context,
+    DashboardTable table, {
+    bool inStrip = false,
+  }) {
     final theme = Theme.of(context);
     final visual = tableFloorVisual(context, table);
     final style = visual.tone.styleOf(theme);
     final l10n = AppLocalizations.of(context);
-    return Semantics(
+    final tile = Semantics(
       label: '${table.label}, ${visual.label}',
       child: RestoflowFloorTable(
         key: Key('floor-table-${table.id}'),
@@ -463,12 +528,24 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
         fill: style.container,
         onFill: style.onContainer,
         border: style.accent,
-        statusIcon: Icon(visual.icon, size: 13, color: style.accent),
+        // 027: a linked member's glyph is the link — the seam outline plus
+        // this icon mark group membership without hiding the status tint.
+        statusIcon: Icon(
+          table.groupId != null ? Icons.link : visual.icon,
+          size: 13,
+          color: style.accent,
+        ),
         footnote: table.activeOrderCount > 0
             ? l10n.tablesOpenOrders(table.activeOrderCount)
             : visual.label,
       ),
     );
+    // 027: outside a canvas (strips) the tile has no room to size it — give
+    // it the fixed reference footprint.
+    if (inStrip) {
+      return SizedBox.fromSize(size: kRestoflowFloorStripTileSize, child: tile);
+    }
+    return tile;
   }
 }
 

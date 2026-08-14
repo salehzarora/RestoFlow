@@ -3,6 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/tables/table_models.dart';
 import 'package:restoflow_dashboard/src/tables/tables_repository.dart';
 import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show RestoflowFloorClusterSeam, kRestoflowFloorSectionAspect;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show floorTableRoomRect;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminResult;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -241,5 +245,62 @@ void main() {
   ) async {
     final ar = await offsets(tester, const Locale('ar'));
     expect(ar, parity['en'], reason: 'the room must not mirror under RTL');
+  });
+
+  testWidgets('027 LINKED (Dashboard, read-only): grouped members render as a '
+      'seamed cluster and are NOT draggable while linked', (tester) async {
+    final errors = await _pump(
+      tester,
+      size: const Size(1500, 5200),
+      locale: const Locale('en'),
+      arrange: true,
+    );
+    _expectClean(errors, 'dashboard linked');
+    // t5+t6 share group g1 in the fixture: one seam behind them.
+    expect(find.byType(RestoflowFloorClusterSeam), findsOneWidget);
+    // Unlinked tables keep their drag handles; linked members do not (base
+    // coordinates are preserved for the unlink restore).
+    expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);
+    expect(find.byKey(const Key('floor-drag-t5')), findsNothing);
+    expect(find.byKey(const Key('floor-drag-t6')), findsNothing);
+    // Both members still render (derived positions, same section).
+    expect(find.byKey(const Key('floor-table-t5')), findsOneWidget);
+    expect(find.byKey(const Key('floor-table-t6')), findsOneWidget);
+    // Physically joined: the derived rects sit one seam apart.
+    final r5 = tester.getRect(find.byKey(const Key('floor-table-t5')));
+    final r6 = tester.getRect(find.byKey(const Key('floor-table-t6')));
+    expect((r6.left - r5.right).abs(), lessThan(r5.width));
+    expect((r6.top - r5.top).abs(), lessThan(1.0));
+  });
+
+  testWidgets('027 CONTRACT PARITY: the rendered tile rect equals the shared '
+      'room-unit contract to <=0.5px (transitively equal to POS/Move)', (
+    tester,
+  ) async {
+    final errors = await _pump(
+      tester,
+      size: const Size(1500, 5200),
+      locale: const Locale('en'),
+    );
+    _expectClean(errors, 'contract parity');
+    final canvasRect = tester.getRect(find.byKey(const Key('floor-canvas-s1')));
+    // t1 is stored at (500, 500).
+    final room = floorTableRoomRect(500, 500);
+    final expected = Rect.fromLTWH(
+      canvasRect.left + room.left * canvasRect.width / 10000,
+      canvasRect.top + room.top * canvasRect.height / 10000,
+      room.width * canvasRect.width / 10000,
+      room.height * canvasRect.height / 10000,
+    );
+    final actual = tester.getRect(find.byKey(const Key('floor-table-t1')));
+    expect((actual.left - expected.left).abs(), lessThanOrEqualTo(0.5));
+    expect((actual.top - expected.top).abs(), lessThanOrEqualTo(0.5));
+    expect((actual.width - expected.width).abs(), lessThanOrEqualTo(0.5));
+    expect((actual.height - expected.height).abs(), lessThanOrEqualTo(0.5));
+    // The compact aspect token holds.
+    expect(
+      canvasRect.width / canvasRect.height,
+      closeTo(kRestoflowFloorSectionAspect, 0.01),
+    );
   });
 }
