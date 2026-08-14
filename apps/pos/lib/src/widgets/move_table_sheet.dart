@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_domain/restoflow_domain.dart' show floorFractionOf;
+
 import '../data/demo_tables.dart';
 import '../data/recent_order.dart';
 import '../data/table_move_repository.dart';
@@ -10,6 +12,7 @@ import '../state/order_setup_controller.dart' show tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import '../state/table_move_controller.dart';
+import 'table_picker_sheet.dart' show splitTablesBySection;
 
 /// RESTAURANT-OPERATIONS-V1-001: the "Move to another table" sheet for an
 /// ACTIVE DINE-IN order.
@@ -305,22 +308,212 @@ class _TableGrid extends StatelessWidget {
         title: l10n.posTablesEmpty,
       );
     }
+    // TABLE-FLOOR-LAYOUT-021: sectioned tables render on their section's
+    // saved floor map (same layout the picker and the Dashboard show); the
+    // legacy remainder keeps the flat wrap below. Same candidates, same
+    // selection rules, same tile keys — only the arrangement is spatial.
+    final split = splitTablesBySection(candidates);
     return SingleChildScrollView(
-      child: Wrap(
-        spacing: RestoflowSpacing.sm,
-        runSpacing: RestoflowSpacing.sm,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          for (final t in candidates)
-            _TableTile(
+          for (final section in split.sections)
+            _MoveSectionZone(
               l10n: l10n,
-              table: t,
-              isCurrent: currentLabel != null && t.label == currentLabel,
-              selected: t.tableId == selectedId,
+              section: section,
+              currentLabel: currentLabel,
+              selectedId: selectedId,
               enabled: enabled,
-              theme: theme,
               onSelect: onSelect,
             ),
+          if (split.legacy.isNotEmpty) ...[
+            if (split.sections.isNotEmpty)
+              const SizedBox(height: RestoflowSpacing.sm),
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.sm,
+              children: [
+                for (final t in split.legacy)
+                  _TableTile(
+                    l10n: l10n,
+                    table: t,
+                    isCurrent: currentLabel != null && t.label == currentLabel,
+                    selected: t.tableId == selectedId,
+                    enabled: enabled,
+                    theme: theme,
+                    onSelect: onSelect,
+                  ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// TABLE-FLOOR-LAYOUT-021: one section's floor map inside the move sheet —
+/// the saved placements on the shared canvas, unplaced sectioned tables in a
+/// strip below it. Move-sheet semantics are identical to the flat tiles:
+/// the CURRENT table is disabled, everything else is pickable.
+class _MoveSectionZone extends StatelessWidget {
+  const _MoveSectionZone({
+    required this.l10n,
+    required this.section,
+    required this.currentLabel,
+    required this.selectedId,
+    required this.enabled,
+    required this.onSelect,
+  });
+
+  final AppLocalizations l10n;
+  final ({String sectionId, String sectionName, List<DemoTable> tables})
+  section;
+  final String? currentLabel;
+  final String? selectedId;
+  final bool enabled;
+  final ValueChanged<DemoTable> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tileSize = RestoflowFloorTable.sizeFor(compact: true);
+    final placed = <DemoTable>[];
+    final unplaced = <DemoTable>[];
+    for (final t in section.tables) {
+      (floorFractionOf(t.layoutX, t.layoutY) == null ? unplaced : placed).add(
+        t,
+      );
+    }
+
+    Widget tile(DemoTable t) => _MoveFloorTile(
+      l10n: l10n,
+      table: t,
+      isCurrent: currentLabel != null && t.label == currentLabel,
+      selected: t.tableId == selectedId,
+      enabled: enabled,
+      onSelect: onSelect,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: RestoflowIconSizes.sm,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: RestoflowSpacing.xs),
+              Expanded(
+                child: Text(
+                  section.sectionName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          if (placed.isNotEmpty)
+            RestoflowFloorSectionCanvas(
+              key: Key('move-table-section-canvas-${section.sectionId}'),
+              tileSize: tileSize,
+              placed: [
+                for (final t in placed)
+                  RestoflowFloorPlacedTile(
+                    fractionX: floorFractionOf(t.layoutX, t.layoutY)!.x,
+                    fractionY: floorFractionOf(t.layoutX, t.layoutY)!.y,
+                    child: tile(t),
+                  ),
+              ],
+            ),
+          if (unplaced.isNotEmpty) ...[
+            if (placed.isNotEmpty) const SizedBox(height: RestoflowSpacing.sm),
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.sm,
+              children: [for (final t in unplaced) tile(t)],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One table on a move-sheet section canvas: the shared top-down visual with
+/// the move sheet's neutral fills (selected / current / plain) and the same
+/// honest cues the flat tiles carry (open orders, occupied/reserved word).
+class _MoveFloorTile extends StatelessWidget {
+  const _MoveFloorTile({
+    required this.l10n,
+    required this.table,
+    required this.isCurrent,
+    required this.selected,
+    required this.enabled,
+    required this.onSelect,
+  });
+
+  final AppLocalizations l10n;
+  final DemoTable table;
+  final bool isCurrent;
+  final bool selected;
+  final bool enabled;
+  final ValueChanged<DemoTable> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final canPick = enabled && !isCurrent;
+    final String? footnote = isCurrent
+        ? l10n.posTableStatusSelected
+        : table.activeOrderCount > 0
+        ? l10n.posTableOpenOrders(table.activeOrderCount)
+        : table.status == TableStatusKind.occupied
+        ? l10n.posTableStatusOccupied
+        : table.status == TableStatusKind.reserved
+        ? l10n.posTableStateReserved
+        : null;
+
+    return Semantics(
+      button: canPick,
+      enabled: canPick,
+      selected: selected,
+      child: GestureDetector(
+        key: Key('move-table-tile-${table.tableId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: canPick ? () => onSelect(table) : null,
+        child: RestoflowFloorTable(
+          compact: true,
+          label: table.label,
+          seats: table.seats,
+          fill: selected
+              ? scheme.primaryContainer
+              : isCurrent
+              ? scheme.surfaceContainerHighest
+              : scheme.surface,
+          onFill: selected
+              ? scheme.onPrimaryContainer
+              : canPick
+              ? scheme.onSurface
+              : scheme.onSurfaceVariant,
+          border: selected ? scheme.primary : scheme.outlineVariant,
+          borderWidth: selected ? 2 : 1,
+          statusIcon: selected
+              ? Icon(Icons.check_circle, size: 14, color: scheme.primary)
+              : null,
+          footnote: footnote,
+        ),
       ),
     );
   }
@@ -413,15 +606,21 @@ class _TableTile extends StatelessWidget {
                       color: RestoflowTone.warning.styleOf(theme).accent,
                     ),
                   )
-                else if (table.status == TableStatusKind.occupied)
+                else if (table.status == TableStatusKind.occupied ||
+                    table.status == TableStatusKind.reserved)
                   // STABILIZATION: a manual occupied/RESERVED floor state with
                   // no live order still deserves a cue — the server accepts
                   // the move, but the cashier must not pick a reserved table
-                  // blind.
+                  // blind. TABLE-FLOOR-LAYOUT-021: reserved is now a distinct
+                  // status kind and keeps this exact cue with its own word.
                   Text(
-                    l10n.posTableStatusOccupied,
+                    table.status == TableStatusKind.occupied
+                        ? l10n.posTableStatusOccupied
+                        : l10n.posTableStateReserved,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: RestoflowTone.warning.styleOf(theme).accent,
+                      color: table.status == TableStatusKind.occupied
+                          ? RestoflowTone.warning.styleOf(theme).accent
+                          : RestoflowTone.info.styleOf(theme).accent,
                     ),
                   ),
               ],

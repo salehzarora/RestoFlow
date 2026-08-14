@@ -209,7 +209,9 @@ void main() {
       );
       expect(tableStatusKindFor(''), TableStatusKind.blocked);
       expect(tableStatusKindFor('available'), TableStatusKind.available);
-      expect(tableStatusKindFor('reserved'), TableStatusKind.occupied);
+      // TABLE-FLOOR-LAYOUT-021: reserved is its own DISPLAY kind now — still
+      // non-assignable (isAssignable stays available-only).
+      expect(tableStatusKindFor('reserved'), TableStatusKind.reserved);
       expect(tableStatusKindFor('occupied'), TableStatusKind.occupied);
       expect(tableStatusKindFor('out_of_service'), TableStatusKind.blocked);
     });
