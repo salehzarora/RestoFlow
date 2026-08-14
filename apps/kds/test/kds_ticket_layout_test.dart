@@ -48,10 +48,13 @@ void main() {
         'title heading', () async {
       final l10n = await _l10n('en');
       final doc = buildKdsTicketDocument(l10n, _ticket());
-      // Brand line (secondary heading) first — the localized fallback when no
-      // real restaurant name is configured, never a hardcoded placeholder.
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, l10n.printRestaurantNameFallback);
+      // TABLE-FLOOR-LAYOUT-021: this DINE-IN fixture opens with the star
+      // band; the brand line (secondary heading) sits directly under it —
+      // the localized fallback when no real restaurant name is configured,
+      // never a hardcoded placeholder.
+      expect(doc.lines.first.kind, PrintLineKind.banner);
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, l10n.printRestaurantNameFallback);
       // The order number is the big title heading (hero) just below it.
       expect(
         doc.lines.any(
@@ -68,8 +71,9 @@ void main() {
         _ticket(),
         restaurantName: 'Falafel House',
       );
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, 'Falafel House');
+      // TABLE-FLOOR-LAYOUT-021: index 1 — the dine-in star band leads.
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, 'Falafel House');
     });
 
     test('order type / table / customer are grouped centered lines', () async {

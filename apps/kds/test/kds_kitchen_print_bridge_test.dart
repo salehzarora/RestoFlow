@@ -195,8 +195,10 @@ void main() {
         .map((l) => l.style)
         .toList();
     // PRINT-LAYOUT-001B: the brand line (secondary heading) leads, above the
-    // large order-number hero heading.
-    expect(styles.first, pp.PrintLineStyle.subheading);
+    // large order-number hero heading. TABLE-FLOOR-LAYOUT-021: on this
+    // DINE-IN fixture the star band is line 0, so the brand sits at index 1.
+    expect(styles.first, isNot(pp.PrintLineStyle.separator));
+    expect(styles[1], pp.PrintLineStyle.subheading);
     expect(styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
     // PRINT-LAYOUT-001C: the kitchen uses its DEDICATED larger item + modifier
     // roles (never the smaller shared receipt item/sub).

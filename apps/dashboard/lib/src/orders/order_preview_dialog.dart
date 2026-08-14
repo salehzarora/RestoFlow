@@ -218,6 +218,23 @@ class _PrintDocumentView extends StatelessWidget {
               child: DottedHairline(),
             ),
           );
+        case PrintLineKind.banner:
+          // TABLE-FLOOR-LAYOUT-021: the dine-in star band — one clipped,
+          // non-wrapping full-width star row (mirrors the printed ticket).
+          rows.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '*' * 32,
+                key: const Key('kitchen-preview-dinein-band'),
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                softWrap: false,
+                textAlign: TextAlign.center,
+                style: mono.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ),
+          );
         case PrintLineKind.headerImage:
           final url = line.imageUrl;
           if (url != null && url.isNotEmpty) {

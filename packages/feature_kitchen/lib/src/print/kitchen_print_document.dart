@@ -18,6 +18,8 @@ enum PrintLineKind {
   rule,
   note,
   spacer,
+  // TABLE-FLOOR-LAYOUT-021: the DINE-IN marker — a full-width ASCII star band.
+  banner,
 }
 
 class PrintLine {
@@ -58,6 +60,16 @@ class PrintLine {
       left = null,
       right = null,
       emphasised = false;
+  // TABLE-FLOOR-LAYOUT-021: the dine-in marker band. Carries NO text of its
+  // own — every renderer derives the full-width star row from its own width
+  // (ESC/POS: `'*' * columns`; HTML: a fixed star row). ASCII only, so the
+  // text ESC/POS path stays byte-safe and the band can never flip a ticket
+  // to raster by itself.
+  PrintLine.banner()
+    : kind = PrintLineKind.banner,
+      left = null,
+      right = null,
+      emphasised = true;
 
   final PrintLineKind kind;
   final String? left;
@@ -100,6 +112,8 @@ html, body { margin: 0; padding: 0; color: #111;
 .n { text-align: center; font-size: 11px; color: #555; margin: 2px 0; }
 .r { border-top: 1px dashed #999; margin: 6px 0; }
 .sp { height: 8px; }
+.bn { text-align: center; font-weight: 900; letter-spacing: 1px; margin: 2px 0;
+  white-space: nowrap; overflow: hidden; }
 ''';
 
 /// Renders [doc] into a self-contained, print-friendly HTML page. The page
@@ -135,6 +149,10 @@ String documentToHtml(PrintDocument doc) {
         body.writeln('<div class="r"></div>');
       case PrintLineKind.spacer:
         body.writeln('<div class="sp"></div>');
+      case PrintLineKind.banner:
+        // TABLE-FLOOR-LAYOUT-021: the dine-in star band (fixed width in HTML;
+        // .bn clips overflow so it can never wrap on a narrow preview).
+        body.writeln('<div class="bn">${'*' * 32}</div>');
     }
   }
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'
