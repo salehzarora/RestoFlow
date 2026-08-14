@@ -3761,6 +3761,51 @@ class AppLocalizationsHe extends AppLocalizations {
   String get tablesOverlapWarning => 'חלק מהשולחנות חופפים על המפה.';
 
   @override
+  String get tablesFloorModeTables => 'שולחנות';
+
+  @override
+  String get tablesFloorModeElements => 'אלמנטים';
+
+  @override
+  String get tablesAddElement => 'הוספת אלמנט';
+
+  @override
+  String get floorElementWall => 'קיר';
+
+  @override
+  String get floorElementDoor => 'דלת';
+
+  @override
+  String get floorElementWindow => 'חלון';
+
+  @override
+  String get floorElementCashier => 'קופה';
+
+  @override
+  String get floorElementPlant => 'צמח';
+
+  @override
+  String get floorElementRotate => 'סיבוב';
+
+  @override
+  String get floorElementResize => 'שינוי גודל';
+
+  @override
+  String get floorElementLabel => 'תווית';
+
+  @override
+  String get floorElementDelete => 'מחיקת אלמנט';
+
+  @override
+  String get floorElementWidth => 'רוחב';
+
+  @override
+  String get floorElementHeight => 'גובה';
+
+  @override
+  String get tablesElementOverlapWarning => 'אלמנט חופף לשולחן על המפה.';
+
+  @override
   String get adminRevokeConfirm =>
       'לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.';
 

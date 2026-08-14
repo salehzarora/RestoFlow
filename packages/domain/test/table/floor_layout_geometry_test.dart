@@ -149,10 +149,7 @@ void main() {
     test('the verdict is symmetric and viewport-independent', () {
       const a = (x: 1200, y: 3300);
       const b = (x: 2600, y: 5400);
-      expect(
-        floorPlacementsOverlap(a, b),
-        floorPlacementsOverlap(b, a),
-      );
+      expect(floorPlacementsOverlap(a, b), floorPlacementsOverlap(b, a));
     });
   });
 
@@ -182,10 +179,105 @@ void main() {
     });
 
     test('out-of-room drags clamp into storable range', () {
-      expect(
-        floorStoredFromRoomTopLeft(-500, kFloorUsableH + 900),
-        (x: 0, y: kFloorLayoutMax),
+      expect(floorStoredFromRoomTopLeft(-500, kFloorUsableH + 900), (
+        x: 0,
+        y: kFloorLayoutMax,
+      ));
+    });
+  });
+  group('027 fixture geometry', () {
+    test('per-kind defaults + capability predicates (owner decision 4)', () {
+      expect(floorElementDefaultSize('wall'), (w: 3000, h: 150));
+      expect(floorElementDefaultSize('window'), (w: 2000, h: 150));
+      expect(floorElementDefaultSize('door'), (w: 900, h: 150));
+      expect(floorElementDefaultSize('cashier'), (w: 900, h: 900));
+      expect(floorElementDefaultSize('plant'), (w: 900, h: 900));
+      expect(kFloorElementKinds, hasLength(5));
+      expect(floorElementResizable('wall'), isTrue);
+      expect(floorElementResizable('window'), isTrue);
+      expect(floorElementResizable('door'), isFalse);
+      expect(floorElementLabelable('cashier'), isTrue);
+      expect(floorElementLabelable('door'), isTrue);
+      expect(floorElementLabelable('plant'), isFalse);
+    });
+
+    test('odd quarter turns swap the effective axes', () {
+      expect(floorElementEffectiveSize(3000, 150, quarterTurns: 1), (
+        w: 150.0,
+        h: 3000.0,
+      ));
+      expect(floorElementEffectiveSize(3000, 150, quarterTurns: 2), (
+        w: 3000.0,
+        h: 150.0,
+      ));
+    });
+
+    test('floorElementRoomRect anchors by the EFFECTIVE usable span', () {
+      final r = floorElementRoomRect(5000, 0, width: 3000, height: 150);
+      expect(r.left, closeTo(0.5 * (10000 - 3000), 1e-9));
+      expect(r.top, 0.0);
+      expect(r.width, 3000.0);
+      expect(r.height, 150.0);
+      // Rotated: the y-axis now carries the long side.
+      final rot = floorElementRoomRect(
+        5000,
+        10000,
+        width: 3000,
+        height: 150,
+        quarterTurns: 1,
       );
+      expect(rot.width, 150.0);
+      expect(rot.height, 3000.0);
+      expect(rot.top, closeTo(10000 - 3000, 1e-9));
+    });
+
+    test('a fixture rect is ALWAYS fully in-bounds by construction', () {
+      for (final stored in [(0, 0), (10000, 10000), (7321, 133)]) {
+        final r = floorElementRoomRect(
+          stored.$1,
+          stored.$2,
+          width: 9000,
+          height: 400,
+          quarterTurns: 3,
+        );
+        expect(r.left, greaterThanOrEqualTo(0));
+        expect(r.top, greaterThanOrEqualTo(0));
+        expect(r.left + r.width, lessThanOrEqualTo(10000 + 1e-9));
+        expect(r.top + r.height, lessThanOrEqualTo(10000 + 1e-9));
+      }
+    });
+
+    test('stored round-trip through the effective footprint', () {
+      final r = floorElementRoomRect(
+        4321,
+        876,
+        width: 2000,
+        height: 150,
+        quarterTurns: 0,
+      );
+      expect(
+        floorElementStoredFromRoomTopLeft(
+          r.left,
+          r.top,
+          effW: r.width,
+          effH: r.height,
+        ),
+        (x: 4321, y: 876),
+      );
+      // A full-canvas span stores 0 instead of dividing by zero.
+      expect(floorElementStoredFromRoomTopLeft(0, 0, effW: 10000, effH: 150), (
+        x: 0,
+        y: 0,
+      ));
+    });
+
+    test('floorRectsIntersect: touching edges do NOT intersect', () {
+      const a = (left: 0.0, top: 0.0, width: 1000.0, height: 1000.0);
+      const apart = (left: 1000.0, top: 0.0, width: 500.0, height: 500.0);
+      const inside = (left: 999.0, top: 999.0, width: 10.0, height: 10.0);
+      expect(floorRectsIntersect(a, apart), isFalse);
+      expect(floorRectsIntersect(a, inside), isTrue);
+      expect(floorRectsIntersect(inside, a), isTrue);
     });
   });
 }

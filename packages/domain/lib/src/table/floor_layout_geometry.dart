@@ -39,7 +39,12 @@ const int kFloorTableH = 2400;
 typedef FloorPoint = ({int x, int y});
 
 /// A rectangle in ROOM UNITS (doubles: derived values are sub-unit precise).
-typedef FloorRoomRect = ({double left, double top, double width, double height});
+typedef FloorRoomRect = ({
+  double left,
+  double top,
+  double width,
+  double height,
+});
 
 /// Clamps one normalized coordinate into the storable range.
 int clampFloorCoordinate(int value) =>
@@ -134,12 +139,119 @@ FloorPoint initialFloorPlacement(List<FloorPoint> occupied) {
         x: ((column + 0.5) / columns * kFloorLayoutMax).round(),
         y: ((row + 0.5) / rows * kFloorLayoutMax).round(),
       );
-      final clear = occupied.every((p) => !floorPlacementsOverlap(candidate, p));
+      final clear = occupied.every(
+        (p) => !floorPlacementsOverlap(candidate, p),
+      );
       if (clear) return candidate;
     }
   }
   return (x: kFloorLayoutMax ~/ 2, y: kFloorLayoutMax ~/ 2);
 }
+
+// ---------------------------------------------------------------------------
+// 027 — visual-only floor FIXTURES (walls/doors/windows/cashier/plants).
+// Same stored-coordinate semantics as tables — the anchor is the fraction of
+// the USABLE span for the fixture's EFFECTIVE (rotated) footprint — so a
+// fixture renders at the identical room spot on every surface.
+// ---------------------------------------------------------------------------
+
+/// The wire kinds of a floor fixture (owner decision 4 — exactly these five).
+const List<String> kFloorElementKinds = [
+  'wall',
+  'door',
+  'window',
+  'cashier',
+  'plant',
+];
+
+/// The per-kind DEFAULT footprint in room units (display + palette creation;
+/// the server owns enforcement). Wall/window are resizable; door/cashier/plant
+/// are fixed to these sizes.
+({int w, int h}) floorElementDefaultSize(String kind) => switch (kind) {
+  'wall' => (w: 3000, h: 150),
+  'window' => (w: 2000, h: 150),
+  'door' => (w: 900, h: 150),
+  _ => (w: 900, h: 900), // cashier, plant
+};
+
+/// Whether a fixture kind may be resized (owner decision 4).
+bool floorElementResizable(String kind) => kind == 'wall' || kind == 'window';
+
+/// Whether a fixture kind may carry a label (owner decision 4).
+bool floorElementLabelable(String kind) => kind == 'cashier' || kind == 'door';
+
+/// The EFFECTIVE room-unit footprint after [quarterTurns] clockwise quarter
+/// rotations (odd turns swap the axes; width/height stay stored unrotated).
+({double w, double h}) floorElementEffectiveSize(
+  int width,
+  int height, {
+  int quarterTurns = 0,
+}) {
+  double clampSpan(int v) => v < 100
+      ? 100.0
+      : (v > kFloorLayoutMax ? kFloorLayoutMax.toDouble() : v.toDouble());
+  final rotated = quarterTurns.isOdd;
+  return (
+    w: clampSpan(rotated ? height : width),
+    h: clampSpan(rotated ? width : height),
+  );
+}
+
+/// The room-unit rect of a fixture at stored ([x], [y]) with the given stored
+/// footprint + orientation. Same anchor semantics as [floorTableRoomRect]:
+/// the stored value is the fraction of the usable span (10000 − effective
+/// footprint) the top-left anchor sits at — always in-bounds by construction.
+FloorRoomRect floorElementRoomRect(
+  int x,
+  int y, {
+  required int width,
+  required int height,
+  int quarterTurns = 0,
+}) {
+  final eff = floorElementEffectiveSize(
+    width,
+    height,
+    quarterTurns: quarterTurns,
+  );
+  final usableW = kFloorLayoutMax - eff.w;
+  final usableH = kFloorLayoutMax - eff.h;
+  return (
+    left: clampFloorCoordinate(x) / kFloorLayoutMax * usableW,
+    top: clampFloorCoordinate(y) / kFloorLayoutMax * usableH,
+    width: eff.w,
+    height: eff.h,
+  );
+}
+
+/// Inverse of [floorElementRoomRect]'s anchor: the stored coordinates whose
+/// anchor lands at the given room-unit top-left for the effective footprint
+/// ([effW]×[effH]). A zero usable span (full-canvas fixture) stores 0.
+FloorPoint floorElementStoredFromRoomTopLeft(
+  double leftRoom,
+  double topRoom, {
+  required double effW,
+  required double effH,
+}) {
+  final usableW = kFloorLayoutMax - effW;
+  final usableH = kFloorLayoutMax - effH;
+  return (
+    x: usableW <= 0
+        ? 0
+        : clampFloorCoordinate((leftRoom / usableW * kFloorLayoutMax).round()),
+    y: usableH <= 0
+        ? 0
+        : clampFloorCoordinate((topRoom / usableH * kFloorLayoutMax).round()),
+  );
+}
+
+/// Whether a fixture rect and a table rect intersect in room units — the
+/// Dashboard's NON-blocking informational warning (owner decision 6: overlap
+/// is legal, never auto-corrected, never blocks saving).
+bool floorRectsIntersect(FloorRoomRect a, FloorRoomRect b) =>
+    a.left < b.left + b.width &&
+    b.left < a.left + a.width &&
+    a.top < b.top + b.height &&
+    b.top < a.top + a.height;
 
 /// Whether two placed tables overlap under the SHARED footprint contract —
 /// evaluated per-axis in ROOM UNITS, so the verdict is identical on every
