@@ -1,2 +1,4 @@
 # POS-REFERENCE-REDESIGN: local before/after screenshot output (never committed)
 test/goldens/redesign/
+# TABLE-FLOOR-LAYOUT-021: local floor-map screenshot output (never committed)
+test/goldens/table_floor_021/
