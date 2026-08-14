@@ -52,11 +52,22 @@ class SupabaseAuthBootstrap {
   /// gated by the `menu_images_device_select` storage policy (an ACTIVE POS
   /// device session bound to this anonymous principal at redeem time; KDS is
   /// excluded — T-014). Anon-key-only, money-free (D-011/T-003).
+  ///
+  /// POS-OPEN-ORDERS-REALTIME-GATE-013: also exposes [invalidationSourceFactory]
+  /// — the ONLY realtime capability a device gets. It builds a
+  /// [RealtimeInvalidationSource] over the SAME already-authenticated client
+  /// (never a second client, never the raw client object), so the private
+  /// branch-hint channel presents this anonymous principal's JWT and is
+  /// authorized server-side by the device-session RECEIVE policy on
+  /// `realtime.messages`. Hints carry no data; the consumer must still call
+  /// the authoritative, fully-gated refresh RPCs (D-010).
   Future<
     ({
       SyncRpcTransport transport,
       DeviceImageUrlResolver imageUrlResolver,
       DeviceReceiptLogoReader receiptLogoReader,
+      InvalidationSource Function(RealtimeScope scope)
+      invalidationSourceFactory,
     })
   >
   createAnonymousDeviceSession() async {
@@ -69,6 +80,8 @@ class SupabaseAuthBootstrap {
       // downloader on the SAME anonymous session (server-gated by the
       // restaurant_logos_device_select policy; KDS excluded).
       receiptLogoReader: SupabaseDeviceReceiptLogoReader(client),
+      invalidationSourceFactory: (scope) =>
+          RealtimeInvalidationSource(client: client, scope: scope),
     );
   }
 }

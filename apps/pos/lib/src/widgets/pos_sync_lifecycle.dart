@@ -9,6 +9,7 @@ import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
+import '../state/pos_orders_realtime_bridge.dart';
 import '../state/ready_notifications_controller.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the app-lifecycle seam for authoritative sync.
@@ -86,6 +87,11 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
   /// arm path goes through [_armReconnectProbe], which returns immediately if
   /// a timer is already live.
   Timer? _reconnectProbe;
+
+  /// POS-OPEN-ORDERS-REALTIME-GATE-013: keeps the branch-hint bridge
+  /// materialized and starts it (foreground-gated) whenever the scope-keyed
+  /// provider rebuilds it.
+  ProviderSubscription<PosOrdersRealtimeBridge?>? _realtimeBridgeSubscription;
 
   /// (Pass A) Whether the app is currently foregrounded. The probe is armed
   /// ONLY while this is true — a periodic RPC from a backgrounded till is the
@@ -174,6 +180,23 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
           if (previous == PosOfflinePhase.offlineCached &&
               next == PosOfflinePhase.online) {
             _onReconnected();
+          }
+        },
+        fireImmediately: true,
+      );
+    });
+    // POS-OPEN-ORDERS-REALTIME-GATE-013: materialize the branch-hint bridge
+    // and START it whenever it (re)builds while the app is foregrounded. The
+    // provider itself owns creation/disposal (scope change / re-pair / logout
+    // rebuild it, disposing the old channel via ref.onDispose); this listener
+    // only adds the foreground-gated start. In demo, tests, and degraded
+    // boots the factory is Disabled, so start() opens no socket.
+    _guarded(() {
+      _realtimeBridgeSubscription = ref.listenManual(
+        posOrdersRealtimeBridgeProvider,
+        (previous, bridge) {
+          if (bridge != null && _foreground) {
+            _guarded(() => unawaited(bridge.start()));
           }
         },
         fireImmediately: true,
@@ -323,6 +346,7 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     _heartbeatSubscription?.close();
     _kitchenModeSnapshotSubscription?.close();
     _offlinePhaseSubscription?.close();
+    _realtimeBridgeSubscription?.close();
     _cancelReconnectProbe();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -354,9 +378,20 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
       // re-arms it below when the phase is still offlineCached.
       _foreground = false;
       _cancelReconnectProbe();
+      // POS-OPEN-ORDERS-REALTIME-GATE-013: the realtime socket pauses with
+      // the surface — stop() closes the channel; the resume path below opens
+      // a FRESH authorized subscription (the bridge builds a new source per
+      // start, a disposed channel is never resurrected).
+      _guarded(() => ref.read(posOrdersRealtimeBridgeProvider)?.stop());
       return;
     }
     _foreground = true;
+    // POS-OPEN-ORDERS-REALTIME-GATE-013: a fresh authorized subscription on
+    // resume (start() is idempotent, so a platform double-resume is safe).
+    _guarded(() {
+      final bridge = ref.read(posOrdersRealtimeBridgeProvider);
+      if (bridge != null) unawaited(bridge.start());
+    });
     // RESUME. The coordinator collapses concurrent callers onto the ONE in-flight
     // sync, so a platform that fires `resumed` more than once cannot start three
     // racing pulls whose losers overwrite the winner.

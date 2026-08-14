@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'design/pos_motion.dart';
 import 'design/pos_visual_tokens.dart';
+import 'data/order_center_view.dart' show PosOrderSection, sectionContains;
 import 'pos_palette.dart';
 import 'state/cart_controller.dart';
 import 'state/discount_controller.dart' show staffCapabilitiesProvider;
@@ -12,6 +13,8 @@ import 'state/menu_filter.dart';
 import 'state/pos_device_accent.dart';
 import 'state/pos_menu_provider.dart';
 import 'state/pos_offline_state.dart';
+import 'state/recent_orders_controller.dart'
+    show posRecentOrdersControllerProvider;
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/device_settings_menu.dart';
@@ -19,6 +22,7 @@ import 'widgets/language_selector.dart';
 import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
+import 'widgets/open_orders_strip.dart';
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_identity_title.dart';
 import 'widgets/pos_bottom_bar.dart';
@@ -326,6 +330,13 @@ class _MenuPane extends ConsumerWidget {
             itemCounts: _categoryCounts(menu),
           );
 
+    // POS-OPEN-ORDERS-STRIP-011: the strip needs the denser band exactly where
+    // the grid itself goes compact (the 1024x600 class of viewports).
+    final viewport = MediaQuery.sizeOf(context);
+    final compactStrip =
+        posLayoutModeFor(width: viewport.width, height: viewport.height) ==
+        PosLayoutMode.compactLandscape;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -333,6 +344,19 @@ class _MenuPane extends ConsumerWidget {
           itemCount: menu?.items.length,
           rail: menuAsync.isLoading ? const _CategoryRailSkeleton() : rail,
         ),
+        // POS-OPEN-ORDERS-STRIP-011: every currently-open order, one tap from
+        // its existing detail/actions surface. Renders NOTHING when no order
+        // is open.
+        // POS-OPEN-ORDERS-SCROLL-POLISH-017: while the GRID is showing, the
+        // strip lives INSIDE the grid's own vertical scroll (its first,
+        // NON-PINNED element) so it scrolls away naturally with the products
+        // and returns at the top — see [_MenuScrollBody]. Every OTHER menu
+        // state (skeleton / load error / setup-required) has no vertical
+        // scroll, so the strip keeps its fixed spot above the state view
+        // here, exactly as before. The two mounts are mutually exclusive:
+        // this guard is the same test `when` uses to pick the data branch.
+        if (menuAsync is! AsyncData<PosMenuData>)
+          OpenOrdersStrip(compact: compactStrip),
         Expanded(
           child: menuAsync.when(
             loading: () => const _MenuSkeleton(),
@@ -351,7 +375,7 @@ class _MenuPane extends ConsumerWidget {
                 : _MenuLoadError(
                     onRetry: () => ref.invalidate(posMenuProvider),
                   ),
-            data: (menu) => _MenuGrid(menu: menu),
+            data: (menu) => _MenuGrid(menu: menu, stripCompact: compactStrip),
           ),
         ),
       ],
@@ -754,9 +778,13 @@ class _OfflineSetupRequired extends StatelessWidget {
 }
 
 class _MenuGrid extends ConsumerWidget {
-  const _MenuGrid({required this.menu});
+  const _MenuGrid({required this.menu, required this.stripCompact});
 
   final PosMenuData menu;
+
+  /// Forwarded to the in-scroll [OpenOrdersStrip] (017): the pane resolves
+  /// the compact flag once from the viewport, same as before.
+  final bool stripCompact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -787,10 +815,20 @@ class _MenuGrid extends ConsumerWidget {
     final cartLocked = cart.lockedByAddition;
 
     if (menu.items.isEmpty) {
-      return RestoflowStateView(
-        icon: Icons.restaurant_menu_outlined,
-        title: l10n.posMenuEmptyTitle,
-        message: l10n.posMenuEmptyBody,
+      // 017: no vertical scroll here either — the strip keeps its fixed spot
+      // above the state view (and renders nothing when no order is open).
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OpenOrdersStrip(compact: stripCompact),
+          Expanded(
+            child: RestoflowStateView(
+              icon: Icons.restaurant_menu_outlined,
+              title: l10n.posMenuEmptyTitle,
+              message: l10n.posMenuEmptyBody,
+            ),
+          ),
+        ],
       );
     }
     // POS-PREMIUM-VISUAL-POLISH-001: this terminal's secondary accent, for
@@ -799,9 +837,18 @@ class _MenuGrid extends ConsumerWidget {
     // The category rail now lives in the deck (`_MenuPane`); the grid is only
     // the merchandise plane.
     final Widget grid = items.isEmpty
-        ? RestoflowStateView(
-            icon: Icons.search_off_outlined,
-            title: l10n.posSearchNoResults,
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 017: the no-results state has no vertical scroll — fixed strip.
+              OpenOrdersStrip(compact: stripCompact),
+              Expanded(
+                child: RestoflowStateView(
+                  icon: Icons.search_off_outlined,
+                  title: l10n.posSearchNoResults,
+                ),
+              ),
+            ],
           )
         : LayoutBuilder(
             builder: (context, constraints) {
@@ -811,8 +858,11 @@ class _MenuGrid extends ConsumerWidget {
                 context,
                 constraints.maxWidth,
               );
-              return GridView.builder(
-                padding: EdgeInsets.all(geometry.padding),
+              // 017: the strip + grid share ONE vertical scroll — the strip
+              // is the first, non-pinned sliver and scrolls away naturally.
+              return _MenuScrollBody(
+                stripCompact: stripCompact,
+                gridPadding: EdgeInsets.all(geometry.padding),
                 gridDelegate: geometry.delegate,
                 itemCount: items.length,
                 itemBuilder: (context, index) {
@@ -976,6 +1026,117 @@ class _MenuGrid extends ConsumerWidget {
     return sameDay
         ? material.formatTimeOfDay(TimeOfDay.fromDateTime(local))
         : material.formatMediumDate(local);
+  }
+}
+
+/// POS-OPEN-ORDERS-SCROLL-POLISH-017 — the merchandise scroll view with the
+/// open-orders strip as its FIRST, NON-PINNED element: the strip scrolls away
+/// naturally with the products and returns when the cashier scrolls back to
+/// the top. Never sticky, never floating; the strip's own horizontal card
+/// list is untouched (a horizontal scrollable inside a vertical one competes
+/// with nothing). Geometry parity with the old `GridView.builder`: the same
+/// grid delegate and the same all-round padding, now as a padded sliver.
+///
+/// This widget also owns the ONE piece of scroll bookkeeping the arrangement
+/// needs. The band's height is COUNT-INDEPENDENT (a fixed 74/90dp × bounded
+/// text scale, see [OpenOrdersStrip]), so ordinary realtime updates (N→M
+/// cards, status repaints) never change the leading extent. Only the band's
+/// mount (0→N open orders) or unmount (N→0) does — and if that lands while
+/// the cashier is scrolled into the grid, the content under their finger
+/// would visibly shift by the band height. The fix: compensate the scroll
+/// offset by that known height in the same frame, so the viewport stays
+/// visually stationary (acceptance: a realtime update while the strip is
+/// off-screen must NOT jump the user's scroll position). At the very top
+/// (offset 0) no compensation runs — the strip simply appears in place.
+class _MenuScrollBody extends ConsumerStatefulWidget {
+  const _MenuScrollBody({
+    required this.stripCompact,
+    required this.gridPadding,
+    required this.gridDelegate,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  final bool stripCompact;
+  final EdgeInsetsGeometry gridPadding;
+  final SliverGridDelegate gridDelegate;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  ConsumerState<_MenuScrollBody> createState() => _MenuScrollBodyState();
+}
+
+class _MenuScrollBodyState extends ConsumerState<_MenuScrollBody> {
+  final ScrollController _controller = ScrollController();
+  bool? _hadOpenOrders;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// The strip's deterministic band height — mirrors [OpenOrdersStrip.build]
+  /// (74/90 by the compact flag, grown with the bounded text scale).
+  double _bandHeight(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    return (widget.stripCompact ? 74.0 : 90.0) * textScale.clamp(1.0, 1.5);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Band PRESENCE, by the strip's own canonical predicate — watched here
+    // ONLY to keep the viewport stationary across the band's mount/unmount
+    // while scrolled. Membership stays entirely the strip's business.
+    final hasOpenOrders = ref.watch(
+      posRecentOrdersControllerProvider.select(
+        (orders) => orders.any((o) => sectionContains(PosOrderSection.open, o)),
+      ),
+    );
+    final had = _hadOpenOrders;
+    if (had != null &&
+        had != hasOpenOrders &&
+        _controller.hasClients &&
+        _controller.offset > 0) {
+      final target =
+          _controller.offset + (hasOpenOrders ? 1 : -1) * _bandHeight(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_controller.hasClients) return;
+        _controller.jumpTo(
+          target
+              .clamp(
+                _controller.position.minScrollExtent,
+                _controller.position.maxScrollExtent,
+              )
+              .toDouble(),
+        );
+      });
+    }
+    _hadOpenOrders = hasOpenOrders;
+
+    // Keys: the scroll viewport + the product sliver keep stable handles for
+    // the layout/responsive contracts that used to pin `GridView` directly.
+    return CustomScrollView(
+      key: const Key('pos-menu-scroll'),
+      controller: _controller,
+      slivers: [
+        SliverToBoxAdapter(
+          child: OpenOrdersStrip(compact: widget.stripCompact),
+        ),
+        SliverPadding(
+          padding: widget.gridPadding,
+          sliver: SliverGrid(
+            key: const Key('pos-product-grid'),
+            gridDelegate: widget.gridDelegate,
+            delegate: SliverChildBuilderDelegate(
+              widget.itemBuilder,
+              childCount: widget.itemCount,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -5673,4 +5673,17 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'תצוגה מקדימה';
+
+  @override
+  String get posOpenOrdersElapsedNow => 'עכשיו';
+
+  @override
+  String posOpenOrdersElapsedMinutes(int minutes) {
+    return 'לפני $minutes דק׳';
+  }
+
+  @override
+  String posOpenOrdersElapsedHoursMinutes(int hours, int minutes) {
+    return 'לפני $hours שע׳ $minutes דק׳';
+  }
 }

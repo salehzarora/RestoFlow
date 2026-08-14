@@ -44,7 +44,7 @@ void main() {
       300,
       scrollable: find
           .descendant(
-            of: find.byType(GridView),
+            of: find.byKey(const Key('pos-menu-scroll')),
             matching: find.byType(Scrollable),
           )
           .first,

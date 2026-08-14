@@ -1770,5 +1770,8 @@
   "posDeviceThemeCustomApply": "تطبيق الألوان",
   "posDeviceThemeCustomCancel": "إلغاء",
   "posDeviceThemeCustomReset": "إعادة للوضع الافتراضي",
-  "posDeviceThemeCustomPreviewTitle": "معاينة"
+  "posDeviceThemeCustomPreviewTitle": "معاينة",
+  "posOpenOrdersElapsedNow": "الآن",
+  "posOpenOrdersElapsedMinutes": "منذ {minutes} د",
+  "posOpenOrdersElapsedHoursMinutes": "منذ {hours} س {minutes} د"
 }

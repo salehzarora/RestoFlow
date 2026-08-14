@@ -218,7 +218,7 @@ void main() {
       // The workspace floats inside the shell gutters (004: borderless
       // panels, so no 1px border term).
       expect(
-        tester.getSize(find.byType(GridView).last).width,
+        tester.getSize(find.byKey(const Key('pos-menu-scroll'))).width,
         1024 - 340 - 2 * kPosShellGutter - kPosShellGap,
       );
 

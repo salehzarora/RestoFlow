@@ -11,6 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
 import '../data/order_actions.dart';
+import '../data/order_actions_assembly.dart';
 import '../data/order_center_view.dart';
 import '../data/order_close_policy.dart';
 import '../data/order_identity.dart';
@@ -196,94 +197,15 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final theme = Theme.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
     final status = ref.watch(posOrderSyncControllerProvider);
-    // EFFECTIVE rights, or null when UNKNOWN. Unknown is NOT denied — a failed probe
-    // must not silently strip a manager of the ability to discount; the server
-    // refuses correctly either way.
-    final caps = ref.watch(staffCapabilitiesProvider).value;
     final entries = ref.watch(outboxControllerProvider);
-    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] Demo never reaches the
-    // acknowledgement rule: a demo entry is never pushed, so it stays pending
-    // forever and would strip payment from every demo order.
-    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the inputs for the printer-only
-    // Complete safety net — the VERIFIED kitchen mode (null unless verified
-    // printer_only/kds) + the set of orders with a completion in flight.
-    final verifiedMode = ref.watch(posVerifiedKitchenModeProvider);
-    final completingIds = ref.watch(posOrderCompleteControllerProvider);
-
-    // The local queue, joined by ORDER IDENTITY. It reports what THIS DEVICE is doing —
-    // never what the ORDER is doing. Conflating the two is what made a queued
-    // payment look like a lifecycle state.
-    //
-    // Joined on the code, this map put one order's "syncing" badge on a DIFFERENT order
-    // that happened to share it — and, through `resolveOrderActions`, withdrew that
-    // innocent order's controls as though it had work in flight.
-    final pendingByIdentity = <String, PosPendingKind>{
-      for (final e in entries)
-        if (e.syncState.isPending) _entryIdentity(e).key: PosPendingKind.submit,
-    };
-    // Pass B: this device's `order.submit` entry per identity — the ONE input the
-    // acknowledgement predicate needs. Restricted to submits on purpose: a queued
-    // payment or discount targets the same order id and says nothing about
-    // whether the ORDER was ever created.
-    final submitByIdentity = <String, OutboxEntry>{
-      for (final e in entries)
-        if (e.operationType == 'order.submit') posOutboxEntryIdentity(e).key: e,
-    };
-    // COMPUTED IN build FROM THE WATCHED PROVIDERS, never captured once: the
-    // outbox list above and the orders list are both watched, so the moment the
-    // queued submit flips to `applied` this recomputes and payment reopens on the
-    // SAME mounted tree — no restart, no reopen.
-    bool submitUnacknowledgedFor(PosRecentOrder o) => posSubmitUnacknowledged(
-      isDemo: isDemo,
-      hasServerSnapshot: o.snapshot != null,
-      submitEntry: submitByIdentity[o.identity.key],
-    );
-    // PSC-001C: an addition THIS DEVICE has in flight (failed-retryable or
-    // applied-awaiting-refresh) for an order withdraws that order's other
-    // controls, exactly like any other pending local operation. Keyed by the
-    // server order id — an addition only ever targets a real server order.
-    final addition = ref.watch(additionControllerProvider);
-    final additionNotifier = ref.read(additionControllerProvider.notifier);
-    // MONEY-CODEX-FINAL-CLOSURE-005 (F1/F4). Every order with a live durable
-    // amendment record, not just the one that happens to be the ACTIVE attempt,
-    // and every order at all while the journal is still being read.
-    //
-    // KEYED THROUGH `identity.key`, WHICH IS THE BUG THIS ALSO FIXES. The map is
-    // keyed by `PosOrderIdentity.key` — `srv:<uuid>` for a server order — while
-    // the PSC-001C line here wrote the RAW `additionTarget.orderId`. Those never
-    // matched, so the addition has in fact NEVER withdrawn an order's money
-    // actions in this sheet. The lookup below resolves each blocked order id to
-    // the row that actually carries it.
-    //
-    // (F1) Before hydration finishes we do not know WHICH orders are affected,
-    // so no money action may be offered on any of them. It is a disk read, and
-    // the alternative is taking a payment against an order whose total is about
-    // to change. Rows, search and the read-only receipt view are untouched.
-    final hydrating = additionNotifier.isStartupBlocked;
-    final blockedOrderIds = <String>{
-      ...additionNotifier.blockedOrderIds,
-      if (addition.target case final t?)
-        if (addition.sending || addition.failed || addition.awaitingRefresh)
-          t.orderId,
-    };
-    // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Which rows carry the
-    // `itemsAdd` stamp ONLY because the journal has not been read yet. The
-    // blanket above is a fail-closed for MONEY actions and stays exactly as it
-    // was; this set lets the central policy relax the READ-ONLY pre-bill for the
-    // rows it has no actual evidence against (see `amendmentsHydrating`). A row
-    // with a REAL blocked amendment is never in it.
-    final hydrationBlanketOnly = <String>{};
-    if (hydrating || blockedOrderIds.isNotEmpty) {
-      for (final o in orders) {
-        final id = o.orderId;
-        final reallyBlocked = id != null && blockedOrderIds.contains(id);
-        if (hydrating || reallyBlocked) {
-          pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
-          if (!reallyBlocked) hydrationBlanketOnly.add(o.identity.key);
-        }
-      }
-    }
+    // POS-OPEN-ORDERS-STRIP-011: the resolveOrderActions INPUT assembly
+    // (pending join, acknowledgement predicate, amendment blanket, close
+    // eligibility) moved VERBATIM to the shared [PosOrderActionsAssembly] so
+    // this sheet and the open-orders strip can never resolve different
+    // verdicts for the same order. Watched here, per build, exactly as
+    // before — the moment a queued submit flips to `applied` this recomputes
+    // and payment reopens on the SAME mounted tree.
+    final assembly = PosOrderActionsAssembly.watch(ref, orders);
 
     // [POS-OFFLINE-OPERATIONS-002] Pass C (B2) — the OWED kitchen ticket per
     // row. A direct_print `order.submit` whose LOCAL dispatch claim still
@@ -424,41 +346,12 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                         return _LoadMoreButton(l10n: l10n, status: status);
                       }
                       final o = visible[i];
-                      final unacknowledged = submitUnacknowledgedFor(o);
                       return _OrderCard(
                         order: o,
                         l10n: l10n,
                         isWide: isWide,
-                        awaitingSubmitAck: unacknowledged,
-                        actions: resolveOrderActions(
-                          o,
-                          capabilities: caps,
-                          pending: pendingByIdentity[o.identity.key],
-                          // Pass B: payment is withdrawn while the server has not
-                          // acknowledged this order's submit (fail-open — see
-                          // posSubmitUnacknowledged).
-                          submitUnacknowledged: unacknowledged,
-                          // Pass C: this row's `itemsAdd` stamp is the startup
-                          // blanket, not a known amendment — it relaxes the
-                          // read-only pre-bill and nothing else.
-                          amendmentsHydrating: hydrationBlanketOnly.contains(
-                            o.identity.key,
-                          ),
-                          // Gap B: the central close-eligibility policy decides the
-                          // printer-only Complete safety net (server re-enforces).
-                          completeEligible:
-                              posOrderCloseEligibility(
-                                status: o.status ?? '',
-                                settled: o.settlement != PosSettlement.unpaid,
-                                verifiedMode: verifiedMode,
-                                actorAuthorized:
-                                    caps?.canFinishKitchenOrders ?? false,
-                                transitionInFlight:
-                                    pendingByIdentity[o.identity.key] != null ||
-                                    completingIds.contains(o.orderId),
-                              ) ==
-                              PosOrderCloseEligibility.allowed,
-                        ),
+                        awaitingSubmitAck: assembly.submitUnacknowledgedFor(o),
+                        actions: assembly.resolveFor(o),
                         outboxState: _outboxStateFor(entries, o.identity),
                         owedPrintEntry: owedKitchenTicketEntryFor(o),
                       );

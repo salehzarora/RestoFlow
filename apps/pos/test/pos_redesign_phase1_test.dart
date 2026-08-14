@@ -203,7 +203,11 @@ void main() {
         expect(find.byKey(const Key('menu-search-field')), findsOneWidget);
         expect(find.byType(CategoryChips), findsOneWidget);
         final grid =
-            tester.widget<GridView>(find.byType(GridView).last).gridDelegate
+            tester
+                    .widget<SliverGrid>(
+                      find.byKey(const Key('pos-product-grid')),
+                    )
+                    .gridDelegate
                 as SliverGridDelegateWithFixedCrossAxisCount;
         expect(grid.crossAxisCount, cols);
 

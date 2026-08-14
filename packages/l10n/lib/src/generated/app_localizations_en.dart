@@ -5758,4 +5758,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'Preview';
+
+  @override
+  String get posOpenOrdersElapsedNow => 'now';
+
+  @override
+  String posOpenOrdersElapsedMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String posOpenOrdersElapsedHoursMinutes(int hours, int minutes) {
+    return '${hours}h ${minutes}m';
+  }
 }

@@ -111,13 +111,21 @@ Future<void> _pumpScreen(
   }
 }
 
-/// The PRODUCT grid — the last GridView in the tree (the deck's category rail
-/// is a ListView, so this stays unambiguous).
+/// The PRODUCT grid — POS-OPEN-ORDERS-SCROLL-POLISH-017 keyed the LOADED grid
+/// (`pos-product-grid`, a [SliverGrid] inside the shared menu scroll); the
+/// SKELETON placeholder is still a plain [GridView], so the parity checks read
+/// whichever state is on screen.
 SliverGridDelegateWithFixedCrossAxisCount _productGridDelegate(
   WidgetTester tester,
-) =>
-    tester.widget<GridView>(find.byType(GridView).last).gridDelegate
+) {
+  final keyed = find.byKey(const Key('pos-product-grid'));
+  if (keyed.evaluate().isNotEmpty) {
+    return tester.widget<SliverGrid>(keyed).gridDelegate
         as SliverGridDelegateWithFixedCrossAxisCount;
+  }
+  return tester.widget<GridView>(find.byType(GridView).last).gridDelegate
+      as SliverGridDelegateWithFixedCrossAxisCount;
+}
 
 void main() {
   group('A. layout-mode resolution and the approved column counts', () {
@@ -232,18 +240,20 @@ void main() {
       await _pumpScreen(tester);
 
       expect(find.byType(CategoryChips), findsOneWidget);
-      // The chips must no longer be built inside the scrolling product grid.
+      // The chips must no longer be built inside the scrolling product body.
       expect(
         find.descendant(
-          of: find.byType(GridView),
+          of: find.byKey(const Key('pos-menu-scroll')),
           matching: find.byType(CategoryChips),
         ),
         findsNothing,
       );
-      // ...and they sit ABOVE the grid on screen.
+      // ...and they sit ABOVE the merchandise scroll area on screen.
       expect(
         tester.getRect(find.byType(CategoryChips)).bottom,
-        lessThanOrEqualTo(tester.getRect(find.byType(GridView).last).top),
+        lessThanOrEqualTo(
+          tester.getRect(find.byKey(const Key('pos-menu-scroll'))).top,
+        ),
       );
     });
 
