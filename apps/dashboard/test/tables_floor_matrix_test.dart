@@ -6,7 +6,7 @@ import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
     show RestoflowFloorClusterSeam, kRestoflowFloorSectionAspect;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show floorTableRoomRect;
+    show floorElementRoomRect, floorTableRoomRect;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminResult;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -45,10 +45,45 @@ DashboardTable _t(
   layoutY: y,
 );
 
+/// 027: the default matrix fixture — one wall high on the s1 canvas, clear of
+/// every table rect (so the overlap notice stays OFF in the base scenes).
+const _wallX1 = DashboardFloorElement(
+  id: 'x1',
+  sectionId: 's1',
+  kind: 'wall',
+  layoutX: 5000,
+  layoutY: 30,
+  widthNorm: 3000,
+  heightNorm: 150,
+);
+
 class _MatrixRepo extends InMemoryTablesStore {
+  _MatrixRepo({this.elements = const [_wallX1]});
+
+  /// 027: this run's fixture catalog + write recorders (the matrix asserts
+  /// WHAT was persisted, not the in-memory demo store's internals).
+  final List<DashboardFloorElement> elements;
+  final saved = <DashboardFloorElement>[];
+  final deletedIds = <String>[];
+
+  @override
+  Future<AdminResult<void>> upsertFloorElement(
+    DashboardFloorElement element,
+  ) async {
+    saved.add(element);
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> deleteFloorElement(String id) async {
+    deletedIds.add(id);
+    return const Success(null);
+  }
+
   @override
   Future<AdminResult<TablesFloorSnapshot>> load() async => Success(
     TablesFloorSnapshot(
+      floorElements: elements,
       sections: const [
         DashboardTableSection(
           id: 's1',
@@ -156,6 +191,7 @@ Future<List<FlutterErrorDetails>> _pump(
   required Size size,
   required Locale locale,
   bool arrange = false,
+  _MatrixRepo? repo,
 }) async {
   final errors = <FlutterErrorDetails>[];
   final previous = FlutterError.onError;
@@ -172,7 +208,7 @@ Future<List<FlutterErrorDetails>> _pump(
       locale: locale,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: Scaffold(body: TablesScreen(repository: _MatrixRepo())),
+      home: Scaffold(body: TablesScreen(repository: repo ?? _MatrixRepo())),
     ),
   );
   await tester.pumpAndSettle();
@@ -302,5 +338,157 @@ void main() {
       canvasRect.width / canvasRect.height,
       closeTo(kRestoflowFloorSectionAspect, 0.01),
     );
+  });
+
+  group('027 FIXTURES (Dashboard editor)', () {
+    testWidgets('read-only outside Elements submode + contract parity rect', (
+      tester,
+    ) async {
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: const Locale('en'),
+        arrange: true,
+      );
+      _expectClean(errors, 'fixtures read-only');
+      // Tables submode (the default): the wall renders but is NOT drag-armed;
+      // tables keep their drag handles.
+      expect(find.byKey(const Key('floor-element-x1')), findsOneWidget);
+      expect(find.byKey(const Key('floor-element-drag-x1')), findsNothing);
+      expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);
+      // The fixture sits at the SHARED room-unit contract rect (<=0.5px).
+      final canvas = tester.getRect(find.byKey(const Key('floor-canvas-s1')));
+      final room = floorElementRoomRect(
+        _wallX1.layoutX,
+        _wallX1.layoutY,
+        width: _wallX1.widthNorm,
+        height: _wallX1.heightNorm,
+      );
+      final actual = tester.getRect(find.byKey(const Key('floor-element-x1')));
+      expect(
+        (actual.left - (canvas.left + room.left * canvas.width / 10000)).abs(),
+        lessThanOrEqualTo(0.5),
+      );
+      expect(
+        (actual.top - (canvas.top + room.top * canvas.height / 10000)).abs(),
+        lessThanOrEqualTo(0.5),
+      );
+      expect(
+        (actual.width - room.width * canvas.width / 10000).abs(),
+        lessThanOrEqualTo(0.5),
+      );
+    });
+
+    testWidgets('Elements submode locks tables, arms fixtures, and a drag '
+        'saves NEW coordinates on END only', (tester) async {
+      final repo = _MatrixRepo();
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: const Locale('en'),
+        arrange: true,
+        repo: repo,
+      );
+      _expectClean(errors, 'elements submode');
+      await tester.tap(find.byKey(const Key('floor-submode-elements')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('floor-element-drag-x1')), findsOneWidget);
+      expect(find.byKey(const Key('floor-drag-t1')), findsNothing);
+      expect(find.byKey(const Key('floor-add-element-s1')), findsOneWidget);
+      expect(repo.saved, isEmpty);
+      await tester.drag(
+        find.byKey(const Key('floor-element-drag-x1')),
+        const Offset(80, 40),
+      );
+      await tester.pumpAndSettle();
+      expect(repo.saved, hasLength(1));
+      expect(repo.saved.single.id, 'x1');
+      expect(repo.saved.single.layoutX, greaterThan(_wallX1.layoutX));
+      expect(repo.saved.single.layoutY, greaterThan(_wallX1.layoutY));
+    });
+
+    testWidgets('the element menu offers kind-appropriate actions and delete '
+        'reaches the repository', (tester) async {
+      final repo = _MatrixRepo();
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: const Locale('en'),
+        arrange: true,
+        repo: repo,
+      );
+      _expectClean(errors, 'element menu');
+      await tester.tap(find.byKey(const Key('floor-submode-elements')));
+      await tester.pumpAndSettle();
+      // A movement-free press on the fixture opens the menu.
+      await tester.tap(find.byKey(const Key('floor-element-drag-x1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('floor-element-menu')), findsOneWidget);
+      expect(find.byKey(const Key('floor-element-rotate')), findsOneWidget);
+      // A wall resizes but carries no label.
+      expect(find.byKey(const Key('floor-element-resize')), findsOneWidget);
+      expect(find.byKey(const Key('floor-element-label')), findsNothing);
+      await tester.tap(find.byKey(const Key('floor-element-delete')));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, ['x1']);
+    });
+
+    testWidgets('palette creation persists a defaulted fixture in the chosen '
+        'section', (tester) async {
+      final repo = _MatrixRepo();
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: const Locale('en'),
+        arrange: true,
+        repo: repo,
+      );
+      _expectClean(errors, 'palette');
+      await tester.tap(find.byKey(const Key('floor-submode-elements')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('floor-add-element-s1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('floor-add-kind-plant-s1')));
+      await tester.pumpAndSettle();
+      expect(repo.saved, hasLength(1));
+      final created = repo.saved.single;
+      expect(created.id, isEmpty); // the store mints the id
+      expect(created.sectionId, 's1');
+      expect(created.kind, 'plant');
+      expect((created.widthNorm, created.heightNorm), (900, 900));
+    });
+
+    testWidgets('fixture/table intersection raises the NON-blocking notice '
+        'and never locks the floor', (tester) async {
+      final repo = _MatrixRepo(
+        elements: const [
+          _wallX1,
+          // A cashier stand straight on top of t1 (500,500).
+          DashboardFloorElement(
+            id: 'x2',
+            sectionId: 's1',
+            kind: 'cashier',
+            layoutX: 500,
+            layoutY: 500,
+            widthNorm: 900,
+            heightNorm: 900,
+            label: 'POS',
+          ),
+        ],
+      );
+      final errors = await _pump(
+        tester,
+        size: const Size(1500, 5200),
+        locale: const Locale('en'),
+        arrange: true,
+        repo: repo,
+      );
+      _expectClean(errors, 'element overlap');
+      expect(find.byKey(const Key('floor-element-overlap-s1')), findsOneWidget);
+      // NON-blocking (owner decision 6): tables stay draggable, nothing is
+      // auto-moved, no dialog interrupts.
+      expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);
+      expect(find.byKey(const Key('floor-element-x2')), findsOneWidget);
+    });
   });
 }

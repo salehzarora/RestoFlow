@@ -53,14 +53,78 @@ class DashboardTableSection {
   final String branchId;
 }
 
+/// TABLE-FLOOR-MAP-POLISH-027: one VISUAL-ONLY floor fixture (a row of
+/// `table_floor_elements`) — wall/door/window/cashier/plant decoration on a
+/// section canvas. Never a table: no status, no occupancy, no orders.
+class DashboardFloorElement {
+  const DashboardFloorElement({
+    required this.id,
+    required this.sectionId,
+    required this.kind,
+    required this.layoutX,
+    required this.layoutY,
+    required this.widthNorm,
+    required this.heightNorm,
+    this.orientationQuarterTurns = 0,
+    this.label,
+  });
+
+  final String id;
+  final String sectionId;
+
+  /// `wall` / `door` / `window` / `cashier` / `plant` (wire values).
+  final String kind;
+
+  /// Normalized anchor (0..10000 each; PHYSICAL — never RTL-mirrored).
+  final int layoutX;
+  final int layoutY;
+
+  /// Stored (unrotated) footprint in room units.
+  final int widthNorm;
+  final int heightNorm;
+
+  /// Clockwise quarter turns (0..3) applied at render time.
+  final int orientationQuarterTurns;
+
+  /// Caption (cashier/door only by contract).
+  final String? label;
+
+  DashboardFloorElement copyWith({
+    int? layoutX,
+    int? layoutY,
+    int? widthNorm,
+    int? heightNorm,
+    int? orientationQuarterTurns,
+    String? label,
+    bool clearLabel = false,
+  }) => DashboardFloorElement(
+    id: id,
+    sectionId: sectionId,
+    kind: kind,
+    layoutX: layoutX ?? this.layoutX,
+    layoutY: layoutY ?? this.layoutY,
+    widthNorm: widthNorm ?? this.widthNorm,
+    heightNorm: heightNorm ?? this.heightNorm,
+    orientationQuarterTurns:
+        orientationQuarterTurns ?? this.orientationQuarterTurns,
+    label: clearLabel ? null : (label ?? this.label),
+  );
+}
+
 /// TABLE-FLOOR-LAYOUT-021: one load of the Tables surface — the table rows
 /// PLUS the section catalog (empty sections must render as empty canvases, so
-/// a per-row join can never carry them).
+/// a per-row join can never carry them). TABLE-FLOOR-MAP-POLISH-027 adds the
+/// visual fixture catalog (absent on an older backend -> empty).
 class TablesFloorSnapshot {
-  const TablesFloorSnapshot({required this.tables, required this.sections});
+  const TablesFloorSnapshot({
+    required this.tables,
+    required this.sections,
+    this.floorElements = const [],
+  });
 
   final List<DashboardTable> tables;
   final List<DashboardTableSection> sections;
+  final List<DashboardFloorElement> floorElements;
 }
 
 /// One configured dining table (a row of `dining_tables`). Inactive tables are
