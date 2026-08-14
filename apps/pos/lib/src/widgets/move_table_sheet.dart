@@ -16,7 +16,7 @@ import '../data/demo_tables.dart';
 import '../data/recent_order.dart';
 import '../data/table_move_repository.dart';
 import '../state/order_setup_controller.dart'
-    show floorElementsProvider, tablesProvider;
+    show floorElementsProvider, tablesProvider, tablesSnapshotProvider;
 import '../state/order_sync_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import '../state/table_move_controller.dart';
@@ -118,7 +118,11 @@ class _MoveTableSheetState extends ConsumerState<MoveTableSheet> {
       if ((e.conflict || e.notMovable || e.notAllowed) && !scopeMoved()) {
         await _reconcile(sync);
       }
-      if (e.tableUnavailable) container.invalidate(tablesProvider);
+      if (e.tableUnavailable) {
+        // 027 fix: the SNAPSHOT provider is the fetcher - invalidating the
+        // derived tablesProvider alone would never hit the repository again.
+        container.invalidate(tablesSnapshotProvider);
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;
