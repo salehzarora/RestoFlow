@@ -43,7 +43,8 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
     final better =
         m.y < anchor.y ||
         (m.y == anchor.y &&
-            (m.x < anchor.x || (m.x == anchor.x && m.id.compareTo(anchor.id) < 0)));
+            (m.x < anchor.x ||
+                (m.x == anchor.x && m.id.compareTo(anchor.id) < 0)));
     if (better) anchor = m;
   }
 
@@ -90,7 +91,10 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
 
   return {
     for (final m in ordered)
-      m.id: floorStoredFromRoomTopLeft(lefts[m.id]! - shiftX, tops[m.id]! - shiftY),
+      m.id: floorStoredFromRoomTopLeft(
+        lefts[m.id]! - shiftX,
+        tops[m.id]! - shiftY,
+      ),
   };
 }
 
