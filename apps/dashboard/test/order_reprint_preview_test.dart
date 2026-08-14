@@ -192,4 +192,66 @@ void main() {
     final html = documentToHtml(buildOrderReceiptPreview(l10n, _order()));
     expect(html.contains(l10n.ordersReprintCancelledBanner), isFalse);
   });
+
+  group('TABLE-FLOOR-LAYOUT-021: the dine-in star band in the kitchen '
+      'preview', () {
+    test('a DINE-IN kitchen preview opens and closes with the band', () async {
+      final l10n = await _l10n('en');
+      final doc = buildOrderKitchenTicketPreview(l10n, _order());
+      expect(doc.lines.first.kind, PrintLineKind.banner);
+      expect(doc.lines.last.kind, PrintLineKind.banner);
+      expect(doc.lines.where((l) => l.kind == PrintLineKind.banner).length, 2);
+      // The HTML print page renders the star rows.
+      expect(documentToHtml(doc).contains('*' * 32), isTrue);
+    });
+
+    test('a takeaway kitchen preview carries NO band; the receipt preview '
+        'never does', () async {
+      final l10n = await _l10n('en');
+      final takeaway = OrderDetail(
+        orderId: 'o3',
+        orderCode: '#1003CC',
+        status: 'completed',
+        orderType: 'takeaway',
+        currencyCode: 'ILS',
+        subtotalMinor: 3600,
+        discountTotalMinor: 0,
+        taxTotalMinor: 0,
+        grandTotalMinor: 3600,
+        items: const [
+          OrderDetailItem(name: 'Wrap', quantity: 1, lineTotalMinor: 3600),
+        ],
+      );
+      final kitchen = buildOrderKitchenTicketPreview(l10n, takeaway);
+      expect(kitchen.lines.any((l) => l.kind == PrintLineKind.banner), isFalse);
+      final receipt = buildOrderReceiptPreview(l10n, _order());
+      expect(receipt.lines.any((l) => l.kind == PrintLineKind.banner), isFalse);
+    });
+
+    test(
+      'the cancelled banner stays TOPMOST on a voided dine-in preview',
+      () async {
+        final l10n = await _l10n('en');
+        final voided = OrderDetail(
+          orderId: 'o4',
+          orderCode: '#1004DD',
+          status: 'voided',
+          orderType: 'dine_in',
+          currencyCode: 'ILS',
+          subtotalMinor: 3600,
+          discountTotalMinor: 0,
+          taxTotalMinor: 0,
+          grandTotalMinor: 3600,
+          items: const [
+            OrderDetailItem(name: 'Wrap', quantity: 1, lineTotalMinor: 3600),
+          ],
+        );
+        final doc = buildOrderKitchenTicketPreview(l10n, voided);
+        expect(doc.lines.first.kind, PrintLineKind.title);
+        expect(doc.lines.first.left, l10n.ordersReprintCancelledBanner);
+        expect(doc.lines[1].kind, PrintLineKind.banner);
+        expect(doc.lines.last.kind, PrintLineKind.banner);
+      },
+    );
+  });
 }

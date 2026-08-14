@@ -159,9 +159,15 @@ PrintDocument buildOrderKitchenTicketPreview(
   AppLocalizations l10n,
   OrderDetail detail,
 ) {
+  // TABLE-FLOOR-LAYOUT-021 (owner decision 6): the dashboard kitchen preview
+  // mirrors the shared composer's dine-in marker — a full-width star band
+  // opening and closing a DINE-IN ticket. The cancelled banner (when present)
+  // stays the topmost line: a void marker must never be pushed off the top.
+  final dineIn = detail.orderType == 'dine_in';
   final lines = <PrintLine>[
     if (_isCancelled(detail))
       PrintLine.title(l10n.ordersReprintCancelledBanner),
+    if (dineIn) PrintLine.banner(),
     PrintLine.title(detail.orderCode),
     PrintLine.kv(
       l10n.posOrderTypeLabel,
@@ -210,6 +216,9 @@ PrintDocument buildOrderKitchenTicketPreview(
       lines.add(PrintLine.sub('» $note'));
     }
   }
+
+  // TABLE-FLOOR-LAYOUT-021: the closing dine-in star band (last content line).
+  if (dineIn) lines.add(PrintLine.banner());
 
   return PrintDocument(title: l10n.kdsTicketPreviewTitle, lines: lines);
 }

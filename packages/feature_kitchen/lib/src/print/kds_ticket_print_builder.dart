@@ -187,6 +187,11 @@ PrintDocument buildKdsTicketPrintDocument({
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
+      // TABLE-FLOOR-LAYOUT-021 (owner decision 4): a DINE-IN ticket opens AND
+      // closes with a full-width ASCII star band, so the kitchen separates
+      // dine-in from takeaway at arm's length. Takeaway/unknown order types
+      // print byte-identically to before.
+      if (dineIn) PrintLine.banner(),
       if (brand != null && brand.isNotEmpty) PrintLine.subtitle(brand),
       PrintLine.title(header),
       // DEFERRED-ORDER-AMENDMENTS-001: the addition marker band, immediately
@@ -242,6 +247,9 @@ PrintDocument buildKdsTicketPrintDocument({
         PrintLine.rule(),
         PrintLine.note('» ${labels.noteLabel}: $orderNote'),
       ],
+      // TABLE-FLOOR-LAYOUT-021: the closing dine-in star band — always the
+      // LAST content line, whatever optional blocks printed above it.
+      if (dineIn) PrintLine.banner(),
     ],
   );
 }
@@ -332,6 +340,20 @@ pp.PrintDocument kitchenTicketToEscPosDocument(
       case PrintLineKind.spacer:
         // A blank, ink-free vertical gap between item blocks.
         lines.add(const pp.PrintTextLine('', style: pp.PrintLineStyle.spacer));
+      case PrintLineKind.banner:
+        // TABLE-FLOOR-LAYOUT-021: the dine-in marker — a FULL-WIDTH star row.
+        // Deliberately NOT the separator style: the raster path draws a rule
+        // for separators and IGNORES their text; this row must keep its stars
+        // in both text and raster modes. Pure ASCII, so the text ESC/POS path
+        // stays byte-safe and the band never forces raster by itself.
+        lines.add(
+          pp.PrintTextLine(
+            '*' * columns,
+            alignment: pp.PrintAlignment.center,
+            emphasis: pp.TextEmphasis.bold,
+            style: pp.PrintLineStyle.normal,
+          ),
+        );
     }
   }
   lines.add(const pp.PrintFeedLine(3));

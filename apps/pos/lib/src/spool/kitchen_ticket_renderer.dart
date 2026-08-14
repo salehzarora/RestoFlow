@@ -98,7 +98,10 @@ final class KitchenTicketLabels {
     roundLabel: 'جولة',
     tableLabel: 'طاولة',
     noteLabel: 'ملاحظة',
-    dineInLabel: 'محلي',
+    // TABLE-FLOOR-LAYOUT-021 (owner decision 5): aligned to the canonical
+    // `posOrderTypeDineIn` wording so the spool ticket and the shared POS/KDS
+    // ticket name dine-in identically. Display-only — no wire value reads it.
+    dineInLabel: 'تناول في المطعم',
     takeawayLabel: 'سفري',
     prepWithOption: _arPrepWith,
     prepWithoutOption: _arPrepWithout,
@@ -159,7 +162,21 @@ final class KitchenTicketRenderer {
   }) {
     final isVoid = dispatch.kind == KitchenSpoolDispatchType.voidNotice;
     final customerPhone = customerPhoneOverride ?? dispatch.customerPhone;
+    // TABLE-FLOOR-LAYOUT-021 (owner decision 4): a DINE-IN ticket opens and
+    // closes with the same full-width ASCII star band the shared POS/KDS
+    // composer prints, so a spool-recovered ticket carries the identical
+    // marker. NOT the separator style (raster draws separators as a rule and
+    // drops their text); pure ASCII, byte-safe in text mode.
+    final dineInBand = dispatch.orderType == 'dine_in'
+        ? pp.PrintTextLine(
+            '*' * columns,
+            alignment: pp.PrintAlignment.center,
+            emphasis: pp.TextEmphasis.bold,
+            style: pp.PrintLineStyle.normal,
+          )
+        : null;
     final lines = <pp.PrintLine>[
+      if (dineInBand != null) dineInBand,
       pp.PrintTextLine(
         labels.kitchenMarker,
         alignment: pp.PrintAlignment.center,
@@ -242,6 +259,9 @@ final class KitchenTicketRenderer {
             style: pp.PrintLineStyle.note,
           ),
       ],
+      // TABLE-FLOOR-LAYOUT-021: the closing dine-in star band — the LAST
+      // content line before the feed/cut.
+      if (dineInBand != null) dineInBand,
       const pp.PrintFeedLine(3),
       const pp.PrintCutLine(),
     ];

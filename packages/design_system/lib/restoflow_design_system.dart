@@ -23,6 +23,7 @@ export 'src/components/bar_chart.dart';
 export 'src/components/brand_mark.dart';
 export 'src/components/code_block.dart';
 export 'src/components/donut_chart.dart';
+export 'src/components/floor_table.dart';
 export 'src/components/gradient_header.dart';
 export 'src/components/language_selector.dart';
 export 'src/components/metric_card.dart';

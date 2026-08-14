@@ -33,6 +33,36 @@ enum DiningTableStatus {
   };
 }
 
+/// TABLE-FLOOR-LAYOUT-021: one first-class dining section (a row of
+/// `table_sections`) — owner-named, owner-ordered, branch-scoped. The floor
+/// editor renders one white canvas per ACTIVE section; inactive sections stay
+/// listed (management) but draw no canvas.
+class DashboardTableSection {
+  const DashboardTableSection({
+    required this.id,
+    required this.name,
+    required this.displayOrder,
+    required this.isActive,
+    required this.branchId,
+  });
+
+  final String id;
+  final String name;
+  final int displayOrder;
+  final bool isActive;
+  final String branchId;
+}
+
+/// TABLE-FLOOR-LAYOUT-021: one load of the Tables surface — the table rows
+/// PLUS the section catalog (empty sections must render as empty canvases, so
+/// a per-row join can never carry them).
+class TablesFloorSnapshot {
+  const TablesFloorSnapshot({required this.tables, required this.sections});
+
+  final List<DashboardTable> tables;
+  final List<DashboardTableSection> sections;
+}
+
 /// One configured dining table (a row of `dining_tables`). Inactive tables are
 /// still listed (the dashboard manages them); tombstoned tables never are.
 class DashboardTable {
@@ -47,6 +77,11 @@ class DashboardTable {
     this.activeOrderCount = 0,
     this.effectiveState,
     this.groupId,
+    this.sectionId,
+    this.sectionName,
+    this.sectionDisplayOrder,
+    this.layoutX,
+    this.layoutY,
   });
 
   final String id;
@@ -84,7 +119,19 @@ class DashboardTable {
   /// the POS remains the operational link/unlink surface for this phase.
   final String? groupId;
 
+  /// TABLE-FLOOR-LAYOUT-021: the first-class section this table sits in (null
+  /// = unassigned/legacy) plus the NORMALIZED placement inside its canvas
+  /// (0..10000 integers, both-or-neither, PHYSICAL — never RTL-mirrored).
+  final String? sectionId;
+  final String? sectionName;
+  final int? sectionDisplayOrder;
+  final int? layoutX;
+  final int? layoutY;
+
   bool get isGrouped => groupId != null;
+
+  /// Whether the table has a complete saved placement on its section canvas.
+  bool get isPlaced => sectionId != null && layoutX != null && layoutY != null;
 
   /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy carrying the GROUP-WIDE effective
   /// state + active dine-in count projected onto this member. Only these two fields
@@ -103,6 +150,37 @@ class DashboardTable {
     activeOrderCount: activeOrderCount,
     effectiveState: effectiveState,
     groupId: groupId,
+    sectionId: sectionId,
+    sectionName: sectionName,
+    sectionDisplayOrder: sectionDisplayOrder,
+    layoutX: layoutX,
+    layoutY: layoutY,
+  );
+
+  /// TABLE-FLOOR-LAYOUT-021: a copy with a different section/placement (the
+  /// in-memory demo store + optimistic arrange moves).
+  DashboardTable copyWithPlacement({
+    String? sectionId,
+    String? sectionName,
+    int? sectionDisplayOrder,
+    int? layoutX,
+    int? layoutY,
+  }) => DashboardTable(
+    id: id,
+    label: label,
+    status: status,
+    isActive: isActive,
+    branchId: branchId,
+    seats: seats,
+    area: area,
+    activeOrderCount: activeOrderCount,
+    effectiveState: effectiveState,
+    groupId: groupId,
+    sectionId: sectionId,
+    sectionName: sectionName,
+    sectionDisplayOrder: sectionDisplayOrder,
+    layoutX: layoutX,
+    layoutY: layoutY,
   );
 }
 

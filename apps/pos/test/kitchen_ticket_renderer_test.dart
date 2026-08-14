@@ -239,6 +239,57 @@ void main() {
       }
     });
   });
+
+  group('TABLE-FLOOR-LAYOUT-021: the dine-in star band on spool tickets', () {
+    KitchenDispatchDocument takeawayDoc() => KitchenDispatchDocument(
+      serverPayloadVersion: 1,
+      kind: KitchenSpoolDispatchType.initialOrder,
+      orderCode: '#000043',
+      orderType: 'takeaway',
+      items: [KitchenDispatchItem(qty: 1, name: 'Cola')],
+    );
+
+    test('a DINE-IN ticket opens and closes with a full-width bold star row '
+        '(never the separator style)', () {
+      final doc = renderer.buildDocument(_initialDoc());
+      final stars = doc.lines.whereType<pp.PrintTextLine>().where(
+        (l) => l.text == '*' * 48,
+      );
+      expect(stars, hasLength(2));
+      for (final band in stars) {
+        expect(band.style, isNot(pp.PrintLineStyle.separator));
+        expect(band.emphasis, pp.TextEmphasis.bold);
+      }
+      // First content line + last content line before the feed/cut.
+      final texts = doc.lines.whereType<pp.PrintTextLine>().toList();
+      expect(texts.first.text, '*' * 48);
+      expect(texts.last.text, '*' * 48);
+    });
+
+    test(
+      'a takeaway ticket carries NO star band (byte-identical to before)',
+      () {
+        final doc = renderer.buildDocument(takeawayDoc());
+        expect(
+          doc.lines.whereType<pp.PrintTextLine>().any(
+            (l) => l.text.contains('*' * 8),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('owner decision 5: the ar spool ticket names dine-in with the '
+        'CANONICAL wording (aligned to posOrderTypeDineIn)', () {
+      final texts = _texts(
+        const KitchenTicketRenderer(
+          labels: KitchenTicketLabels.ar,
+        ).buildDocument(_initialDoc()),
+      ).join('\n');
+      expect(texts, contains('تناول في المطعم'));
+      expect(texts, isNot(contains('محلي')));
+    });
+  });
 }
 
 class _ExplodingRasterizer implements pp.ReceiptRasterizer {

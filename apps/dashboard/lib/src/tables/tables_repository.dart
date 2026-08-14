@@ -20,11 +20,15 @@ import 'table_models.dart';
 /// shared state views and snackbar mapping work unchanged.
 abstract class TablesAdminRepository {
   /// `public.list_tables` — the branch's dining tables (inactive INCLUDED,
-  /// tombstones excluded), label-ordered.
-  Future<AdminResult<List<DashboardTable>>> load();
+  /// tombstones excluded), label-ordered, PLUS the TABLE-FLOOR-LAYOUT-021
+  /// section catalog (empty sections included, display-ordered).
+  Future<AdminResult<TablesFloorSnapshot>> load();
 
   /// `public.upsert_table` — create ([id] null) or update label/seats/area/
-  /// active. The operational status is owned by [setStatus], never by upsert.
+  /// active. The operational status is owned by [setStatus], never by upsert;
+  /// the section/placement are owned by [setTableSection]/[setTablePosition]
+  /// (deliberately OUTSIDE this full-replace call so a stale client can never
+  /// erase layout).
   Future<AdminResult<void>> upsertTable({
     String? id,
     required String label,
@@ -40,13 +44,60 @@ abstract class TablesAdminRepository {
   /// `public.soft_delete_table` — tombstones the table (D-020); existing
   /// orders keep their table reference.
   Future<AdminResult<void>> deleteTable(String id);
+
+  /// TABLE-FLOOR-LAYOUT-021 — `public.upsert_table_section`: create ([id]
+  /// null; appends after the live siblings) or rename/toggle a section.
+  Future<AdminResult<void>> upsertSection({
+    String? id,
+    required String name,
+    required bool isActive,
+  });
+
+  /// `public.soft_delete_table_section` — tombstones the section AND detaches
+  /// its tables (section + placement cleared; tables are NEVER deleted).
+  Future<AdminResult<void>> deleteSection(String id);
+
+  /// `public.set_table_section` — assign ([sectionId] non-null) or clear.
+  /// Any section change clears the placement (a position belongs to one
+  /// canvas).
+  Future<AdminResult<void>> setTableSection(String tableId, String? sectionId);
+
+  /// `public.set_table_layout_position` — place the table at NORMALIZED
+  /// integer coordinates (0..10000 each) inside its section canvas.
+  Future<AdminResult<void>> setTablePosition(
+    String tableId,
+    int layoutX,
+    int layoutY,
+  );
+
+  /// `public.reorder_table_sections` — the COMPLETE live section id list in
+  /// the owner's new order.
+  Future<AdminResult<void>> reorderSections(List<String> ids);
 }
 
 /// A clearly-labelled in-memory demo store (demo mode only; the demo banner is
-/// shown by the shell). Mirrors the backend semantics without a backend.
+/// shown by the shell). Mirrors the backend semantics without a backend —
+/// TABLE-FLOOR-LAYOUT-021 seeds two REAL sections with placed tables so the
+/// demo floor editor renders a meaningful map out of the box.
 class InMemoryTablesStore implements TablesAdminRepository {
   InMemoryTablesStore()
-    : _tables = [
+    : _sections = [
+        const DashboardTableSection(
+          id: 'demo-section-1',
+          name: 'Main hall',
+          displayOrder: 0,
+          isActive: true,
+          branchId: 'demo-branch',
+        ),
+        const DashboardTableSection(
+          id: 'demo-section-2',
+          name: 'Terrace',
+          displayOrder: 1,
+          isActive: true,
+          branchId: 'demo-branch',
+        ),
+      ],
+      _tables = [
         const DashboardTable(
           id: 'demo-table-1',
           label: 'T1',
@@ -55,6 +106,11 @@ class InMemoryTablesStore implements TablesAdminRepository {
           status: DiningTableStatus.available,
           isActive: true,
           branchId: 'demo-branch',
+          sectionId: 'demo-section-1',
+          sectionName: 'Main hall',
+          sectionDisplayOrder: 0,
+          layoutX: 1500,
+          layoutY: 2500,
         ),
         const DashboardTable(
           id: 'demo-table-2',
@@ -64,6 +120,11 @@ class InMemoryTablesStore implements TablesAdminRepository {
           status: DiningTableStatus.occupied,
           isActive: true,
           branchId: 'demo-branch',
+          sectionId: 'demo-section-1',
+          sectionName: 'Main hall',
+          sectionDisplayOrder: 0,
+          layoutX: 5000,
+          layoutY: 2500,
         ),
         const DashboardTable(
           id: 'demo-table-3',
@@ -73,6 +134,11 @@ class InMemoryTablesStore implements TablesAdminRepository {
           status: DiningTableStatus.available,
           isActive: true,
           branchId: 'demo-branch',
+          sectionId: 'demo-section-1',
+          sectionName: 'Main hall',
+          sectionDisplayOrder: 0,
+          layoutX: 8200,
+          layoutY: 6500,
         ),
         const DashboardTable(
           id: 'demo-table-4',
@@ -82,6 +148,11 @@ class InMemoryTablesStore implements TablesAdminRepository {
           status: DiningTableStatus.available,
           isActive: true,
           branchId: 'demo-branch',
+          sectionId: 'demo-section-2',
+          sectionName: 'Terrace',
+          sectionDisplayOrder: 1,
+          layoutX: 2200,
+          layoutY: 3200,
         ),
         const DashboardTable(
           id: 'demo-table-5',
@@ -91,7 +162,14 @@ class InMemoryTablesStore implements TablesAdminRepository {
           status: DiningTableStatus.outOfService,
           isActive: true,
           branchId: 'demo-branch',
+          sectionId: 'demo-section-2',
+          sectionName: 'Terrace',
+          sectionDisplayOrder: 1,
+          layoutX: 6800,
+          layoutY: 6200,
         ),
+        // P3 is deliberately UNASSIGNED: the legacy/unassigned fallback zone
+        // must always be demonstrable.
         const DashboardTable(
           id: 'demo-table-6',
           label: 'P3',
@@ -103,12 +181,152 @@ class InMemoryTablesStore implements TablesAdminRepository {
         ),
       ];
 
+  final List<DashboardTableSection> _sections;
   final List<DashboardTable> _tables;
   int _seq = 0;
 
   @override
-  Future<AdminResult<List<DashboardTable>>> load() async =>
-      Success(List.unmodifiable(_tables));
+  Future<AdminResult<TablesFloorSnapshot>> load() async => Success(
+    TablesFloorSnapshot(
+      tables: List.unmodifiable(_tables),
+      sections: List.unmodifiable(
+        [..._sections]
+          ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder)),
+      ),
+    ),
+  );
+
+  @override
+  Future<AdminResult<void>> upsertSection({
+    String? id,
+    required String name,
+    required bool isActive,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return const Failure(AdminValidation('name'));
+    final duplicate = _sections.any(
+      (s) => s.id != id && s.name.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (duplicate) return const Failure(AdminConflict('duplicate_name'));
+    final index = _sections.indexWhere((s) => s.id == id);
+    if (index >= 0) {
+      _sections[index] = DashboardTableSection(
+        id: _sections[index].id,
+        name: trimmed,
+        displayOrder: _sections[index].displayOrder,
+        isActive: isActive,
+        branchId: _sections[index].branchId,
+      );
+      // Keep the denormalized section name on assigned tables honest.
+      for (var i = 0; i < _tables.length; i++) {
+        if (_tables[i].sectionId == id) {
+          _tables[i] = _tables[i].copyWithPlacement(
+            sectionId: id,
+            sectionName: trimmed,
+            sectionDisplayOrder: _tables[i].sectionDisplayOrder,
+            layoutX: _tables[i].layoutX,
+            layoutY: _tables[i].layoutY,
+          );
+        }
+      }
+    } else {
+      final next = _sections.isEmpty
+          ? 0
+          : _sections
+                    .map((s) => s.displayOrder)
+                    .reduce((a, b) => a > b ? a : b) +
+                1;
+      _sections.add(
+        DashboardTableSection(
+          id: id ?? 'demo-section-new-${++_seq}',
+          name: trimmed,
+          displayOrder: next,
+          isActive: isActive,
+          branchId: 'demo-branch',
+        ),
+      );
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> deleteSection(String id) async {
+    _sections.removeWhere((s) => s.id == id);
+    // DETACH, never delete: the backend clears section + placement.
+    for (var i = 0; i < _tables.length; i++) {
+      if (_tables[i].sectionId == id) {
+        _tables[i] = _tables[i].copyWithPlacement();
+      }
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setTableSection(
+    String tableId,
+    String? sectionId,
+  ) async {
+    final index = _tables.indexWhere((t) => t.id == tableId);
+    if (index < 0) return const Failure(AdminTransient());
+    if (sectionId == null) {
+      _tables[index] = _tables[index].copyWithPlacement();
+      return const Success(null);
+    }
+    DashboardTableSection? section;
+    for (final s in _sections) {
+      if (s.id == sectionId) {
+        section = s;
+        break;
+      }
+    }
+    if (section == null) return const Failure(AdminTransient());
+    // A section change clears the placement (one canvas, one position).
+    _tables[index] = _tables[index].copyWithPlacement(
+      sectionId: section.id,
+      sectionName: section.name,
+      sectionDisplayOrder: section.displayOrder,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setTablePosition(
+    String tableId,
+    int layoutX,
+    int layoutY,
+  ) async {
+    final index = _tables.indexWhere((t) => t.id == tableId);
+    if (index < 0) return const Failure(AdminTransient());
+    final t = _tables[index];
+    if (t.sectionId == null) return const Failure(AdminValidation('section'));
+    if (layoutX < 0 || layoutX > 10000 || layoutY < 0 || layoutY > 10000) {
+      return const Failure(AdminValidation('position'));
+    }
+    _tables[index] = t.copyWithPlacement(
+      sectionId: t.sectionId,
+      sectionName: t.sectionName,
+      sectionDisplayOrder: t.sectionDisplayOrder,
+      layoutX: layoutX,
+      layoutY: layoutY,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> reorderSections(List<String> ids) async {
+    for (var i = 0; i < ids.length; i++) {
+      final index = _sections.indexWhere((s) => s.id == ids[i]);
+      if (index < 0) return const Failure(AdminTransient());
+      _sections[index] = DashboardTableSection(
+        id: _sections[index].id,
+        name: _sections[index].name,
+        displayOrder: i,
+        isActive: _sections[index].isActive,
+        branchId: _sections[index].branchId,
+      );
+    }
+    return const Success(null);
+  }
 
   @override
   Future<AdminResult<void>> upsertTable({
@@ -194,7 +412,7 @@ class SupabaseTablesRepository implements TablesAdminRepository {
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 
   @override
-  Future<AdminResult<List<DashboardTable>>> load() async {
+  Future<AdminResult<TablesFloorSnapshot>> load() async {
     final Object? raw;
     try {
       raw = await _t.invoke('list_tables', <String, dynamic>{
@@ -208,11 +426,37 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       return const Failure(AdminTransient());
     }
     if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
-    return Success([
-      for (final row in (raw['tables'] as List?) ?? const [])
-        if (row is Map)
-          if (_tableFrom(row) case final t?) t,
-    ]);
+    return Success(
+      TablesFloorSnapshot(
+        tables: [
+          for (final row in (raw['tables'] as List?) ?? const [])
+            if (row is Map)
+              if (_tableFrom(row) case final t?) t,
+        ],
+        // TABLE-FLOOR-LAYOUT-021: the section catalog envelope (absent on an
+        // older backend -> empty list; the floor editor simply shows no
+        // canvases and everything stays in the classic grid).
+        sections: [
+          for (final row in (raw['sections'] as List?) ?? const [])
+            if (row is Map)
+              if (_sectionFrom(row) case final s?) s,
+        ],
+      ),
+    );
+  }
+
+  static DashboardTableSection? _sectionFrom(Map<dynamic, dynamic> row) {
+    final id = row['id'];
+    final name = row['name'];
+    if (id is! String || name is! String || name.isEmpty) return null;
+    final order = row['display_order'];
+    return DashboardTableSection(
+      id: id,
+      name: name,
+      displayOrder: order is int ? order : 0,
+      isActive: row['is_active'] == true,
+      branchId: (row['branch_id'] ?? '').toString(),
+    );
   }
 
   static DashboardTable? _tableFrom(Map<dynamic, dynamic> row) {
@@ -227,6 +471,15 @@ class SupabaseTablesRepository implements TablesAdminRepository {
     // active link group (display-only on the Dashboard; the POS owns link/unlink).
     final effective = row['effective_state'];
     final groupId = row['group_id'];
+    // TABLE-FLOOR-LAYOUT-021: the section + normalized placement (all nullable;
+    // a legacy row simply carries none). Defensive both-or-neither on the
+    // coordinates — the DB forbids halves, and we never trust one axis.
+    final sectionId = row['section_id'];
+    final sectionName = row['section_name'];
+    final sectionOrder = row['section_display_order'];
+    final rawX = row['layout_x'];
+    final rawY = row['layout_y'];
+    final hasXY = rawX is int && rawY is int;
     return DashboardTable(
       id: (row['id'] ?? '').toString(),
       label: (row['label'] ?? '').toString(),
@@ -242,6 +495,13 @@ class SupabaseTablesRepository implements TablesAdminRepository {
           ? effective
           : null,
       groupId: groupId is String && groupId.isNotEmpty ? groupId : null,
+      sectionId: sectionId is String && sectionId.isNotEmpty ? sectionId : null,
+      sectionName: sectionName is String && sectionName.isNotEmpty
+          ? sectionName
+          : null,
+      sectionDisplayOrder: sectionOrder is int ? sectionOrder : null,
+      layoutX: hasXY ? rawX : null,
+      layoutY: hasXY ? rawY : null,
     );
   }
 
@@ -329,6 +589,109 @@ class SupabaseTablesRepository implements TablesAdminRepository {
         'p_organization_id': _scope.organizationId,
         'p_table_id': id,
       });
+    } on SyncTransportException catch (e) {
+      return Failure(_mapTransport(e));
+    } catch (_) {
+      return const Failure(AdminTransient());
+    }
+    if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
+    return const Success(null);
+  }
+
+  // ---- TABLE-FLOOR-LAYOUT-021: sections + freeform placement ---------------
+
+  @override
+  Future<AdminResult<void>> upsertSection({
+    String? id,
+    required String name,
+    required bool isActive,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return const Failure(AdminValidation('name'));
+    final restaurantId = _scope.restaurantId;
+    final branchId = _scope.branchId;
+    if (restaurantId == null || branchId == null) {
+      return const Failure(AdminValidation('scope'));
+    }
+    return _invokeVoid('upsert_table_section', <String, dynamic>{
+      'p_client_request_id': _requestId('upsert-section', [id ?? '', trimmed]),
+      'p_organization_id': _scope.organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_branch_id': branchId,
+      'p_id': id,
+      'p_name': trimmed,
+      'p_is_active': isActive,
+    });
+  }
+
+  @override
+  Future<AdminResult<void>> deleteSection(String id) async =>
+      _invokeVoid('soft_delete_table_section', <String, dynamic>{
+        'p_client_request_id': _requestId('delete-section', [id]),
+        'p_organization_id': _scope.organizationId,
+        'p_section_id': id,
+      });
+
+  @override
+  Future<AdminResult<void>> setTableSection(
+    String tableId,
+    String? sectionId,
+  ) async => _invokeVoid('set_table_section', <String, dynamic>{
+    'p_client_request_id': _requestId('set-section', [
+      tableId,
+      sectionId ?? '',
+    ]),
+    'p_organization_id': _scope.organizationId,
+    'p_table_id': tableId,
+    'p_section_id': sectionId,
+  });
+
+  @override
+  Future<AdminResult<void>> setTablePosition(
+    String tableId,
+    int layoutX,
+    int layoutY,
+  ) async {
+    if (layoutX < 0 || layoutX > 10000 || layoutY < 0 || layoutY > 10000) {
+      return const Failure(AdminValidation('position'));
+    }
+    return _invokeVoid('set_table_layout_position', <String, dynamic>{
+      'p_client_request_id': _requestId('set-position', [
+        tableId,
+        '$layoutX',
+        '$layoutY',
+      ]),
+      'p_organization_id': _scope.organizationId,
+      'p_table_id': tableId,
+      'p_layout_x': layoutX,
+      'p_layout_y': layoutY,
+    });
+  }
+
+  @override
+  Future<AdminResult<void>> reorderSections(List<String> ids) async {
+    if (ids.isEmpty) return const Failure(AdminValidation('sections'));
+    final restaurantId = _scope.restaurantId;
+    final branchId = _scope.branchId;
+    if (restaurantId == null || branchId == null) {
+      return const Failure(AdminValidation('scope'));
+    }
+    return _invokeVoid('reorder_table_sections', <String, dynamic>{
+      'p_organization_id': _scope.organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_branch_id': branchId,
+      'p_ids': ids,
+    });
+  }
+
+  /// The shared invoke-and-map body every void write above uses.
+  Future<AdminResult<void>> _invokeVoid(
+    String function,
+    Map<String, dynamic> params,
+  ) async {
+    final Object? raw;
+    try {
+      raw = await _t.invoke(function, params);
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));
     } catch (_) {

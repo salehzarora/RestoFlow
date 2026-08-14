@@ -104,11 +104,15 @@ void main() {
       );
       final texts = [for (final l in doc.lines) l.left ?? l.right ?? ''];
 
-      // Brand hero (secondary heading) ABOVE the big order-number reference.
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, 'Falafel House');
-      expect(doc.lines[1].kind, PrintLineKind.title);
-      expect(doc.lines[1].left, '#000042');
+      // TABLE-FLOOR-LAYOUT-021: a DINE-IN ticket opens and closes with the
+      // star band; the brand hero (secondary heading) sits directly under it,
+      // ABOVE the big order-number reference.
+      expect(doc.lines.first.kind, PrintLineKind.banner);
+      expect(doc.lines.last.kind, PrintLineKind.banner);
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, 'Falafel House');
+      expect(doc.lines[2].kind, PrintLineKind.title);
+      expect(doc.lines[2].left, '#000042');
       expect(texts, contains('Dine-in'));
       expect(texts, contains('Table 5'));
       expect(texts, contains('Customer: Dana'));
@@ -262,6 +266,8 @@ void main() {
   });
 
   group('restaurant-name brand line (PRINT-LAYOUT-001B, test A)', () {
+    // The _ticket() fixture is DINE-IN, so line 0 is the 021 star band; the
+    // brand hierarchy under test starts at line 1.
     test('prints the real restaurant name as the brand line above the '
         'order reference', () {
       final doc = buildKdsTicketPrintDocument(
@@ -269,10 +275,10 @@ void main() {
         labels: _labels(),
         restaurantName: 'Falafel House',
       );
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, 'Falafel House');
-      expect(doc.lines[1].kind, PrintLineKind.title);
-      expect(doc.lines[1].left, '#000042');
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, 'Falafel House');
+      expect(doc.lines[2].kind, PrintLineKind.title);
+      expect(doc.lines[2].left, '#000042');
     });
 
     test('falls back to the localized generic brand word when no real name '
@@ -281,8 +287,8 @@ void main() {
         ticket: _ticket(),
         labels: _labels(),
       );
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, 'Restaurant');
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, 'Restaurant');
     });
 
     test('a blank/whitespace real name uses the fallback, never a blank '
@@ -292,8 +298,8 @@ void main() {
         labels: _labels(),
         restaurantName: '   ',
       );
-      expect(doc.lines.first.kind, PrintLineKind.subtitle);
-      expect(doc.lines.first.left, 'Restaurant');
+      expect(doc.lines[1].kind, PrintLineKind.subtitle);
+      expect(doc.lines[1].left, 'Restaurant');
     });
 
     test('omits the brand line entirely when neither a real name nor a '
@@ -302,9 +308,83 @@ void main() {
         ticket: _ticket(),
         labels: _labelsNoFallback(),
       );
-      expect(doc.lines.first.kind, PrintLineKind.title);
-      expect(doc.lines.first.left, '#000042');
+      expect(doc.lines[1].kind, PrintLineKind.title);
+      expect(doc.lines[1].left, '#000042');
       expect(doc.lines.any((l) => l.kind == PrintLineKind.subtitle), isFalse);
+    });
+  });
+
+  group('dine-in star band (TABLE-FLOOR-LAYOUT-021)', () {
+    test('a dine-in ticket opens AND closes with the band; takeaway carries '
+        'none', () {
+      final dineIn = buildKdsTicketPrintDocument(
+        ticket: _ticket(),
+        labels: _labels(),
+      );
+      expect(dineIn.lines.first.kind, PrintLineKind.banner);
+      expect(dineIn.lines.last.kind, PrintLineKind.banner);
+      expect(
+        dineIn.lines.where((l) => l.kind == PrintLineKind.banner).length,
+        2,
+      );
+
+      final takeaway = buildKdsTicketPrintDocument(
+        ticket: KdsTicketView(
+          kitchenTicketId: '#7',
+          stationId: KdsTicketMapper.unassignedStation,
+          status: KitchenTicketStatus.newTicket,
+          orderNumber: '#7',
+          orderType: 'takeaway',
+          items: const [KdsItemView(name: 'Cola', quantity: 1)],
+        ),
+        labels: _labels(),
+      );
+      expect(
+        takeaway.lines.any((l) => l.kind == PrintLineKind.banner),
+        isFalse,
+      );
+    });
+
+    test('an UNKNOWN/absent order type prints no band (fail-quiet)', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: KdsTicketView(
+          kitchenTicketId: '#8',
+          stationId: KdsTicketMapper.unassignedStation,
+          status: KitchenTicketStatus.newTicket,
+          orderNumber: '#8',
+          items: const [KdsItemView(name: 'Cola', quantity: 1)],
+        ),
+        labels: _labels(),
+      );
+      expect(doc.lines.any((l) => l.kind == PrintLineKind.banner), isFalse);
+    });
+
+    test('ESC/POS renders the band as a FULL-WIDTH bold star row — never the '
+        'separator style (raster would drop the stars)', () {
+      final escpos = kitchenTicketToEscPosDocument(
+        buildKdsTicketPrintDocument(ticket: _ticket(), labels: _labels()),
+        columns: 48,
+      );
+      final stars = escpos.lines
+          .whereType<pp.PrintTextLine>()
+          .where((l) => l.text == '*' * 48)
+          .toList();
+      expect(stars, hasLength(2));
+      for (final band in stars) {
+        expect(band.style, isNot(pp.PrintLineStyle.separator));
+        expect(band.emphasis, pp.TextEmphasis.bold);
+      }
+      // 50mm labels get the same band at their own width.
+      final narrow = kitchenTicketToEscPosDocument(
+        buildKdsTicketPrintDocument(ticket: _ticket(), labels: _labels()),
+        columns: 32,
+      );
+      expect(
+        narrow.lines.whereType<pp.PrintTextLine>().where(
+          (l) => l.text == '*' * 32,
+        ),
+        hasLength(2),
+      );
     });
   });
 

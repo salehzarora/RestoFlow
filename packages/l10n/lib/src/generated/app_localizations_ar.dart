@@ -3749,6 +3749,49 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tablesSaved => 'تم حفظ الطاولة';
 
   @override
+  String get tablesSectionsTitle => 'أقسام الصالة';
+
+  @override
+  String get tablesSectionAdd => 'إضافة قسم';
+
+  @override
+  String get tablesSectionName => 'اسم القسم';
+
+  @override
+  String get tablesSectionEdit => 'إعادة تسمية القسم';
+
+  @override
+  String get tablesSectionDelete => 'حذف القسم';
+
+  @override
+  String get tablesSectionDeleteConfirm =>
+      'هل تريد حذف هذا القسم؟ ستبقى طاولاته وتصبح غير مخصصة.';
+
+  @override
+  String get tablesArrange => 'ترتيب الطاولات';
+
+  @override
+  String get tablesArrangeDone => 'إنهاء الترتيب';
+
+  @override
+  String get tablesSetSection => 'تعيين القسم';
+
+  @override
+  String get tablesSectionNone => 'بدون قسم';
+
+  @override
+  String get tablesUnassignedZone => 'طاولات غير مخصصة';
+
+  @override
+  String get tablesNotPlaced => 'لم توضع بعد';
+
+  @override
+  String get tablesPlaceOnMap => 'وضع على المخطط';
+
+  @override
+  String get tablesOverlapWarning => 'بعض الطاولات متداخلة على المخطط.';
+
+  @override
   String get adminRevokeConfirm =>
       'هل تريد إلغاء هذا الجهاز؟ سينتهي اقترانه وجلساته فورًا وسيعود الجهاز إلى شاشة الاقتران.';
 

@@ -13,14 +13,19 @@ const String _demoCurrencyCode = 'ILS';
 /// UI/demo occupancy status for a [DiningTable] (RF-114).
 ///
 /// The domain [DiningTable] stores NO status — occupancy is DERIVED, never
-/// stored (DOMAIN_MODEL.md §5.1). These three values are derived here for the
+/// stored (DOMAIN_MODEL.md §5.1). These values are derived here for the
 /// POS table picker:
 ///  * [blocked]   — the table is inactive (`!isActive`); out of service.
 ///  * [occupied]  — an OPEN (non-terminal) dine-in order is assigned to it per
 ///                  [TableAssignmentService]; it cannot take another (the
 ///                  one-open-dine-in-per-table rule, RF-035).
+///  * [reserved]  — TABLE-FLOOR-LAYOUT-021 (owner decision 3): the manual
+///                  `reserved` floor flag, DISPLAY-ONLY distinct. It behaves
+///                  exactly like [occupied] for every business rule (never
+///                  assignable, same gating) — it merely stops LYING about
+///                  WHY the table is unavailable.
 ///  * [available] — active and free; assignable to a dine-in order.
-enum TableStatusKind { available, occupied, blocked }
+enum TableStatusKind { available, reserved, occupied, blocked }
 
 /// Immutable UI view of a [DiningTable] plus its derived [TableStatusKind].
 class DemoTable {
@@ -31,6 +36,11 @@ class DemoTable {
     this.manualStatus = 'available',
     this.effectiveState = 'available',
     this.groupId,
+    this.sectionId,
+    this.sectionName,
+    this.sectionDisplayOrder,
+    this.layoutX,
+    this.layoutY,
     String? memberEffectiveState,
     int? memberActiveOrderCount,
   }) : _memberEffectiveState = memberEffectiveState,
@@ -38,6 +48,17 @@ class DemoTable {
 
   final DiningTable table;
   final TableStatusKind status;
+
+  /// TABLE-FLOOR-LAYOUT-021: the first-class dining section this table sits in
+  /// (null = legacy/unsectioned — the picker keeps its area-text fallback
+  /// zone), plus the owner's section ordering and the NORMALIZED placement
+  /// (0..[kFloorLayoutMax] integers; both-or-neither; physical — never
+  /// RTL-mirrored). All display plumbing: no business rule reads them.
+  final String? sectionId;
+  final String? sectionName;
+  final int? sectionDisplayOrder;
+  final int? layoutX;
+  final int? layoutY;
 
   /// RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy — how many live
   /// active-status orders currently sit on this table, as the SERVER counted
@@ -135,6 +156,11 @@ class DemoTable {
     manualStatus: manualStatus,
     effectiveState: effectiveState,
     groupId: groupId,
+    sectionId: sectionId,
+    sectionName: sectionName,
+    sectionDisplayOrder: sectionDisplayOrder,
+    layoutX: layoutX,
+    layoutY: layoutY,
     memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
     memberActiveOrderCount:
         memberActiveOrderCount ?? this.memberActiveOrderCount,
@@ -148,7 +174,10 @@ class DemoTable {
 TableStatusKind tableStatusKindFor(String effectiveState) =>
     switch (normalizeTableEffectiveState(effectiveState)) {
       'available' => TableStatusKind.available,
-      'reserved' || 'occupied' => TableStatusKind.occupied,
+      // TABLE-FLOOR-LAYOUT-021: reserved is DISPLAY-distinct now; it stays
+      // non-assignable exactly like occupied (business rules unchanged).
+      'reserved' => TableStatusKind.reserved,
+      'occupied' => TableStatusKind.occupied,
       _ => TableStatusKind.blocked, // out_of_service + unknown
     };
 
@@ -287,9 +316,9 @@ class DemoTablesStore implements TablesRepository {
 
   TableStatusKind _kindFor(String effective) => switch (effective) {
     'available' => TableStatusKind.available,
+    'reserved' => TableStatusKind.reserved, // display-distinct, non-assignable
     'out_of_service' => TableStatusKind.blocked,
-    _ =>
-      TableStatusKind.occupied, // occupied / reserved -> non-assignable visual
+    _ => TableStatusKind.occupied, // occupied -> non-assignable visual
   };
 
   /// Ten tables across two areas, one out of service — a realistic mix so the
@@ -421,6 +450,21 @@ class RealTablesRepository implements TablesRepository {
       final groupId = row['group_id'] is String
           ? row['group_id'] as String
           : null;
+      // TABLE-FLOOR-LAYOUT-021: the section + normalized placement keys. All
+      // nullable — a legacy row simply has none and falls back to the
+      // area-text zone. Malformed values degrade to null (display plumbing;
+      // never a gate).
+      final sectionId = row['section_id'] is String
+          ? row['section_id'] as String
+          : null;
+      final sectionName = row['section_name'] is String
+          ? row['section_name'] as String
+          : null;
+      final rawSectionOrder = row['section_display_order'];
+      final rawX = row['layout_x'];
+      final rawY = row['layout_y'];
+      final layoutX = rawX is int ? rawX : null;
+      final layoutY = rawY is int ? rawY : null;
       tables.add(
         DemoTable(
           table: DiningTable(
@@ -441,18 +485,26 @@ class RealTablesRepository implements TablesRepository {
           manualStatus: manual,
           effectiveState: effective,
           groupId: groupId,
+          sectionId: sectionId,
+          sectionName: sectionId == null ? null : sectionName,
+          sectionDisplayOrder: rawSectionOrder is int ? rawSectionOrder : null,
+          // Defensive both-or-neither (the DB forbids halves; never trust one).
+          layoutX: layoutX != null && layoutY != null ? layoutX : null,
+          layoutY: layoutX != null && layoutY != null ? layoutY : null,
         ),
       );
     }
     return tables;
   }
 
-  /// Maps the backend status to the picker's assignability model: reserved
-  /// and occupied are both non-assignable ("occupied" visual); out_of_service
-  /// is blocked; anything unknown fails closed to blocked.
+  /// Maps the backend status to the picker's assignability model: reserved is
+  /// display-distinct but non-assignable exactly like occupied
+  /// (TABLE-FLOOR-LAYOUT-021); out_of_service is blocked; anything unknown
+  /// fails closed to blocked.
   static TableStatusKind _statusFor(Object? status) => switch (status) {
     'available' => TableStatusKind.available,
-    'occupied' || 'reserved' => TableStatusKind.occupied,
+    'reserved' => TableStatusKind.reserved,
+    'occupied' => TableStatusKind.occupied,
     'out_of_service' => TableStatusKind.blocked,
     _ => TableStatusKind.blocked,
   };

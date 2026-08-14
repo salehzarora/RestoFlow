@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show floorFractionOf;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -256,14 +257,12 @@ int compareTablesByLabelThenId(DemoTable a, DemoTable b) {
   return byLabel != 0 ? byLabel : a.tableId.compareTo(b.tableId);
 }
 
-/// PSC-001B: builds the picker layout from the (already deduplicated +
-/// group-projected) table list. Pure and deterministic: member order is
-/// (label, tableId), cross-zone groups sort by their first member, and a
-/// duplicate-free input is guaranteed upstream by [withGroupAggregation].
-TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
-  // Collect group members. Only a group with >= 2 visible members becomes a
-  // combined card; a singleton (anomaly — the backend guarantees >= 2) stays a
-  // plain tile with its linked badge, so no table can ever disappear.
+/// PSC-001B: the combined-card view models, one per link group with >= 2
+/// visible members. A singleton (anomaly — the backend guarantees >= 2) gets
+/// no card and stays a plain tile with its linked badge, so no table can ever
+/// disappear. TABLE-FLOOR-LAYOUT-021: public so the section canvases resolve
+/// a placed grouped member to the SAME card the area layout would use.
+Map<String, TableGroupCardData> buildTableGroupCards(List<DemoTable> tables) {
   final membersByGroup = <String, List<DemoTable>>{};
   for (final t in tables) {
     final g = t.groupId;
@@ -275,6 +274,57 @@ TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
     final members = [...e.value]..sort(compareTablesByLabelThenId);
     cards[e.key] = TableGroupCardData(groupId: e.key, members: members);
   }
+  return cards;
+}
+
+/// TABLE-FLOOR-LAYOUT-021: splits the branch's tables into FIRST-CLASS
+/// sections (owner-ordered by display order, then name, then id) and the
+/// LEGACY remainder (no section assigned). Pure and deterministic; a table
+/// can never be in both.
+({
+  List<({String sectionId, String sectionName, List<DemoTable> tables})>
+  sections,
+  List<DemoTable> legacy,
+})
+splitTablesBySection(List<DemoTable> tables) {
+  final legacy = <DemoTable>[];
+  final bySection = <String, List<DemoTable>>{};
+  final names = <String, String>{};
+  final orders = <String, int>{};
+  for (final t in tables) {
+    final sid = t.sectionId;
+    if (sid == null) {
+      legacy.add(t);
+      continue;
+    }
+    (bySection[sid] ??= <DemoTable>[]).add(t);
+    final name = t.sectionName;
+    if (name != null && name.isNotEmpty) names[sid] = name;
+    final order = t.sectionDisplayOrder;
+    if (order != null) orders[sid] = order;
+  }
+  final ids = bySection.keys.toList()
+    ..sort((a, b) {
+      final byOrder = (orders[a] ?? 1 << 30).compareTo(orders[b] ?? 1 << 30);
+      if (byOrder != 0) return byOrder;
+      final byName = (names[a] ?? '').compareTo(names[b] ?? '');
+      return byName != 0 ? byName : a.compareTo(b);
+    });
+  return (
+    sections: [
+      for (final id in ids)
+        (sectionId: id, sectionName: names[id] ?? '', tables: bySection[id]!),
+    ],
+    legacy: legacy,
+  );
+}
+
+/// PSC-001B: builds the picker layout from the (already deduplicated +
+/// group-projected) table list. Pure and deterministic: member order is
+/// (label, tableId), cross-zone groups sort by their first member, and a
+/// duplicate-free input is guaranteed upstream by [withGroupAggregation].
+TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
+  final cards = buildTableGroupCards(tables);
 
   final sameAreaGroupIds = <String>{};
   final crossZone = <TableGroupCardData>[];
@@ -351,7 +401,14 @@ class _FloorMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final layout = buildTablePickerLayout(tables);
+    // TABLE-FLOOR-LAYOUT-021: first-class sections render as REAL floor-map
+    // canvases with the owner's saved placements; the LEGACY remainder keeps
+    // the pre-existing pseudo floor map (area zones, walkway, group cards)
+    // unchanged — no table can ever disappear during a gradual migration.
+    final split = splitTablesBySection(tables);
+    final groupCards = buildTableGroupCards(tables);
+    final legacy = split.legacy;
+    final layout = buildTablePickerLayout(legacy);
     final areas = layout.areas;
     // PSC-001B correction 4: the decorative Entrance/Counter captions belong to
     // the ORIGINAL first/second physical zones, not to whatever index an area
@@ -359,7 +416,7 @@ class _FloorMap extends StatelessWidget {
     // the PRE-FILTER area identity so dropping an emptied zone can never shift
     // a caption onto the wrong zone.
     final originalAreaKeys = [
-      for (final a in groupTablesByArea(tables)) a.areaKey,
+      for (final a in groupTablesByArea(legacy)) a.areaKey,
     ];
     String? edgeLabelFor(String areaKey) {
       if (originalAreaKeys.isNotEmpty && areaKey == originalAreaKeys[0]) {
@@ -376,8 +433,19 @@ class _FloorMap extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < areas.length; i++) ...[
+          for (var i = 0; i < split.sections.length; i++) ...[
             if (i > 0) const _AisleDivider(),
+            _SectionZone(
+              section: split.sections[i],
+              groupCards: groupCards,
+              assignedId: assignedId,
+              onAssign: onAssign,
+              onOpenGroup: onOpenGroup,
+              onManage: onManage,
+            ),
+          ],
+          for (var i = 0; i < areas.length; i++) ...[
+            if (i > 0 || split.sections.isNotEmpty) const _AisleDivider(),
             _AreaZone(
               areaName: localizedTableArea(areas[i].areaKey, l10n),
               edgeLabel: edgeLabelFor(areas[i].areaKey),
@@ -389,7 +457,8 @@ class _FloorMap extends StatelessWidget {
             ),
           ],
           if (layout.crossZoneGroups.isNotEmpty) ...[
-            if (areas.isNotEmpty) const _AisleDivider(),
+            if (areas.isNotEmpty || split.sections.isNotEmpty)
+              const _AisleDivider(),
             _LinkedTablesSection(
               groups: layout.crossZoneGroups,
               assignedId: assignedId,
@@ -397,6 +466,213 @@ class _FloorMap extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// TABLE-FLOOR-LAYOUT-021: one FIRST-CLASS section — the same bordered zone
+/// chrome as a legacy area, but its body is the REAL floor-map canvas with
+/// tables placed at their saved normalized coordinates. Sectioned tables the
+/// owner has not placed yet auto-flow in a strip under the canvas, so nothing
+/// is ever hidden. All picker semantics are unchanged: only AVAILABLE tables
+/// assign; a grouped member opens the group-detail sheet (never assigns
+/// directly); long-press manage stays capability-gated by the caller.
+class _SectionZone extends StatelessWidget {
+  const _SectionZone({
+    required this.section,
+    required this.groupCards,
+    required this.assignedId,
+    required this.onAssign,
+    required this.onOpenGroup,
+    this.onManage,
+  });
+
+  final ({String sectionId, String sectionName, List<DemoTable> tables})
+  section;
+  final Map<String, TableGroupCardData> groupCards;
+  final String? assignedId;
+  final void Function(DemoTable) onAssign;
+  final void Function(TableGroupCardData) onOpenGroup;
+  final void Function(DemoTable)? onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tileSize = RestoflowFloorTable.sizeFor(compact: true);
+    final placed = <DemoTable>[];
+    final unplaced = <DemoTable>[];
+    for (final t in section.tables) {
+      (floorFractionOf(t.layoutX, t.layoutY) == null ? unplaced : placed).add(
+        t,
+      );
+    }
+
+    Widget tile(DemoTable t) => _SectionFloorTile(
+      table: t,
+      selected: t.tableId == assignedId,
+      groupCard: t.groupId == null ? null : groupCards[t.groupId],
+      onAssign: onAssign,
+      onOpenGroup: onOpenGroup,
+      onManage: onManage,
+    );
+
+    return Container(
+      key: Key('table-section-zone-${section.sectionId}'),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: RestoflowSpacing.xs),
+              Expanded(
+                child: Text(
+                  section.sectionName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          if (placed.isNotEmpty)
+            RestoflowFloorSectionCanvas(
+              key: Key('table-section-canvas-${section.sectionId}'),
+              tileSize: tileSize,
+              placed: [
+                for (final t in placed)
+                  RestoflowFloorPlacedTile(
+                    fractionX: floorFractionOf(t.layoutX, t.layoutY)!.x,
+                    fractionY: floorFractionOf(t.layoutX, t.layoutY)!.y,
+                    child: tile(t),
+                  ),
+              ],
+            ),
+          if (unplaced.isNotEmpty) ...[
+            if (placed.isNotEmpty) const SizedBox(height: RestoflowSpacing.sm),
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.sm,
+              children: [for (final t in unplaced) tile(t)],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One table on a section canvas: the shared top-down [RestoflowFloorTable]
+/// visual, tinted by the SAME `_statusFill` mapping the legacy tiles and the
+/// legend use, with the picker's exact tap semantics.
+class _SectionFloorTile extends StatelessWidget {
+  const _SectionFloorTile({
+    required this.table,
+    required this.selected,
+    required this.groupCard,
+    required this.onAssign,
+    required this.onOpenGroup,
+    this.onManage,
+  });
+
+  final DemoTable table;
+  final bool selected;
+
+  /// Non-null when this table is a member of a linked group with a combined
+  /// card: tapping opens the group-detail sheet (an EXPLICIT member choice
+  /// happens there — the tile itself never assigns a grouped table).
+  final TableGroupCardData? groupCard;
+  final void Function(DemoTable) onAssign;
+  final void Function(TableGroupCardData) onOpenGroup;
+  final void Function(DemoTable)? onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final base = _statusFill(table.status, theme);
+    final fill = selected ? scheme.primaryContainer : base.fill;
+    final onFill = selected ? scheme.onPrimaryContainer : base.onFill;
+    final border = selected ? scheme.primary : base.border;
+    final statusLabel = selected
+        ? l10n.posTableStatusSelected
+        : _statusLabel(table.status, l10n);
+
+    final Widget? glyph = switch (true) {
+      _ when selected => Icon(
+        Icons.check_circle,
+        size: 14,
+        color: scheme.primary,
+      ),
+      _ when groupCard != null => Icon(Icons.link, size: 13, color: onFill),
+      _ when table.status == TableStatusKind.occupied => Icon(
+        Icons.do_not_disturb_on,
+        size: 13,
+        color: onFill,
+      ),
+      _ when table.status == TableStatusKind.reserved => Icon(
+        Icons.event_seat_outlined,
+        size: 13,
+        color: onFill,
+      ),
+      _ when table.status == TableStatusKind.blocked => Icon(
+        Icons.block,
+        size: 13,
+        color: onFill,
+      ),
+      _ => null,
+    };
+
+    final card = groupCard;
+    final VoidCallback? onTap = card != null
+        ? () => onOpenGroup(card)
+        : table.isAssignable
+        ? () => onAssign(table)
+        : null;
+
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      selected: selected,
+      label: selected
+          ? l10n.posTableSelectedSemantic(table.label)
+          : '${table.label}, $statusLabel',
+      child: GestureDetector(
+        key: Key('table-floor-tile-${table.tableId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        onLongPress: onManage == null ? null : () => onManage!(table),
+        child: RestoflowFloorTable(
+          compact: true,
+          label: table.label,
+          seats: table.seats,
+          fill: fill,
+          onFill: onFill,
+          border: border,
+          borderWidth: selected ? 2 : 1,
+          statusIcon: glyph,
+          footnote: table.activeOrderCount > 0
+              ? l10n.posTableOpenOrders(table.activeOrderCount)
+              : statusLabel,
+        ),
       ),
     );
   }
@@ -651,6 +927,7 @@ class _TableLegend extends StatelessWidget {
     final scheme = theme.colorScheme;
     final available = _statusFill(TableStatusKind.available, theme);
     final occupied = _statusFill(TableStatusKind.occupied, theme);
+    final reserved = _statusFill(TableStatusKind.reserved, theme);
     final blocked = _statusFill(TableStatusKind.blocked, theme);
     return Wrap(
       spacing: RestoflowSpacing.lg,
@@ -665,6 +942,12 @@ class _TableLegend extends StatelessWidget {
           color: occupied.fill,
           borderColor: occupied.border,
           label: l10n.posTableStatusOccupied,
+        ),
+        // TABLE-FLOOR-LAYOUT-021: reserved is self-explanatory on the map.
+        _LegendItem(
+          color: reserved.fill,
+          borderColor: reserved.border,
+          label: l10n.posTableStateReserved,
         ),
         _LegendItem(
           color: blocked.fill,
@@ -754,6 +1037,15 @@ class _LegendItem extends StatelessWidget {
         onFill: warning.onContainer,
         border: warning.accent.withValues(alpha: 0.5),
       );
+    // TABLE-FLOOR-LAYOUT-021: reserved is a DISTINCT visual (info tone), but
+    // behaves exactly like occupied for every business rule (not assignable).
+    case TableStatusKind.reserved:
+      final info = RestoflowTone.info.styleOf(theme);
+      return (
+        fill: info.container,
+        onFill: info.onContainer,
+        border: info.accent.withValues(alpha: 0.5),
+      );
     case TableStatusKind.blocked:
       final danger = RestoflowTone.danger.styleOf(theme);
       return (
@@ -771,6 +1063,8 @@ String _statusLabel(TableStatusKind kind, AppLocalizations l10n) {
       return l10n.posTableStatusAvailable;
     case TableStatusKind.occupied:
       return l10n.posTableStatusOccupied;
+    case TableStatusKind.reserved:
+      return l10n.posTableStateReserved;
     case TableStatusKind.blocked:
       return l10n.posTableStatusBlocked;
   }
@@ -819,6 +1113,13 @@ class _TableTile extends StatelessWidget {
       ),
       _ when table.status == TableStatusKind.occupied => Icon(
         Icons.do_not_disturb_on,
+        size: 18,
+        color: onFill,
+      ),
+      // TABLE-FLOOR-LAYOUT-021: reserved carries its own glyph — never a
+      // colour-alone distinction.
+      _ when table.status == TableStatusKind.reserved => Icon(
+        Icons.event_seat_outlined,
         size: 18,
         color: onFill,
       ),

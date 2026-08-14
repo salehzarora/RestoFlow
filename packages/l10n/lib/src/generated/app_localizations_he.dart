@@ -3718,6 +3718,49 @@ class AppLocalizationsHe extends AppLocalizations {
   String get tablesSaved => 'השולחן נשמר';
 
   @override
+  String get tablesSectionsTitle => 'אזורי הישיבה';
+
+  @override
+  String get tablesSectionAdd => 'הוספת אזור';
+
+  @override
+  String get tablesSectionName => 'שם האזור';
+
+  @override
+  String get tablesSectionEdit => 'שינוי שם האזור';
+
+  @override
+  String get tablesSectionDelete => 'מחיקת האזור';
+
+  @override
+  String get tablesSectionDeleteConfirm =>
+      'למחוק את האזור הזה? השולחנות שבו יישמרו ויהפכו ללא-משויכים.';
+
+  @override
+  String get tablesArrange => 'סידור שולחנות';
+
+  @override
+  String get tablesArrangeDone => 'סיום הסידור';
+
+  @override
+  String get tablesSetSection => 'שיוך לאזור';
+
+  @override
+  String get tablesSectionNone => 'ללא אזור';
+
+  @override
+  String get tablesUnassignedZone => 'שולחנות לא משויכים';
+
+  @override
+  String get tablesNotPlaced => 'טרם הוצב';
+
+  @override
+  String get tablesPlaceOnMap => 'הצבה על המפה';
+
+  @override
+  String get tablesOverlapWarning => 'חלק מהשולחנות חופפים על המפה.';
+
+  @override
   String get adminRevokeConfirm =>
       'לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.';
 

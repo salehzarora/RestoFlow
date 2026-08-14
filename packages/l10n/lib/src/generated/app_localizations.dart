@@ -6982,6 +6982,90 @@ abstract class AppLocalizations {
   /// **'Table saved'**
   String get tablesSaved;
 
+  /// Heading of the floor-map area on the dashboard Tables tab (TABLE-FLOOR-LAYOUT-021).
+  ///
+  /// In en, this message translates to:
+  /// **'Floor sections'**
+  String get tablesSectionsTitle;
+
+  /// Button that creates a new dining section.
+  ///
+  /// In en, this message translates to:
+  /// **'Add section'**
+  String get tablesSectionAdd;
+
+  /// Text field label in the add/rename section dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Section name'**
+  String get tablesSectionName;
+
+  /// Dialog title / action when renaming an existing section.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename section'**
+  String get tablesSectionEdit;
+
+  /// Per-section delete action + confirm dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete section'**
+  String get tablesSectionDelete;
+
+  /// Section delete confirmation body — tables are detached, never deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this section? Its tables are kept and become unassigned.'**
+  String get tablesSectionDeleteConfirm;
+
+  /// Toggle that enters floor arrange mode (drag tables on the section canvas).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrange tables'**
+  String get tablesArrange;
+
+  /// Toggle label while arrange mode is ON; tapping leaves arrange mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Done arranging'**
+  String get tablesArrangeDone;
+
+  /// Per-table action that opens the section assignment menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Set section'**
+  String get tablesSetSection;
+
+  /// Menu option that clears a table's section (back to unassigned).
+  ///
+  /// In en, this message translates to:
+  /// **'No section'**
+  String get tablesSectionNone;
+
+  /// Heading of the fallback zone listing tables without a section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned tables'**
+  String get tablesUnassignedZone;
+
+  /// Caption for section tables that have no saved position on the canvas.
+  ///
+  /// In en, this message translates to:
+  /// **'Not placed yet'**
+  String get tablesNotPlaced;
+
+  /// Arrange-mode action that gives an unplaced table a safe initial spot.
+  ///
+  /// In en, this message translates to:
+  /// **'Place on map'**
+  String get tablesPlaceOnMap;
+
+  /// Arrange-mode notice when two saved placements visually overlap (informational only — nothing is auto-moved).
+  ///
+  /// In en, this message translates to:
+  /// **'Some tables overlap on the map.'**
+  String get tablesOverlapWarning;
+
   /// Device revoke confirmation body.
   ///
   /// In en, this message translates to:

@@ -19,6 +19,9 @@ enum PrintLineKind {
   rule,
   note,
   headerImage,
+  // TABLE-FLOOR-LAYOUT-021: the DINE-IN marker — a full-width ASCII star band
+  // (kitchen-ticket preview only; mirrors the shared POS/KDS composer).
+  banner,
 }
 
 class PrintLine {
@@ -62,6 +65,14 @@ class PrintLine {
       left = null,
       right = null,
       emphasised = false;
+  // TABLE-FLOOR-LAYOUT-021: the dine-in star band (no text of its own — every
+  // renderer derives the full-width star row).
+  PrintLine.banner()
+    : kind = PrintLineKind.banner,
+      left = null,
+      right = null,
+      emphasised = true,
+      imageUrl = null;
 
   final PrintLineKind kind;
   final String? left;
@@ -105,6 +116,8 @@ html, body { margin: 0; padding: 0; color: #111;
 .s { font-size: 12px; color: #444; margin: 0 0 2px 14px; }
 .n { text-align: center; font-size: 11px; color: #555; margin: 2px 0; }
 .r { border-top: 1px dashed #999; margin: 6px 0; }
+.bn { text-align: center; font-weight: 900; letter-spacing: 1px; margin: 2px 0;
+  white-space: nowrap; overflow: hidden; }
 .logo { text-align: center; margin: 2px 0 6px; }
 .logo img { display: inline-block; max-width: 60%; max-height: 120px;
   height: auto; width: auto; }
@@ -139,6 +152,10 @@ String documentToHtml(PrintDocument doc) {
         body.writeln('<div class="n">${_escape(line.left)}</div>');
       case PrintLineKind.rule:
         body.writeln('<div class="r"></div>');
+      case PrintLineKind.banner:
+        // TABLE-FLOOR-LAYOUT-021: the dine-in star band (fixed width; .bn
+        // clips so it can never wrap).
+        body.writeln('<div class="bn">${'*' * 32}</div>');
       case PrintLineKind.headerImage:
         final url = line.imageUrl;
         if (url != null && url.isNotEmpty) {

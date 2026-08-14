@@ -9,12 +9,20 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
         adminFailureMessage;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'floor_layout_editor.dart';
 import 'table_models.dart';
+import 'table_status_visuals.dart';
 import 'tables_repository.dart';
 
 /// The dashboard Tables surface (sprint `dining_tables` backend): list, add,
 /// edit, set the operational status, and remove the dining tables the POS
 /// table picker sells from.
+///
+/// TABLE-FLOOR-LAYOUT-021 adds the FLOOR layer on top: named sections, one
+/// white floor-map canvas per section with tables placed at saved normalized
+/// coordinates, and an Arrange mode (drag freely, save on drag END only,
+/// optimistic + revert on failure). The classic card grid below stays the
+/// full management surface.
 class TablesScreen extends StatefulWidget {
   const TablesScreen({required this.repository, super.key});
 
@@ -25,8 +33,14 @@ class TablesScreen extends StatefulWidget {
 }
 
 class _TablesScreenState extends State<TablesScreen> {
-  late Future<AdminResult<List<DashboardTable>>> _future = widget.repository
+  late Future<AdminResult<TablesFloorSnapshot>> _future = widget.repository
       .load();
+
+  /// The last successful load, shown while a reload is in flight so an
+  /// arrange-mode drag save never flashes the whole screen back to a spinner.
+  AdminResult<TablesFloorSnapshot>? _lastResult;
+
+  bool _arrange = false;
 
   void _reload() {
     // Braces, not an arrow: the setState callback must not RETURN the future.
@@ -51,6 +65,32 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
+  /// TABLE-FLOOR-LAYOUT-021: one placement write, fired on drag END only.
+  /// Returns false when the write failed so the editor reverts the tile; a
+  /// success silently refreshes the snapshot (no snackbar per drop).
+  Future<bool> _moveTable(String tableId, int layoutX, int layoutY) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await widget.repository.setTablePosition(
+      tableId,
+      layoutX,
+      layoutY,
+    );
+    if (!mounted) return false;
+    return result.fold(
+      (_) {
+        _reload();
+        return true;
+      },
+      (failure) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(adminFailureMessage(l10n, failure))),
+        );
+        return false;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -70,12 +110,15 @@ class _TablesScreenState extends State<TablesScreen> {
           ],
         ),
         Expanded(
-          child: FutureBuilder<AdminResult<List<DashboardTable>>>(
+          child: FutureBuilder<AdminResult<TablesFloorSnapshot>>(
             future: _future,
             builder: (context, snap) {
-              if (!snap.hasData) return AdminStateView.loading();
-              return snap.data!.fold(
-                (tables) => _list(context, tables),
+              // Cache the last success so reloads keep the current UI up.
+              if (snap.hasData) _lastResult = snap.data;
+              final result = snap.data ?? _lastResult;
+              if (result == null) return AdminStateView.loading();
+              return result.fold(
+                (snapshot) => _body(context, snapshot),
                 (failure) => AdminStateView.fromFailure(
                   context,
                   failure,
@@ -89,14 +132,15 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
-  Widget _list(BuildContext context, List<DashboardTable> rawTables) {
+  Widget _body(BuildContext context, TablesFloorSnapshot snapshot) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     // PILOT-OPERATIONS-CORRECTIONS-001 (A4): project the group-wide effective state +
     // active dine-in count onto every grouped member, so a free-looking peer of an
     // occupied group never appears Available. One canonical aggregation, shared with
     // the POS (packages/domain).
-    final tables = withDashboardGroupAggregation(rawTables);
-    if (tables.isEmpty) {
+    final tables = withDashboardGroupAggregation(snapshot.tables);
+    if (tables.isEmpty && snapshot.sections.isEmpty) {
       return AdminStateView(
         icon: Icons.table_restaurant_outlined,
         title: l10n.tablesEmptyTitle,
@@ -121,7 +165,12 @@ class _TablesScreenState extends State<TablesScreen> {
       labels.sort();
       groupLabels[g] = labels.join(' + ');
     });
-    // A floor-manager grid: one status-coloured tile per table.
+    // The floor layer reads the AGGREGATED tables so a grouped tile's tint on
+    // the map matches its card below.
+    final floorSnapshot = TablesFloorSnapshot(
+      tables: tables,
+      sections: snapshot.sections,
+    );
     return ListView(
       padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
@@ -130,6 +179,52 @@ class _TablesScreenState extends State<TablesScreen> {
         RestoflowSpacing.xxl,
       ),
       children: [
+        // ------------------------------------------------------------ floor
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.tablesSectionsTitle,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            OutlinedButton.icon(
+              key: const Key('tables-add-section'),
+              onPressed: () => _showSectionDialog(context),
+              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+              label: Text(l10n.tablesSectionAdd),
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+            FilledButton.tonalIcon(
+              key: const Key('tables-arrange-toggle'),
+              onPressed: () => setState(() => _arrange = !_arrange),
+              icon: Icon(
+                _arrange ? Icons.done : Icons.open_with,
+                size: RestoflowIconSizes.sm,
+              ),
+              label: Text(
+                _arrange ? l10n.tablesArrangeDone : l10n.tablesArrange,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        FloorLayoutEditor(
+          snapshot: floorSnapshot,
+          arrange: _arrange,
+          onRenameSection: (section) =>
+              _showSectionDialog(context, section: section),
+          onDeleteSection: (section) => _confirmDeleteSection(context, section),
+          onReorderSections: (ids) =>
+              _run(() => widget.repository.reorderSections(ids)),
+          onMoveTable: _moveTable,
+          onSetSection: (table) =>
+              _chooseSection(context, table, snapshot.sections),
+        ),
+        const Divider(height: RestoflowSpacing.xl),
+        // ------------------------------------------------------------ cards
         Wrap(
           spacing: RestoflowSpacing.md,
           runSpacing: RestoflowSpacing.md,
@@ -144,6 +239,8 @@ class _TablesScreenState extends State<TablesScreen> {
                       : groupLabels[table.groupId],
                   onSetStatus: (status) =>
                       _run(() => widget.repository.setStatus(table.id, status)),
+                  onSetSection: () =>
+                      _chooseSection(context, table, snapshot.sections),
                   onEdit: () => _showTableDialog(context, table: table),
                   onDelete: () => _confirmDelete(context, table),
                 ),
@@ -205,48 +302,113 @@ class _TablesScreenState extends State<TablesScreen> {
       await _run(() => widget.repository.deleteTable(table.id));
     }
   }
-}
 
-/// The localized label + semantic tone + icon for a table status. Tones ride
-/// the shared TRUE semantic palette (success/warning/info/danger), so the
-/// tiles stay themeable (no hardcoded palette).
-/// PILOT-OPERATIONS-CORRECTIONS-001: the localized label for a server effective
-/// state string, reusing the manual-status vocabulary.
-String _effectiveLabel(BuildContext context, String effective) {
-  final status = DiningTableStatus.fromWire(effective);
-  // Finding 6: an unknown/unrecognized effective state gets an HONEST localized label
-  // (never shown raw, never as Available).
-  if (status == null) return AppLocalizations.of(context).tablesStatusUnknown;
-  return _statusVisual(context, status).label;
-}
+  // ------------------------------------------------------ section management
 
-({String label, RestoflowTone tone, IconData icon}) _statusVisual(
-  BuildContext context,
-  DiningTableStatus status,
-) {
-  final l10n = AppLocalizations.of(context);
-  return switch (status) {
-    DiningTableStatus.available => (
-      label: l10n.tablesStatusAvailable,
-      tone: RestoflowTone.success,
-      icon: Icons.check_circle_outline,
+  Future<void> _showSectionDialog(
+    BuildContext context, {
+    DashboardTableSection? section,
+  }) => showDialog<void>(
+    context: context,
+    builder: (_) => _SectionDialog(
+      section: section,
+      onSave: ({required name, required isActive}) => _run(
+        () => widget.repository.upsertSection(
+          id: section?.id,
+          name: name,
+          isActive: isActive,
+        ),
+      ),
     ),
-    DiningTableStatus.occupied => (
-      label: l10n.tablesStatusOccupied,
-      tone: RestoflowTone.warning,
-      icon: Icons.people_alt_outlined,
-    ),
-    DiningTableStatus.reserved => (
-      label: l10n.tablesStatusReserved,
-      tone: RestoflowTone.info,
-      icon: Icons.event_seat_outlined,
-    ),
-    DiningTableStatus.outOfService => (
-      label: l10n.tablesStatusOutOfService,
-      tone: RestoflowTone.danger,
-      icon: Icons.block_outlined,
-    ),
-  };
+  );
+
+  Future<void> _confirmDeleteSection(
+    BuildContext context,
+    DashboardTableSection section,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.tablesSectionDelete),
+        // Deleting a section only DETACHES its tables (they are never
+        // deleted) — the confirm copy says exactly that.
+        content: Text(l10n.tablesSectionDeleteConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.adminCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.tablesSectionDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _run(() => widget.repository.deleteSection(section.id));
+    }
+  }
+
+  /// Pick a section for [table] (or "no section"). A record wrapper
+  /// distinguishes "dialog dismissed" (null) from "chose no-section" ((null,)).
+  Future<void> _chooseSection(
+    BuildContext context,
+    DashboardTable table,
+    List<DashboardTableSection> sections,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    // Localized action word + the table's own label (data, not copy).
+    final dialogTitle = '${l10n.tablesSetSection} — ${table.label}';
+    final choice = await showDialog<(String?,)>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(dialogTitle),
+        children: [
+          for (final section in sections)
+            if (section.isActive)
+              SimpleDialogOption(
+                key: Key('choose-section-${section.id}'),
+                onPressed: () => Navigator.of(dialogContext).pop((section.id,)),
+                child: Row(
+                  children: [
+                    Icon(
+                      section.id == table.sectionId
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: RestoflowIconSizes.sm,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    ),
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Expanded(child: Text(section.name)),
+                  ],
+                ),
+              ),
+          SimpleDialogOption(
+            key: const Key('choose-section-none'),
+            onPressed: () => Navigator.of(dialogContext).pop((null,)),
+            child: Row(
+              children: [
+                Icon(
+                  table.sectionId == null
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  size: RestoflowIconSizes.sm,
+                  color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                Expanded(child: Text(l10n.tablesSectionNone)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    if (choice.$1 == table.sectionId) return; // no-op pick
+    await _run(() => widget.repository.setTableSection(table.id, choice.$1));
+  }
 }
 
 /// One floor tile: a status accent edge, a big table label, the seats/area
@@ -255,6 +417,7 @@ class _TableCard extends StatelessWidget {
   const _TableCard({
     required this.table,
     required this.onSetStatus,
+    required this.onSetSection,
     required this.onEdit,
     required this.onDelete,
     this.groupLabel,
@@ -262,6 +425,9 @@ class _TableCard extends StatelessWidget {
 
   final DashboardTable table;
   final ValueChanged<DiningTableStatus> onSetStatus;
+
+  /// TABLE-FLOOR-LAYOUT-021: opens the section chooser for this table.
+  final VoidCallback onSetSection;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -274,7 +440,7 @@ class _TableCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final status = _statusVisual(context, table.status);
+    final status = tableStatusVisual(context, table.status);
     final statusStyle = status.tone.styleOf(theme);
     // PILOT-OPERATIONS-CORRECTIONS-001: the SERVER effective state, shown when it
     // differs from the manual status (e.g. manually Available but effectively
@@ -284,13 +450,18 @@ class _TableCard extends StatelessWidget {
         table.effectiveState != table.status.wire;
     final detail = [
       if (table.seats != null) '${l10n.tablesFieldSeats}: ${table.seats}',
-      if (table.area != null) table.area!,
+      // TABLE-FLOOR-LAYOUT-021: the section is the floor home; the legacy
+      // free-text area stays visible for unsectioned tables only.
+      if (table.sectionName != null)
+        table.sectionName!
+      else if (table.area != null)
+        table.area!,
       // RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy, always shown — a
       // floor manager reads "1 open order" here the moment a POS seats a
       // party, independently of the manual floor status above.
       l10n.tablesOpenOrders(table.activeOrderCount),
       if (effectiveDiffers)
-        '${l10n.tablesEffective}: ${_effectiveLabel(context, table.effectiveState!)}',
+        '${l10n.tablesEffective}: ${tableEffectiveLabel(context, table.effectiveState!)}',
     ].join(' · ');
 
     return Container(
@@ -413,9 +584,9 @@ class _TableCard extends StatelessWidget {
                                   child: Row(
                                     children: [
                                       Icon(
-                                        _statusVisual(context, value).icon,
+                                        tableStatusVisual(context, value).icon,
                                         size: RestoflowIconSizes.sm,
-                                        color: _statusVisual(
+                                        color: tableStatusVisual(
                                           context,
                                           value,
                                         ).tone.styleOf(theme).accent,
@@ -423,7 +594,9 @@ class _TableCard extends StatelessWidget {
                                       const SizedBox(
                                         width: RestoflowSpacing.sm,
                                       ),
-                                      Text(_statusVisual(context, value).label),
+                                      Text(
+                                        tableStatusVisual(context, value).label,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -454,6 +627,15 @@ class _TableCard extends StatelessWidget {
                                 ],
                               ),
                             ),
+                          ),
+                        ),
+                        IconButton(
+                          key: Key('table-set-section-${table.id}'),
+                          tooltip: l10n.tablesSetSection,
+                          onPressed: onSetSection,
+                          icon: const Icon(
+                            Icons.location_on_outlined,
+                            size: RestoflowIconSizes.md,
                           ),
                         ),
                         IconButton(
@@ -601,6 +783,93 @@ class _TableDialogState extends State<_TableDialog> {
           child: Text(l10n.adminCancel),
         ),
         FilledButton(
+          onPressed: _busy ? null : _submit,
+          child: Text(l10n.adminSave),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section add / rename dialog (TABLE-FLOOR-LAYOUT-021).
+// ---------------------------------------------------------------------------
+class _SectionDialog extends StatefulWidget {
+  const _SectionDialog({required this.onSave, this.section});
+
+  final DashboardTableSection? section;
+  final Future<void> Function({required String name, required bool isActive})
+  onSave;
+
+  @override
+  State<_SectionDialog> createState() => _SectionDialogState();
+}
+
+class _SectionDialogState extends State<_SectionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name = TextEditingController(
+    text: widget.section?.name ?? '',
+  );
+  late bool _active = widget.section?.isActive ?? true;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _busy = true);
+    await widget.onSave(name: _name.text.trim(), isActive: _active);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(
+        widget.section == null ? l10n.tablesSectionAdd : l10n.tablesSectionEdit,
+      ),
+      content: SizedBox(
+        width: RestoflowPanelWidths.dialog,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const Key('section-name-field'),
+                controller: _name,
+                decoration: InputDecoration(
+                  labelText: l10n.tablesSectionName,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                validator: (v) =>
+                    (v ?? '').trim().isEmpty ? l10n.tablesErrLabel : null,
+              ),
+              const SizedBox(height: RestoflowSpacing.sm),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.tablesActive),
+                value: _active,
+                onChanged: (v) => setState(() => _active = v),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.adminCancel),
+        ),
+        FilledButton(
+          key: const Key('section-save'),
           onPressed: _busy ? null : _submit,
           child: Text(l10n.adminSave),
         ),
