@@ -46,11 +46,21 @@ class OrderActionRow extends ConsumerWidget {
     required this.l10n,
     required this.actions,
     this.keyPrefix = 'recent',
+    this.onPaymentSuccess,
   });
 
   final PosRecentOrder order;
   final AppLocalizations l10n;
   final PosOrderActions actions;
+
+  /// POS-OPEN-ORDER-PAYMENT-DISMISS-019: invoked ONLY after
+  /// [CashPaymentSheet.show] resolves TRUE (the one authoritative success
+  /// edge). The detail preview passes its own dismissal here so a paid order
+  /// never leaves a stale, still-payable panel behind the closed payment
+  /// sheet; the Orders sheet passes nothing and keeps its current behavior
+  /// (rows re-resolve from the authoritative refresh in place). Cancel,
+  /// failure, refusal and both pre-open gates never fire it.
+  final VoidCallback? onPaymentSuccess;
 
   /// ORDER-DETAIL-PREVIEW-001: the Widget-key namespace. It defaults to
   /// `recent`, so every key this row emits in the Orders sheet is BYTE-IDENTICAL
@@ -102,23 +112,30 @@ class OrderActionRow extends ConsumerWidget {
         OrderActionButton(
           child: FilledButton.icon(
             key: Key('$keyPrefix-pay-${order.orderNumber}'),
-            onPressed: () => CashPaymentSheet.show(
-              context,
-              identity: order.identity,
-              orderId: order.orderId,
-              orderNumber: order.orderNumber,
-              // AUTHORITATIVE total + revision. The sheet no longer receives the
-              // submit-time figure it used to be handed.
-              amountMinor: order.grandTotalMinor,
-              currencyCode: order.currencyCode,
-              expectedRevision: order.revision,
-              // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The central
-              // policy's own verdict, carried straight through. It is already
-              // false whenever this button is drawn (an unacknowledged submit
-              // withdraws `canPay`); passing it keeps the ONE entry point able
-              // to refuse honestly if that ever stops being true.
-              submitUnacknowledged: actions.submitUnacknowledged,
-            ),
+            onPressed: () async {
+              final paid = await CashPaymentSheet.show(
+                context,
+                identity: order.identity,
+                orderId: order.orderId,
+                orderNumber: order.orderNumber,
+                // AUTHORITATIVE total + revision. The sheet no longer receives
+                // the submit-time figure it used to be handed.
+                amountMinor: order.grandTotalMinor,
+                currencyCode: order.currencyCode,
+                expectedRevision: order.revision,
+                // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass B] The
+                // central policy's own verdict, carried straight through. It
+                // is already false whenever this button is drawn (an
+                // unacknowledged submit withdraws `canPay`); passing it keeps
+                // the ONE entry point able to refuse honestly if that ever
+                // stops being true.
+                submitUnacknowledged: actions.submitUnacknowledged,
+              );
+              // 019: success — and ONLY success — hands control back to the
+              // surface that opened this row (the preview dismisses itself);
+              // the payment sheet has already closed by the time this resolves.
+              if (paid) onPaymentSuccess?.call();
+            },
             icon: const Icon(Icons.payments_outlined, size: 18),
             label: Text(l10n.posTakePayment),
           ),

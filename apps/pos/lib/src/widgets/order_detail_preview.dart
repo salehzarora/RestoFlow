@@ -98,6 +98,24 @@ class OrderDetailPreview extends ConsumerWidget {
                 l10n: l10n,
                 actions: actions,
                 keyPrefix: 'preview',
+                // POS-OPEN-ORDER-PAYMENT-DISMISS-019: a GENUINE payment success
+                // retires this preview immediately — its [actions] were
+                // resolved when the card was tapped and are stale the moment
+                // the money is recorded (a still-visible "Collect payment"
+                // on a paid order is a double-charge invitation). The normal
+                // Navigator pop keeps the standard sheet slide-down; whether
+                // the strip card then stays or goes belongs to the
+                // authoritative refresh + the canonical Open predicate,
+                // NEVER to this callback. Cancel/failure/refusal keep the
+                // cashier here with today's error behavior.
+                onPaymentSuccess: () {
+                  final route = ModalRoute.of(context);
+                  // Pop ONLY while this sheet still owns the top of the stack
+                  // — never yank a route out from under something newer.
+                  if (route != null && route.isCurrent) {
+                    Navigator.of(context).pop();
+                  }
+                },
               ),
             ),
           ],

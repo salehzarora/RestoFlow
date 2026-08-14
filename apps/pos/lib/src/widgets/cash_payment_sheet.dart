@@ -80,7 +80,13 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
   /// references (RF-130); null/empty on the demo in-memory path (ignored there).
   final String? orderId;
 
-  static Future<void> show(
+  /// POS-OPEN-ORDER-PAYMENT-DISMISS-019: resolves to TRUE only on the one
+  /// authoritative success edge (`payCash` returned and the sheet popped
+  /// itself with a result). Every other exit — cancel button, drag/barrier
+  /// dismissal, a refused/failed/conflicted attempt the cashier then closes,
+  /// or either honest pre-open gate — resolves FALSE, so a caller can dismiss
+  /// its own surface after a genuine payment and ONLY then.
+  static Future<bool> show(
     BuildContext context, {
     required PosOrderIdentity identity,
     required String orderNumber,
@@ -100,7 +106,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     // with the honest localized reason instead of opening a sheet whose
     // Confirm can only fail. Gated HERE so every caller (confirmation, orders
     // centre, detail preview) behaves identically; payment logic is untouched.
-    if (blockPosActionWhileOffline(context)) return Future.value();
+    if (blockPosActionWhileOffline(context)) return Future.value(false);
     // Pass B — the ORDER-SCOPED sibling of that gate. The till may be perfectly
     // online while THIS order's submit is still queued; `record_payment` would
     // answer `order not found` and the sheet would blame the network for it.
@@ -109,9 +115,9 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
       context,
       submitUnacknowledged: submitUnacknowledged,
     )) {
-      return Future.value();
+      return Future.value(false);
     }
-    return showModalBottomSheet<void>(
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -123,7 +129,8 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
         orderId: orderId,
         expectedRevision: expectedRevision,
       ),
-    );
+      // A dismissed/cancelled sheet pops with no result — that is NOT success.
+    ).then((paid) => paid ?? false);
   }
 
   @override
@@ -320,7 +327,9 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       );
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
-      if (mounted) navigator.pop();
+      // 019: the pop CARRIES the success result — the one authoritative edge
+      // (`payCash` returned) is the only place `true` can ever originate.
+      if (mounted) navigator.pop(true);
     } on PaymentException catch (e) {
       // DESIGN-001: an honest, visible failure — the payment was NOT recorded
       // and the cashier must know. The banner below the sheet body says so;
