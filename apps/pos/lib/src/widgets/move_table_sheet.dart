@@ -7,6 +7,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
         floorClusterSeamRect,
+        floorElementRoomRect,
         floorFractionOf,
         floorTableRoomRect,
         packLinkedCluster;
@@ -14,7 +15,8 @@ import 'package:restoflow_domain/restoflow_domain.dart'
 import '../data/demo_tables.dart';
 import '../data/recent_order.dart';
 import '../data/table_move_repository.dart';
-import '../state/order_setup_controller.dart' show tablesProvider;
+import '../state/order_setup_controller.dart'
+    show floorElementsProvider, tablesProvider;
 import '../state/order_sync_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import '../state/table_move_controller.dart';
@@ -213,6 +215,7 @@ class _MoveTableSheetState extends ConsumerState<MoveTableSheet> {
                 data: (list) => _TableGrid(
                   l10n: l10n,
                   tables: list,
+                  floorElements: ref.watch(floorElementsProvider),
                   currentLabel: currentLabel,
                   selectedId: _selectedTableId,
                   enabled: !_submitting && !_staleAfterRefusal,
@@ -289,6 +292,7 @@ class _TableGrid extends StatelessWidget {
   const _TableGrid({
     required this.l10n,
     required this.tables,
+    required this.floorElements,
     required this.currentLabel,
     required this.selectedId,
     required this.enabled,
@@ -297,6 +301,9 @@ class _TableGrid extends StatelessWidget {
 
   final AppLocalizations l10n;
   final List<DemoTable> tables;
+
+  /// 027: the READ-ONLY visual fixture catalog (per-section decoration).
+  final List<PosFloorElement> floorElements;
   final String? currentLabel;
   final String? selectedId;
   final bool enabled;
@@ -329,6 +336,10 @@ class _TableGrid extends StatelessWidget {
             _MoveSectionZone(
               l10n: l10n,
               section: section,
+              elements: [
+                for (final e in floorElements)
+                  if (e.sectionId == section.sectionId) e,
+              ],
               currentLabel: currentLabel,
               selectedId: selectedId,
               enabled: enabled,
@@ -368,6 +379,7 @@ class _MoveSectionZone extends StatelessWidget {
   const _MoveSectionZone({
     required this.l10n,
     required this.section,
+    required this.elements,
     required this.currentLabel,
     required this.selectedId,
     required this.enabled,
@@ -377,6 +389,9 @@ class _MoveSectionZone extends StatelessWidget {
   final AppLocalizations l10n;
   final ({String sectionId, String sectionName, List<DemoTable> tables})
   section;
+
+  /// 027: this section's read-only visual fixtures.
+  final List<PosFloorElement> elements;
   final String? currentLabel;
   final String? selectedId;
   final bool enabled;
@@ -459,7 +474,27 @@ class _MoveSectionZone extends StatelessWidget {
                 }
                 return RestoflowFloorSectionCanvas(
                   key: Key('move-table-section-canvas-${section.sectionId}'),
-                  background: seams,
+                  // 027 z-order: fixtures under seams under tables; read-only.
+                  background: [
+                    for (final e in elements)
+                      RestoflowFloorPlacedTile(
+                        room: floorElementRoomRect(
+                          e.layoutX,
+                          e.layoutY,
+                          width: e.widthNorm,
+                          height: e.heightNorm,
+                          quarterTurns: e.orientationQuarterTurns,
+                        ),
+                        child: IgnorePointer(
+                          child: RestoflowFloorFixture(
+                            key: Key('move-floor-element-${e.id}'),
+                            kind: e.kind,
+                            label: e.label,
+                          ),
+                        ),
+                      ),
+                    ...seams,
+                  ],
                   placed: [
                     for (final t in placed)
                       RestoflowFloorPlacedTile(

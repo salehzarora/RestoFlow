@@ -5,6 +5,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
         floorClusterSeamRect,
+        floorElementRoomRect,
         floorFractionOf,
         floorTableRoomRect,
         packLinkedCluster;
@@ -109,6 +110,7 @@ class TablePickerSheet extends ConsumerWidget {
                       )
                     : _FloorMap(
                         tables: tables,
+                        floorElements: ref.watch(floorElementsProvider),
                         assignedId: assignedId,
                         onAssign: (t) {
                           ref
@@ -392,6 +394,7 @@ String localizedTableArea(String areaKey, AppLocalizations l10n) {
 class _FloorMap extends StatelessWidget {
   const _FloorMap({
     required this.tables,
+    required this.floorElements,
     required this.assignedId,
     required this.onAssign,
     required this.onOpenGroup,
@@ -399,6 +402,9 @@ class _FloorMap extends StatelessWidget {
   });
 
   final List<DemoTable> tables;
+
+  /// 027: the READ-ONLY visual fixture catalog (per-section decoration).
+  final List<PosFloorElement> floorElements;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
   final void Function(TableGroupCardData) onOpenGroup;
@@ -443,6 +449,10 @@ class _FloorMap extends StatelessWidget {
             if (i > 0) const _AisleDivider(),
             _SectionZone(
               section: split.sections[i],
+              elements: [
+                for (final e in floorElements)
+                  if (e.sectionId == split.sections[i].sectionId) e,
+              ],
               groupCards: groupCards,
               assignedId: assignedId,
               onAssign: onAssign,
@@ -487,6 +497,7 @@ class _FloorMap extends StatelessWidget {
 class _SectionZone extends StatelessWidget {
   const _SectionZone({
     required this.section,
+    required this.elements,
     required this.groupCards,
     required this.assignedId,
     required this.onAssign,
@@ -496,6 +507,9 @@ class _SectionZone extends StatelessWidget {
 
   final ({String sectionId, String sectionName, List<DemoTable> tables})
   section;
+
+  /// 027: this section's read-only visual fixtures.
+  final List<PosFloorElement> elements;
   final Map<String, TableGroupCardData> groupCards;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
@@ -587,7 +601,28 @@ class _SectionZone extends StatelessWidget {
                 }
                 return RestoflowFloorSectionCanvas(
                   key: Key('table-section-canvas-${section.sectionId}'),
-                  background: seams,
+                  // 027 z-order: fixtures under seams under tables; fixtures
+                  // are IgnorePointer — pure decoration, never tappable.
+                  background: [
+                    for (final e in elements)
+                      RestoflowFloorPlacedTile(
+                        room: floorElementRoomRect(
+                          e.layoutX,
+                          e.layoutY,
+                          width: e.widthNorm,
+                          height: e.heightNorm,
+                          quarterTurns: e.orientationQuarterTurns,
+                        ),
+                        child: IgnorePointer(
+                          child: RestoflowFloorFixture(
+                            key: Key('pos-floor-element-${e.id}'),
+                            kind: e.kind,
+                            label: e.label,
+                          ),
+                        ),
+                      ),
+                    ...seams,
+                  ],
                   // Room-unit rects from the SHARED contract — identical
                   // relative geometry to the Dashboard editor by construction.
                   placed: [
