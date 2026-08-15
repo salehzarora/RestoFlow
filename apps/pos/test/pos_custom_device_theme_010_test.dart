@@ -96,14 +96,17 @@ Future<void> _tapVisible(WidgetTester tester, Key key) async {
 Future<void> _pickColor(
   WidgetTester tester,
   String tileKey,
-  Color color,
-) async {
+  Color color, {
+  String? typed,
+}) async {
   await _scrollSheetTo(tester, find.byKey(Key(tileKey)));
   await _tapVisible(tester, Key(tileKey));
   await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+  // [typed] lets a caller keep 010's normalise-on-the-way-to-storage contract
+  // honest by entering a lowercase, bare-# value the way a cashier would.
   await tester.enterText(
     find.byKey(const Key('pos-color-picker-hex')),
-    posFormatHexColor(color),
+    typed ?? posFormatHexColor(color),
   );
   await tester.pumpAndSettle();
   await _tapVisible(tester, const Key('pos-color-picker-confirm'));
@@ -713,15 +716,20 @@ void main() {
       await tester.pumpAndSettle();
       await _openCustomEditor(tester);
 
+      // Lowercase and without the leading '#', exactly as the ORIGINAL F4
+      // typed it: normalisation to the canonical uppercase wire must still
+      // happen end to end through the widget, not just in the parser unit.
       await _pickColor(
         tester,
         'custom-theme-primary-swatch',
         const Color(0xFF1A3D34),
+        typed: '1a3d34',
       );
       await _pickColor(
         tester,
         'custom-theme-secondary-swatch',
         const Color(0xFFE76F2E),
+        typed: '#E76F2E',
       );
       await _scrollSheetTo(tester, find.byKey(const Key('custom-theme-apply')));
       final apply = tester.widget<FilledButton>(

@@ -71,7 +71,7 @@ Future<Color?> showPosColorPicker(
   builder: (_) => PosColorPickerSheet(initial: initial, title: title),
 );
 
-/// The picker body. Public so tests can pump it directly without a route.
+/// The picker body. Public so it can be routed and asserted on directly.
 class PosColorPickerSheet extends StatefulWidget {
   const PosColorPickerSheet({
     super.key,
@@ -105,6 +105,9 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
   /// «متقدم» starts collapsed — the whole point is that hex is optional.
   bool _advancedOpen = false;
 
+  /// Lets the toggle scroll the revealed field into view on short viewports.
+  final GlobalKey _advancedFieldKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -132,6 +135,10 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
     setState(
       () => _hsv = HSVColor.fromAHSV(1, next.hue, next.saturation, next.value),
     );
+    _syncHexFromHsv();
+  }
+
+  void _syncHexFromHsv() {
     final text = posFormatHexColor(_color);
     if (_hexCtl.text.toUpperCase() == text) return;
     _syncingHex = true;
@@ -147,11 +154,18 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
   void _onHexEdited() {
     if (_syncingHex) return;
     final parsed = _hexColor;
-    // Unparseable text leaves the visual controls exactly where they were —
-    // the owner still sees the color the sheet would return, and confirm is
-    // disabled until the text agrees with it again.
     setState(() {
-      if (parsed != null) _hsv = HSVColor.fromColor(parsed);
+      // Unparseable text leaves the visual controls exactly where they were —
+      // the owner still sees the color the sheet would return, and confirm is
+      // disabled until the text agrees with it again.
+      if (parsed == null) return;
+      // A TextEditingController notifies on SELECTION changes too, so merely
+      // tapping into the field re-runs this with identical text. Rebuilding
+      // _hsv from an unchanged color would throw its hue away — a grey or a
+      // black carries none — snapping the hue rail to red under a caret tap.
+      // Only a genuinely different color may move the instruments.
+      if (parsed.toARGB32() == _color.toARGB32()) return;
+      _hsv = HSVColor.fromColor(parsed);
     });
   }
 
@@ -219,7 +233,7 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
                         const SizedBox(height: RestoflowSpacing.md),
                         _caption(theme, l10n.posColorPickerShade),
                         const SizedBox(height: RestoflowSpacing.xs),
-                        _shadeStrip(),
+                        _shadeStrip(l10n),
                         const SizedBox(height: RestoflowSpacing.sm),
                         _advanced(theme, l10n),
                       ],
@@ -316,7 +330,7 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
   );
 
   /// Lighter → darker at the current hue and saturation.
-  Widget _shadeStrip() => Row(
+  Widget _shadeStrip(AppLocalizations l10n) => Row(
     key: const Key('pos-color-picker-shades'),
     children: [
       for (var i = 0; i < kPosColorPickerShadeStops.length; i++) ...[
@@ -325,6 +339,7 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
           child: _ShadeStep(
             key: Key('pos-color-picker-shade-$i'),
             color: _hsv.withValue(kPosColorPickerShadeStops[i]).toColor(),
+            label: l10n.posColorPickerShade,
             onTap: () => _setHsv(_hsv.withValue(kPosColorPickerShadeStops[i])),
           ),
         ),
@@ -340,13 +355,29 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
         child: TextButton.icon(
           key: const Key('pos-color-picker-advanced-toggle'),
           style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-          onPressed: () => setState(() => _advancedOpen = !_advancedOpen),
+          onPressed: () {
+            setState(() => _advancedOpen = !_advancedOpen);
+            if (!_advancedOpen) {
+              // Collapsing DISCARDS a half-typed hex, so hiding an invalid
+              // field can never leave the owner staring at a dead confirm.
+              _syncHexFromHsv();
+              return;
+            }
+            // On a 1024x600 tablet the toggle sits at the bottom of the
+            // scroll area, so the field it reveals lands below the fold —
+            // tapping «متقدم» would look like it did nothing.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final box = _advancedFieldKey.currentContext;
+              if (box != null) Scrollable.ensureVisible(box, alignment: 1);
+            });
+          },
           icon: Icon(_advancedOpen ? Icons.expand_less : Icons.expand_more),
           label: Text(l10n.posColorPickerAdvanced),
         ),
       ),
       if (_advancedOpen)
         Padding(
+          key: _advancedFieldKey,
           padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
           child: TextField(
             key: const Key('pos-color-picker-hex'),
@@ -363,7 +394,14 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
               fontFamilyFallback: kPosMoneyFontFallbacks,
             ),
             decoration: InputDecoration(
-              labelText: l10n.posDeviceThemeCustomHexHint,
+              // A LABEL widget, not labelText: the decorator lays the label
+              // out in the AMBIENT direction, so in ar/he the pattern paints
+              // as "RRGGBB#" — the leading '#' is a neutral that flips to the
+              // far side. TextField.textDirection governs the VALUE only.
+              label: Text(
+                l10n.posDeviceThemeCustomHexHint,
+                textDirection: TextDirection.ltr,
+              ),
               hintText: l10n.posDeviceThemeCustomHexHint,
               counterText: '',
               isDense: true,
@@ -383,7 +421,12 @@ class _PosColorPickerSheetState extends State<PosColorPickerSheet> {
         child: FilledButton(
           key: const Key('pos-color-picker-confirm'),
           style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-          onPressed: _hexColor == null
+          // Only genuinely INVALID text blocks, and that always shows the
+          // localized error beside it. An EMPTY field is not an error: hex is
+          // an optional override, and the visual controls still hold a real
+          // colour — blocking there would disable the button with nothing on
+          // screen saying why.
+          onPressed: _hexInvalid
               ? null
               : () => Navigator.of(context).pop(_color),
           child: Text(l10n.posColorPickerConfirm),
@@ -424,25 +467,37 @@ class _PickerSwatch extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      child: InkWell(
-        onTap: onTap,
+      // A color has no name to announce, so give assistive tech the one
+      // identifier that exists. Without this the swatch reads as a bare
+      // unnamed button.
+      value: posFormatHexColor(color),
+      // Material carries the colour, not the child: ink splash, hover and the
+      // keyboard focus overlay all paint ON the Material, so an opaque child
+      // Container would swallow every one of them and leave a keyboard user
+      // with no idea where focus is.
+      child: Material(
+        color: color,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            border: Border.all(
-              color: selected
-                  ? theme.colorScheme.onSurface
-                  : kRestoflowHairline,
-              width: selected ? 2 : 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          focusColor: posReadableInkOn(color).withValues(alpha: 0.32),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(
+                color: selected
+                    ? theme.colorScheme.onSurface
+                    : kRestoflowHairline,
+                width: selected ? 2 : 1,
+              ),
             ),
+            child: selected
+                ? Icon(Icons.check, size: 20, color: posReadableInkOn(color))
+                : null,
           ),
-          child: selected
-              ? Icon(Icons.check, size: 20, color: posReadableInkOn(color))
-              : null,
         ),
       ),
     );
@@ -452,24 +507,40 @@ class _PickerSwatch extends StatelessWidget {
 /// One lighter/darker step. Not a persistent selection (the field marker and
 /// the header preview already say where you are) — a nudge you can take.
 class _ShadeStep extends StatelessWidget {
-  const _ShadeStep({super.key, required this.color, required this.onTap});
+  const _ShadeStep({
+    super.key,
+    required this.color,
+    required this.label,
+    required this.onTap,
+  });
 
   final Color color;
+
+  /// The section's own caption («أفتح أو أغمق»), so the step is not announced
+  /// as an anonymous button.
+  final String label;
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      child: InkWell(
-        onTap: onTap,
+      label: label,
+      value: posFormatHexColor(color),
+      child: Material(
+        color: color,
         borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-            border: Border.all(color: kRestoflowHairline),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+          focusColor: posReadableInkOn(color).withValues(alpha: 0.32),
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+              border: Border.all(color: kRestoflowHairline),
+            ),
           ),
         ),
       ),
@@ -527,8 +598,8 @@ class _SaturationValueField extends StatelessWidget {
                     // Physical left/top on purpose: a color field is a
                     // spatial instrument, not a text run — mirroring it in
                     // ar/he would move the marker away from the color.
-                    left: hsv.saturation * width - 13,
-                    top: (1 - hsv.value) * height - 13,
+                    left: hsv.saturation * width - _SelectionMarker.size / 2,
+                    top: (1 - hsv.value) * height - _SelectionMarker.size / 2,
                     child: const _SelectionMarker(
                       key: Key('pos-color-picker-sv-marker'),
                     ),
@@ -582,8 +653,8 @@ class _HueRail extends StatelessWidget {
                       ),
                     ),
                     Positioned(
-                      left: hsv.hue / 360 * width - 13,
-                      top: _height / 2 - 13,
+                      left: hsv.hue / 360 * width - _SelectionMarker.size / 2,
+                      top: (_height - _SelectionMarker.size) / 2,
                       child: const _SelectionMarker(
                         key: Key('pos-color-picker-hue-marker'),
                       ),
@@ -605,23 +676,31 @@ class _HueRail extends StatelessWidget {
 class _SelectionMarker extends StatelessWidget {
   const _SelectionMarker({super.key});
 
+  /// Pinned, because both instruments centre the marker with `- size / 2`.
+  /// Letting the rings decide the size drifts that centre off the colour the
+  /// marker names (the nested border/padding measured 23dp, not 26).
+  static const double size = 26;
+
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      shape: BoxShape.circle,
-      color: Colors.transparent,
-      border: Border.fromBorderSide(
-        BorderSide(color: Color(0x8A000000), width: 1.5),
+  Widget build(BuildContext context) => const SizedBox(
+    width: size,
+    height: size,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.fromBorderSide(
+          BorderSide(color: Color(0x8A000000), width: 1.5),
+        ),
       ),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(1.5),
-      child: Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 3),
+      child: Padding(
+        padding: EdgeInsets.all(1.5),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.fromBorderSide(
+              BorderSide(color: Colors.white, width: 3),
+            ),
+          ),
         ),
       ),
     ),

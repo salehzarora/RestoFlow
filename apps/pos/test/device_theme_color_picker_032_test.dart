@@ -185,7 +185,11 @@ Future<List<String>> _overflowsDuring(Future<void> Function() body) async {
   FlutterError.onError = (details) {
     if (details.exceptionAsString().contains('overflowed')) {
       found.add(details.toString());
+      return;
     }
+    // Anything that is NOT an overflow still has to fail the test — swallowing
+    // it would make these cases blind to a paint-time crash.
+    prior?.call(details);
   };
   try {
     await body();
@@ -226,8 +230,25 @@ void main() {
         find.byKey(const Key('pos-color-picker-hue-rail')),
         findsOneWidget,
       );
-      for (final swatch in kPosColorPickerPalette) {
-        final hex = posFormatHexColor(swatch).substring(1);
+      // Pinned literally, NOT looped over kPosColorPickerPalette: iterating
+      // the same constant the widget renders would still pass after half the
+      // palette was deleted.
+      expect(kPosColorPickerPalette.length, 12);
+      expect(kPosColorPickerShadeStops.length, 5);
+      for (final hex in const [
+        '16263B', // navy — the default primary, so "put it back" is one tap
+        '1A3D34',
+        '3B2A44',
+        '2B2F36',
+        '2C5F8A',
+        '146B6B',
+        '4E5B31',
+        'A62B2B',
+        '8C4A2F',
+        'D9642B', // ember — the default secondary
+        'D89A2B',
+        'F2EFE8',
+      ]) {
         expect(
           find.byKey(Key('pos-color-picker-swatch-$hex')),
           findsOneWidget,
@@ -349,27 +370,26 @@ void main() {
         Key('pos-color-picker-hue-marker'),
       ]) {
         expect(find.byKey(key), findsOneWidget);
-        final outer = tester.widget<DecoratedBox>(
-          find
-              .descendant(
+        final rings = tester
+            .widgetList<DecoratedBox>(
+              find.descendant(
                 of: find.byKey(key),
                 matching: find.byType(DecoratedBox),
-              )
-              .first,
-        );
-        final dark = (outer.decoration as BoxDecoration).border!.top.color;
-        expect(dark.a, greaterThan(0.4), reason: 'dark ring must be opaque');
+              ),
+            )
+            .toList();
+        expect(rings.length, 2, reason: 'marker needs BOTH rings');
+        final dark =
+            (rings.first.decoration as BoxDecoration).border!.top.color;
+        final light =
+            (rings.last.decoration as BoxDecoration).border!.top.color;
+        // Dark ring holds it against a white bed; white ring against black.
+        expect(dark.a, greaterThan(0.4));
         expect(dark.computeLuminance(), lessThan(0.2));
-        final inner = tester.widget<Container>(
-          find.descendant(
-            of: find.byKey(key),
-            matching: find.byType(Container),
-          ),
-        );
-        expect(
-          (inner.decoration! as BoxDecoration).border!.top.color,
-          Colors.white,
-        );
+        expect(light, Colors.white);
+        // The size is load-bearing: both instruments centre with `- size / 2`.
+        expect(tester.getSize(find.byKey(key)).width, 26);
+        expect(tester.getSize(find.byKey(key)).height, 26);
       }
     });
 
@@ -390,8 +410,11 @@ void main() {
       final marker = tester.getRect(
         find.byKey(const Key('pos-color-picker-sv-marker')),
       );
-      expect(marker.center.dx, closeTo(field.left + field.width * 0.8, 2));
-      expect(marker.center.dy, closeTo(field.top + field.height * 0.3, 2));
+      // Tight on purpose: 2dp of slack once hid a 1.5dp centring error
+      // caused by the marker's real size (23dp) differing from the half-size
+      // offset it was positioned with (13dp).
+      expect(marker.center.dx, closeTo(field.left + field.width * 0.8, 0.6));
+      expect(marker.center.dy, closeTo(field.top + field.height * 0.3, 0.6));
     });
 
     testWidgets('A10. Advanced is collapsed by default; opening it reveals a '
@@ -434,7 +457,7 @@ void main() {
       final hsv = HSVColor.fromColor(const Color(0xFF1A3D34));
       expect(
         marker.center.dx,
-        closeTo(field.left + field.width * hsv.saturation, 2),
+        closeTo(field.left + field.width * hsv.saturation, 0.6),
       );
     });
 
@@ -489,6 +512,168 @@ void main() {
       await _tapVisible(tester, const Key('pos-color-picker-cancel'));
       expect(_resolved, isTrue);
       expect(_picked, isNull);
+    });
+
+    testWidgets('A15. collapsing Advanced DISCARDS a half-typed hex, so an '
+        'invisible invalid field can never leave confirm dead', (tester) async {
+      await _openPicker(tester, initial: seed);
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+      // The formatter only admits [#0-9a-fA-F], so garbage like 'zzz' can
+      // never reach the field — an invalid value has to be well-formed
+      // characters at the wrong length.
+      await tester.enterText(
+        find.byKey(const Key('pos-color-picker-hex')),
+        '#12F',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('pos-color-picker-confirm')),
+            )
+            .onPressed,
+        isNull,
+      );
+      // Hide the field again — the reason for the disabled button would now be
+      // off screen, so the draft must snap back to the visual choice.
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+      expect(find.byKey(const Key('pos-color-picker-hex')), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('pos-color-picker-confirm')),
+            )
+            .onPressed,
+        isNotNull,
+        reason: 'a hidden invalid hex must not block confirm',
+      );
+      await _tapVisible(tester, const Key('pos-color-picker-confirm'));
+      _expectColorNear(_picked!, seed);
+    });
+
+    testWidgets('A17. the hue marker sits ON the hue it names, and both '
+        'markers are centred on their point rather than offset by their own '
+        'geometry', (tester) async {
+      await _openPicker(tester, initial: seed);
+      await _tapFraction(
+        tester,
+        const Key('pos-color-picker-hue-rail'),
+        0.25,
+        0.5,
+      );
+      final rail = tester.getRect(
+        find.byKey(const Key('pos-color-picker-hue-rail')),
+      );
+      final marker = tester.getRect(
+        find.byKey(const Key('pos-color-picker-hue-marker')),
+      );
+      final hue = HSVColor.fromColor(_pickerColor(tester)).hue;
+      expect(
+        marker.center.dx,
+        closeTo(rail.left + rail.width * hue / 360, 0.6),
+      );
+      expect(marker.center.dy, closeTo(rail.center.dy, 0.6));
+      expect(marker.width, marker.height, reason: 'the marker must be round');
+    });
+
+    testWidgets('A18. an EMPTY advanced hex field is not a dead end — no '
+        'error, confirm still live, and it returns the visual color', (
+      tester,
+    ) async {
+      await _openPicker(tester, initial: seed);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+      await tester.enterText(find.byKey(const Key('pos-color-picker-hex')), '');
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.posDeviceThemeCustomInvalidHex), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('pos-color-picker-confirm')),
+            )
+            .onPressed,
+        isNotNull,
+        reason: 'an empty optional override must never block saving',
+      );
+      await _tapVisible(tester, const Key('pos-color-picker-confirm'));
+      _expectColorNear(_picked!, seed);
+    });
+
+    testWidgets('A16b. moving the caret in the Advanced field does NOT reset '
+        'the hue — a grey keeps the hue rail where the owner left it', (
+      tester,
+    ) async {
+      await _openPicker(tester, initial: seed);
+      // Park the hue deliberately away from 0, then desaturate to a grey:
+      // the color alone no longer carries the hue.
+      await _tapFraction(
+        tester,
+        const Key('pos-color-picker-hue-rail'),
+        0.55,
+        0.5,
+      );
+      await _tapFraction(
+        tester,
+        const Key('pos-color-picker-sv-field'),
+        0.0,
+        0.35,
+      );
+      final rail = tester.getRect(
+        find.byKey(const Key('pos-color-picker-hue-rail')),
+      );
+      final before = tester
+          .getRect(find.byKey(const Key('pos-color-picker-hue-marker')))
+          .center
+          .dx;
+      expect(
+        before,
+        greaterThan(rail.left + rail.width * 0.4),
+        reason: 'setup: the hue must be parked away from 0',
+      );
+
+      // Open Advanced and place the caret — the controller notifies on
+      // SELECTION changes, with the text unchanged.
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+      final controller = tester
+          .widget<TextField>(find.byKey(const Key('pos-color-picker-hex')))
+          .controller!;
+      controller.selection = const TextSelection.collapsed(offset: 3);
+      await tester.pumpAndSettle();
+
+      final after = tester
+          .getRect(find.byKey(const Key('pos-color-picker-hue-marker')))
+          .center
+          .dx;
+      expect(
+        after,
+        closeTo(before, 1),
+        reason: 'a caret move must not snap the hue rail back to red',
+      );
+    });
+
+    testWidgets('A16. the color controls announce WHICH color they are — a '
+        'swatch is never a bare unnamed button', (tester) async {
+      await _openPicker(tester, initial: seed);
+      const swatch = Color(0xFF146B6B);
+      final data = tester
+          .getSemantics(
+            find.byKey(
+              Key(
+                'pos-color-picker-swatch-'
+                '${posFormatHexColor(swatch).substring(1)}',
+              ),
+            ),
+          )
+          .getSemanticsData();
+      expect(data.value, posFormatHexColor(swatch));
+      expect(data.flagsCollection.isButton, isTrue);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final shade = tester
+          .getSemantics(find.byKey(const Key('pos-color-picker-shade-0')))
+          .getSemanticsData();
+      expect(shade.label, l10n.posColorPickerShade);
+      expect(shade.value, isNotEmpty);
     });
 
     testWidgets('A14. every tappable control clears 44dp', (tester) async {
@@ -645,6 +830,64 @@ void main() {
         _tileColor(tester, 'custom-theme-primary-swatch'),
         PosThemePair.navyEmber.primary,
       );
+    });
+
+    testWidgets('B3b. each tile opens the picker on ITS OWN color — the '
+        'secondary tile must never seed from the primary', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'restoflow.pos.device_theme.test-dev': 'custom:0E2A3F:B9822D',
+      });
+      await tester.pumpWidget(_settingsApp());
+      await tester.pumpAndSettle();
+      for (final (tile, expected) in const [
+        ('custom-theme-primary-swatch', Color(0xFF0E2A3F)),
+        ('custom-theme-secondary-swatch', Color(0xFFB9822D)),
+      ]) {
+        await _scrollSheetTo(tester, find.byKey(Key(tile)));
+        await _tapVisible(tester, Key(tile));
+        _expectColorNear(_pickerColor(tester), expected);
+        expect(find.text(posFormatHexColor(expected)), findsWidgets);
+        await _tapVisible(tester, const Key('pos-color-picker-cancel'));
+      }
+    });
+
+    testWidgets('B3c. each tile is TITLED with its own role, so the sheet '
+        'never asks for the wrong color', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(_settingsApp());
+      await tester.pumpAndSettle();
+      await _openCustomEditor(tester);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      for (final (tile, title, other) in [
+        (
+          'custom-theme-primary-swatch',
+          l10n.posDeviceThemeCustomPrimaryLabel,
+          l10n.posDeviceThemeCustomSecondaryLabel,
+        ),
+        (
+          'custom-theme-secondary-swatch',
+          l10n.posDeviceThemeCustomSecondaryLabel,
+          l10n.posDeviceThemeCustomPrimaryLabel,
+        ),
+      ]) {
+        await _scrollSheetTo(tester, find.byKey(Key(tile)));
+        await _tapVisible(tester, Key(tile));
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('pos-color-picker')),
+            matching: find.text(title),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('pos-color-picker')),
+            matching: find.text(other),
+          ),
+          findsNothing,
+        );
+        await _tapVisible(tester, const Key('pos-color-picker-cancel'));
+      }
     });
 
     testWidgets('B4. cancelling the picker leaves the draft exactly where it '
@@ -846,6 +1089,28 @@ void main() {
       expect(
         tester
             .widget<Text>(find.byKey(const Key('pos-color-picker-hex-readout')))
+            .textDirection,
+        TextDirection.ltr,
+      );
+    });
+
+    testWidgets('C1b. the Advanced hex LABEL keeps its Latin run in Arabic — '
+        'a labelText would paint the pattern as "RRGGBB#"', (tester) async {
+      await _openPicker(tester, initial: seed, locale: const Locale('ar'));
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+      final label = tester.widget<Text>(
+        find
+            .descendant(
+              of: find.byType(TextField),
+              matching: find.text(l10n.posDeviceThemeCustomHexHint),
+            )
+            .first,
+      );
+      expect(label.textDirection, TextDirection.ltr);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('pos-color-picker-hex')))
             .textDirection,
         TextDirection.ltr,
       );
