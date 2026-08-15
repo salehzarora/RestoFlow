@@ -3792,6 +3792,65 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tablesOverlapWarning => 'بعض الطاولات متداخلة على المخطط.';
 
   @override
+  String get tablesFloorModeTables => 'طاولات';
+
+  @override
+  String get tablesFloorModeElements => 'عناصر';
+
+  @override
+  String get tablesAddElement => 'إضافة عنصر';
+
+  @override
+  String get floorElementWall => 'حائط';
+
+  @override
+  String get floorElementDoor => 'باب';
+
+  @override
+  String get floorElementWindow => 'شباك';
+
+  @override
+  String get floorElementCashier => 'كاشير';
+
+  @override
+  String get floorElementPlant => 'نبتة';
+
+  @override
+  String get floorElementRotate => 'تدوير';
+
+  @override
+  String get floorElementResize => 'تغيير الحجم';
+
+  @override
+  String get floorElementLabel => 'التسمية';
+
+  @override
+  String get floorElementDelete => 'حذف العنصر';
+
+  @override
+  String get floorElementDeleteConfirmTitle => 'حذف العنصر؟';
+
+  @override
+  String floorElementDeleteConfirmBody(String kind) {
+    return 'ستتم إزالة $kind من مخطط الصالة.';
+  }
+
+  @override
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label) {
+    return 'ستتم إزالة $kind \"$label\" من مخطط الصالة.';
+  }
+
+  @override
+  String get floorElementWidth => 'العرض';
+
+  @override
+  String get floorElementHeight => 'الارتفاع';
+
+  @override
+  String get tablesElementOverlapWarning =>
+      'أحد العناصر يتداخل مع طاولة على المخطط.';
+
+  @override
   String get adminRevokeConfirm =>
       'هل تريد إلغاء هذا الجهاز؟ سينتهي اقترانه وجلساته فورًا وسيعود الجهاز إلى شاشة الاقتران.';
 

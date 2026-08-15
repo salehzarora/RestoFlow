@@ -79,7 +79,7 @@ class _RecordingRepo implements KitchenFinishRepository {
 }
 
 /// Counts how many times the floor read is actually performed.
-class _CountingTables implements TablesRepository {
+class _CountingTables extends TablesRepository {
   int loads = 0;
 
   @override

@@ -172,8 +172,28 @@ final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
 /// aggregation is applied, so every consumer (floor read, picker, table-operations
 /// sheet) sees each group as ONE unit — every member carrying the group-wide effective
 /// state and active dine-in count, never a free-looking peer of an occupied group.
+/// 027: the ONE tables read — rows + visual fixture catalog from the same
+/// `pos_tables` envelope (a single invoke; never a second round trip).
+final tablesSnapshotProvider = FutureProvider.autoDispose<PosFloorSnapshot>((
+  ref,
+) async {
+  final snapshot = await ref
+      .watch(tablesRepositoryProvider)
+      .loadFloorSnapshot();
+  return PosFloorSnapshot(
+    tables: withGroupAggregation(snapshot.tables),
+    floorElements: snapshot.floorElements,
+  );
+});
+
 final tablesProvider = FutureProvider.autoDispose<List<DemoTable>>(
-  (ref) async => withGroupAggregation(
-    await ref.watch(tablesRepositoryProvider).loadTables(),
-  ),
+  (ref) async => (await ref.watch(tablesSnapshotProvider.future)).tables,
+);
+
+/// 027: the READ-ONLY fixture layer for the POS floor surfaces. Degrades to
+/// nothing while loading/failed — decoration never gates a picker.
+final floorElementsProvider = Provider.autoDispose<List<PosFloorElement>>(
+  (ref) => ref
+      .watch(tablesSnapshotProvider)
+      .maybeWhen(data: (s) => s.floorElements, orElse: () => const []),
 );

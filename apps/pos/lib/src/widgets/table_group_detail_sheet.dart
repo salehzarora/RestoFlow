@@ -141,7 +141,9 @@ class _TableGroupDetailSheetState extends ConsumerState<TableGroupDetailSheet> {
               ref.read(tablesProvider).valueOrNull,
             ).first.tableId,
           );
-      ref.invalidate(tablesProvider); // reconcile from the authoritative read
+      // reconcile from the authoritative read (027 fix: the snapshot
+      // provider is the fetcher; the derived tablesProvider follows it).
+      ref.invalidate(tablesSnapshotProvider);
       if (mounted) Navigator.of(context).maybePop();
     } on TableOperationException catch (e) {
       if (!mounted) return;

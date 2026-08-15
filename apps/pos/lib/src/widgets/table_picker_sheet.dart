@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
-import 'package:restoflow_domain/restoflow_domain.dart' show floorFractionOf;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show
+        FloorPoint,
+        floorClusterSeamRect,
+        floorElementRoomRect,
+        floorFractionOf,
+        floorTableRoomRect,
+        packLinkedCluster;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -103,6 +110,7 @@ class TablePickerSheet extends ConsumerWidget {
                       )
                     : _FloorMap(
                         tables: tables,
+                        floorElements: ref.watch(floorElementsProvider),
                         assignedId: assignedId,
                         onAssign: (t) {
                           ref
@@ -386,6 +394,7 @@ String localizedTableArea(String areaKey, AppLocalizations l10n) {
 class _FloorMap extends StatelessWidget {
   const _FloorMap({
     required this.tables,
+    required this.floorElements,
     required this.assignedId,
     required this.onAssign,
     required this.onOpenGroup,
@@ -393,6 +402,9 @@ class _FloorMap extends StatelessWidget {
   });
 
   final List<DemoTable> tables;
+
+  /// 027: the READ-ONLY visual fixture catalog (per-section decoration).
+  final List<PosFloorElement> floorElements;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
   final void Function(TableGroupCardData) onOpenGroup;
@@ -437,6 +449,10 @@ class _FloorMap extends StatelessWidget {
             if (i > 0) const _AisleDivider(),
             _SectionZone(
               section: split.sections[i],
+              elements: [
+                for (final e in floorElements)
+                  if (e.sectionId == split.sections[i].sectionId) e,
+              ],
               groupCards: groupCards,
               assignedId: assignedId,
               onAssign: onAssign,
@@ -481,6 +497,7 @@ class _FloorMap extends StatelessWidget {
 class _SectionZone extends StatelessWidget {
   const _SectionZone({
     required this.section,
+    required this.elements,
     required this.groupCards,
     required this.assignedId,
     required this.onAssign,
@@ -490,6 +507,9 @@ class _SectionZone extends StatelessWidget {
 
   final ({String sectionId, String sectionName, List<DemoTable> tables})
   section;
+
+  /// 027: this section's read-only visual fixtures.
+  final List<PosFloorElement> elements;
   final Map<String, TableGroupCardData> groupCards;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
@@ -499,7 +519,6 @@ class _SectionZone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tileSize = RestoflowFloorTable.sizeFor(compact: true);
     final placed = <DemoTable>[];
     final unplaced = <DemoTable>[];
     for (final t in section.tables) {
@@ -508,13 +527,14 @@ class _SectionZone extends StatelessWidget {
       );
     }
 
-    Widget tile(DemoTable t) => _SectionFloorTile(
+    Widget tile(DemoTable t, {bool inStrip = false}) => _SectionFloorTile(
       table: t,
       selected: t.tableId == assignedId,
       groupCard: t.groupId == null ? null : groupCards[t.groupId],
       onAssign: onAssign,
       onOpenGroup: onOpenGroup,
       onManage: onManage,
+      inStrip: inStrip,
     );
 
     return Container(
@@ -553,24 +573,79 @@ class _SectionZone extends StatelessWidget {
           ),
           const SizedBox(height: RestoflowSpacing.md),
           if (placed.isNotEmpty)
-            RestoflowFloorSectionCanvas(
-              key: Key('table-section-canvas-${section.sectionId}'),
-              tileSize: tileSize,
-              placed: [
-                for (final t in placed)
-                  RestoflowFloorPlacedTile(
-                    fractionX: floorFractionOf(t.layoutX, t.layoutY)!.x,
-                    fractionY: floorFractionOf(t.layoutX, t.layoutY)!.y,
-                    child: tile(t),
-                  ),
-              ],
+            Builder(
+              builder: (context) {
+                // 027: linked members pack into DERIVED per-section clusters
+                // (base coordinates untouched — unlink restores exactly).
+                final derived = <String, FloorPoint>{};
+                final seams = <RestoflowFloorPlacedTile>[];
+                final byGroup = <String, List<DemoTable>>{};
+                for (final t in placed) {
+                  final g = t.groupId;
+                  if (g != null) (byGroup[g] ??= []).add(t);
+                }
+                for (final members in byGroup.values) {
+                  if (members.length < 2) continue;
+                  members.sort(compareTablesByLabelThenId);
+                  final packed = packLinkedCluster([
+                    for (final t in members)
+                      (id: t.tableId, x: t.layoutX!, y: t.layoutY!),
+                  ]);
+                  derived.addAll(packed);
+                  seams.add(
+                    RestoflowFloorPlacedTile(
+                      room: floorClusterSeamRect(packed.values),
+                      child: const RestoflowFloorClusterSeam(),
+                    ),
+                  );
+                }
+                return RestoflowFloorSectionCanvas(
+                  key: Key('table-section-canvas-${section.sectionId}'),
+                  // 027 z-order: fixtures under seams under tables; fixtures
+                  // are IgnorePointer — pure decoration, never tappable.
+                  background: [
+                    for (final e in elements)
+                      RestoflowFloorPlacedTile(
+                        room: floorElementRoomRect(
+                          e.layoutX,
+                          e.layoutY,
+                          width: e.widthNorm,
+                          height: e.heightNorm,
+                          quarterTurns: e.orientationQuarterTurns,
+                        ),
+                        child: IgnorePointer(
+                          child: RestoflowFloorFixture(
+                            key: Key('pos-floor-element-${e.id}'),
+                            kind: e.kind,
+                            label: e.label,
+                          ),
+                        ),
+                      ),
+                    ...seams,
+                  ],
+                  // Room-unit rects from the SHARED contract — identical
+                  // relative geometry to the Dashboard editor by construction.
+                  placed: [
+                    for (final t in placed)
+                      RestoflowFloorPlacedTile(
+                        room: derived[t.tableId] != null
+                            ? floorTableRoomRect(
+                                derived[t.tableId]!.x,
+                                derived[t.tableId]!.y,
+                              )
+                            : floorTableRoomRect(t.layoutX!, t.layoutY!),
+                        child: tile(t),
+                      ),
+                  ],
+                );
+              },
             ),
           if (unplaced.isNotEmpty) ...[
             if (placed.isNotEmpty) const SizedBox(height: RestoflowSpacing.sm),
             Wrap(
               spacing: RestoflowSpacing.sm,
               runSpacing: RestoflowSpacing.sm,
-              children: [for (final t in unplaced) tile(t)],
+              children: [for (final t in unplaced) tile(t, inStrip: true)],
             ),
           ],
         ],
@@ -590,10 +665,15 @@ class _SectionFloorTile extends StatelessWidget {
     required this.onAssign,
     required this.onOpenGroup,
     this.onManage,
+    this.inStrip = false,
   });
 
   final DemoTable table;
   final bool selected;
+
+  /// 027: strips (not-placed lists) have no canvas to size the tile — it
+  /// takes the fixed reference footprint instead.
+  final bool inStrip;
 
   /// Non-null when this table is a member of a linked group with a combined
   /// card: tapping opens the group-detail sheet (an EXPLICIT member choice
@@ -648,6 +728,19 @@ class _SectionFloorTile extends StatelessWidget {
         ? () => onAssign(table)
         : null;
 
+    final Widget floorTile = RestoflowFloorTable(
+      label: table.label,
+      seats: table.seats,
+      fill: fill,
+      onFill: onFill,
+      border: border,
+      borderWidth: selected ? 2 : 1,
+      statusIcon: glyph,
+      footnote: table.activeOrderCount > 0
+          ? l10n.posTableOpenOrders(table.activeOrderCount)
+          : statusLabel,
+    );
+
     return Semantics(
       button: onTap != null,
       enabled: onTap != null,
@@ -660,19 +753,12 @@ class _SectionFloorTile extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         onLongPress: onManage == null ? null : () => onManage!(table),
-        child: RestoflowFloorTable(
-          compact: true,
-          label: table.label,
-          seats: table.seats,
-          fill: fill,
-          onFill: onFill,
-          border: border,
-          borderWidth: selected ? 2 : 1,
-          statusIcon: glyph,
-          footnote: table.activeOrderCount > 0
-              ? l10n.posTableOpenOrders(table.activeOrderCount)
-              : statusLabel,
-        ),
+        child: inStrip
+            ? SizedBox.fromSize(
+                size: kRestoflowFloorStripTileSize,
+                child: floorTile,
+              )
+            : floorTile,
       ),
     );
   }

@@ -59,9 +59,9 @@ class _TableOperationsSheetState extends ConsumerState<TableOperationsSheet> {
     });
     try {
       await action();
-      ref.invalidate(
-        tablesProvider,
-      ); // reconcile from the authoritative read model
+      // reconcile from the authoritative read model (027 fix: the
+      // snapshot provider is the fetcher; tablesProvider derives from it).
+      ref.invalidate(tablesSnapshotProvider);
       if (mounted) Navigator.of(context).maybePop();
     } on TableOperationException catch (e) {
       if (!mounted) return;

@@ -91,6 +91,27 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
+  /// TABLE-FLOOR-MAP-POLISH-027: one fixture write (move/resize/rotate/
+  /// relabel), fired on the gesture END only — the [_moveTable] shape.
+  Future<bool> _saveElement(DashboardFloorElement element) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await widget.repository.upsertFloorElement(element);
+    if (!mounted) return false;
+    return result.fold(
+      (_) {
+        _reload();
+        return true;
+      },
+      (failure) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(adminFailureMessage(l10n, failure))),
+        );
+        return false;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -170,6 +191,7 @@ class _TablesScreenState extends State<TablesScreen> {
     final floorSnapshot = TablesFloorSnapshot(
       tables: tables,
       sections: snapshot.sections,
+      floorElements: snapshot.floorElements,
     );
     return ListView(
       padding: const EdgeInsetsDirectional.fromSTEB(
@@ -222,6 +244,11 @@ class _TablesScreenState extends State<TablesScreen> {
           onMoveTable: _moveTable,
           onSetSection: (table) =>
               _chooseSection(context, table, snapshot.sections),
+          onCreateElement: (element) =>
+              _run(() => widget.repository.upsertFloorElement(element)),
+          onSaveElement: _saveElement,
+          onDeleteElement: (element) =>
+              _run(() => widget.repository.deleteFloorElement(element.id)),
         ),
         const Divider(height: RestoflowSpacing.xl),
         // ------------------------------------------------------------ cards

@@ -128,7 +128,7 @@ List<DemoTable> _floor() => [
   _t('l2', 'L2', area: 'Patio', active: 1),
 ];
 
-class _FakeTablesRepo implements TablesRepository {
+class _FakeTablesRepo extends TablesRepository {
   _FakeTablesRepo(this.rows);
   final List<DemoTable> rows;
   @override

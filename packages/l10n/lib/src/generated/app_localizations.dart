@@ -7066,6 +7066,114 @@ abstract class AppLocalizations {
   /// **'Some tables overlap on the map.'**
   String get tablesOverlapWarning;
 
+  /// Arrange submode toggle: only tables are draggable.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get tablesFloorModeTables;
+
+  /// Arrange submode toggle: only visual fixtures (walls/doors/...) are editable.
+  ///
+  /// In en, this message translates to:
+  /// **'Elements'**
+  String get tablesFloorModeElements;
+
+  /// Per-section palette button that creates a visual fixture.
+  ///
+  /// In en, this message translates to:
+  /// **'Add element'**
+  String get tablesAddElement;
+
+  /// Fixture kind: wall.
+  ///
+  /// In en, this message translates to:
+  /// **'Wall'**
+  String get floorElementWall;
+
+  /// Fixture kind: door.
+  ///
+  /// In en, this message translates to:
+  /// **'Door'**
+  String get floorElementDoor;
+
+  /// Fixture kind: window.
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get floorElementWindow;
+
+  /// Fixture kind: cashier stand.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier'**
+  String get floorElementCashier;
+
+  /// Fixture kind: plant.
+  ///
+  /// In en, this message translates to:
+  /// **'Plant'**
+  String get floorElementPlant;
+
+  /// Element menu action: rotate a quarter turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get floorElementRotate;
+
+  /// Element menu action: resize (walls/windows only).
+  ///
+  /// In en, this message translates to:
+  /// **'Resize'**
+  String get floorElementResize;
+
+  /// Element menu action: edit the caption (cashier/door only).
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get floorElementLabel;
+
+  /// Element menu action: delete the fixture.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete element'**
+  String get floorElementDelete;
+
+  /// Fixture delete confirmation dialog title (028).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete element?'**
+  String get floorElementDeleteConfirmTitle;
+
+  /// Fixture delete confirmation body naming the kind (unlabelled fixture).
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} will be removed from the floor map.'**
+  String floorElementDeleteConfirmBody(String kind);
+
+  /// Fixture delete confirmation body naming the kind AND its label.
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} \"{label}\" will be removed from the floor map.'**
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label);
+
+  /// Resize dialog field: footprint width.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get floorElementWidth;
+
+  /// Resize dialog field: footprint height.
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get floorElementHeight;
+
+  /// NON-blocking arrange-mode notice when a fixture intersects a table (never blocks saving, nothing is auto-moved).
+  ///
+  /// In en, this message translates to:
+  /// **'An element overlaps a table on the map.'**
+  String get tablesElementOverlapWarning;
+
   /// Device revoke confirmation body.
   ///
   /// In en, this message translates to:

@@ -37,7 +37,7 @@ import '../state/pos_auto_print_prefs.dart'
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
-import '../state/order_setup_controller.dart' show tablesProvider;
+import '../state/order_setup_controller.dart' show tablesSnapshotProvider;
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_offline_state.dart';
@@ -666,7 +666,9 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // order is still active and its table is still genuinely occupied. An
     // advance to `served` counts too - a paid order auto-completes on reaching
     // served, which frees its table just as a direct completion does.
-    if (summary.finished > 0) container.invalidate(tablesProvider);
+    // 027 fix: invalidate the FETCHER (the snapshot provider) - the derived
+    // tablesProvider would otherwise keep serving the stale floor read.
+    if (summary.finished > 0) container.invalidate(tablesSnapshotProvider);
     final String message;
     if (summary.total == 0) {
       message = l10n.posFinishAllNoActiveOrders;
