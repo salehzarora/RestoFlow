@@ -10540,10 +10540,10 @@ abstract class AppLocalizations {
   /// **'Custom'**
   String get posDeviceThemeCustom;
 
-  /// Helper line inside the custom-theme editor.
+  /// Helper line inside the custom-theme editor. DEVICE-THEME-COLOR-PICKER-032 dropped the #RRGGBB wording — the colors are chosen visually now.
   ///
   /// In en, this message translates to:
-  /// **'Pick any two colors as #RRGGBB. They restyle this device only.'**
+  /// **'Pick any two colors by eye. They restyle this device only.'**
   String get posDeviceThemeCustomHelp;
 
   /// Label for the custom theme's structural (first) color field.
@@ -10593,6 +10593,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get posDeviceThemeCustomPreviewTitle;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: trailing affordance on a custom-theme color swatch tile — tapping it opens the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get posDeviceThemeCustomChange;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption above the one-tap curated palette in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick colors'**
+  String get posColorPickerQuickColors;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption and accessibility label for the saturation/brightness field in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Color palette'**
+  String get posColorPickerField;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption and accessibility label for the hue rail in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get posColorPickerHue;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption above the lighter/darker shade steps in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Lighter or darker'**
+  String get posColorPickerShade;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: expander revealing the optional manual hex field in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get posColorPickerAdvanced;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: confirm button returning the visually chosen color to the custom-theme editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose color'**
+  String get posColorPickerConfirm;
 
   /// POS-OPEN-ORDERS-STRIP-011: elapsed-open time under one minute on an open-order card.
   ///

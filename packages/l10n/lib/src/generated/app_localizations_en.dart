@@ -5776,7 +5776,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomHelp =>
-      'Pick any two colors as #RRGGBB. They restyle this device only.';
+      'Pick any two colors by eye. They restyle this device only.';
 
   @override
   String get posDeviceThemeCustomPrimaryLabel => 'Primary color';
@@ -5801,6 +5801,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'Preview';
+
+  @override
+  String get posDeviceThemeCustomChange => 'Change';
+
+  @override
+  String get posColorPickerQuickColors => 'Quick colors';
+
+  @override
+  String get posColorPickerField => 'Color palette';
+
+  @override
+  String get posColorPickerHue => 'Hue';
+
+  @override
+  String get posColorPickerShade => 'Lighter or darker';
+
+  @override
+  String get posColorPickerAdvanced => 'Advanced';
+
+  @override
+  String get posColorPickerConfirm => 'Choose color';
 
   @override
   String get posOpenOrdersElapsedNow => 'now';

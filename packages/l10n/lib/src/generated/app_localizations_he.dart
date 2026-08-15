@@ -5691,7 +5691,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomHelp =>
-      'בחרו שני צבעים בפורמט ‎#RRGGBB — הם משנים את מראה המכשיר הזה בלבד.';
+      'בחרו שני צבעים בעין — הם משנים את מראה המכשיר הזה בלבד.';
 
   @override
   String get posDeviceThemeCustomPrimaryLabel => 'הצבע הראשי';
@@ -5716,6 +5716,27 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'תצוגה מקדימה';
+
+  @override
+  String get posDeviceThemeCustomChange => 'שינוי';
+
+  @override
+  String get posColorPickerQuickColors => 'צבעים מהירים';
+
+  @override
+  String get posColorPickerField => 'לוח הצבעים';
+
+  @override
+  String get posColorPickerHue => 'גוון';
+
+  @override
+  String get posColorPickerShade => 'בהיר יותר או כהה יותר';
+
+  @override
+  String get posColorPickerAdvanced => 'מתקדם';
+
+  @override
+  String get posColorPickerConfirm => 'בחירת הצבע';
 
   @override
   String get posOpenOrdersElapsedNow => 'עכשיו';

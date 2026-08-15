@@ -2,3 +2,5 @@
 test/goldens/redesign/
 # TABLE-FLOOR-LAYOUT-021: local floor-map screenshot output (never committed)
 test/goldens/table_floor_021/
+# DEVICE-THEME-COLOR-PICKER-032: local visual-acceptance screenshots (never committed)
+test/goldens/device_theme_032/
