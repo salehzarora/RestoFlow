@@ -5788,7 +5788,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomHelp =>
-      'اختر أي لونين بصيغة ‎#RRGGBB — يغيّران مظهر هذا الجهاز فقط.';
+      'اختر أي لونين بالنظر — يغيّران مظهر هذا الجهاز فقط.';
 
   @override
   String get posDeviceThemeCustomPrimaryLabel => 'اللون الأساسي';
@@ -5814,6 +5814,27 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'معاينة';
+
+  @override
+  String get posDeviceThemeCustomChange => 'تغيير';
+
+  @override
+  String get posColorPickerQuickColors => 'ألوان جاهزة';
+
+  @override
+  String get posColorPickerField => 'لوحة الألوان';
+
+  @override
+  String get posColorPickerHue => 'درجة اللون';
+
+  @override
+  String get posColorPickerShade => 'أفتح أو أغمق';
+
+  @override
+  String get posColorPickerAdvanced => 'متقدم';
+
+  @override
+  String get posColorPickerConfirm => 'اختيار اللون';
 
   @override
   String get posOpenOrdersElapsedNow => 'الآن';

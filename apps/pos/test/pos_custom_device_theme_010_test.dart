@@ -60,6 +60,58 @@ Future<void> _openCustomEditor(WidgetTester tester) async {
   await _scrollSheetTo(tester, find.byKey(const Key('custom-theme-apply')));
 }
 
+/// DEVICE-THEME-COLOR-PICKER-032: the editor's hex FIELDS became swatch tiles
+/// that open the visual picker. These helpers drive that surface so the 010
+/// contracts below (draft-only, Apply persists the same wire, Cancel discards,
+/// Reset restores the preset) keep being asserted end to end.
+Color _tileColor(WidgetTester tester, String key) {
+  final container = tester.widget<Container>(
+    find
+        .descendant(
+          of: find.byKey(Key(key)),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Container &&
+                w.decoration is BoxDecoration &&
+                (w.decoration! as BoxDecoration).color != null,
+          ),
+        )
+        .first,
+  );
+  return (container.decoration! as BoxDecoration).color!;
+}
+
+/// Taps a control after scrolling it into view — the picker scrolls on short
+/// viewports, and a bare tap would silently miss and leave its route open.
+Future<void> _tapVisible(WidgetTester tester, Key key) async {
+  await tester.ensureVisible(find.byKey(key));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(key));
+  await tester.pumpAndSettle();
+}
+
+/// Picks [color] for one half of the pair through the real picker route.
+/// Uses the picker's Advanced hex field so the 010 contracts keep asserting
+/// EXACT colours; the visual-only path is covered by the 032 suite.
+Future<void> _pickColor(
+  WidgetTester tester,
+  String tileKey,
+  Color color, {
+  String? typed,
+}) async {
+  await _scrollSheetTo(tester, find.byKey(Key(tileKey)));
+  await _tapVisible(tester, Key(tileKey));
+  await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
+  // [typed] lets a caller keep 010's normalise-on-the-way-to-storage contract
+  // honest by entering a lowercase, bare-# value the way a cashier would.
+  await tester.enterText(
+    find.byKey(const Key('pos-color-picker-hex')),
+    typed ?? posFormatHexColor(color),
+  );
+  await tester.pumpAndSettle();
+  await _tapVisible(tester, const Key('pos-color-picker-confirm'));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -606,74 +658,80 @@ void main() {
       await tester.pumpAndSettle();
       await _openCustomEditor(tester);
       expect(find.byKey(const Key('custom-theme-editor')), findsOneWidget);
-      final primaryField = tester.widget<TextField>(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-primary-hex')),
-          matching: find.byType(TextField),
-        ),
+      await _scrollSheetTo(
+        tester,
+        find.byKey(const Key('custom-theme-secondary-swatch')),
       );
-      final secondaryField = tester.widget<TextField>(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-secondary-hex')),
-          matching: find.byType(TextField),
-        ),
+      expect(
+        _tileColor(tester, 'custom-theme-primary-swatch'),
+        const Color(0xFF16263B),
       );
-      expect(primaryField.controller?.text, '#16263B');
-      expect(secondaryField.controller?.text, '#D9642B');
+      expect(
+        _tileColor(tester, 'custom-theme-secondary-swatch'),
+        const Color(0xFFD9642B),
+      );
       // Revealing the editor applied nothing.
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('restoflow.pos.device_theme.test-dev'), isNull);
     });
 
-    testWidgets('F3. invalid input disables Apply, shows the localized '
-        'error, and never reaches the live theme', (tester) async {
+    testWidgets('F3. invalid hex under the picker\'s Advanced section shows '
+        'the localized error and blocks the choice — it never reaches the '
+        'live theme', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(_app(const PosDeviceSettingsSheet()));
       await tester.pumpAndSettle();
       await _openCustomEditor(tester);
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
 
+      await _scrollSheetTo(
+        tester,
+        find.byKey(const Key('custom-theme-primary-swatch')),
+      );
+      await _tapVisible(tester, const Key('custom-theme-primary-swatch'));
+      await _tapVisible(tester, const Key('pos-color-picker-advanced-toggle'));
       await tester.enterText(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-primary-hex')),
-          matching: find.byType(TextField),
-        ),
+        find.byKey(const Key('pos-color-picker-hex')),
         '#12F',
       );
       await tester.pumpAndSettle();
       expect(find.text(l10n.posDeviceThemeCustomInvalidHex), findsOneWidget);
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('custom-theme-apply')))
+            .widget<FilledButton>(
+              find.byKey(const Key('pos-color-picker-confirm')),
+            )
             .onPressed,
         isNull,
       );
+      await _tapVisible(tester, const Key('pos-color-picker-cancel'));
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('restoflow.pos.device_theme.test-dev'), isNull);
     });
 
-    testWidgets('F4. a valid pair enables Apply; applying persists the '
-        'custom wire and selects the custom swatch', (tester) async {
+    testWidgets('F4. a chosen pair applies: the SAME custom wire persists and '
+        'the custom swatch reports selected', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(_app(const PosDeviceSettingsSheet()));
       await tester.pumpAndSettle();
       await _openCustomEditor(tester);
 
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-primary-hex')),
-          matching: find.byType(TextField),
-        ),
-        '1a3d34',
+      // Lowercase and without the leading '#', exactly as the ORIGINAL F4
+      // typed it: normalisation to the canonical uppercase wire must still
+      // happen end to end through the widget, not just in the parser unit.
+      await _pickColor(
+        tester,
+        'custom-theme-primary-swatch',
+        const Color(0xFF1A3D34),
+        typed: '1a3d34',
       );
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-secondary-hex')),
-          matching: find.byType(TextField),
-        ),
-        '#E76F2E',
+      await _pickColor(
+        tester,
+        'custom-theme-secondary-swatch',
+        const Color(0xFFE76F2E),
+        typed: '#E76F2E',
       );
-      await tester.pumpAndSettle();
+      await _scrollSheetTo(tester, find.byKey(const Key('custom-theme-apply')));
       final apply = tester.widget<FilledButton>(
         find.byKey(const Key('custom-theme-apply')),
       );
@@ -705,14 +763,11 @@ void main() {
       await tester.pumpWidget(_app(const PosDeviceSettingsSheet()));
       await tester.pumpAndSettle();
       await _openCustomEditor(tester);
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-primary-hex')),
-          matching: find.byType(TextField),
-        ),
-        '#BADBAD',
+      await _pickColor(
+        tester,
+        'custom-theme-primary-swatch',
+        const Color(0xFFBADBAD),
       );
-      await tester.pumpAndSettle();
       await _scrollSheetTo(
         tester,
         find.byKey(const Key('custom-theme-cancel')),
@@ -735,15 +790,12 @@ void main() {
       await tester.pumpAndSettle();
       await _scrollSheetTo(
         tester,
-        find.byKey(const Key('custom-theme-editor')),
+        find.byKey(const Key('custom-theme-primary-swatch')),
       );
-      final primaryField = tester.widget<TextField>(
-        find.descendant(
-          of: find.byKey(const Key('custom-theme-primary-hex')),
-          matching: find.byType(TextField),
-        ),
+      expect(
+        _tileColor(tester, 'custom-theme-primary-swatch'),
+        const Color(0xFF0E2A3F),
       );
-      expect(primaryField.controller?.text, '#0E2A3F');
       await _scrollSheetTo(tester, find.byKey(const Key('custom-theme-reset')));
       await tester.tap(find.byKey(const Key('custom-theme-reset')));
       await tester.pumpAndSettle();
@@ -763,6 +815,8 @@ void main() {
       await _openCustomEditor(tester);
       for (final key in const [
         'device-theme-custom',
+        'custom-theme-primary-swatch',
+        'custom-theme-secondary-swatch',
         'custom-theme-apply',
         'custom-theme-cancel',
         'custom-theme-reset',
