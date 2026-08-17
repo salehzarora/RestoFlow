@@ -439,7 +439,7 @@ void _shellRetentionTests() {
     );
 
     // Leave Overview for Orders through the real navigation callback.
-    nav().onDestinationSelected!(DashboardDestination.orders.tabIndex);
+    nav().onDestinationSelected!(DashboardDestination.orders.visibleIndex!);
     await tester.pumpAndSettle();
     expect(
       find.byKey(const Key('reports-heading')),
@@ -448,7 +448,7 @@ void _shellRetentionTests() {
     );
 
     // ...and come back.
-    nav().onDestinationSelected!(DashboardDestination.overview.tabIndex);
+    nav().onDestinationSelected!(DashboardDestination.overview.visibleIndex!);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);
 

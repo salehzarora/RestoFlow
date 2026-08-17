@@ -352,7 +352,7 @@ void main() {
     final nav = () => tester.widget<NavigationBar>(
       find.byKey(const Key('dashboard-bottom-nav')),
     );
-    nav().onDestinationSelected!(DashboardDestination.orders.tabIndex);
+    nav().onDestinationSelected!(DashboardDestination.orders.visibleIndex!);
     await tester.pumpAndSettle();
     expect(
       find.byKey(const Key('reports-heading')),
@@ -360,7 +360,7 @@ void main() {
       reason: 'the Overview subtree really was torn down',
     );
 
-    nav().onDestinationSelected!(DashboardDestination.overview.tabIndex);
+    nav().onDestinationSelected!(DashboardDestination.overview.visibleIndex!);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);

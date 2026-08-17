@@ -698,7 +698,7 @@ void main() {
         );
 
     Future<void> goTo(WidgetTester tester, DashboardDestination d) async {
-      nav(tester).onDestinationSelected!(d.tabIndex);
+      nav(tester).onDestinationSelected!(d.visibleIndex!);
       await tester.pumpAndSettle();
     }
 

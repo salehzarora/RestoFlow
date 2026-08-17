@@ -20,7 +20,6 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/analytics/dashboard_destination.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
 import 'package:restoflow_dashboard/src/printers/printers_repository.dart';
-import 'package:restoflow_dashboard/src/printers/printers_screen.dart';
 import 'package:restoflow_dashboard/src/setup/device_summary_card.dart';
 import 'package:restoflow_dashboard/src/setup/setup_center.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
@@ -463,7 +462,7 @@ void main() {
     Future<void> goTo(WidgetTester tester, DashboardDestination d) async {
       tester
           .widget<NavigationBar>(find.byKey(const Key('dashboard-bottom-nav')))
-          .onDestinationSelected!(d.tabIndex);
+          .onDestinationSelected!(d.visibleIndex!);
       await tester.pumpAndSettle();
     }
 
@@ -625,7 +624,7 @@ void main() {
 
       tester
           .widget<NavigationBar>(find.byKey(const Key('dashboard-bottom-nav')))
-          .onDestinationSelected!(DashboardDestination.orders.tabIndex);
+          .onDestinationSelected!(DashboardDestination.orders.visibleIndex!);
       await tester.pumpAndSettle();
 
       // If V2.1 had introduced Offstage/IndexedStack retention, the Overview
@@ -845,10 +844,12 @@ void main() {
     });
   });
 
-  group('M. leaving Printers refetches ONLY the printer read model', () {
-    testWidgets(
-      'the matching provider evaluates once more; the others do not',
-      (tester) async {
+  group(
+    'M. per-source invalidation still holds after the printing removal',
+    () {
+      testWidgets('leaving a remaining tab refreshes only its own source', (
+        tester,
+      ) async {
         await _pumpShell(
           tester,
           devices: _CountingDevices(),
@@ -858,10 +859,6 @@ void main() {
 
         final container = _shellContainer(tester);
         final key = container.read(currentSetupScopeKeyProvider);
-        final printerEvals = countEvaluations(
-          container,
-          setupPrintersProvider(key),
-        );
         final deviceEvals = countEvaluations(
           container,
           setupDevicesProvider(key),
@@ -869,36 +866,59 @@ void main() {
         final staffEvals = countEvaluations(container, setupStaffProvider(key));
         final menuEvals = countEvaluations(container, setupMenuProvider(key));
 
-        expect(printerEvals(), 1);
+        // NOTE: countEvaluations subscribes lazily, so its own first call is
+        // an evaluation. That makes it unusable for proving a NEGATIVE about
+        // printers here — that claim is measured directly at the repository in
+        // printing_governance_ui_036_037_test (`load()` is never called).
         expect(deviceEvals(), 1);
         expect(staffEvals(), 1);
         expect(menuEvals(), 1);
 
-        await _goTo(tester, DashboardDestination.printers);
-        expect(find.byKey(const Key('reports-heading')), findsNothing);
-        expect(find.byType(PrintersScreen), findsOneWidget);
-
+        // Leaving and returning to a REMAINING tab still refreshes only its
+        // own source — per-source invalidation is unchanged.
+        await _goTo(tester, DashboardDestination.devices);
         await _goTo(tester, DashboardDestination.overview);
-        expect(find.byKey(const Key('reports-heading')), findsOneWidget);
-
-        expect(
-          printerEvals(),
-          2,
-          reason: 'the printer read model refreshes exactly once',
-        );
-        expect(
-          deviceEvals(),
-          1,
-          reason: 'a printer edit cannot change the device counts',
-        );
+        expect(deviceEvals(), 2, reason: 'its own source refreshes');
         expect(staffEvals(), 1);
         expect(
           menuEvals(),
           1,
           reason: 'invalidation is per-source, never a wipe of the whole panel',
         );
-      },
-    );
+      });
+    },
+  );
+
+  group('N. Printing is hidden from navigation but still routable (037)', () {
+    testWidgets('the visible bar exposes no Printing destination, and the '
+        'canonical index space is unchanged', (tester) async {
+      await _pumpShell(
+        tester,
+        devices: _CountingDevices(),
+        printers: InMemoryPrintersStore(),
+        staff: InMemoryStaffStore(),
+      );
+      // The enum keeps its identity and index — nothing renumbered.
+      expect(DashboardDestination.printers.tabIndex, 3);
+      expect(DashboardDestination.printers.hiddenFromNavigation, isTrue);
+      expect(DashboardDestination.printers.visibleIndex, isNull);
+      // …and every OTHER destination keeps its canonical index too.
+      expect(DashboardDestination.staff.tabIndex, 4);
+      expect(DashboardDestination.orders.tabIndex, 7);
+      expect(DashboardDestination.settings.tabIndex, 9);
+      // The visible order is the canonical order minus Printing.
+      expect(DashboardDestination.visible.map((d) => d.name).toList(), [
+        'overview',
+        'menu',
+        'devices',
+        'staff',
+        'tables',
+        'users',
+        'orders',
+        'activity',
+        'settings',
+      ]);
+    });
   });
 }
 

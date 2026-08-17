@@ -591,8 +591,13 @@ class _DashboardShellState extends State<DashboardShell> {
               Expanded(child: content),
               NavigationBar(
                 key: const Key('dashboard-bottom-nav'),
-                selectedIndex: _index,
-                onDestinationSelected: (value) => _select(value, ref),
+                // 037: NavigationBar has no notion of a hidden destination, so
+                // its index space is the COMPACTED one. Translate both ways;
+                // a canonical tab with no visible tile (Printing, reached
+                // internally) falls back to 0 rather than asserting.
+                selectedIndex: _visibleIndexOf(_index, l10n),
+                onDestinationSelected: (value) =>
+                    _select(_visibleDestinations(l10n)[value].$1, ref),
                 // RF-132 (Codex review): ten destinations at phone width
                 // leave no room to render any label unclipped, so the bar
                 // is deliberately ICON-ONLY. NavigationBar keeps each
@@ -601,16 +606,15 @@ class _DashboardShellState extends State<DashboardShell> {
                 // and the tooltip covers hover/long-press; selection
                 // stays visible via the filled icon + indicator pill.
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                destinations: _destinations(l10n)
-                    .map(
-                      (d) => NavigationDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: d.label,
-                        tooltip: d.label,
-                      ),
-                    )
-                    .toList(),
+                destinations: [
+                  for (final entry in _visibleDestinations(l10n))
+                    NavigationDestination(
+                      icon: Icon(entry.$2.icon),
+                      selectedIcon: Icon(entry.$2.selectedIcon),
+                      label: entry.$2.label,
+                      tooltip: entry.$2.label,
+                    ),
+                ],
               ),
             ],
           );
@@ -897,6 +901,23 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
+  /// 037: the visible subset, paired with each item's CANONICAL index so
+  /// selection keeps speaking the original index space. Hidden-ness comes from
+  /// [DashboardDestination] — one source of truth for shell and tests alike.
+  List<(int, _NavItem)> _visibleDestinations(AppLocalizations l10n) {
+    final all = _destinations(l10n);
+    return [
+      for (var i = 0; i < all.length; i++)
+        if (!DashboardDestination.fromIndex(i).hiddenFromNavigation)
+          (i, all[i]),
+    ];
+  }
+
+  /// The compacted position of a canonical index, or 0 when that tab is hidden
+  /// (a hidden screen reached internally highlights nothing in particular).
+  int _visibleIndexOf(int canonical, AppLocalizations l10n) =>
+      DashboardDestination.fromIndex(canonical).visibleIndex ?? 0;
+
   List<_NavItem> _destinations(AppLocalizations l10n) => [
     _NavItem(
       icon: Icons.dashboard_outlined,
@@ -913,6 +934,10 @@ class _DashboardShellState extends State<DashboardShell> {
       selectedIcon: Icons.devices,
       label: l10n.dashboardNavDevices,
     ),
+    // 037: printer management is no longer part of the normal Dashboard
+    // (DashboardDestination.printers.hiddenFromNavigation). Physical printer
+    // setup lives on the POS/KDS device; the screen, its route index and the
+    // whole printer backend stay intact behind it.
     _NavItem(
       icon: Icons.print_outlined,
       selectedIcon: Icons.print,
@@ -1153,13 +1178,17 @@ class _SideNav extends StatelessWidget {
                 RestoflowSpacing.lg,
               ),
               children: [
+                // 037: hidden destinations are skipped, but the loop still
+                // walks the CANONICAL index space, so selection and taps need
+                // no translation here.
                 for (var i = 0; i < destinations.length; i++)
-                  _SideNavTile(
-                    item: destinations[i],
-                    selected: i == selectedIndex,
-                    compact: compact,
-                    onTap: () => onSelected(i),
-                  ),
+                  if (!DashboardDestination.fromIndex(i).hiddenFromNavigation)
+                    _SideNavTile(
+                      item: destinations[i],
+                      selected: i == selectedIndex,
+                      compact: compact,
+                      onTap: () => onSelected(i),
+                    ),
               ],
             ),
           ),

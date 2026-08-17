@@ -618,7 +618,9 @@ void main() {
       await selectBranchB(tester);
 
       // Navigate with the SHELL's own control — no provider is written here.
-      nav(tester).onDestinationSelected!(DashboardDestination.orders.tabIndex);
+      nav(tester).onDestinationSelected!(
+        DashboardDestination.orders.visibleIndex!,
+      );
       await tester.pumpAndSettle();
 
       // Reach History through its own segmented control.
@@ -637,7 +639,7 @@ void main() {
 
       // ...and returning to Overview still shows the choice.
       nav(tester).onDestinationSelected!(
-        DashboardDestination.overview.tabIndex,
+        DashboardDestination.overview.visibleIndex!,
       );
       await tester.pumpAndSettle();
       expect(

@@ -368,7 +368,9 @@ void main() {
           l10n.dashboardNavOverview,
           l10n.dashboardNavMenu,
           l10n.dashboardNavDevices,
-          l10n.dashboardNavPrinters,
+          // 037: Printing is hidden from the visible bar, so it has no
+          // destination here to name. Every REMAINING destination must still
+          // be fully labelled for assistive tech.
           l10n.dashboardNavStaff,
           l10n.dashboardNavTables,
           l10n.dashboardNavUsers,

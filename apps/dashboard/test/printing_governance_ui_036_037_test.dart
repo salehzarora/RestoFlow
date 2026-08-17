@@ -51,8 +51,15 @@ class _PrintersStub implements PrintersRepository {
   _PrintersStub(this._snapshot);
   final PrintersSnapshot _snapshot;
 
+  /// 037: how many times the Overview asked for printers. It must stay 0 —
+  /// the panel no longer shows printing, so it must not pay for the read.
+  int loads = 0;
+
   @override
-  Future<AdminResult<PrintersSnapshot>> load() async => Success(_snapshot);
+  Future<AdminResult<PrintersSnapshot>> load() async {
+    loads += 1;
+    return Success(_snapshot);
+  }
 
   @override
   Future<AdminResult<void>> upsertPrinter({
@@ -157,6 +164,8 @@ PrinterDevice _printer({
 PrintersSnapshot _snapshot(List<PrinterDevice> printers) =>
     PrintersSnapshot(printers: printers, routes: const [], stations: const []);
 
+_PrintersStub? _lastPrintersStub;
+
 Future<void> _pumpOverview(
   WidgetTester tester, {
   required KitchenWorkflowMode? mode,
@@ -181,7 +190,7 @@ Future<void> _pumpOverview(
                 _DevicesStub(const [_activePos, _activeKds]),
               ),
               setupPrintersRepositoryProvider.overrideWithValue(
-                _PrintersStub(_snapshot(printers)),
+                _lastPrintersStub = _PrintersStub(_snapshot(printers)),
               ),
               setupStaffRepositoryProvider.overrideWithValue(
                 _StaffStub(const [_staffWithPin]),
@@ -295,180 +304,92 @@ Future<_RecordingTransport> _pumpPrinting(
 
 void main() {
   // =========================================================================
-  group('A. Overview — printing CONFIGURATION, never printer health', () {
-    testWidgets('A1. printer_only + an enabled kitchen printer: the printing '
-        'dimension PASSES and is labelled as configuration', (tester) async {
+  // 037 SUPERSEDES 036's Overview slice. The owner removed printer management
+  // from the normal Dashboard, so the Overview carries NO printing readiness
+  // at all — in every workflow mode, printer_only included. What 036 built
+  // (an honest, printer_only-scoped configuration dimension) is gone rather
+  // than made dishonest again; group B below still guards the page itself,
+  // which remains reachable internally and fully functional.
+  group('A. Overview carries no printing content at all (037)', () {
+    for (final mode in const [
+      KitchenWorkflowMode.printerOnly,
+      KitchenWorkflowMode.kds,
+      null,
+    ]) {
+      testWidgets('A1. ${mode?.wire ?? 'unreadable'}: no tile, no stat, no '
+          'help copy, no next step', (tester) async {
+        await _pumpOverview(
+          tester,
+          mode: mode,
+          printers: [_printer(id: 'k1', role: PrinterRole.kitchen)],
+        );
+        expect(find.byKey(const Key('setup-stat-printers')), findsNothing);
+        expect(
+          find.byKey(const Key('setup-printing-config-help')),
+          findsNothing,
+        );
+        expect(find.text('Printing'), findsNothing);
+        expect(find.textContaining('No live kitchen printer'), findsNothing);
+        expect(find.textContaining('No printers configured'), findsNothing);
+        expect(find.text('Add printer'), findsNothing);
+      });
+    }
+
+    testWidgets('A1b. the Overview never even ASKS for printers — it does not '
+        'pay for a read it no longer shows', (tester) async {
       await _pumpOverview(
         tester,
         mode: KitchenWorkflowMode.printerOnly,
         printers: [_printer(id: 'k1', role: PrinterRole.kitchen)],
       );
-      expect(find.byKey(const Key('setup-stat-printers')), findsOneWidget);
-      expect(find.text('Printing'), findsOneWidget);
-      // Everything else in this fixture is ready, so a passing printing
-      // dimension is the difference between 100% and not.
-      expect(_percent(tester), 100);
-      // …and no next step nags about printers.
       expect(
-        find.textContaining('No live kitchen printer configured'),
-        findsNothing,
+        _lastPrintersStub!.loads,
+        0,
+        reason: 'the printers repository must not be loaded by the Overview',
       );
     });
 
-    testWidgets('A2. printer_only: a `both`-role printer also qualifies — it '
-        'is kitchen-capable', (tester) async {
+    testWidgets('A2. printer_only with NO printer at all is still fully '
+        'ready — printing never enters the denominator', (tester) async {
       await _pumpOverview(
         tester,
         mode: KitchenWorkflowMode.printerOnly,
-        printers: [_printer(id: 'b1', role: PrinterRole.both)],
-      );
-      expect(_percent(tester), 100);
-    });
-
-    testWidgets('A3. printer_only: a 58mm kitchen printer STILL qualifies — '
-        'paper width is not a server qualification', (tester) async {
-      await _pumpOverview(
-        tester,
-        mode: KitchenWorkflowMode.printerOnly,
-        printers: [
-          _printer(id: 'k58', role: PrinterRole.kitchen, paperWidth: '58mm'),
-        ],
+        printers: const [],
       );
       expect(
         _percent(tester),
         100,
-        reason: 'a working 58mm printer_only branch must not be failed',
+        reason: 'printing must not reduce readiness in any mode',
       );
     });
 
-    testWidgets('A4. printer_only + NO qualifying printer: the dimension '
-        'fails and the next step names the real gap', (tester) async {
-      final opened = <String>[];
-      await _pumpOverview(
-        tester,
-        mode: KitchenWorkflowMode.printerOnly,
-        // A receipt-only printer is NOT kitchen-capable.
-        printers: [_printer(id: 'r1', role: PrinterRole.receipt)],
-        opened: opened,
-      );
-      expect(_percent(tester), lessThan(100));
-      expect(
-        find.textContaining('No live kitchen printer configured'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Add printer'));
-      await tester.pumpAndSettle();
-      expect(opened, ['printers']);
-    });
-
-    testWidgets('A5. printer_only: a DISABLED kitchen printer does not '
-        'qualify', (tester) async {
-      await _pumpOverview(
-        tester,
-        mode: KitchenWorkflowMode.printerOnly,
-        printers: [
-          _printer(id: 'k1', role: PrinterRole.kitchen, isEnabled: false),
-        ],
-      );
-      expect(_percent(tester), lessThan(100));
-    });
-
-    testWidgets('A6. NOT printer_only: the printing tile is HIDDEN, readiness '
-        'is not penalised, and no "Add printer" step appears', (tester) async {
-      await _pumpOverview(
-        tester,
-        mode: KitchenWorkflowMode.kds,
-        printers: const [],
-      );
-      expect(find.byKey(const Key('setup-stat-printers')), findsNothing);
-      expect(find.text('Printing'), findsNothing);
-      expect(
-        find.textContaining('No live kitchen printer configured'),
-        findsNothing,
-      );
-      expect(find.textContaining('No printers configured'), findsNothing);
-      expect(find.text('Add printer'), findsNothing);
-      // The denominator dropped with the dimension: zero printer rows leave a
-      // KDS branch fully ready.
-      expect(_percent(tester), 100);
-    });
-
-    testWidgets('A7. NOT printer_only: even WITH printer rows the tile stays '
-        'out of readiness', (tester) async {
-      await _pumpOverview(
-        tester,
-        mode: KitchenWorkflowMode.kds,
-        printers: [_printer(id: 'k1', role: PrinterRole.kitchen)],
-      );
-      expect(find.byKey(const Key('setup-stat-printers')), findsNothing);
-      expect(_percent(tester), 100);
-    });
-
-    testWidgets('A8. an UNREADABLE workflow mode is not treated as '
-        'printer_only — a transport blip cannot invent a failing dimension', (
+    testWidgets('A3. a receipt-only branch is not penalised either', (
       tester,
     ) async {
-      await _pumpOverview(tester, mode: null, printers: const []);
-      expect(find.byKey(const Key('setup-stat-printers')), findsNothing);
-      expect(_percent(tester), 100);
-    });
-
-    testWidgets('A9. the copy NEVER claims a printer is online, reachable or '
-        'connected', (tester) async {
       await _pumpOverview(
         tester,
         mode: KitchenWorkflowMode.printerOnly,
-        printers: [_printer(id: 'k1', role: PrinterRole.kitchen)],
+        printers: [_printer(id: 'r1', role: PrinterRole.receipt)],
       );
-      final help = tester.widget<Text>(
-        find.byKey(const Key('setup-printing-config-help')),
-      );
-      final copy = help.data!;
-      expect(copy, contains('does not check'));
-      for (final claim in const [
-        'online',
-        'reachable',
-        'connected to',
-        'printer is ready',
-      ]) {
-        expect(
-          copy.toLowerCase().contains(claim.toLowerCase()) &&
-              !copy.toLowerCase().contains('does not'),
-          isFalse,
-          reason: 'help copy must not assert "$claim"',
-        );
-      }
-      // The label itself is configuration wording, not hardware wording.
-      expect(find.text('Printers'), findsNothing);
+      expect(_percent(tester), 100);
     });
 
-    for (final (locale, label) in const [
-      (Locale('ar'), 'إعداد الطباعة'),
-      (Locale('he'), 'הגדרת הדפסה'),
-    ]) {
-      testWidgets('A10. ${locale.languageCode}: the printing dimension renders '
-          'its localized configuration label', (tester) async {
-        final overflows = <String>[];
-        final prior = FlutterError.onError;
-        FlutterError.onError = (details) {
-          if (details.exceptionAsString().contains('overflowed')) {
-            overflows.add(details.toString());
-          } else {
-            prior?.call(details);
-          }
-        };
+    for (final locale in const [Locale('ar'), Locale('he')]) {
+      testWidgets('A4. ${locale.languageCode}: no printing wording appears', (
+        tester,
+      ) async {
+        final label = {
+          'ar': 'إعداد الطباعة',
+          'he': 'הגדרת הדפסה',
+        }[locale.languageCode]!;
         await _pumpOverview(
           tester,
           mode: KitchenWorkflowMode.printerOnly,
           printers: [_printer(id: 'k1', role: PrinterRole.kitchen)],
           locale: locale,
         );
-        FlutterError.onError = prior;
-        expect(find.text(label), findsOneWidget);
-        expect(
-          overflows.where((o) => o.contains('setup_center.dart')),
-          isEmpty,
-        );
+        expect(find.text(label), findsNothing);
+        expect(find.byKey(const Key('setup-stat-printers')), findsNothing);
       });
     }
   });

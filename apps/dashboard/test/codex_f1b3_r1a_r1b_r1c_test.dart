@@ -316,7 +316,7 @@ void main() {
     Future<void> openOrdersHistory(WidgetTester tester) async {
       tester
           .widget<NavigationBar>(find.byKey(const Key('dashboard-bottom-nav')))
-          .onDestinationSelected!(DashboardDestination.orders.tabIndex);
+          .onDestinationSelected!(DashboardDestination.orders.visibleIndex!);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('orders-tab-history')));
       await tester.pumpAndSettle();
