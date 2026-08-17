@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_menu.dart';
 import '../design/pos_visual_tokens.dart';
 import '../format/money_format.dart';
+import '../media/pos_media_image.dart';
 import '../pos_palette.dart';
 
 /// The band-pill display priority (menu/media sprint, Part F): the two
@@ -541,12 +542,21 @@ class _ImageBand extends StatelessWidget {
               builder: (context, constraints) {
                 final dpr = MediaQuery.devicePixelRatioOf(context);
                 final cacheW = (constraints.maxWidth * dpr).round();
-                return Image.network(
-                  item.imageUrl!,
+                // EGRESS-REMEDIATION-001: same Image widget + decode cap as
+                // the old Image.network, but the provider is keyed by the
+                // STABLE object path (not the rotating signed token) and
+                // backed by the persistent media cache — an unchanged photo
+                // survives menu refreshes/resumes/restarts without a
+                // re-download. Rendering is pixel-identical.
+                return Image(
+                  image: ResizeImage.resizeIfNeeded(
+                    cacheW > 0 ? cacheW : null,
+                    null,
+                    posMediaImageProvider(item.imageUrl!),
+                  ),
                   fit: BoxFit.cover,
                   alignment: Alignment.center,
                   width: double.infinity,
-                  cacheWidth: cacheW > 0 ? cacheW : null,
                   errorBuilder: (context, error, stackTrace) =>
                       _CategoryBand(category: category),
                 );

@@ -134,9 +134,9 @@ Future<void> main() async {
         // PRINT-BRANDING-LOGO-001: the restaurant-logo blob store over the same
         // authenticated anon-key client (D-011); the branding REPO is built in
         // the shell from the transport + concrete restaurant scope.
-        brandingLogoStorage: SupabaseRestaurantLogoStorage(
-          Supabase.instance.client,
-        ),
+        // EGRESS-REMEDIATION-001.1: now built inside buildDashboardRealAuth so
+        // its signed-URL cache is wiped at the sign-out boundary.
+        brandingLogoStorage: real.brandingLogoStorage,
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
         tablesRepositoryFor: real.tablesRepositoryFor,

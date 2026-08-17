@@ -29,6 +29,7 @@ export 'src/data/in_memory_menu_store.dart';
 export 'src/data/menu_image_path.dart';
 export 'src/data/menu_image_storage.dart';
 export 'src/data/picked_menu_image.dart';
+export 'src/data/signed_url_cache.dart';
 export 'src/data/menu_management_repository.dart';
 export 'src/data/menu_read_source.dart';
 export 'src/data/menu_validation.dart';

@@ -13,10 +13,12 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
         MenuReadSource,
         MenuWriter,
         RpcMenuReadSource,
-        RpcMenuWriter;
+        RpcMenuWriter,
+        signedUrlCacheFor;
 import 'package:supabase/supabase.dart';
 
 import '../admin/supabase_admin_device_repository.dart';
+import '../branding/restaurant_logo_storage.dart';
 import '../admin/supabase_users_repository.dart';
 import '../menu/supabase_menu_image_storage.dart';
 import '../printers/printers_repository.dart';
@@ -67,6 +69,7 @@ const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
   MenuReadSource menuReadSource,
   MenuWriter menuWriter,
   MenuImageStorage menuImageStorage,
+  RestaurantLogoStorage brandingLogoStorage,
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
   TablesAdminRepository Function(AdminScope scope) tablesRepositoryFor,
@@ -75,8 +78,21 @@ const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
 buildDashboardRealAuth(SupabaseClient client) {
   final transport = SupabaseSyncRpcTransport(client);
   String? currentUserId() => client.auth.currentUser?.id;
+  // EGRESS-REMEDIATION-001.1: the two media storages are built HERE so the
+  // sign-out boundary below can wipe their signed-URL caches — the ONE true
+  // authorization boundary. Ordinary navigation, tab switches and media
+  // refreshes never touch this path, so normal dashboard usage keeps its
+  // cached URLs for the whole validity window.
+  final menuImageStorage = SupabaseMenuImageStorage(client);
+  final brandingLogoStorage = SupabaseRestaurantLogoStorage(client);
   return (
-    auth: SupabaseDashboardAuthRepository(client),
+    auth: SupabaseDashboardAuthRepository(
+      client,
+      onSignedOut: () {
+        signedUrlCacheFor(menuImageStorage).clear();
+        signedUrlCacheFor(brandingLogoStorage).clear();
+      },
+    ),
     onboarding: SupabaseOnboardingRepository(
       transport,
       currentUserId: currentUserId,
@@ -102,7 +118,10 @@ buildDashboardRealAuth(SupabaseClient client) {
     menuWriter: RpcMenuWriter(transport),
     // Menu/media sprint: REAL item image storage over the same authenticated
     // client (RF-110 bucket + policies; signed URLs only — D-032).
-    menuImageStorage: SupabaseMenuImageStorage(client),
+    menuImageStorage: menuImageStorage,
+    // PRINT-BRANDING-LOGO-001: the restaurant-logo blob store over the same
+    // authenticated anon-key client (D-011).
+    brandingLogoStorage: brandingLogoStorage,
     // Sprint: real printers (RF-150 backend) + staff/PIN provisioning surfaces.
     printersRepositoryFor: (scope) => SupabasePrintersRepository(
       transport: transport,
@@ -128,9 +147,15 @@ buildDashboardRealAuth(SupabaseClient client) {
 
 /// GoTrue-backed [DashboardAuthRepository].
 class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
-  SupabaseDashboardAuthRepository(this._client);
+  SupabaseDashboardAuthRepository(this._client, {void Function()? onSignedOut})
+    : _onSignedOut = onSignedOut;
 
   final SupabaseClient _client;
+
+  /// EGRESS-REMEDIATION-001.1: auth-boundary cleanup (drops cached signed
+  /// media URLs). Runs on EVERY sign-out attempt — even one whose network
+  /// call failed, because the local session is being torn down either way.
+  final void Function()? _onSignedOut;
 
   // WEB-AUTH-SESSION-ISOLATION-001: "there is a session" is NOT the same as
   // "this dashboard is signed in". On one origin, GoTrue's cross-tab broadcast
@@ -206,7 +231,19 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
   }
 
   @override
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    try {
+      await _client.auth.signOut();
+    } finally {
+      // Best-effort, never throwing: a cache-cleanup failure must not turn a
+      // completed sign-out into an error.
+      try {
+        _onSignedOut?.call();
+      } catch (_) {
+        // Swallowed by design.
+      }
+    }
+  }
 }
 
 /// `public.create_organization`-backed [OnboardingRepository].

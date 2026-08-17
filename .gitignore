@@ -235,5 +235,5 @@ logs/
 tmp/
 .cache/
 
-# Local screenshot generators (table_floor_027 etc.) write here; never committed.
+# Local screenshot generators (table_floor_027, device_theme_032, ...) write here; never committed.
 **/test/goldens/

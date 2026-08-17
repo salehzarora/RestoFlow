@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/menu_image_path.dart';
 import '../data/menu_image_storage.dart';
 import '../data/picked_menu_image.dart';
+import '../data/signed_url_cache.dart';
 import '../models/menu_item.dart';
 import '../models/menu_write_failure.dart';
 import '../state/menu_providers.dart';
@@ -46,17 +47,19 @@ class _MenuImagePanelState extends ConsumerState<MenuImagePanel> {
   _PanelIssue? _issue;
   MenuWriteFailure? _persistFailure;
 
-  // The signed-URL future is cached per object key so rebuilds don't re-sign.
-  String? _signedForPath;
-  Future<Uri>? _signedUrlFuture;
-
-  Future<Uri> _signedUrl(MenuImageStorage storage, String path) {
-    if (_signedForPath != path || _signedUrlFuture == null) {
-      _signedForPath = path;
-      _signedUrlFuture = storage.createSignedUrl(path);
-    }
-    return _signedUrlFuture!;
-  }
+  // EGRESS-REMEDIATION-001: the editor preview reuses the SAME shared
+  // expiry-aware signed-URL cache as the catalog thumbnails (keyed per
+  // storage backend + object path), so opening an item's editor no longer
+  // mints a second token — and therefore no longer re-downloads bytes the
+  // thumbnail already fetched under the identical URL. A replaced image has a
+  // new versioned path, so it still resolves fresh immediately.
+  Future<Uri> _signedUrl(MenuImageStorage storage, String path) =>
+      signedUrlCacheFor(storage).resolve(
+        path,
+        validity: kSignedUrlValidity,
+        sign: () =>
+            storage.createSignedUrl(path, expiresIn: kSignedUrlValidity),
+      );
 
   Future<void> _pick() async {
     final picked = await ref.read(menuImageFilePickerProvider)();
