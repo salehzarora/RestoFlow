@@ -94,6 +94,15 @@ void _wide(WidgetTester tester) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+/// 038: reprint now opens a chooser. Tap it, then pick the CUSTOMER receipt —
+/// the behaviour these tests assert is unchanged, only the path to it.
+Future<void> tapReprintCustomer(WidgetTester tester, Key reprintKey) async {
+  await tester.tap(find.byKey(reprintKey));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('reprint-choice-customer')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('unpaid offers Take payment; paid offers Reprint + View', (
     tester,
@@ -156,8 +165,7 @@ void main() {
       await tester.pumpWidget(_wrap(await _seededStore()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('recent-reprint-#P1')));
-      await tester.pumpAndSettle();
+      await tapReprintCustomer(tester, const Key('recent-reprint-#P1'));
       // No native/loopback bridge in a test -> honest "no printer" snackbar,
       // and NOTHING mutates the order/payment.
       expect(find.text(l10n.printStatusNotConfigured), findsOneWidget);

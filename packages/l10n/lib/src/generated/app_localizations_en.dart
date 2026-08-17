@@ -5902,4 +5902,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get printersGovernanceIntro =>
       'Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.';
+
+  @override
+  String get posReprintChooserTitle => 'Reprint';
+
+  @override
+  String get posReprintCustomerReceipt => 'Customer receipt';
+
+  @override
+  String get posReprintCustomerReceiptHint =>
+      'Prints the cashier receipt on the receipt printer.';
+
+  @override
+  String get posReprintKitchenTicket => 'Kitchen ticket';
+
+  @override
+  String get posReprintKitchenTicketHint =>
+      'Prints the order ticket on the kitchen printer.';
+
+  @override
+  String get posReprintKitchenUnavailable =>
+      'This order has no printable kitchen ticket on this device.';
 }

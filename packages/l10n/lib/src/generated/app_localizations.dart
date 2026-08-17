@@ -10773,6 +10773,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.'**
   String get printersGovernanceIntro;
+
+  /// ORDER-REPRINT-CHOOSER-038: title of the reprint chooser opened from an order row.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint'**
+  String get posReprintChooserTitle;
+
+  /// ORDER-REPRINT-CHOOSER-038: option that reprints the cashier/customer receipt on the RECEIPT printer only.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer receipt'**
+  String get posReprintCustomerReceipt;
+
+  /// ORDER-REPRINT-CHOOSER-038: secondary line naming the receipt printer destination.
+  ///
+  /// In en, this message translates to:
+  /// **'Prints the cashier receipt on the receipt printer.'**
+  String get posReprintCustomerReceiptHint;
+
+  /// ORDER-REPRINT-CHOOSER-038: option that reprints the kitchen ticket on the KITCHEN printer only.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket'**
+  String get posReprintKitchenTicket;
+
+  /// ORDER-REPRINT-CHOOSER-038: secondary line naming the kitchen printer destination.
+  ///
+  /// In en, this message translates to:
+  /// **'Prints the order ticket on the kitchen printer.'**
+  String get posReprintKitchenTicketHint;
+
+  /// ORDER-REPRINT-CHOOSER-038: honest kitchen-only refusal when the order carries no printable kitchen snapshot on this device. NEVER falls back to the receipt printer.
+  ///
+  /// In en, this message translates to:
+  /// **'This order has no printable kitchen ticket on this device.'**
+  String get posReprintKitchenUnavailable;
 }
 
 class _AppLocalizationsDelegate

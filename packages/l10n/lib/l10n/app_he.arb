@@ -1814,5 +1814,11 @@
   "setupPrintingConfig": "הגדרת הדפסה",
   "setupPrintingConfigHelp": "תצורת ההדפסה של הסניף. היא אינה בודקת שהמדפסת פועלת, מחוברת או זמינה — החיבור הפיזי מוגדר בכל מכשיר קופה או מסך מטבח.",
   "setupNoKitchenPrinter": "אין מדפסת מטבח פעילה — מצב הדפסה בלבד מחייב אחת.",
-  "printersGovernanceIntro": "קבעו אילו מדפסות יש לסניף, מה הן מדפיסות ואילו עמדות הן משרתות. כל מכשיר קופה או מסך מטבח מגדיר את החיבור הפיזי שלו; דף זה אינו יודע אם מדפסת מחוברת."
+  "printersGovernanceIntro": "קבעו אילו מדפסות יש לסניף, מה הן מדפיסות ואילו עמדות הן משרתות. כל מכשיר קופה או מסך מטבח מגדיר את החיבור הפיזי שלו; דף זה אינו יודע אם מדפסת מחוברת.",
+  "posReprintChooserTitle": "הדפסה חוזרת",
+  "posReprintCustomerReceipt": "קבלת לקוח",
+  "posReprintCustomerReceiptHint": "מדפיסה את קבלת הקופה במדפסת הקבלות.",
+  "posReprintKitchenTicket": "פתק מטבח",
+  "posReprintKitchenTicketHint": "מדפיסה את פתק ההזמנה במדפסת המטבח.",
+  "posReprintKitchenUnavailable": "להזמנה זו אין פתק מטבח להדפסה במכשיר זה."
 }

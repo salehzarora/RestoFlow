@@ -10,6 +10,11 @@ import '../data/payment.dart';
 import '../data/order_detail_repository.dart';
 import '../data/recent_order.dart';
 import '../print/native_print_bridges.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        kitchenTicketPrintLabelsFromL10n,
+        posKitchenReprintProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_order_complete_controller.dart';
@@ -35,6 +40,9 @@ import 'receipt_print_preview.dart';
 /// Eligibility is NOT duplicated here and payment/print/RPC commands are NOT
 /// re-implemented: this widget draws what `resolveOrderActions` already decided
 /// and calls the handlers that already existed.
+
+/// ORDER-REPRINT-CHOOSER-038 — which document the operator asked for.
+enum _ReprintChoice { customer, kitchen }
 
 /// The trailing actions — EVERY one of them decided by the central policy. A control
 /// that the server would refuse is not drawn at all: a button that always fails is a
@@ -244,7 +252,7 @@ class OrderActionRow extends ConsumerWidget {
         OrderActionButton(
           child: OutlinedButton.icon(
             key: Key('$keyPrefix-reprint-${order.orderNumber}'),
-            onPressed: () => _reprint(context, ref),
+            onPressed: () => _openReprintChooser(context, ref),
             icon: const Icon(Icons.print_outlined, size: 18),
             label: Text(l10n.posRecentReprintAction),
           ),
@@ -449,7 +457,141 @@ class OrderActionRow extends ConsumerWidget {
     null => true,
   };
 
-  Future<void> _reprint(BuildContext context, WidgetRef ref) async {
+  /// ORDER-REPRINT-CHOOSER-038 — the reprint control now ASKS which document.
+  ///
+  /// Before this, tapping reprint went straight to the customer receipt, and a
+  /// kitchen ticket could only be reprinted from the confirmation screen that
+  /// dies the moment the next order starts. Both documents are reachable here,
+  /// and each one goes to ITS OWN configured printer:
+  ///
+  ///   * customer  -> the existing receipt composer + print bridge, untouched;
+  ///   * kitchen   -> the canonical kitchen seam the automatic and immediate
+  ///                  manual prints already use.
+  ///
+  /// There is no cross-purpose fallback in either direction: an unavailable
+  /// kitchen printer produces a KITCHEN error and prints nothing, and the same
+  /// holds for the receipt side. Dismissing the sheet prints nothing at all.
+  Future<void> _openReprintChooser(BuildContext context, WidgetRef ref) async {
+    final choice = await showModalBottomSheet<_ReprintChoice>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          key: const Key('reprint-chooser'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.xs,
+                RestoflowSpacing.lg,
+                RestoflowSpacing.sm,
+              ),
+              child: Text(
+                l10n.posReprintChooserTitle,
+                style: Theme.of(
+                  sheetContext,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ListTile(
+              key: const Key('reprint-choice-customer'),
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: Text(l10n.posReprintCustomerReceipt),
+              subtitle: Text(l10n.posReprintCustomerReceiptHint),
+              minVerticalPadding: RestoflowSpacing.md,
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReprintChoice.customer),
+            ),
+            ListTile(
+              key: const Key('reprint-choice-kitchen'),
+              leading: const Icon(Icons.soup_kitchen_outlined),
+              title: Text(l10n.posReprintKitchenTicket),
+              subtitle: Text(l10n.posReprintKitchenTicketHint),
+              minVerticalPadding: RestoflowSpacing.md,
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReprintChoice.kitchen),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.sm,
+                RestoflowSpacing.lg,
+                RestoflowSpacing.lg,
+              ),
+              child: TextButton(
+                key: const Key('reprint-choice-cancel'),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                child: Text(l10n.adminCancel),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    // Cancel, back and a barrier dismiss all land here: NOTHING is printed.
+    switch (choice) {
+      case null:
+        return;
+      case _ReprintChoice.customer:
+        await _reprintCustomerReceipt(context, ref);
+      case _ReprintChoice.kitchen:
+        await _reprintKitchenTicket(context, ref);
+    }
+  }
+
+  /// The KITCHEN half. Prints the SELECTED historical order's snapshot — never
+  /// the current cart — through `printKitchenTicketAndSettleOwedClaims`, the
+  /// same seam the confirmation screen's manual print and the automatic
+  /// on-submit print already use. That seam owns kitchen-printer resolution,
+  /// so no transport code is duplicated here and the receipt printer is never
+  /// consulted.
+  ///
+  /// Print-only: it composes and sends. It creates no order, resubmits
+  /// nothing, and changes no order, payment, table or kitchen status. (The
+  /// seam may SETTLE an owed direct-print claim on success — that is
+  /// pre-existing print bookkeeping recording that the ticket physically went
+  /// out, not a business-state change.)
+  Future<void> _reprintKitchenTicket(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final view = order.order;
+    if (view == null) {
+      // Honest KITCHEN-only refusal — never a silent receipt instead.
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posReprintKitchenUnavailable)),
+      );
+      return;
+    }
+    final outcome = await ref.read(posKitchenReprintProvider)(
+      container: ProviderScope.containerOf(context, listen: false),
+      order: view,
+      labels: kitchenTicketPrintLabelsFromL10n(l10n),
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(switch (outcome) {
+          PosKitchenPrintOutcome.printed => l10n.posKitchenTicketPrintedSnack,
+          PosKitchenPrintOutcome.noPrinterConfigured ||
+          PosKitchenPrintOutcome.unavailable =>
+            l10n.posKitchenPrinterNotConfiguredSnack,
+          PosKitchenPrintOutcome.failed ||
+          PosKitchenPrintOutcome.ineligibleOrder =>
+            l10n.posKitchenTicketPrintFailedSnack,
+        }),
+      ),
+    );
+  }
+
+  Future<void> _reprintCustomerReceipt(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final bridge = ref.read(posActivePrintBridgeProvider);
     if (bridge == null) {

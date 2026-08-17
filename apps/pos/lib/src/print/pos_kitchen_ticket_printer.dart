@@ -509,6 +509,33 @@ class PosKitchenTicketPrinter {
   }
 }
 
+/// ORDER-REPRINT-CHOOSER-038 — the KITCHEN reprint seam used by the Orders
+/// reprint chooser.
+///
+/// It exists so a test can assert EXACTLY which printer path a selection
+/// invoked: the routing rule ("customer -> receipt printer only, kitchen ->
+/// kitchen printer only, never a cross-purpose fallback") is only meaningfully
+/// provable if each path is observable on its own. The default is the
+/// canonical print-and-settle function the confirmation screen already calls —
+/// this adds no second printing architecture, only a named door onto the
+/// existing one.
+typedef PosKitchenReprint =
+    Future<PosKitchenPrintOutcome> Function({
+      required ProviderContainer container,
+      required SubmittedOrderView order,
+      required KitchenTicketPrintLabels labels,
+    });
+
+final posKitchenReprintProvider = Provider<PosKitchenReprint>(
+  (ref) =>
+      ({required container, required order, required labels}) =>
+          printKitchenTicketAndSettleOwedClaims(
+            container: container,
+            order: order,
+            labels: labels,
+          ),
+);
+
 /// The MANUAL "Print kitchen ticket" entry point — an intentional print/reprint
 /// for an already-created order. No idempotency guard (a deliberate press may
 /// print again); it never changes order/payment/KDS state.

@@ -5816,4 +5816,25 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get printersGovernanceIntro =>
       'קבעו אילו מדפסות יש לסניף, מה הן מדפיסות ואילו עמדות הן משרתות. כל מכשיר קופה או מסך מטבח מגדיר את החיבור הפיזי שלו; דף זה אינו יודע אם מדפסת מחוברת.';
+
+  @override
+  String get posReprintChooserTitle => 'הדפסה חוזרת';
+
+  @override
+  String get posReprintCustomerReceipt => 'קבלת לקוח';
+
+  @override
+  String get posReprintCustomerReceiptHint =>
+      'מדפיסה את קבלת הקופה במדפסת הקבלות.';
+
+  @override
+  String get posReprintKitchenTicket => 'פתק מטבח';
+
+  @override
+  String get posReprintKitchenTicketHint =>
+      'מדפיסה את פתק ההזמנה במדפסת המטבח.';
+
+  @override
+  String get posReprintKitchenUnavailable =>
+      'להזמנה זו אין פתק מטבח להדפסה במכשיר זה.';
 }
