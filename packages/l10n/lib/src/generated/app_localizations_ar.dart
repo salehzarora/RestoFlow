@@ -2951,7 +2951,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'محاولات كثيرة جدًا. يُرجى الانتظار بضع دقائق ثم المحاولة مرة أخرى.';
 
   @override
-  String get dashboardNavPrinters => 'الطابعات';
+  String get dashboardNavPrinters => 'إعداد الطباعة';
 
   @override
   String get dashboardNavStaff => 'الموظفون';
@@ -3408,7 +3408,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardDevicesUnavailable => 'حالة الأجهزة غير متوفرة';
 
   @override
-  String get printersTitle => 'الطابعات';
+  String get printersTitle => 'إعداد الطباعة';
 
   @override
   String get printersSubtitle => 'طابعات الإيصالات والمطبخ لهذا الفرع';
@@ -3571,13 +3571,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printersStatusReadyNetwork => 'جاهزة عبر محوّل الشبكة';
-
-  @override
-  String get printersTestPrint => 'طباعة تجريبية';
-
-  @override
-  String get printersTestPrintUnavailable =>
-      'الطباعة التجريبية تتطلب محوّل الطباعة أو الجسر — غير متاحة في إصدار الويب هذا.';
 
   @override
   String get staffTitle => 'الموظفون';
@@ -5848,4 +5841,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String posOpenOrdersElapsedHoursMinutes(int hours, int minutes) {
     return 'منذ $hours س $minutes د';
   }
+
+  @override
+  String get setupPrintingConfig => 'إعداد الطباعة';
+
+  @override
+  String get setupPrintingConfigHelp =>
+      'إعدادات الطباعة لهذا الفرع. لا تتحقق من أن الطابعة تعمل أو مقترنة أو متصلة — يتم إعداد التوصيل الفعلي على كل جهاز نقطة بيع أو شاشة مطبخ.';
+
+  @override
+  String get setupNoKitchenPrinter =>
+      'لا توجد طابعة مطبخ مفعّلة — وضع الطباعة فقط يحتاج إلى واحدة.';
+
+  @override
+  String get printersGovernanceIntro =>
+      'حدّد طابعات هذا الفرع، وما تطبعه، والمحطات التي تخدمها. كل جهاز نقطة بيع أو شاشة مطبخ يضبط توصيله الفعلي بنفسه؛ هذه الصفحة لا تعرف ما إذا كانت الطابعة متصلة.';
 }

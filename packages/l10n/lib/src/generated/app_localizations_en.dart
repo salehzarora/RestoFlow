@@ -2976,7 +2976,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Too many attempts. Please wait a few minutes and try again.';
 
   @override
-  String get dashboardNavPrinters => 'Printers';
+  String get dashboardNavPrinters => 'Printing';
 
   @override
   String get dashboardNavStaff => 'Staff';
@@ -3428,7 +3428,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardDevicesUnavailable => 'Device status unavailable';
 
   @override
-  String get printersTitle => 'Printers';
+  String get printersTitle => 'Printing setup';
 
   @override
   String get printersSubtitle => 'Receipt and kitchen printers for this branch';
@@ -3592,13 +3592,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get printersStatusReadyNetwork => 'Ready via network adapter';
-
-  @override
-  String get printersTestPrint => 'Test print';
-
-  @override
-  String get printersTestPrintUnavailable =>
-      'Test print needs the print adapter or bridge — not available in this web build.';
 
   @override
   String get staffTitle => 'Staff';
@@ -5894,4 +5887,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String posOpenOrdersElapsedHoursMinutes(int hours, int minutes) {
     return '${hours}h ${minutes}m';
   }
+
+  @override
+  String get setupPrintingConfig => 'Printing';
+
+  @override
+  String get setupPrintingConfigHelp =>
+      'Branch printing configuration. It does not check that a printer is powered on, paired or reachable — physical connection is set up on each POS/KDS device.';
+
+  @override
+  String get setupNoKitchenPrinter =>
+      'No live kitchen printer configured — printer-only service needs one.';
+
+  @override
+  String get printersGovernanceIntro =>
+      'Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.';
 }

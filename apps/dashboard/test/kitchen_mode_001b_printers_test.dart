@@ -126,10 +126,8 @@ void main() {
         find.widgetWithText(TextFormField, 'Display name'),
         'Pass-through',
       );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Host / IP address'),
-        '10.0.0.60',
-      );
+      // 036: no endpoint is typed any more — the role=both contract this test
+      // guards must hold without one.
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 

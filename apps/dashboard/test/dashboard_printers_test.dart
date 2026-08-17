@@ -179,15 +179,17 @@ void main() {
       expect(find.text('How is the printer connected?'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      // Step 3: details — name + host are all a network printer needs.
+      // Step 3: details — 036: a NAME is all a printer record needs. The
+      // endpoint fields are gone, so this also proves a create still succeeds
+      // with no transport input at all.
       expect(find.text('Printer details'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextFormField, 'Host / IP address'),
+        findsNothing,
+      );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Display name'),
         'Bar printer',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Host / IP address'),
-        '10.0.0.60',
       );
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
@@ -196,10 +198,12 @@ void main() {
         (s) => s,
         (f) => fail('expected success'),
       );
-      expect(
-        snapshot.printers.any((p) => p.displayName == 'Bar printer'),
-        isTrue,
+      final created = snapshot.printers.firstWhere(
+        (p) => p.displayName == 'Bar printer',
       );
+      // 036: a brand-new row sends the RPC's own default for
+      // p_connection_config — never an invented endpoint.
+      expect(created.connectionConfig, isEmpty);
       expect(find.text('Bar printer'), findsOneWidget);
     });
 
@@ -303,12 +307,17 @@ void main() {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
 
-        // Step 3, simple by default: host is asked for, the port is NOT.
+        // 036: NO endpoint input survives — not host, not port, and not the
+        // Advanced disclosure that used to hide the port. Nothing in the
+        // POS/KDS/bridge runtime reads connection_config, so asking for one
+        // here promised a connection this page never makes.
         expect(
           find.widgetWithText(TextFormField, 'Host / IP address'),
-          findsOneWidget,
+          findsNothing,
         );
         expect(find.widgetWithText(TextFormField, 'Port'), findsNothing);
+        expect(find.text('Advanced'), findsNothing);
+        expect(find.text('9100'), findsNothing);
         // Honest for every type: saving configures, never prints.
         expect(
           find.text(
@@ -319,12 +328,11 @@ void main() {
         );
         // Never a fake print success.
         expect(find.textContaining('print succeeded'), findsNothing);
-
-        // Advanced reveals the port, pre-filled with the 9100 default.
-        await tester.tap(find.text('Advanced'));
-        await tester.pumpAndSettle();
-        expect(find.widgetWithText(TextFormField, 'Port'), findsOneWidget);
-        expect(find.text('9100'), findsOneWidget);
+        // 036: physical setup is directed to the DEVICE.
+        expect(
+          find.byKey(const Key('printer-device-setup-notice')),
+          findsOneWidget,
+        );
       });
 
       testWidgets('bluetooth: the selected tile and the details step show the '
@@ -444,29 +452,21 @@ void main() {
         expect(find.text('Ready via network adapter'), findsNothing);
       });
 
-      testWidgets('test print is always disabled with an honest explanation', (
-        tester,
-      ) async {
+      testWidgets('036: the dead Test Print control is GONE from the '
+          'Dashboard entirely', (tester) async {
         await pump(tester, InMemoryPrintersStore());
 
-        // One affordance per card (two demo printers) — all disabled.
-        final buttons = tester
-            .widgetList<TextButton>(
-              find.widgetWithText(TextButton, 'Test print'),
-            )
-            .toList();
-        expect(buttons, hasLength(2));
-        for (final button in buttons) {
-          expect(button.onPressed, isNull);
-        }
+        // It could never dispatch anything — there is no print adapter or
+        // bridge here — so a permanently-disabled button only implied this
+        // page might reach the hardware. Device-side test print (POS/KDS) is
+        // untouched and remains the real one.
+        expect(find.widgetWithText(TextButton, 'Test print'), findsNothing);
+        expect(find.textContaining('Test print'), findsNothing);
         expect(
-          find.text(
-            'Test print needs the print adapter or bridge — not available in '
-            'this web build.',
-          ),
-          findsNWidgets(2),
+          find.textContaining('Test print needs the print adapter'),
+          findsNothing,
         );
-        // Never a fake success path anywhere on the page.
+        // Still never a fake success path anywhere on the page.
         expect(find.textContaining('print succeeded'), findsNothing);
         expect(find.textContaining('printed'), findsNothing);
       });

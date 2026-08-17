@@ -922,7 +922,7 @@
   "pairingWrongScope": "هذا الرمز لمطعم أو فرع مختلف.",
   "pairingFailed": "تعذّر اقتران هذا الجهاز. حاول مرة أخرى.",
   "pairingLocked": "محاولات كثيرة جدًا. يُرجى الانتظار بضع دقائق ثم المحاولة مرة أخرى.",
-  "dashboardNavPrinters": "الطابعات",
+  "dashboardNavPrinters": "إعداد الطباعة",
   "dashboardNavStaff": "الموظفون",
   "dashboardNavTables": "الطاولات",
   "dashboardModeDemo": "تجريبي",
@@ -1045,7 +1045,7 @@
   "setupMoreSteps": "{count, plural, =1{خطوة إعداد إضافية واحدة} =2{خطوتا إعداد إضافيتان} other{{count} خطوات إعداد إضافية}}",
   "dashboardDevicesActiveOfConfigured": "النشطة من الأجهزة المُهيأة",
   "dashboardDevicesUnavailable": "حالة الأجهزة غير متوفرة",
-  "printersTitle": "الطابعات",
+  "printersTitle": "إعداد الطباعة",
   "printersSubtitle": "طابعات الإيصالات والمطبخ لهذا الفرع",
   "printersAdd": "إضافة طابعة",
   "printersEmptyTitle": "لا توجد طابعات بعد",
@@ -1097,8 +1097,6 @@
   "printersStatusNeedsBridge": "تتطلب جسر الطباعة",
   "printersStatusConfigOnly": "مُهيأة فقط",
   "printersStatusReadyNetwork": "جاهزة عبر محوّل الشبكة",
-  "printersTestPrint": "طباعة تجريبية",
-  "printersTestPrintUnavailable": "الطباعة التجريبية تتطلب محوّل الطباعة أو الجسر — غير متاحة في إصدار الويب هذا.",
   "staffTitle": "الموظفون",
   "staffSubtitle": "الموظفون وتسجيل الدخول برقم PIN لهذا الفرع",
   "staffAdd": "إضافة موظف",
@@ -1812,5 +1810,9 @@
   "posColorPickerConfirm": "اختيار اللون",
   "posOpenOrdersElapsedNow": "الآن",
   "posOpenOrdersElapsedMinutes": "منذ {minutes} د",
-  "posOpenOrdersElapsedHoursMinutes": "منذ {hours} س {minutes} د"
+  "posOpenOrdersElapsedHoursMinutes": "منذ {hours} س {minutes} د",
+  "setupPrintingConfig": "إعداد الطباعة",
+  "setupPrintingConfigHelp": "إعدادات الطباعة لهذا الفرع. لا تتحقق من أن الطابعة تعمل أو مقترنة أو متصلة — يتم إعداد التوصيل الفعلي على كل جهاز نقطة بيع أو شاشة مطبخ.",
+  "setupNoKitchenPrinter": "لا توجد طابعة مطبخ مفعّلة — وضع الطباعة فقط يحتاج إلى واحدة.",
+  "printersGovernanceIntro": "حدّد طابعات هذا الفرع، وما تطبعه، والمحطات التي تخدمها. كل جهاز نقطة بيع أو شاشة مطبخ يضبط توصيله الفعلي بنفسه؛ هذه الصفحة لا تعرف ما إذا كانت الطابعة متصلة."
 }

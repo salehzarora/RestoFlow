@@ -922,7 +922,7 @@
   "pairingWrongScope": "הקוד שייך למסעדה או לסניף אחר.",
   "pairingFailed": "לא ניתן לצמד את המכשיר. נסו שוב.",
   "pairingLocked": "יותר מדי ניסיונות. אנא המתינו כמה דקות ונסו שוב.",
-  "dashboardNavPrinters": "מדפסות",
+  "dashboardNavPrinters": "הדפסה",
   "dashboardNavStaff": "צוות",
   "dashboardNavTables": "שולחנות",
   "dashboardModeDemo": "דמו",
@@ -1045,7 +1045,7 @@
   "setupMoreSteps": "{count, plural, =1{שלב הגדרה נוסף אחד} =2{שני שלבי הגדרה נוספים} other{{count} שלבי הגדרה נוספים}}",
   "dashboardDevicesActiveOfConfigured": "פעילים מתוך המכשירים המוגדרים",
   "dashboardDevicesUnavailable": "סטטוס המכשירים אינו זמין",
-  "printersTitle": "מדפסות",
+  "printersTitle": "הגדרת הדפסה",
   "printersSubtitle": "מדפסות קבלות ומטבח לסניף זה",
   "printersAdd": "הוספת מדפסת",
   "printersEmptyTitle": "אין מדפסות עדיין",
@@ -1097,8 +1097,6 @@
   "printersStatusNeedsBridge": "דורשת גשר הדפסה",
   "printersStatusConfigOnly": "מוגדרת בלבד",
   "printersStatusReadyNetwork": "מוכנה דרך מתאם רשת",
-  "printersTestPrint": "הדפסת ניסיון",
-  "printersTestPrintUnavailable": "הדפסת ניסיון דורשת את מתאם ההדפסה או הגשר — לא זמינה בגרסת אינטרנט זו.",
   "staffTitle": "צוות",
   "staffSubtitle": "עובדים וכניסת PIN לסניף זה",
   "staffAdd": "הוספת איש צוות",
@@ -1812,5 +1810,9 @@
   "posOpenOrdersElapsedMinutes": "לפני {minutes} דק׳",
   "posOpenOrdersElapsedHoursMinutes": "לפני {hours} שע׳ {minutes} דק׳",
   "posDeviceThemeAubergineSlate": "חציל ולבנה",
-  "posDeviceThemeSaffronGold": "פחם וזהב"
+  "posDeviceThemeSaffronGold": "פחם וזהב",
+  "setupPrintingConfig": "הגדרת הדפסה",
+  "setupPrintingConfigHelp": "תצורת ההדפסה של הסניף. היא אינה בודקת שהמדפסת פועלת, מחוברת או זמינה — החיבור הפיזי מוגדר בכל מכשיר קופה או מסך מטבח.",
+  "setupNoKitchenPrinter": "אין מדפסת מטבח פעילה — מצב הדפסה בלבד מחייב אחת.",
+  "printersGovernanceIntro": "קבעו אילו מדפסות יש לסניף, מה הן מדפיסות ואילו עמדות הן משרתות. כל מכשיר קופה או מסך מטבח מגדיר את החיבור הפיזי שלו; דף זה אינו יודע אם מדפסת מחוברת."
 }

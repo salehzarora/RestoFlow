@@ -2189,7 +2189,7 @@
   "@pairingFailed": {"description": "Safe generic error when pairing fails."},
   "pairingLocked": "Too many attempts. Please wait a few minutes and try again.",
   "@pairingLocked": {"description": "Safe rate-limit error after too many invalid pairing attempts (RF-118); reveals only that the caller is throttled."},
-  "dashboardNavPrinters": "Printers",
+  "dashboardNavPrinters": "Printing",
   "@dashboardNavPrinters": {"description": "Dashboard navigation label for the printers surface."},
   "dashboardNavStaff": "Staff",
   "@dashboardNavStaff": {"description": "Dashboard navigation label for the staff/PIN surface."},
@@ -2451,7 +2451,7 @@
     "description": "Dashboard V2: caption on the Overview device readiness card when the device list could not be loaded — an honest unavailable state, never a fake zero count."
   },
   "@setupReady": {"description": "Setup success banner when the readiness checks pass."},
-  "printersTitle": "Printers",
+  "printersTitle": "Printing setup",
   "@printersTitle": {"description": "Printers page title."},
   "printersSubtitle": "Receipt and kitchen printers for this branch",
   "@printersSubtitle": {"description": "Printers page subtitle."},
@@ -2555,10 +2555,6 @@
   "@printersStatusConfigOnly": {"description": "Printer status pill for network printers in this build: the configuration is saved but no print adapter is registered, so nothing can be dispatched."},
   "printersStatusReadyNetwork": "Ready via network adapter",
   "@printersStatusReadyNetwork": {"description": "Printer status pill RESERVED for builds that register a real network print adapter. In this web build no adapter exists (hasPrintAdapter is const false in code), so this status is intentionally unreachable — it must never be shown without a real adapter."},
-  "printersTestPrint": "Test print",
-  "@printersTestPrint": {"description": "Per-printer test-print button label. In this build the button is ALWAYS disabled (no print transport); it must never fake a success."},
-  "printersTestPrintUnavailable": "Test print needs the print adapter or bridge — not available in this web build.",
-  "@printersTestPrintUnavailable": {"description": "Explanation next to the permanently disabled test-print button in this build."},
   "staffTitle": "Staff",
   "@staffTitle": {"description": "Staff page title."},
   "staffSubtitle": "Employees and PIN sign-in for this branch",
@@ -3966,5 +3962,13 @@
   "posOpenOrdersElapsedMinutes": "{minutes} min",
   "@posOpenOrdersElapsedMinutes": {"description": "Compact elapsed-open time in minutes on an open-order card.", "placeholders": {"minutes": {"type": "int"}}},
   "posOpenOrdersElapsedHoursMinutes": "{hours}h {minutes}m",
-  "@posOpenOrdersElapsedHoursMinutes": {"description": "Compact elapsed-open time above one hour on an open-order card.", "placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
+  "@posOpenOrdersElapsedHoursMinutes": {"description": "Compact elapsed-open time above one hour on an open-order card.", "placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}},
+  "setupPrintingConfig": "Printing",
+  "@setupPrintingConfig": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: Overview readiness label for server-side printing CONFIGURATION. Never claims physical printer health."},
+  "setupPrintingConfigHelp": "Branch printing configuration. It does not check that a printer is powered on, paired or reachable — physical connection is set up on each POS/KDS device.",
+  "@setupPrintingConfigHelp": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: honesty line under the printing readiness stat and on its next-step row."},
+  "setupNoKitchenPrinter": "No live kitchen printer configured — printer-only service needs one.",
+  "@setupNoKitchenPrinter": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: next step shown ONLY for printer_only branches with no live kitchen-capable printer record."},
+  "printersGovernanceIntro": "Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.",
+  "@printersGovernanceIntro": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: intro on the printing management page separating branch governance from device-side physical setup."}
 }

@@ -28,6 +28,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
     show MenuReadSource, MenuScope, MenuSnapshot;
 
+import '../admin/branch_kitchen_workflow_repository.dart';
 import '../printers/printer_models.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_models.dart';
@@ -102,6 +103,15 @@ final setupPrintersRepositoryProvider = Provider<PrintersRepository?>(
 
 final setupStaffRepositoryProvider = Provider<StaffRepository?>((ref) => null);
 
+/// PRINTING-GOVERNANCE-UI-HONESTY-036 — the branch's kitchen workflow seam.
+///
+/// The Setup Center needs it to answer a question it previously did not ask:
+/// is a server printer record actually a PREREQUISITE for this branch? It is
+/// only under `printer_only`, where the POS prints kitchen tickets directly.
+/// Same seam instance the Settings section already uses; null in demo/tests.
+final setupKitchenWorkflowRepositoryProvider =
+    Provider<BranchKitchenWorkflowRepository?>((ref) => null);
+
 /// The real menu read seam and the scope to read it at. Both null => the menu
 /// card is omitted rather than shown with invented counts.
 final setupMenuSourceProvider = Provider<MenuReadSource?>((ref) => null);
@@ -152,6 +162,22 @@ final setupPrintersProvider =
       return snapshot;
     }, dependencies: [setupPrintersRepositoryProvider]);
 
+/// PRINTING-GOVERNANCE-UI-HONESTY-036 — the branch's kitchen workflow mode.
+///
+/// Null means "not readable" (no repository wired, or the read failed) — NOT
+/// `kds`. The Setup Center treats an unreadable mode as "printing config is
+/// not a proven prerequisite", so a transport blip can never invent a failing
+/// readiness dimension for a branch that may not even use printer_only.
+final setupKitchenWorkflowProvider =
+    FutureProvider.family<KitchenWorkflowMode?, SetupScopeKey>((
+      ref,
+      key,
+    ) async {
+      final repository = ref.watch(setupKitchenWorkflowRepositoryProvider);
+      if (repository == null) return null;
+      return repository.read();
+    }, dependencies: [setupKitchenWorkflowRepositoryProvider]);
+
 final setupStaffProvider =
     FutureProvider.family<List<StaffMember>?, SetupScopeKey>((ref, key) async {
       final repository = ref.watch(setupStaffRepositoryProvider);
@@ -197,4 +223,5 @@ void _invalidateSetupSources(
   invalidate(setupPrintersProvider(key));
   invalidate(setupStaffProvider(key));
   invalidate(setupMenuProvider(key));
+  invalidate(setupKitchenWorkflowProvider(key));
 }

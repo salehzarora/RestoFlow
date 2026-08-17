@@ -5599,7 +5599,7 @@ abstract class AppLocalizations {
   /// Dashboard navigation label for the printers surface.
   ///
   /// In en, this message translates to:
-  /// **'Printers'**
+  /// **'Printing'**
   String get dashboardNavPrinters;
 
   /// Dashboard navigation label for the staff/PIN surface.
@@ -6337,7 +6337,7 @@ abstract class AppLocalizations {
   /// Printers page title.
   ///
   /// In en, this message translates to:
-  /// **'Printers'**
+  /// **'Printing setup'**
   String get printersTitle;
 
   /// Printers page subtitle.
@@ -6645,18 +6645,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ready via network adapter'**
   String get printersStatusReadyNetwork;
-
-  /// Per-printer test-print button label. In this build the button is ALWAYS disabled (no print transport); it must never fake a success.
-  ///
-  /// In en, this message translates to:
-  /// **'Test print'**
-  String get printersTestPrint;
-
-  /// Explanation next to the permanently disabled test-print button in this build.
-  ///
-  /// In en, this message translates to:
-  /// **'Test print needs the print adapter or bridge — not available in this web build.'**
-  String get printersTestPrintUnavailable;
 
   /// Staff page title.
   ///
@@ -10761,6 +10749,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{hours}h {minutes}m'**
   String posOpenOrdersElapsedHoursMinutes(int hours, int minutes);
+
+  /// PRINTING-GOVERNANCE-UI-HONESTY-036: Overview readiness label for server-side printing CONFIGURATION. Never claims physical printer health.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing'**
+  String get setupPrintingConfig;
+
+  /// PRINTING-GOVERNANCE-UI-HONESTY-036: honesty line under the printing readiness stat and on its next-step row.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch printing configuration. It does not check that a printer is powered on, paired or reachable — physical connection is set up on each POS/KDS device.'**
+  String get setupPrintingConfigHelp;
+
+  /// PRINTING-GOVERNANCE-UI-HONESTY-036: next step shown ONLY for printer_only branches with no live kitchen-capable printer record.
+  ///
+  /// In en, this message translates to:
+  /// **'No live kitchen printer configured — printer-only service needs one.'**
+  String get setupNoKitchenPrinter;
+
+  /// PRINTING-GOVERNANCE-UI-HONESTY-036: intro on the printing management page separating branch governance from device-side physical setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.'**
+  String get printersGovernanceIntro;
 }
 
 class _AppLocalizationsDelegate
