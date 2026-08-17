@@ -32,6 +32,7 @@ import 'package:restoflow_dashboard/src/printers/printers_repository.dart';
 import 'package:restoflow_dashboard/src/printers/printers_screen.dart';
 import 'package:restoflow_dashboard/src/setup/setup_center.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
+import 'package:restoflow_dashboard/src/admin/branch_kitchen_workflow_repository.dart';
 import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
@@ -107,6 +108,17 @@ Future<List<String>> _overflowsDuring(Future<void> Function() body) async {
   await body();
   FlutterError.onError = previous;
   return overflows;
+}
+
+/// PRINTING-GOVERNANCE-UI-HONESTY-036: a branch whose kitchen tickets are
+/// printed by the POS, so printing configuration IS a readiness dimension.
+class _PrinterOnlyWorkflow implements BranchKitchenWorkflowRepository {
+  @override
+  Future<KitchenWorkflowMode?> read() async => KitchenWorkflowMode.printerOnly;
+
+  @override
+  Future<KitchenWorkflowWriteResult> setMode(KitchenWorkflowMode mode) async =>
+      throw UnimplementedError();
 }
 
 void main() {
@@ -730,6 +742,12 @@ void main() {
                 ),
                 setupStaffRepositoryProvider.overrideWithValue(
                   InMemoryStaffStore(),
+                ),
+                // 036: the printing stat renders only for a printer_only
+                // branch, so this layout fixture declares that mode to keep
+                // measuring the FULL four-stat strip.
+                setupKitchenWorkflowRepositoryProvider.overrideWithValue(
+                  _PrinterOnlyWorkflow(),
                 ),
               ],
               child: MaterialApp(

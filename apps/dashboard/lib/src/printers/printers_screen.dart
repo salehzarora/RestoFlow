@@ -122,7 +122,8 @@ class _PrintersScreenState extends State<PrintersScreen> {
       return AdminStateView(
         icon: Icons.print_outlined,
         title: l10n.printersEmptyTitle,
-        body: l10n.printersEmptyBody,
+        // 036: even with nothing configured, say what this page is for.
+        body: '${l10n.printersEmptyBody}\n\n${l10n.printersGovernanceIntro}',
       );
     }
     return ListView(
@@ -133,6 +134,17 @@ class _PrintersScreenState extends State<PrintersScreen> {
         RestoflowSpacing.xxl,
       ),
       children: [
+        // 036: what this page governs, and where physical setup really
+        // happens. It scrolls WITH the list on purpose — as a fixed sibling of
+        // the Expanded list it made the header taller than a 430px/2x viewport
+        // and overflowed the page by 58px.
+        RestoflowNoticeBanner(
+          key: const Key('printing-governance-intro'),
+          tone: RestoflowTone.info,
+          icon: Icons.devices_outlined,
+          body: l10n.printersGovernanceIntro,
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
         _PrinterReadinessSummary(snapshot: snapshot),
         const SizedBox(height: RestoflowSpacing.sm),
         for (final printer in snapshot.printers)
@@ -579,26 +591,11 @@ class _PrinterCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: RestoflowSpacing.sm),
-            // Test print stays visible but ALWAYS disabled in this build:
-            // there is no print adapter/bridge to dispatch through, and the
-            // repo honesty rule forbids a fake success path.
-            Row(
-              children: [
-                TextButton(
-                  onPressed: null,
-                  child: Text(l10n.printersTestPrint),
-                ),
-                const SizedBox(width: RestoflowSpacing.xs),
-                Expanded(
-                  child: Text(
-                    l10n.printersTestPrintUnavailable,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // PRINTING-GOVERNANCE-UI-HONESTY-036: the permanently-disabled
+            // Test Print control is GONE. It could never dispatch anything —
+            // the Dashboard has no print adapter or bridge — so it only
+            // implied this page might reach the hardware. Device-side test
+            // print (POS/KDS) is untouched and remains the real one.
             // V2.2 — the action row REFLOWS instead of clipping.
             //
             // It used to be a Row of a Switch, a Spacer and three inflexible
@@ -693,18 +690,6 @@ class _PrinterDialogState extends State<_PrinterDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.printer?.displayName ?? '',
   );
-  late final TextEditingController _host = TextEditingController(
-    text: widget.printer?.host ?? '',
-  );
-  late final TextEditingController _port = TextEditingController(
-    text: widget.printer?.port ?? '9100',
-  );
-  late final TextEditingController _bluetoothId = TextEditingController(
-    text: widget.printer?.connectionConfig['bluetooth_id']?.toString() ?? '',
-  );
-  late final TextEditingController _usbPath = TextEditingController(
-    text: widget.printer?.connectionConfig['usb_path']?.toString() ?? '',
-  );
   late PrinterConnectionType _connection =
       widget.printer?.connectionType ?? PrinterConnectionType.network;
   late PrinterRole _role = widget.printer?.role ?? PrinterRole.receipt;
@@ -715,23 +700,27 @@ class _PrinterDialogState extends State<_PrinterDialog> {
   @override
   void dispose() {
     _name.dispose();
-    _host.dispose();
-    _port.dispose();
-    _bluetoothId.dispose();
-    _usbPath.dispose();
     super.dispose();
   }
 
-  Map<String, Object?> _config() => switch (_connection) {
-    PrinterConnectionType.network => {
-      'host': _host.text.trim(),
-      'port': int.tryParse(_port.text.trim()) ?? 9100,
-    },
-    PrinterConnectionType.bluetooth => {
-      'bluetooth_id': _bluetoothId.text.trim(),
-    },
-    PrinterConnectionType.usb => {'usb_path': _usbPath.text.trim()},
-  };
+  /// PRINTING-GOVERNANCE-UI-HONESTY-036 — the endpoint (host/port/bluetooth_id/
+  /// usb_path) fields are gone from this wizard: nothing in the POS/KDS/bridge
+  /// runtime consumes `connection_config`, so editing them only implied the
+  /// Dashboard configures physical transport.
+  ///
+  /// HIDING A FIELD MUST NOT DESTROY DATA. On EDIT this returns the stored
+  /// config VERBATIM — including legacy host/port values, and including the
+  /// case where the owner changes connection_type, because discarding a value
+  /// the owner can no longer see or retype would be silent data loss. The
+  /// preserved blob may therefore describe a different transport than the
+  /// current connection_type; that is inert today and deliberately preferred
+  /// over deletion.
+  ///
+  /// On CREATE there is nothing to preserve, so it sends `{}` — which is the
+  /// RPC's OWN default for `p_connection_config` (and its `coalesce` target),
+  /// so no server contract changes.
+  Map<String, Object?> _config() =>
+      widget.printer?.connectionConfig ?? const <String, Object?>{};
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -892,59 +881,34 @@ class _PrinterDialogState extends State<_PrinterDialog> {
         validator: (v) => (v ?? '').trim().isEmpty ? l10n.adminErrName : null,
       ),
       const SizedBox(height: RestoflowSpacing.md),
-      if (_connection == PrinterConnectionType.network)
-        TextFormField(
-          controller: _host,
-          decoration: deco(l10n.printersFieldHost),
-          validator: (v) =>
-              (v ?? '').trim().isEmpty ? l10n.printersErrHost : null,
-        )
-      else if (_connection == PrinterConnectionType.bluetooth)
+      // 036: the host / port / bluetooth-id / usb-path FIELDS and the
+      // "Advanced" disclosure that held them are GONE. `connection_config` is
+      // not read by any POS/KDS/bridge runtime, so asking an owner to type an
+      // endpoint here promised a connection this page never makes. Stored
+      // legacy values are preserved untouched (see `_config`).
+      //
+      // The per-transport notices STAY: they are honest statements about what
+      // this build does, not endpoint inputs, and removing them was never in
+      // this ticket's scope.
+      if (_connection == PrinterConnectionType.bluetooth)
         RestoflowNoticeBanner(
           tone: RestoflowTone.warning,
           icon: Icons.bluetooth_disabled_outlined,
           body: l10n.printersConnBluetoothWeb,
         )
-      else
+      else if (_connection == PrinterConnectionType.usb)
         RestoflowNoticeBanner(
           tone: RestoflowTone.warning,
           icon: Icons.usb_outlined,
           body: l10n.printersConnUsbAdapter,
         ),
-      // Technical extras stay out of the main flow. A collapsed (default)
-      // tile never registers its fields with the Form, so an untouched port
-      // can never block a save (9100 fallback).
-      ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: RestoflowSpacing.md),
-        title: Text(
-          l10n.printersAdvanced,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        children: [
-          if (_connection == PrinterConnectionType.network)
-            TextFormField(
-              controller: _port,
-              decoration: deco(l10n.printersFieldPort),
-              keyboardType: TextInputType.number,
-              validator: (v) {
-                final port = int.tryParse((v ?? '').trim());
-                return (port == null || port < 1 || port > 65535)
-                    ? l10n.printersErrPort
-                    : null;
-              },
-            )
-          else if (_connection == PrinterConnectionType.bluetooth)
-            TextFormField(
-              controller: _bluetoothId,
-              decoration: deco(l10n.printersFieldBluetoothId),
-            )
-          else
-            TextFormField(
-              controller: _usbPath,
-              decoration: deco(l10n.printersFieldUsbPath),
-            ),
-        ],
+      const SizedBox(height: RestoflowSpacing.sm),
+      // Where physical setup actually happens.
+      RestoflowNoticeBanner(
+        key: const Key('printer-device-setup-notice'),
+        tone: RestoflowTone.info,
+        icon: Icons.devices_outlined,
+        body: l10n.printersGovernanceIntro,
       ),
       const SizedBox(height: RestoflowSpacing.sm),
       DropdownButtonFormField<String>(

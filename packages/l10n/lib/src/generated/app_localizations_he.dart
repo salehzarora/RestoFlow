@@ -2929,7 +2929,7 @@ class AppLocalizationsHe extends AppLocalizations {
       'יותר מדי ניסיונות. אנא המתינו כמה דקות ונסו שוב.';
 
   @override
-  String get dashboardNavPrinters => 'מדפסות';
+  String get dashboardNavPrinters => 'הדפסה';
 
   @override
   String get dashboardNavStaff => 'צוות';
@@ -3378,7 +3378,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardDevicesUnavailable => 'סטטוס המכשירים אינו זמין';
 
   @override
-  String get printersTitle => 'מדפסות';
+  String get printersTitle => 'הגדרת הדפסה';
 
   @override
   String get printersSubtitle => 'מדפסות קבלות ומטבח לסניף זה';
@@ -3540,13 +3540,6 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get printersStatusReadyNetwork => 'מוכנה דרך מתאם רשת';
-
-  @override
-  String get printersTestPrint => 'הדפסת ניסיון';
-
-  @override
-  String get printersTestPrintUnavailable =>
-      'הדפסת ניסיון דורשת את מתאם ההדפסה או הגשר — לא זמינה בגרסת אינטרנט זו.';
 
   @override
   String get staffTitle => 'צוות';
@@ -5808,4 +5801,19 @@ class AppLocalizationsHe extends AppLocalizations {
   String posOpenOrdersElapsedHoursMinutes(int hours, int minutes) {
     return 'לפני $hours שע׳ $minutes דק׳';
   }
+
+  @override
+  String get setupPrintingConfig => 'הגדרת הדפסה';
+
+  @override
+  String get setupPrintingConfigHelp =>
+      'תצורת ההדפסה של הסניף. היא אינה בודקת שהמדפסת פועלת, מחוברת או זמינה — החיבור הפיזי מוגדר בכל מכשיר קופה או מסך מטבח.';
+
+  @override
+  String get setupNoKitchenPrinter =>
+      'אין מדפסת מטבח פעילה — מצב הדפסה בלבד מחייב אחת.';
+
+  @override
+  String get printersGovernanceIntro =>
+      'קבעו אילו מדפסות יש לסניף, מה הן מדפיסות ואילו עמדות הן משרתות. כל מכשיר קופה או מסך מטבח מגדיר את החיבור הפיזי שלו; דף זה אינו יודע אם מדפסת מחוברת.';
 }

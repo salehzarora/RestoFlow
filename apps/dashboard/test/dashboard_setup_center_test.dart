@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_dashboard/src/admin/branch_kitchen_workflow_repository.dart';
 import 'package:restoflow_dashboard/src/printers/printer_models.dart';
 import 'package:restoflow_dashboard/src/printers/printers_repository.dart';
 import 'package:restoflow_dashboard/src/setup/setup_center.dart';
@@ -88,6 +89,21 @@ class _PrintersStub extends _EmptyPrinters {
   Future<AdminResult<PrintersSnapshot>> load() async => Success(_snapshot);
 }
 
+/// PRINTING-GOVERNANCE-UI-HONESTY-036 — the branch's kitchen workflow mode.
+/// `null` reproduces an unreadable mode (no repo wired), which must NOT be
+/// treated as printer_only.
+class _WorkflowStub implements BranchKitchenWorkflowRepository {
+  _WorkflowStub(this._mode);
+  final KitchenWorkflowMode? _mode;
+
+  @override
+  Future<KitchenWorkflowMode?> read() async => _mode;
+
+  @override
+  Future<KitchenWorkflowWriteResult> setMode(KitchenWorkflowMode mode) async =>
+      throw UnimplementedError();
+}
+
 class _MenuStub implements MenuReadSource {
   _MenuStub(this._snapshot);
   final MenuSnapshot _snapshot;
@@ -119,6 +135,7 @@ Future<void> _pump(
   PrintersSnapshot? printers,
   void Function(String)? onOpen,
   Locale? locale,
+  KitchenWorkflowMode? kitchenWorkflowMode,
 }) async {
   tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
@@ -140,6 +157,9 @@ Future<void> _pump(
                 printers == null ? _EmptyPrinters() : _PrintersStub(printers),
               ),
               setupStaffRepositoryProvider.overrideWithValue(_StaffStub(staff)),
+              setupKitchenWorkflowRepositoryProvider.overrideWithValue(
+                _WorkflowStub(kitchenWorkflowMode),
+              ),
               setupMenuSourceProvider.overrideWithValue(
                 menuItems == null
                     ? null
@@ -205,12 +225,15 @@ const _onePrinter = PrintersSnapshot(
 
 void main() {
   testWidgets('empty workspace: a guided checklist with a fixing action per '
-      'step (menu, POS, KDS, printer)', (tester) async {
+      'step (menu, POS, KDS, printing)', (tester) async {
+    // 036: printing is a prerequisite ONLY under printer_only, so this
+    // full-checklist fixture declares that mode.
     await _pump(
       tester,
       devices: const [],
       staff: const [],
       menuItems: const [],
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     expect(find.text('Setup'), findsOneWidget);
     // Four readiness stat chips now: menu + devices + printers + staff PINs.
@@ -225,7 +248,10 @@ void main() {
     expect(find.text('Create POS device'), findsOneWidget);
     expect(find.textContaining('No kitchen display yet'), findsOneWidget);
     expect(find.text('Create kitchen display'), findsOneWidget);
-    expect(find.textContaining('No printers configured yet'), findsOneWidget);
+    expect(
+      find.textContaining('No live kitchen printer configured'),
+      findsOneWidget,
+    );
     expect(find.text('Add printer'), findsOneWidget);
   });
 
@@ -283,6 +309,8 @@ void main() {
       menuItems: [_menuItem(isActive: true)],
       printers: _onePrinter,
       onOpen: opened.add,
+      // 036: the printing stat renders only under printer_only.
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     await tester.tap(find.byKey(const Key('setup-stat-menu')));
     await tester.tap(find.byKey(const Key('setup-stat-devices')));
@@ -299,6 +327,7 @@ void main() {
       staff: const [],
       menuItems: const [],
       onOpen: opened.add,
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     // RF-132: expand the disclosure so every remaining step's action is
     // reachable, then verify each original callback still fires.
@@ -340,6 +369,9 @@ void main() {
           employmentStatus: 'active',
         ),
       ],
+      // 036: keeps the printing step in play so the staff-PIN step still sits
+      // BEHIND the disclosure, which is what this test measures.
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     // The missing printers are the prominent warning; the staff-PIN step sits
     // behind the disclosure — expand to it.
@@ -356,18 +388,23 @@ void main() {
 
   testWidgets('RF-132: only the first pending step is prominent; the '
       'disclosure names the exact remaining count', (tester) async {
-    // Empty workspace => 5 pending steps: menu, POS, KDS, printers, staff PIN.
+    // Empty printer_only workspace => 5 pending steps: menu, POS, KDS,
+    // printing, staff PIN.
     await _pump(
       tester,
       devices: const [],
       staff: const [],
       menuItems: const [],
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     // Prominent: ONLY the first (menu) step.
     expect(find.textContaining('No menu items yet'), findsOneWidget);
     expect(find.textContaining('No POS device yet'), findsNothing);
     expect(find.textContaining('No kitchen display yet'), findsNothing);
-    expect(find.textContaining('No printers configured yet'), findsNothing);
+    expect(
+      find.textContaining('No live kitchen printer configured'),
+      findsNothing,
+    );
     expect(find.textContaining('No staff member has a PIN yet'), findsNothing);
     // The disclosure is present and its count is exact (4 remaining).
     expect(find.byKey(const Key('setup-more-steps')), findsOneWidget);
@@ -383,6 +420,7 @@ void main() {
       staff: const [],
       menuItems: const [],
       onOpen: opened.add,
+      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     await tester.tap(find.byKey(const Key('setup-more-steps')));
     await tester.pumpAndSettle();
@@ -391,7 +429,7 @@ void main() {
     final remaining = <String>[
       'No POS device yet',
       'No kitchen display yet',
-      'No printers configured yet',
+      'No live kitchen printer configured',
       'No staff member has a PIN yet',
     ];
     for (final title in remaining) {

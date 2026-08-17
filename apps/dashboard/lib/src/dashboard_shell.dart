@@ -449,6 +449,11 @@ class _DashboardShellState extends State<DashboardShell> {
         setupDevicesRepositoryProvider.overrideWithValue(_realDeviceRepo),
         setupPrintersRepositoryProvider.overrideWithValue(_printersRepo),
         setupStaffRepositoryProvider.overrideWithValue(_staffRepo),
+        // 036: the SAME seam the Settings section uses, so the Overview can
+        // tell whether a printer record is a real prerequisite for this branch.
+        setupKitchenWorkflowRepositoryProvider.overrideWithValue(
+          _kitchenWorkflowRepo,
+        ),
         setupMenuSourceProvider.overrideWithValue(widget.menuReadSource),
         setupMenuScopeProvider.overrideWithValue(_menuScope),
       ],

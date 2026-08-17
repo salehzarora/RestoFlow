@@ -722,6 +722,9 @@ final dashboardRefreshControllerProvider =
         setupPrintersProvider,
         setupStaffProvider,
         setupMenuProvider,
+        // 036: the refresh action invalidates this too, and a scoped provider
+        // may only read what its dependencies list names.
+        setupKitchenWorkflowProvider,
       ],
     );
 
