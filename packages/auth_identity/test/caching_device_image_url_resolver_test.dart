@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
 /// EGRESS-REMEDIATION-001 — the POS signed-URL cache decorator.
