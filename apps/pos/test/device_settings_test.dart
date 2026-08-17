@@ -7,6 +7,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
+import 'package:restoflow_pos/src/state/pos_session.dart'
+    show posImageUrlResolverProvider;
 import 'package:restoflow_pos/src/state/pos_printer_assignments.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -289,6 +291,7 @@ void main() {
     WidgetTester tester, {
     required DevicePrinterAssignmentsReader reader,
     DeviceSessionManager? manager,
+    DeviceImageUrlResolver? imageResolver,
   }) async {
     SharedPreferences.setMockInitialValues(const {});
     tester.view.physicalSize = const Size(900, 1600);
@@ -304,6 +307,8 @@ void main() {
         posPrinterAssignmentsReaderProvider.overrideWithValue(reader),
         if (manager != null)
           posDeviceSessionManagerProvider.overrideWithValue(manager),
+        if (imageResolver != null)
+          posImageUrlResolverProvider.overrideWithValue(imageResolver),
       ],
     );
     addTearDown(container.dispose);
@@ -361,6 +366,40 @@ void main() {
     expect(container.read(posDeviceContextProvider), isNull);
   });
 
+  testWidgets('EGRESS-REMEDIATION-001.1: a confirmed unpair CLEARS the '
+      'signed-URL cache (the pairing boundary), while opening/refreshing the '
+      'sheet does not', (tester) async {
+    final manager = _FakeManager();
+    final inner = _CountingImageResolver();
+    final caching = CachingDeviceImageUrlResolver(inner);
+    // Warm the cache exactly as a menu load would.
+    await caching.signedUrlsFor(['menu/a.png']);
+    expect(inner.calls, 1);
+    await pumpWithManager(
+      tester,
+      reader: _FakeAssignmentsReader(_assignments()),
+      manager: manager,
+      imageResolver: caching,
+    );
+    // Ordinary sheet interaction (a NORMAL operating event) must not clear:
+    await tester.tap(find.byKey(const Key('device-refresh-button')));
+    await tester.pumpAndSettle();
+    await caching.signedUrlsFor(['menu/a.png']);
+    expect(inner.calls, 1, reason: 'refresh is not an auth boundary');
+
+    // The TRUE pairing boundary: confirmed unpair.
+    await tester.tap(find.byKey(const Key('device-unpair-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('device-unpair-confirm')));
+    await tester.pumpAndSettle();
+    expect(manager.unpaired, isTrue);
+
+    // The old pairing's URLs are gone: the next request re-signs (a re-pair
+    // resolves its own media normally through the same path).
+    await caching.signedUrlsFor(['menu/a.png']);
+    expect(inner.calls, 2, reason: 'unpair cleared the signed-URL cache');
+  });
+
   testWidgets('Part G: with no session manager (demo/unconfigured) there is '
       'NO unpair control — Refresh only', (tester) async {
     await pumpWithManager(
@@ -371,4 +410,20 @@ void main() {
     expect(find.byKey(const Key('device-refresh-button')), findsOneWidget);
     expect(find.byKey(const Key('device-unpair-button')), findsNothing);
   });
+}
+
+/// EGRESS-REMEDIATION-001.1: counts real signings behind the caching layer.
+class _CountingImageResolver implements DeviceImageUrlResolver {
+  int calls = 0;
+
+  @override
+  Future<Map<String, String>> signedUrlsFor(
+    List<String> objectKeys, {
+    Duration expiresIn = const Duration(minutes: 30),
+  }) async {
+    calls += 1;
+    return {
+      for (final k in objectKeys) k: 'https://s.example/$k?token=t$calls',
+    };
+  }
 }

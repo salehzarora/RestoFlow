@@ -59,6 +59,22 @@ class PosMediaCache {
       maxNrOfCacheObjects: 400,
     ),
   );
+
+  /// EGRESS-REMEDIATION-001.1 — the PAIRING-BOUNDARY wipe. Empties the
+  /// persistent byte cache IF one was ever created (a no-op otherwise, which
+  /// also keeps widget tests off the platform channels). Best-effort: a file
+  /// system failure is swallowed — an unpair must never hang or crash on
+  /// cache cleanup, and a leftover file is retention-only (it can never be
+  /// DISPLAYED again: the new pairing's menu references its own org's paths).
+  static Future<void> clearIfCreated() async {
+    final cache = _instance;
+    if (cache == null) return;
+    try {
+      await cache.emptyCache();
+    } catch (_) {
+      // Best-effort by design.
+    }
+  }
 }
 
 /// Test seam: widget tests replace the provider factory (e.g. with plain

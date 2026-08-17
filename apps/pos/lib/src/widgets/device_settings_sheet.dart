@@ -1,14 +1,17 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
-    show DeviceSessionManager;
+    show CachingDeviceImageUrlResolver, DeviceSessionManager;
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../media/pos_media_image.dart' show PosMediaCache;
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../print/print_bridge.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
@@ -281,6 +284,15 @@ class _ConnectionControls extends ConsumerWidget {
     if (confirmed != true) return;
     // Clear the local device session (best-effort server self-revoke).
     await manager.unpair();
+    // EGRESS-REMEDIATION-001.1: unpair is a TRUE pairing boundary — drop the
+    // old organization's cached media here and ONLY here (signed URLs + the
+    // persistent byte cache). Normal resume/reconnect/PIN/session refreshes
+    // never pass through this flow, so ordinary operation keeps its caches.
+    // Both wipes are best-effort and non-blocking: an unpair never hangs on
+    // cache cleanup.
+    final urlResolver = ref.read(posImageUrlResolverProvider);
+    if (urlResolver is CachingDeviceImageUrlResolver) urlResolver.clear();
+    unawaited(PosMediaCache.clearIfCreated());
     // Return the pairing gate to the pairing screen (it watches this).
     ref.read(posDeviceContextProvider.notifier).set(null);
     if (sheetNavigator.canPop()) sheetNavigator.pop();
