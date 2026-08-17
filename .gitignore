@@ -234,3 +234,6 @@ logs/
 *.tmp
 tmp/
 .cache/
+
+# Local screenshot generators (table_floor_027, device_theme_032, ...) write here; never committed.
+**/test/goldens/

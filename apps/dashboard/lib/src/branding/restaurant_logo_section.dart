@@ -5,7 +5,12 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminSectionCard;
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
-    show PickedMenuImage, pickMenuImageFile, menuImagePickerSupported;
+    show
+        PickedMenuImage,
+        kSignedUrlValidity,
+        menuImagePickerSupported,
+        pickMenuImageFile,
+        signedUrlCacheFor;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
     show LogoValidationError;
@@ -107,7 +112,19 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
     Uri? url;
     if (settings.hasLogo) {
       try {
-        url = await widget.storage!.createSignedUrl(settings.path!);
+        // EGRESS-REMEDIATION-001: reuse one signed URL per logo path across
+        // Settings visits (the storage instance is app-lifetime), so
+        // revisiting Settings inside the validity window neither re-signs nor
+        // re-downloads the unchanged logo. A replaced logo has a new
+        // versioned path and resolves fresh immediately.
+        url = await signedUrlCacheFor(widget.storage!).resolve(
+          settings.path!,
+          validity: kSignedUrlValidity,
+          sign: () => widget.storage!.createSignedUrl(
+            settings.path!,
+            expiresIn: kSignedUrlValidity,
+          ),
+        );
       } catch (_) {
         url = null; // fail-soft: no preview, controls still work
       }
@@ -343,7 +360,16 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
     Uri? url;
     if (settings.hasLogo) {
       try {
-        url = await widget.storage!.createSignedUrl(settings.path!);
+        // A saved logo always lands on a NEW versioned path, so this resolves
+        // a fresh URL; an unchanged path reuses the cached one.
+        url = await signedUrlCacheFor(widget.storage!).resolve(
+          settings.path!,
+          validity: kSignedUrlValidity,
+          sign: () => widget.storage!.createSignedUrl(
+            settings.path!,
+            expiresIn: kSignedUrlValidity,
+          ),
+        );
       } catch (_) {
         url = null;
       }

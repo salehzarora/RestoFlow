@@ -12,6 +12,17 @@ dependencies:
   flutter_riverpod: '>=2.5.0 <3.0.0'
   # Persists the NON-SECRET selected UI language per device/browser (sprint).
   shared_preferences: '>=2.0.0 <3.0.0'
+  # EGRESS-REMEDIATION-001: persistent (disk) byte cache for menu images on
+  # io targets, keyed by the STABLE versioned object path instead of the
+  # rotating signed token — an unchanged product photo downloads once per
+  # device instead of once per menu refresh/app restart. Web keeps browser
+  # HTTP caching (the cache manager is memory-backed there). The standard,
+  # minimal pairing: cached_network_image's provider + flutter_cache_manager.
+  cached_network_image: '>=3.4.0 <4.0.0'
+  # Direct import of ImageRenderMethodForWeb (HttpGet keeps web decodes
+  # byte-based like the previous NetworkImage, so decode-size caps hold).
+  cached_network_image_platform_interface: '>=4.0.0 <5.0.0'
+  flutter_cache_manager: '>=3.4.0 <4.0.0'
   restoflow_l10n:
     path: ../../packages/l10n
   restoflow_domain:

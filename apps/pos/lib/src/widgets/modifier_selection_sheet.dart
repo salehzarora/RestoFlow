@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../format/money_format.dart';
+import '../media/pos_media_image.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_menu_provider.dart';
@@ -1223,8 +1224,11 @@ class _ItemThumbnail extends StatelessWidget {
         height: _size,
         child: url == null
             ? fallback
-            : Image.network(
-                url,
+            // EGRESS-REMEDIATION-001: stable-path provider — the sheet
+            // header reuses the SAME downloaded bytes as the grid tile
+            // instead of a third full fetch of the object.
+            : Image(
+                image: posMediaImageProvider(url),
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => fallback,
               ),

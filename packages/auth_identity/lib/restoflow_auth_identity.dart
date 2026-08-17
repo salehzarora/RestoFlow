@@ -21,6 +21,7 @@ export 'src/device_context.dart';
 // pairing-scope record (ids + session handle only — never the token) that lets
 // an offline cold boot prove a prior server-verified pairing.
 export 'src/device_context_cache.dart';
+export 'src/caching_device_image_url_resolver.dart';
 export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
 // Device settings sprint: the safe per-device printer-assignments projection.

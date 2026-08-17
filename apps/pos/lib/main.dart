@@ -577,7 +577,11 @@ class PosBootCoordinator {
       transport: transport,
       // Read-only menu-image signed URLs on the same anonymous session
       // (server-gated by the POS device storage policy — T-014 keeps KDS out).
-      imageResolver: session.imageUrlResolver,
+      // EGRESS-REMEDIATION-001: wrapped in the path-keyed URL cache so a menu
+      // refresh with UNCHANGED image paths reuses the previous signed URLs
+      // (every image-cache layer stays hot) instead of minting fresh tokens.
+      // The cache lives exactly as long as this device bootstrap.
+      imageResolver: CachingDeviceImageUrlResolver(session.imageUrlResolver),
       printerAssignments: SupabaseDevicePrinterAssignmentsRepository(
         transport: transport,
         secretStore: store,

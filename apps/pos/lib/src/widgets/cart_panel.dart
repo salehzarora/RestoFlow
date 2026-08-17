@@ -18,6 +18,7 @@ import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
+import '../media/pos_media_image.dart';
 import '../pos_palette.dart';
 import '../data/order_submission.dart' show OrderDispatchMode, OutboxSyncState;
 import '../data/round_print_claim_store.dart'
@@ -1887,10 +1888,16 @@ class _LineThumb extends StatelessWidget {
             ? fallback
             : ClipRRect(
                 borderRadius: BorderRadius.circular(kPosTrackRadius),
-                child: Image.network(
-                  url!,
+                // EGRESS-REMEDIATION-001: stable-path provider — the cart
+                // thumb shares the grid's downloaded bytes instead of
+                // fetching the same object again under its own cache key.
+                child: Image(
+                  image: ResizeImage.resizeIfNeeded(
+                    cacheW > 0 ? cacheW : null,
+                    null,
+                    posMediaImageProvider(url!),
+                  ),
                   fit: BoxFit.cover,
-                  cacheWidth: cacheW > 0 ? cacheW : null,
                   errorBuilder: (context, error, stackTrace) => fallback,
                 ),
               ),

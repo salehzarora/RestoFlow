@@ -704,8 +704,12 @@ class _DashboardShellState extends State<DashboardShell> {
   }
 
   /// Builds a transient current-logo signed-URL resolver from the branding
-  /// repository + storage, or null when either is unavailable (text-only). The
-  /// signed URL is minted per preview and never persisted.
+  /// repository + storage, or null when either is unavailable (text-only).
+  /// EGRESS-REMEDIATION-001: the branding READ still runs per preview (live
+  /// truth — a just-replaced logo is picked up immediately via its new
+  /// versioned path), but the signed URL itself is reused per path from the
+  /// shared cache, so repeated previews inside the validity window stop
+  /// minting fresh tokens and re-downloading the unchanged logo.
   ReceiptLogoUrlResolver? _receiptLogoUrlResolver() {
     final repo = _brandingRepo;
     final storage = widget.brandingLogoStorage;
@@ -716,7 +720,14 @@ class _DashboardShellState extends State<DashboardShell> {
         return null;
       }
       try {
-        final url = await storage.createSignedUrl(settings.path!);
+        final url = await signedUrlCacheFor(storage).resolve(
+          settings.path!,
+          validity: kSignedUrlValidity,
+          sign: () => storage.createSignedUrl(
+            settings.path!,
+            expiresIn: kSignedUrlValidity,
+          ),
+        );
         return url.toString();
       } catch (_) {
         return null;

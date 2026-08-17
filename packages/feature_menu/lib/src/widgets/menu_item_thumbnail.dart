@@ -3,31 +3,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 import '../data/menu_image_storage.dart';
+import '../data/signed_url_cache.dart';
 import '../models/menu_item.dart';
 import '../state/menu_providers.dart';
 
-/// Session-lived signed-URL futures, cached PER storage backend (an [Expando],
-/// so one surface's storage never serves another's URLs and a torn-down
-/// backend stays garbage-collectable). Signed URLs are short-lived by design
-/// (private bucket — DECISION D-032); a cache entry outliving its URL is
-/// harmless here: already-rendered thumbnails keep their decoded bytes, and a
-/// stale-URL load failure just falls back to the placeholder icon.
-final Expando<Map<String, Future<Uri>>> _signedUrlCache =
-    Expando<Map<String, Future<Uri>>>('menu thumbnail signed-url cache');
-
 /// Resolves (and memoizes) the signed URL for [path] so a list rebuild never
-/// re-signs every visible row. FAIL-SOFT: a failed resolution is observed
-/// (never an unhandled async error), evicted so a later rebuild may retry,
-/// and surfaces only as the placeholder icon — never error chrome or spam.
-Future<Uri> _cachedSignedUrl(MenuImageStorage storage, String path) {
-  final cache = _signedUrlCache[storage] ??= <String, Future<Uri>>{};
-  final existing = cache[path];
-  if (existing != null) return existing;
-  final future = storage.createSignedUrl(path);
-  cache[path] = future;
-  future.then<void>((_) {}, onError: (Object _) => cache.remove(path));
-  return future;
-}
+/// re-signs every visible row. EGRESS-REMEDIATION-001: the memo now lives in
+/// the shared expiry-aware [SignedUrlCache] (still keyed PER storage backend
+/// via an [Expando], preserving the auth boundary), so the SAME cached URL is
+/// also reused by the item editor's preview — one signing and one download per
+/// object per validity window instead of one per surface. Near expiry the
+/// path re-signs, which also fixes the old silent 30-minute degrade to the
+/// placeholder. FAIL-SOFT exactly as before: a failed resolution is observed,
+/// evicted so a later rebuild may retry, and surfaces only as the placeholder
+/// icon — never error chrome or spam.
+Future<Uri> cachedMenuImageSignedUrl(MenuImageStorage storage, String path) =>
+    signedUrlCacheFor(storage).resolve(
+      path,
+      validity: kSignedUrlValidity,
+      sign: () => storage.createSignedUrl(path, expiresIn: kSignedUrlValidity),
+    );
 
 /// A small rounded product thumbnail for catalog rows and the editor's summary
 /// strip (menu/media sprint, Part F): the item's image — fetched via a
@@ -60,7 +55,7 @@ class MenuItemThumbnail extends ConsumerWidget {
       content = placeholder();
     } else {
       content = FutureBuilder<Uri>(
-        future: _cachedSignedUrl(storage, imagePath),
+        future: cachedMenuImageSignedUrl(storage, imagePath),
         builder: (context, snapshot) {
           final url = snapshot.data;
           // Pending AND failed both render the placeholder (fail-soft).
