@@ -35,7 +35,10 @@ enum DashboardDestination {
   overview(0),
   menu(1),
   devices(2),
-  printers(3),
+  // DASHBOARD-PRINTING-UI-HIDE-037: printer management left the normal
+  // Dashboard. The destination, its index and the screen behind it all stay —
+  // only the visible nav tile is gone — so nothing here is renumbered.
+  printers(3, hiddenFromNavigation: true),
   staff(4),
   tables(5),
   users(6),
@@ -43,11 +46,36 @@ enum DashboardDestination {
   activity(8),
   settings(9);
 
-  const DashboardDestination(this.tabIndex);
+  const DashboardDestination(
+    this.tabIndex, {
+    this.hiddenFromNavigation = false,
+  });
 
   /// The shell tab index this destination renders as. Existing value — this
   /// enum records the mapping, it does not redefine it.
   final int tabIndex;
+
+  /// 037: omitted from the visible rail/bar. Still routable internally by
+  /// [tabIndex]; the shell's destination switch is unchanged.
+  final bool hiddenFromNavigation;
+
+  /// Every destination the navigation actually SHOWS, in order.
+  static List<DashboardDestination> get visible => [
+    for (final d in DashboardDestination.values)
+      if (!d.hiddenFromNavigation) d,
+  ];
+
+  /// This destination's position in the VISIBLE index space, or null when it
+  /// is hidden.
+  ///
+  /// The rail walks the canonical space and skips hidden rows, but Material's
+  /// `NavigationBar` has no notion of a hidden destination — its indices are
+  /// necessarily compacted. This is the single mapping both the shell and its
+  /// tests use, so the two can never drift.
+  int? get visibleIndex {
+    final at = visible.indexOf(this);
+    return at < 0 ? null : at;
+  }
 
   /// Resolves a shell index back to a destination.
   ///

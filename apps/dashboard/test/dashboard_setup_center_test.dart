@@ -225,19 +225,17 @@ const _onePrinter = PrintersSnapshot(
 
 void main() {
   testWidgets('empty workspace: a guided checklist with a fixing action per '
-      'step (menu, POS, KDS, printing)', (tester) async {
-    // 036: printing is a prerequisite ONLY under printer_only, so this
-    // full-checklist fixture declares that mode.
+      'step (menu, POS, KDS)', (tester) async {
     await _pump(
       tester,
       devices: const [],
       staff: const [],
       menuItems: const [],
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     expect(find.text('Setup'), findsOneWidget);
     // Four readiness stat chips now: menu + devices + printers + staff PINs.
-    expect(find.textContaining('0/0'), findsNWidgets(4));
+    // 037: three stats now — menu, devices, staff.
+    expect(find.textContaining('0/0'), findsNWidgets(3));
     // RF-132: the first step is the prominent warning; the rest live behind
     // the compact disclosure — expand it to reach every remaining step.
     expect(find.textContaining('No menu items yet'), findsOneWidget);
@@ -248,11 +246,12 @@ void main() {
     expect(find.text('Create POS device'), findsOneWidget);
     expect(find.textContaining('No kitchen display yet'), findsOneWidget);
     expect(find.text('Create kitchen display'), findsOneWidget);
+    // 037: printing left the Overview — no printing step in any mode.
     expect(
       find.textContaining('No live kitchen printer configured'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Add printer'), findsOneWidget);
+    expect(find.text('Add printer'), findsNothing);
   });
 
   testWidgets('unpaired devices raise the pairing warning AND explain how '
@@ -309,14 +308,11 @@ void main() {
       menuItems: [_menuItem(isActive: true)],
       printers: _onePrinter,
       onOpen: opened.add,
-      // 036: the printing stat renders only under printer_only.
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     await tester.tap(find.byKey(const Key('setup-stat-menu')));
     await tester.tap(find.byKey(const Key('setup-stat-devices')));
-    await tester.tap(find.byKey(const Key('setup-stat-printers')));
     await tester.tap(find.byKey(const Key('setup-stat-staff')));
-    expect(opened, ['menu', 'devices', 'printers', 'staff']);
+    expect(opened, ['menu', 'devices', 'staff']);
   });
 
   testWidgets('checklist buttons navigate to the fixing tab', (tester) async {
@@ -327,7 +323,6 @@ void main() {
       staff: const [],
       menuItems: const [],
       onOpen: opened.add,
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     // RF-132: expand the disclosure so every remaining step's action is
     // reachable, then verify each original callback still fires.
@@ -336,8 +331,7 @@ void main() {
     await tester.tap(find.text('Add your first menu item'));
     await tester.tap(find.text('Create POS device'));
     await tester.tap(find.text('Create kitchen display'));
-    await tester.tap(find.text('Add printer'));
-    expect(opened, ['menu', 'devices', 'devices', 'printers']);
+    expect(opened, ['menu', 'devices', 'devices']);
   });
 
   testWidgets('a menu of ONLY disabled items still warns (nothing to sell)', (
@@ -369,14 +363,10 @@ void main() {
           employmentStatus: 'active',
         ),
       ],
-      // 036: keeps the printing step in play so the staff-PIN step still sits
-      // BEHIND the disclosure, which is what this test measures.
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
-    // The missing printers are the prominent warning; the staff-PIN step sits
-    // behind the disclosure — expand to it.
-    await tester.tap(find.byKey(const Key('setup-more-steps')));
-    await tester.pumpAndSettle();
+    // 037: printing no longer occupies the prominent slot, so the staff-PIN
+    // step IS the single pending step — no disclosure exists to expand.
+    expect(find.byKey(const Key('setup-more-steps')), findsNothing);
     expect(
       find.textContaining('No staff member has a PIN yet'),
       findsOneWidget,
@@ -388,14 +378,13 @@ void main() {
 
   testWidgets('RF-132: only the first pending step is prominent; the '
       'disclosure names the exact remaining count', (tester) async {
-    // Empty printer_only workspace => 5 pending steps: menu, POS, KDS,
-    // printing, staff PIN.
+    // 037: empty workspace => 4 pending steps: menu, POS, KDS, staff PIN.
+    // Printing is no longer a Dashboard concern.
     await _pump(
       tester,
       devices: const [],
       staff: const [],
       menuItems: const [],
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     // Prominent: ONLY the first (menu) step.
     expect(find.textContaining('No menu items yet'), findsOneWidget);
@@ -408,7 +397,7 @@ void main() {
     expect(find.textContaining('No staff member has a PIN yet'), findsNothing);
     // The disclosure is present and its count is exact (4 remaining).
     expect(find.byKey(const Key('setup-more-steps')), findsOneWidget);
-    expect(find.text('4 more setup steps'), findsOneWidget);
+    expect(find.text('3 more setup steps'), findsOneWidget);
   });
 
   testWidgets('RF-132: expanding the disclosure exposes EVERY remaining step '
@@ -420,7 +409,6 @@ void main() {
       staff: const [],
       menuItems: const [],
       onOpen: opened.add,
-      kitchenWorkflowMode: KitchenWorkflowMode.printerOnly,
     );
     await tester.tap(find.byKey(const Key('setup-more-steps')));
     await tester.pumpAndSettle();
@@ -429,7 +417,6 @@ void main() {
     final remaining = <String>[
       'No POS device yet',
       'No kitchen display yet',
-      'No live kitchen printer configured',
       'No staff member has a PIN yet',
     ];
     for (final title in remaining) {
@@ -449,10 +436,9 @@ void main() {
     await tester.tap(find.text('Add your first menu item'));
     await tester.tap(find.text('Create POS device'));
     await tester.tap(find.text('Create kitchen display'));
-    await tester.tap(find.text('Add printer'));
     await tester.ensureVisible(find.text('Create staff PIN'));
     await tester.tap(find.text('Create staff PIN'));
-    expect(opened, ['menu', 'devices', 'devices', 'printers', 'staff']);
+    expect(opened, ['menu', 'devices', 'devices', 'staff']);
   });
 
   testWidgets('RF-132: a single pending step shows only its warning — no '

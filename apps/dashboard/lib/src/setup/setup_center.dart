@@ -5,7 +5,6 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show DeviceLifecycleStatus;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import '../admin/branch_kitchen_workflow_repository.dart';
 import '../state/setup_device_providers.dart';
 
 /// A guided "is this branch ready for service?" checklist at the top of the
@@ -21,9 +20,6 @@ class _Counts {
     this.devicesActive,
     this.posDevices,
     this.kdsDevices,
-    this.printersTotal,
-    this.printersEnabled,
-    this.kitchenPrintersEnabled,
     this.staffTotal,
     this.staffWithPin,
     this.menuTotal,
@@ -35,14 +31,6 @@ class _Counts {
   final int? devicesActive;
   final int? posDevices;
   final int? kdsDevices;
-  final int? printersTotal;
-  final int? printersEnabled;
-
-  /// 036: enabled printers whose role actually serves KITCHEN tickets
-  /// (`kitchen` or `both`). This — not "any enabled row" — is the record the
-  /// printer_only workflow depends on, so it is what the printing-configuration
-  /// dimension measures.
-  final int? kitchenPrintersEnabled;
   final int? staffTotal;
   final int? staffWithPin;
   final int? menuTotal;
@@ -74,31 +62,20 @@ class DashboardSetupCenter extends ConsumerWidget {
     // asking the same repository the same question twice.
     final key = ref.watch(currentSetupScopeKeyProvider);
     final devicesAsync = ref.watch(setupDevicesProvider(key));
-    final printersAsync = ref.watch(setupPrintersProvider(key));
     final staffAsync = ref.watch(setupStaffProvider(key));
     final menuAsync = ref.watch(setupMenuProvider(key));
-    // 036: printing configuration is a PREREQUISITE only under printer_only,
-    // where the POS prints kitchen tickets itself. An unreadable mode is NOT
-    // treated as printer_only, so a transport blip cannot invent a failing
-    // dimension for a branch that may run a KDS.
-    final workflowAsync = ref.watch(setupKitchenWorkflowProvider(key));
-    final printerOnly =
-        workflowAsync.valueOrNull == KitchenWorkflowMode.printerOnly;
     final menuCountable =
         ref.watch(setupMenuSourceProvider) != null &&
         ref.watch(setupMenuScopeProvider) != null;
 
     final devices = devicesAsync.valueOrNull;
-    final printers = printersAsync.valueOrNull;
     final staff = staffAsync.valueOrNull;
     final menu = menuAsync.valueOrNull;
     // Loading until every source the panel actually shows has answered, which
     // is what the single Future used to mean.
     final loading =
         devicesAsync.isLoading ||
-        printersAsync.isLoading ||
         staffAsync.isLoading ||
-        workflowAsync.isLoading ||
         (menuCountable && menuAsync.isLoading);
 
     final liveItems = menu?.items.where((i) => !i.isDeleted);
@@ -115,16 +92,6 @@ class DashboardSetupCenter extends ConsumerWidget {
           .length,
       posDevices: liveDevices?.where((d) => d.deviceType == 'pos').length,
       kdsDevices: liveDevices?.where((d) => d.deviceType == 'kds').length,
-      printersTotal: printers?.printers.length,
-      printersEnabled: printers?.printers.where((p) => p.isEnabled).length,
-      // 036: mirrors the SERVER's kitchen qualification in
-      // get_device_printer_assignments — a live row of this branch whose role
-      // serves kitchen tickets (`kitchen` or `both`). `paper_width` is NOT a
-      // server qualification and is deliberately not required here; adding it
-      // would fail a branch whose 58mm printer_only dispatch works fine.
-      kitchenPrintersEnabled: printers?.printers
-          .where((p) => p.isEnabled && p.role.servesKitchenTickets)
-          .length,
       staffTotal: staff?.length,
       staffWithPin: staff?.where((s) => s.isActive && s.hasPin).length,
       menuTotal: liveItems?.length,
@@ -145,13 +112,6 @@ class DashboardSetupCenter extends ConsumerWidget {
           (
             countable: true,
             done: ready(counts.devicesActive, counts.devicesTotal),
-          ),
-          // 036: printing CONFIGURATION counts toward readiness only where it
-          // is a real prerequisite. A KDS-mode branch is not penalised for
-          // having no server printer rows, and the denominator shrinks with it.
-          (
-            countable: printerOnly,
-            done: ready(counts.kitchenPrintersEnabled, counts.printersTotal),
           ),
           (
             countable: true,
@@ -186,19 +146,6 @@ class DashboardSetupCenter extends ConsumerWidget {
               onTap: onOpenDevices,
               tapKey: const Key('setup-stat-devices'),
             ),
-          // 036: shown ONLY under printer_only, where it is operationally
-          // required, and labelled as printing CONFIGURATION — it counts live
-          // kitchen-capable records, and says nothing about whether any
-          // printer is powered on, paired or reachable.
-          if (printerOnly && counts.printersTotal != null)
-            RestoflowReadinessStat(
-              icon: Icons.print_outlined,
-              label: l10n.setupPrintingConfig,
-              done: counts.kitchenPrintersEnabled ?? 0,
-              total: counts.printersTotal!,
-              onTap: onOpenPrinters,
-              tapKey: const Key('setup-stat-printers'),
-            ),
           if (counts.staffTotal != null)
             RestoflowReadinessStat(
               icon: Icons.badge_outlined,
@@ -230,25 +177,7 @@ class DashboardSetupCenter extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
               ),
             ),
-            // 036: the honesty line — say plainly that this readiness is
-            // server-side CONFIGURATION and proves nothing about hardware.
-            if (printerOnly && counts.printersTotal != null) ...[
-              const SizedBox(height: RestoflowSpacing.xs),
-              Text(
-                l10n.setupPrintingConfigHelp,
-                key: const Key('setup-printing-config-help'),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            ..._nextSteps(
-              l10n,
-              counts,
-              loading,
-              menuCountable: menuCountable,
-              printerOnly: printerOnly,
-            ),
+            ..._nextSteps(l10n, counts, loading, menuCountable: menuCountable),
           ],
         );
       },
@@ -270,7 +199,6 @@ class DashboardSetupCenter extends ConsumerWidget {
     _Counts c,
     bool loading, {
     required bool menuCountable,
-    required bool printerOnly,
   }) {
     if (loading) return const [];
     final steps = <_SetupStepData>[];
@@ -318,21 +246,6 @@ class DashboardSetupCenter extends ConsumerWidget {
         description: l10n.setupPairingHint,
         actionLabel: l10n.dashboardNavDevices,
         onAction: onOpenDevices,
-      );
-    }
-    // 036: only a printer_only branch is missing something when it has no live
-    // kitchen printer record. A KDS-mode branch gets NO "add printer" step —
-    // its kitchen tickets go to the KDS, and server printer rows are optional.
-    // The step also now names the real gap (a KITCHEN-capable record), so a
-    // branch whose only printer is receipt-role is told the truth.
-    if (printerOnly &&
-        c.printersTotal != null &&
-        (c.kitchenPrintersEnabled ?? 0) == 0) {
-      add(
-        l10n.setupNoKitchenPrinter,
-        description: l10n.setupPrintingConfigHelp,
-        actionLabel: l10n.setupAddPrinter,
-        onAction: onOpenPrinters,
       );
     }
     if (c.staffTotal != null && c.staffWithPin == 0) {
