@@ -1,7 +1,6 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show CachingDeviceImageUrlResolver, DeviceSessionManager;
@@ -27,6 +26,7 @@ import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
 import '../state/pos_printer_transport.dart';
 import '../state/receipt_print_controller.dart';
+import 'pos_color_picker_sheet.dart';
 import 'printer_settings_section.dart';
 
 /// The POS operational device-settings sheet (device settings sprint).
@@ -637,12 +637,18 @@ class _DeviceAccentSection extends ConsumerWidget {
 /// the curated preset swatches plus the CUSTOM two-color option and its
 /// inline editor.
 ///
-/// The editor is a DRAFT surface: typed values touch nothing until both parse
-/// as valid `#RRGGBB` colors AND the cashier taps Apply — partial/invalid
-/// input never reaches the live app theme. Least-invasive initialization
-/// (documented choice): the fields seed from the CURRENTLY ACTIVE pair
-/// (custom → its exact hexes; preset → that preset's two colors as a starting
-/// point); no second persistence key is introduced.
+/// DEVICE-THEME-COLOR-PICKER-032 replaced the two `#RRGGBB` text fields with
+/// two large swatch tiles that open the VISUAL picker
+/// ([showPosColorPicker]). The draft is now two [Color]s rather than two
+/// strings, so it can never be half-typed: Apply is always available and
+/// nothing invalid can reach the live theme. Manual hex moved inside the
+/// picker under «متقدم», keeping its validation.
+///
+/// The editor remains a DRAFT surface: choosing colors touches nothing until
+/// the cashier taps Apply. Least-invasive initialization (documented choice):
+/// the draft seeds from the CURRENTLY ACTIVE pair (custom → its exact colors;
+/// preset → that preset's two colors as a starting point); no second
+/// persistence key is introduced.
 class _DeviceThemeSection extends ConsumerStatefulWidget {
   const _DeviceThemeSection({required this.l10n});
 
@@ -654,41 +660,25 @@ class _DeviceThemeSection extends ConsumerStatefulWidget {
 }
 
 class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
-  final TextEditingController _primaryCtl = TextEditingController();
-  final TextEditingController _secondaryCtl = TextEditingController();
+  /// The draft pair, as COLORS. There is no half-valid state to guard against
+  /// any more — every path that writes these (the picker's confirm, a preset
+  /// tap, a reseed) yields a real color.
+  Color _draftPrimary = PosThemePair.navyEmber.primary;
+  Color _draftAction = PosThemePair.navyEmber.action;
 
   /// The cashier opened the editor from the custom swatch (a draft over a
   /// preset). While the ACTIVE pair is custom the editor shows regardless.
   bool _draftOpen = false;
 
-  /// The last pair the preview rendered — keeps the preview stable while a
-  /// field passes through invalid states mid-typing.
-  PosThemePair _lastPreview = PosThemePair.navyEmber;
-
   @override
   void initState() {
     super.initState();
     _seedFrom(ref.read(posDeviceThemePairProvider));
-    _primaryCtl.addListener(_onEdited);
-    _secondaryCtl.addListener(_onEdited);
   }
-
-  @override
-  void dispose() {
-    _primaryCtl.dispose();
-    _secondaryCtl.dispose();
-    super.dispose();
-  }
-
-  void _onEdited() => setState(() {});
 
   void _seedFrom(PosThemePair pair) {
-    _primaryCtl.text = posFormatHexColor(pair.primary);
-    _secondaryCtl.text = posFormatHexColor(pair.action);
-    _lastPreview = PosThemePair.custom(
-      primary: pair.primary,
-      action: pair.action,
-    );
+    _draftPrimary = pair.primary;
+    _draftAction = pair.action;
   }
 
   String _themeLabel(PosThemePair pair) => switch (pair.wire) {
@@ -698,12 +688,28 @@ class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
     _ => widget.l10n.posDeviceThemeNavyEmber,
   };
 
-  /// Both fields parsed, or null while either is invalid — the Apply gate.
-  PosThemePair? _candidate() {
-    final primary = posParseHexColor(_primaryCtl.text);
-    final action = posParseHexColor(_secondaryCtl.text);
-    if (primary == null || action == null) return null;
-    return PosThemePair.custom(primary: primary, action: action);
+  /// What Apply would persist, and what the preview renders.
+  PosThemePair get _candidate =>
+      PosThemePair.custom(primary: _draftPrimary, action: _draftAction);
+
+  /// Opens the visual picker for one half of the pair. Cancelling (or
+  /// dismissing the sheet) resolves to null and leaves the draft untouched.
+  Future<void> _pick({required bool primary}) async {
+    final chosen = await showPosColorPicker(
+      context,
+      initial: primary ? _draftPrimary : _draftAction,
+      title: primary
+          ? widget.l10n.posDeviceThemeCustomPrimaryLabel
+          : widget.l10n.posDeviceThemeCustomSecondaryLabel,
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      if (primary) {
+        _draftPrimary = chosen;
+      } else {
+        _draftAction = chosen;
+      }
+    });
   }
 
   @override
@@ -720,8 +726,7 @@ class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
     });
     final active = ref.watch(posDeviceThemePairProvider);
     final editorVisible = active.isCustom || _draftOpen;
-    final candidate = _candidate();
-    if (candidate != null) _lastPreview = candidate;
+    final candidate = _candidate;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -795,20 +800,20 @@ class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
                   ),
                 ),
                 const SizedBox(height: RestoflowSpacing.sm),
-                _HexColorField(
-                  key: const Key('custom-theme-primary-hex'),
-                  controller: _primaryCtl,
+                _ColorSwatchTile(
+                  key: const Key('custom-theme-primary-swatch'),
+                  color: _draftPrimary,
                   label: l10n.posDeviceThemeCustomPrimaryLabel,
-                  hint: l10n.posDeviceThemeCustomHexHint,
-                  invalidText: l10n.posDeviceThemeCustomInvalidHex,
+                  changeLabel: l10n.posDeviceThemeCustomChange,
+                  onTap: () => _pick(primary: true),
                 ),
                 const SizedBox(height: RestoflowSpacing.sm),
-                _HexColorField(
-                  key: const Key('custom-theme-secondary-hex'),
-                  controller: _secondaryCtl,
+                _ColorSwatchTile(
+                  key: const Key('custom-theme-secondary-swatch'),
+                  color: _draftAction,
                   label: l10n.posDeviceThemeCustomSecondaryLabel,
-                  hint: l10n.posDeviceThemeCustomHexHint,
-                  invalidText: l10n.posDeviceThemeCustomInvalidHex,
+                  changeLabel: l10n.posDeviceThemeCustomChange,
+                  onTap: () => _pick(primary: false),
                 ),
                 const SizedBox(height: RestoflowSpacing.sm),
                 Text(
@@ -819,7 +824,7 @@ class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
                   ),
                 ),
                 const SizedBox(height: RestoflowSpacing.xs),
-                _CustomThemePreview(pair: _lastPreview),
+                _CustomThemePreview(pair: candidate),
                 const SizedBox(height: RestoflowSpacing.sm),
                 Wrap(
                   spacing: RestoflowSpacing.sm,
@@ -830,14 +835,15 @@ class _DeviceThemeSectionState extends ConsumerState<_DeviceThemeSection> {
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 44),
                       ),
-                      onPressed: candidate == null
-                          ? null
-                          : () {
-                              ref
-                                  .read(posDeviceThemeProvider.notifier)
-                                  .setTheme(candidate);
-                              setState(() => _draftOpen = false);
-                            },
+                      // Always enabled: a visually chosen pair cannot be
+                      // half-typed, so hex knowledge is no longer a gate on
+                      // saving (DEVICE-THEME-COLOR-PICKER-032 §3).
+                      onPressed: () {
+                        ref
+                            .read(posDeviceThemeProvider.notifier)
+                            .setTheme(candidate);
+                        setState(() => _draftOpen = false);
+                      },
                       child: Text(l10n.posDeviceThemeCustomApply),
                     ),
                     TextButton(
@@ -1000,66 +1006,103 @@ class _CustomThemeSwatch extends StatelessWidget {
   }
 }
 
-/// One `#RRGGBB` entry: a live swatch preview beside a forced-LTR text field.
-/// Invalid non-empty input shows the localized error; the value itself is
-/// only consumed by the section's Apply gate.
-class _HexColorField extends StatelessWidget {
-  const _HexColorField({
+/// DEVICE-THEME-COLOR-PICKER-032 — one half of the custom pair as a large
+/// tappable tile: a 56dp swatch of the DRAFT color, the localized role label,
+/// the hex demoted to quiet secondary information, and a change affordance.
+///
+/// The whole row is the target (well past 44dp), because on a till the finger
+/// aims at the colour, not at a chevron.
+class _ColorSwatchTile extends StatelessWidget {
+  const _ColorSwatchTile({
     super.key,
-    required this.controller,
+    required this.color,
     required this.label,
-    required this.hint,
-    required this.invalidText,
+    required this.changeLabel,
+    required this.onTap,
   });
 
-  final TextEditingController controller;
+  final Color color;
   final String label;
-  final String hint;
-  final String invalidText;
+  final String changeLabel;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final parsed = posParseHexColor(controller.text);
-    final invalid = controller.text.trim().isNotEmpty && parsed == null;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: parsed ?? Colors.transparent,
-            borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-            border: Border.all(color: kRestoflowHairline),
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: label,
+      value: posFormatHexColor(color),
+      child: Material(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 72),
+            padding: const EdgeInsets.all(RestoflowSpacing.sm),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(color: kRestoflowHairline),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                    border: Border.all(color: kRestoflowHairline),
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.xxs),
+                      // Secondary, informational — never the way in. Hex is
+                      // Latin, so it keeps a fixed LTR run inside ar/he.
+                      Text(
+                        posFormatHexColor(color),
+                        textDirection: TextDirection.ltr,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontFamily: kPosMoneyFontFamily,
+                          fontFamilyFallback: kPosMoneyFontFallbacks,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                Text(
+                  changeLabel,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                // chevron_right carries matchTextDirection, so the affordance
+                // points "forward" in ar/he instead of back at the label.
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: RestoflowSpacing.sm),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            // Hex is Latin — a fixed LTR run keeps the caret sane in ar/he.
-            textDirection: TextDirection.ltr,
-            autocorrect: false,
-            enableSuggestions: false,
-            maxLength: 7,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp('[#0-9a-fA-F]')),
-            ],
-            style: const TextStyle(
-              fontFamily: kPosMoneyFontFamily,
-              fontFamilyFallback: kPosMoneyFontFallbacks,
-            ),
-            decoration: InputDecoration(
-              labelText: label,
-              hintText: hint,
-              counterText: '',
-              isDense: true,
-              errorText: invalid ? invalidText : null,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

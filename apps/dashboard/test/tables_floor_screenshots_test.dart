@@ -15,11 +15,12 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 
-/// TABLE-FLOOR-LAYOUT-021 — LOCAL screenshot generator for the Dashboard
-/// floor editor (not a regression test). Skipped unless run explicitly:
+/// TABLE-FLOOR-LAYOUT-021 / TABLE-FLOOR-MAP-POLISH-027 — LOCAL screenshot
+/// generator for the Dashboard floor editor (not a regression test). Skipped
+/// unless run explicitly:
 ///   flutter test test/tables_floor_screenshots_test.dart \
 ///     --dart-define=DASH_SCREENSHOTS=true --update-goldens
-/// which WRITES the PNGs under test/goldens/table_floor_021/. Never committed,
+/// which WRITES the PNGs under test/goldens/table_floor_027/. Never committed,
 /// never exercised on CI.
 const bool _enabled = bool.fromEnvironment('DASH_SCREENSHOTS');
 
@@ -85,10 +86,68 @@ DashboardTable _t(
   layoutY: y,
 );
 
+/// 027: all five fixture kinds on the main hall — the door + cashier carry
+/// labels; the window is rotated a quarter turn (vertical).
+const List<DashboardFloorElement> _shotElements = [
+  DashboardFloorElement(
+    id: 'e-wall',
+    sectionId: 's1',
+    kind: 'wall',
+    layoutX: 5000,
+    layoutY: 0,
+    widthNorm: 3200,
+    heightNorm: 150,
+  ),
+  DashboardFloorElement(
+    id: 'e-window',
+    sectionId: 's1',
+    kind: 'window',
+    layoutX: 0,
+    layoutY: 4500,
+    widthNorm: 2400,
+    heightNorm: 150,
+    orientationQuarterTurns: 1,
+  ),
+  DashboardFloorElement(
+    id: 'e-door',
+    sectionId: 's1',
+    kind: 'door',
+    layoutX: 0,
+    layoutY: 0,
+    widthNorm: 900,
+    heightNorm: 150,
+    label: 'مدخل',
+  ),
+  DashboardFloorElement(
+    id: 'e-cashier',
+    sectionId: 's1',
+    kind: 'cashier',
+    layoutX: 9800,
+    layoutY: 4500,
+    widthNorm: 900,
+    heightNorm: 900,
+    label: 'كاشير',
+  ),
+  DashboardFloorElement(
+    id: 'e-plant',
+    sectionId: 's1',
+    kind: 'plant',
+    layoutX: 9800,
+    layoutY: 0,
+    widthNorm: 900,
+    heightNorm: 900,
+  ),
+];
+
 class _ShotRepo extends InMemoryTablesStore {
+  _ShotRepo({this.elements = _shotElements});
+
+  final List<DashboardFloorElement> elements;
+
   @override
   Future<AdminResult<TablesFloorSnapshot>> load() async => Success(
     TablesFloorSnapshot(
+      floorElements: elements,
       sections: const [
         DashboardTableSection(
           id: 's1',
@@ -191,6 +250,8 @@ Future<void> _shot(
   required Locale locale,
   required String name,
   bool arrange = true,
+  bool elementsMode = false,
+  _ShotRepo? repo,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -204,7 +265,7 @@ Future<void> _shot(
       supportedLocales: kSupportedLocales,
       debugShowCheckedModeBanner: false,
       theme: restoflowLightBrandTheme(),
-      home: Scaffold(body: TablesScreen(repository: _ShotRepo())),
+      home: Scaffold(body: TablesScreen(repository: repo ?? _ShotRepo())),
     ),
   );
   await tester.pumpAndSettle();
@@ -212,9 +273,13 @@ Future<void> _shot(
     await tester.tap(find.byKey(const Key('tables-arrange-toggle')));
     await tester.pumpAndSettle();
   }
+  if (elementsMode) {
+    await tester.tap(find.byKey(const Key('floor-submode-elements')));
+    await tester.pumpAndSettle();
+  }
   await expectLater(
     find.byType(MaterialApp),
-    matchesGoldenFile('goldens/table_floor_021/$name.png'),
+    matchesGoldenFile('goldens/table_floor_027/$name.png'),
   );
 }
 
@@ -251,6 +316,52 @@ void main() {
       locale: const Locale('ar'),
       name: 'view_1500_ar',
       arrange: false,
+    );
+  });
+
+  testWidgets('arrange 1500 he', skip: !_enabled, (tester) async {
+    await _shot(
+      tester,
+      size: const Size(1500, 2600),
+      locale: const Locale('he'),
+      name: 'arrange_1500_he',
+    );
+  });
+
+  testWidgets('027 elements submode 1500 ar', skip: !_enabled, (tester) async {
+    await _shot(
+      tester,
+      size: const Size(1500, 2600),
+      locale: const Locale('ar'),
+      name: 'arrange_elements_1500_ar',
+      elementsMode: true,
+    );
+  });
+
+  testWidgets('027 fixture/table overlap notice 1500 ar', skip: !_enabled, (
+    tester,
+  ) async {
+    await _shot(
+      tester,
+      size: const Size(1500, 2600),
+      locale: const Locale('ar'),
+      name: 'arrange_overlap_1500_ar',
+      repo: _ShotRepo(
+        elements: [
+          ..._shotElements,
+          // Straight on top of ط١ (800,900): the NON-blocking notice scene.
+          const DashboardFloorElement(
+            id: 'e-clash',
+            sectionId: 's1',
+            kind: 'cashier',
+            layoutX: 800,
+            layoutY: 900,
+            widthNorm: 900,
+            heightNorm: 900,
+            label: 'كاشير',
+          ),
+        ],
+      ),
     );
   });
 }

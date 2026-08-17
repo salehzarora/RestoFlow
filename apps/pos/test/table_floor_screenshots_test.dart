@@ -16,11 +16,12 @@ import 'package:restoflow_pos/src/design/pos_theme.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart';
 import 'package:restoflow_pos/src/widgets/table_picker_sheet.dart';
 
-/// TABLE-FLOOR-LAYOUT-021 — LOCAL screenshot generator for the POS floor-map
-/// picker (not a regression test). Skipped everywhere unless run explicitly:
+/// TABLE-FLOOR-LAYOUT-021 / TABLE-FLOOR-MAP-POLISH-027 — LOCAL screenshot
+/// generator for the POS floor-map picker (not a regression test). Skipped
+/// everywhere unless run explicitly:
 ///   flutter test test/table_floor_screenshots_test.dart \
 ///     --dart-define=POS_SCREENSHOTS=true --update-goldens
-/// which WRITES the PNGs under test/goldens/table_floor_021/. Never committed,
+/// which WRITES the PNGs under test/goldens/table_floor_027/. Never committed,
 /// never exercised on CI.
 const bool _enabled = bool.fromEnvironment('POS_SCREENSHOTS');
 
@@ -183,11 +184,67 @@ List<DemoTable> _floor() => [
   _t('l2', 'ق٢', area: 'Patio', active: 1),
 ];
 
-class _FakeTablesRepo implements TablesRepository {
+/// 027: the same five-kind fixture catalog the Dashboard generator paints.
+const List<PosFloorElement> _elements = [
+  PosFloorElement(
+    id: 'e-wall',
+    sectionId: 's1',
+    kind: 'wall',
+    layoutX: 5000,
+    layoutY: 0,
+    widthNorm: 3200,
+    heightNorm: 150,
+  ),
+  PosFloorElement(
+    id: 'e-window',
+    sectionId: 's1',
+    kind: 'window',
+    layoutX: 0,
+    layoutY: 4500,
+    widthNorm: 2400,
+    heightNorm: 150,
+    orientationQuarterTurns: 1,
+  ),
+  PosFloorElement(
+    id: 'e-door',
+    sectionId: 's1',
+    kind: 'door',
+    layoutX: 0,
+    layoutY: 0,
+    widthNorm: 900,
+    heightNorm: 150,
+    label: 'مدخل',
+  ),
+  PosFloorElement(
+    id: 'e-cashier',
+    sectionId: 's1',
+    kind: 'cashier',
+    layoutX: 9800,
+    layoutY: 4500,
+    widthNorm: 900,
+    heightNorm: 900,
+    label: 'كاشير',
+  ),
+  PosFloorElement(
+    id: 'e-plant',
+    sectionId: 's1',
+    kind: 'plant',
+    layoutX: 9800,
+    layoutY: 0,
+    widthNorm: 900,
+    heightNorm: 900,
+  ),
+];
+
+class _FakeTablesRepo extends TablesRepository {
   _FakeTablesRepo(this.rows);
   final List<DemoTable> rows;
   @override
   Future<List<DemoTable>> loadTables() async => rows;
+
+  @override
+  Future<PosFloorSnapshot> loadFloorSnapshot() async =>
+      PosFloorSnapshot(tables: rows, floorElements: _elements);
 }
 
 class _Launcher extends StatelessWidget {
@@ -244,7 +301,7 @@ Future<void> _shot(
   await tester.pumpAndSettle();
   await expectLater(
     find.byType(MaterialApp),
-    matchesGoldenFile('goldens/table_floor_021/$name.png'),
+    matchesGoldenFile('goldens/table_floor_027/$name.png'),
   );
 }
 
@@ -289,6 +346,15 @@ void main() {
       size: const Size(1280, 800),
       locale: const Locale('en'),
       name: 'picker_1280_en',
+    );
+  });
+
+  testWidgets('picker 1280 he', skip: !_enabled, (tester) async {
+    await _shot(
+      tester,
+      size: const Size(1280, 800),
+      locale: const Locale('he'),
+      name: 'picker_1280_he',
     );
   });
 }

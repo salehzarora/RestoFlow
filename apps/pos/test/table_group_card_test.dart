@@ -46,7 +46,7 @@ DemoTable _t(
   groupId: group,
 );
 
-class _FakeTablesRepo implements TablesRepository {
+class _FakeTablesRepo extends TablesRepository {
   _FakeTablesRepo(this.rows);
 
   List<DemoTable> rows;

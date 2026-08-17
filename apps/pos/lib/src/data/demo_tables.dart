@@ -248,6 +248,43 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
   ];
 }
 
+/// TABLE-FLOOR-MAP-POLISH-027: one VISUAL-ONLY floor fixture from the
+/// `pos_tables` `floor_elements` envelope catalog — wall/door/window/cashier/
+/// plant decoration on a section canvas. Read-only on every POS surface;
+/// never a table (no status, no occupancy, no assignability).
+class PosFloorElement {
+  const PosFloorElement({
+    required this.id,
+    required this.sectionId,
+    required this.kind,
+    required this.layoutX,
+    required this.layoutY,
+    required this.widthNorm,
+    required this.heightNorm,
+    this.orientationQuarterTurns = 0,
+    this.label,
+  });
+
+  final String id;
+  final String sectionId;
+  final String kind;
+  final int layoutX;
+  final int layoutY;
+  final int widthNorm;
+  final int heightNorm;
+  final int orientationQuarterTurns;
+  final String? label;
+}
+
+/// 027: one tables read — the rows plus the fixture catalog that rides the
+/// same envelope (a single `pos_tables` invoke, never two).
+class PosFloorSnapshot {
+  const PosFloorSnapshot({required this.tables, this.floorElements = const []});
+
+  final List<DemoTable> tables;
+  final List<PosFloorElement> floorElements;
+}
+
 /// The repository seam for tables (RF-114). Its method maps 1:1 to the future
 /// backend read — an RLS-scoped `tables` query for the active branch — and the
 /// derived occupancy mirrors what a server `assign_table` RPC would enforce.
@@ -256,6 +293,12 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
 abstract class TablesRepository {
   /// Loads the branch's tables with their derived occupancy [TableStatusKind].
   Future<List<DemoTable>> loadTables();
+
+  /// 027: tables + visual fixtures in ONE read. The default keeps older
+  /// implementations honest with an empty fixture catalog; the real
+  /// repository overrides this to parse both from the same envelope.
+  Future<PosFloorSnapshot> loadFloorSnapshot() async =>
+      PosFloorSnapshot(tables: await loadTables());
 }
 
 /// In-memory, clearly-labelled DEMO tables store (RF-114). It seeds a fixed set
@@ -265,7 +308,7 @@ abstract class TablesRepository {
 /// flag).
 ///
 /// NO backend, NO Supabase, NO persistence. Nothing here is synced or audited.
-class DemoTablesStore implements TablesRepository {
+class DemoTablesStore extends TablesRepository {
   DemoTablesStore({
     TablePolicy policy = const TablePolicy(),
     Map<String, String> manualOverrides = const {},
@@ -399,8 +442,8 @@ class DemoTablesStore implements TablesRepository {
 /// available|occupied|reserved|out_of_service. Fail-closed: no
 /// transport/session (or a rejected response) throws — the picker shows its
 /// honest error/empty state, never demo tables.
-class RealTablesRepository implements TablesRepository {
-  const RealTablesRepository(this._transport, this._session);
+class RealTablesRepository extends TablesRepository {
+  RealTablesRepository(this._transport, this._session);
 
   final SyncRpcTransport? _transport;
   final SyncSession? _session;
@@ -412,7 +455,14 @@ class RealTablesRepository implements TablesRepository {
   static const String _serverScope = 'server-scoped';
 
   @override
-  Future<List<DemoTable>> loadTables() async {
+  Future<List<DemoTable>> loadTables() async =>
+      (await loadFloorSnapshot()).tables;
+
+  /// 027: the SAME single `pos_tables` invoke now also yields the visual
+  /// fixture catalog (`floor_elements` envelope key; absent on an older
+  /// backend -> empty).
+  @override
+  Future<PosFloorSnapshot> loadFloorSnapshot() async {
     final transport = _transport;
     final session = _session;
     if (transport == null || session == null) {
@@ -428,7 +478,7 @@ class RealTablesRepository implements TablesRepository {
       throw const RealRepoNotWiredError('tables: pos_tables rejected');
     }
     final rows = raw['tables'];
-    if (rows is! List) return const <DemoTable>[];
+    if (rows is! List) return const PosFloorSnapshot(tables: []);
     final tables = <DemoTable>[];
     for (final row in rows.whereType<Map>()) {
       final id = row['id'];
@@ -494,7 +544,56 @@ class RealTablesRepository implements TablesRepository {
         ),
       );
     }
-    return tables;
+    return PosFloorSnapshot(
+      tables: tables,
+      floorElements: _elementsFrom(raw['floor_elements']),
+    );
+  }
+
+  /// 027: the fixture catalog rows. Malformed rows degrade to nothing —
+  /// decoration is never worth failing a tables load.
+  static List<PosFloorElement> _elementsFrom(Object? rows) {
+    if (rows is! List) return const <PosFloorElement>[];
+    final out = <PosFloorElement>[];
+    for (final row in rows.whereType<Map>()) {
+      final id = row['id'];
+      final sectionId = row['section_id'];
+      final kind = row['kind'];
+      final x = row['layout_x'];
+      final y = row['layout_y'];
+      final w = row['width_norm'];
+      final h = row['height_norm'];
+      if (id is! String ||
+          id.isEmpty ||
+          sectionId is! String ||
+          sectionId.isEmpty ||
+          kind is! String ||
+          kind.isEmpty ||
+          x is! int ||
+          y is! int ||
+          w is! int ||
+          h is! int) {
+        continue;
+      }
+      final orient = row['orientation_quarter_turns'];
+      final label = row['label'];
+      out.add(
+        PosFloorElement(
+          id: id,
+          sectionId: sectionId,
+          kind: kind,
+          layoutX: x,
+          layoutY: y,
+          widthNorm: w,
+          heightNorm: h,
+          orientationQuarterTurns: orient is int && orient >= 0 && orient <= 3
+              ? orient
+              : 0,
+          label: label is String && label.isNotEmpty ? label : null,
+        ),
+      );
+    }
+    return out;
   }
 
   /// Maps the backend status to the picker's assignability model: reserved is

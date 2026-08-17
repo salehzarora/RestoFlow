@@ -73,6 +73,15 @@ abstract class TablesAdminRepository {
   /// `public.reorder_table_sections` — the COMPLETE live section id list in
   /// the owner's new order.
   Future<AdminResult<void>> reorderSections(List<String> ids);
+
+  /// TABLE-FLOOR-MAP-POLISH-027 — `public.upsert_floor_element`: create or
+  /// edit a VISUAL-ONLY fixture. An EMPTY [DashboardFloorElement.id] creates
+  /// (the store mints the id); a known id updates. kind + section are
+  /// immutable server contract — an edit only moves/resizes/rotates/relabels.
+  Future<AdminResult<void>> upsertFloorElement(DashboardFloorElement element);
+
+  /// `public.delete_floor_element` — tombstones the fixture.
+  Future<AdminResult<void>> deleteFloorElement(String id);
 }
 
 /// A clearly-labelled in-memory demo store (demo mode only; the demo banner is
@@ -183,6 +192,29 @@ class InMemoryTablesStore implements TablesAdminRepository {
 
   final List<DashboardTableSection> _sections;
   final List<DashboardTable> _tables;
+  // TABLE-FLOOR-MAP-POLISH-027: demo fixtures so the element layer renders a
+  // meaningful floor out of the box (a wall + a labelled cashier stand).
+  final List<DashboardFloorElement> _elements = [
+    const DashboardFloorElement(
+      id: 'demo-element-1',
+      sectionId: 'demo-section-1',
+      kind: 'wall',
+      layoutX: 0,
+      layoutY: 0,
+      widthNorm: 3000,
+      heightNorm: 150,
+    ),
+    const DashboardFloorElement(
+      id: 'demo-element-2',
+      sectionId: 'demo-section-1',
+      kind: 'cashier',
+      layoutX: 9500,
+      layoutY: 9500,
+      widthNorm: 900,
+      heightNorm: 900,
+      label: 'POS',
+    ),
+  ];
   int _seq = 0;
 
   @override
@@ -193,8 +225,48 @@ class InMemoryTablesStore implements TablesAdminRepository {
         [..._sections]
           ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder)),
       ),
+      floorElements: List.unmodifiable(_elements),
     ),
   );
+
+  @override
+  Future<AdminResult<void>> upsertFloorElement(
+    DashboardFloorElement element,
+  ) async {
+    if (element.layoutX < 0 ||
+        element.layoutX > 10000 ||
+        element.layoutY < 0 ||
+        element.layoutY > 10000) {
+      return const Failure(AdminValidation('position'));
+    }
+    final trimmed = element.label?.trim();
+    final normalized = DashboardFloorElement(
+      id: element.id.isEmpty ? 'demo-element-new-${++_seq}' : element.id,
+      sectionId: element.sectionId,
+      kind: element.kind,
+      layoutX: element.layoutX,
+      layoutY: element.layoutY,
+      widthNorm: element.widthNorm,
+      heightNorm: element.heightNorm,
+      orientationQuarterTurns: element.orientationQuarterTurns,
+      label: (trimmed?.isEmpty ?? true) ? null : trimmed,
+    );
+    final index = element.id.isEmpty
+        ? -1
+        : _elements.indexWhere((e) => e.id == element.id);
+    if (index >= 0) {
+      _elements[index] = normalized;
+    } else {
+      _elements.add(normalized);
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> deleteFloorElement(String id) async {
+    _elements.removeWhere((e) => e.id == id);
+    return const Success(null);
+  }
 
   @override
   Future<AdminResult<void>> upsertSection({
@@ -252,6 +324,9 @@ class InMemoryTablesStore implements TablesAdminRepository {
   @override
   Future<AdminResult<void>> deleteSection(String id) async {
     _sections.removeWhere((s) => s.id == id);
+    // 027: fixtures are section-owned — they go with the section (the backend
+    // tombstones them the same way).
+    _elements.removeWhere((e) => e.sectionId == id);
     // DETACH, never delete: the backend clears section + placement.
     for (var i = 0; i < _tables.length; i++) {
       if (_tables[i].sectionId == id) {
@@ -441,7 +516,51 @@ class SupabaseTablesRepository implements TablesAdminRepository {
             if (row is Map)
               if (_sectionFrom(row) case final s?) s,
         ],
+        // TABLE-FLOOR-MAP-POLISH-027: the fixture catalog envelope (absent on
+        // an older backend -> empty; the element layer simply draws nothing).
+        floorElements: [
+          for (final row in (raw['floor_elements'] as List?) ?? const [])
+            if (row is Map)
+              if (_elementFrom(row) case final e?) e,
+        ],
       ),
+    );
+  }
+
+  static DashboardFloorElement? _elementFrom(Map<dynamic, dynamic> row) {
+    final id = row['id'];
+    final sectionId = row['section_id'];
+    final kind = row['kind'];
+    final x = row['layout_x'];
+    final y = row['layout_y'];
+    final w = row['width_norm'];
+    final h = row['height_norm'];
+    if (id is! String ||
+        id.isEmpty ||
+        sectionId is! String ||
+        sectionId.isEmpty ||
+        kind is! String ||
+        kind.isEmpty ||
+        x is! int ||
+        y is! int ||
+        w is! int ||
+        h is! int) {
+      return null; // malformed -> skip (decoration, never worth failing a load)
+    }
+    final orient = row['orientation_quarter_turns'];
+    final label = row['label'];
+    return DashboardFloorElement(
+      id: id,
+      sectionId: sectionId,
+      kind: kind,
+      layoutX: x,
+      layoutY: y,
+      widthNorm: w,
+      heightNorm: h,
+      orientationQuarterTurns: orient is int && orient >= 0 && orient <= 3
+          ? orient
+          : 0,
+      label: label is String && label.isNotEmpty ? label : null,
     );
   }
 
@@ -683,6 +802,49 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       'p_ids': ids,
     });
   }
+
+  // ---- TABLE-FLOOR-MAP-POLISH-027: visual fixtures -------------------------
+
+  @override
+  Future<AdminResult<void>> upsertFloorElement(
+    DashboardFloorElement element,
+  ) async {
+    final restaurantId = _scope.restaurantId;
+    final branchId = _scope.branchId;
+    if (restaurantId == null || branchId == null) {
+      return const Failure(AdminValidation('scope'));
+    }
+    final trimmed = element.label?.trim();
+    return _invokeVoid('upsert_floor_element', <String, dynamic>{
+      'p_client_request_id': _requestId('upsert-element', [
+        element.id,
+        element.kind,
+        '${element.layoutX}',
+        '${element.layoutY}',
+      ]),
+      'p_organization_id': _scope.organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_branch_id': branchId,
+      'p_section_id': element.sectionId,
+      'p_kind': element.kind,
+      // Empty id = create: the SERVER mints (p_id null); a known id updates.
+      'p_id': element.id.isEmpty ? null : element.id,
+      'p_layout_x': element.layoutX,
+      'p_layout_y': element.layoutY,
+      'p_width_norm': element.widthNorm,
+      'p_height_norm': element.heightNorm,
+      'p_orientation_quarter_turns': element.orientationQuarterTurns,
+      'p_label': (trimmed?.isEmpty ?? true) ? null : trimmed,
+    });
+  }
+
+  @override
+  Future<AdminResult<void>> deleteFloorElement(String id) async =>
+      _invokeVoid('delete_floor_element', <String, dynamic>{
+        'p_client_request_id': _requestId('delete-element', [id]),
+        'p_organization_id': _scope.organizationId,
+        'p_element_id': id,
+      });
 
   /// The shared invoke-and-map body every void write above uses.
   Future<AdminResult<void>> _invokeVoid(

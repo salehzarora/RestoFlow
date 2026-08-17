@@ -68,6 +68,15 @@ class _EmptyTablesRepo implements TablesAdminRepository {
       const Success(null);
 
   @override
+  Future<AdminResult<void>> upsertFloorElement(
+    DashboardFloorElement element,
+  ) async => const Success(null);
+
+  @override
+  Future<AdminResult<void>> deleteFloorElement(String id) async =>
+      const Success(null);
+
+  @override
   Future<AdminResult<void>> setTableSection(
     String tableId,
     String? sectionId,

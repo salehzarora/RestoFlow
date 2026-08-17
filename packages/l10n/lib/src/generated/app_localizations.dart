@@ -7066,6 +7066,114 @@ abstract class AppLocalizations {
   /// **'Some tables overlap on the map.'**
   String get tablesOverlapWarning;
 
+  /// Arrange submode toggle: only tables are draggable.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get tablesFloorModeTables;
+
+  /// Arrange submode toggle: only visual fixtures (walls/doors/...) are editable.
+  ///
+  /// In en, this message translates to:
+  /// **'Elements'**
+  String get tablesFloorModeElements;
+
+  /// Per-section palette button that creates a visual fixture.
+  ///
+  /// In en, this message translates to:
+  /// **'Add element'**
+  String get tablesAddElement;
+
+  /// Fixture kind: wall.
+  ///
+  /// In en, this message translates to:
+  /// **'Wall'**
+  String get floorElementWall;
+
+  /// Fixture kind: door.
+  ///
+  /// In en, this message translates to:
+  /// **'Door'**
+  String get floorElementDoor;
+
+  /// Fixture kind: window.
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get floorElementWindow;
+
+  /// Fixture kind: cashier stand.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier'**
+  String get floorElementCashier;
+
+  /// Fixture kind: plant.
+  ///
+  /// In en, this message translates to:
+  /// **'Plant'**
+  String get floorElementPlant;
+
+  /// Element menu action: rotate a quarter turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get floorElementRotate;
+
+  /// Element menu action: resize (walls/windows only).
+  ///
+  /// In en, this message translates to:
+  /// **'Resize'**
+  String get floorElementResize;
+
+  /// Element menu action: edit the caption (cashier/door only).
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get floorElementLabel;
+
+  /// Element menu action: delete the fixture.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete element'**
+  String get floorElementDelete;
+
+  /// Fixture delete confirmation dialog title (028).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete element?'**
+  String get floorElementDeleteConfirmTitle;
+
+  /// Fixture delete confirmation body naming the kind (unlabelled fixture).
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} will be removed from the floor map.'**
+  String floorElementDeleteConfirmBody(String kind);
+
+  /// Fixture delete confirmation body naming the kind AND its label.
+  ///
+  /// In en, this message translates to:
+  /// **'The {kind} \"{label}\" will be removed from the floor map.'**
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label);
+
+  /// Resize dialog field: footprint width.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get floorElementWidth;
+
+  /// Resize dialog field: footprint height.
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get floorElementHeight;
+
+  /// NON-blocking arrange-mode notice when a fixture intersects a table (never blocks saving, nothing is auto-moved).
+  ///
+  /// In en, this message translates to:
+  /// **'An element overlaps a table on the map.'**
+  String get tablesElementOverlapWarning;
+
   /// Device revoke confirmation body.
   ///
   /// In en, this message translates to:
@@ -10540,10 +10648,10 @@ abstract class AppLocalizations {
   /// **'Custom'**
   String get posDeviceThemeCustom;
 
-  /// Helper line inside the custom-theme editor.
+  /// Helper line inside the custom-theme editor. DEVICE-THEME-COLOR-PICKER-032 dropped the #RRGGBB wording — the colors are chosen visually now.
   ///
   /// In en, this message translates to:
-  /// **'Pick any two colors as #RRGGBB. They restyle this device only.'**
+  /// **'Pick any two colors by eye. They restyle this device only.'**
   String get posDeviceThemeCustomHelp;
 
   /// Label for the custom theme's structural (first) color field.
@@ -10593,6 +10701,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get posDeviceThemeCustomPreviewTitle;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: trailing affordance on a custom-theme color swatch tile — tapping it opens the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get posDeviceThemeCustomChange;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption above the one-tap curated palette in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick colors'**
+  String get posColorPickerQuickColors;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption and accessibility label for the saturation/brightness field in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Color palette'**
+  String get posColorPickerField;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption and accessibility label for the hue rail in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get posColorPickerHue;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: caption above the lighter/darker shade steps in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Lighter or darker'**
+  String get posColorPickerShade;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: expander revealing the optional manual hex field in the visual color picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get posColorPickerAdvanced;
+
+  /// DEVICE-THEME-COLOR-PICKER-032: confirm button returning the visually chosen color to the custom-theme editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose color'**
+  String get posColorPickerConfirm;
 
   /// POS-OPEN-ORDERS-STRIP-011: elapsed-open time under one minute on an open-order card.
   ///

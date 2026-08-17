@@ -3813,6 +3813,65 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tablesOverlapWarning => 'Some tables overlap on the map.';
 
   @override
+  String get tablesFloorModeTables => 'Tables';
+
+  @override
+  String get tablesFloorModeElements => 'Elements';
+
+  @override
+  String get tablesAddElement => 'Add element';
+
+  @override
+  String get floorElementWall => 'Wall';
+
+  @override
+  String get floorElementDoor => 'Door';
+
+  @override
+  String get floorElementWindow => 'Window';
+
+  @override
+  String get floorElementCashier => 'Cashier';
+
+  @override
+  String get floorElementPlant => 'Plant';
+
+  @override
+  String get floorElementRotate => 'Rotate';
+
+  @override
+  String get floorElementResize => 'Resize';
+
+  @override
+  String get floorElementLabel => 'Label';
+
+  @override
+  String get floorElementDelete => 'Delete element';
+
+  @override
+  String get floorElementDeleteConfirmTitle => 'Delete element?';
+
+  @override
+  String floorElementDeleteConfirmBody(String kind) {
+    return 'The $kind will be removed from the floor map.';
+  }
+
+  @override
+  String floorElementDeleteConfirmBodyLabeled(String kind, String label) {
+    return 'The $kind \"$label\" will be removed from the floor map.';
+  }
+
+  @override
+  String get floorElementWidth => 'Width';
+
+  @override
+  String get floorElementHeight => 'Height';
+
+  @override
+  String get tablesElementOverlapWarning =>
+      'An element overlaps a table on the map.';
+
+  @override
   String get adminRevokeConfirm =>
       'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.';
 
@@ -5776,7 +5835,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomHelp =>
-      'Pick any two colors as #RRGGBB. They restyle this device only.';
+      'Pick any two colors by eye. They restyle this device only.';
 
   @override
   String get posDeviceThemeCustomPrimaryLabel => 'Primary color';
@@ -5801,6 +5860,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDeviceThemeCustomPreviewTitle => 'Preview';
+
+  @override
+  String get posDeviceThemeCustomChange => 'Change';
+
+  @override
+  String get posColorPickerQuickColors => 'Quick colors';
+
+  @override
+  String get posColorPickerField => 'Color palette';
+
+  @override
+  String get posColorPickerHue => 'Hue';
+
+  @override
+  String get posColorPickerShade => 'Lighter or darker';
+
+  @override
+  String get posColorPickerAdvanced => 'Advanced';
+
+  @override
+  String get posColorPickerConfirm => 'Choose color';
 
   @override
   String get posOpenOrdersElapsedNow => 'now';
