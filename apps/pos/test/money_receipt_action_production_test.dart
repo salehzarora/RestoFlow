@@ -299,6 +299,15 @@ PosOrderDetailPayment _serverPayment() => PosOrderDetailPayment(
 
 String _text(Uint8List bytes) => String.fromCharCodes(bytes);
 
+/// 038: reprint now opens a chooser. Tap it, then pick the CUSTOMER receipt —
+/// the behaviour these tests assert is unchanged, only the path to it.
+Future<void> tapReprintCustomer(WidgetTester tester, Key reprintKey) async {
+  await tester.tap(find.byKey(reprintKey));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('reprint-choice-customer')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(_seedBluetoothPrinter);
 
@@ -554,8 +563,7 @@ void main() {
         'carrying the configured surcharge', (tester) async {
       final (_, bridge) = await pumpRow(tester);
 
-      await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
-      await tester.pumpAndSettle();
+      await tapReprintCustomer(tester, const Key('recent-reprint-#RCPT1'));
 
       expect(
         bridge.documents,
@@ -585,12 +593,12 @@ void main() {
       tester,
     ) async {
       final (_, bridge) = await pumpRow(tester);
-      final key = const Key('recent-reprint-#RCPT1');
+      const key = Key('recent-reprint-#RCPT1');
 
-      await tester.tap(find.byKey(key));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(key));
-      await tester.pumpAndSettle();
+      // 038: each request now goes through the chooser; asking twice still
+      // yields two documents.
+      await tapReprintCustomer(tester, key);
+      await tapReprintCustomer(tester, key);
 
       expect(
         bridge.documents,
@@ -863,8 +871,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
-      await tester.pumpAndSettle();
+      await tapReprintCustomer(tester, const Key('recent-reprint-#RCPT1'));
 
       // ---- AFTER: exactly one read, exactly one document, zero writes.
       expect(
@@ -903,8 +910,7 @@ void main() {
       // the till's own state, and that is what is counted above.
 
       // ---- AND IT REMAINS REPEATABLE, still with no writes.
-      await tester.tap(find.byKey(const Key('recent-reprint-#RCPT1')));
-      await tester.pumpAndSettle();
+      await tapReprintCustomer(tester, const Key('recent-reprint-#RCPT1'));
       expect(bridge.documents, hasLength(2));
       expect(payments.calls, 0);
       expect(transport.calls, isEmpty);

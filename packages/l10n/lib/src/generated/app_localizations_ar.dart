@@ -5856,4 +5856,25 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get printersGovernanceIntro =>
       'حدّد طابعات هذا الفرع، وما تطبعه، والمحطات التي تخدمها. كل جهاز نقطة بيع أو شاشة مطبخ يضبط توصيله الفعلي بنفسه؛ هذه الصفحة لا تعرف ما إذا كانت الطابعة متصلة.';
+
+  @override
+  String get posReprintChooserTitle => 'إعادة الطباعة';
+
+  @override
+  String get posReprintCustomerReceipt => 'إيصال الزبون';
+
+  @override
+  String get posReprintCustomerReceiptHint =>
+      'طباعة إيصال الكاشير من طابعة الإيصالات.';
+
+  @override
+  String get posReprintKitchenTicket => 'إيصال المطبخ';
+
+  @override
+  String get posReprintKitchenTicketHint =>
+      'طباعة تذكرة الطلب من طابعة المطبخ.';
+
+  @override
+  String get posReprintKitchenUnavailable =>
+      'لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.';
 }

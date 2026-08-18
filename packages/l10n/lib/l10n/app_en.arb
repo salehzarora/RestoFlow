@@ -3970,5 +3970,17 @@
   "setupNoKitchenPrinter": "No live kitchen printer configured — printer-only service needs one.",
   "@setupNoKitchenPrinter": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: next step shown ONLY for printer_only branches with no live kitchen-capable printer record."},
   "printersGovernanceIntro": "Set which printers this branch has, what they print, and which stations they serve. Each POS/KDS device configures its own physical connection; this page cannot tell whether a printer is online.",
-  "@printersGovernanceIntro": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: intro on the printing management page separating branch governance from device-side physical setup."}
+  "@printersGovernanceIntro": {"description": "PRINTING-GOVERNANCE-UI-HONESTY-036: intro on the printing management page separating branch governance from device-side physical setup."},
+  "posReprintChooserTitle": "Reprint",
+  "@posReprintChooserTitle": {"description": "ORDER-REPRINT-CHOOSER-038: title of the reprint chooser opened from an order row."},
+  "posReprintCustomerReceipt": "Customer receipt",
+  "@posReprintCustomerReceipt": {"description": "ORDER-REPRINT-CHOOSER-038: option that reprints the cashier/customer receipt on the RECEIPT printer only."},
+  "posReprintCustomerReceiptHint": "Prints the cashier receipt on the receipt printer.",
+  "@posReprintCustomerReceiptHint": {"description": "ORDER-REPRINT-CHOOSER-038: secondary line naming the receipt printer destination."},
+  "posReprintKitchenTicket": "Kitchen ticket",
+  "@posReprintKitchenTicket": {"description": "ORDER-REPRINT-CHOOSER-038: option that reprints the kitchen ticket on the KITCHEN printer only."},
+  "posReprintKitchenTicketHint": "Prints the order ticket on the kitchen printer.",
+  "@posReprintKitchenTicketHint": {"description": "ORDER-REPRINT-CHOOSER-038: secondary line naming the kitchen printer destination."},
+  "posReprintKitchenUnavailable": "This order has no printable kitchen ticket on this device.",
+  "@posReprintKitchenUnavailable": {"description": "ORDER-REPRINT-CHOOSER-038: honest kitchen-only refusal when the order carries no printable kitchen snapshot on this device. NEVER falls back to the receipt printer."}
 }
