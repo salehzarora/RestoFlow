@@ -161,6 +161,16 @@ Finder get _bill => find.byKey(const Key('recent-print-bill-$_code'));
 Finder get _pay => find.byKey(const Key('recent-pay-$_code'));
 Finder get _reprint => find.byKey(const Key('recent-reprint-$_code'));
 
+/// 040: the open-order print control now opens a chooser. Tap it, then pick
+/// the CUSTOMER BILL — the pre-bill behaviour asserted below is unchanged,
+/// only the path to it.
+Future<void> tapPrintBill(WidgetTester tester, Finder button) async {
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('print-choice-bill')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   test('FIXTURE CONTRACT: the unpaid fixture satisfies canPay and the paid one '
       'does not', () {
@@ -189,7 +199,7 @@ void main() {
     // Scoped to THIS order's button: the demo branch also lists other unpaid
     // orders, which legitimately show their own Print bill action.
     expect(
-      find.descendant(of: _bill, matching: find.text(l10n.posPrintBillAction)),
+      find.descendant(of: _bill, matching: find.text(l10n.posPrintAction)),
       findsOneWidget,
     );
     // Print bill does not replace or masquerade as the paid-receipt reprint.
@@ -200,8 +210,7 @@ void main() {
       'creates the bill job', (tester) async {
     final container = await _pump(tester, await _store(_unpaidOrder()));
 
-    await tester.tap(_bill);
-    await tester.pumpAndSettle();
+    await tapPrintBill(tester, _bill);
 
     final job = container
         .read(receiptPrintControllerProvider.notifier)
@@ -293,10 +302,10 @@ void main() {
     // Same key in Arabic, different localized text — nothing is hardcoded.
     expect(_bill, findsOneWidget);
     expect(
-      find.descendant(of: _bill, matching: find.text(ar.posPrintBillAction)),
+      find.descendant(of: _bill, matching: find.text(ar.posPrintAction)),
       findsOneWidget,
     );
-    expect(ar.posPrintBillAction, isNot(en.posPrintBillAction));
+    expect(ar.posPrintAction, isNot(en.posPrintAction));
     expect(tester.takeException(), isNull, reason: 'no RTL overflow');
   });
 }

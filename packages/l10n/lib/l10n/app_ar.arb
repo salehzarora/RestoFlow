@@ -1820,5 +1820,9 @@
   "posReprintCustomerReceiptHint": "طباعة إيصال الكاشير من طابعة الإيصالات.",
   "posReprintKitchenTicket": "إيصال المطبخ",
   "posReprintKitchenTicketHint": "طباعة تذكرة الطلب من طابعة المطبخ.",
-  "posReprintKitchenUnavailable": "لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز."
+  "posReprintKitchenUnavailable": "لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.",
+  "posPrintAction": "طباعة",
+  "posPrintChooserTitle": "خيارات الطباعة",
+  "posPrintCustomerBill": "حساب الزبون",
+  "posPrintCustomerBillHint": "طباعة حساب الزبون الحالي من طابعة الإيصالات."
 }

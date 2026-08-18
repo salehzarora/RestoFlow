@@ -1820,5 +1820,9 @@
   "posReprintCustomerReceiptHint": "מדפיסה את קבלת הקופה במדפסת הקבלות.",
   "posReprintKitchenTicket": "פתק מטבח",
   "posReprintKitchenTicketHint": "מדפיסה את פתק ההזמנה במדפסת המטבח.",
-  "posReprintKitchenUnavailable": "להזמנה זו אין פתק מטבח להדפסה במכשיר זה."
+  "posReprintKitchenUnavailable": "להזמנה זו אין פתק מטבח להדפסה במכשיר זה.",
+  "posPrintAction": "הדפסה",
+  "posPrintChooserTitle": "אפשרויות הדפסה",
+  "posPrintCustomerBill": "חשבון לקוח",
+  "posPrintCustomerBillHint": "מדפיסה את החשבון הנוכחי במדפסת הקבלות."
 }

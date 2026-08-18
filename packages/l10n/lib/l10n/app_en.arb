@@ -3982,5 +3982,13 @@
   "posReprintKitchenTicketHint": "Prints the order ticket on the kitchen printer.",
   "@posReprintKitchenTicketHint": {"description": "ORDER-REPRINT-CHOOSER-038: secondary line naming the kitchen printer destination."},
   "posReprintKitchenUnavailable": "This order has no printable kitchen ticket on this device.",
-  "@posReprintKitchenUnavailable": {"description": "ORDER-REPRINT-CHOOSER-038: honest kitchen-only refusal when the order carries no printable kitchen snapshot on this device. NEVER falls back to the receipt printer."}
+  "@posReprintKitchenUnavailable": {"description": "ORDER-REPRINT-CHOOSER-038: honest kitchen-only refusal when the order carries no printable kitchen snapshot on this device. NEVER falls back to the receipt printer."},
+  "posPrintAction": "Print",
+  "@posPrintAction": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: the print action on an OPEN/unpaid order. Deliberately not \"reprint\" — an unpaid pre-bill has not necessarily been printed before."},
+  "posPrintChooserTitle": "Print options",
+  "@posPrintChooserTitle": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: title of the chooser opened from an open order."},
+  "posPrintCustomerBill": "Customer bill",
+  "@posPrintCustomerBill": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: option printing the current customer bill/pre-bill on the RECEIPT printer only."},
+  "posPrintCustomerBillHint": "Prints the current bill on the receipt printer.",
+  "@posPrintCustomerBillHint": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: secondary line naming the receipt printer destination for the bill."}
 }

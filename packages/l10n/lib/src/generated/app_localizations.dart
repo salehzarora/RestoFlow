@@ -10809,6 +10809,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This order has no printable kitchen ticket on this device.'**
   String get posReprintKitchenUnavailable;
+
+  /// OPEN-ORDER-PRINT-CHOOSER-040: the print action on an OPEN/unpaid order. Deliberately not "reprint" — an unpaid pre-bill has not necessarily been printed before.
+  ///
+  /// In en, this message translates to:
+  /// **'Print'**
+  String get posPrintAction;
+
+  /// OPEN-ORDER-PRINT-CHOOSER-040: title of the chooser opened from an open order.
+  ///
+  /// In en, this message translates to:
+  /// **'Print options'**
+  String get posPrintChooserTitle;
+
+  /// OPEN-ORDER-PRINT-CHOOSER-040: option printing the current customer bill/pre-bill on the RECEIPT printer only.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer bill'**
+  String get posPrintCustomerBill;
+
+  /// OPEN-ORDER-PRINT-CHOOSER-040: secondary line naming the receipt printer destination for the bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Prints the current bill on the receipt printer.'**
+  String get posPrintCustomerBillHint;
 }
 
 class _AppLocalizationsDelegate
