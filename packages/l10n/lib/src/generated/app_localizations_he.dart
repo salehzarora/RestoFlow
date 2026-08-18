@@ -5850,4 +5850,64 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posPrintCustomerBillHint =>
       'מדפיסה את החשבון הנוכחי במדפסת הקבלות.';
+
+  @override
+  String get dashboardSettingsOperatingCurrency => 'מטבע המסעדה';
+
+  @override
+  String get dashboardSettingsOperatingCurrencyHint =>
+      'משמש לתפריט ולהזמנות חדשות של מסעדה זו.';
+
+  @override
+  String get dashboardSettingsCurrencyInherited => 'בירושה מהגדרות הארגון';
+
+  @override
+  String get dashboardSettingsCurrencyOverridden => 'מוגדר עבור מסעדה זו';
+
+  @override
+  String get dashboardSettingsCurrencyOverrideNote =>
+      'לאחר ההגדרה ניתן לשנות למטבע אחר בלבד — לא ניתן לחזור לירושה מכאן.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeTitle => 'לשנות את מטבע המסעדה?';
+
+  @override
+  String get dashboardSettingsCurrencyChangeBody =>
+      'הסכומים אינם מומרים. 40.00 יישאר 40.00 במטבע החדש. הזמנות, תשלומים וקבלות קודמים שומרים על המטבע המקורי שלהם.';
+
+  @override
+  String dashboardSettingsCurrencyChangeFromTo(String from, String to) {
+    return '$from ← $to';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyChangeAck =>
+      'אני מבין/ה שהסכומים אינם מומרים.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeConfirm => 'שינוי מטבע';
+
+  @override
+  String get dashboardSettingsCurrencyBlockedTitle =>
+      'יש לסיים תחילה עבודה פתוחה';
+
+  @override
+  String dashboardSettingsCurrencyBlockedOrders(int count) {
+    return 'יש $count הזמנות פתוחות. סגרו אותן לפני שינוי המטבע.';
+  }
+
+  @override
+  String dashboardSettingsCurrencyBlockedShifts(int count) {
+    return 'יש $count משמרות מזומן פתוחות. סגרו אותן לפני שינוי המטבע.';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyBlockedUnknown =>
+      'לא ניתן היה לבדוק הזמנות פתוחות ומשמרות. נסו שוב.';
+
+  @override
+  String get menuCurrencyInherited => 'בירושה מהגדרות המסעדה';
+
+  @override
+  String get dashboardSettingsCurrencySearchHint => 'חיפוש לפי קוד (למשל USD)';
 }

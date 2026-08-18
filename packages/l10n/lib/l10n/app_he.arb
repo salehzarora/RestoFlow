@@ -1824,5 +1824,21 @@
   "posPrintAction": "הדפסה",
   "posPrintChooserTitle": "אפשרויות הדפסה",
   "posPrintCustomerBill": "חשבון לקוח",
-  "posPrintCustomerBillHint": "מדפיסה את החשבון הנוכחי במדפסת הקבלות."
+  "posPrintCustomerBillHint": "מדפיסה את החשבון הנוכחי במדפסת הקבלות.",
+  "dashboardSettingsOperatingCurrency": "מטבע המסעדה",
+  "dashboardSettingsOperatingCurrencyHint": "משמש לתפריט ולהזמנות חדשות של מסעדה זו.",
+  "dashboardSettingsCurrencyInherited": "בירושה מהגדרות הארגון",
+  "dashboardSettingsCurrencyOverridden": "מוגדר עבור מסעדה זו",
+  "dashboardSettingsCurrencyOverrideNote": "לאחר ההגדרה ניתן לשנות למטבע אחר בלבד — לא ניתן לחזור לירושה מכאן.",
+  "dashboardSettingsCurrencyChangeTitle": "לשנות את מטבע המסעדה?",
+  "dashboardSettingsCurrencyChangeBody": "הסכומים אינם מומרים. 40.00 יישאר 40.00 במטבע החדש. הזמנות, תשלומים וקבלות קודמים שומרים על המטבע המקורי שלהם.",
+  "dashboardSettingsCurrencyChangeFromTo": "{from} ← {to}",
+  "dashboardSettingsCurrencyChangeAck": "אני מבין/ה שהסכומים אינם מומרים.",
+  "dashboardSettingsCurrencyChangeConfirm": "שינוי מטבע",
+  "dashboardSettingsCurrencyBlockedTitle": "יש לסיים תחילה עבודה פתוחה",
+  "dashboardSettingsCurrencyBlockedOrders": "יש {count} הזמנות פתוחות. סגרו אותן לפני שינוי המטבע.",
+  "dashboardSettingsCurrencyBlockedShifts": "יש {count} משמרות מזומן פתוחות. סגרו אותן לפני שינוי המטבע.",
+  "dashboardSettingsCurrencyBlockedUnknown": "לא ניתן היה לבדוק הזמנות פתוחות ומשמרות. נסו שוב.",
+  "menuCurrencyInherited": "בירושה מהגדרות המסעדה",
+  "dashboardSettingsCurrencySearchHint": "חיפוש לפי קוד (למשל USD)"
 }

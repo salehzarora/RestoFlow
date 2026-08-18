@@ -139,6 +139,9 @@ class _FakeSettingsRepo implements SettingsRepository {
   ];
   int branchSaves = 0;
   int restaurantSaves = 0;
+  int currencySaves = 0;
+  String? lastCurrencyCode;
+  SettingsWrite currencyResult = SettingsWrite.ok;
   String? lastBranchName;
   String? lastReceiptPrefix;
   String? lastBranchStatus;
@@ -164,6 +167,15 @@ class _FakeSettingsRepo implements SettingsRepository {
     lastBranchStatus = status;
     lastBranchTimezone = timezone;
     return branchResult;
+  }
+
+  @override
+  Future<SettingsWrite> saveOperatingCurrency({
+    required String currencyCode,
+  }) async {
+    currencySaves++;
+    lastCurrencyCode = currencyCode;
+    return currencyResult;
   }
 
   @override
@@ -462,8 +474,14 @@ void main() {
 
       expect(find.text(l10n.dashboardSettingsEditableTitle), findsOneWidget);
       expect(find.byKey(const Key('settings-branch-name')), findsOneWidget);
-      // Currency is locked (a note), never an editable selector.
-      expect(find.text(l10n.dashboardSettingsCurrencyLocked), findsOneWidget);
+      // OPS-043 D1: the currency is no longer a locked note — it is a real
+      // restaurant-level selector. (Its behaviour is covered in
+      // dashboard_operating_currency_043_test.dart.)
+      expect(find.text(l10n.dashboardSettingsCurrencyLocked), findsNothing);
+      expect(
+        find.byKey(const Key('settings-operating-currency')),
+        findsOneWidget,
+      );
 
       await tester.enterText(
         find.byKey(const Key('settings-branch-name')),

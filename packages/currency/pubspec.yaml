@@ -1,0 +1,9 @@
+name: restoflow_currency
+description: RestoFlow currency package (OPS-043) - the ONE shared ISO-4217 catalog, money display formatter, and major-to-minor parser. Pure Dart - no Flutter, no intl, no IO.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace
+dev_dependencies:
+  test: ^1.25.0

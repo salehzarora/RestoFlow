@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_currency/restoflow_currency.dart'
+    show currencySelectorLabel, normalizeCurrencyCode;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -70,13 +72,14 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _description = TextEditingController(
     text: _item?.description ?? '',
   );
+  // OPS-043 D1: formatted in the RESTAURANT's operating currency, which is the
+  // same code the save sends and the same exponent the parse uses. Three
+  // different currencies in one card is how a 3-decimal tenant ends up typing
+  // 1.234 into a field that stores 12.34.
   late final TextEditingController _price = TextEditingController(
     text: _item == null
         ? ''
-        : formatMinorUnits(_item.basePriceMinor, _item.currencyCode),
-  );
-  late final TextEditingController _currency = TextEditingController(
-    text: _item?.currencyCode ?? widget.scope.currencyCode,
+        : formatMinorUnits(_item.basePriceMinor, _currencyCode),
   );
   // MENU-ORDER-001 (Codex #6): items are drag-reordered in the items panel — a
   // normal edit sends NO display_order (null); the DB guard trigger preserves the
@@ -152,7 +155,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _name.dispose();
     _description.dispose();
     _price.dispose();
-    _currency.dispose();
     _prepMinutes.dispose();
     _kitchenNote.dispose();
     _sku.dispose();
@@ -165,7 +167,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     super.dispose();
   }
 
-  String get _currencyCode => _item?.currencyCode ?? widget.scope.currencyCode;
+  /// OPS-043 D1: the restaurant's operating currency — the ONE currency this
+  /// editor works in.
+  ///
+  /// The SCOPE is the authority, not the item. Items inherit the restaurant
+  /// setting, so a legacy row stored under an older code is re-stamped on the
+  /// next save; that is denomination only, because D2 forbids FX conversion and
+  /// the stored NUMBER never changes. It falls back to the item's own code only
+  /// when the scope has none, so nothing can be saved with a blank currency.
+  String get _currencyCode =>
+      normalizeCurrencyCode(widget.scope.currencyCode) ??
+      normalizeCurrencyCode(_item?.currencyCode) ??
+      widget.scope.currencyCode;
 
   /// The FRESHEST snapshot row for the edited item (the editor target is
   /// captured when the editor opens, but the snapshot reloads after every
@@ -290,7 +303,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   }
 
   Future<void> _saveFields() async {
-    final currencyText = _currency.text.trim().toUpperCase();
+    // OPS-043 D1: no typed currency any more. The inherited operating currency
+    // is what the price is parsed AS and what p_currency_code is sent AS — the
+    // two can no longer disagree.
+    final currencyText = _currencyCode;
     final nameError = validateName(_name.text);
     final priceMinor = parseMajorToMinor(_price.text, currencyText);
     final priceError = validateBasePriceMinor(priceMinor);
@@ -634,45 +650,70 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// 3. Pricing: the base price + currency (sizes/variants render as their own
-  /// sections right below this card). Money integer minor only (D-007).
+  /// 3. Pricing: the base price. Money integer minor only (D-007).
+  ///
+  /// OPS-043 D1: there is NO per-item currency selector any more. One
+  /// restaurant operates in one currency — `coalesce(currency_override,
+  /// default_currency)` — and every item inherits it, so the currency is shown
+  /// READ-ONLY beside the price and changed only in Dashboard Settings. The
+  /// upsert still sends `p_currency_code` (the server argument is NOT NULL);
+  /// it now sends the inherited value instead of a typed one.
   Widget _pricingCard(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
     return MenuSectionCard(
       title: l10n.menuPricingSection,
       icon: Icons.sell_outlined,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: 2,
-            child: TextField(
-              key: const ValueKey('menu-item-price'),
-              controller: _price,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: l10n.menuPriceLabel,
-                border: const OutlineInputBorder(),
-                errorText: _priceError == null
-                    ? null
-                    : l10n.menuFieldErrorText(_priceError!),
-              ),
+          TextField(
+            key: const ValueKey('menu-item-price'),
+            controller: _price,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: l10n.menuPriceLabel,
+              // The inherited currency, on the field itself: the number the
+              // cashier types is in THIS currency and nothing else.
+              suffixText: currencySelectorLabel(_currencyCode),
+              border: const OutlineInputBorder(),
+              errorText: _priceError == null
+                  ? null
+                  : l10n.menuFieldErrorText(_priceError!),
             ),
           ),
-          const SizedBox(width: RestoflowSpacing.md),
-          Expanded(
-            child: TextField(
-              controller: _currency,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: l10n.menuCurrencyLabel,
-                border: const OutlineInputBorder(),
-                errorText: _currencyError == null
-                    ? null
-                    : l10n.menuFieldErrorText(_currencyError!),
+          const SizedBox(height: RestoflowSpacing.xs),
+          // The inherited currency, and — when the scope has no usable one —
+          // the fail-closed error that blocks the save. The validator survived
+          // the selector's removal on purpose: without it a blank scope
+          // currency would reach the server as an opaque 42501.
+          Row(
+            key: const ValueKey('menu-item-currency-inherited'),
+            children: [
+              Icon(
+                _currencyError == null
+                    ? Icons.lock_outline
+                    : Icons.error_outline,
+                size: RestoflowIconSizes.sm,
+                color: _currencyError == null
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.error,
               ),
-            ),
+              const SizedBox(width: RestoflowSpacing.xs),
+              Expanded(
+                child: Text(
+                  _currencyError == null
+                      ? '${l10n.menuCurrencyLabel}: '
+                            '${currencySelectorLabel(_currencyCode)} — '
+                            '${l10n.menuCurrencyInherited}'
+                      : l10n.menuFieldErrorText(_currencyError!),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _currencyError == null
+                        ? theme.colorScheme.onSurfaceVariant
+                        : theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

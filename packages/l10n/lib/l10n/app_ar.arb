@@ -1824,5 +1824,21 @@
   "posPrintAction": "طباعة",
   "posPrintChooserTitle": "خيارات الطباعة",
   "posPrintCustomerBill": "حساب الزبون",
-  "posPrintCustomerBillHint": "طباعة حساب الزبون الحالي من طابعة الإيصالات."
+  "posPrintCustomerBillHint": "طباعة حساب الزبون الحالي من طابعة الإيصالات.",
+  "dashboardSettingsOperatingCurrency": "عملة المطعم",
+  "dashboardSettingsOperatingCurrencyHint": "تُستخدم في قائمة الطعام والطلبات الجديدة لهذا المطعم.",
+  "dashboardSettingsCurrencyInherited": "موروثة من إعدادات المؤسسة",
+  "dashboardSettingsCurrencyOverridden": "مضبوطة لهذا المطعم",
+  "dashboardSettingsCurrencyOverrideNote": "بعد الضبط، يمكن تغيير العملة إلى عملة أخرى فقط — ولا يمكن إعادتها إلى الوضع الموروث من هنا.",
+  "dashboardSettingsCurrencyChangeTitle": "تغيير عملة المطعم؟",
+  "dashboardSettingsCurrencyChangeBody": "لا يتم تحويل المبالغ. 40.00 تبقى 40.00 بالعملة الجديدة. تحتفظ الطلبات والمدفوعات والإيصالات السابقة بعملتها الأصلية.",
+  "dashboardSettingsCurrencyChangeFromTo": "{from} ← {to}",
+  "dashboardSettingsCurrencyChangeAck": "أفهم أنه لن يتم تحويل أي مبلغ.",
+  "dashboardSettingsCurrencyChangeConfirm": "تغيير العملة",
+  "dashboardSettingsCurrencyBlockedTitle": "أنهِ العمل المفتوح أولاً",
+  "dashboardSettingsCurrencyBlockedOrders": "يوجد {count} طلب مفتوح. أغلقها قبل تغيير العملة.",
+  "dashboardSettingsCurrencyBlockedShifts": "توجد {count} وردية نقدية مفتوحة. أغلقها قبل تغيير العملة.",
+  "dashboardSettingsCurrencyBlockedUnknown": "تعذّر التحقق من الطلبات المفتوحة والورديات. حاول مرة أخرى.",
+  "menuCurrencyInherited": "موروثة من إعدادات المطعم",
+  "dashboardSettingsCurrencySearchHint": "ابحث بالرمز (مثل USD)"
 }

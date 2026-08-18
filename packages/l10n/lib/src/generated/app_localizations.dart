@@ -10833,6 +10833,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Prints the current bill on the receipt printer.'**
   String get posPrintCustomerBillHint;
+
+  /// OPS-043 D1: the restaurant-level currency selector label in Dashboard Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating currency'**
+  String get dashboardSettingsOperatingCurrency;
+
+  /// OPS-043 D1: what the operating currency governs.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for this restaurant\'s menu and new orders.'**
+  String get dashboardSettingsOperatingCurrencyHint;
+
+  /// OPS-043 D1: the restaurant has no currency_override, so the organization default applies.
+  ///
+  /// In en, this message translates to:
+  /// **'Inherited from the organization default'**
+  String get dashboardSettingsCurrencyInherited;
+
+  /// OPS-043 D1: the restaurant carries its own currency_override.
+  ///
+  /// In en, this message translates to:
+  /// **'Set for this restaurant'**
+  String get dashboardSettingsCurrencyOverridden;
+
+  /// OPS-043: update_restaurant_settings applies currency_override with COALESCE, so it can set but never clear an override.
+  ///
+  /// In en, this message translates to:
+  /// **'Once set, the currency can only be changed to another currency here — it cannot be returned to inherited.'**
+  String get dashboardSettingsCurrencyOverrideNote;
+
+  /// OPS-043 D3: title of the currency-change confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Change operating currency?'**
+  String get dashboardSettingsCurrencyChangeTitle;
+
+  /// OPS-043 D3: the mandated no-conversion warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Amounts are NOT converted. 40.00 stays 40.00 in the new currency. Historical orders, payments, and receipts keep their original currency.'**
+  String get dashboardSettingsCurrencyChangeBody;
+
+  /// OPS-043: the currency being replaced and the one replacing it.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} → {to}'**
+  String dashboardSettingsCurrencyChangeFromTo(String from, String to);
+
+  /// OPS-043 D3: the explicit acknowledgment the owner must tick.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand amounts are not converted.'**
+  String get dashboardSettingsCurrencyChangeAck;
+
+  /// OPS-043 D3: confirm button of the currency-change dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Change currency'**
+  String get dashboardSettingsCurrencyChangeConfirm;
+
+  /// OPS-043 D3 safety gate: the currency change is blocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish open work first'**
+  String get dashboardSettingsCurrencyBlockedTitle;
+
+  /// OPS-043 D3 safety gate: open orders block the change.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} open orders. Close or settle them before changing the currency.'**
+  String dashboardSettingsCurrencyBlockedOrders(int count);
+
+  /// OPS-043 D3 safety gate: active cash shifts block the change.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} open cash shifts. Close them before changing the currency.'**
+  String dashboardSettingsCurrencyBlockedShifts(int count);
+
+  /// OPS-043 D3 safety gate: the check itself failed, so the change fails closed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check open orders and shifts. Try again.'**
+  String get dashboardSettingsCurrencyBlockedUnknown;
+
+  /// OPS-043 D1: the item editor shows the restaurant operating currency read-only; items no longer carry their own selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Inherited from restaurant settings'**
+  String get menuCurrencyInherited;
+
+  /// OPS-043: search box of the operating-currency picker; the ISO code is the search key.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by code (e.g. USD)'**
+  String get dashboardSettingsCurrencySearchHint;
 }
 
 class _AppLocalizationsDelegate

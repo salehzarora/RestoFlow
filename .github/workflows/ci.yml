@@ -115,6 +115,13 @@ jobs:
       - name: Tests — auth_identity (device auth + PIN session models)
         run: dart test packages/auth_identity
 
+      # OPS-043 Phase 1: the shared ISO-4217 catalog/formatter/parser. Pure
+      # Dart, so it belongs in this lane — and it MUST be listed explicitly:
+      # these steps name one package each, there is no glob, so an unlisted
+      # package is silently never tested.
+      - name: Tests — currency (OPS-043, shared ISO-4217 money display/entry)
+        run: dart test packages/currency
+
       # RF-020 (RF020-B1): Flutter-FREE structural check of the committed l10n
       # setup (ARB completeness + generated output present/consistent). Runs even
       # if the Flutter tool is unavailable, so l10n structural regressions are

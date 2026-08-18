@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_currency/restoflow_currency.dart'
+    show currencySelectorLabelIsolated;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminPageHeader, AdminSectionCard, AdminStateView, adminRoleLabel;
@@ -10,6 +12,8 @@ import '../branding/restaurant_logo_section.dart';
 import '../branding/restaurant_logo_storage.dart';
 import 'branch_kitchen_workflow_repository.dart';
 import 'branch_shift_close_policy_repository.dart';
+import 'currency_change_guard.dart';
+import 'currency_picker.dart';
 import 'supabase_settings_repository.dart';
 import 'timezone_catalog.dart';
 import 'timezone_picker.dart';
@@ -58,6 +62,7 @@ class RealSettingsView extends StatefulWidget {
     this.currencyCode,
     this.policyRepository,
     this.settingsRepository,
+    this.currencyChangeGuard,
     this.brandingRepository,
     this.brandingStorage,
     this.kitchenWorkflowRepository,
@@ -89,6 +94,11 @@ class RealSettingsView extends StatefulWidget {
   /// concrete branch in scope — the editable section is then omitted (the honest
   /// read-only workspace view remains). The server enforces the owner gate.
   final SettingsRepository? settingsRepository;
+
+  /// OPS-043 D3: the open-orders / open-shift check run BEFORE an operating
+  /// currency change. Null is treated exactly like a failed check — the change
+  /// is refused, never silently allowed.
+  final CurrencyChangeGuard? currencyChangeGuard;
 
   @override
   State<RealSettingsView> createState() => _RealSettingsViewState();
@@ -125,6 +135,14 @@ class _RealSettingsViewState extends State<RealSettingsView> {
 
   /// The global IANA catalog for the picker (loaded from `list_timezones`).
   List<TimezoneOption> _timezones = const [];
+
+  /// OPS-043 D1: the restaurant's operating currency AS THE SERVER HAS IT.
+  /// Only ever assigned from a prefill read or from a confirmed successful
+  /// write — never optimistically, so the row cannot claim a change the
+  /// server refused.
+  String? _currencyCode;
+  bool _currencyIsInherited = true;
+  bool _savingCurrency = false;
 
   /// Only a full owner (org/restaurant) may change branch settings — this
   /// mirrors the server gate (`set_branch_pos_shift_close_enabled` requires
@@ -300,6 +318,11 @@ class _RealSettingsViewState extends State<RealSettingsView> {
       if (prefill.restaurantName != null) {
         _restaurantName.text = prefill.restaurantName!;
       }
+      // OPS-043: the authoritative pair. `widget.currencyCode` is already
+      // coalesced (and falls back to the demo currency), so it cannot say
+      // whether the value is inherited — only this read can.
+      _currencyCode = prefill.effectiveCurrency ?? _currencyCode;
+      _currencyIsInherited = prefill.currencyIsInherited;
     });
   }
 
@@ -307,6 +330,194 @@ class _RealSettingsViewState extends State<RealSettingsView> {
     final zones = await repo.loadTimezones();
     if (!mounted || zones.isEmpty) return;
     setState(() => _timezones = zones);
+  }
+
+  // ===========================================================================
+  // OPS-043 D1/D2/D3 — Operating currency
+  // ===========================================================================
+
+  /// The restaurant's operating currency: the server-read value when we have
+  /// one, else the coalesced value the shell resolved. Null only when neither
+  /// is known, in which case the row shows an em dash rather than a guess.
+  String? get _operatingCurrency => _currencyCode ?? widget.currencyCode;
+
+  /// The Operating currency row: what it is now, where it came from, and — for
+  /// an owner — a picker that opens the confirmed change flow.
+  ///
+  /// D2's ordering rule is enforced by the shared module, not here:
+  /// [selectableCurrencies] returns only what the app can currently display and
+  /// take money in (exponent-2 in Phase 1), and Phase 2 widens it by flipping
+  /// one constant.
+  /// The Operating currency row: what it is now, where it came from, and — for
+  /// an owner — a searchable picker that opens the confirmed change flow.
+  ///
+  /// D2's ordering rule is enforced by the shared module, not here:
+  /// `selectableCurrencies()` returns only what the app can currently display
+  /// and take money in (exponent-2 in Phase 1), and Phase 2 widens it by
+  /// flipping one constant.
+  Widget _operatingCurrencyField(BuildContext context, AppLocalizations l10n) {
+    return CurrencyPickerField(
+      l10n: l10n,
+      currentCode: _operatingCurrency,
+      isInherited: _currencyIsInherited,
+      busy: _savingCurrency,
+      onPicked: (picked) => _onCurrencyPicked(context, l10n, picked),
+    );
+  }
+
+  /// The full change flow: SAFETY GATE first (D3), then the no-conversion
+  /// confirmation, then the write. Picking the value already in force does
+  /// nothing at all.
+  Future<void> _onCurrencyPicked(
+    BuildContext context,
+    AppLocalizations l10n,
+    String code,
+  ) async {
+    final repo = widget.settingsRepository;
+    if (repo == null || _savingCurrency) return;
+    final current = _operatingCurrency;
+    if (code == current) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _savingCurrency = true);
+    try {
+      // 1. D3 SAFETY GATE — open orders / open cash shift, fail closed.
+      final gate =
+          await (widget.currencyChangeGuard?.check() ??
+              Future.value(const CurrencyChangeGate.unknown()));
+      if (!mounted) return;
+      if (gate.blocksChange) {
+        await _showCurrencyBlocked(context, l10n, gate);
+        return;
+      }
+
+      // 2. D3 CONFIRMATION — amounts are not converted.
+      if (!mounted) return;
+      final confirmed = await _confirmCurrencyChange(
+        context,
+        l10n,
+        current,
+        code,
+      );
+      if (!mounted || !confirmed) return;
+
+      // 3. The write. `restaurants.currency_override` for THIS restaurant.
+      final result = await repo.saveOperatingCurrency(currencyCode: code);
+      if (!mounted) return;
+      if (result == SettingsWrite.ok) {
+        setState(() {
+          _currencyCode = code;
+          _currencyIsInherited = false;
+        });
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(_writeMessage(l10n, result))),
+      );
+    } finally {
+      if (mounted) setState(() => _savingCurrency = false);
+    }
+  }
+
+  /// D3: the blocked-change message, naming what has to be resolved first.
+  /// "Unknown" is reported as its own honest message — never as "all clear".
+  Future<void> _showCurrencyBlocked(
+    BuildContext context,
+    AppLocalizations l10n,
+    CurrencyChangeGate gate,
+  ) {
+    final reasons = <String>[
+      if (gate.openOrders > 0)
+        l10n.dashboardSettingsCurrencyBlockedOrders(gate.openOrders),
+      if (gate.openShifts > 0)
+        l10n.dashboardSettingsCurrencyBlockedShifts(gate.openShifts),
+    ];
+    if (reasons.isEmpty) {
+      reasons.add(l10n.dashboardSettingsCurrencyBlockedUnknown);
+    }
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const Key('settings-currency-blocked'),
+        title: Text(l10n.dashboardSettingsCurrencyBlockedTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final reason in reasons) Text(reason)],
+        ),
+        actions: [
+          TextButton(
+            key: const Key('settings-currency-blocked-close'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(l10n.activityLogClose),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// D3: the no-conversion confirmation with an EXPLICIT acknowledgment. The
+  /// confirm button stays disabled until the owner ticks it.
+  Future<bool> _confirmCurrencyChange(
+    BuildContext context,
+    AppLocalizations l10n,
+    String? from,
+    String to,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        var acknowledged = false;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            key: const Key('settings-currency-confirm'),
+            title: Text(l10n.dashboardSettingsCurrencyChangeTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  // Bidi-isolated: in Arabic/Hebrew the two Latin
+                  // labels would otherwise swap their brackets and
+                  // the owner could not tell which currency is
+                  // replacing which.
+                  l10n.dashboardSettingsCurrencyChangeFromTo(
+                    currencySelectorLabelIsolated(from),
+                    currencySelectorLabelIsolated(to),
+                  ),
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                Text(l10n.dashboardSettingsCurrencyChangeBody),
+                const SizedBox(height: RestoflowSpacing.sm),
+                CheckboxListTile(
+                  key: const Key('settings-currency-ack'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: acknowledged,
+                  onChanged: (v) => setLocal(() => acknowledged = v ?? false),
+                  title: Text(l10n.dashboardSettingsCurrencyChangeAck),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                key: const Key('settings-currency-cancel'),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(l10n.adminCancel),
+              ),
+              FilledButton(
+                key: const Key('settings-currency-apply'),
+                onPressed: acknowledged
+                    ? () => Navigator.of(ctx).pop(true)
+                    : null,
+                child: Text(l10n.dashboardSettingsCurrencyChangeConfirm),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    return confirmed ?? false;
   }
 
   String _writeMessage(
@@ -439,7 +650,10 @@ class _RealSettingsViewState extends State<RealSettingsView> {
               _ValueField(label: l10n.authBranch, value: membership.branchName),
               _ValueField(
                 label: l10n.menuCurrencyLabel,
-                value: widget.currencyCode,
+                // OPS-043: the SAME value the Operating currency row shows, so
+                // a successful change cannot leave this card quoting the old
+                // currency until the next full reload.
+                value: _operatingCurrency,
               ),
               _ValueField(
                 label: l10n.authRole,
@@ -492,33 +706,19 @@ class _RealSettingsViewState extends State<RealSettingsView> {
 
   /// The owner-only editable fields (RF-116): branch display name + receipt
   /// prefix (one Save), and — when a concrete restaurant is in scope — the
-  /// restaurant name (its own Save). Currency stays locked (ILS-only pilot).
-  /// Every Save calls the real backend RPC and reflects the true result.
+  /// restaurant name (its own Save).
+  ///
+  /// OPS-043 D1 replaced the "currency is fixed to ₪" note with a real
+  /// Operating currency selector for THIS restaurant. Every Save calls the real
+  /// backend RPC and reflects the true result.
   Widget _editableFields(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Currency is fixed to ILS — a read-only note, NEVER an editable selector.
-        Row(
-          children: [
-            Icon(
-              Icons.lock_outline,
-              size: RestoflowIconSizes.sm,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: RestoflowSpacing.xs),
-            Expanded(
-              child: Text(
-                l10n.dashboardSettingsCurrencyLocked,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: RestoflowSpacing.md),
+        if (_hasRestaurant) ...[
+          _operatingCurrencyField(context, l10n),
+          const Divider(height: RestoflowSpacing.xl),
+        ],
         TextField(
           key: const Key('settings-branch-name'),
           controller: _branchName,

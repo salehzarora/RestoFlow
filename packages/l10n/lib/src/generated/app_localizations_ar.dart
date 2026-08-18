@@ -5890,4 +5890,64 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posPrintCustomerBillHint =>
       'طباعة حساب الزبون الحالي من طابعة الإيصالات.';
+
+  @override
+  String get dashboardSettingsOperatingCurrency => 'عملة المطعم';
+
+  @override
+  String get dashboardSettingsOperatingCurrencyHint =>
+      'تُستخدم في قائمة الطعام والطلبات الجديدة لهذا المطعم.';
+
+  @override
+  String get dashboardSettingsCurrencyInherited => 'موروثة من إعدادات المؤسسة';
+
+  @override
+  String get dashboardSettingsCurrencyOverridden => 'مضبوطة لهذا المطعم';
+
+  @override
+  String get dashboardSettingsCurrencyOverrideNote =>
+      'بعد الضبط، يمكن تغيير العملة إلى عملة أخرى فقط — ولا يمكن إعادتها إلى الوضع الموروث من هنا.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeTitle => 'تغيير عملة المطعم؟';
+
+  @override
+  String get dashboardSettingsCurrencyChangeBody =>
+      'لا يتم تحويل المبالغ. 40.00 تبقى 40.00 بالعملة الجديدة. تحتفظ الطلبات والمدفوعات والإيصالات السابقة بعملتها الأصلية.';
+
+  @override
+  String dashboardSettingsCurrencyChangeFromTo(String from, String to) {
+    return '$from ← $to';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyChangeAck =>
+      'أفهم أنه لن يتم تحويل أي مبلغ.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeConfirm => 'تغيير العملة';
+
+  @override
+  String get dashboardSettingsCurrencyBlockedTitle =>
+      'أنهِ العمل المفتوح أولاً';
+
+  @override
+  String dashboardSettingsCurrencyBlockedOrders(int count) {
+    return 'يوجد $count طلب مفتوح. أغلقها قبل تغيير العملة.';
+  }
+
+  @override
+  String dashboardSettingsCurrencyBlockedShifts(int count) {
+    return 'توجد $count وردية نقدية مفتوحة. أغلقها قبل تغيير العملة.';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyBlockedUnknown =>
+      'تعذّر التحقق من الطلبات المفتوحة والورديات. حاول مرة أخرى.';
+
+  @override
+  String get menuCurrencyInherited => 'موروثة من إعدادات المطعم';
+
+  @override
+  String get dashboardSettingsCurrencySearchHint => 'ابحث بالرمز (مثل USD)';
 }
