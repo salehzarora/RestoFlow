@@ -12,5 +12,11 @@ resolution: workspace
 # the client logic stays fully unit-testable with no sockets.
 dependencies:
   http: ^1.0.0
+  # OPS-043 Phase 2: the shared ISO-4217 exponent catalog. Receipts keep their
+  # symbol-free "42.42 ILS" style; only the exponent table is now shared, so it
+  # can no longer drift from the POS/dashboard one (it was already missing
+  # OMR/TND/KRW).
+  restoflow_currency:
+    path: ../currency
 dev_dependencies:
   test: ^1.25.0

@@ -29,6 +29,11 @@ dependencies:
     path: ../../packages/domain
   restoflow_money:
     path: ../../packages/money
+  # OPS-043 Phase 2: the shared ISO-4217 catalog/formatter/parser. The POS money
+  # display AND every cash-entry path route through it, so a 0- or 3-decimal
+  # currency can no longer be recorded 100x/10x wrong.
+  restoflow_currency:
+    path: ../../packages/currency
   restoflow_design_system:
     path: ../../packages/design_system
   # RF-115: the ESC/POS adapter + the LOCAL print-bridge client (loopback HTTP,

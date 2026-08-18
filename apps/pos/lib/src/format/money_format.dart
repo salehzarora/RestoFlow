@@ -1,24 +1,25 @@
+import 'package:restoflow_currency/restoflow_currency.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
-/// Formats integer minor-unit money for display in the POS demo UI.
+/// Formats integer minor-unit money for display in the POS.
 ///
-/// Money is integer minor units everywhere (DECISION D-007); the money package
-/// ships no formatter, so the presentation layer owns rendering. Every input is
-/// an integer minor-unit amount — there is no floating-point money.
+/// OPS-043 Phase 2: this is now a THIN ADAPTER over `packages/currency`, the
+/// one shared ISO-4217 catalog/formatter. It used to carry its own 3-entry
+/// symbol table and its own 3-entry fraction-digit table — both defaulting to
+/// two decimals, which for JPY/KRW (0) and JOD/KWD/BHD/OMR/TND (3) rendered a
+/// figure that was wrong by 100x or 10x rather than merely unfamiliar.
+///
+/// The class survives (rather than 51 call sites being rewritten) because the
+/// call sites are correct as they stand: each already passes the currency of
+/// the thing it is rendering — the ROW's code for stored money, the cart's for
+/// live money. Only the table underneath them was wrong.
+///
+/// ILS/USD/EUR output is unchanged to the character; the difference is that a
+/// currency outside those three now renders with its CODE ("CHF 25.00") instead
+/// of a bare, unlabelled number, and 0-/3-decimal currencies get their real
+/// exponent.
 class MoneyFormatter {
   const MoneyFormatter._();
-
-  static const Map<String, String> _symbols = <String, String>{
-    'ILS': '₪',
-    'USD': r'$',
-    'EUR': '€',
-  };
-
-  static const Map<String, int> _fractionDigits = <String, int>{
-    'ILS': 2,
-    'USD': 2,
-    'EUR': 2,
-  };
 
   /// Renders a [Money] value, e.g. `Money(4200, 'ILS')` -> `"₪42.00"`.
   static String format(Money money) =>
@@ -26,19 +27,8 @@ class MoneyFormatter {
 
   /// Renders an integer minor-unit amount for [currencyCode],
   /// e.g. `formatMinor(4200, 'ILS')` -> `"₪42.00"`.
-  static String formatMinor(int amountMinor, String currencyCode) {
-    final digits = _fractionDigits[currencyCode] ?? 2;
-    final symbol = _symbols[currencyCode] ?? '';
-    final divisor = _pow10(digits);
-    final negative = amountMinor < 0;
-    final abs = amountMinor.abs();
-    final whole = abs ~/ divisor;
-    final number = digits == 0
-        ? '$whole'
-        : '$whole.${(abs % divisor).toString().padLeft(digits, '0')}';
-    final sign = negative ? '-' : '';
-    return '$sign$symbol$number';
-  }
+  static String formatMinor(int amountMinor, String currencyCode) =>
+      formatCurrencyMinor(amountMinor, currencyCode);
 
   /// Renders a SIGNED minor-unit price delta with an explicit sign, e.g.
   /// `formatSignedDeltaMinor(300, 'ILS')` -> `"+₪3.00"` and `-300` ->
@@ -46,14 +36,5 @@ class MoneyFormatter {
   /// option sheet and on cart sub-lines. Zero renders as `"+₪0.00"` — callers
   /// showing "free" for zero deltas must branch before calling.
   static String formatSignedDeltaMinor(int deltaMinor, String currencyCode) =>
-      (deltaMinor < 0 ? '−' : '+') +
-      formatMinor(deltaMinor.abs(), currencyCode);
-
-  static int _pow10(int exponent) {
-    var result = 1;
-    for (var i = 0; i < exponent; i++) {
-      result *= 10;
-    }
-    return result;
-  }
+      formatSignedCurrencyMinor(deltaMinor, currencyCode);
 }

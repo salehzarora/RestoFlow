@@ -111,7 +111,13 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
     if (ordersRaw is List) {
       for (final row in ordersRaw) {
         if (row is! Map) continue;
-        rows.add(_row(row, currency));
+        // OPS-043 Phase 2 — HISTORICAL MONEY IS NEVER RELABELLED. Each row
+        // now carries the currency the order was actually taken in; the
+        // envelope code is only a fallback for a server that predates the
+        // per-row key, so this client is correct against BOTH deployments
+        // (order of operations: migration first, then this).
+        final rowCurrency = (row['currency_code'] ?? '').toString();
+        rows.add(_row(row, rowCurrency.isEmpty ? currency : rowCurrency));
       }
     }
     return OrderHistoryPage(

@@ -1,29 +1,25 @@
 /// Integer-only minor-unit money parse/format helpers (RF-111, DECISION D-007).
 ///
-/// There is NO shared display/input formatter in `packages/money` (it has the
-/// `Money` value type but no formatter), so RF-111 provides this small one. It
-/// is strictly integer arithmetic — no `double`, no `toStringAsFixed` — so it
-/// can never introduce floating-point money. Per-currency minor-unit exponents
-/// mirror the receipt formatter's approach.
+/// OPS-043 Phase 2: the EXPONENT TABLE and the formatter moved to
+/// `packages/currency`, the one shared ISO-4217 catalog. This file held the
+/// third of three hand-maintained exponent maps in the repo — it knew OMR, TND
+/// and KRW that the receipt formatter's did not, and neither knew the rest of
+/// ISO-4217. Sharing the table is the whole point: two maps that disagree about
+/// how many decimals a currency has will eventually disagree in production.
+///
+/// What stays local is the PARSER'S INPUT GRAMMAR. This one is deliberately
+/// more forgiving than cash entry — it accepts a leading `+`, a bare `.50`, a
+/// trailing `12.` and negatives, because it backs a menu price field an owner
+/// types into, not a till. The strict grammar lives in
+/// `packages/currency`'s `parseCashToMinor`. Only the exponent is shared.
 library;
+
+import 'package:restoflow_currency/restoflow_currency.dart' as currency;
 
 /// The number of minor-unit decimal places for [currencyCode] (e.g. 2 for USD,
 /// 3 for JOD, 0 for JPY). Defaults to 2 for unknown codes.
-int currencyExponent(String currencyCode) {
-  switch (currencyCode.trim().toUpperCase()) {
-    case 'JOD':
-    case 'KWD':
-    case 'BHD':
-    case 'OMR':
-    case 'TND':
-      return 3;
-    case 'JPY':
-    case 'KRW':
-      return 0;
-    default:
-      return 2;
-  }
-}
+int currencyExponent(String currencyCode) =>
+    currency.currencyExponent(currencyCode);
 
 int _pow10(int exponent) {
   var result = 1;
@@ -38,18 +34,12 @@ final RegExp _digits = RegExp(r'^[0-9]*$');
 /// Formats integer minor units to a major-unit display string using ONLY
 /// integer arithmetic, e.g. `(4242, 'USD') -> "42.42"`, `(-50, 'USD') -> "-0.50"`,
 /// `(500, 'JPY') -> "500"`.
-String formatMinorUnits(int minorUnits, String currencyCode) {
-  final exponent = currencyExponent(currencyCode);
-  final isNegative = minorUnits < 0;
-  final absolute = isNegative ? -minorUnits : minorUnits;
-  final scale = _pow10(exponent);
-  final whole = absolute ~/ scale;
-  final fraction = absolute % scale;
-  final sign = isNegative ? '-' : '';
-  if (exponent == 0) return '$sign$whole';
-  final fractionText = fraction.toString().padLeft(exponent, '0');
-  return '$sign$whole.$fractionText';
-}
+String formatMinorUnits(int minorUnits, String currencyCode) =>
+    currency.formatCurrencyMinor(
+      minorUnits,
+      currencyCode,
+      style: currency.CurrencySymbolStyle.bare,
+    );
 
 /// Parses a major-unit string (e.g. `"12.50"`) into integer minor units for
 /// [currencyCode], or `null` when the input is not a valid amount. Integer-only:
