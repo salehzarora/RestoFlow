@@ -29,6 +29,8 @@ class SettingsPrefill {
     this.branchTimezone,
     this.restaurantName,
     this.restaurantStatus,
+    this.restaurantCurrencyOverride,
+    this.organizationDefaultCurrency,
   });
 
   final String? branchName;
@@ -46,6 +48,26 @@ class SettingsPrefill {
 
   /// The restaurant's current status, preserved on save.
   final String? restaurantStatus;
+
+  /// OPS-043 D1: `restaurants.currency_override` AS STORED — null means this
+  /// restaurant inherits. The already-coalesced effective currency on
+  /// `ResolvedTenantContext` cannot answer "is this inherited or set?", which
+  /// is exactly what the Operating currency row has to tell the owner.
+  final String? restaurantCurrencyOverride;
+
+  /// OPS-043 D1: `organizations.default_currency` — the value inherited when
+  /// [restaurantCurrencyOverride] is null.
+  final String? organizationDefaultCurrency;
+
+  /// The currency this restaurant actually operates in:
+  /// `coalesce(restaurants.currency_override, organizations.default_currency)`,
+  /// the same rule the menu/POS RPCs apply server-side.
+  String? get effectiveCurrency =>
+      restaurantCurrencyOverride ?? organizationDefaultCurrency;
+
+  /// True when the currency comes from the organization rather than from this
+  /// restaurant's own override.
+  bool get currencyIsInherited => restaurantCurrencyOverride == null;
 }
 
 /// Reads current (branch/restaurant) settings and writes the editable subset via
@@ -80,11 +102,29 @@ abstract interface class SettingsRepository {
     required String name,
     required String status,
   });
+
+  /// OPS-043 D1: sets `restaurants.currency_override` for THIS restaurant only.
+  ///
+  /// Deliberately its own method rather than another parameter on
+  /// [saveRestaurant]: the two are separate owner intents with separate
+  /// confirmations, and folding the currency into the name save would put it
+  /// under the same idempotency fingerprint.
+  ///
+  /// It can only SET. `update_restaurant_settings` applies the value with
+  /// `coalesce(v_cur, currency_override)`, so a null argument means "leave
+  /// unchanged" and there is NO server path back to inheritance — see
+  /// [SettingsPrefill.currencyIsInherited]. It also never touches sibling
+  /// restaurants: the write is scoped to `p_restaurant_id`, and
+  /// `organizations.default_currency` is not written here at all.
+  Future<SettingsWrite> saveOperatingCurrency({required String currencyCode});
 }
 
 /// The real, Supabase-backed [SettingsRepository] over `public.list_org_structure`
 /// (read) and `public.update_branch_settings` / `public.update_restaurant_settings`
-/// (write). Currency is NEVER writable here — the pilot stays ILS-only (Q-007).
+/// (write). OPS-043 D1 replaced the ILS-only lock (Q-007) with a real
+/// restaurant-level Operating currency: [saveOperatingCurrency] writes
+/// `restaurants.currency_override` for THIS restaurant, and nothing here ever
+/// writes `organizations.default_currency`.
 class SupabaseSettingsRepository implements SettingsRepository {
   SupabaseSettingsRepository({
     required SyncRpcTransport transport,
@@ -114,6 +154,10 @@ class SupabaseSettingsRepository implements SettingsRepository {
       return null;
     }
     if (raw is! Map || raw['ok'] != true) return null;
+    final organization = raw['organization'];
+    final orgDefaultCurrency = organization is Map
+        ? organization['default_currency']
+        : null;
     for (final r in (raw['restaurants'] as List?) ?? const []) {
       if (r is! Map || (r['id'] ?? '').toString() != restaurantId) continue;
       String? branchName;
@@ -136,6 +180,10 @@ class SupabaseSettingsRepository implements SettingsRepository {
         branchTimezone: branchTimezone,
         restaurantName: _nonEmpty(r['name']),
         restaurantStatus: _nonEmpty(r['status']),
+        // OPS-043: the RAW pair, never pre-coalesced — the settings row has to
+        // distinguish "inherited from the organization" from "set here".
+        restaurantCurrencyOverride: _nonEmpty(r['currency_override']),
+        organizationDefaultCurrency: _nonEmpty(orgDefaultCurrency),
       );
     }
     return null;
@@ -216,10 +264,45 @@ class SupabaseSettingsRepository implements SettingsRepository {
         'p_organization_id': organizationId,
         'p_restaurant_id': restaurantId,
         'p_name': name,
-        // Currency stays locked (ILS-only pilot); timezone is not edited here.
+        // The name save must not touch the currency: null means "leave
+        // unchanged" (the RPC coalesces), and the currency has its own
+        // confirmed write in [saveOperatingCurrency]. Timezone is not edited
+        // here either.
         'p_currency_override': null,
         'p_timezone': null,
         'p_status': status,
+      });
+    } catch (_) {
+      return SettingsWrite.unavailable;
+    }
+    return _outcome(raw);
+  }
+
+  @override
+  Future<SettingsWrite> saveOperatingCurrency({
+    required String currencyCode,
+  }) async {
+    final code = currencyCode.trim().toUpperCase();
+    // Fail closed on a malformed code rather than letting the server raise
+    // 42501 (which surfaces as an opaque "unavailable").
+    if (!RegExp(r'^[A-Z]{3}$').hasMatch(code)) {
+      return SettingsWrite.unavailable;
+    }
+    final Object? raw;
+    try {
+      raw = await _t.invoke('update_restaurant_settings', <String, dynamic>{
+        // The currency is part of the fingerprint: two different currency
+        // saves must never collide on the server's management ledger.
+        'p_client_request_id': _requestId('restaurant-currency', [code]),
+        'p_organization_id': organizationId,
+        'p_restaurant_id': restaurantId,
+        // THIS restaurant only. Null name/timezone/status leave those fields
+        // untouched (the RPC coalesces), and no organization-level currency is
+        // written — sibling restaurants keep their own currency (D1).
+        'p_name': null,
+        'p_currency_override': code,
+        'p_timezone': null,
+        'p_status': null,
       });
     } catch (_) {
       return SettingsWrite.unavailable;

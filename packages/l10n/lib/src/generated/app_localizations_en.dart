@@ -5936,4 +5936,65 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posPrintCustomerBillHint =>
       'Prints the current bill on the receipt printer.';
+
+  @override
+  String get dashboardSettingsOperatingCurrency => 'Operating currency';
+
+  @override
+  String get dashboardSettingsOperatingCurrencyHint =>
+      'Used for this restaurant\'s menu and new orders.';
+
+  @override
+  String get dashboardSettingsCurrencyInherited =>
+      'Inherited from the organization default';
+
+  @override
+  String get dashboardSettingsCurrencyOverridden => 'Set for this restaurant';
+
+  @override
+  String get dashboardSettingsCurrencyOverrideNote =>
+      'Once set, the currency can only be changed to another currency here — it cannot be returned to inherited.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeTitle =>
+      'Change operating currency?';
+
+  @override
+  String get dashboardSettingsCurrencyChangeBody =>
+      'Amounts are NOT converted. 40.00 stays 40.00 in the new currency. Historical orders, payments, and receipts keep their original currency.';
+
+  @override
+  String dashboardSettingsCurrencyChangeFromTo(String from, String to) {
+    return '$from → $to';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyChangeAck =>
+      'I understand amounts are not converted.';
+
+  @override
+  String get dashboardSettingsCurrencyChangeConfirm => 'Change currency';
+
+  @override
+  String get dashboardSettingsCurrencyBlockedTitle => 'Finish open work first';
+
+  @override
+  String dashboardSettingsCurrencyBlockedOrders(int count) {
+    return '$count open orders. Close or settle them before changing the currency.';
+  }
+
+  @override
+  String dashboardSettingsCurrencyBlockedShifts(int count) {
+    return '$count open cash shifts. Close them before changing the currency.';
+  }
+
+  @override
+  String get dashboardSettingsCurrencyBlockedUnknown =>
+      'Could not check open orders and shifts. Try again.';
+
+  @override
+  String get menuCurrencyInherited => 'Inherited from restaurant settings';
+
+  @override
+  String get dashboardSettingsCurrencySearchHint => 'Search by code (e.g. USD)';
 }

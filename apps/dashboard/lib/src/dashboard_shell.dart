@@ -10,6 +10,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'admin/branch_kitchen_workflow_repository.dart';
 import 'admin/branch_shift_close_policy_repository.dart';
+import 'admin/currency_change_guard.dart';
 import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
 import 'branding/receipt_logo_url_resolver.dart';
@@ -328,6 +329,27 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
+  /// OPS-043 D3: the open-orders / open-shift check run before an operating
+  /// currency change, built once. Restaurant-scoped (branch is deliberately
+  /// null — the currency is a RESTAURANT setting, so every branch of it
+  /// counts). Null without a transport or a concrete restaurant, which the
+  /// settings view treats as "cannot verify" and therefore refuses to change.
+  late final CurrencyChangeGuard? _currencyGuard = _buildCurrencyGuard();
+
+  CurrencyChangeGuard? _buildCurrencyGuard() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    if (transport == null || membership == null || restaurantId == null) {
+      return null;
+    }
+    return SupabaseCurrencyChangeGuard(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+    );
+  }
+
   /// PRINT-BRANDING-LOGO-001: the receipt-branding read/write seam, built once.
   /// Null unless there is an authenticated transport AND a concrete restaurant
   /// in scope (branch is not required — branding is restaurant-level) -> the
@@ -535,6 +557,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   policyRepository: _shiftClosePolicyRepo,
                   kitchenWorkflowRepository: _kitchenWorkflowRepo,
                   settingsRepository: _settingsRepo,
+                  currencyChangeGuard: _currencyGuard,
                   brandingRepository: _brandingRepo,
                   brandingStorage: widget.brandingLogoStorage,
                 ),

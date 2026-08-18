@@ -3990,5 +3990,53 @@
   "posPrintCustomerBill": "Customer bill",
   "@posPrintCustomerBill": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: option printing the current customer bill/pre-bill on the RECEIPT printer only."},
   "posPrintCustomerBillHint": "Prints the current bill on the receipt printer.",
-  "@posPrintCustomerBillHint": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: secondary line naming the receipt printer destination for the bill."}
+  "@posPrintCustomerBillHint": {"description": "OPEN-ORDER-PRINT-CHOOSER-040: secondary line naming the receipt printer destination for the bill."},
+  "dashboardSettingsOperatingCurrency": "Operating currency",
+  "@dashboardSettingsOperatingCurrency": {"description": "OPS-043 D1: the restaurant-level currency selector label in Dashboard Settings."},
+  "dashboardSettingsOperatingCurrencyHint": "Used for this restaurant's menu and new orders.",
+  "@dashboardSettingsOperatingCurrencyHint": {"description": "OPS-043 D1: what the operating currency governs."},
+  "dashboardSettingsCurrencyInherited": "Inherited from the organization default",
+  "@dashboardSettingsCurrencyInherited": {"description": "OPS-043 D1: the restaurant has no currency_override, so the organization default applies."},
+  "dashboardSettingsCurrencyOverridden": "Set for this restaurant",
+  "@dashboardSettingsCurrencyOverridden": {"description": "OPS-043 D1: the restaurant carries its own currency_override."},
+  "dashboardSettingsCurrencyOverrideNote": "Once set, the currency can only be changed to another currency here — it cannot be returned to inherited.",
+  "@dashboardSettingsCurrencyOverrideNote": {"description": "OPS-043: update_restaurant_settings applies currency_override with COALESCE, so it can set but never clear an override."},
+  "dashboardSettingsCurrencyChangeTitle": "Change operating currency?",
+  "@dashboardSettingsCurrencyChangeTitle": {"description": "OPS-043 D3: title of the currency-change confirmation."},
+  "dashboardSettingsCurrencyChangeBody": "Amounts are NOT converted. 40.00 stays 40.00 in the new currency. Historical orders, payments, and receipts keep their original currency.",
+  "@dashboardSettingsCurrencyChangeBody": {"description": "OPS-043 D3: the mandated no-conversion warning."},
+  "dashboardSettingsCurrencyChangeFromTo": "{from} → {to}",
+  "@dashboardSettingsCurrencyChangeFromTo": {
+    "description": "OPS-043: the currency being replaced and the one replacing it.",
+    "placeholders": {
+      "from": { "type": "String" },
+      "to": { "type": "String" }
+    }
+  },
+  "dashboardSettingsCurrencyChangeAck": "I understand amounts are not converted.",
+  "@dashboardSettingsCurrencyChangeAck": {"description": "OPS-043 D3: the explicit acknowledgment the owner must tick."},
+  "dashboardSettingsCurrencyChangeConfirm": "Change currency",
+  "@dashboardSettingsCurrencyChangeConfirm": {"description": "OPS-043 D3: confirm button of the currency-change dialog."},
+  "dashboardSettingsCurrencyBlockedTitle": "Finish open work first",
+  "@dashboardSettingsCurrencyBlockedTitle": {"description": "OPS-043 D3 safety gate: the currency change is blocked."},
+  "dashboardSettingsCurrencyBlockedOrders": "{count} open orders. Close or settle them before changing the currency.",
+  "@dashboardSettingsCurrencyBlockedOrders": {
+    "description": "OPS-043 D3 safety gate: open orders block the change.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "dashboardSettingsCurrencyBlockedShifts": "{count} open cash shifts. Close them before changing the currency.",
+  "@dashboardSettingsCurrencyBlockedShifts": {
+    "description": "OPS-043 D3 safety gate: active cash shifts block the change.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "dashboardSettingsCurrencyBlockedUnknown": "Could not check open orders and shifts. Try again.",
+  "@dashboardSettingsCurrencyBlockedUnknown": {"description": "OPS-043 D3 safety gate: the check itself failed, so the change fails closed."},
+  "menuCurrencyInherited": "Inherited from restaurant settings",
+  "@menuCurrencyInherited": {"description": "OPS-043 D1: the item editor shows the restaurant operating currency read-only; items no longer carry their own selector."},
+  "dashboardSettingsCurrencySearchHint": "Search by code (e.g. USD)",
+  "@dashboardSettingsCurrencySearchHint": {"description": "OPS-043: search box of the operating-currency picker; the ISO code is the search key."}
 }
