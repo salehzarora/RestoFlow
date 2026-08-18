@@ -4038,5 +4038,11 @@
   "menuCurrencyInherited": "Inherited from restaurant settings",
   "@menuCurrencyInherited": {"description": "OPS-043 D1: the item editor shows the restaurant operating currency read-only; items no longer carry their own selector."},
   "dashboardSettingsCurrencySearchHint": "Search by code (e.g. USD)",
-  "@dashboardSettingsCurrencySearchHint": {"description": "OPS-043: search box of the operating-currency picker; the ISO code is the search key."}
+  "@dashboardSettingsCurrencySearchHint": {"description": "OPS-043: search box of the operating-currency picker; the ISO code is the search key."},
+  "dashboardCurrencyMixedTitle": "More than one currency in this range",
+  "@dashboardCurrencyMixedTitle": {"description": "OPS-043 D3: the selected range holds orders in several currencies, so totals are shown per currency."},
+  "dashboardCurrencyMixedBody": "Totals are listed per currency. Amounts are never converted or added together.",
+  "@dashboardCurrencyMixedBody": {"description": "OPS-043 D3: explains the per-currency split and that no conversion happens."},
+  "dashboardCurrencyCheckUnavailable": "Monetary totals are hidden: this range's currencies could not be checked, and amounts in different currencies must never be added together.",
+  "@dashboardCurrencyCheckUnavailable": {"description": "OPS-043 D3: the per-currency breakdown could not be read, so merged money is suppressed rather than guessed."}
 }

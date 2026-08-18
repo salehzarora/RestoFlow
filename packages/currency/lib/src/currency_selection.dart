@@ -3,12 +3,20 @@
 ///
 /// D2 (OPS-043) sets a hard ordering rule: a currency may NOT appear in the
 /// selector until display + input + cash/payment parsing are proven safe for
-/// its exponent class. Phase 1 ships the shared module but the POS still
-/// carries hardcoded 2-decimal assumptions (`parseCashToMinor(fractionDigits:
-/// 2)`, the `% 100` / `~/ 100` cash sheet, the 100-minor dashboard axis), so
-/// only exponent-2 currencies are offerable. Phase 2 replaces those sites and
-/// flips [kCurrencySelectorScope] to [CurrencySelectorScope.fullIso] — one
-/// constant, in code, exactly as D2 demands.
+/// its exponent class.
+///
+/// Phase 1 shipped this module with the gate CLOSED, because the POS still
+/// carried hardcoded 2-decimal assumptions. Phase 2 removed them: every
+/// formatter now shares this catalog, `parseCashToMinor` takes the currency,
+/// the cash sheet's `% 100` / `~/ 100` write-back and its fixed quick-cash
+/// ladder follow the exponent, counted drawer cash follows the shift's
+/// currency, and the fixed discount follows the order's (a PERCENTAGE stays at
+/// two decimals — it is not money). Phase 2B closed the last hole: the
+/// Dashboard Overview now splits a mixed-currency window instead of summing it,
+/// and hides money outright when it cannot tell.
+///
+/// So the gate is OPEN. It stays a single in-code constant rather than a config
+/// value precisely so re-closing it is a reviewed code change.
 library;
 
 import 'currency_catalog.dart';
@@ -23,11 +31,15 @@ enum CurrencySelectorScope {
   fullIso,
 }
 
-/// THE GATE. Flip this to [CurrencySelectorScope.fullIso] in the same change
-/// that lands Phase 2's replacement of every hardcoded exponent site — not
-/// before, and never as a config value a deployment could get wrong.
+/// THE GATE. Opened in OPS-043 Phase 2B, once every exponent-sensitive path
+/// was proven safe: display (four formatters on one catalog), entry (cash
+/// tender, quick amounts, counted drawer, fixed discount), printing, stored
+/// history (per-row currency), and reports (mixed windows split, never summed).
+///
+/// Re-close it by setting this back to [CurrencySelectorScope.exponent2Only] if
+/// a regression is found; nothing else needs to change.
 const CurrencySelectorScope kCurrencySelectorScope =
-    CurrencySelectorScope.exponent2Only;
+    CurrencySelectorScope.fullIso;
 
 /// Fund, metal, supranational and reserved codes: real ISO-4217 entries that a
 /// restaurant cannot be paid in. They stay in the catalog so a stored value

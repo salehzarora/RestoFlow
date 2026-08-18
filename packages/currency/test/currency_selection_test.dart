@@ -5,34 +5,35 @@ import 'package:test/test.dart';
 /// selectable before the sites that would mishandle it are fixed.
 void main() {
   group('THE PHASE GATE', () {
-    test('Phase 1 ships with the selector restricted to exponent-2 '
-        'currencies', () {
-      expect(kCurrencySelectorScope, CurrencySelectorScope.exponent2Only);
+    test('the gate is OPEN as of Phase 2B — every exponent-sensitive path is '
+        'proven safe', () {
+      expect(kCurrencySelectorScope, CurrencySelectorScope.fullIso);
     });
 
-    test('under the Phase-1 gate no 0-, 3- or 4-decimal currency is offerable '
-        '— the POS cash path still assumes two decimals', () {
-      for (final code in [
-        'JPY',
-        'KRW',
-        'KWD',
-        'JOD',
-        'BHD',
-        'OMR',
-        'TND',
-        'CLF',
-      ]) {
-        expect(isSelectableCurrency(code), isFalse, reason: code);
+    test('0- and 3-decimal currencies are now offerable: the formatters, the '
+        'cash paths and the reports all handle their exponents', () {
+      for (final code in ['JPY', 'KRW', 'KWD', 'JOD', 'BHD', 'OMR', 'TND']) {
+        expect(isSelectableCurrency(code), isTrue, reason: code);
       }
     });
 
-    test('flipping the gate to fullIso is all Phase 2 has to do', () {
-      const full = CurrencySelectorScope.fullIso;
-      expect(isSelectableCurrency('JPY', scope: full), isTrue);
-      expect(isSelectableCurrency('KWD', scope: full), isTrue);
+    test('opening the gate did NOT open it to fund/metal units — CLF is a '
+        '4-decimal index unit, not something a restaurant is paid in', () {
+      expect(isSelectableCurrency('CLF'), isFalse);
+      expect(isSelectableCurrency('XAU'), isFalse);
+    });
+
+    test('re-closing the gate is still one constant away', () {
       expect(
-        selectableCurrencies(scope: full).length,
-        greaterThan(selectableCurrencies().length),
+        isSelectableCurrency('JPY', scope: CurrencySelectorScope.exponent2Only),
+        isFalse,
+      );
+    });
+
+    test('the narrow scope still exists and is still narrower', () {
+      expect(
+        selectableCurrencies(scope: CurrencySelectorScope.exponent2Only).length,
+        lessThan(selectableCurrencies().length),
       );
     });
   });
@@ -97,7 +98,8 @@ void main() {
       expect(codes, contains('ILS'));
       expect(codes, orderedEquals(List<String>.from(codes)..sort()));
       expect(codes.toSet().length, codes.length);
-      expect(list.every((c) => c.exponent == 2), isTrue);
+      // Every spendable exponent class is now represented.
+      expect(list.map((c) => c.exponent).toSet(), containsAll([0, 2, 3]));
     });
 
     test('is big enough to be a real ISO list, not an allowlist of three', () {

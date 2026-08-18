@@ -5950,4 +5950,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardSettingsCurrencySearchHint => 'ابحث بالرمز (مثل USD)';
+
+  @override
+  String get dashboardCurrencyMixedTitle => 'أكثر من عملة في هذه الفترة';
+
+  @override
+  String get dashboardCurrencyMixedBody =>
+      'تُعرض الإجماليات لكل عملة على حدة. لا يتم تحويل المبالغ أو جمعها معًا.';
+
+  @override
+  String get dashboardCurrencyCheckUnavailable =>
+      'تم إخفاء الإجماليات المالية: تعذّر التحقق من عملات هذه الفترة، ولا يجوز جمع مبالغ بعملات مختلفة.';
 }

@@ -4,6 +4,7 @@ import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/main.dart';
+import 'package:restoflow_dashboard/src/data/currency_breakdown_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
@@ -88,6 +89,12 @@ Widget _wrapLimited() => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
+    ),
+    // OPS-043 Phase 2B: this suite is not about currency. Declare the
+    // single-currency world explicitly so the money gate lets the real figures
+    // render (an unknown currency count deliberately hides money).
+    dashboardCurrencyGuardProvider.overrideWith(
+      (ref) async => const ReportCurrencyGuard.single('ILS'),
     ),
     ownerReportsRepositoryProvider.overrideWithValue(const _LimitedRepo()),
   ],

@@ -136,3 +136,86 @@ class SupabaseCurrencyBreakdownRepository
     return int.tryParse('${v ?? ''}') ?? 0;
   }
 }
+
+/// What the Overview is allowed to do with the report's money, for one window.
+enum ReportMoneyMode {
+  /// Exactly one currency is in play: render every total exactly as before.
+  single,
+
+  /// More than one currency is in play. A merged total would be a fiction, so
+  /// the money is rendered per currency instead.
+  mixed,
+
+  /// We could not establish how many currencies are in play. Merged money is
+  /// SUPPRESSED — "I could not check" must never be rendered as "one currency".
+  unknown,
+}
+
+/// The gate every money widget on the Overview passes through.
+///
+/// It exists because the failure it prevents is silent: a range holding ₪1,000
+/// and $700 has no single total, but a screen will happily print `₪1,700` and
+/// nobody can tell by looking. So the decision is made ONCE, here, and the
+/// widgets ask this object rather than each deciding for themselves.
+class ReportCurrencyGuard {
+  const ReportCurrencyGuard._(
+    this.mode, {
+    this.displayCurrency,
+    this.totals = const [],
+  });
+
+  /// One currency, named. Everything renders as it always has.
+  const ReportCurrencyGuard.single(String currency)
+    : this._(ReportMoneyMode.single, displayCurrency: currency);
+
+  /// Several currencies, each with its own totals.
+  const ReportCurrencyGuard.mixed(List<CurrencyTotals> totals)
+    : this._(ReportMoneyMode.mixed, totals: totals);
+
+  /// Not established. Money is hidden.
+  const ReportCurrencyGuard.unknown() : this._(ReportMoneyMode.unknown);
+
+  final ReportMoneyMode mode;
+
+  /// The currency every merged figure is labelled with, in [ReportMoneyMode
+  /// .single] only.
+  ///
+  /// LABEL AUTHORITY: this is the currency the WINDOW's money is actually in,
+  /// taken from the breakdown, not the organization default. A range of
+  /// historical ILS orders stays labelled ILS even after the restaurant has
+  /// moved to USD — relabelling a past range with today's currency is exactly
+  /// the lie D3 forbids.
+  final String? displayCurrency;
+
+  /// Per-currency totals, in [ReportMoneyMode.mixed] only.
+  final List<CurrencyTotals> totals;
+
+  /// True only when a single merged monetary figure is honest.
+  bool get canRenderMergedMoney => mode == ReportMoneyMode.single;
+
+  /// Decides the mode from a breakdown plus what the report itself reported.
+  ///
+  /// [envelopeCurrency] is the report's own `currency_code`; it is used only as
+  /// the LABEL for a window that has no money to mislabel. [orderCount] is the
+  /// independent evidence the ticket allows: a window with no billed orders has
+  /// nothing to sum, so zeros may render even when the breakdown is missing.
+  factory ReportCurrencyGuard.resolve({
+    required CurrencyBreakdown breakdown,
+    required String envelopeCurrency,
+    required int orderCount,
+  }) {
+    if (breakdown.available) {
+      if (breakdown.totals.length > 1) {
+        return ReportCurrencyGuard.mixed(breakdown.totals);
+      }
+      final single = breakdown.singleCurrency;
+      if (single != null) return ReportCurrencyGuard.single(single);
+      // Available and empty: the window genuinely holds no money.
+      return ReportCurrencyGuard.single(envelopeCurrency);
+    }
+    // UNAVAILABLE. The one safe exception: a window with no orders at all has
+    // no unlike currencies to add together, so its zeros are honest.
+    if (orderCount == 0) return ReportCurrencyGuard.single(envelopeCurrency);
+    return const ReportCurrencyGuard.unknown();
+  }
+}

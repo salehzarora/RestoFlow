@@ -2,6 +2,8 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_currency/restoflow_currency.dart'
+    show currencySelectorLabel;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -20,6 +22,7 @@ import 'analytics/owner_sales_series_query_key.dart';
 import 'analytics/payment_method_analytics.dart';
 import 'analytics/payment_tender_colors.dart';
 import 'data/audit_log_models.dart' show AuditBranchOption;
+import 'data/currency_breakdown_repository.dart';
 import 'data/demo_report.dart';
 import 'data/owner_sales_series.dart';
 import 'data/owner_top_items.dart';
@@ -128,6 +131,12 @@ class DashboardHomeScreen extends ConsumerWidget {
             child: reportAsync.when(
               data: (report) => _ReportContent(
                 report: report,
+                // OPS-043 Phase 2B: the currency gate, resolved once per
+                // window. `unknown` while it is still loading, so money can
+                // never flash on screen before it is known to be addable.
+                currencyGuard:
+                    ref.watch(dashboardCurrencyGuardProvider).valueOrNull ??
+                    const ReportCurrencyGuard.unknown(),
                 window: window,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
@@ -836,6 +845,7 @@ class _CustomRangeCaption extends StatelessWidget {
 class _ReportContent extends StatelessWidget {
   const _ReportContent({
     required this.report,
+    required this.currencyGuard,
     required this.window,
     required this.isDemo,
     this.deviceSummary,
@@ -845,6 +855,11 @@ class _ReportContent extends StatelessWidget {
   });
 
   final DashboardReport report;
+
+  /// OPS-043 Phase 2B (D3) — how many currencies this window's money is in.
+  /// A plain value, not a provider read, so this widget stays Riverpod-free
+  /// (the same rule [window] and [salesSeriesKey] follow).
+  final ReportCurrencyGuard currencyGuard;
 
   /// F2.1 — the COMMITTED analytics window, passed as a plain value so this
   /// widget stays Riverpod-free (the same rule [salesSeriesKey] follows).
@@ -886,8 +901,15 @@ class _ReportContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final drill = onDrillDown;
-    String money(int amountMinor) =>
-        MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
+    // OPS-043 Phase 2B — LABEL AUTHORITY. The currency comes from the guard,
+    // i.e. from what the window's money is ACTUALLY in, falling back to the
+    // report envelope. A past range of ILS orders keeps saying ILS after the
+    // restaurant moves to USD; relabelling history with today's currency is
+    // precisely what D3 forbids.
+    String money(int amountMinor) => MoneyFormatter.formatMinor(
+      amountMinor,
+      currencyGuard.displayCurrency ?? report.currencyCode,
+    );
 
     // DESIGN-002 / RF-REPORT-004: a trend delta vs the prior EQUIVALENT period,
     // when one exists — demo, the live-limited "vs yesterday" (LIVE-UX-001), or
@@ -947,6 +969,23 @@ class _ReportContent extends StatelessWidget {
           banner,
           const SizedBox(height: RestoflowSpacing.xl),
           const _RangeUnavailable(),
+        ],
+      );
+    }
+
+    // OPS-043 Phase 2B (D3): NEVER sum unlike currencies. When the window
+    // holds more than one currency — or when we could not establish that it
+    // holds only one — every merged monetary figure below is suppressed and
+    // this section stands in its place. Suppression is deliberate on the
+    // unknown path: a screen that quietly adds ILS to USD is worse than a
+    // screen that admits it does not know.
+    if (!currencyGuard.canRenderMergedMoney) {
+      return ListView(
+        padding: const EdgeInsets.all(RestoflowSpacing.lg),
+        children: [
+          banner,
+          const SizedBox(height: RestoflowSpacing.xl),
+          _CurrencySafetySection(guard: currencyGuard, report: report),
         ],
       );
     }
@@ -2286,6 +2325,87 @@ class _RecentShiftTile extends StatelessWidget {
 /// RF-REPORT-004 — the honest "this range isn't available yet" panel shown in
 /// live mode when owner_report_range isn't deployed and the range isn't today
 /// (the range chips stay visible above so the owner can switch back).
+/// OPS-043 Phase 2B (D3) — what the Overview shows INSTEAD of merged money.
+///
+/// Two states share this widget because they share the rule: a figure that
+/// would add unlike currencies together is never rendered.
+///   * MIXED  — each currency's own totals, side by side, unconverted.
+///   * UNKNOWN — nothing monetary at all, and an honest reason.
+/// The non-money counts stay in both: an order count is a valid integer no
+/// matter how many currencies the orders were taken in.
+class _CurrencySafetySection extends StatelessWidget {
+  const _CurrencySafetySection({required this.guard, required this.report});
+
+  final ReportCurrencyGuard guard;
+  final DashboardReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (guard.mode == ReportMoneyMode.unknown) {
+      return RestoflowStateView(
+        key: const Key('reports-currency-unavailable'),
+        icon: Icons.currency_exchange_outlined,
+        message: l10n.dashboardCurrencyCheckUnavailable,
+      );
+    }
+    return Column(
+      key: const Key('reports-currency-split'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          key: const Key('reports-currency-mixed-banner'),
+          title: l10n.dashboardCurrencyMixedTitle,
+          body: l10n.dashboardCurrencyMixedBody,
+          icon: Icons.currency_exchange_outlined,
+          tone: RestoflowTone.warning,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        for (final total in guard.totals)
+          Padding(
+            padding: const EdgeInsets.only(bottom: RestoflowSpacing.md),
+            child: RestoflowSectionCard(
+              key: Key('currency-split-${total.currencyCode}'),
+              title: currencySelectorLabel(total.currencyCode),
+              children: [
+                SectionRow(
+                  key: Key('currency-split-net-${total.currencyCode}'),
+                  label: l10n.dashboardNetSales,
+                  trailingValue: MoneyFormatter.formatMinor(
+                    total.netMinor,
+                    total.currencyCode,
+                  ),
+                ),
+                SectionRow(
+                  key: Key('currency-split-collected-${total.currencyCode}'),
+                  label: l10n.dashboardCashCollected,
+                  trailingValue: MoneyFormatter.formatMinor(
+                    total.collectedMinor,
+                    total.currencyCode,
+                  ),
+                ),
+                SectionRow(
+                  label: l10n.dashboardOrders,
+                  trailingValue: total.orderCount.toString(),
+                ),
+              ],
+            ),
+          ),
+        // Non-money counts stay: an order count is a valid integer however many
+        // currencies the orders were taken in.
+        RestoflowMetricCard(
+          key: const Key('currency-safety-order-count'),
+          style: RestoflowMetricCardStyle.kpi,
+          tone: RestoflowTone.info,
+          label: l10n.dashboardOrders,
+          value: report.orderCount.toString(),
+          icon: Icons.receipt_long_outlined,
+        ),
+      ],
+    );
+  }
+}
+
 class _RangeUnavailable extends StatelessWidget {
   const _RangeUnavailable();
 

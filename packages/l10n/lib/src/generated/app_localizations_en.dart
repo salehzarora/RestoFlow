@@ -5997,4 +5997,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardSettingsCurrencySearchHint => 'Search by code (e.g. USD)';
+
+  @override
+  String get dashboardCurrencyMixedTitle =>
+      'More than one currency in this range';
+
+  @override
+  String get dashboardCurrencyMixedBody =>
+      'Totals are listed per currency. Amounts are never converted or added together.';
+
+  @override
+  String get dashboardCurrencyCheckUnavailable =>
+      'Monetary totals are hidden: this range\'s currencies could not be checked, and amounts in different currencies must never be added together.';
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
+import 'package:restoflow_dashboard/src/data/currency_breakdown_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -59,6 +60,12 @@ Widget _wrapLimited() => ProviderScope(
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
     ),
+    // OPS-043 Phase 2B: this suite is not about currency. Declare the
+    // single-currency world explicitly so the money gate lets the real figures
+    // render (an unknown currency count deliberately hides money).
+    dashboardCurrencyGuardProvider.overrideWith(
+      (ref) async => const ReportCurrencyGuard.single('ILS'),
+    ),
     ownerReportsRepositoryProvider.overrideWithValue(const _LimitedRepo()),
   ],
   child: const MaterialApp(
@@ -111,6 +118,12 @@ Widget _wrapHourly() => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
+    ),
+    // OPS-043 Phase 2B: this suite is not about currency. Declare the
+    // single-currency world explicitly so the money gate lets the real figures
+    // render (an unknown currency count deliberately hides money).
+    dashboardCurrencyGuardProvider.overrideWith(
+      (ref) async => const ReportCurrencyGuard.single('ILS'),
     ),
     ownerReportsRepositoryProvider.overrideWithValue(const _HourlyRepo()),
   ],
@@ -170,6 +183,12 @@ Widget _wrapShift(ShiftCash? shiftCash, {bool zeroSales = false}) =>
         runtimeConfigProvider.overrideWithValue(
           RuntimeConfig.test(isDemoMode: false),
         ),
+        // OPS-043 Phase 2B: this suite is about shift reconciliation, not
+        // currency. Declare the single-currency world so the money gate lets
+        // the real figures render.
+        dashboardCurrencyGuardProvider.overrideWith(
+          (ref) async => const ReportCurrencyGuard.single('ILS'),
+        ),
         ownerReportsRepositoryProvider.overrideWithValue(
           _ShiftRepo(shiftCash, zeroSales: zeroSales),
         ),
@@ -209,6 +228,12 @@ Widget _wrapUnavailable() => ProviderScope(
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
     ),
+    // OPS-043 Phase 2B: this suite is not about currency. Declare the
+    // single-currency world explicitly so the money gate lets the real figures
+    // render (an unknown currency count deliberately hides money).
+    dashboardCurrencyGuardProvider.overrideWith(
+      (ref) async => const ReportCurrencyGuard.single('ILS'),
+    ),
     ownerReportsRepositoryProvider.overrideWithValue(const _UnavailableRepo()),
   ],
   child: const MaterialApp(
@@ -226,6 +251,12 @@ Widget _wrapRealMode() => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
+    ),
+    // OPS-043 Phase 2B: this suite is not about currency. Declare the
+    // single-currency world explicitly so the money gate lets the real figures
+    // render (an unknown currency count deliberately hides money).
+    dashboardCurrencyGuardProvider.overrideWith(
+      (ref) async => const ReportCurrencyGuard.single('ILS'),
     ),
     ownerReportsRepositoryProvider.overrideWithValue(
       const DemoOwnerReportsRepository(),
