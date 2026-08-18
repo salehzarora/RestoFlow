@@ -5837,4 +5837,17 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posReprintKitchenUnavailable =>
       'להזמנה זו אין פתק מטבח להדפסה במכשיר זה.';
+
+  @override
+  String get posPrintAction => 'הדפסה';
+
+  @override
+  String get posPrintChooserTitle => 'אפשרויות הדפסה';
+
+  @override
+  String get posPrintCustomerBill => 'חשבון לקוח';
+
+  @override
+  String get posPrintCustomerBillHint =>
+      'מדפיסה את החשבון הנוכחי במדפסת הקבלות.';
 }

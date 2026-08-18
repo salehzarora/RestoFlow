@@ -5923,4 +5923,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posReprintKitchenUnavailable =>
       'This order has no printable kitchen ticket on this device.';
+
+  @override
+  String get posPrintAction => 'Print';
+
+  @override
+  String get posPrintChooserTitle => 'Print options';
+
+  @override
+  String get posPrintCustomerBill => 'Customer bill';
+
+  @override
+  String get posPrintCustomerBillHint =>
+      'Prints the current bill on the receipt printer.';
 }

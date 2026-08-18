@@ -171,9 +171,12 @@ class OrderActionRow extends ConsumerWidget {
         OrderActionButton(
           child: OutlinedButton.icon(
             key: Key('$keyPrefix-print-bill-${order.orderNumber}'),
-            onPressed: () => _printBill(context, ref),
-            icon: const Icon(Icons.receipt_long_outlined, size: 18),
-            label: Text(l10n.posPrintBillAction),
+            // 040: the control now ASKS which document. Labelled «طباعة» /
+            // "Print", not "reprint": an unpaid pre-bill has not necessarily
+            // been printed before, so "reprint" would be a lie on this row.
+            onPressed: () => _openOpenOrderPrintChooser(context, ref),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: Text(l10n.posPrintAction),
           ),
         ),
       );
@@ -471,65 +474,131 @@ class OrderActionRow extends ConsumerWidget {
   /// There is no cross-purpose fallback in either direction: an unavailable
   /// kitchen printer produces a KITCHEN error and prints nothing, and the same
   /// holds for the receipt side. Dismissing the sheet prints nothing at all.
-  Future<void> _openReprintChooser(BuildContext context, WidgetRef ref) async {
-    final choice = await showModalBottomSheet<_ReprintChoice>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          key: const Key('reprint-chooser'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                RestoflowSpacing.lg,
-                RestoflowSpacing.xs,
-                RestoflowSpacing.lg,
-                RestoflowSpacing.sm,
-              ),
-              child: Text(
-                l10n.posReprintChooserTitle,
-                style: Theme.of(
-                  sheetContext,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
+  /// ORDER-REPRINT-CHOOSER-038 / OPEN-ORDER-PRINT-CHOOSER-040 — the ONE
+  /// chooser both order states use.
+  ///
+  /// The two contexts differ only in wording and in which customer-facing
+  /// document the first option prints:
+  ///
+  ///   * a CLOSED/paid order reprints the customer RECEIPT;
+  ///   * an OPEN/unpaid order prints the current customer BILL (pre-bill).
+  ///
+  /// The second option is the same kitchen ticket in both. Keeping one sheet
+  /// means the routing rule — each document to its own printer, never a
+  /// cross-purpose fallback — has a single implementation to be right about.
+  Future<_ReprintChoice?> _showPrintChooser(
+    BuildContext context, {
+    required String sheetKey,
+    required String title,
+    required String customerLabel,
+    required String customerHint,
+    required IconData customerIcon,
+    required String customerKey,
+    required String kitchenKey,
+    required String cancelKey,
+  }) => showModalBottomSheet<_ReprintChoice>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        key: Key(sheetKey),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
             ),
-            ListTile(
-              key: const Key('reprint-choice-customer'),
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: Text(l10n.posReprintCustomerReceipt),
-              subtitle: Text(l10n.posReprintCustomerReceiptHint),
-              minVerticalPadding: RestoflowSpacing.md,
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(_ReprintChoice.customer),
+            child: Text(
+              title,
+              style: Theme.of(
+                sheetContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            ListTile(
-              key: const Key('reprint-choice-kitchen'),
-              leading: const Icon(Icons.soup_kitchen_outlined),
-              title: Text(l10n.posReprintKitchenTicket),
-              subtitle: Text(l10n.posReprintKitchenTicketHint),
-              minVerticalPadding: RestoflowSpacing.md,
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(_ReprintChoice.kitchen),
+          ),
+          ListTile(
+            key: Key(customerKey),
+            leading: Icon(customerIcon),
+            title: Text(customerLabel),
+            subtitle: Text(customerHint),
+            minVerticalPadding: RestoflowSpacing.md,
+            onTap: () =>
+                Navigator.of(sheetContext).pop(_ReprintChoice.customer),
+          ),
+          ListTile(
+            key: Key(kitchenKey),
+            leading: const Icon(Icons.soup_kitchen_outlined),
+            title: Text(l10n.posReprintKitchenTicket),
+            subtitle: Text(l10n.posReprintKitchenTicketHint),
+            minVerticalPadding: RestoflowSpacing.md,
+            onTap: () => Navigator.of(sheetContext).pop(_ReprintChoice.kitchen),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
+              RestoflowSpacing.lg,
+              RestoflowSpacing.lg,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                RestoflowSpacing.lg,
-                RestoflowSpacing.sm,
-                RestoflowSpacing.lg,
-                RestoflowSpacing.lg,
-              ),
-              child: TextButton(
-                key: const Key('reprint-choice-cancel'),
-                style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                onPressed: () => Navigator.of(sheetContext).pop(),
-                child: Text(l10n.adminCancel),
-              ),
+            child: TextButton(
+              key: Key(cancelKey),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+              onPressed: () => Navigator.of(sheetContext).pop(),
+              child: Text(l10n.adminCancel),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    ),
+  );
+
+  /// OPEN-ORDER-PRINT-CHOOSER-040 — the OPEN/unpaid order's print chooser.
+  ///
+  /// The gap this closes: an open order only ever offered «طباعة الحساب», so
+  /// once the cart moved on there was no way to put a kitchen ticket back on
+  /// the pass for an order still being served. The bill option runs the
+  /// EXISTING pre-bill path untouched; the kitchen option runs the same
+  /// canonical seam the closed-order chooser uses.
+  Future<void> _openOpenOrderPrintChooser(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final choice = await _showPrintChooser(
+      context,
+      sheetKey: 'print-chooser',
+      title: l10n.posPrintChooserTitle,
+      customerLabel: l10n.posPrintCustomerBill,
+      customerHint: l10n.posPrintCustomerBillHint,
+      customerIcon: Icons.receipt_long_outlined,
+      customerKey: 'print-choice-bill',
+      kitchenKey: 'print-choice-kitchen',
+      cancelKey: 'print-choice-cancel',
+    );
+    if (!context.mounted) return;
+    switch (choice) {
+      case null:
+        return;
+      case _ReprintChoice.customer:
+        await _printBill(context, ref);
+      case _ReprintChoice.kitchen:
+        await _reprintKitchenTicket(context, ref);
+    }
+  }
+
+  Future<void> _openReprintChooser(BuildContext context, WidgetRef ref) async {
+    final choice = await _showPrintChooser(
+      context,
+      sheetKey: 'reprint-chooser',
+      title: l10n.posReprintChooserTitle,
+      customerLabel: l10n.posReprintCustomerReceipt,
+      customerHint: l10n.posReprintCustomerReceiptHint,
+      customerIcon: Icons.receipt_long_outlined,
+      customerKey: 'reprint-choice-customer',
+      kitchenKey: 'reprint-choice-kitchen',
+      cancelKey: 'reprint-choice-cancel',
     );
     if (!context.mounted) return;
     // Cancel, back and a barrier dismiss all land here: NOTHING is printed.

@@ -331,6 +331,16 @@ Finder get _payButton => find.byKey(const Key('recent-pay-$_code'));
 
 // ===========================================================================
 
+/// 040: the open-order print control now opens a chooser. Tap it, then pick
+/// the CUSTOMER BILL — the pre-bill behaviour asserted below is unchanged,
+/// only the path to it.
+Future<void> tapPrintBill(WidgetTester tester, Finder button) async {
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('print-choice-bill')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -492,7 +502,7 @@ void main() {
       expect(
         find.descendant(
           of: _billButton,
-          matching: find.text(l10n.posPrintBillAction),
+          matching: find.text(l10n.posPrintAction),
         ),
         findsOneWidget,
       );
@@ -649,8 +659,7 @@ void main() {
         final h = await _pumpActionRow(tester);
 
         expect(_billButton, findsOneWidget);
-        await tester.tap(_billButton);
-        await tester.pumpAndSettle();
+        await tapPrintBill(tester, _billButton);
 
         expect(
           h.repo.attempts,
@@ -684,8 +693,7 @@ void main() {
         'says the print failed', (tester) async {
       final h = await _pumpActionRow(tester, printerReachable: false);
 
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
+      await tapPrintBill(tester, _billButton);
 
       expect(h.connector.sent, isEmpty);
       final job = h.billJob;
@@ -705,8 +713,7 @@ void main() {
         'the order is untouched', (tester) async {
       final h = await _pumpActionRow(tester, printerConfigured: false);
 
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
+      await tapPrintBill(tester, _billButton);
 
       expect(h.connector.sent, isEmpty);
       expect(h.billJob, isNotNull);
@@ -718,10 +725,8 @@ void main() {
         'receipt slot', (tester) async {
       final h = await _pumpActionRow(tester);
 
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
+      await tapPrintBill(tester, _billButton);
+      await tapPrintBill(tester, _billButton);
 
       expect(h.connector.sent, hasLength(2), reason: 'a bill may be reprinted');
       expect(
@@ -740,8 +745,7 @@ void main() {
     testWidgets('28 — printing a pre-bill creates NO kitchen job and mutates '
         'no order state', (tester) async {
       final h = await _pumpActionRow(tester);
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
+      await tapPrintBill(tester, _billButton);
 
       // The receipt controller is the ONLY print surface this action touches,
       // and it holds exactly the bill. The kitchen stack (ticket builder, auto
@@ -841,12 +845,11 @@ void main() {
       expect(
         find.descendant(
           of: _billButton,
-          matching: find.text(h.l10n.posPrintBillAction),
+          matching: find.text(h.l10n.posPrintAction),
         ),
         findsOneWidget,
       );
-      await tester.tap(_billButton);
-      await tester.pumpAndSettle();
+      await tapPrintBill(tester, _billButton);
       expect(tester.takeException(), isNull, reason: 'no RTL overflow');
 
       final blob = _blob(h.billJob!.document!);

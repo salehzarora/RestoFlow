@@ -5877,4 +5877,17 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posReprintKitchenUnavailable =>
       'لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.';
+
+  @override
+  String get posPrintAction => 'طباعة';
+
+  @override
+  String get posPrintChooserTitle => 'خيارات الطباعة';
+
+  @override
+  String get posPrintCustomerBill => 'حساب الزبون';
+
+  @override
+  String get posPrintCustomerBillHint =>
+      'طباعة حساب الزبون الحالي من طابعة الإيصالات.';
 }
