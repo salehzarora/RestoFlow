@@ -110,11 +110,21 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
     super.dispose();
   }
 
-  /// The parsed value in the op's unit: minor units for fixed, basis points for
-  /// percentage (`parseCashToMinor` with 2 fraction digits gives both). Null on
-  /// empty/malformed input.
-  int? get _parsedValue =>
-      parseCashToMinor(_valueController.text, fractionDigits: 2);
+  /// The parsed value in the op's unit: MINOR UNITS for a fixed amount, BASIS
+  /// POINTS for a percentage. Null on empty/malformed input.
+  ///
+  /// OPS-043 Phase 2 split what used to be one 2-decimal parse:
+  ///   * fixed is MONEY, so its decimals come from the currency — at a JPY
+  ///     till "5" is 5 minor units, and at a KWD till "5" is 5000;
+  ///   * a percentage is NOT money. "17.5" is 1750 basis points in every
+  ///     currency on earth, so it keeps an explicit two decimals and must
+  ///     never be re-pointed at the currency exponent.
+  int? get _parsedValue => _type == DiscountType.percentage
+      ? parseCashToMinor(_valueController.text, fractionDigits: 2)
+      : parseCashToMinor(
+          _valueController.text,
+          currencyCode: widget.currencyCode,
+        );
 
   /// The order total this entry WOULD leave, in integer minor units — the same
   /// arithmetic the server performs (`subtotal - discount + tax`, with the discount

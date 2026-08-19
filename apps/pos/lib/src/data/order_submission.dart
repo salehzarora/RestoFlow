@@ -558,6 +558,11 @@ class OrderSummary {
     tableLabel: json['table_label'] as String?,
     itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
     subtotalMinor: (json['subtotal_minor'] as num?)?.toInt() ?? 0,
+    // OPS-043 Phase 2 — CORRECTED CLAIM: the write side of 'currency_code'
+    // (OrderSummary.toJson above) shipped in the same commit as this read
+    // (3063c722), so no queued summary has ever lacked it. The floor stays
+    // only so a malformed local record degrades to a label rather than
+    // losing a queued order; it is not a historical default.
     currencyCode: json['currency_code'] as String? ?? 'ILS',
     customerName: json['customer_name'] as String?,
     customerPhone: json['customer_phone'] as String?,

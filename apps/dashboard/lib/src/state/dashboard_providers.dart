@@ -8,6 +8,7 @@ import '../analytics/dashboard_analytics_scope.dart';
 import '../analytics/owner_report_query_key.dart';
 import '../analytics/owner_sales_series_query_key.dart';
 import '../data/audit_log_models.dart' show AuditBranchOption;
+import '../data/currency_breakdown_repository.dart';
 import '../data/demo_report.dart';
 import '../data/owner_reports_repository.dart';
 import '../data/owner_sales_series.dart';
@@ -381,6 +382,69 @@ final dashboardReportProvider = FutureProvider<DashboardReport>((ref) {
   final key = ref.watch(currentOwnerReportKeyProvider);
   return ref.watch(ownerReportForKeyProvider(key).future);
 }, dependencies: [ownerReportForKeyProvider, currentOwnerReportKeyProvider]);
+
+/// OPS-043 Phase 2B - the per-currency breakdown seam behind the Overview.
+///
+/// Null in demo mode (the demo report is single-currency by construction) and
+/// whenever there is no authenticated transport or no organization in scope -
+/// which the guard below treats as "could not check", never as "one currency".
+final currencyBreakdownRepositoryProvider =
+    Provider<CurrencyBreakdownRepository?>(
+      (ref) {
+        if (ref.watch(runtimeConfigProvider).isDemoMode) return null;
+        final transport = ref.watch(dashboardAuthTransportProvider);
+        final key = ref.watch(currentOwnerReportKeyProvider);
+        final organizationId = key.organizationId;
+        if (transport == null || organizationId == null) return null;
+        return SupabaseCurrencyBreakdownRepository(
+          transport: transport,
+          organizationId: organizationId,
+          restaurantId: key.restaurantId,
+          branchId: key.branchId,
+        );
+      },
+      dependencies: [
+        dashboardAuthTransportProvider,
+        currentOwnerReportKeyProvider,
+      ],
+    );
+
+/// THE GATE every money widget on the Overview passes through (D3: unlike
+/// currencies are never summed).
+///
+/// It answers one question about the CURRENT report window - "how many
+/// currencies is this money actually in?" - and the Overview renders normally,
+/// splits per currency, or hides money accordingly.
+///
+/// Demo mode short-circuits to `single`: the demo generator produces one
+/// currency, so calling an RPC that does not exist there would turn every demo
+/// screen into a safety state for no reason.
+///
+/// In real mode it needs the window bounds, and only `owner_report_range`
+/// reports them. On the `owner_daily_report` / `sales_summary` degrade paths
+/// they are null, so the answer is UNKNOWN and money is suppressed - which is
+/// the correct outcome: those two RPCs label everything with the organization
+/// default and cannot say what currencies the window actually held.
+final dashboardCurrencyGuardProvider = FutureProvider<ReportCurrencyGuard>(
+  (ref) async {
+    final report = await ref.watch(dashboardReportProvider.future);
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return ReportCurrencyGuard.single(report.currencyCode);
+    }
+    final repository = ref.watch(currencyBreakdownRepositoryProvider);
+    final start = report.rangeStartLabel;
+    final end = report.rangeEndLabel;
+    final breakdown = (repository == null || start == null || end == null)
+        ? const CurrencyBreakdown.unavailable()
+        : await repository.load(start: start, end: end);
+    return ReportCurrencyGuard.resolve(
+      breakdown: breakdown,
+      envelopeCurrency: report.currencyCode,
+      orderCount: report.orderCount,
+    );
+  },
+  dependencies: [dashboardReportProvider, currencyBreakdownRepositoryProvider],
+);
 
 /// CLIENT-A — the daily sales-series data seam (`owner_sales_series`).
 ///

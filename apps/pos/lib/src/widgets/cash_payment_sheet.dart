@@ -2,6 +2,8 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_currency/restoflow_currency.dart'
+    show CurrencySymbolStyle, formatCurrencyMinor, quickAmountStepsMinor;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -205,13 +207,24 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     super.dispose();
   }
 
+  // OPS-043 Phase 2: the tender's decimals come from the ORDER's currency.
+  // With a hardcoded 2 a 1,000 yen note was booked as 100,000 yen.
   int? get _tenderedMinor =>
-      parseCashToMinor(_controller.text, fractionDigits: 2);
+      parseCashToMinor(_controller.text, currencyCode: widget.currencyCode);
 
+  /// Writes a minor-unit amount back into the text field in MAJOR units.
+  ///
+  /// This used to be `minor % 100` / `minor ~/ 100`, i.e. two decimals
+  /// hardcoded: tapping a quick amount at a JPY till wrote "10.00" for 1000
+  /// yen, which then re-parsed to a different number than the button meant.
+  /// The shared formatter emits exactly the digits the currency has, and the
+  /// parser above accepts exactly that shape, so the round-trip is closed.
   void _setAmount(int minor) {
-    final digits = minor % 100;
-    final text = '${minor ~/ 100}.${digits.toString().padLeft(2, '0')}';
-    _controller.text = text;
+    _controller.text = formatCurrencyMinor(
+      minor,
+      widget.currencyCode,
+      style: CurrencySymbolStyle.bare,
+    );
     setState(_clearErrors);
   }
 
@@ -437,11 +450,16 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     await sync.refreshOrders(<String>[orderId]);
   }
 
-  /// Quick-cash suggestions: the exact amount, then round-ups to ₪10 / ₪50 /
-  /// ₪100 above it.
+  /// Quick-cash suggestions: the exact amount, then round-ups to the next
+  /// sensible note above it.
+  ///
+  /// OPS-043 Phase 2: the ladder comes from the currency instead of the
+  /// hardcoded 1000/5000/10000 minor units, which only ever meant ₪10/₪50/₪100
+  /// in a 2-decimal currency. At a JPY till those same numbers would have
+  /// offered ¥1,000/¥5,000/¥10,000 rounding steps for a ¥480 coffee.
   List<int> get _quickAmounts {
     final set = <int>{widget.amountMinor};
-    for (final step in <int>[1000, 5000, 10000]) {
+    for (final step in quickAmountStepsMinor(widget.currencyCode)) {
       final up = ((widget.amountMinor + step - 1) ~/ step) * step;
       if (up > widget.amountMinor) set.add(up);
     }

@@ -5910,4 +5910,15 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get dashboardSettingsCurrencySearchHint => 'חיפוש לפי קוד (למשל USD)';
+
+  @override
+  String get dashboardCurrencyMixedTitle => 'יותר ממטבע אחד בטווח הזה';
+
+  @override
+  String get dashboardCurrencyMixedBody =>
+      'הסכומים מוצגים לפי מטבע. אין המרה ואין חיבור בין מטבעות.';
+
+  @override
+  String get dashboardCurrencyCheckUnavailable =>
+      'הסכומים הכספיים מוסתרים: לא ניתן היה לבדוק את המטבעות של הטווח, ואסור לחבר סכומים במטבעות שונים.';
 }

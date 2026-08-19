@@ -75,8 +75,9 @@ void main() {
       );
     });
 
-    testWidgets('A5. D2 GATE: the picker offers exponent-2 currencies and NOT '
-        'JPY/KWD, because the POS cash path still assumes two decimals', (
+    testWidgets('A5. D2 GATE (opened in Phase 2B): the picker now offers the '
+        'full spendable ISO list, including 0- and 3-decimal currencies, '
+        'because every exponent-sensitive path was made safe first', (
       tester,
     ) async {
       await _pump(tester, repo: _Repo(prefill: _prefill()));
@@ -92,10 +93,14 @@ void main() {
       await search('EUR');
       expect(find.byKey(const Key('settings-currency-EUR')), findsOneWidget);
       await search('JPY');
-      expect(find.byKey(const Key('settings-currency-JPY')), findsNothing);
-      expect(find.byKey(const Key('currency-no-results')), findsOneWidget);
+      expect(find.byKey(const Key('settings-currency-JPY')), findsOneWidget);
       await search('KWD');
-      expect(find.byKey(const Key('settings-currency-KWD')), findsNothing);
+      expect(find.byKey(const Key('settings-currency-KWD')), findsOneWidget);
+      // Fund and metal units are still NOT offerable: a restaurant cannot be
+      // paid in gold, and opening the exponent gate never opened that one.
+      await search('XAU');
+      expect(find.byKey(const Key('settings-currency-XAU')), findsNothing);
+      expect(find.byKey(const Key('currency-no-results')), findsOneWidget);
     });
   });
 

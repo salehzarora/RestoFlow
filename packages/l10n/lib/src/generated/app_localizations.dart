@@ -10929,6 +10929,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search by code (e.g. USD)'**
   String get dashboardSettingsCurrencySearchHint;
+
+  /// OPS-043 D3: the selected range holds orders in several currencies, so totals are shown per currency.
+  ///
+  /// In en, this message translates to:
+  /// **'More than one currency in this range'**
+  String get dashboardCurrencyMixedTitle;
+
+  /// OPS-043 D3: explains the per-currency split and that no conversion happens.
+  ///
+  /// In en, this message translates to:
+  /// **'Totals are listed per currency. Amounts are never converted or added together.'**
+  String get dashboardCurrencyMixedBody;
+
+  /// OPS-043 D3: the per-currency breakdown could not be read, so merged money is suppressed rather than guessed.
+  ///
+  /// In en, this message translates to:
+  /// **'Monetary totals are hidden: this range\'s currencies could not be checked, and amounts in different currencies must never be added together.'**
+  String get dashboardCurrencyCheckUnavailable;
 }
 
 class _AppLocalizationsDelegate

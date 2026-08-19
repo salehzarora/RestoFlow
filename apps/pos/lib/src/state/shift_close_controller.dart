@@ -7,6 +7,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import '../data/ids.dart';
 import '../data/shift_repository.dart';
 import 'payment_controller.dart';
+import '../data/demo_menu.dart' show kDemoCurrencyCode;
+import 'pos_menu_provider.dart';
 import 'pos_session.dart';
 import 'pos_shift.dart';
 
@@ -45,6 +47,16 @@ class CurrentShiftView {
 /// separately and authoritatively by [shiftExpectedCashProvider].
 final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
   final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+  // OPS-043 Phase 2: the REAL branch used to hardcode 'ILS', so the whole
+  // shift-close panel — opening float, expected cash, counted, variance —
+  // labelled a restaurant's money with a currency it may not operate in. The
+  // shift objects carry no currency (neither PosOpenShift nor the server's
+  // open-shift summary emits one), so the reachable authority is the same one
+  // the cart already prices in: the loaded menu's currency. It is DISPLAY ONLY
+  // — closeShift's payload carries shift_id / counted_amount_minor / reason and
+  // no currency at all.
+  final realCurrency =
+      ref.watch(posMenuProvider).valueOrNull?.currencyCode ?? kDemoCurrencyCode;
   if (isDemo) {
     final shift = ref.watch(paymentControllerProvider).shift;
     return CurrentShiftView(
@@ -58,13 +70,13 @@ final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
   }
   final handle = ref.watch(posOpenShiftProvider);
   if (handle == null) {
-    return const CurrentShiftView(
+    return CurrentShiftView(
       isOpen: false,
       isDemo: false,
       openingFloatMinor: 0,
       expectedSoFarMinor: null,
       openedAt: null,
-      currencyCode: 'ILS',
+      currencyCode: realCurrency,
     );
   }
   return CurrentShiftView(
@@ -74,7 +86,7 @@ final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
     // Never combined with local cash — see the class doc (A5).
     expectedSoFarMinor: null,
     openedAt: handle.openedAt,
-    currencyCode: 'ILS',
+    currencyCode: realCurrency,
   );
 });
 

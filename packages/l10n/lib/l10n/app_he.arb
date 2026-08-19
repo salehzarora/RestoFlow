@@ -1840,5 +1840,8 @@
   "dashboardSettingsCurrencyBlockedShifts": "יש {count} משמרות מזומן פתוחות. סגרו אותן לפני שינוי המטבע.",
   "dashboardSettingsCurrencyBlockedUnknown": "לא ניתן היה לבדוק הזמנות פתוחות ומשמרות. נסו שוב.",
   "menuCurrencyInherited": "בירושה מהגדרות המסעדה",
-  "dashboardSettingsCurrencySearchHint": "חיפוש לפי קוד (למשל USD)"
+  "dashboardSettingsCurrencySearchHint": "חיפוש לפי קוד (למשל USD)",
+  "dashboardCurrencyMixedTitle": "יותר ממטבע אחד בטווח הזה",
+  "dashboardCurrencyMixedBody": "הסכומים מוצגים לפי מטבע. אין המרה ואין חיבור בין מטבעות.",
+  "dashboardCurrencyCheckUnavailable": "הסכומים הכספיים מוסתרים: לא ניתן היה לבדוק את המטבעות של הטווח, ואסור לחבר סכומים במטבעות שונים."
 }

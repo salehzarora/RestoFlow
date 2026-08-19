@@ -654,9 +654,13 @@ class CartDraftSnapshot {
       }
       lines.add(line);
     }
-    // The currency is only ever omitted by a record written before it was
-    // serialized; the pilot is ILS-only, so absence keeps its historical
-    // meaning while a present-but-unreadable value is corruption.
+    // OPS-043 Phase 2 — CORRECTED CLAIM. This is not backward compatibility:
+    // the WRITE of 'currency_code' landed in the same commit that created the
+    // durable draft store (ab438933), so no persisted draft has ever lacked the
+    // key. The default is retained only because a decode that threw here would
+    // discard a cashier's recovered cart over a field the UI re-derives on the
+    // next menu load. It is a last-resort floor, not a historical meaning — a
+    // present-but-unreadable value is still corruption and still throws.
     final rawCurrency = json['currency_code'];
     final String currencyCode;
     if (rawCurrency == null) {

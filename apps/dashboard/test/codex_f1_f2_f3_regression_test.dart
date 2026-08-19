@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/analytics/dashboard_analytics_scope.dart';
 import 'package:restoflow_dashboard/src/analytics/dashboard_destination.dart';
+import 'package:restoflow_dashboard/src/data/currency_breakdown_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
 import 'package:restoflow_dashboard/src/data/active_orders_models.dart';
 import 'package:restoflow_dashboard/src/data/active_orders_repository.dart';
@@ -573,6 +574,14 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            // OPS-043 Phase 2B: this suite is about SCOPE synchronisation, not
+            // currency. Declare the single-currency world explicitly so the
+            // money gate lets the Overview's real cards render (an unknown
+            // currency count deliberately hides money, which would take the
+            // payment-mix row this test taps off the screen).
+            dashboardCurrencyGuardProvider.overrideWith(
+              (ref) async => const ReportCurrencyGuard.single('ILS'),
+            ),
             runtimeConfigProvider.overrideWithValue(
               RuntimeConfig.test(isDemoMode: false),
             ),

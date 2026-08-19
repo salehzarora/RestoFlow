@@ -54,10 +54,14 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     super.dispose();
   }
 
-  int? get _countedMinor => parseCashToMinor(_counted.text);
+  /// The counted drawer cash, in the SHIFT's currency. OPS-043 Phase 2: this
+  /// used to default to two decimals, so a counted JPY drawer was recorded
+  /// 100x high and every variance derived from it was fiction.
+  int? _countedMinorFor(String currencyCode) =>
+      parseCashToMinor(_counted.text, currencyCode: currencyCode);
 
   Future<void> _submit(CurrentShiftView view) async {
-    final counted = _countedMinor;
+    final counted = _countedMinorFor(view.currencyCode);
     if (counted == null) return;
     final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
@@ -296,7 +300,7 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
   ) {
     final theme = Theme.of(context);
     final currency = view.currencyCode;
-    final counted = _countedMinor;
+    final counted = _countedMinorFor(currency);
     // PILOT-OPERATIONS-CORRECTIONS-001 (A5): the AUTHORITATIVE expected comes ONLY from
     // the fresh server summary (demo drawer in demo mode) — never a local combination.
     // Null while loading OR when a real read failed: the estimate/difference are then
