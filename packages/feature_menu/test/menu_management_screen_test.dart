@@ -157,7 +157,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('menu-item-name')), findsOneWidget);
-    expect(find.text(result.l10n.menuSizesHeading), findsOneWidget);
+    // OPS-043 Phase 3: the Sizes section left the editor; Kitchen setup is
+    // the section that proves the editor opened.
+    expect(find.text(result.l10n.menuSizesHeading), findsNothing);
+    expect(find.text(result.l10n.menuKitchenPrepSection), findsOneWidget);
     // The image panel is the honest, gated deferral (no fake upload).
     expect(find.text(result.l10n.menuImageDeferredTitle), findsOneWidget);
   });

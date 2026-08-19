@@ -190,8 +190,10 @@ Future<void> _openItem(WidgetTester tester, String name) async {
 }
 
 void main() {
-  testWidgets('an existing item shows the six sections with the advanced '
-      'section COLLAPSED (fields hidden until expanded)', (tester) async {
+  testWidgets('an existing item shows the SIMPLIFIED section set — Sizes, '
+      'Types, the Preparation inputs and Advanced are gone (OPS-043 P3)', (
+    tester,
+  ) async {
     final store = _seededStore();
     final l10n = await _pump(tester, store);
     await _openItem(tester, 'House Burger');
@@ -200,42 +202,34 @@ void main() {
     expect(find.text(l10n.menuBasicInfoSection), findsOneWidget);
     expect(find.text(l10n.menuImageHeading), findsOneWidget);
     expect(find.text(l10n.menuPricingSection), findsOneWidget);
-    expect(find.text(l10n.menuSizesHeading), findsOneWidget);
-    expect(find.text(l10n.menuVariantsHeading), findsOneWidget);
-    expect(find.text(l10n.menuPreparationSection), findsOneWidget);
     expect(find.text(l10n.menuModifiersHeading), findsOneWidget);
-    expect(find.text(l10n.menuAdvancedSection), findsOneWidget);
+    // Kitchen setup is now a card in its own right, not a sub-section of
+    // Preparation.
+    expect(find.text(l10n.menuKitchenPrepSection), findsOneWidget);
+    // OPS-043 Phase 3 — retired from the UI. Their DATA is unaffected; the
+    // carry-through is proven in item_editor_no_wipe_043p3_test.dart.
+    expect(find.text(l10n.menuSizesHeading), findsNothing);
+    expect(find.text(l10n.menuVariantsHeading), findsNothing);
+    expect(find.text(l10n.menuPreparationSection), findsNothing);
+    expect(find.text(l10n.menuAdvancedSection), findsNothing);
 
     // Field keys present.
     expect(find.byKey(const ValueKey('menu-item-name')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-item-type')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-item-price')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('menu-item-prep-minutes')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('menu-item-kitchen-note')),
-      findsOneWidget,
-    );
-
-    // Advanced starts collapsed — its fields are NOT built yet.
-    expect(find.byKey(const ValueKey('menu-item-sku')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-item-portion')), findsNothing);
-
-    // Expanding reveals the generic advanced fields.
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('menu-item-advanced')),
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-advanced')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('menu-item-sku')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-item-portion')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-item-patty-count')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('menu-item-patty-weight')),
-      findsOneWidget,
-    );
+    // Every retired input, gone — including the Advanced panel that used to
+    // hide them behind an expander.
+    for (final key in const [
+      'menu-item-prep-minutes',
+      'menu-item-kitchen-note',
+      'menu-item-advanced',
+      'menu-item-sku',
+      'menu-item-portion',
+      'menu-item-patty-count',
+      'menu-item-patty-weight',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
   });
 
   testWidgets('a NEW item shows only the field sections (no image, sizes, '
@@ -248,120 +242,12 @@ void main() {
 
     expect(find.text(l10n.menuBasicInfoSection), findsOneWidget);
     expect(find.text(l10n.menuPricingSection), findsOneWidget);
-    expect(find.text(l10n.menuPreparationSection), findsOneWidget);
-    expect(find.text(l10n.menuAdvancedSection), findsOneWidget);
+    expect(find.text(l10n.menuKitchenPrepSection), findsOneWidget);
+    expect(find.text(l10n.menuPreparationSection), findsNothing);
+    expect(find.text(l10n.menuAdvancedSection), findsNothing);
     expect(find.text(l10n.menuImageHeading), findsNothing);
     expect(find.text(l10n.menuSizesHeading), findsNothing);
     expect(find.text(l10n.menuModifiersHeading), findsNothing);
-  });
-
-  testWidgets('saving sends every rich attribute to upsertItem (the save '
-      'payload contract)', (tester) async {
-    final store = _seededStore();
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'House Burger');
-
-    // Preparation.
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-prep-minutes')),
-      '15',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-kitchen-note')),
-      'Extra crispy.',
-    );
-
-    // Tags: add 'spicy' to the pre-selected 'popular'.
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('menu-item-tag-spicy')),
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-tag-spicy')));
-    await tester.pump();
-
-    // Item type: switch food -> combo through the dropdown.
-    await tester.ensureVisible(find.byKey(const ValueKey('menu-item-type')));
-    await tester.tap(find.byKey(const ValueKey('menu-item-type')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(l10n.menuItemTypeCombo).last);
-    await tester.pumpAndSettle();
-
-    // Advanced: expand, then fill SKU/portion/count/weight.
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('menu-item-advanced')),
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-advanced')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('menu-item-sku')), 'HB-2');
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-portion')),
-      'Double',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-patty-count')),
-      '2',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-patty-weight')),
-      '160',
-    );
-
-    // Save lives in the always-visible top bar.
-    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
-    await tester.pumpAndSettle();
-
-    expect(store.upsertItemCalls, 1);
-    expect(store.lastName, 'House Burger');
-    expect(store.lastItemType, 'combo');
-    // Canonical vocabulary order, not click order.
-    expect(store.lastTags, ['spicy', 'popular']);
-    expect(store.lastPrepMinutes, 15);
-    expect(store.lastSku, 'HB-2');
-    expect(store.lastKitchenNote, 'Extra crispy.');
-    expect(store.lastAttributes, {
-      'portion_label': 'Double',
-      'patty_count': 2,
-      'patty_weight_grams': 160,
-    });
-  });
-
-  testWidgets('a non-integer prep time is a field error and blocks the save', (
-    tester,
-  ) async {
-    final store = _seededStore();
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'House Burger');
-
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-prep-minutes')),
-      'abc',
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
-    await tester.pumpAndSettle();
-
-    expect(find.text(l10n.menuErrorAmount), findsOneWidget);
-    expect(store.upsertItemCalls, 0);
-  });
-
-  testWidgets('a negative advanced count is a field error and blocks the '
-      'save', (tester) async {
-    final store = _seededStore();
-    final l10n = await _pump(tester, store);
-    await _openItem(tester, 'House Burger');
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('menu-item-advanced')),
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-advanced')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('menu-item-patty-count')),
-      '-1',
-    );
-    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
-    await tester.pumpAndSettle();
-
-    expect(find.text(l10n.menuErrorNegativePrice), findsOneWidget);
-    expect(store.upsertItemCalls, 0);
   });
 
   testWidgets('an existing item shows the product summary strip (name, '
@@ -568,24 +454,11 @@ void main() {
     await _pump(tester, store);
     await _openItem(tester, 'House Burger');
 
-    expect(
-      tester
-          .widget<TextField>(
-            find.byKey(const ValueKey('menu-item-prep-minutes')),
-          )
-          .controller!
-          .text,
-      '10',
-    );
-    expect(
-      tester
-          .widget<TextField>(
-            find.byKey(const ValueKey('menu-item-kitchen-note')),
-          )
-          .controller!
-          .text,
-      'Rest the patty.',
-    );
+    // OPS-043 Phase 3: prep minutes and the kitchen note are no longer
+    // rendered, so there is no controller to seed. The stored values are still
+    // carried through on save (item_editor_no_wipe_043p3_test.dart).
+    expect(find.byKey(const ValueKey('menu-item-prep-minutes')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-item-kitchen-note')), findsNothing);
     // The stored tag renders selected.
     final popularChip = tester.widget<FilterChip>(
       find.byKey(const ValueKey('menu-item-tag-popular')),
