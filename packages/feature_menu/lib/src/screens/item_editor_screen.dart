@@ -84,24 +84,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   // MENU-ORDER-001 (Codex #6): items are drag-reordered in the items panel — a
   // normal edit sends NO display_order (null); the DB guard trigger preserves the
   // live order, so nothing is hand-tracked here.
-  late final TextEditingController _prepMinutes = TextEditingController(
-    text: _item?.prepMinutes?.toString() ?? '',
-  );
-  late final TextEditingController _kitchenNote = TextEditingController(
-    text: _item?.kitchenNote ?? '',
-  );
-  late final TextEditingController _sku = TextEditingController(
-    text: _item?.sku ?? '',
-  );
-  late final TextEditingController _portion = TextEditingController(
-    text: _item?.portionLabel ?? '',
-  );
-  late final TextEditingController _pattyCount = TextEditingController(
-    text: _item?.pattyCount?.toString() ?? '',
-  );
-  late final TextEditingController _pattyWeight = TextEditingController(
-    text: _item?.pattyWeightGrams?.toString() ?? '',
-  );
+  // OPS-043 Phase 3: the controllers for prep time, kitchen note, SKU,
+  // portion label, patty count and patty weight are gone with their inputs.
+  // The VALUES are not — see `_builtAttributes` and the carry-through in
+  // `_saveFields`.
 
   /// KITCHEN-PREP-001: the editable kitchen prep component rows, seeded from the
   /// item's configured `attributes.prep_components`. Inline-editable (mirrors how
@@ -145,9 +131,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   MenuFieldError? _nameError;
   MenuFieldError? _priceError;
   MenuFieldError? _currencyError;
-  MenuFieldError? _prepError;
-  MenuFieldError? _pattyCountError;
-  MenuFieldError? _pattyWeightError;
   bool _submitting = false;
 
   @override
@@ -155,12 +138,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _name.dispose();
     _description.dispose();
     _price.dispose();
-    _prepMinutes.dispose();
-    _kitchenNote.dispose();
-    _sku.dispose();
-    _portion.dispose();
-    _pattyCount.dispose();
-    _pattyWeight.dispose();
     for (final row in _prepRows) {
       row.dispose();
     }
@@ -193,18 +170,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     return item;
   }
 
-  /// Parses an OPTIONAL non-negative integer field (prep minutes, counts,
-  /// weights): blank = unset (null, no error); a non-integer or negative value
-  /// is a field error — never silently coerced.
-  static (int?, MenuFieldError?) _parseOptionalNonNegativeInt(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return (null, null);
-    final value = int.tryParse(text);
-    if (value == null) return (null, MenuFieldError.notAnInteger);
-    if (value < 0) return (null, MenuFieldError.negativePrice);
-    return (value, null);
-  }
-
   /// The tags to persist: the fixed vocabulary in canonical order, plus any
   /// unknown (newer-backend) tags the item already carried — never dropped.
   List<String> _selectedTags() => [
@@ -214,28 +179,27 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
       if (!kMenuItemTags.contains(tag)) tag,
   ];
 
-  /// The attributes to persist: the three typed fields over any OTHER keys the
-  /// item already carried (full-state upsert must not clobber future keys).
-  /// NON-MONEY only (D-007) — count/weight-in-grams are not amounts.
+  /// The attributes to persist.
+  ///
+  /// OPS-043 Phase 3: this editor now owns exactly ONE key —
+  /// `prep_components` (Kitchen setup). Everything else the row carries is
+  /// passed through untouched: the retired advanced keys (`portion_label`,
+  /// `patty_count`, `patty_weight_grams`) and any key a future ticket adds.
+  ///
+  /// It used to `remove` those three and re-add them from controllers. That was
+  /// safe only while the controllers existed to re-supply them; with the
+  /// Advanced panel gone the removes alone would have wiped stored values on
+  /// the next ordinary save. Not removing them is the fix — a key nobody edits
+  /// is a key nobody should touch.
+  ///
+  /// `prep_components` keeps the drop-then-re-add dance on purpose: clearing
+  /// every row in the UI must clear the stored list, which an unconditional
+  /// merge could not express.
   Map<String, dynamic> _builtAttributes({
-    required int? pattyCount,
-    required int? pattyWeightGrams,
     required List<Map<String, Object?>> prepComponents,
   }) {
     final attributes = <String, dynamic>{...?_freshItem?.attributes}
-      ..remove(kMenuAttrPortionLabel)
-      ..remove(kMenuAttrPattyCount)
-      ..remove(kMenuAttrPattyWeightGrams)
-      // KITCHEN-PREP-001: full-state — drop then re-add so clearing every row
-      // clears the stored list; other (future) attribute keys are preserved.
-      ..remove(kMenuAttrPrepComponents)
-      ..addAll(
-        MenuItem.buildAttributes(
-          portionLabel: _portion.text,
-          pattyCount: pattyCount,
-          pattyWeightGrams: pattyWeightGrams,
-        ),
-      );
+      ..remove(kMenuAttrPrepComponents);
     if (prepComponents.isNotEmpty) {
       attributes[kMenuAttrPrepComponents] = prepComponents;
     }
@@ -311,15 +275,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     final priceMinor = parseMajorToMinor(_price.text, currencyText);
     final priceError = validateBasePriceMinor(priceMinor);
     final currencyError = validateCurrencyCode(currencyText);
-    final (prepMinutes, prepError) = _parseOptionalNonNegativeInt(
-      _prepMinutes.text,
-    );
-    final (pattyCount, pattyCountError) = _parseOptionalNonNegativeInt(
-      _pattyCount.text,
-    );
-    final (pattyWeight, pattyWeightError) = _parseOptionalNonNegativeInt(
-      _pattyWeight.text,
-    );
     // KITCHEN-PREP-001: validate + serialize the prep rows (mutates per-row
     // errors, read back in build via the setState below).
     final prep = _collectPrepRows();
@@ -328,16 +283,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
       _nameError = nameError;
       _priceError = priceError;
       _currencyError = currencyError;
-      _prepError = prepError;
-      _pattyCountError = pattyCountError;
-      _pattyWeightError = pattyWeightError;
     });
     if (nameError != null ||
         priceError != null ||
         currencyError != null ||
-        prepError != null ||
-        pattyCountError != null ||
-        pattyWeightError != null ||
         prep.hasError ||
         categoryId == null) {
       return;
@@ -364,16 +313,17 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           imagePath: _freshItem?.imagePath,
           itemType: _itemType,
           tags: _selectedTags(),
-          prepMinutes: prepMinutes,
-          sku: _sku.text.trim().isEmpty ? null : _sku.text.trim(),
-          kitchenNote: _kitchenNote.text.trim().isEmpty
-              ? null
-              : _kitchenNote.text.trim(),
-          attributes: _builtAttributes(
-            pattyCount: pattyCount,
-            pattyWeightGrams: pattyWeight,
-            prepComponents: prep.components,
-          ),
+          // OPS-043 Phase 3 - NO-WIPE CARRY-THROUGH. These three left the UI;
+          // they did NOT leave the row. `menu_upsert_item` is a full-state
+          // upsert, so a field this editor stops sending is CLEARED on the
+          // server - an operator renaming an item would silently erase its SKU,
+          // prep time and kitchen note. They are now read back verbatim from
+          // the freshest snapshot row, exactly as `imagePath` above already is
+          // and as MenuImagePanel does on its own save/remove paths.
+          prepMinutes: _freshItem?.prepMinutes,
+          sku: _freshItem?.sku,
+          kitchenNote: _freshItem?.kitchenNote,
+          attributes: _builtAttributes(prepComponents: prep.components),
         );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -460,55 +410,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                     const SizedBox(height: RestoflowSpacing.lg),
                     // 3. Pricing (base price; sizes/variants right below).
                     _pricingCard(context, l10n),
-                    if (_item != null) ...[
-                      const SizedBox(height: RestoflowSpacing.lg),
-                      _PricedChildSection(
-                        title: l10n.menuSizesHeading,
-                        icon: Icons.straighten,
-                        addLabel: l10n.menuAddSize,
-                        kind: PricedChildKind.size,
-                        parentId: _item.id,
-                        currencyCode: _currencyCode,
-                        rows: widget.snapshot
-                            .sizesForItem(_item.id)
-                            .map(
-                              (s) => _PricedChildVm(
-                                id: s.id,
-                                name: s.name,
-                                deltaMinor: s.priceDeltaMinor,
-                                isActive: s.isActive,
-                                branchId: s.branchId,
-                                displayOrder: s.displayOrder,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: RestoflowSpacing.lg),
-                      _PricedChildSection(
-                        title: l10n.menuVariantsHeading,
-                        icon: Icons.tune,
-                        addLabel: l10n.menuAddVariant,
-                        kind: PricedChildKind.variant,
-                        parentId: _item.id,
-                        currencyCode: _currencyCode,
-                        rows: widget.snapshot
-                            .variantsForItem(_item.id)
-                            .map(
-                              (v) => _PricedChildVm(
-                                id: v.id,
-                                name: v.name,
-                                deltaMinor: v.priceDeltaMinor,
-                                isActive: v.isActive,
-                                branchId: v.branchId,
-                                displayOrder: v.displayOrder,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
                     const SizedBox(height: RestoflowSpacing.lg),
-                    // 4. Preparation (prep minutes + the standing kitchen note).
-                    _preparationCard(context, l10n),
+                    // 4. Kitchen setup (what the chef assembles per unit).
+                    _kitchenSetupCard(context, l10n),
                     if (_item != null) ...[
                       const SizedBox(height: RestoflowSpacing.lg),
                       // 5. Options & modifiers.
@@ -519,9 +423,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                         currencyCode: _currencyCode,
                       ),
                     ],
-                    const SizedBox(height: RestoflowSpacing.lg),
-                    // 6. Advanced — collapsed so the default view stays simple.
-                    _advancedCard(context, l10n),
                   ],
                 ),
               ),
@@ -720,50 +621,23 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// 4. Preparation: prep time + the standing kitchen note (both pass through
-  /// to kitchen sessions server-side — a KDS needs prep info).
-  Widget _preparationCard(BuildContext context, AppLocalizations l10n) {
+  /// 4. Kitchen setup — what the chef assembles for ONE unit of the item,
+  /// aggregated on the KDS (KITCHEN-PREP-001).
+  ///
+  /// OPS-043 Phase 3 emptied the old "Preparation" card of its two inputs
+  /// (prep minutes, kitchen note): neither was read by any POS, KDS, ticket,
+  /// submit payload or report, so they were asking a restaurant for data
+  /// nothing consumed. The COLUMNS and their stored values are untouched and
+  /// carried through on every save. What is left is the part the kitchen
+  /// actually uses, so it is now the card itself rather than a sub-section.
+  Widget _kitchenSetupCard(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
     return MenuSectionCard(
-      title: l10n.menuPreparationSection,
-      icon: Icons.timer_outlined,
+      title: l10n.menuKitchenPrepSection,
+      icon: Icons.restaurant_menu,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            key: const ValueKey('menu-item-prep-minutes'),
-            controller: _prepMinutes,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: l10n.menuPrepMinutesLabel,
-              border: const OutlineInputBorder(),
-              errorText: _prepError == null
-                  ? null
-                  : l10n.menuFieldErrorText(_prepError!),
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          TextField(
-            key: const ValueKey('menu-item-kitchen-note'),
-            controller: _kitchenNote,
-            maxLines: 2,
-            decoration: InputDecoration(
-              labelText: l10n.menuKitchenNoteLabel,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          // KITCHEN-PREP-001: the OPTIONAL kitchen prep components editor — what
-          // the chef assembles for ONE unit of the item, aggregated on the KDS.
-          const SizedBox(height: RestoflowSpacing.md),
-          const Divider(),
-          const SizedBox(height: RestoflowSpacing.sm),
-          Text(
-            l10n.menuKitchenPrepSection,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.xs),
           Text(
             l10n.menuKitchenPrepHint,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -863,102 +737,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                     (_) => removed.dispose(),
                   );
                 },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 6. Advanced: a COLLAPSED expansion tile (SKU, portion label, and the
-  /// generic per-piece count/weight). Generic across cuisines — a pizza or
-  /// cafe owner simply leaves the count/weight fields empty. Weight is GRAMS
-  /// (never money — D-007).
-  Widget _advancedCard(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: ExpansionTile(
-        key: const ValueKey('menu-item-advanced'),
-        leading: Icon(
-          Icons.discount_outlined,
-          size: 20,
-          color: theme.colorScheme.primary,
-        ),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        title: Text(
-          l10n.menuAdvancedSection,
-          style: theme.textTheme.titleMedium,
-        ),
-        subtitle: Text(
-          l10n.menuAdvancedSectionHint,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        childrenPadding: const EdgeInsetsDirectional.fromSTEB(
-          RestoflowSpacing.lg,
-          0,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg,
-        ),
-        children: [
-          TextField(
-            key: const ValueKey('menu-item-sku'),
-            controller: _sku,
-            decoration: InputDecoration(
-              labelText: l10n.menuSkuLabel,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          TextField(
-            key: const ValueKey('menu-item-portion'),
-            controller: _portion,
-            decoration: InputDecoration(
-              labelText: l10n.menuPortionFieldLabel,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('menu-item-patty-count'),
-                  controller: _pattyCount,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.menuPattyCountLabel,
-                    border: const OutlineInputBorder(),
-                    errorText: _pattyCountError == null
-                        ? null
-                        : l10n.menuFieldErrorText(_pattyCountError!),
-                  ),
-                ),
-              ),
-              const SizedBox(width: RestoflowSpacing.md),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('menu-item-patty-weight'),
-                  controller: _pattyWeight,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.menuPattyWeightLabel,
-                    border: const OutlineInputBorder(),
-                    errorText: _pattyWeightError == null
-                        ? null
-                        : l10n.menuFieldErrorText(_pattyWeightError!),
-                  ),
-                ),
               ),
             ],
           ),
