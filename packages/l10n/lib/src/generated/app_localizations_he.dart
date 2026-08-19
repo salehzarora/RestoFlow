@@ -6027,4 +6027,19 @@ class AppLocalizationsHe extends AppLocalizations {
   String menuCopySavedSummary(int groups, int options) {
     return 'הועתקו $groups קבוצות ו-$options אפשרויות.';
   }
+
+  @override
+  String get menuCopyDraftEditHint =>
+      'אלו שורות טיוטה — ערכו אותן כאן. הן נוצרות בלחיצה על שמירה.';
+
+  @override
+  String get menuCopyDraftRemoveTitle => 'להסיר מההעתקה?';
+
+  @override
+  String get menuCopyDraftRemoveBody =>
+      'ההסרה היא מהטופס הזה בלבד. שום דבר לא נשמר עדיין, ולכן שום דבר לא נמחק.';
+
+  @override
+  String get menuCopyDraftRemoveLinked =>
+      'אפשרות אחרת מפוצלת לפי זו. הקישור הזה ינוקה.';
 }

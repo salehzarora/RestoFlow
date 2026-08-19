@@ -6067,4 +6067,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String menuCopySavedSummary(int groups, int options) {
     return 'تم نسخ $groups مجموعات و$options خيارات.';
   }
+
+  @override
+  String get menuCopyDraftEditHint =>
+      'هذه صفوف مسودة — عدّلها هنا. تُنشأ عند الضغط على حفظ.';
+
+  @override
+  String get menuCopyDraftRemoveTitle => 'إزالة من النسخة؟';
+
+  @override
+  String get menuCopyDraftRemoveBody =>
+      'تتم الإزالة من هذا النموذج فقط. لم يُحفظ أي شيء بعد، لذا لا يُحذف أي شيء.';
+
+  @override
+  String get menuCopyDraftRemoveLinked =>
+      'هناك خيار آخر مقسوم بهذا الخيار. سيتم مسح ذلك الرابط.';
 }

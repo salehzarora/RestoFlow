@@ -1870,5 +1870,9 @@
   "menuCopyBlockedHasModifiers": "לפריט הזה כבר יש קבוצות תוספות, ולכן העתקה תשכפל אותן. מחקו אותן קודם, או העתיקו לפריט חדש.",
   "menuCopySavingProgress": "שומר את ההגדרות שהועתקו… {done}/{total}",
   "menuCopyFlushPartial": "נעצר לאחר יצירת {groups} קבוצות ו-{options} אפשרויות. שום דבר לא בוטל — לחצו שוב על שמירה כדי להמשיך מכאן.",
-  "menuCopySavedSummary": "הועתקו {groups} קבוצות ו-{options} אפשרויות."
+  "menuCopySavedSummary": "הועתקו {groups} קבוצות ו-{options} אפשרויות.",
+  "menuCopyDraftEditHint": "אלו שורות טיוטה — ערכו אותן כאן. הן נוצרות בלחיצה על שמירה.",
+  "menuCopyDraftRemoveTitle": "להסיר מההעתקה?",
+  "menuCopyDraftRemoveBody": "ההסרה היא מהטופס הזה בלבד. שום דבר לא נשמר עדיין, ולכן שום דבר לא נמחק.",
+  "menuCopyDraftRemoveLinked": "אפשרות אחרת מפוצלת לפי זו. הקישור הזה ינוקה."
 }

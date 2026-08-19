@@ -6115,4 +6115,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String menuCopySavedSummary(int groups, int options) {
     return 'Copied $groups groups and $options options.';
   }
+
+  @override
+  String get menuCopyDraftEditHint =>
+      'These are draft rows — edit them here. They are created when you press Save.';
+
+  @override
+  String get menuCopyDraftRemoveTitle => 'Remove from the copy?';
+
+  @override
+  String get menuCopyDraftRemoveBody =>
+      'It is removed from this form only. Nothing has been saved yet, so nothing is deleted.';
+
+  @override
+  String get menuCopyDraftRemoveLinked =>
+      'Another option is split by this one. That link will be cleared.';
 }

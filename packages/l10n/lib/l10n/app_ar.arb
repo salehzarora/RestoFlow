@@ -1870,5 +1870,9 @@
   "menuCopyBlockedHasModifiers": "هذا الصنف لديه مجموعات مُعدِّلات بالفعل، لذا سيؤدي النسخ إلى تكرارها. احذفها أولًا، أو انسخ إلى صنف جديد.",
   "menuCopySavingProgress": "جارٍ حفظ الإعدادات المنسوخة… {done}/{total}",
   "menuCopyFlushPartial": "توقّف بعد إنشاء {groups} مجموعات و{options} خيارات. لم يُتراجع عن أي شيء — اضغط حفظ مرة أخرى للمتابعة من هنا.",
-  "menuCopySavedSummary": "تم نسخ {groups} مجموعات و{options} خيارات."
+  "menuCopySavedSummary": "تم نسخ {groups} مجموعات و{options} خيارات.",
+  "menuCopyDraftEditHint": "هذه صفوف مسودة — عدّلها هنا. تُنشأ عند الضغط على حفظ.",
+  "menuCopyDraftRemoveTitle": "إزالة من النسخة؟",
+  "menuCopyDraftRemoveBody": "تتم الإزالة من هذا النموذج فقط. لم يُحفظ أي شيء بعد، لذا لا يُحذف أي شيء.",
+  "menuCopyDraftRemoveLinked": "هناك خيار آخر مقسوم بهذا الخيار. سيتم مسح ذلك الرابط."
 }

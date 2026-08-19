@@ -22,6 +22,7 @@ import '../models/modifier_option.dart';
 import '../state/menu_providers.dart';
 import '../widgets/menu_badges.dart';
 import '../widgets/menu_components.dart';
+import '../widgets/menu_copied_modifiers_draft_editor.dart';
 import '../widgets/menu_copy_source_picker.dart';
 import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
@@ -156,6 +157,17 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   /// The flush is ~20 ordinary RPCs for a burger-shaped item; a save that long
   /// must say what it is doing.
   ({int done, int total})? _flushProgress;
+
+  /// OPS-043 Phase 4B: the operator's OWN values from immediately before the
+  /// copy was applied, so Discard can put them back.
+  ///
+  /// Applying a copy overwrites the price field and replaces the Kitchen setup
+  /// rows. Dropping `_copy` alone would leave those overwritten values sitting
+  /// in the form as if the operator had typed them — a "discard" that discards
+  /// the wrong half. Captured only when no copy is applied yet, so changing the
+  /// source mid-draft still restores the ORIGINAL values rather than the
+  /// previous copy's.
+  ({String priceText, List<_PrepRowValues> prepRows})? _preCopyState;
 
   /// The item this editor writes to: the edited row, or the one it created on a
   /// previous, partly-failed Save.
@@ -539,6 +551,8 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         row.copiedClassifierOptionId = '';
       }
       _copy = null;
+      // The copy is persisted; there is no longer a pre-copy form to return to.
+      _preCopyState = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -609,10 +623,16 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   }
 
   /// Seeds the form from [config]. Zero writes — the price field and the
-  /// Kitchen setup rows are ordinary editable controls, so the operator reviews
-  /// and adjusts everything before the copy becomes real.
+  /// Kitchen setup rows are ordinary editable controls, and the copied modifier
+  /// groups are edited in place, so the operator reviews and adjusts everything
+  /// before the copy becomes real.
   void _applyCopy(MenuCopiedConfig config) {
     final retired = List<_PrepRow>.of(_prepRows);
+    // Capture what the operator had BEFORE the first copy of this session.
+    _preCopyState ??= (
+      priceText: _price.text,
+      prepRows: [for (final row in _prepRows) row.values],
+    );
     setState(() {
       _copy = config;
       // D5: the source base price, prefilled and editable.
@@ -644,10 +664,48 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     });
   }
 
-  /// Drops the draft. Nothing was ever written, so nothing is deleted — the
-  /// price and Kitchen setup rows simply stay as they are for the operator to
-  /// edit or replace.
-  void _discardCopy() => setState(() => _copy = null);
+  /// Drops the draft AND puts the form back the way the operator left it.
+  ///
+  /// Nothing was ever written, so there is nothing to delete on the server —
+  /// but the price field and the Kitchen setup rows were overwritten by the
+  /// copy, and leaving those behind would be a discard that only half discards.
+  void _discardCopy() {
+    final before = _preCopyState;
+    final retired = List<_PrepRow>.of(_prepRows);
+    setState(() {
+      _copy = null;
+      _preCopyState = null;
+      if (before == null) return;
+      _price.text = before.priceText;
+      _priceError = null;
+      _prepRows
+        ..clear()
+        ..addAll([for (final values in before.prepRows) values.toRow()]);
+    });
+    if (before == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final row in retired) {
+        row.dispose();
+      }
+    });
+  }
+
+  /// OPS-043 Phase 4B: drops Kitchen setup links whose draft option is gone.
+  ///
+  /// A prep row is classified by a DRAFT option, so removing that option would
+  /// otherwise leave the row pointing at something the flush can no longer map
+  /// — a link that silently stops working after Save. Clearing it here means
+  /// the editor shows the truth instead.
+  void _reconcileCopiedPrepLinks() {
+    final copy = _copy;
+    if (copy == null) return;
+    for (final row in _prepRows) {
+      if (row.copiedClassifierOptionId.isEmpty) continue;
+      if (copy.optionNameBySourceId(row.copiedClassifierOptionId) == null) {
+        row.copiedClassifierOptionId = '';
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -974,27 +1032,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          for (final group in copy.groups) ...[
-            const SizedBox(height: RestoflowSpacing.sm),
-            Text(
-              '${group.name} — '
-              '${l10n.menuCopyPreviewOptions(group.options.length)}',
-              style: theme.textTheme.bodyMedium,
-            ),
-            for (final option in group.options)
-              Padding(
-                padding: const EdgeInsetsDirectional.only(
-                  start: RestoflowSpacing.md,
-                ),
-                child: Text(
-                  '${option.name} · '
-                  '${formatMinorUnits(option.priceDeltaMinor, _currencyCode)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-          ],
+          const SizedBox(height: RestoflowSpacing.sm),
+          // OPS-043 Phase 4B: the copied groups and options are EDITABLE right
+          // here. They used to be a read-only list, because every modifier
+          // widget in this package renders a server row — so reviewing a copy
+          // meant saving it first and fixing it afterwards, on live rows, which
+          // is precisely what a draft is for.
+          MenuCopiedModifiersDraftEditor(
+            config: copy,
+            currencyCode: _currencyCode,
+            enabled: !_submitting,
+            onChanged: () => setState(_reconcileCopiedPrepLinks),
+          ),
           const SizedBox(height: RestoflowSpacing.sm),
           Text(
             l10n.menuCopyDraftNotice,
@@ -2069,11 +2118,47 @@ class _PrepRow {
   /// falls back to its single unsplit total.
   bool classifierMissing = false;
 
+  /// A plain snapshot of this row's text, so the editor can restore it after a
+  /// discard without holding on to disposed controllers.
+  _PrepRowValues get values => _PrepRowValues(
+    name: name.text,
+    quantity: quantity.text,
+    unit: unit.text,
+    classifierOptionId: classifierOptionId,
+    copiedClassifierOptionId: copiedClassifierOptionId,
+  );
+
   void dispose() {
     name.dispose();
     quantity.dispose();
     unit.dispose();
   }
+}
+
+/// OPS-043 Phase 4B: the controller-free form of a [_PrepRow], used to remember
+/// the Kitchen setup the operator had before a copy overwrote it.
+class _PrepRowValues {
+  const _PrepRowValues({
+    required this.name,
+    required this.quantity,
+    required this.unit,
+    required this.classifierOptionId,
+    required this.copiedClassifierOptionId,
+  });
+
+  final String name;
+  final String quantity;
+  final String unit;
+  final String classifierOptionId;
+  final String copiedClassifierOptionId;
+
+  _PrepRow toRow() => _PrepRow(
+    name: name,
+    quantity: quantity,
+    unit: unit,
+    classifierOptionId: classifierOptionId,
+    copiedClassifierOptionId: copiedClassifierOptionId,
+  );
 }
 
 /// OPS-043 Phase 4: the editor's bridge from the copy pipeline to the scoped

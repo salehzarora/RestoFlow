@@ -773,12 +773,12 @@ void main() {
         expect(g120.priceDeltaMinor, 0);
         expect(g120.displayOrder, 0);
         expect(g120.isActive, isTrue);
-        expect(g120.kitchenMeat!['quantity'], 1);
-        expect(g120.kitchenMeat!['unit'], 'pcs');
+        expect(g120.kitchenMeatQuantity, 1);
+        expect(g120.kitchenMeatUnit, 'pcs');
         expect(g120.classifierSourceOptionId, 'opt-cheese');
 
         expect(size.options[1].priceDeltaMinor, 1500);
-        expect(size.options[1].kitchenMeat!['quantity'], 2);
+        expect(size.options[1].kitchenMeatQuantity, 2);
 
         final lettuce = additions.options[1];
         expect(lettuce.name, 'Lettuce');
@@ -787,7 +787,7 @@ void main() {
           isFalse,
           reason: 'an inactive option copies as inactive, not silently revived',
         );
-        expect(lettuce.kitchenMeat, isNull);
+        expect(lettuce.hasKitchenMeat, isFalse);
 
         // Kitchen setup, including the legacy 016 link.
         expect(config.prepComponents, hasLength(2));
@@ -860,7 +860,7 @@ void main() {
       // is gone — exactly what the trust boundary would have forced at read
       // time, done up front so nothing unremappable is ever carried.
       final option = config.groups.first.options.first;
-      expect(option.kitchenMeat!['quantity'], 1);
+      expect(option.kitchenMeatQuantity, 1);
       expect(option.carriesClassifier, isFalse);
       expect(config.prepComponents.first['name'], 'Meat');
       expect(config.prepComponents.first['classifier_option_id'], isNull);

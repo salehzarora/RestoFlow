@@ -31,6 +31,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import '../models/menu_item.dart';
 import '../models/menu_snapshot.dart';
 import '../models/menu_write_failure.dart';
+import '../models/modifier_option.dart';
 import 'menu_writer.dart';
 
 /// The wire keys of the classifier triple, shared by `kitchen_meat` and a
@@ -52,21 +53,41 @@ class CopiedOptionDraft {
     required this.priceDeltaMinor,
     required this.displayOrder,
     required this.isActive,
-    this.kitchenMeat,
+    this.kitchenMeatQuantity,
+    this.kitchenMeatUnit = '',
+    this.classifierSourceOptionId = '',
   });
 
-  /// The id of the option this one was copied from. NEVER persisted — the
-  /// remap key only.
+  /// The id of the option this one was copied from.
+  ///
+  /// NEVER persisted, and never shown: it is this draft option's STABLE
+  /// IDENTITY. Every classifier link inside the draft is expressed in terms of
+  /// it, so renaming an option — or reordering, or repricing it — cannot break
+  /// the link, and the flush can still map it to the row's real id. A display
+  /// name could do none of that.
   final String sourceOptionId;
 
-  final String name;
-  final int priceDeltaMinor;
-  final int displayOrder;
-  final bool isActive;
+  /// Editable before Save. `menu_upsert_modifier_option` receives exactly these
+  /// values, read at flush time, so what the operator last typed is what is
+  /// written.
+  String name;
+  int priceDeltaMinor;
+  int displayOrder;
+  bool isActive;
 
-  /// The copied kitchen-count metadata (`{quantity, unit}` plus, possibly, a
-  /// classifier link that still names a SOURCE option). Null = no count.
-  final Map<String, dynamic>? kitchenMeat;
+  /// KITCHEN-MEAT-001, editable: how much ONE selection contributes. Null = no
+  /// kitchen count at all (the option simply does not appear in the rollup).
+  num? kitchenMeatQuantity;
+
+  /// The free-text unit of that count ("قطع", "pcs", "g", …).
+  String kitchenMeatUnit;
+
+  /// KITCHEN-MODIFIER-PREP-CLASSIFIER-019, editable: the [sourceOptionId] of
+  /// ANOTHER draft option that classifies this one's contribution. '' = unsplit.
+  ///
+  /// A SOURCE id, deliberately: it is remapped to the new option's real id on
+  /// the flush's second pass, and until then it names nothing on the server.
+  String classifierSourceOptionId;
 
   /// Set once the real row exists (its server-minted id).
   String? createdId;
@@ -74,35 +95,47 @@ class CopiedOptionDraft {
   /// Set once the second pass has written this option's remapped classifier.
   bool classifierFlushed = false;
 
-  /// The source option id this option's kitchen count is classified by, or ''.
-  String get classifierSourceOptionId {
-    final value = kitchenMeat?[kCopyClassifierOptionIdKey];
-    return value is String ? value.trim() : '';
-  }
+  bool get hasKitchenMeat =>
+      kitchenMeatQuantity != null && kitchenMeatQuantity! > 0;
 
-  bool get carriesClassifier => classifierSourceOptionId.isNotEmpty;
+  bool get carriesClassifier =>
+      hasKitchenMeat && classifierSourceOptionId.trim().isNotEmpty;
 
-  /// The metadata as written on the FIRST pass: the count itself, with every
-  /// classifier key removed. A target row therefore never holds a source id,
-  /// not even between the two passes.
+  /// The metadata as written on the FIRST pass: the count itself, with NO
+  /// classifier key. A target row therefore never holds a source id, not even
+  /// between the two passes.
   Map<String, dynamic>? get kitchenMeatWithoutClassifier {
-    final meat = kitchenMeat;
-    if (meat == null) return null;
-    return <String, dynamic>{...meat}
-      ..remove(kCopyClassifierOptionIdKey)
-      ..remove(kCopyClassifierOptionNameKey);
+    if (!hasKitchenMeat) return null;
+    return <String, dynamic>{
+      'quantity': kitchenMeatQuantity,
+      'unit': kitchenMeatUnit,
+    };
   }
 
   /// The metadata as written on the SECOND pass: the same count, with the
-  /// classifier pointing at the NEW option. An id with no entry in [remap]
-  /// yields the unclassified form rather than a foreign link — the count is
-  /// kept, the (unresolvable) split is not invented.
-  Map<String, dynamic>? kitchenMeatRemapped(Map<String, String> remap) {
-    final meat = kitchenMeat;
-    if (meat == null) return null;
-    final newId = remap[classifierSourceOptionId];
-    if (newId == null || newId.isEmpty) return kitchenMeatWithoutClassifier;
-    return <String, dynamic>{...meat, kCopyClassifierOptionIdKey: newId};
+  /// classifier pointing at the NEW option, and its name read from the draft
+  /// (so a rename before Save is what the kitchen prints). A link with no entry
+  /// in [remap] yields the unclassified form rather than a foreign one — the
+  /// count is kept, the unresolvable split is not invented.
+  Map<String, dynamic>? kitchenMeatRemapped(
+    Map<String, String> remap,
+    String? classifierName,
+  ) {
+    if (!hasKitchenMeat) return null;
+    final base = kitchenMeatWithoutClassifier!;
+    final newId = remap[classifierSourceOptionId.trim()];
+    if (!carriesClassifier ||
+        newId == null ||
+        newId.isEmpty ||
+        classifierName == null ||
+        classifierName.isEmpty) {
+      return base;
+    }
+    return <String, dynamic>{
+      ...base,
+      kCopyClassifierOptionIdKey: newId,
+      kCopyClassifierOptionNameKey: classifierName,
+    };
   }
 }
 
@@ -122,18 +155,20 @@ class CopiedGroupDraft {
     required this.options,
   });
 
-  /// Bookkeeping only — never persisted.
+  /// The group this one was copied from — stable identity, never persisted.
   final String sourceModifierId;
 
-  final String name;
-  final String selectionType;
-  final int minSelect;
-  final int? maxSelect;
-  final bool isRequired;
-  final int displayOrder;
-  final bool isActive;
-  final bool allowQuantity;
-  final int? maxQuantity;
+  /// All editable before Save; `menu_upsert_modifier` receives exactly these
+  /// values, read at flush time.
+  String name;
+  String selectionType;
+  int minSelect;
+  int? maxSelect;
+  bool isRequired;
+  int displayOrder;
+  bool isActive;
+  bool allowQuantity;
+  int? maxQuantity;
   final List<CopiedOptionDraft> options;
 
   /// Set once the real group row exists.
@@ -176,7 +211,7 @@ class MenuCopiedConfig {
   int get kitchenCountOptionCount => groups.fold(
     0,
     (total, group) =>
-        total + group.options.where((o) => o.kitchenMeat != null).length,
+        total + group.options.where((o) => o.hasKitchenMeat).length,
   );
 
   /// How many classifier links must be remapped on Save (options + prep rows).
@@ -212,13 +247,78 @@ class MenuCopiedConfig {
   /// no option of this draft. Names are copied verbatim, so this is also the
   /// name the NEW option will carry — which is what a classifier label needs.
   String? optionNameBySourceId(String sourceOptionId) {
-    if (sourceOptionId.isEmpty) return null;
+    final needle = sourceOptionId.trim();
+    if (needle.isEmpty) return null;
     for (final entry in allOptions) {
-      if (entry.option.sourceOptionId == sourceOptionId)
-        return entry.option.name;
+      if (entry.option.sourceOptionId == needle) return entry.option.name;
     }
     return null;
   }
+
+  /// The draft option a SOURCE id names, or null.
+  CopiedOptionDraft? optionBySourceId(String sourceOptionId) {
+    final needle = sourceOptionId.trim();
+    if (needle.isEmpty) return null;
+    for (final entry in allOptions) {
+      if (entry.option.sourceOptionId == needle) return entry.option;
+    }
+    return null;
+  }
+
+  /// Every OTHER draft option, as the split-by candidates for
+  /// [selfSourceOptionId]. An option can never classify itself, and only
+  /// options of THIS draft are offered — the same product-scoping rule the
+  /// persisted editor applies, enforced here by construction.
+  List<CopiedOptionDraft> classifierCandidatesFor(String selfSourceOptionId) =>
+      [
+        for (final entry in allOptions)
+          if (entry.option.sourceOptionId != selfSourceOptionId) entry.option,
+      ];
+
+  /// Which draft options are named as the split-by target of something else —
+  /// the ones whose removal would strand a link.
+  Set<String> get classifierTargetSourceIds => <String>{
+    for (final entry in allOptions)
+      if (entry.option.carriesClassifier)
+        entry.option.classifierSourceOptionId.trim(),
+  };
+
+  /// Removes a draft option and CLEARS every link that named it, so a delete
+  /// can never leave a dangling classifier behind. Draft-only: nothing exists
+  /// on the server yet, so there is nothing to delete there.
+  void removeOption(CopiedOptionDraft option) {
+    for (final group in groups) {
+      group.options.remove(option);
+    }
+    clearDanglingCopiedClassifiers(this);
+  }
+
+  /// Removes a whole draft group (and therefore its options), clearing every
+  /// link those options were the target of.
+  void removeGroup(CopiedGroupDraft group) {
+    groups.remove(group);
+    clearDanglingCopiedClassifiers(this);
+  }
+}
+
+/// Clears every draft classifier link whose target is no longer an option of
+/// the draft, and returns the source ids that were cleared.
+///
+/// The trust boundary would strip such a link at read time anyway; clearing it
+/// HERE means the operator sees the truth ("not split") in the editor instead
+/// of a link that quietly stops working after Save.
+Set<String> clearDanglingCopiedClassifiers(MenuCopiedConfig config) {
+  final live = <String>{
+    for (final entry in config.allOptions) entry.option.sourceOptionId,
+  };
+  final cleared = <String>{};
+  for (final entry in config.allOptions) {
+    final id = entry.option.classifierSourceOptionId.trim();
+    if (id.isEmpty || live.contains(id)) continue;
+    cleared.add(id);
+    entry.option.classifierSourceOptionId = '';
+  }
+  return cleared;
 }
 
 /// Whether a wire `prep_components` row carries a classifier link.
@@ -267,21 +367,15 @@ MenuCopiedConfig buildMenuCopiedConfig({
         maxQuantity: group.maxQuantity,
         options: <CopiedOptionDraft>[
           for (final option in snapshot.optionsForModifier(group.id))
-            CopiedOptionDraft(
-              sourceOptionId: option.id,
-              name: option.name,
-              priceDeltaMinor: option.priceDeltaMinor,
-              displayOrder: option.displayOrder,
-              isActive: option.isActive,
+            _draftOption(
+              option,
               // Trust boundary FIRST: a link the source itself could not
               // justify is dropped now, so it can never become an unremappable
               // id on the copy.
-              kitchenMeat: _meatToWire(
-                resolveTrustedMeatClassifier(
-                  KitchenMeat.tryFromJson(option.kitchenMeat),
-                  optionNamesById: optionNamesById,
-                  selfOptionId: option.id,
-                ),
+              resolveTrustedMeatClassifier(
+                KitchenMeat.tryFromJson(option.kitchenMeat),
+                optionNamesById: optionNamesById,
+                selfOptionId: option.id,
               ),
             ),
         ],
@@ -306,10 +400,20 @@ MenuCopiedConfig buildMenuCopiedConfig({
   );
 }
 
-Map<String, dynamic>? _meatToWire(KitchenMeat? meat) {
-  if (meat == null) return null;
-  return <String, dynamic>{...meat.toJson()};
-}
+/// One source option as a draft, with its (already trusted) kitchen count
+/// decomposed into the editable fields the draft editor binds to.
+CopiedOptionDraft _draftOption(ModifierOption option, KitchenMeat? meat) =>
+    CopiedOptionDraft(
+      sourceOptionId: option.id,
+      name: option.name,
+      priceDeltaMinor: option.priceDeltaMinor,
+      displayOrder: option.displayOrder,
+      isActive: option.isActive,
+      kitchenMeatQuantity: meat?.quantity,
+      kitchenMeatUnit: meat?.unit ?? '',
+      // Still a SOURCE id at this point; the flush remaps it.
+      classifierSourceOptionId: meat?.classifierOptionId ?? '',
+    );
 
 /// Which step of the flush a failure happened in — so the operator is told
 /// exactly how far the (deliberately NON-atomic) sequence got.
@@ -476,7 +580,13 @@ Future<MenuCopyFlushReport> flushMenuCopiedConfig({
       id: option.createdId,
       modifierId: entry.group.createdId!,
       option: option,
-      kitchenMeat: option.kitchenMeatRemapped(remap),
+      // The name is read from the DRAFT, not from what the source carried,
+      // so renaming the classifying option before Save is what the kitchen
+      // ends up printing.
+      kitchenMeat: option.kitchenMeatRemapped(
+        remap,
+        config.optionNameBySourceId(option.classifierSourceOptionId),
+      ),
     );
     MenuWriteFailure? linkFailure;
     outcome.fold(

@@ -11109,6 +11109,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied {groups} groups and {options} options.'**
   String menuCopySavedSummary(int groups, int options);
+
+  /// OPS-043 Phase 4B: says the modifier rows below are a LOCAL draft - editable here and created only by the normal Save.
+  ///
+  /// In en, this message translates to:
+  /// **'These are draft rows — edit them here. They are created when you press Save.'**
+  String get menuCopyDraftEditHint;
+
+  /// OPS-043 Phase 4B: confirmation title for removing a group/option from the copied DRAFT (nothing is deleted on the server, because nothing exists there yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from the copy?'**
+  String get menuCopyDraftRemoveTitle;
+
+  /// OPS-043 Phase 4B: confirmation body - the removal is local only.
+  ///
+  /// In en, this message translates to:
+  /// **'It is removed from this form only. Nothing has been saved yet, so nothing is deleted.'**
+  String get menuCopyDraftRemoveBody;
+
+  /// OPS-043 Phase 4B: extra warning when the row being removed is the split-by target of another option; those links are cleared so none is left dangling.
+  ///
+  /// In en, this message translates to:
+  /// **'Another option is split by this one. That link will be cleared.'**
+  String get menuCopyDraftRemoveLinked;
 }
 
 class _AppLocalizationsDelegate
