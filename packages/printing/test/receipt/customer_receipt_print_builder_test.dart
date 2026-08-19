@@ -111,6 +111,94 @@ void main() {
     );
   });
 
+  // OPS-043 Phase 5A (coverage-only): a historical receipt in a NON-ILS,
+  // non-2-decimal currency. Every other receipt fixture in this repo is ILS, so
+  // the exponent on the printed document was never actually exercised - and a
+  // receipt is the one artefact a customer takes away and a tax inspector
+  // reads. The builder is already correct; this pins it.
+  group('a receipt in a 3-decimal currency (OPS-043 Phase 5A)', () {
+    test('JOD prints THREE decimals, not two', () async {
+      final doc = await CustomerReceiptPrintBuilder.build(
+        input: ReceiptInput(
+          organizationId: 'org-1',
+          branchId: 'branch-1',
+          deviceId: 'dev-1',
+          paymentId: 'pay-jod',
+          receiptNumber: 'R-JOD',
+          orderRef: 'o-jod',
+          serviceType: ReceiptServiceType.takeaway,
+          currencyCode: 'JOD',
+          locale: ReceiptLocale.en,
+          issuedAt: issuedAt,
+          items: [
+            ReceiptItemLine(
+              nameSnapshot: 'Shawarma',
+              quantity: 1,
+              lineTotalMinor: 47400,
+            ),
+          ],
+          subtotalMinor: 47400,
+          totalMinor: 47400,
+          tender: const ReceiptTenderLine(
+            method: 'Cash',
+            paidMinor: 50000,
+            changeMinor: 2600,
+          ),
+        ),
+        paper: ReceiptPaperSpec.mm80,
+      );
+      final texts = doc.lines
+          .whereType<PrintTextLine>()
+          .map((l) => l.text)
+          .join('\n');
+      // 47400 minor units is 47.400 JOD, and emphatically not 474.00.
+      expect(texts, contains('47.400 JOD'));
+      expect(texts, isNot(contains('474.00')));
+      // The tender block prints bare figures (the code sits on the total),
+      // so assert the EXPONENT there, which is the part that can be wrong.
+      expect(texts, contains('50.000'), reason: 'tender keeps 3 decimals');
+      expect(texts, contains('2.600'), reason: 'so does change');
+    });
+
+    test('JPY prints NO decimals', () async {
+      final doc = await CustomerReceiptPrintBuilder.build(
+        input: ReceiptInput(
+          organizationId: 'org-1',
+          branchId: 'branch-1',
+          deviceId: 'dev-1',
+          paymentId: 'pay-jpy',
+          receiptNumber: 'R-JPY',
+          orderRef: 'o-jpy',
+          serviceType: ReceiptServiceType.takeaway,
+          currencyCode: 'JPY',
+          locale: ReceiptLocale.en,
+          issuedAt: issuedAt,
+          items: [
+            ReceiptItemLine(
+              nameSnapshot: 'Ramen',
+              quantity: 1,
+              lineTotalMinor: 1200,
+            ),
+          ],
+          subtotalMinor: 1200,
+          totalMinor: 1200,
+          tender: const ReceiptTenderLine(
+            method: 'Cash',
+            paidMinor: 2000,
+            changeMinor: 800,
+          ),
+        ),
+        paper: ReceiptPaperSpec.mm80,
+      );
+      final texts = doc.lines
+          .whereType<PrintTextLine>()
+          .map((l) => l.text)
+          .join('\n');
+      expect(texts, contains('1200 JPY'));
+      expect(texts, isNot(contains('12.00')));
+    });
+  });
+
   // --- Layout wrapping ----------------------------------------------------
 
   group('58/80mm layout: wrap names, never truncate money', () {

@@ -109,6 +109,11 @@ class DashboardHomeScreen extends ConsumerWidget {
     // issued at all. Built HERE so the card is a composition slot like
     // [setupPanel]/[deviceSummary] and `_ReportContent` stays Riverpod-free.
     final seriesKey = ref.watch(currentOwnerSalesSeriesKeyProvider);
+    // OPS-043 Phase 5A: resolved ONCE here, so the sales chart is labelled from
+    // the same authority as everything else on the page.
+    final guard =
+        ref.watch(dashboardCurrencyGuardProvider).valueOrNull ??
+        const ReportCurrencyGuard.unknown();
 
     final panel = setupPanel;
     final nav = onNavigate;
@@ -134,15 +139,17 @@ class DashboardHomeScreen extends ConsumerWidget {
                 // OPS-043 Phase 2B: the currency gate, resolved once per
                 // window. `unknown` while it is still loading, so money can
                 // never flash on screen before it is known to be addable.
-                currencyGuard:
-                    ref.watch(dashboardCurrencyGuardProvider).valueOrNull ??
-                    const ReportCurrencyGuard.unknown(),
+                currencyGuard: guard,
                 window: window,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
                 salesByDay: seriesKey == null
                     ? null
-                    : _SalesByDayCard(queryKey: seriesKey),
+                    : _SalesByDayCard(
+                        queryKey: seriesKey,
+                        currencyCode:
+                            guard.displayCurrency ?? report.currencyCode,
+                      ),
                 salesSeriesKey: seriesKey,
                 // F0.4: bound HERE, where a WidgetRef exists. The child
                 // stays a plain StatelessWidget and never learns about
@@ -624,7 +631,12 @@ class DashboardRangeChipProbe extends StatelessWidget {
 /// "Unavailable" and "empty" are the pair that matters. Collapsing them would
 /// tell an owner their best week sold nothing because a migration had not run.
 class _TopItemsCard extends ConsumerWidget {
-  const _TopItemsCard();
+  const _TopItemsCard({required this.currencyCode});
+
+  /// OPS-043 Phase 5A: the WINDOW's currency, not the top-items envelope's.
+  /// `owner_top_items` carries its own label, and a card that disagreed with
+  /// the KPI row above it is exactly the failure this phase closes.
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -699,7 +711,7 @@ class _TopItemsCard extends ConsumerWidget {
             name: items.items[i].name,
             meta:
                 '×${items.items[i].quantity} · '
-                '${MoneyFormatter.formatMinor(items.items[i].lineRevenueMinor, items.currencyCode)}',
+                '${MoneyFormatter.formatMinor(items.items[i].lineRevenueMinor, currencyCode)}',
             // Display-only ratio for the share bar. Money itself stays integer
             // minor everywhere above (D-007) — this never reaches a total.
             fraction: top == 0 ? 0 : items.items[i].lineRevenueMinor / top,
@@ -906,10 +918,26 @@ class _ReportContent extends StatelessWidget {
     // report envelope. A past range of ILS orders keeps saying ILS after the
     // restaurant moves to USD; relabelling history with today's currency is
     // precisely what D3 forbids.
-    String money(int amountMinor) => MoneyFormatter.formatMinor(
-      amountMinor,
-      currencyGuard.displayCurrency ?? report.currencyCode,
-    );
+    // OPS-043 Phase 5A — ONE label for the whole window.
+    //
+    // Phase 2B gave the KPI row this authority; every other money card kept
+    // formatting with `report.currencyCode`, the RPC envelope. That was
+    // survivable only while `currency_override` was always null: the moment a
+    // restaurant sets an operating currency the envelope says the ORG default
+    // and the guard says the restaurant's, and the two disagree on the SAME
+    // screen. With different exponents that is not a wrong symbol but a wrong
+    // NUMBER — 47400 minor units reads `JOD 47.400` under one and a 2-decimal
+    // figure under the other, because the formatter takes its exponent from
+    // the label it is handed.
+    //
+    // Below this point the guard is necessarily SINGLE: `canRenderMergedMoney`
+    // has already returned for mixed and unknown windows, which is what keeps
+    // this from becoming "label everything with today's currency". A past ILS
+    // window still says ILS after the restaurant moves to JOD, because the
+    // GUARD describes the window, not the restaurant.
+    final windowCurrency = currencyGuard.displayCurrency ?? report.currencyCode;
+    String money(int amountMinor) =>
+        MoneyFormatter.formatMinor(amountMinor, windowCurrency);
 
     // DESIGN-002 / RF-REPORT-004: a trend delta vs the prior EQUIVALENT period,
     // when one exists — demo, the live-limited "vs yesterday" (LIVE-UX-001), or
@@ -1213,7 +1241,7 @@ class _ReportContent extends StatelessWidget {
     // F3 — both cards now own their own request, keyed on the committed window.
     // They used to be projections of DashboardReport, which meant they were
     // EMPTY in real mode and empty for every demo range except today.
-    const topItems = _TopItemsCard();
+    final topItems = _TopItemsCard(currencyCode: windowCurrency);
     final recentOrders = _RecentOrdersCard(
       // The unfiltered history on the CURRENT window: `OrdersHistoryDrillDown`
       // with every filter left at "all". No new navigation path, and no chance
@@ -1290,7 +1318,7 @@ class _ReportContent extends StatelessWidget {
               report.paymentMethods,
               totalCollectedMinor: report.collectedMinor,
             ),
-            currencyCode: report.currencyCode,
+            currencyCode: windowCurrency,
             supportsMethodFilters: report.supportsPaymentMethodHistoryFilters,
             // F0.4 / CLIENT-C: a legend row answers "which orders make up this
             // total?" through the SAME typed drill-down the KPI cards use, so
@@ -1316,7 +1344,7 @@ class _ReportContent extends StatelessWidget {
                 : _MethodTrendStrip(
                     queryKey: salesSeriesKey!,
                     method: _trendMethodFor(report.paymentMethods),
-                    currencyCode: report.currencyCode,
+                    currencyCode: windowCurrency,
                   ),
           );
 
@@ -1367,7 +1395,7 @@ class _ReportContent extends StatelessWidget {
         ? null
         : _ShiftCashCard(
             shiftCash: shiftCash,
-            currencyCode: report.currencyCode,
+            currencyCode: windowCurrency,
             range: report.range,
           );
 
@@ -1391,7 +1419,7 @@ class _ReportContent extends StatelessWidget {
         ? null
         : _OrderTypeCard(
             queryKey: salesSeriesKey!,
-            currencyCode: report.currencyCode,
+            currencyCode: windowCurrency,
             onTapOrderType: drill == null
                 ? null
                 : (orderType) => switch (orderType) {
@@ -1700,7 +1728,11 @@ class _ComparisonRow extends StatelessWidget {
 ///  * empty    -> "no report data", the server's real answer;
 ///  * error    -> the shared error state.
 class _SalesByDayCard extends ConsumerWidget {
-  const _SalesByDayCard({required this.queryKey});
+  const _SalesByDayCard({required this.queryKey, required this.currencyCode});
+
+  /// OPS-043 Phase 5A: the WINDOW's currency. The series envelope carries its
+  /// own, and the axis/tooltip must not contradict the KPI row.
+  final String currencyCode;
 
   final OwnerSalesSeriesQueryKey queryKey;
 
@@ -1753,7 +1785,7 @@ class _SalesByDayCard extends ConsumerWidget {
     }
 
     String money(int amountMinor) =>
-        MoneyFormatter.formatMinor(amountMinor, series.currencyCode);
+        MoneyFormatter.formatMinor(amountMinor, currencyCode);
 
     // The chart datum carries only a short label and an int, so the tooltip
     // needs a way back to the full bucket. Keyed by IDENTITY, not by the axis
