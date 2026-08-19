@@ -30,12 +30,12 @@ export 'src/data/menu_image_path.dart';
 export 'src/data/menu_image_storage.dart';
 export 'src/data/picked_menu_image.dart';
 export 'src/data/signed_url_cache.dart';
+export 'src/data/menu_config_copy.dart';
 export 'src/data/menu_management_repository.dart';
 export 'src/data/menu_read_source.dart';
 export 'src/data/menu_validation.dart';
 export 'src/data/menu_writer.dart';
 export 'src/data/minor_money.dart';
-export 'src/data/modifier_templates.dart';
 export 'src/data/rpc_menu_read_source.dart';
 export 'src/data/rpc_menu_writer.dart';
 
@@ -45,4 +45,9 @@ export 'src/state/menu_providers.dart';
 // UI (the owner menu management surface + the in-place editor target).
 export 'src/screens/item_editor_screen.dart' show MenuEditorTarget;
 export 'src/screens/menu_management_screen.dart';
+export 'src/widgets/menu_copy_source_picker.dart'
+    show
+        filterMenuCopySources,
+        menuCopySourceCandidates,
+        showMenuCopySourcePicker;
 export 'src/widgets/menu_image_panel.dart' show MenuImagePanel;

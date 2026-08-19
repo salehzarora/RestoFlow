@@ -5921,4 +5921,110 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get dashboardCurrencyCheckUnavailable =>
       'הסכומים הכספיים מוסתרים: לא ניתן היה לבדוק את המטבעות של הטווח, ואסור לחבר סכומים במטבעות שונים.';
+
+  @override
+  String get menuCopyFromItemTitle => 'העתקת הגדרות מפריט קיים';
+
+  @override
+  String get menuCopyFromItemHint =>
+      'שימוש חוזר בספירות המטבח, בקבוצות התוספות, באפשרויות ובמחיר הבסיס של פריט אחר. שום דבר לא נכתב עד שתלחצו על שמירה.';
+
+  @override
+  String get menuCopyFromItemAction => 'בחירת פריט מקור';
+
+  @override
+  String get menuCopyFromItemChange => 'החלפת מקור';
+
+  @override
+  String get menuCopyFromItemRemove => 'ביטול ההגדרות שהועתקו';
+
+  @override
+  String get menuCopyFromItemSearch => 'חיפוש פריטים';
+
+  @override
+  String get menuCopyFromItemEmpty =>
+      'אין עדיין פריט אחר במסעדה הזו עם הגדרות להעתקה.';
+
+  @override
+  String get menuCopyFromItemNoMatch => 'אין פריט שתואם לחיפוש הזה.';
+
+  @override
+  String get menuCopyPreviewTitle => 'מה יועתק';
+
+  @override
+  String menuCopyPreviewGroups(int count) {
+    return '$count קבוצות תוספות';
+  }
+
+  @override
+  String menuCopyPreviewOptions(int count) {
+    return '$count אפשרויות';
+  }
+
+  @override
+  String menuCopyPreviewPrepRows(int count) {
+    return '$count שורות בספירות המטבח';
+  }
+
+  @override
+  String menuCopyPreviewKitchenCounts(int count) {
+    return '$count אפשרויות נושאות ספירות מטבח';
+  }
+
+  @override
+  String menuCopyPreviewClassifiers(int count) {
+    return '$count קישורי פיצול, יקושרו מחדש לפריט הזה בשמירה';
+  }
+
+  @override
+  String menuCopyPreviewBasePrice(String price) {
+    return 'מחיר בסיס $price';
+  }
+
+  @override
+  String get menuCopyPreviewNothing => 'לפריט הזה אין הגדרות להעתקה.';
+
+  @override
+  String get menuCopyPreviewExcluded =>
+      'השם, התיאור, התמונה, הקטגוריה והקוד לעולם אינם מועתקים.';
+
+  @override
+  String get menuCopyApplyAction => 'העתקת הגדרות';
+
+  @override
+  String get menuCopyDraftNotice => 'עדיין לא נשמר — לחצו על שמירה כדי ליצור.';
+
+  @override
+  String menuCopyAppliedFrom(String name) {
+    return 'הועתק מתוך $name';
+  }
+
+  @override
+  String get menuCopyReplaceTitle => 'להחליף את ההגדרות בטופס הזה?';
+
+  @override
+  String get menuCopyReplaceBody =>
+      'מחיר הבסיס, ספירות המטבח והתוספות בטופס הזה יוחלפו במועתקים. שום דבר בשרת לא משתנה עד שתלחצו על שמירה.';
+
+  @override
+  String get menuCopyReplaceConfirm => 'החלפה';
+
+  @override
+  String get menuCopyBlockedHasModifiers =>
+      'לפריט הזה כבר יש קבוצות תוספות, ולכן העתקה תשכפל אותן. מחקו אותן קודם, או העתיקו לפריט חדש.';
+
+  @override
+  String menuCopySavingProgress(int done, int total) {
+    return 'שומר את ההגדרות שהועתקו… $done/$total';
+  }
+
+  @override
+  String menuCopyFlushPartial(int groups, int options) {
+    return 'נעצר לאחר יצירת $groups קבוצות ו-$options אפשרויות. שום דבר לא בוטל — לחצו שוב על שמירה כדי להמשיך מכאן.';
+  }
+
+  @override
+  String menuCopySavedSummary(int groups, int options) {
+    return 'הועתקו $groups קבוצות ו-$options אפשרויות.';
+  }
 }

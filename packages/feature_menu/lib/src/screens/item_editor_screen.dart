@@ -6,7 +6,9 @@ import 'package:restoflow_currency/restoflow_currency.dart'
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/menu_config_copy.dart';
 import '../data/menu_validation.dart';
+import '../data/menu_writer.dart';
 import '../data/minor_money.dart';
 import '../models/menu_category.dart';
 import '../models/menu_entity_type.dart';
@@ -14,17 +16,18 @@ import '../models/menu_field_error.dart';
 import '../models/menu_item.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
+import '../models/menu_write_failure.dart';
 import '../models/modifier.dart';
 import '../models/modifier_option.dart';
 import '../state/menu_providers.dart';
 import '../widgets/menu_badges.dart';
 import '../widgets/menu_components.dart';
+import '../widgets/menu_copy_source_picker.dart';
 import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
 import '../widgets/menu_item_thumbnail.dart';
 import '../widgets/menu_l10n.dart';
 import '../widgets/menu_reorder.dart';
-import '../widgets/modifier_template_picker.dart';
 
 /// What the item editor is editing: an existing [item], or a new item in
 /// [categoryId].
@@ -39,13 +42,18 @@ class MenuEditorTarget {
 
 /// The in-place item editor (RF-111 + menu/media sprint). Rendered inside the
 /// menu surface subtree (NOT a pushed route) so it stays under the feature
-/// ProviderScope overrides. Structured as sectioned cards: 1 basic info
-/// (name/description/category/type/tags), 2 image, 3 pricing (base price +
-/// sizes/variants), 4 preparation (prep minutes + kitchen note), 5 modifiers
-/// (+ options), 6 a COLLAPSED advanced section (SKU/portion/count/weight —
-/// generic across cuisines; owners simply ignore what doesn't fit). New items
-/// show only the field sections; existing items show every section. Save and
-/// Cancel live in the always-visible top bar.
+/// ProviderScope overrides.
+///
+/// Sectioned cards, in order: 1 basic info (name/description/category/type/
+/// tags), 2 image (existing items only), 3 copy settings from an existing item,
+/// 4 pricing, 5 kitchen setup, 6 modifiers + options (existing items only —
+/// every modifier row is a server row, so there is nothing to render until the
+/// item exists). Save and Cancel live in the always-visible top bar.
+///
+/// OPS-043 Phase 3 retired Sizes, Types, the two Preparation inputs and the
+/// Advanced panel from this form; their COLUMNS and values are untouched and
+/// carried through on every save. Phase 4 replaced the six hardcoded modifier
+/// templates with the copy-from-item card.
 class ItemEditorView extends ConsumerStatefulWidget {
   const ItemEditorView({
     required this.snapshot,
@@ -133,6 +141,42 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   MenuFieldError? _currencyError;
   bool _submitting = false;
 
+  /// OPS-043 Phase 4: the configuration copied from another item, held ONLY
+  /// here. Applying a copy writes nothing; this field IS the draft, and the
+  /// normal Save is the one and only moment it becomes real (D7).
+  MenuCopiedConfig? _copy;
+
+  /// OPS-043 Phase 4: the id of the item a previous Save created before the
+  /// copy flush stopped. Without it a retry would create a SECOND item — the
+  /// one thing a blind retry of a non-atomic sequence gets catastrophically
+  /// wrong.
+  String? _createdItemId;
+
+  /// OPS-043 Phase 4: how far the copy flush has got, for the progress note.
+  /// The flush is ~20 ordinary RPCs for a burger-shaped item; a save that long
+  /// must say what it is doing.
+  ({int done, int total})? _flushProgress;
+
+  /// The item this editor writes to: the edited row, or the one it created on a
+  /// previous, partly-failed Save.
+  String? get _targetItemId => _item?.id ?? _createdItemId;
+
+  /// OPS-043 Phase 4: true when copying would DUPLICATE live configuration.
+  ///
+  /// The per-entity write path can only ADD a modifier group. There is no bulk
+  /// replace, and `menu_soft_delete` tombstones exactly ONE row without
+  /// cascading to its children — so "replacing" an item's modifiers would mean
+  /// deleting every option and every group one call at a time, with no
+  /// transaction, destroying live configuration that a mid-way failure could
+  /// not restore. The copy is therefore offered only where it can be performed
+  /// by creation alone; on an item that already has groups it is refused, in
+  /// words, before anything happens.
+  bool get _copyBlockedByExistingModifiers {
+    final id = _targetItemId;
+    if (id == null) return false;
+    return widget.snapshot.modifiersForItem(id).isNotEmpty;
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -210,7 +254,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   /// is dropped; a partially-filled row must have a non-blank name AND a
   /// positive integer quantity, else its fields are flagged. Returns the wire
   /// list (`[{name, quantity, unit}]`) and whether any row is in error.
-  ({List<Map<String, Object?>> components, bool hasError}) _collectPrepRows() {
+  ///
+  /// OPS-043 Phase 4: when [copySource] is given, a row that came from a COPY
+  /// also emits its classifier pair, using the SOURCE option id. That id is
+  /// never written as-is — `remapPrepComponents` swaps it for the new option's
+  /// id on the way to the writer — but emitting it here is what lets the link
+  /// follow the row through renames, additions and deletions the operator makes
+  /// before saving. With [copySource] null (every ordinary save, and the copy's
+  /// own first pass) a copied link emits nothing at all, so no source id can
+  /// reach the server even for one write.
+  ({List<Map<String, Object?>> components, bool hasError}) _collectPrepRows({
+    MenuCopiedConfig? copySource,
+  }) {
     final components = <Map<String, Object?>>[];
     var hasError = false;
     // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: resolve each classifier link
@@ -223,6 +278,11 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
       row.nameError = null;
       row.quantityError = null;
       row.classifierMissing = false;
+      // OPS-043 Phase 4: a copied link resolves against the DRAFT, not against
+      // the item's live options — the options it names do not exist yet.
+      final copiedName = copySource?.optionNameBySourceId(
+        row.copiedClassifierOptionId,
+      );
       final name = row.name.text.trim();
       final quantityText = row.quantity.text.trim();
       final unit = row.unit.text.trim();
@@ -259,6 +319,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           if (classifierName != null) ...<String, Object?>{
             'classifier_option_id': row.classifierOptionId,
             'classifier_option_name': classifierName,
+          } else if (copiedName != null) ...<String, Object?>{
+            // The SOURCE id, remapped before it is written (see the doc above).
+            'classifier_option_id': row.copiedClassifierOptionId,
+            'classifier_option_name': copiedName,
           },
         });
       }
@@ -266,45 +330,32 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     return (components: components, hasError: hasError);
   }
 
-  Future<void> _saveFields() async {
-    // OPS-043 D1: no typed currency any more. The inherited operating currency
-    // is what the price is parsed AS and what p_currency_code is sent AS — the
-    // two can no longer disagree.
-    final currencyText = _currencyCode;
-    final nameError = validateName(_name.text);
-    final priceMinor = parseMajorToMinor(_price.text, currencyText);
-    final priceError = validateBasePriceMinor(priceMinor);
-    final currencyError = validateCurrencyCode(currencyText);
-    // KITCHEN-PREP-001: validate + serialize the prep rows (mutates per-row
-    // errors, read back in build via the setState below).
-    final prep = _collectPrepRows();
-    final categoryId = _categoryId;
-    setState(() {
-      _nameError = nameError;
-      _priceError = priceError;
-      _currencyError = currencyError;
-    });
-    if (nameError != null ||
-        priceError != null ||
-        currencyError != null ||
-        prep.hasError ||
-        categoryId == null) {
-      return;
-    }
-
-    setState(() => _submitting = true);
-    final l10n = AppLocalizations.of(context);
-    final outcome = await ref
+  /// The FULL-STATE item payload — ONE builder, used by the ordinary save AND
+  /// by the copy flush's classifier pass.
+  ///
+  /// `menu_upsert_item` clears whatever it is not sent, so two writes of the
+  /// same item must agree on every field: a second write that forgot the image,
+  /// the SKU or the kitchen note would erase what the first one just saved.
+  /// Sharing the builder makes that impossible rather than merely unlikely —
+  /// the two calls differ in exactly one argument, the prep rows.
+  Future<MenuWriteOutcome> _upsertItem({
+    required String? id,
+    required String categoryId,
+    required int basePriceMinor,
+    required String currencyCode,
+    required List<Map<String, Object?>> prepComponents,
+  }) {
+    return ref
         .read(menuWriteControllerProvider)
         .upsertItem(
-          id: _item?.id,
+          id: id,
           menuCategoryId: categoryId,
           name: _name.text.trim(),
           description: _description.text.trim().isEmpty
               ? null
               : _description.text.trim(),
-          basePriceMinor: priceMinor!,
-          currencyCode: currencyText,
+          basePriceMinor: basePriceMinor,
+          currencyCode: currencyCode,
           displayOrder:
               null, // Codex #6: edit sends no order; guard trigger preserves it
           isActive: _active,
@@ -323,38 +374,280 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           prepMinutes: _freshItem?.prepMinutes,
           sku: _freshItem?.sku,
           kitchenNote: _freshItem?.kitchenNote,
-          attributes: _builtAttributes(prepComponents: prep.components),
+          attributes: _builtAttributes(prepComponents: prepComponents),
         );
+  }
+
+  Future<void> _saveFields() async {
+    // OPS-043 D1: no typed currency any more. The inherited operating currency
+    // is what the price is parsed AS and what p_currency_code is sent AS — the
+    // two can no longer disagree.
+    final currencyText = _currencyCode;
+    final nameError = validateName(_name.text);
+    final priceMinor = parseMajorToMinor(_price.text, currencyText);
+    final priceError = validateBasePriceMinor(priceMinor);
+    final currencyError = validateCurrencyCode(currencyText);
+    // KITCHEN-PREP-001: validate + serialize the prep rows (mutates per-row
+    // errors, read back in build via the setState below).
+    //
+    // OPS-043 Phase 4: NO copySource here on purpose. This first write must
+    // carry the Kitchen setup rows WITHOUT their copied classifier links — the
+    // options those links name do not exist yet, and writing a source id, even
+    // for one write, is exactly what this whole feature exists to avoid.
+    final prep = _collectPrepRows();
+    final categoryId = _categoryId;
+    setState(() {
+      _nameError = nameError;
+      _priceError = priceError;
+      _currencyError = currencyError;
+    });
+    if (nameError != null ||
+        priceError != null ||
+        currencyError != null ||
+        prep.hasError ||
+        categoryId == null) {
+      return;
+    }
+    final basePriceMinor = priceMinor!;
+
+    setState(() => _submitting = true);
+    final l10n = AppLocalizations.of(context);
+    final outcome = await _upsertItem(
+      id: _targetItemId,
+      categoryId: categoryId,
+      basePriceMinor: basePriceMinor,
+      currencyCode: currencyText,
+      prepComponents: prep.components,
+    );
     if (!mounted) return;
-    setState(() => _submitting = false);
-    outcome.fold(
-      (_) {
-        // 017 (Codex MEDIUM #5): the save DROPPED every dangling link from the
-        // payload, so the in-memory row must stop claiming one — otherwise the
-        // editor keeps showing a stale id and a warning for a link that is no
-        // longer persisted. Resource name/quantity/unit and every unrelated
-        // field are untouched; a link that RESOLVED is left exactly as it is.
-        final cleared = _prepRows.where((r) => r.classifierMissing).toList();
-        if (cleared.isNotEmpty) {
-          setState(() {
-            for (final row in cleared) {
-              row.classifierOptionId = '';
-              row.classifierMissing = false;
-            }
-          });
+
+    final failure = outcome.fold<MenuWriteFailure?>((_) => null, (f) => f);
+    if (failure != null) {
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.menuWriteFailureText(failure))),
+      );
+      return;
+    }
+    final itemId = outcome.fold<String>((result) => result.id, (_) => '');
+    // The item EXISTS now. Remember its id so that if the copy flush below
+    // stops halfway, pressing Save again UPDATES this item instead of creating
+    // a second one.
+    if (_item == null) _createdItemId = itemId;
+
+    // 017 (Codex MEDIUM #5): the save DROPPED every dangling link from the
+    // payload, so the in-memory row must stop claiming one — otherwise the
+    // editor keeps showing a stale id and a warning for a link that is no
+    // longer persisted. Resource name/quantity/unit and every unrelated
+    // field are untouched; a link that RESOLVED is left exactly as it is.
+    final cleared = _prepRows.where((r) => r.classifierMissing).toList();
+    if (cleared.isNotEmpty) {
+      setState(() {
+        for (final row in cleared) {
+          row.classifierOptionId = '';
+          row.classifierMissing = false;
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.menuSavedSnack)));
-        if (!widget.target.isExisting) widget.onClose();
-      },
-      (failure) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.menuWriteFailureText(failure))),
-        );
+      });
+    }
+
+    final copy = _copy;
+    if (copy != null) {
+      await _flushCopy(
+        copy: copy,
+        l10n: l10n,
+        itemId: itemId,
+        categoryId: categoryId,
+        basePriceMinor: basePriceMinor,
+        currencyCode: currencyText,
+      );
+      return;
+    }
+
+    setState(() => _submitting = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.menuSavedSnack)));
+    if (!widget.target.isExisting) widget.onClose();
+  }
+
+  /// OPS-043 Phase 4: turns the copied draft into real rows, AFTER the item
+  /// itself has been saved.
+  ///
+  /// The sequence is not atomic and is not presented as if it were: on a
+  /// failure it says exactly how much was created, leaves it in place, and
+  /// keeps the operator in this editor with the draft intact so pressing Save
+  /// again RESUMES. The editor closes only after the whole copy has landed —
+  /// closing on the item write alone would dispose this State mid-flush and
+  /// abandon the groups it was still creating.
+  Future<void> _flushCopy({
+    required MenuCopiedConfig copy,
+    required AppLocalizations l10n,
+    required String itemId,
+    required String categoryId,
+    required int basePriceMinor,
+    required String currencyCode,
+  }) async {
+    final report = await flushMenuCopiedConfig(
+      config: copy,
+      sink: _EditorCopySink(
+        controller: ref.read(menuWriteControllerProvider),
+        menuItemId: itemId,
+        rewritePrep: (remap) => _upsertItem(
+          id: itemId,
+          categoryId: categoryId,
+          basePriceMinor: basePriceMinor,
+          currencyCode: currencyCode,
+          // The rows the operator is looking at NOW (they may have edited,
+          // added or deleted some since applying the copy), with the copied
+          // links swapped from source ids to the new options' ids.
+          prepComponents: remapPrepComponents(
+            _collectPrepRows(copySource: copy).components,
+            remap,
+          ),
+        ),
+      ),
+      onProgress: (done, total) {
+        if (mounted) {
+          setState(() => _flushProgress = (done: done, total: total));
+        }
       },
     );
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _flushProgress = null;
+    });
+    if (!report.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.menuWriteFailureText(report.failure!)}\n'
+            '${l10n.menuCopyFlushPartial(report.groupsCreated, report.optionsCreated)}',
+          ),
+        ),
+      );
+      return;
+    }
+    // The copy is real. Re-point the Kitchen setup rows at the options that now
+    // exist, so an ordinary later save keeps those links instead of dropping
+    // ids that only ever meant anything to the draft.
+    final remap = copy.remap;
+    setState(() {
+      for (final row in _prepRows) {
+        if (row.copiedClassifierOptionId.isEmpty) continue;
+        row.classifierOptionId = remap[row.copiedClassifierOptionId] ?? '';
+        row.copiedClassifierOptionId = '';
+      }
+      _copy = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          l10n.menuCopySavedSummary(
+            report.groupsCreated,
+            report.optionsCreated,
+          ),
+        ),
+      ),
+    );
+    if (!widget.target.isExisting) widget.onClose();
   }
+
+  /// OPS-043 Phase 4: picks a source and applies it to the LOCAL draft.
+  ///
+  /// Nothing here writes. The picker returns a plain object, this method puts
+  /// it in a field and seeds two visible controls from it — that is the entire
+  /// "apply".
+  Future<void> _pickCopySource() async {
+    final config = await showMenuCopySourcePicker(
+      context,
+      snapshot: widget.snapshot,
+      currencyCode: _currencyCode,
+      // An item can never be its own source.
+      excludeItemId: _targetItemId,
+    );
+    if (config == null || !mounted) return;
+    if (_formHoldsValues() && !await _confirmReplaceDraft()) return;
+    if (!mounted) return;
+    _applyCopy(config);
+  }
+
+  /// Whether the form already holds values a copy would overwrite.
+  bool _formHoldsValues() =>
+      _copy != null ||
+      _price.text.trim().isNotEmpty ||
+      _prepRows.any(
+        (row) =>
+            row.name.text.trim().isNotEmpty ||
+            row.quantity.text.trim().isNotEmpty ||
+            row.unit.text.trim().isNotEmpty,
+      );
+
+  Future<bool> _confirmReplaceDraft() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('menu-copy-replace-confirm'),
+        icon: const Icon(Icons.content_copy_outlined),
+        title: Text(l10n.menuCopyReplaceTitle),
+        content: Text(l10n.menuCopyReplaceBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.menuCancelAction),
+          ),
+          FilledButton(
+            key: const ValueKey('menu-copy-replace-accept'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.menuCopyReplaceConfirm),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  /// Seeds the form from [config]. Zero writes — the price field and the
+  /// Kitchen setup rows are ordinary editable controls, so the operator reviews
+  /// and adjusts everything before the copy becomes real.
+  void _applyCopy(MenuCopiedConfig config) {
+    final retired = List<_PrepRow>.of(_prepRows);
+    setState(() {
+      _copy = config;
+      // D5: the source base price, prefilled and editable.
+      _price.text = formatMinorUnits(config.basePriceMinor, _currencyCode);
+      _priceError = null;
+      _prepRows
+        ..clear()
+        ..addAll([
+          for (final row in config.prepComponents)
+            _PrepRow(
+              name: (row['name'] ?? '').toString(),
+              quantity: formatPrepQuantity(
+                row['quantity'] is num ? row['quantity']! as num : 0,
+              ),
+              unit: (row['unit'] ?? '').toString(),
+              // The SOURCE id, kept apart from `classifierOptionId` so nothing
+              // can mistake it for a live link on this item and write it.
+              copiedClassifierOptionId: (row['classifier_option_id'] ?? '')
+                  .toString(),
+            ),
+        ]);
+    });
+    // Dispose the replaced rows AFTER the frame, once their TextFields have
+    // left the tree (no use-after-dispose).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final row in retired) {
+        row.dispose();
+      }
+    });
+  }
+
+  /// Drops the draft. Nothing was ever written, so nothing is deleted — the
+  /// price and Kitchen setup rows simply stay as they are for the operator to
+  /// edit or replace.
+  void _discardCopy() => setState(() => _copy = null);
 
   @override
   Widget build(BuildContext context) {
@@ -408,14 +701,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                       MenuImagePanel(item: _freshItem ?? _item),
                     ],
                     const SizedBox(height: RestoflowSpacing.lg),
-                    // 3. Pricing (base price; sizes/variants right below).
+                    // 3. Copy settings from an existing item — it fills the two
+                    // cards below, so it sits above them.
+                    _copySettingsCard(context, l10n),
+                    const SizedBox(height: RestoflowSpacing.lg),
+                    // 4. Pricing (base price).
                     _pricingCard(context, l10n),
                     const SizedBox(height: RestoflowSpacing.lg),
-                    // 4. Kitchen setup (what the chef assembles per unit).
+                    // 5. Kitchen setup (what the chef assembles per unit).
                     _kitchenSetupCard(context, l10n),
                     if (_item != null) ...[
                       const SizedBox(height: RestoflowSpacing.lg),
-                      // 5. Options & modifiers.
+                      // 6. Options & modifiers.
                       _ModifiersSection(
                         item: _item,
                         modifiers: widget.snapshot.modifiersForItem(_item.id),
@@ -551,7 +848,167 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// 3. Pricing: the base price. Money integer minor only (D-007).
+  /// 3. OPS-043 Phase 4 — copy settings from an existing item.
+  ///
+  /// This REPLACES the six hardcoded modifier templates. A template could only
+  /// ever offer a generic guess at a menu it had never seen (its deltas were
+  /// hardcoded ILS, and it carried no kitchen counts and no prep rows at all);
+  /// the restaurant's own items are the real templates, and they already carry
+  /// every field the kitchen consumes.
+  ///
+  /// The card is the whole draft surface: the copied base price lands in the
+  /// price field and the copied Kitchen setup in the prep card — both ordinary
+  /// editable controls — while the modifier groups are listed READ-ONLY here,
+  /// because every modifier widget in this package renders a server row and
+  /// there is nothing to render until the item exists. They become fully
+  /// editable in the Modifiers section the moment Save creates them.
+  Widget _copySettingsCard(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final copy = _copy;
+    final blocked = _copyBlockedByExistingModifiers;
+    final progress = _flushProgress;
+    return MenuSectionCard(
+      key: const ValueKey('menu-copy-card'),
+      title: l10n.menuCopyFromItemTitle,
+      icon: Icons.content_copy_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            blocked
+                ? l10n.menuCopyBlockedHasModifiers
+                : l10n.menuCopyFromItemHint,
+            key: blocked
+                ? const ValueKey('menu-copy-blocked')
+                : const ValueKey('menu-copy-hint'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: blocked
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (copy != null) ...[
+            const SizedBox(height: RestoflowSpacing.md),
+            _copySummary(context, l10n, copy),
+          ],
+          if (progress != null) ...[
+            const SizedBox(height: RestoflowSpacing.md),
+            Text(
+              l10n.menuCopySavingProgress(progress.done, progress.total),
+              key: const ValueKey('menu-copy-progress'),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: RestoflowSpacing.xs),
+            LinearProgressIndicator(
+              value: progress.total == 0
+                  ? null
+                  : progress.done / progress.total,
+            ),
+          ],
+          const SizedBox(height: RestoflowSpacing.md),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('menu-copy-choose-source'),
+                  onPressed: blocked || _submitting ? null : _pickCopySource,
+                  icon: const Icon(
+                    Icons.library_add_outlined,
+                    size: RestoflowIconSizes.sm,
+                  ),
+                  label: Text(
+                    copy == null
+                        ? l10n.menuCopyFromItemAction
+                        : l10n.menuCopyFromItemChange,
+                  ),
+                ),
+                if (copy != null)
+                  TextButton.icon(
+                    key: const ValueKey('menu-copy-discard'),
+                    onPressed: _submitting ? null : _discardCopy,
+                    icon: const Icon(Icons.close, size: RestoflowIconSizes.sm),
+                    label: Text(l10n.menuCopyFromItemRemove),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the copy brought over, so the operator reviews it before Save.
+  Widget _copySummary(
+    BuildContext context,
+    AppLocalizations l10n,
+    MenuCopiedConfig copy,
+  ) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('menu-copy-summary'),
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.menuCopyAppliedFrom(copy.sourceItemName),
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: RestoflowSpacing.xxs),
+          Text(
+            <String>[
+              l10n.menuCopyPreviewGroups(copy.groupCount),
+              l10n.menuCopyPreviewOptions(copy.optionCount),
+              l10n.menuCopyPreviewPrepRows(copy.prepComponents.length),
+              if (copy.classifierLinkCount > 0)
+                l10n.menuCopyPreviewClassifiers(copy.classifierLinkCount),
+            ].join(' · '),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          for (final group in copy.groups) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            Text(
+              '${group.name} — '
+              '${l10n.menuCopyPreviewOptions(group.options.length)}',
+              style: theme.textTheme.bodyMedium,
+            ),
+            for (final option in group.options)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  start: RestoflowSpacing.md,
+                ),
+                child: Text(
+                  '${option.name} · '
+                  '${formatMinorUnits(option.priceDeltaMinor, _currencyCode)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+          const SizedBox(height: RestoflowSpacing.sm),
+          Text(
+            l10n.menuCopyDraftNotice,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 4. Pricing: the base price. Money integer minor only (D-007).
   ///
   /// OPS-043 D1: there is NO per-item currency selector any more. One
   /// restaurant operates in one currency — `coalesce(currency_override,
@@ -621,7 +1078,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  /// 4. Kitchen setup — what the chef assembles for ONE unit of the item,
+  /// 5. Kitchen setup — what the chef assembles for ONE unit of the item,
   /// aggregated on the KDS (KITCHEN-PREP-001).
   ///
   /// OPS-043 Phase 3 emptied the old "Preparation" card of its two inputs
@@ -1350,32 +1807,19 @@ class _ModifiersSection extends ConsumerWidget {
       title: l10n.menuModifiersHeading,
       icon: Icons.layers_outlined,
       contentPadding: EdgeInsets.zero,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Copy-on-attach templates: applying one creates ONE ordinary
-          // modifier group + options via the same write path as the manual
-          // form below (D-031 stays per-item; nothing is auto-applied).
-          // Codex #5: the ADD controls sit in the header (outside the list
-          // IgnorePointer) — disable both while THIS item's group reorder persists.
-          TextButton.icon(
-            key: const ValueKey('menu-template-add'),
-            onPressed: reordering
-                ? null
-                : () =>
-                      showModifierTemplatePicker(context, menuItemId: item.id),
-            icon: const Icon(Icons.library_add_outlined, size: 18),
-            label: Text(l10n.menuTemplateAddAction),
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          TextButton.icon(
-            onPressed: reordering
-                ? null
-                : () => showModifierFormDialog(context, menuItemId: item.id),
-            icon: const Icon(Icons.add, size: 18),
-            label: Text(l10n.menuAddModifier),
-          ),
-        ],
+      // OPS-043 Phase 4: the "Add template" entry point is gone. The six
+      // hardcoded Dart templates it opened are superseded by "copy settings
+      // from an existing item" at the top of this editor, which copies the
+      // restaurant's OWN configuration — kitchen counts, classifiers and real
+      // prices included — instead of a generic guess with hardcoded ILS deltas.
+      // Codex #5: the ADD control sits in the header (outside the list
+      // IgnorePointer) — disable it while THIS item's group reorder persists.
+      trailing: TextButton.icon(
+        onPressed: reordering
+            ? null
+            : () => showModifierFormDialog(context, menuItemId: item.id),
+        icon: const Icon(Icons.add, size: 18),
+        label: Text(l10n.menuAddModifier),
       ),
       child: modifiers.isEmpty
           ? Padding(
@@ -1590,6 +2034,7 @@ class _PrepRow {
     String quantity = '',
     String unit = '',
     this.classifierOptionId = '',
+    this.copiedClassifierOptionId = '',
   }) : name = TextEditingController(text: name),
        quantity = TextEditingController(text: quantity),
        unit = TextEditingController(text: unit);
@@ -1603,6 +2048,17 @@ class _PrepRow {
   /// existing row keeps). Never a quantity — only which bucket the configured
   /// quantity is counted in.
   String classifierOptionId;
+
+  /// OPS-043 Phase 4: the SOURCE option id this row was copied with, held
+  /// apart from [classifierOptionId] on purpose.
+  ///
+  /// A source id in [classifierOptionId] would resolve against THIS item's live
+  /// options, find nothing, be flagged missing, be dropped from the payload —
+  /// and then be CLEARED by the post-save cleanup, destroying the link before
+  /// the flush could ever remap it. Kept here it is invisible to all of that,
+  /// travels with the row through renames and reordering, and is swapped for
+  /// the new option's id on the copy's second pass. Emptied once that lands.
+  String copiedClassifierOptionId;
 
   /// Inline validation errors surfaced on save (blank name / non-positive qty).
   MenuFieldError? nameError;
@@ -1618,4 +2074,68 @@ class _PrepRow {
     quantity.dispose();
     unit.dispose();
   }
+}
+
+/// OPS-043 Phase 4: the editor's bridge from the copy pipeline to the scoped
+/// write controller. It holds no state of its own — every decision about WHAT
+/// to write lives in `flushMenuCopiedConfig`; this only knows HOW.
+class _EditorCopySink implements MenuCopyWriteSink {
+  _EditorCopySink({
+    required this.controller,
+    required this.menuItemId,
+    required this.rewritePrep,
+  });
+
+  final MenuWriteController controller;
+  final String menuItemId;
+
+  /// Re-sends the item's full state with the prep rows' classifier ids resolved
+  /// through the old -> new option map.
+  final Future<MenuWriteOutcome> Function(Map<String, String> remap)
+  rewritePrep;
+
+  @override
+  Future<MenuWriteOutcome> createGroup(CopiedGroupDraft group) =>
+      controller.upsertModifier(
+        menuItemId: menuItemId,
+        name: group.name,
+        selectionType: group.selectionType,
+        minSelect: group.minSelect,
+        maxSelect: group.maxSelect,
+        isRequired: group.isRequired,
+        // A CREATE keeps the copied order: the MENU-ORDER-001 guard trigger is
+        // BEFORE UPDATE only, so an insert honours the value it is given.
+        displayOrder: group.displayOrder,
+        isActive: group.isActive,
+        // Copied together on purpose — the server rejects `single` +
+        // allow_quantity, so splitting them would invent an invalid group.
+        allowQuantity: group.allowQuantity,
+        maxQuantity: group.maxQuantity,
+      );
+
+  @override
+  Future<MenuWriteOutcome> upsertOption({
+    String? id,
+    required String modifierId,
+    required CopiedOptionDraft option,
+    required Map<String, dynamic>? kitchenMeat,
+  }) => controller.upsertModifierOption(
+    id: id,
+    modifierId: modifierId,
+    name: option.name,
+    priceDeltaMinor: option.priceDeltaMinor,
+    // Create: the copied order. Update (the classifier pass): null, so the
+    // guard trigger preserves whatever order the row has — sending a value
+    // there is how a drag-set order gets silently overwritten.
+    displayOrder: id == null ? option.displayOrder : null,
+    isActive: option.isActive,
+    // The FULL object, always: `p_kitchen_meat` is omitted when this is null
+    // and the RPC then writes NULL, so a pass that forgot the count would
+    // destroy it.
+    kitchenMeat: kitchenMeat,
+  );
+
+  @override
+  Future<MenuWriteOutcome> rewritePrepClassifiers(Map<String, String> remap) =>
+      rewritePrep(remap);
 }
