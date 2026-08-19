@@ -158,4 +158,113 @@ void main() {
     );
     expect(save.onPressed, isNotNull);
   });
+  // OPS-043 Phase 4: the copy-from-item picker is the newest dialog on this
+  // surface, so it is the newest candidate for exactly this bug. It renders
+  // above the nested scope and must therefore look nothing up: everything it
+  // needs is handed in, and the flush runs on the CALLER's controller. If that
+  // ever regresses, the writes below either never happen or land with a root
+  // fallback scope — this test fails in both cases, where the feature tests
+  // (which pump the overrides at the root) would happily pass.
+  testWidgets('OPS-043 Phase 4: copying settings from a NESTED provider scope '
+      'creates the item, its groups and its options under the REAL scope', (
+    tester,
+  ) async {
+    final l10n = await en();
+    final store = InMemoryMenuStore(
+      categories: const [
+        MenuCategory(
+          id: 'cat-1',
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          name: 'Grill',
+          displayOrder: 0,
+          isActive: true,
+        ),
+      ],
+      items: const [
+        MenuItem(
+          id: 'item-source',
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          menuCategoryId: 'cat-1',
+          name: 'Classic Burger',
+          description: null,
+          basePriceMinor: 4800,
+          currencyCode: 'ILS',
+          defaultStationId: null,
+          displayOrder: 0,
+          isActive: true,
+        ),
+      ],
+      modifiers: const [
+        Modifier(
+          id: 'mod-size',
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          menuItemId: 'item-source',
+          name: 'Size',
+          selectionType: 'single',
+          minSelect: 1,
+          maxSelect: 1,
+          isRequired: true,
+          displayOrder: 0,
+          isActive: true,
+        ),
+      ],
+      modifierOptions: const [
+        ModifierOption(
+          id: 'opt-120',
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          modifierId: 'mod-size',
+          name: '120g',
+          priceDeltaMinor: 0,
+          displayOrder: 0,
+          isActive: true,
+        ),
+      ],
+    );
+    await _pumpNested(tester, readSource: store, writer: store);
+
+    await tester.tap(find.text(l10n.menuAddItem).first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('menu-copy-choose-source')),
+    );
+    await tester.tap(find.byKey(const ValueKey('menu-copy-choose-source')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('menu-copy-source-item-source')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-copy-preview-apply')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-item-name')),
+      'Double Burger',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
+    await tester.pumpAndSettle();
+
+    final saved = await store.load(_scope);
+    final created = saved.items.firstWhere((i) => i.name == 'Double Burger');
+    expect(created.organizationId, 'org-1');
+    expect(created.restaurantId, 'rest-1');
+    expect(created.branchId, 'branch-1');
+    expect(created.basePriceMinor, 4800);
+
+    final group = saved.modifiersForItem(created.id).single;
+    expect(group.name, 'Size');
+    expect(group.organizationId, 'org-1');
+    expect(group.branchId, 'branch-1');
+    final option = saved.optionsForModifier(group.id).single;
+    expect(option.name, '120g');
+    expect(option.restaurantId, 'rest-1');
+  });
 }

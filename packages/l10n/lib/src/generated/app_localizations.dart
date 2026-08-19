@@ -10947,6 +10947,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Monetary totals are hidden: this range\'s currencies could not be checked, and amounts in different currencies must never be added together.'**
   String get dashboardCurrencyCheckUnavailable;
+
+  /// OPS-043 Phase 4: the reuse card/dialog title - copy an existing item configuration into the item being edited.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy settings from an existing item'**
+  String get menuCopyFromItemTitle;
+
+  /// OPS-043 Phase 4: explains what the copy brings over and that Apply changes nothing on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reuse another item\'s kitchen setup, modifier groups, options and base price. Nothing is written until you press Save.'**
+  String get menuCopyFromItemHint;
+
+  /// OPS-043 Phase 4: opens the source-item picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose source item'**
+  String get menuCopyFromItemAction;
+
+  /// OPS-043 Phase 4: replaces the already-copied draft with another source item.
+  ///
+  /// In en, this message translates to:
+  /// **'Change source'**
+  String get menuCopyFromItemChange;
+
+  /// OPS-043 Phase 4: drops the copied draft; nothing was ever written, so nothing is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard copied settings'**
+  String get menuCopyFromItemRemove;
+
+  /// OPS-043 Phase 4: search field label in the source-item picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Search items'**
+  String get menuCopyFromItemSearch;
+
+  /// OPS-043 Phase 4: no eligible source item exists in the active restaurant.
+  ///
+  /// In en, this message translates to:
+  /// **'No other item in this restaurant has settings to copy yet.'**
+  String get menuCopyFromItemEmpty;
+
+  /// OPS-043 Phase 4: the picker search matched nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No item matches this search.'**
+  String get menuCopyFromItemNoMatch;
+
+  /// OPS-043 Phase 4: heading of the preview listing exactly what the copy will bring over.
+  ///
+  /// In en, this message translates to:
+  /// **'What will be copied'**
+  String get menuCopyPreviewTitle;
+
+  /// OPS-043 Phase 4: preview line - how many modifier groups will be copied.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} modifier groups'**
+  String menuCopyPreviewGroups(int count);
+
+  /// OPS-043 Phase 4: preview line - how many modifier options will be copied.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} options'**
+  String menuCopyPreviewOptions(int count);
+
+  /// OPS-043 Phase 4: preview line - how many Kitchen setup rows will be copied.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} kitchen setup rows'**
+  String menuCopyPreviewPrepRows(int count);
+
+  /// OPS-043 Phase 4: preview line - how many options carry kitchen-count metadata.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} options carry kitchen counts'**
+  String menuCopyPreviewKitchenCounts(int count);
+
+  /// OPS-043 Phase 4: preview line - how many split-by links exist; they are relinked to the new items own options on save.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} split-by links, relinked to this item on save'**
+  String menuCopyPreviewClassifiers(int count);
+
+  /// OPS-043 Phase 4 (D5): preview line - the source base price, prefilled into the editable price field.
+  ///
+  /// In en, this message translates to:
+  /// **'Base price {price}'**
+  String menuCopyPreviewBasePrice(String price);
+
+  /// OPS-043 Phase 4: the chosen source has no configuration worth copying.
+  ///
+  /// In en, this message translates to:
+  /// **'This item has no settings to copy.'**
+  String get menuCopyPreviewNothing;
+
+  /// OPS-043 Phase 4 (D7): the identity fields the copy never touches.
+  ///
+  /// In en, this message translates to:
+  /// **'The name, description, picture, category and code are never copied.'**
+  String get menuCopyPreviewExcluded;
+
+  /// OPS-043 Phase 4: applies the copy to the LOCAL editor draft (zero server writes).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy settings'**
+  String get menuCopyApplyAction;
+
+  /// OPS-043 Phase 4 (D7): the copied configuration exists only in this form until the normal Save.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved yet — press Save to create it.'**
+  String get menuCopyDraftNotice;
+
+  /// OPS-043 Phase 4: names the source the draft was copied from (presentational only; no live link is kept).
+  ///
+  /// In en, this message translates to:
+  /// **'Copied from {name}'**
+  String menuCopyAppliedFrom(String name);
+
+  /// OPS-043 Phase 4: confirmation title shown when applying a copy over a form that already holds values.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace the settings in this form?'**
+  String get menuCopyReplaceTitle;
+
+  /// OPS-043 Phase 4: confirmation body - only the form is replaced, never the server.
+  ///
+  /// In en, this message translates to:
+  /// **'The base price, kitchen setup and modifiers in this form will be replaced by the copied ones. Nothing on the server changes until you press Save.'**
+  String get menuCopyReplaceBody;
+
+  /// OPS-043 Phase 4: confirms replacing the form values with the copied ones.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get menuCopyReplaceConfirm;
+
+  /// OPS-043 Phase 4: refuses the copy on an item that already has modifier groups, because the per-entity write path can only ADD groups - replacing them would orphan or duplicate live rows.
+  ///
+  /// In en, this message translates to:
+  /// **'This item already has modifier groups, so copying would duplicate them. Delete them first, or copy into a new item.'**
+  String get menuCopyBlockedHasModifiers;
+
+  /// OPS-043 Phase 4: progress note during the sequential (non-atomic) flush of the copied configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving copied settings… {done}/{total}'**
+  String menuCopySavingProgress(int done, int total);
+
+  /// OPS-043 Phase 4: honest partial-failure note - the flush is NOT atomic, nothing is rolled back, and Save resumes from where it stopped instead of duplicating.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped after creating {groups} groups and {options} options. Nothing was undone — press Save again to continue from here.'**
+  String menuCopyFlushPartial(int groups, int options);
+
+  /// OPS-043 Phase 4: success note stating exactly what the copy created.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied {groups} groups and {options} options.'**
+  String menuCopySavedSummary(int groups, int options);
+
+  /// OPS-043 Phase 4B: says the modifier rows below are a LOCAL draft - editable here and created only by the normal Save.
+  ///
+  /// In en, this message translates to:
+  /// **'These are draft rows — edit them here. They are created when you press Save.'**
+  String get menuCopyDraftEditHint;
+
+  /// OPS-043 Phase 4B: confirmation title for removing a group/option from the copied DRAFT (nothing is deleted on the server, because nothing exists there yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from the copy?'**
+  String get menuCopyDraftRemoveTitle;
+
+  /// OPS-043 Phase 4B: confirmation body - the removal is local only.
+  ///
+  /// In en, this message translates to:
+  /// **'It is removed from this form only. Nothing has been saved yet, so nothing is deleted.'**
+  String get menuCopyDraftRemoveBody;
+
+  /// OPS-043 Phase 4B: extra warning when the row being removed is the split-by target of another option; those links are cleared so none is left dangling.
+  ///
+  /// In en, this message translates to:
+  /// **'Another option is split by this one. That link will be cleared.'**
+  String get menuCopyDraftRemoveLinked;
 }
 
 class _AppLocalizationsDelegate

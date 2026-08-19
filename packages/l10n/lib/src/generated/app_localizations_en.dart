@@ -6009,4 +6009,125 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardCurrencyCheckUnavailable =>
       'Monetary totals are hidden: this range\'s currencies could not be checked, and amounts in different currencies must never be added together.';
+
+  @override
+  String get menuCopyFromItemTitle => 'Copy settings from an existing item';
+
+  @override
+  String get menuCopyFromItemHint =>
+      'Reuse another item\'s kitchen setup, modifier groups, options and base price. Nothing is written until you press Save.';
+
+  @override
+  String get menuCopyFromItemAction => 'Choose source item';
+
+  @override
+  String get menuCopyFromItemChange => 'Change source';
+
+  @override
+  String get menuCopyFromItemRemove => 'Discard copied settings';
+
+  @override
+  String get menuCopyFromItemSearch => 'Search items';
+
+  @override
+  String get menuCopyFromItemEmpty =>
+      'No other item in this restaurant has settings to copy yet.';
+
+  @override
+  String get menuCopyFromItemNoMatch => 'No item matches this search.';
+
+  @override
+  String get menuCopyPreviewTitle => 'What will be copied';
+
+  @override
+  String menuCopyPreviewGroups(int count) {
+    return '$count modifier groups';
+  }
+
+  @override
+  String menuCopyPreviewOptions(int count) {
+    return '$count options';
+  }
+
+  @override
+  String menuCopyPreviewPrepRows(int count) {
+    return '$count kitchen setup rows';
+  }
+
+  @override
+  String menuCopyPreviewKitchenCounts(int count) {
+    return '$count options carry kitchen counts';
+  }
+
+  @override
+  String menuCopyPreviewClassifiers(int count) {
+    return '$count split-by links, relinked to this item on save';
+  }
+
+  @override
+  String menuCopyPreviewBasePrice(String price) {
+    return 'Base price $price';
+  }
+
+  @override
+  String get menuCopyPreviewNothing => 'This item has no settings to copy.';
+
+  @override
+  String get menuCopyPreviewExcluded =>
+      'The name, description, picture, category and code are never copied.';
+
+  @override
+  String get menuCopyApplyAction => 'Copy settings';
+
+  @override
+  String get menuCopyDraftNotice => 'Not saved yet — press Save to create it.';
+
+  @override
+  String menuCopyAppliedFrom(String name) {
+    return 'Copied from $name';
+  }
+
+  @override
+  String get menuCopyReplaceTitle => 'Replace the settings in this form?';
+
+  @override
+  String get menuCopyReplaceBody =>
+      'The base price, kitchen setup and modifiers in this form will be replaced by the copied ones. Nothing on the server changes until you press Save.';
+
+  @override
+  String get menuCopyReplaceConfirm => 'Replace';
+
+  @override
+  String get menuCopyBlockedHasModifiers =>
+      'This item already has modifier groups, so copying would duplicate them. Delete them first, or copy into a new item.';
+
+  @override
+  String menuCopySavingProgress(int done, int total) {
+    return 'Saving copied settings… $done/$total';
+  }
+
+  @override
+  String menuCopyFlushPartial(int groups, int options) {
+    return 'Stopped after creating $groups groups and $options options. Nothing was undone — press Save again to continue from here.';
+  }
+
+  @override
+  String menuCopySavedSummary(int groups, int options) {
+    return 'Copied $groups groups and $options options.';
+  }
+
+  @override
+  String get menuCopyDraftEditHint =>
+      'These are draft rows — edit them here. They are created when you press Save.';
+
+  @override
+  String get menuCopyDraftRemoveTitle => 'Remove from the copy?';
+
+  @override
+  String get menuCopyDraftRemoveBody =>
+      'It is removed from this form only. Nothing has been saved yet, so nothing is deleted.';
+
+  @override
+  String get menuCopyDraftRemoveLinked =>
+      'Another option is split by this one. That link will be cleared.';
 }

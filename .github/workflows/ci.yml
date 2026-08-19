@@ -168,6 +168,14 @@ jobs:
       - name: Tests — feature_kitchen (KDS sync + ticket models)
         run: flutter test packages/feature_kitchen
 
+      # OPS-043 Phase 4B: this package was MISSING from the list, and the
+      # steps name one package each with no glob — so its suite (the menu
+      # management surface, the Phase-3 no-wipe contract and the Phase-4
+      # copy-from-item zero-write/classifier-remap proofs) ran locally only
+      # and no PR could go red on it.
+      - name: Tests — feature_menu (RF-111 menu management + OPS-043 editor)
+        run: flutter test packages/feature_menu
+
       - name: Tests — design_system (RF-141 shared components)
         run: flutter test packages/design_system
 

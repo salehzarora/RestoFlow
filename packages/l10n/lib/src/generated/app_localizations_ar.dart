@@ -5961,4 +5961,125 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get dashboardCurrencyCheckUnavailable =>
       'تم إخفاء الإجماليات المالية: تعذّر التحقق من عملات هذه الفترة، ولا يجوز جمع مبالغ بعملات مختلفة.';
+
+  @override
+  String get menuCopyFromItemTitle => 'نسخ الإعدادات من صنف موجود';
+
+  @override
+  String get menuCopyFromItemHint =>
+      'أعد استخدام أعداد المطبخ والمُعدِّلات والخيارات والسعر الأساسي من صنف آخر. لا يُكتب أي شيء حتى تضغط حفظ.';
+
+  @override
+  String get menuCopyFromItemAction => 'اختر الصنف المصدر';
+
+  @override
+  String get menuCopyFromItemChange => 'تغيير المصدر';
+
+  @override
+  String get menuCopyFromItemRemove => 'تجاهل الإعدادات المنسوخة';
+
+  @override
+  String get menuCopyFromItemSearch => 'ابحث في الأصناف';
+
+  @override
+  String get menuCopyFromItemEmpty =>
+      'لا يوجد صنف آخر في هذا المطعم لديه إعدادات لنسخها بعد.';
+
+  @override
+  String get menuCopyFromItemNoMatch => 'لا يوجد صنف يطابق هذا البحث.';
+
+  @override
+  String get menuCopyPreviewTitle => 'ما الذي سيُنسخ';
+
+  @override
+  String menuCopyPreviewGroups(int count) {
+    return '$count مجموعات مُعدِّلات';
+  }
+
+  @override
+  String menuCopyPreviewOptions(int count) {
+    return '$count خيارات';
+  }
+
+  @override
+  String menuCopyPreviewPrepRows(int count) {
+    return '$count صفوف في أعداد المطبخ';
+  }
+
+  @override
+  String menuCopyPreviewKitchenCounts(int count) {
+    return '$count خيارات تحمل أعداد مطبخ';
+  }
+
+  @override
+  String menuCopyPreviewClassifiers(int count) {
+    return '$count روابط تقسيم، يُعاد ربطها بهذا الصنف عند الحفظ';
+  }
+
+  @override
+  String menuCopyPreviewBasePrice(String price) {
+    return 'السعر الأساسي $price';
+  }
+
+  @override
+  String get menuCopyPreviewNothing => 'هذا الصنف ليس لديه إعدادات لنسخها.';
+
+  @override
+  String get menuCopyPreviewExcluded =>
+      'لا يتم نسخ الاسم والوصف والصورة والفئة والرمز أبدًا.';
+
+  @override
+  String get menuCopyApplyAction => 'نسخ الإعدادات';
+
+  @override
+  String get menuCopyDraftNotice => 'لم يُحفظ بعد — اضغط حفظ لإنشائه.';
+
+  @override
+  String menuCopyAppliedFrom(String name) {
+    return 'منسوخ من $name';
+  }
+
+  @override
+  String get menuCopyReplaceTitle => 'استبدال الإعدادات في هذا النموذج؟';
+
+  @override
+  String get menuCopyReplaceBody =>
+      'سيتم استبدال السعر الأساسي وأعداد المطبخ والمُعدِّلات في هذا النموذج بالمنسوخة. لا يتغيّر أي شيء على الخادم حتى تضغط حفظ.';
+
+  @override
+  String get menuCopyReplaceConfirm => 'استبدال';
+
+  @override
+  String get menuCopyBlockedHasModifiers =>
+      'هذا الصنف لديه مجموعات مُعدِّلات بالفعل، لذا سيؤدي النسخ إلى تكرارها. احذفها أولًا، أو انسخ إلى صنف جديد.';
+
+  @override
+  String menuCopySavingProgress(int done, int total) {
+    return 'جارٍ حفظ الإعدادات المنسوخة… $done/$total';
+  }
+
+  @override
+  String menuCopyFlushPartial(int groups, int options) {
+    return 'توقّف بعد إنشاء $groups مجموعات و$options خيارات. لم يُتراجع عن أي شيء — اضغط حفظ مرة أخرى للمتابعة من هنا.';
+  }
+
+  @override
+  String menuCopySavedSummary(int groups, int options) {
+    return 'تم نسخ $groups مجموعات و$options خيارات.';
+  }
+
+  @override
+  String get menuCopyDraftEditHint =>
+      'هذه صفوف مسودة — عدّلها هنا. تُنشأ عند الضغط على حفظ.';
+
+  @override
+  String get menuCopyDraftRemoveTitle => 'إزالة من النسخة؟';
+
+  @override
+  String get menuCopyDraftRemoveBody =>
+      'تتم الإزالة من هذا النموذج فقط. لم يُحفظ أي شيء بعد، لذا لا يُحذف أي شيء.';
+
+  @override
+  String get menuCopyDraftRemoveLinked =>
+      'هناك خيار آخر مقسوم بهذا الخيار. سيتم مسح ذلك الرابط.';
 }
