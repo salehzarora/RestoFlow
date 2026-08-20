@@ -49,6 +49,17 @@
 --                                  keeps its merge-parties power untouched).
 --   7. public SECURITY INVOKER wrappers + exact grants (authenticated only;
 --      never anon; never service_role — D-011/D-012).
+--   8. HARDENING-FIX-073 (independent review): the kiosk client is UNTRUSTED —
+--      unlike the staff POS, its snapshots carry no authority. kiosk_submit_order
+--      therefore refuses: any price drift from the canonical live menu
+--      (menu_price_changed — refresh, never silent repricing), any modifier
+--      rule violation (modifier_selection_invalid — required/min/max/single/
+--      quantity per the POS effective rules; dead/hidden selections), any
+--      customer discount (discount_not_allowed), any non-tenant currency
+--      (currency_mismatch), and any tax that is not the RF-117 branch-setting
+--      computation (tax_mismatch). Persisted name snapshots are canonical DB
+--      values; and a row trigger (orders_actor_guard) proves every actorless
+--      order really belongs to a kiosk device.
 --
 -- NOT here (deliberately): table TTL holds (deferred by owner decision B), any
 -- backfill or data change, fake employees/service identities, client wiring,
@@ -341,6 +352,46 @@ alter table public.orders add constraint orders_actor_all_or_none
 
 comment on constraint orders_actor_all_or_none on public.orders is
   'KIOSK-001 Phase 2 (owner decision A): an order carries the FULL staff actor triple (every PIN/POS path — unchanged) or NONE of it (kiosk-created orders; device_id is the audited actor). A partial triple is invalid in both worlds. Direct writes stay revoked; only the SECURITY DEFINER submit RPCs can produce rows.';
+
+-- Defense-in-depth (HARDENING-FIX-073): the all-or-none CHECK cannot itself
+-- prove an actorless row belongs to a KIOSK device. This row trigger closes
+-- that: a NULL staff triple is only legal when the row device is
+-- device_type='kiosk' (checked on INSERT and on any UPDATE, so a staff order
+-- can never be laundered into an actorless one). The full-triple staff path
+-- short-circuits without touching the devices table. SECURITY DEFINER so the
+-- device lookup never depends on the writing role RLS view; 23514 keeps
+-- constraint-violation semantics for callers and tests.
+create function app.orders_actor_guard()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path = ''
+as $$
+begin
+  if new.pin_session_id is null
+     and new.opened_by_employee_profile_id is null
+     and new.resolved_membership_id is null then
+    if not exists (
+         select 1 from public.devices d
+           where d.id = new.device_id
+             and d.organization_id = new.organization_id
+             and d.device_type = 'kiosk') then
+      raise exception 'orders: a staff-actorless order is only legal from a kiosk device'
+        using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function app.orders_actor_guard() from public;
+
+create trigger orders_actor_guard
+  before insert or update on public.orders
+  for each row execute function app.orders_actor_guard();
+
+comment on function app.orders_actor_guard() is
+  'KIOSK-001 HARDENING-FIX-073 defense-in-depth: a NULL staff actor triple on an order is only legal when the order''s device is a kiosk. Full-triple staff rows short-circuit (no lookup). 23514 = constraint semantics.';
 
 -- ----------------------------------------------------------------------------
 -- 6. Transport idempotency ledger: the kiosk submit op joins the SAME ledger
@@ -701,6 +752,17 @@ declare
   v_customer_name text;
   v_customer_phone text;
   v_kitchen_mode  text;
+  v_canon_currency  text;
+  v_tax_enabled     boolean;
+  v_tax_rate_bp     integer;
+  v_tax_mode        text;
+  v_expected_tax    bigint;
+  v_price_mismatch  jsonb;
+  v_invalid_mods    jsonb;
+  v_canon_item_name text;
+  v_canon_mod_name  text;
+  v_canon_opt_name  text;
+  v_canon_delta     bigint;
   v_auto          jsonb;
   v_result        jsonb;
 begin
@@ -798,6 +860,39 @@ begin
     raise exception 'kiosk_submit_order: order totals must be non-negative integers (minor units)' using errcode = '42501';
   end if;
 
+  -- (authority: discounts — HARDENING-FIX-073) V1 kiosk has NO customer
+  -- discount authority: a customer terminal can never price its own reduction.
+  -- Both the order-level total AND every per-line discount must be exactly
+  -- zero. Staff POS discounts (role-gated RPCs) are untouched.
+  if p_client_discount_total_minor <> 0
+     or exists (
+       select 1 from jsonb_array_elements(p_order_items) e
+         where (e ? 'line_discount_minor')
+           and jsonb_typeof(e -> 'line_discount_minor') <> 'null'
+           and app.order_parse_minor(e -> 'line_discount_minor', 'order_items[].line_discount_minor') <> 0) then
+    v_result := jsonb_build_object('ok', false, 'error', 'discount_not_allowed', 'entity', 'order');
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'discount_not_allowed', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
+  -- (authority: currency — HARDENING-FIX-073) a syntactically valid ISO code is
+  -- not enough for an untrusted terminal: the order currency must BE the tenant
+  -- currency (the same coalesce(restaurants.currency_override,
+  -- organizations.default_currency) kiosk_menu serves).
+  select coalesce(r.currency_override, o.default_currency)
+    into v_canon_currency
+    from public.restaurants r
+    join public.organizations o on o.id = r.organization_id
+    where r.id = v_rest and r.organization_id = v_org;
+  if v_canon_currency is null or p_currency_code <> v_canon_currency then
+    v_result := jsonb_build_object('ok', false, 'error', 'currency_mismatch', 'entity', 'order',
+                                   'expected_currency', v_canon_currency);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'currency_mismatch', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
   -- (payload+) order-type table SHAPE rules — submit_order VERBATIM.
   if p_order_type = 'takeaway' and p_table_id is not null then
     v_result := jsonb_build_object('ok', false, 'error', 'table_not_allowed', 'entity', 'order');
@@ -856,10 +951,46 @@ begin
     raise exception 'kiosk_submit_order: client subtotal_minor (%) does not match snapshot recompute (%)',
       p_client_subtotal_minor, v_subtotal using errcode = '42501';
   end if;
-  v_grand := v_subtotal - p_client_discount_total_minor + p_client_tax_total_minor;
-  if v_grand < 0 then
-    raise exception 'kiosk_submit_order: computed grand_total_minor is negative' using errcode = '42501';
+  -- (authority: tax — HARDENING-FIX-073) the customer terminal never prices its
+  -- own tax. The RF-117 per-branch owner setting is the single authority:
+  -- disabled/0-bp => tax MUST be 0; enabled => tax MUST equal the canonical
+  -- integer computation — round-HALF-AWAY-FROM-ZERO on a numeric transient,
+  -- byte-matching the POS tax_math (`percentMinor`) and the money engine:
+  --   exclusive: round(base * rate_bp / 10000)          (added on top)
+  --   inclusive: round(base * rate_bp / (10000+rate_bp)) (extracted, not added)
+  -- The base is the post-discount goods total, which for a kiosk (discounts
+  -- forced 0 above) is the recomputed subtotal. A mismatch is the stable
+  -- refresh-required refusal (the owner may have changed the rate mid-cart).
+  select b.tax_enabled, b.tax_rate_bp, b.tax_mode
+    into v_tax_enabled, v_tax_rate_bp, v_tax_mode
+    from public.branches b
+    where b.id = v_branch and b.organization_id = v_org and b.deleted_at is null;
+  if not found then
+    raise exception 'kiosk_submit_order: branch row unavailable during the tax gate (state inconsistency)';
   end if;
+  if coalesce(v_tax_enabled, false) and coalesce(v_tax_rate_bp, 0) > 0 then
+    if v_tax_mode = 'inclusive' then
+      v_expected_tax := round((v_subtotal::numeric * v_tax_rate_bp) / (10000 + v_tax_rate_bp))::bigint;
+    else
+      v_expected_tax := round((v_subtotal::numeric * v_tax_rate_bp) / 10000)::bigint;
+    end if;
+  else
+    v_expected_tax := 0;
+  end if;
+  if p_client_tax_total_minor <> v_expected_tax then
+    v_result := jsonb_build_object('ok', false, 'error', 'tax_mismatch', 'entity', 'order',
+                                   'expected_tax_total_minor', v_expected_tax);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'tax_mismatch', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
+  -- discount proven 0 and tax proven canonical, so the grand total is fully
+  -- server-derived: subtotal plus the tax only when the mode ADDS it.
+  v_grand := v_subtotal
+           + case when coalesce(v_tax_enabled, false) and coalesce(v_tax_rate_bp, 0) > 0
+                       and v_tax_mode = 'exclusive'
+                  then v_expected_tax else 0 end;
   if p_client_grand_total_minor <> v_grand then
     raise exception 'kiosk_submit_order: client grand_total_minor (%) does not match snapshot recompute (%)',
       p_client_grand_total_minor, v_grand using errcode = '42501';
@@ -986,6 +1117,32 @@ begin
     return v_result;
   end if;
 
+  -- (authority: item price — HARDENING-FIX-073) the kiosk client is untrusted:
+  -- its submitted unit price snapshot must EQUAL the canonical live
+  -- base_price_minor, read under the SAME menu_items FOR UPDATE serialization
+  -- as the sellability gate (a concurrent price edit serializes against this
+  -- submit). A mismatch is the stable refresh-required refusal — the server
+  -- never silently charges a different amount than the cart showed.
+  select jsonb_agg(jsonb_build_object(
+           'menu_item_id', bad.menu_item_id, 'name', bad.name)
+           order by bad.menu_item_id)
+    into v_price_mismatch
+    from (
+      select distinct e ->> 'menu_item_id' as menu_item_id, i.name
+        from jsonb_array_elements(p_order_items) e
+        join public.menu_items i
+          on i.id = (e ->> 'menu_item_id')::uuid
+         and i.organization_id = v_org
+       where (e ->> 'unit_price_minor_snapshot')::bigint is distinct from i.base_price_minor
+    ) bad;
+  if v_price_mismatch is not null then
+    v_result := jsonb_build_object('ok', false, 'error', 'menu_price_changed',
+                                   'entity', 'order', 'items', v_price_mismatch);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'menu_price_changed', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
   -- (003D) modifier option IDENTITY + OWNERSHIP — submit_order VERBATIM.
   select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'option_name_snapshot')
     into v_bad_modifiers
@@ -1014,6 +1171,159 @@ begin
                                    'entity', 'order', 'modifiers', v_bad_modifiers);
     update public.sync_operations set status = 'rejected', result = v_result,
       rejection_reason = 'modifier_option_not_in_scope', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
+  -- (authority: modifier liveness + price — HARDENING-FIX-073) ownership alone
+  -- (003D above) is not enough for an untrusted terminal. Every selected option
+  -- must be LIVE and branch-visible inside a LIVE branch-visible group (the
+  -- exact kiosk_menu predicates), and its submitted price snapshot must EQUAL
+  -- the canonical price_delta_minor. Dead/hidden selections are the stable
+  -- selection refusal; a price drift is the stable refresh-required refusal.
+  select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'modifier_option_id')
+    into v_invalid_mods
+    from (
+      select distinct jsonb_build_object(
+               'menu_item_id',        e ->> 'menu_item_id',
+               'modifier_option_id',  m ->> 'modifier_option_id',
+               'reason',              'not_live') as bad
+        from jsonb_array_elements(p_order_items) e
+        cross join lateral jsonb_array_elements(
+          case when jsonb_typeof(e -> 'modifiers') = 'array'
+               then e -> 'modifiers' else '[]'::jsonb end) m
+       where (m ->> 'modifier_option_id') is not null
+         and not exists (
+           select 1
+             from public.modifier_options mo
+             join public.modifiers mg
+               on  mg.organization_id = mo.organization_id
+               and mg.id              = mo.modifier_id
+            where mo.organization_id = v_org
+              and mo.restaurant_id   = v_rest
+              and mo.id              = (m ->> 'modifier_option_id')::uuid
+              and mo.is_active and mo.deleted_at is null
+              and (mo.branch_id is null or mo.branch_id = v_branch)
+              and mg.restaurant_id = v_rest
+              and mg.is_active and mg.deleted_at is null
+              and (mg.branch_id is null or mg.branch_id = v_branch)
+         )
+    ) offenders;
+  if v_invalid_mods is not null then
+    v_result := jsonb_build_object('ok', false, 'error', 'modifier_selection_invalid',
+                                   'entity', 'order', 'modifiers', v_invalid_mods);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'modifier_selection_invalid', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
+  select jsonb_agg(bad order by bad ->> 'menu_item_id', bad ->> 'modifier_option_id')
+    into v_price_mismatch
+    from (
+      select distinct jsonb_build_object(
+               'menu_item_id',       e ->> 'menu_item_id',
+               'modifier_option_id', m ->> 'modifier_option_id') as bad
+        from jsonb_array_elements(p_order_items) e
+        cross join lateral jsonb_array_elements(
+          case when jsonb_typeof(e -> 'modifiers') = 'array'
+               then e -> 'modifiers' else '[]'::jsonb end) m
+        join public.modifier_options mo
+          on mo.organization_id = v_org
+         and mo.id = (m ->> 'modifier_option_id')::uuid
+       where (m ->> 'modifier_option_id') is not null
+         and (m ->> 'price_minor_snapshot')::bigint is distinct from mo.price_delta_minor
+    ) offenders;
+  if v_price_mismatch is not null then
+    v_result := jsonb_build_object('ok', false, 'error', 'menu_price_changed',
+                                   'entity', 'order', 'modifiers', v_price_mismatch);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'menu_price_changed', updated_at = now() where id = v_so_id;
+    return v_result;
+  end if;
+
+  -- (authority: modifier group RULES — HARDENING-FIX-073) the server enforces
+  -- the CURRENT group contract per submitted LINE, mirroring the POS sheet's
+  -- effective rules exactly:
+  --   effective_min = single ? 1 : (is_required and min_select=0 ? 1 : min_select)
+  --   effective_max = single ? 1 : max_select   (null = unlimited)
+  -- over DISTINCT selected options, and per-option TOTAL quantity (duplicate
+  -- rows are SUMMED so they can never bypass a cap) = 1 unless the group
+  -- allows quantities, else capped by max_quantity (null = no cap). The group
+  -- universe is the item's LIVE branch-visible groups — a dead or hidden group
+  -- is never demanded and never counted.
+  with lines as (
+    select t.ord, t.e
+      from jsonb_array_elements(p_order_items) with ordinality t(e, ord)
+  ),
+  sel as (
+    select l.ord,
+           (l.e ->> 'menu_item_id')::uuid as item_id,
+           (m ->> 'modifier_option_id')::uuid as option_id,
+           sum(case when (m ? 'quantity') and jsonb_typeof(m -> 'quantity') <> 'null'
+                    then (m ->> 'quantity')::bigint else 1 end) as total_qty
+      from lines l
+      cross join lateral jsonb_array_elements(
+        case when jsonb_typeof(l.e -> 'modifiers') = 'array'
+             then l.e -> 'modifiers' else '[]'::jsonb end) m
+     where (m ->> 'modifier_option_id') is not null
+     group by 1, 2, 3
+  ),
+  live_groups as (
+    select mg.menu_item_id as item_id, mg.id as group_id, mg.name,
+           mg.selection_type, mg.min_select, mg.max_select, mg.is_required,
+           mg.allow_quantity, mg.max_quantity,
+           case when mg.selection_type = 'single' then 1
+                when mg.is_required and mg.min_select = 0 then 1
+                else mg.min_select end as effective_min,
+           case when mg.selection_type = 'single' then 1
+                else mg.max_select end as effective_max
+      from public.modifiers mg
+      where mg.organization_id = v_org
+        and mg.restaurant_id   = v_rest
+        and mg.menu_item_id in (select distinct (e ->> 'menu_item_id')::uuid
+                                  from jsonb_array_elements(p_order_items) e)
+        and mg.is_active and mg.deleted_at is null
+        and (mg.branch_id is null or mg.branch_id = v_branch)
+  ),
+  counts as (
+    select s.ord, g.group_id,
+           count(distinct s.option_id) as n_opts
+      from sel s
+      join public.modifier_options mo
+        on mo.organization_id = v_org and mo.id = s.option_id
+      join live_groups g
+        on g.group_id = mo.modifier_id and g.item_id = s.item_id
+      group by 1, 2
+  ),
+  violations as (
+    -- (a) cardinality per line x live group (missing required group included:
+    --     the cross join covers groups with NO selection at n = 0).
+    select l.ord, g.group_id, g.name, 'selection_count'::text as kind
+      from lines l
+      join live_groups g on g.item_id = (l.e ->> 'menu_item_id')::uuid
+      left join counts c on c.ord = l.ord and c.group_id = g.group_id
+      where coalesce(c.n_opts, 0) < g.effective_min
+         or (g.effective_max is not null and coalesce(c.n_opts, 0) > g.effective_max)
+    union all
+    -- (b) per-option quantity: exactly 1 unless quantities are allowed;
+    --     otherwise capped by max_quantity (null = no cap).
+    select s.ord, g.group_id, g.name, 'quantity'::text as kind
+      from sel s
+      join public.modifier_options mo
+        on mo.organization_id = v_org and mo.id = s.option_id
+      join live_groups g
+        on g.group_id = mo.modifier_id and g.item_id = s.item_id
+      where (not g.allow_quantity and s.total_qty <> 1)
+         or (g.allow_quantity and g.max_quantity is not null and s.total_qty > g.max_quantity)
+  )
+  select jsonb_agg(distinct jsonb_build_object(
+           'line', v.ord, 'modifier_id', v.group_id, 'modifier_name', v.name, 'kind', v.kind))
+    into v_invalid_mods
+    from violations v;
+  if v_invalid_mods is not null then
+    v_result := jsonb_build_object('ok', false, 'error', 'modifier_selection_invalid',
+                                   'entity', 'order', 'modifiers', v_invalid_mods);
+    update public.sync_operations set status = 'rejected', result = v_result,
+      rejection_reason = 'modifier_selection_invalid', updated_at = now() where id = v_so_id;
     return v_result;
   end if;
 
@@ -1084,14 +1394,22 @@ begin
     end if;
     v_line_total := v_qty * (v_unit + v_mod_sum) - v_line_disc;
 
+    -- (authority: canonical snapshots — HARDENING-FIX-073) the persisted
+    -- receipt/kitchen snapshot is the CANONICAL validated menu row, never a
+    -- client string (the client's copy stays in the request payload for wire
+    -- compatibility and idempotency identity only). Kiosks sell no
+    -- sizes/variants, so those legacy snapshot slots persist NULL.
+    select i.name into v_canon_item_name
+      from public.menu_items i
+      where i.organization_id = v_org and i.id = (v_item ->> 'menu_item_id')::uuid;
     insert into public.order_items (
       organization_id, restaurant_id, branch_id, order_id, menu_item_id,
       status, quantity, menu_item_name_snapshot, unit_price_minor_snapshot,
       item_size_snapshot, item_variant_snapshot, line_discount_minor, line_total_minor, notes, prep_snapshot)
     values (
       v_org, v_rest, v_branch, p_order_id, (v_item ->> 'menu_item_id')::uuid,
-      'pending', v_qty::int, v_item ->> 'menu_item_name_snapshot', v_unit,
-      v_item -> 'item_size_snapshot', v_item -> 'item_variant_snapshot', v_line_disc, v_line_total,
+      'pending', v_qty::int, v_canon_item_name, v_unit,
+      null, null, v_line_disc, v_line_total,
       v_item ->> 'notes', v_item -> 'prep_snapshot')
     returning id into v_item_id;
 
@@ -1108,12 +1426,22 @@ begin
         v_mod_qty   := case when (v_modifier ? 'quantity') and jsonb_typeof(v_modifier -> 'quantity') <> 'null'
                             then app.order_parse_minor(v_modifier -> 'quantity', 'modifiers[].quantity')
                             else 1 end;
+        -- canonical group/option names + the canonical validated delta
+        -- (HARDENING-FIX-073; the client strings were required above for wire
+        -- shape but are never persisted).
+        select mo.name, mg.name, mo.price_delta_minor
+          into v_canon_opt_name, v_canon_mod_name, v_canon_delta
+          from public.modifier_options mo
+          join public.modifiers mg
+            on mg.organization_id = mo.organization_id and mg.id = mo.modifier_id
+          where mo.organization_id = v_org
+            and mo.id = (v_modifier ->> 'modifier_option_id')::uuid;
         insert into public.order_item_modifiers (
           organization_id, restaurant_id, branch_id, order_item_id, modifier_option_id,
           modifier_name_snapshot, option_name_snapshot, price_minor_snapshot, quantity, meat_snapshot)
         values (
           v_org, v_rest, v_branch, v_item_id, (v_modifier ->> 'modifier_option_id')::uuid,
-          v_modifier ->> 'modifier_name_snapshot', v_modifier ->> 'option_name_snapshot', v_mod_price, v_mod_qty::int,
+          v_canon_mod_name, v_canon_opt_name, v_canon_delta, v_mod_qty::int,
           app.kitchen_modifier_prep_projection(v_modifier -> 'meat_snapshot'));
         v_mod_count := v_mod_count + 1;
       end loop;
@@ -1195,7 +1523,7 @@ end;
 $$;
 
 comment on function app.kiosk_submit_order(uuid, text, uuid, text, text, uuid, text, text, text, text, jsonb, bigint, bigint, bigint, bigint, timestamptz) is
-  'KIOSK-001 Phase 2: the ONE kiosk mutation — a customer order submit authorized by a kiosk device session token (device_type=kiosk; NO PIN session, NO staff permissions). Validation is app.submit_order''s, block for block (shape/currency/type, snapshot-only money recompute, canonical sellability + availability under the menu_items FOR UPDATE serialization, 003D modifier ownership, 021 frozen-prep comparison, KITCHEN-MODE dispatch + zero-total auto-complete tail). KIOSK deltas: (a) transport-ledger claim (sync_push b2 contract) for op kiosk.order.submit with the phone-excluded fingerprint + business replay backstop on orders (D-022); (b) owner decision B — the dine-in table row is LOCKED (FOR UPDATE) and must be effectively AVAILABLE (manual available + zero live dine-in orders); concurrent losers get the stable table_no_longer_available refusal; POS merge-parties semantics untouched; NO holds, NO new columns; (c) owner decision A — staff actor triple NULL, shift NULL, the kiosk device is the audited actor (kiosk.order.submitted, actor_kind=kiosk_device); (d) optional customer name/phone validated up front (app.is_valid_customer_phone) and stamped in the insert; phone is data-only and excluded from the idempotency fingerprint. The order is UNPAID (pay-at-cashier: record_payment/settlement/auto-completion unchanged) and enters the normal kitchen lifecycle/projections.';
+  'KIOSK-001 Phase 2: the ONE kiosk mutation — a customer order submit authorized by a kiosk device session token (device_type=kiosk; NO PIN session, NO staff permissions). Validation is app.submit_order''s, block for block (shape/currency/type, snapshot-only money recompute, canonical sellability + availability under the menu_items FOR UPDATE serialization, 003D modifier ownership, 021 frozen-prep comparison, KITCHEN-MODE dispatch + zero-total auto-complete tail). KIOSK deltas: (a) transport-ledger claim (sync_push b2 contract) for op kiosk.order.submit with the phone-excluded fingerprint + business replay backstop on orders (D-022); (b) owner decision B — the dine-in table row is LOCKED (FOR UPDATE) and must be effectively AVAILABLE (manual available + zero live dine-in orders); concurrent losers get the stable table_no_longer_available refusal; POS merge-parties semantics untouched; NO holds, NO new columns; (c) owner decision A — staff actor triple NULL, shift NULL, the kiosk device is the audited actor (kiosk.order.submitted, actor_kind=kiosk_device); (d) optional customer name/phone validated up front (app.is_valid_customer_phone) and stamped in the insert; phone is data-only and excluded from the idempotency fingerprint. The order is UNPAID (pay-at-cashier: record_payment/settlement/auto-completion unchanged) and enters the normal kitchen lifecycle/projections. HARDENING-FIX-073 — the kiosk client is UNTRUSTED: submitted item/option prices must EQUAL the canonical live base_price_minor / price_delta_minor under the same FOR UPDATE serialization (else the stable menu_price_changed refresh refusal — the server never silently reprices); modifier group rules (required/min/max/single/quantity, POS effective-rule parity, duplicates summed) are server-enforced (modifier_selection_invalid), selected options/groups must be LIVE and branch-visible; customer discounts are prohibited (discount_not_allowed, order and line level); the currency must BE the tenant currency (currency_mismatch); tax is server-computed from the RF-117 branch setting with round-half-away-from-zero (tax_mismatch); persisted item/group/option name snapshots are the CANONICAL menu rows, never client strings, and kiosk lines persist NULL size/variant slots.';
 
 -- ----------------------------------------------------------------------------
 -- 11. public wrappers + exact grants (the get_device_printer_assignments

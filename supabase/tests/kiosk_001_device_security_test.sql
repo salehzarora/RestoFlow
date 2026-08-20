@@ -9,15 +9,18 @@
 -- (actor-null orders, unpaid, audit device actor, validation refusals,
 -- idempotency ledger + business replay, the atomic no-hold table gate),
 -- POS actor preservation, the staff-PIN privilege boundary, pay-later, POS
--- projection + KDS pull visibility, revocation cutting access, and the ACL /
--- constraint surface. Fixtures inserted as the BYPASSRLS harness role; device
+-- projection + KDS pull visibility, revocation cutting access, the ACL /
+-- constraint surface, and the HARDENING-FIX-073 untrusted-client matrix
+-- (forged item/option prices, modifier group rules, self-applied discounts,
+-- non-tenant currency, invented tax, forged display names, actorless-order
+-- device guard). Fixtures inserted as the BYPASSRLS harness role; device
 -- calls run as an ANONYMOUS authenticated principal (GUC '').
 -- ============================================================================
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(78);
+select plan(105);
 
 -- ===== fixture: Org A (Rest A1: branch A1a device-branch, A1b sibling); Org B
 insert into organizations (id, name, slug, default_currency) values
@@ -88,6 +91,27 @@ insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_
 insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order, is_active, kitchen_meat) values
   ('00000000-0000-0000-0000-0071000d2a01', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a01', 'Classic', 0,    0, true, null),
   ('00000000-0000-0000-0000-0071000d2a02', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a01', 'Double',  1500, 1, true, '{"quantity":2,"unit":"pc"}'::jsonb);
+-- HARDENING-FIX-073 fixtures: an INACTIVE option inside the live Weight group;
+-- a DEAD Burger group carrying a live-flagged option; a quantity-enabled
+-- Extras group (multiple, per-option cap 2); and a Salad whose REQUIRED Mix
+-- group demands exactly 2 distinct picks.
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order, is_active) values
+  ('00000000-0000-0000-0000-0071000d2a03', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a01', 'Rare', 0, 2, false);
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name, selection_type, min_select, max_select, is_required, is_active, allow_quantity, max_quantity) values
+  ('00000000-0000-0000-0000-0071000d1a02', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000117a1', 'DeadExtras', 'multiple', 0, null, false, false, false, null),
+  ('00000000-0000-0000-0000-0071000d1a03', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000117a1', 'Extras',     'multiple', 0, null, false, true,  true,  2);
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order, is_active) values
+  ('00000000-0000-0000-0000-0071000d2a04', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a02', 'DeadOpt', 0,   0, true),
+  ('00000000-0000-0000-0000-0071000d2a05', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a03', 'Sauce',   200, 0, true);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order, is_active) values
+  ('00000000-0000-0000-0000-0071000117a6', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000c1a00', 'Salad', 800, 'ILS', 5, true);
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name, selection_type, min_select, max_select, is_required, is_active) values
+  ('00000000-0000-0000-0000-0071000d1a04', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000117a6', 'Mix', 'multiple', 2, 2, true, true);
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order, is_active) values
+  ('00000000-0000-0000-0000-0071000d2a06', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a04', 'MixA', 0, 0, true),
+  ('00000000-0000-0000-0000-0071000d2a07', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a04', 'MixB', 0, 1, true),
+  ('00000000-0000-0000-0000-0071000d2a08', '00000000-0000-0000-0000-007100000a00', '00000000-0000-0000-0000-007100000a10', null, '00000000-0000-0000-0000-0071000d1a04', 'MixC', 0, 2, true);
+
 -- an Org B option (for the ownership refusal)
 insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name, selection_type, is_active) values
   ('00000000-0000-0000-0000-0071000d1b01', '00000000-0000-0000-0000-007100000b00', '00000000-0000-0000-0000-007100000b10', null, '00000000-0000-0000-0000-0071000117b1', 'B Mod', 'single', true);
@@ -534,7 +558,257 @@ insert into _res values ('kds_pull',
 select ok((select r::text like '%0071000a1d01%' from _res where label = 'kds_pull'),
   'K5: the kiosk order flows to the KDS sync_pull feed');
 
--- ---- L. revocation cuts access at use time (75) -----------------------------
+-- ---- N. HARDENING-FIX-073: the kiosk client is UNTRUSTED (75-101) ----------
+-- Everything below runs as the harness role (RPC authority is the token
+-- parameter, never the caller role; persisted-state asserts need the harness).
+
+-- N-price: forged snapshots are refused with the stable refresh error.
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d01', 'kiosk-hf-01', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1)),
+    1, 0, 0, 1)) ->> 'error'), 'menu_price_changed',
+  'N1: a forged 1-agora item price (canonical 1000) is menu_price_changed, never a silent recharge');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d02', 'kiosk-hf-02', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 0)),
+    0, 0, 0, 0)) ->> 'error'), 'menu_price_changed',
+  'N2: a forged FREE item (0 vs canonical 1000) is refused');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d03', 'kiosk-hf-03', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(jsonb_build_object(
+        'modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+        'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double',
+        'price_minor_snapshot', 1)))),
+    4001, 0, 0, 4001)) ->> 'error'), 'menu_price_changed',
+  'N3: a forged option delta (1 vs canonical 1500) is refused');
+
+-- N-rules: the CURRENT group contract is server-enforced.
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d04', 'kiosk-hf-04', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000)),
+    4000, 0, 0, 4000)) ->> 'error'), 'modifier_selection_invalid',
+  'N4: omitting the REQUIRED Weight group is refused even with a consistent subtotal');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d05', 'kiosk-hf-05', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a01',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Classic', 'price_minor_snapshot', 0),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500)))),
+    5500, 0, 0, 5500)) ->> 'error'), 'modifier_selection_invalid',
+  'N5: two distinct options in a SINGLE group are refused');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d06', 'kiosk-hf-06', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500)))),
+    7000, 0, 0, 7000)) ->> 'error'), 'modifier_selection_invalid',
+  'N6: DUPLICATE rows of one option are summed and cannot bypass the single-selection cap');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0a', 'kiosk-hf-07', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(jsonb_build_object(
+        'modifier_option_id', '00000000-0000-0000-0000-0071000d2a03',
+        'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Rare', 'price_minor_snapshot', 0)))),
+    4000, 0, 0, 4000)) ->> 'error'), 'modifier_selection_invalid',
+  'N7: an INACTIVE option is refused (ownership alone is not liveness)');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0b', 'kiosk-hf-08', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a04',
+          'modifier_name_snapshot', 'DeadExtras', 'option_name_snapshot', 'DeadOpt', 'price_minor_snapshot', 0)))),
+    5500, 0, 0, 5500)) ->> 'error'), 'modifier_selection_invalid',
+  'N8: an option inside a DEAD group is refused (and a dead group is never demanded)');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0c', 'kiosk-hf-09', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500,
+          'meat_snapshot', (select v from _snap)),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a05',
+          'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Sauce', 'price_minor_snapshot', 200,
+          'quantity', 3)))),
+    6100, 0, 0, 6100)) ->> 'error'), 'modifier_selection_invalid',
+  'N9: quantity 3 over the per-option cap of 2 is refused');
+insert into _res values ('hf_qty',
+  public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0d', 'kiosk-hf-10', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'Burger', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+          'modifier_name_snapshot', 'Weight', 'option_name_snapshot', 'Double', 'price_minor_snapshot', 1500,
+          'meat_snapshot', (select v from _snap)),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a05',
+          'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Sauce', 'price_minor_snapshot', 200,
+          'quantity', 2)))),
+    5900, 0, 0, 5900));
+select ok((select (r ->> 'ok')::boolean from _res where label = 'hf_qty'),
+  'N10: an in-cap quantity 2 with canonical prices is accepted');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0e', 'kiosk-hf-11', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a6',
+      'menu_item_name_snapshot', 'Salad', 'quantity', 1, 'unit_price_minor_snapshot', 800,
+      'modifiers', jsonb_build_array(jsonb_build_object(
+        'modifier_option_id', '00000000-0000-0000-0000-0071000d2a06',
+        'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixA', 'price_minor_snapshot', 0)))),
+    800, 0, 0, 800)) ->> 'error'), 'modifier_selection_invalid',
+  'N11: one pick under min_select=2 is refused');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d0f', 'kiosk-hf-12', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a6',
+      'menu_item_name_snapshot', 'Salad', 'quantity', 1, 'unit_price_minor_snapshot', 800,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a06',
+          'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixA', 'price_minor_snapshot', 0),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a07',
+          'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixB', 'price_minor_snapshot', 0),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a08',
+          'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixC', 'price_minor_snapshot', 0)))),
+    800, 0, 0, 800)) ->> 'error'), 'modifier_selection_invalid',
+  'N12: three picks over max_select=2 are refused');
+select ok((((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d10', 'kiosk-hf-13', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a6',
+      'menu_item_name_snapshot', 'Salad', 'quantity', 1, 'unit_price_minor_snapshot', 800,
+      'modifiers', jsonb_build_array(
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a06',
+          'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixA', 'price_minor_snapshot', 0),
+        jsonb_build_object('modifier_option_id', '00000000-0000-0000-0000-0071000d2a07',
+          'modifier_name_snapshot', 'Mix', 'option_name_snapshot', 'MixB', 'price_minor_snapshot', 0)))),
+    800, 0, 0, 800)) ->> 'ok')::boolean),
+  'N13: exactly 2 picks satisfy the min=max=2 contract');
+
+-- N-discount: V1 kiosk has no customer discount authority.
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d11', 'kiosk-hf-14', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 4, 'unit_price_minor_snapshot', 1000)),
+    4000, 3999, 0, 1)) ->> 'error'), 'discount_not_allowed',
+  'N14: a self-applied 3999 discount (pay 1 agora) is refused');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d12', 'kiosk-hf-15', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000,
+      'line_discount_minor', 100)),
+    900, 0, 0, 900)) ->> 'error'), 'discount_not_allowed',
+  'N15: a nonzero LINE discount is refused too');
+
+-- N-currency: the tenant currency is the only legal currency.
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d13', 'kiosk-hf-16', 'takeaway', null, 'USD', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) ->> 'error'), 'currency_mismatch',
+  'N16: USD on an ILS tenant is refused despite passing the ISO regex');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d14', 'kiosk-hf-17', 'takeaway', null, 'EUR', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) ->> 'error'), 'currency_mismatch',
+  'N17: EUR is refused the same way');
+
+-- N-tax: the RF-117 branch setting is the only tax authority.
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d15', 'kiosk-hf-18', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 170, 1170)) ->> 'error'), 'tax_mismatch',
+  'N18: a customer-invented tax on a tax-DISABLED branch is refused');
+update branches set tax_enabled = true, tax_rate_bp = 1700
+  where id = '00000000-0000-0000-0000-007100000a1a';
+insert into _res values ('hf_tax',
+  public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d16', 'kiosk-hf-19', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 170, 1170));
+select ok((select (r ->> 'ok')::boolean from _res where label = 'hf_tax'),
+  'N19: the canonical 17% exclusive tax (170 on 1000) is accepted');
+select ok((select o.tax_total_minor = 170 and o.grand_total_minor = 1170 from orders o
+            where o.id = '00000000-0000-0000-0000-0071000b0d16'),
+  'N20: the authoritative tax + grand persist');
+select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d17', 'kiosk-hf-20', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'Cola', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) ->> 'error'), 'tax_mismatch',
+  'N21: omitting the tax on a tax-ENABLED branch is refused (stale cart => refresh)');
+update branches set tax_enabled = false, tax_rate_bp = 0
+  where id = '00000000-0000-0000-0000-007100000a1a';
+
+-- N-snapshots: persisted names are CANONICAL, never client strings.
+insert into _res values ('hf_name1',
+  public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d18', 'kiosk-hf-21', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a2',
+      'menu_item_name_snapshot', 'HACKED ITEM', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000));
+select ok((select (r ->> 'ok')::boolean from _res where label = 'hf_name1'),
+  'N22: a fake display name does not block a valid order (names carry no authority)');
+select is((select oi.menu_item_name_snapshot from order_items oi
+            where oi.order_id = '00000000-0000-0000-0000-0071000b0d18'), 'Cola',
+  'N23: the persisted item snapshot is the CANONICAL DB name, not the client string');
+insert into _res values ('hf_name2',
+  public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+    '00000000-0000-0000-0000-0071000b0d19', 'kiosk-hf-22', 'takeaway', null, 'ILS', null, null, null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '00000000-0000-0000-0000-0071000117a1',
+      'menu_item_name_snapshot', 'FAKE BURGER', 'quantity', 1, 'unit_price_minor_snapshot', 4000,
+      'modifiers', jsonb_build_array(jsonb_build_object(
+        'modifier_option_id', '00000000-0000-0000-0000-0071000d2a02',
+        'modifier_name_snapshot', 'FAKE GROUP', 'option_name_snapshot', 'FAKE OPT',
+        'price_minor_snapshot', 1500,
+        'meat_snapshot', (select v from _snap))))),
+    5500, 0, 0, 5500));
+select ok((select (r ->> 'ok')::boolean from _res where label = 'hf_name2'),
+  'N24: fake group/option labels do not block a valid order');
+select ok((select oi.menu_item_name_snapshot = 'Burger'
+              and oim.modifier_name_snapshot = 'Weight'
+              and oim.option_name_snapshot = 'Double'
+              and oim.price_minor_snapshot = 1500
+            from order_items oi
+            join order_item_modifiers oim on oim.order_item_id = oi.id
+            where oi.order_id = '00000000-0000-0000-0000-0071000b0d19'),
+  'N25: the persisted receipt/kitchen snapshots are the canonical Weight/Double rows');
+
+-- N-actor: defense-in-depth — an actorless row must belong to a KIOSK device.
+select throws_ok(
+  $$insert into orders (id, organization_id, restaurant_id, branch_id, device_id,
+      order_type, status, currency_code, subtotal_minor, grand_total_minor, local_operation_id)
+    values (gen_random_uuid(), '00000000-0000-0000-0000-007100000a00',
+      '00000000-0000-0000-0000-007100000a10', '00000000-0000-0000-0000-007100000a1a',
+      '00000000-0000-0000-0000-007100004004',
+      'takeaway', 'submitted', 'ILS', 0, 0, 'direct-pos-null-actor')$$,
+  '23514', null,
+  'N26: an actorless order on a POS device is refused even by a privileged direct write');
+select lives_ok(
+  $$insert into orders (id, organization_id, restaurant_id, branch_id, device_id,
+      order_type, status, currency_code, subtotal_minor, grand_total_minor, local_operation_id)
+    values ('00000000-0000-0000-0000-0071000b0df1', '00000000-0000-0000-0000-007100000a00',
+      '00000000-0000-0000-0000-007100000a10', '00000000-0000-0000-0000-007100000a1a',
+      '00000000-0000-0000-0000-007100004001',
+      'takeaway', 'submitted', 'ILS', 0, 0, 'direct-hf-1')$$,
+  'N27: an actorless order on a KIOSK device passes the guard');
+
+-- ---- L. revocation cuts access at use time (102) ----------------------------
 reset role;
 update device_sessions set is_active = false, revoked_at = now()
   where id = '00000000-0000-0000-0000-007100004054';
@@ -543,7 +817,7 @@ set local app.current_app_user_id = '';
 select is((app.kiosk_menu('00000000-0000-0000-0000-007100004002', 'tok-kiosk-b') ->> 'error'),
   'invalid_session', 'L1: revoking the session cuts every kiosk RPC immediately');
 
--- ---- M. constraints + ACL surface (76-78) ----------------------------------
+-- ---- M. constraints + ACL surface (103-105) --------------------------------
 reset role;
 select throws_ok(
   $$insert into devices (id, organization_id, restaurant_id, branch_id, device_type, label)
