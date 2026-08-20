@@ -6231,4 +6231,355 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get menuCopyDraftRemoveLinked =>
       'Another option is split by this one. That link will be cleared.';
+
+  @override
+  String get kioskTagline => 'Fire-grilled. Made fresh for you.';
+
+  @override
+  String get kioskStart => 'Start your order';
+
+  @override
+  String get kioskTouchStart => 'Touch anywhere to begin';
+
+  @override
+  String get kioskNowPreparing => 'Now preparing';
+
+  @override
+  String get kioskHow => 'How do you want your meal?';
+
+  @override
+  String get kioskDineIn => 'Dine in';
+
+  @override
+  String get kioskTakeaway => 'Take away';
+
+  @override
+  String get kioskDineInSub => 'Eat here at the restaurant';
+
+  @override
+  String get kioskTakeawaySub => 'Packed to go';
+
+  @override
+  String get kioskPayNote => 'You will pay at the counter — not at the kiosk';
+
+  @override
+  String get kioskBack => 'Back';
+
+  @override
+  String get kioskChooseTable => 'Choose your table';
+
+  @override
+  String get kioskTableAvailable => 'Available';
+
+  @override
+  String get kioskTableOccupied => 'Occupied';
+
+  @override
+  String get kioskTableReserved => 'Reserved';
+
+  @override
+  String kioskSeatsCount(int count) {
+    return '$count seats';
+  }
+
+  @override
+  String kioskFreeCount(int count) {
+    return '$count free';
+  }
+
+  @override
+  String get kioskContinue => 'Continue';
+
+  @override
+  String get kioskPickTableFirst => 'Tap an available table to continue';
+
+  @override
+  String get kioskTableLabel => 'Table';
+
+  @override
+  String get kioskMenuTitle => 'What are you craving today?';
+
+  @override
+  String get kioskSwipeMore => 'Swipe to explore more';
+
+  @override
+  String get kioskCart => 'Cart';
+
+  @override
+  String get kioskCheckout => 'Checkout';
+
+  @override
+  String kioskItemsCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get kioskYourOrder => 'Your order';
+
+  @override
+  String get kioskBasePrice => 'base price';
+
+  @override
+  String get kioskKitchenNote => 'Note for the kitchen';
+
+  @override
+  String get kioskKitchenNoteHint => 'e.g. no salt on the fries…';
+
+  @override
+  String get kioskOptional => 'optional';
+
+  @override
+  String get kioskRequired => 'Required';
+
+  @override
+  String get kioskChooseOne => 'Choose 1';
+
+  @override
+  String kioskUpTo(int count) {
+    return 'Up to $count';
+  }
+
+  @override
+  String get kioskIncluded => 'Included';
+
+  @override
+  String get kioskAddToOrder => 'Add to order';
+
+  @override
+  String get kioskUpdateItem => 'Update item';
+
+  @override
+  String kioskPleaseChoose(String groups) {
+    return 'Please choose: $groups';
+  }
+
+  @override
+  String get kioskRemove => 'Remove';
+
+  @override
+  String get kioskForCounterCall => 'For the counter call';
+
+  @override
+  String get kioskNameOptional => 'Name (optional)';
+
+  @override
+  String get kioskPhoneOptional => 'Phone (optional)';
+
+  @override
+  String get kioskChange => 'Change';
+
+  @override
+  String get kioskTotal => 'Total';
+
+  @override
+  String get kioskPlaceOrder => 'Place order';
+
+  @override
+  String get kioskCartEmpty => 'Your cart is empty';
+
+  @override
+  String get kioskCartEmptySub => 'Good things are one tap away';
+
+  @override
+  String get kioskBrowseMenu => 'Browse the menu';
+
+  @override
+  String get kioskOrderSent => 'Order sent!';
+
+  @override
+  String get kioskShowNumber =>
+      'Show this number at the counter — that is where you pay.';
+
+  @override
+  String get kioskOrderNumberLabel => 'Order number';
+
+  @override
+  String get kioskServiceLabel => 'Service';
+
+  @override
+  String get kioskNameLabel => 'Name';
+
+  @override
+  String get kioskPayAtCounter => 'Pay at counter';
+
+  @override
+  String get kioskPrintingSlip => 'Printing your slip';
+
+  @override
+  String get kioskNewOrder => 'New order';
+
+  @override
+  String kioskBackToStartIn(int seconds) {
+    return 'Back to start in ${seconds}s';
+  }
+
+  @override
+  String get kioskStillThere => 'Still there?';
+
+  @override
+  String get kioskStillThereSub =>
+      'This order will reset so the next guest can start fresh.';
+
+  @override
+  String get kioskImStillHere => 'I\'m still here';
+
+  @override
+  String get kioskStartOver => 'Start over';
+
+  @override
+  String get kioskAddedToOrder => 'Added to your order';
+
+  @override
+  String get kioskZoneHall => 'Main hall';
+
+  @override
+  String get kioskZonePatio => 'Patio';
+
+  @override
+  String get kioskZoneBar => 'Bar';
+
+  @override
+  String get kioskMadeFresh => 'Fire-grilled · made fresh for you';
+
+  @override
+  String kioskPoweredBy(String device) {
+    return 'Powered by RestoFlow · Kiosk $device';
+  }
+
+  @override
+  String get kioskGroupWeight => 'Choose your patty weight';
+
+  @override
+  String get kioskGroupSide => 'Choose your side';
+
+  @override
+  String get kioskGroupDrink => 'Choose your drink';
+
+  @override
+  String get kioskGroupSauce => 'Choose your sauce';
+
+  @override
+  String get kioskGroupAddons => 'Add-ons';
+
+  @override
+  String get kioskGroupRemovals => 'Anything out?';
+
+  @override
+  String get kioskStaffAccess => 'Staff access';
+
+  @override
+  String get kioskStaffPinPrompt =>
+      'Enter your employee PIN — same PIN as the POS.';
+
+  @override
+  String get kioskCancel => 'Cancel';
+
+  @override
+  String get kioskSettingsTitle => 'Kiosk device settings';
+
+  @override
+  String get kioskSettingsSignedIn => 'signed in via employee PIN';
+
+  @override
+  String get kioskSettingsExit => 'Exit to kiosk';
+
+  @override
+  String get kioskSettingsOrdering => 'Ordering';
+
+  @override
+  String get kioskSettingsTableToggleTitle => 'Table selection for dine-in';
+
+  @override
+  String get kioskSettingsTableToggleSub =>
+      'ON: customers must pick an available table. OFF: dine-in continues without a table.';
+
+  @override
+  String get kioskSettingsIdleSection => 'Idle & attract screen';
+
+  @override
+  String get kioskSettingsIdleAfter => 'Return to attract after';
+
+  @override
+  String get kioskSettingsAttractContent => 'Attract content';
+
+  @override
+  String get kioskSettingsAttractPhotos => 'Photo loop';
+
+  @override
+  String get kioskSettingsAttractPromo => 'Promo image';
+
+  @override
+  String get kioskSettingsAttractVideo => 'Video file';
+
+  @override
+  String get kioskSettingsPromoDropHint =>
+      'Drop a meal ad or seasonal poster here — it becomes the idle screen. Portrait 1080×1920 recommended.';
+
+  @override
+  String get kioskSettingsVideoHint =>
+      'Upload an .mp4 in the RestoFlow dashboard → Devices. It syncs to the device and loops on idle, muted.';
+
+  @override
+  String get kioskSettingsPrinterSection => 'Receipt printer';
+
+  @override
+  String get kioskSettingsPrintTest => 'Print test slip';
+
+  @override
+  String get kioskSettingsPrinterNote =>
+      'Same printer-binding model as POS stations — the kiosk prints the customer slip; kitchen tickets keep routing by station.';
+
+  @override
+  String get kioskPrinterBound => 'BOUND';
+
+  @override
+  String get kioskPrinterAvailable => 'Available';
+
+  @override
+  String get kioskPrinterOffline => 'Offline';
+
+  @override
+  String get kioskSettingsDefaultLang => 'Attract default language';
+
+  @override
+  String get kioskSettingsDefaultLangNote =>
+      'Customers can switch language any time; the kiosk returns to this one on idle reset.';
+
+  @override
+  String get kioskSettingsDiagnostics => 'Diagnostics';
+
+  @override
+  String get kioskSettingsDevice => 'Device';
+
+  @override
+  String get kioskSettingsPairing => 'Pairing';
+
+  @override
+  String get kioskSettingsPairingActive => 'Active ✓';
+
+  @override
+  String get kioskSettingsMenuSync => 'Menu sync';
+
+  @override
+  String get kioskSettingsOrdersToday => 'Orders today';
+
+  @override
+  String get kioskSettingsResync => 'Re-sync menu now';
+
+  @override
+  String get kioskSettingsAccessNote =>
+      'Access is gated by the employee PIN — any authorized role (cashier, manager, chef). No separate kiosk password.';
+
+  @override
+  String kioskSecondsShort(int seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String kioskTestSlipSent(String printer) {
+    return 'Test slip sent to $printer';
+  }
+
+  @override
+  String get kioskResyncDone => 'Menu re-synced · fixture data';
 }

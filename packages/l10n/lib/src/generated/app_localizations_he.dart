@@ -6143,4 +6143,352 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get menuCopyDraftRemoveLinked =>
       'אפשרות אחרת מפוצלת לפי זו. הקישור הזה ינוקה.';
+
+  @override
+  String get kioskTagline => 'על האש. טרי בשבילכם.';
+
+  @override
+  String get kioskStart => 'התחילו הזמנה';
+
+  @override
+  String get kioskTouchStart => 'געו במסך כדי להתחיל';
+
+  @override
+  String get kioskNowPreparing => 'בהכנה כעת';
+
+  @override
+  String get kioskHow => 'איך תרצו את הארוחה?';
+
+  @override
+  String get kioskDineIn => 'לשבת במקום';
+
+  @override
+  String get kioskTakeaway => 'לקחת';
+
+  @override
+  String get kioskDineInSub => 'אוכלים כאן במסעדה';
+
+  @override
+  String get kioskTakeawaySub => 'ארוז לדרך';
+
+  @override
+  String get kioskPayNote => 'התשלום בקופה — לא בעמדה';
+
+  @override
+  String get kioskBack => 'חזרה';
+
+  @override
+  String get kioskChooseTable => 'בחרו שולחן';
+
+  @override
+  String get kioskTableAvailable => 'פנוי';
+
+  @override
+  String get kioskTableOccupied => 'תפוס';
+
+  @override
+  String get kioskTableReserved => 'שמור';
+
+  @override
+  String kioskSeatsCount(int count) {
+    return '$count מקומות';
+  }
+
+  @override
+  String kioskFreeCount(int count) {
+    return '$count פנויים';
+  }
+
+  @override
+  String get kioskContinue => 'המשך';
+
+  @override
+  String get kioskPickTableFirst => 'בחרו שולחן פנוי כדי להמשיך';
+
+  @override
+  String get kioskTableLabel => 'שולחן';
+
+  @override
+  String get kioskMenuTitle => 'על מה בא לכם היום?';
+
+  @override
+  String get kioskSwipeMore => 'החליקו לעוד קטגוריות';
+
+  @override
+  String get kioskCart => 'סל';
+
+  @override
+  String get kioskCheckout => 'לתשלום';
+
+  @override
+  String kioskItemsCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String get kioskYourOrder => 'ההזמנה שלכם';
+
+  @override
+  String get kioskBasePrice => 'מחיר בסיס';
+
+  @override
+  String get kioskKitchenNote => 'הערה למטבח';
+
+  @override
+  String get kioskKitchenNoteHint => 'לדוגמה: בלי מלח בצ׳יפס…';
+
+  @override
+  String get kioskOptional => 'רשות';
+
+  @override
+  String get kioskRequired => 'חובה';
+
+  @override
+  String get kioskChooseOne => 'בחרו 1';
+
+  @override
+  String kioskUpTo(int count) {
+    return 'עד $count';
+  }
+
+  @override
+  String get kioskIncluded => 'כלול';
+
+  @override
+  String get kioskAddToOrder => 'הוסיפו להזמנה';
+
+  @override
+  String get kioskUpdateItem => 'עדכון פריט';
+
+  @override
+  String kioskPleaseChoose(String groups) {
+    return 'נא לבחור: $groups';
+  }
+
+  @override
+  String get kioskRemove => 'הסרה';
+
+  @override
+  String get kioskForCounterCall => 'לקריאה בקופה';
+
+  @override
+  String get kioskNameOptional => 'שם (לא חובה)';
+
+  @override
+  String get kioskPhoneOptional => 'טלפון (לא חובה)';
+
+  @override
+  String get kioskChange => 'שינוי';
+
+  @override
+  String get kioskTotal => 'סה\"כ';
+
+  @override
+  String get kioskPlaceOrder => 'שליחת הזמנה';
+
+  @override
+  String get kioskCartEmpty => 'הסל ריק';
+
+  @override
+  String get kioskCartEmptySub => 'הדברים הטובים במרחק נגיעה';
+
+  @override
+  String get kioskBrowseMenu => 'לתפריט';
+
+  @override
+  String get kioskOrderSent => 'ההזמנה נשלחה!';
+
+  @override
+  String get kioskShowNumber => 'הציגו את המספר בקופה — שם משלמים.';
+
+  @override
+  String get kioskOrderNumberLabel => 'מספר הזמנה';
+
+  @override
+  String get kioskServiceLabel => 'שירות';
+
+  @override
+  String get kioskNameLabel => 'שם';
+
+  @override
+  String get kioskPayAtCounter => 'לתשלום בקופה';
+
+  @override
+  String get kioskPrintingSlip => 'מדפיסים לכם פתק';
+
+  @override
+  String get kioskNewOrder => 'הזמנה חדשה';
+
+  @override
+  String kioskBackToStartIn(int seconds) {
+    return 'חוזרים להתחלה בעוד $seconds שניות';
+  }
+
+  @override
+  String get kioskStillThere => 'עדיין כאן?';
+
+  @override
+  String get kioskStillThereSub => 'ההזמנה תתאפס כדי שהאורח הבא יתחיל נקי.';
+
+  @override
+  String get kioskImStillHere => 'אני כאן';
+
+  @override
+  String get kioskStartOver => 'להתחיל מחדש';
+
+  @override
+  String get kioskAddedToOrder => 'נוסף להזמנה';
+
+  @override
+  String get kioskZoneHall => 'האולם';
+
+  @override
+  String get kioskZonePatio => 'המרפסת';
+
+  @override
+  String get kioskZoneBar => 'הבר';
+
+  @override
+  String get kioskMadeFresh => 'על האש · טרי בשבילכם';
+
+  @override
+  String kioskPoweredBy(String device) {
+    return 'מופעל על ידי RestoFlow · עמדה $device';
+  }
+
+  @override
+  String get kioskGroupWeight => 'בחרו משקל קציצה';
+
+  @override
+  String get kioskGroupSide => 'בחרו תוספת';
+
+  @override
+  String get kioskGroupDrink => 'בחרו שתייה';
+
+  @override
+  String get kioskGroupSauce => 'בחרו רוטב';
+
+  @override
+  String get kioskGroupAddons => 'תוספות';
+
+  @override
+  String get kioskGroupRemovals => 'להוריד משהו?';
+
+  @override
+  String get kioskStaffAccess => 'כניסת צוות';
+
+  @override
+  String get kioskStaffPinPrompt => 'הזינו קוד עובד — אותו קוד כמו בקופה.';
+
+  @override
+  String get kioskCancel => 'ביטול';
+
+  @override
+  String get kioskSettingsTitle => 'הגדרות עמדת הקיוסק';
+
+  @override
+  String get kioskSettingsSignedIn => 'מחוברים באמצעות קוד עובד';
+
+  @override
+  String get kioskSettingsExit => 'יציאה לקיוסק';
+
+  @override
+  String get kioskSettingsOrdering => 'הזמנות';
+
+  @override
+  String get kioskSettingsTableToggleTitle => 'בחירת שולחן לישיבה במקום';
+
+  @override
+  String get kioskSettingsTableToggleSub =>
+      'פעיל: הלקוח חייב לבחור שולחן פנוי. כבוי: ממשיכים בלי שולחן.';
+
+  @override
+  String get kioskSettingsIdleSection => 'מסך המתנה ופרסום';
+
+  @override
+  String get kioskSettingsIdleAfter => 'חזרה למסך הפתיחה אחרי';
+
+  @override
+  String get kioskSettingsAttractContent => 'תוכן מסך הפתיחה';
+
+  @override
+  String get kioskSettingsAttractPhotos => 'מצגת תמונות';
+
+  @override
+  String get kioskSettingsAttractPromo => 'תמונת פרסום';
+
+  @override
+  String get kioskSettingsAttractVideo => 'קובץ וידאו';
+
+  @override
+  String get kioskSettingsPromoDropHint =>
+      'גררו לכאן מודעה או פוסטר עונתי — הוא יהפוך למסך ההמתנה. מומלץ 1080×1920 לאורך.';
+
+  @override
+  String get kioskSettingsVideoHint =>
+      'העלו קובץ .mp4 בלוח הבקרה של RestoFlow ← מכשירים. הוא יסתנכרן לעמדה ויתנגן בהמתנה, ללא קול.';
+
+  @override
+  String get kioskSettingsPrinterSection => 'מדפסת פתקים';
+
+  @override
+  String get kioskSettingsPrintTest => 'הדפסת פתק ניסיון';
+
+  @override
+  String get kioskSettingsPrinterNote =>
+      'אותו מודל קישור מדפסות כמו בעמדות הקופה — הקיוסק מדפיס את פתק הלקוח; כרטיסי מטבח ממשיכים לפי תחנה.';
+
+  @override
+  String get kioskPrinterBound => 'מקושרת';
+
+  @override
+  String get kioskPrinterAvailable => 'זמינה';
+
+  @override
+  String get kioskPrinterOffline => 'מנותקת';
+
+  @override
+  String get kioskSettingsDefaultLang => 'שפת ברירת מחדל למסך הפתיחה';
+
+  @override
+  String get kioskSettingsDefaultLangNote =>
+      'הלקוחות יכולים להחליף שפה בכל רגע; העמדה חוזרת לשפה זו באיפוס.';
+
+  @override
+  String get kioskSettingsDiagnostics => 'אבחון';
+
+  @override
+  String get kioskSettingsDevice => 'מכשיר';
+
+  @override
+  String get kioskSettingsPairing => 'צימוד';
+
+  @override
+  String get kioskSettingsPairingActive => 'פעיל ✓';
+
+  @override
+  String get kioskSettingsMenuSync => 'סנכרון תפריט';
+
+  @override
+  String get kioskSettingsOrdersToday => 'הזמנות היום';
+
+  @override
+  String get kioskSettingsResync => 'סנכרון תפריט מחדש';
+
+  @override
+  String get kioskSettingsAccessNote =>
+      'הגישה מוגנת בקוד עובד — כל תפקיד מורשה (קופאי, מנהל, טבח). אין סיסמת קיוסק נפרדת.';
+
+  @override
+  String kioskSecondsShort(int seconds) {
+    return '$seconds שנ׳';
+  }
+
+  @override
+  String kioskTestSlipSent(String printer) {
+    return 'פתק ניסיון נשלח אל $printer';
+  }
+
+  @override
+  String get kioskResyncDone => 'התפריט סונכרן מחדש · נתוני דמו';
 }

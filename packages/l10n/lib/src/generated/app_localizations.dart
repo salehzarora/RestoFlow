@@ -11205,6 +11205,654 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Another option is split by this one. That link will be cleared.'**
   String get menuCopyDraftRemoveLinked;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Fire-grilled. Made fresh for you.'**
+  String get kioskTagline;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Start your order'**
+  String get kioskStart;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Touch anywhere to begin'**
+  String get kioskTouchStart;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Now preparing'**
+  String get kioskNowPreparing;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'How do you want your meal?'**
+  String get kioskHow;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Dine in'**
+  String get kioskDineIn;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Take away'**
+  String get kioskTakeaway;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Eat here at the restaurant'**
+  String get kioskDineInSub;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Packed to go'**
+  String get kioskTakeawaySub;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'You will pay at the counter — not at the kiosk'**
+  String get kioskPayNote;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get kioskBack;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your table'**
+  String get kioskChooseTable;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get kioskTableAvailable;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get kioskTableOccupied;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get kioskTableReserved;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} seats'**
+  String kioskSeatsCount(int count);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} free'**
+  String kioskFreeCount(int count);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get kioskContinue;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Tap an available table to continue'**
+  String get kioskPickTableFirst;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Table'**
+  String get kioskTableLabel;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'What are you craving today?'**
+  String get kioskMenuTitle;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Swipe to explore more'**
+  String get kioskSwipeMore;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Cart'**
+  String get kioskCart;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get kioskCheckout;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String kioskItemsCount(int count);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Your order'**
+  String get kioskYourOrder;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'base price'**
+  String get kioskBasePrice;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Note for the kitchen'**
+  String get kioskKitchenNote;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. no salt on the fries…'**
+  String get kioskKitchenNoteHint;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'optional'**
+  String get kioskOptional;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get kioskRequired;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose 1'**
+  String get kioskChooseOne;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {count}'**
+  String kioskUpTo(int count);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Included'**
+  String get kioskIncluded;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Add to order'**
+  String get kioskAddToOrder;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Update item'**
+  String get kioskUpdateItem;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose: {groups}'**
+  String kioskPleaseChoose(String groups);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get kioskRemove;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'For the counter call'**
+  String get kioskForCounterCall;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Name (optional)'**
+  String get kioskNameOptional;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Phone (optional)'**
+  String get kioskPhoneOptional;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get kioskChange;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get kioskTotal;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Place order'**
+  String get kioskPlaceOrder;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get kioskCartEmpty;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Good things are one tap away'**
+  String get kioskCartEmptySub;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Browse the menu'**
+  String get kioskBrowseMenu;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Order sent!'**
+  String get kioskOrderSent;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Show this number at the counter — that is where you pay.'**
+  String get kioskShowNumber;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Order number'**
+  String get kioskOrderNumberLabel;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get kioskServiceLabel;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get kioskNameLabel;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Pay at counter'**
+  String get kioskPayAtCounter;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Printing your slip'**
+  String get kioskPrintingSlip;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'New order'**
+  String get kioskNewOrder;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Back to start in {seconds}s'**
+  String kioskBackToStartIn(int seconds);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Still there?'**
+  String get kioskStillThere;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'This order will reset so the next guest can start fresh.'**
+  String get kioskStillThereSub;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m still here'**
+  String get kioskImStillHere;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get kioskStartOver;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Added to your order'**
+  String get kioskAddedToOrder;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Main hall'**
+  String get kioskZoneHall;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Patio'**
+  String get kioskZonePatio;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Bar'**
+  String get kioskZoneBar;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Fire-grilled · made fresh for you'**
+  String get kioskMadeFresh;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Powered by RestoFlow · Kiosk {device}'**
+  String kioskPoweredBy(String device);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your patty weight'**
+  String get kioskGroupWeight;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your side'**
+  String get kioskGroupSide;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your drink'**
+  String get kioskGroupDrink;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your sauce'**
+  String get kioskGroupSauce;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Add-ons'**
+  String get kioskGroupAddons;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Anything out?'**
+  String get kioskGroupRemovals;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Staff access'**
+  String get kioskStaffAccess;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your employee PIN — same PIN as the POS.'**
+  String get kioskStaffPinPrompt;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kioskCancel;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Kiosk device settings'**
+  String get kioskSettingsTitle;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'signed in via employee PIN'**
+  String get kioskSettingsSignedIn;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Exit to kiosk'**
+  String get kioskSettingsExit;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Ordering'**
+  String get kioskSettingsOrdering;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Table selection for dine-in'**
+  String get kioskSettingsTableToggleTitle;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'ON: customers must pick an available table. OFF: dine-in continues without a table.'**
+  String get kioskSettingsTableToggleSub;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Idle & attract screen'**
+  String get kioskSettingsIdleSection;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Return to attract after'**
+  String get kioskSettingsIdleAfter;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Attract content'**
+  String get kioskSettingsAttractContent;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Photo loop'**
+  String get kioskSettingsAttractPhotos;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Promo image'**
+  String get kioskSettingsAttractPromo;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Video file'**
+  String get kioskSettingsAttractVideo;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Drop a meal ad or seasonal poster here — it becomes the idle screen. Portrait 1080×1920 recommended.'**
+  String get kioskSettingsPromoDropHint;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload an .mp4 in the RestoFlow dashboard → Devices. It syncs to the device and loops on idle, muted.'**
+  String get kioskSettingsVideoHint;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt printer'**
+  String get kioskSettingsPrinterSection;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Print test slip'**
+  String get kioskSettingsPrintTest;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Same printer-binding model as POS stations — the kiosk prints the customer slip; kitchen tickets keep routing by station.'**
+  String get kioskSettingsPrinterNote;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'BOUND'**
+  String get kioskPrinterBound;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get kioskPrinterAvailable;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get kioskPrinterOffline;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Attract default language'**
+  String get kioskSettingsDefaultLang;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can switch language any time; the kiosk returns to this one on idle reset.'**
+  String get kioskSettingsDefaultLangNote;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get kioskSettingsDiagnostics;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get kioskSettingsDevice;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing'**
+  String get kioskSettingsPairing;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Active ✓'**
+  String get kioskSettingsPairingActive;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Menu sync'**
+  String get kioskSettingsMenuSync;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Orders today'**
+  String get kioskSettingsOrdersToday;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Re-sync menu now'**
+  String get kioskSettingsResync;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Access is gated by the employee PIN — any authorized role (cashier, manager, chef). No separate kiosk password.'**
+  String get kioskSettingsAccessNote;
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String kioskSecondsShort(int seconds);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Test slip sent to {printer}'**
+  String kioskTestSlipSent(String printer);
+
+  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Menu re-synced · fixture data'**
+  String get kioskResyncDone;
 }
 
 class _AppLocalizationsDelegate

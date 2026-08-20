@@ -6183,4 +6183,355 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get menuCopyDraftRemoveLinked =>
       'هناك خيار آخر مقسوم بهذا الخيار. سيتم مسح ذلك الرابط.';
+
+  @override
+  String get kioskTagline => 'طعم يأخذك في مغامرة.';
+
+  @override
+  String get kioskStart => 'ابدأ طلبك';
+
+  @override
+  String get kioskTouchStart => 'المس الشاشة للبدء';
+
+  @override
+  String get kioskNowPreparing => 'قيد التحضير الآن';
+
+  @override
+  String get kioskHow => 'كيف تفضّل وجبتك؟';
+
+  @override
+  String get kioskDineIn => 'تناول في المطعم';
+
+  @override
+  String get kioskTakeaway => 'سفري';
+
+  @override
+  String get kioskDineInSub => 'الأكل هنا في المطعم';
+
+  @override
+  String get kioskTakeawaySub => 'مغلّف للطريق';
+
+  @override
+  String get kioskPayNote => 'الدفع عند الكاشير — ليس في الجهاز';
+
+  @override
+  String get kioskBack => 'رجوع';
+
+  @override
+  String get kioskChooseTable => 'اختر طاولتك';
+
+  @override
+  String get kioskTableAvailable => 'متاحة';
+
+  @override
+  String get kioskTableOccupied => 'مشغولة';
+
+  @override
+  String get kioskTableReserved => 'محجوزة';
+
+  @override
+  String kioskSeatsCount(int count) {
+    return '$count مقاعد';
+  }
+
+  @override
+  String kioskFreeCount(int count) {
+    return '$count متاحة';
+  }
+
+  @override
+  String get kioskContinue => 'متابعة';
+
+  @override
+  String get kioskPickTableFirst => 'اختر طاولة متاحة للمتابعة';
+
+  @override
+  String get kioskTableLabel => 'الطاولة';
+
+  @override
+  String get kioskMenuTitle => 'ما الذي تشتهيه اليوم؟';
+
+  @override
+  String get kioskSwipeMore => 'اسحب لاستكشاف المزيد';
+
+  @override
+  String get kioskCart => 'السلة';
+
+  @override
+  String get kioskCheckout => 'إتمام الطلب';
+
+  @override
+  String kioskItemsCount(int count) {
+    return '$count منتج';
+  }
+
+  @override
+  String get kioskYourOrder => 'طلبك';
+
+  @override
+  String get kioskBasePrice => 'السعر الأساسي';
+
+  @override
+  String get kioskKitchenNote => 'ملاحظة للمطبخ';
+
+  @override
+  String get kioskKitchenNoteHint => 'مثال: بدون ملح على البطاطا…';
+
+  @override
+  String get kioskOptional => 'اختياري';
+
+  @override
+  String get kioskRequired => 'مطلوب';
+
+  @override
+  String get kioskChooseOne => 'اختر 1';
+
+  @override
+  String kioskUpTo(int count) {
+    return 'حتى $count';
+  }
+
+  @override
+  String get kioskIncluded => 'مشمول';
+
+  @override
+  String get kioskAddToOrder => 'أضف إلى الطلب';
+
+  @override
+  String get kioskUpdateItem => 'تحديث الصنف';
+
+  @override
+  String kioskPleaseChoose(String groups) {
+    return 'يرجى الاختيار: $groups';
+  }
+
+  @override
+  String get kioskRemove => 'إزالة';
+
+  @override
+  String get kioskForCounterCall => 'للنداء عند الكاشير';
+
+  @override
+  String get kioskNameOptional => 'الاسم (اختياري)';
+
+  @override
+  String get kioskPhoneOptional => 'الهاتف (اختياري)';
+
+  @override
+  String get kioskChange => 'تغيير';
+
+  @override
+  String get kioskTotal => 'الإجمالي';
+
+  @override
+  String get kioskPlaceOrder => 'إرسال الطلب';
+
+  @override
+  String get kioskCartEmpty => 'سلتك فارغة';
+
+  @override
+  String get kioskCartEmptySub => 'الأشياء اللذيذة على بعد لمسة';
+
+  @override
+  String get kioskBrowseMenu => 'تصفّح القائمة';
+
+  @override
+  String get kioskOrderSent => 'تم إرسال الطلب!';
+
+  @override
+  String get kioskShowNumber => 'أظهر هذا الرقم عند الكاشير — هناك يتم الدفع.';
+
+  @override
+  String get kioskOrderNumberLabel => 'رقم الطلب';
+
+  @override
+  String get kioskServiceLabel => 'الخدمة';
+
+  @override
+  String get kioskNameLabel => 'الاسم';
+
+  @override
+  String get kioskPayAtCounter => 'ادفع عند الكاشير';
+
+  @override
+  String get kioskPrintingSlip => 'نطبع قسيمتك الآن';
+
+  @override
+  String get kioskNewOrder => 'طلب جديد';
+
+  @override
+  String kioskBackToStartIn(int seconds) {
+    return 'العودة إلى البداية خلال $seconds ث';
+  }
+
+  @override
+  String get kioskStillThere => 'هل ما زلت هنا؟';
+
+  @override
+  String get kioskStillThereSub =>
+      'سيُعاد ضبط الطلب ليبدأ الضيف التالي من جديد.';
+
+  @override
+  String get kioskImStillHere => 'أنا هنا';
+
+  @override
+  String get kioskStartOver => 'البدء من جديد';
+
+  @override
+  String get kioskAddedToOrder => 'أُضيف إلى طلبك';
+
+  @override
+  String get kioskZoneHall => 'الصالة';
+
+  @override
+  String get kioskZonePatio => 'التراس';
+
+  @override
+  String get kioskZoneBar => 'البار';
+
+  @override
+  String get kioskMadeFresh => 'على النار · طازج من أجلك';
+
+  @override
+  String kioskPoweredBy(String device) {
+    return 'مشغّل بواسطة RestoFlow · جهاز $device';
+  }
+
+  @override
+  String get kioskGroupWeight => 'اختر وزن اللحم';
+
+  @override
+  String get kioskGroupSide => 'اختر الطبق الجانبي';
+
+  @override
+  String get kioskGroupDrink => 'اختر مشروبك';
+
+  @override
+  String get kioskGroupSauce => 'اختر الصلصة';
+
+  @override
+  String get kioskGroupAddons => 'إضافات';
+
+  @override
+  String get kioskGroupRemovals => 'بدون شيء؟';
+
+  @override
+  String get kioskStaffAccess => 'دخول الموظفين';
+
+  @override
+  String get kioskStaffPinPrompt =>
+      'أدخل رمز الموظف — نفس الرمز المستخدم في نقطة البيع.';
+
+  @override
+  String get kioskCancel => 'إلغاء';
+
+  @override
+  String get kioskSettingsTitle => 'إعدادات جهاز الكشك';
+
+  @override
+  String get kioskSettingsSignedIn => 'تم الدخول برمز الموظف';
+
+  @override
+  String get kioskSettingsExit => 'الخروج إلى الكشك';
+
+  @override
+  String get kioskSettingsOrdering => 'الطلبات';
+
+  @override
+  String get kioskSettingsTableToggleTitle =>
+      'اختيار الطاولة للتناول في المطعم';
+
+  @override
+  String get kioskSettingsTableToggleSub =>
+      'تشغيل: يجب على الزبون اختيار طاولة متاحة. إيقاف: يتابع الطلب دون طاولة.';
+
+  @override
+  String get kioskSettingsIdleSection => 'شاشة الخمول والعرض';
+
+  @override
+  String get kioskSettingsIdleAfter => 'العودة إلى شاشة البداية بعد';
+
+  @override
+  String get kioskSettingsAttractContent => 'محتوى شاشة البداية';
+
+  @override
+  String get kioskSettingsAttractPhotos => 'عرض صور';
+
+  @override
+  String get kioskSettingsAttractPromo => 'صورة إعلانية';
+
+  @override
+  String get kioskSettingsAttractVideo => 'ملف فيديو';
+
+  @override
+  String get kioskSettingsPromoDropHint =>
+      'ضع هنا إعلان وجبة أو ملصقًا موسميًا — سيصبح شاشة الخمول. يُنصح بمقاس عمودي 1080×1920.';
+
+  @override
+  String get kioskSettingsVideoHint =>
+      'ارفع ملف .mp4 من لوحة تحكم RestoFlow ← الأجهزة. سيتزامن مع الجهاز ويُعرض عند الخمول بدون صوت.';
+
+  @override
+  String get kioskSettingsPrinterSection => 'طابعة القسائم';
+
+  @override
+  String get kioskSettingsPrintTest => 'طباعة قسيمة تجريبية';
+
+  @override
+  String get kioskSettingsPrinterNote =>
+      'نفس نموذج ربط الطابعات في نقاط البيع — يطبع الكشك قسيمة الزبون، وتبقى تذاكر المطبخ موجهة حسب المحطة.';
+
+  @override
+  String get kioskPrinterBound => 'مرتبطة';
+
+  @override
+  String get kioskPrinterAvailable => 'متاحة';
+
+  @override
+  String get kioskPrinterOffline => 'غير متصلة';
+
+  @override
+  String get kioskSettingsDefaultLang => 'اللغة الافتراضية لشاشة البداية';
+
+  @override
+  String get kioskSettingsDefaultLangNote =>
+      'يمكن للزبائن تغيير اللغة في أي وقت؛ يعود الكشك إلى هذه اللغة عند إعادة الضبط.';
+
+  @override
+  String get kioskSettingsDiagnostics => 'التشخيص';
+
+  @override
+  String get kioskSettingsDevice => 'الجهاز';
+
+  @override
+  String get kioskSettingsPairing => 'الاقتران';
+
+  @override
+  String get kioskSettingsPairingActive => 'نشط ✓';
+
+  @override
+  String get kioskSettingsMenuSync => 'مزامنة القائمة';
+
+  @override
+  String get kioskSettingsOrdersToday => 'طلبات اليوم';
+
+  @override
+  String get kioskSettingsResync => 'إعادة مزامنة القائمة الآن';
+
+  @override
+  String get kioskSettingsAccessNote =>
+      'الدخول محمي برمز الموظف — أي دور مخوّل (كاشير، مدير، طاهٍ). لا كلمة سر خاصة بالكشك.';
+
+  @override
+  String kioskSecondsShort(int seconds) {
+    return '$seconds ث';
+  }
+
+  @override
+  String kioskTestSlipSent(String printer) {
+    return 'أُرسلت قسيمة تجريبية إلى $printer';
+  }
+
+  @override
+  String get kioskResyncDone => 'أُعيدت مزامنة القائمة · بيانات تجريبية';
 }
