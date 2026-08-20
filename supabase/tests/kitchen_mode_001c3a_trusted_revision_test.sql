@@ -329,11 +329,13 @@ select is(
     '{"kitchen_workflow_mode": "kds", "kitchen_workflow_mode_revision": 1, "pin_hash": "x"}'::jsonb),
   '{"kitchen_workflow_mode": "kds", "kitchen_workflow_mode_revision": 1}'::jsonb,
   'audit: full-row settings.branch.updated snapshots now surface the mode scalars (documented)');                -- 40
+-- KIOSK-001 Phase 2 (owner decision A): a recorded DEVICE is now a valid audit
+-- actor, so a device-only row is legal. The surviving RF-017 invariant is that
+-- SOME actor is always present — a row with no human AND no device stays impossible.
 select throws_ok(
-  $$ insert into audit_events (organization_id, action, device_id)
-     values ('00000000-0000-0000-0000-0001c3a00a00', 'kitchen.dispatch_created',
-             '00000000-0000-0000-0000-0001c3a0d002') $$,
-  '23514', null, 'audit: the RF-017 HUMAN-ACTOR constraint is UNCHANGED (device-only actor impossible)');        -- 41
+  $$ insert into audit_events (organization_id, action)
+     values ('00000000-0000-0000-0000-0001c3a00a00', 'kitchen.dispatch_created') $$,
+  '23514', null, 'audit: the RF-017 actor-present constraint still refuses a NO-actor row (device-only became legal in KIOSK-001 Phase 2)');        -- 41
 insert into audit_events (organization_id, action, actor_app_user_id, new_values)
   values ('00000000-0000-0000-0000-0001c3a00a00', 'settings.branch.kitchen_mode_updated',
           '00000000-0000-0000-0000-0001c3a00e01', '{"kitchen_workflow_mode": "kds"}'::jsonb);
