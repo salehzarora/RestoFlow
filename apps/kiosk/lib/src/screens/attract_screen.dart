@@ -53,11 +53,14 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                 scale: 1.03 + .13 * _kenBurns.value,
                 child: child,
               ),
-              child: Image.asset(kioskAttractAssets.first, fit: BoxFit.cover),
+              child: KioskFixtureImage(
+                asset: kioskAttractAssets.first,
+                fallback: const ColoredBox(color: KioskColors.canvasBottom),
+              ),
             ),
-            KioskAttractMode.promo => Image.asset(
-              kioskAttractAssets.last,
-              fit: BoxFit.cover,
+            KioskAttractMode.promo => KioskFixtureImage(
+              asset: kioskAttractAssets.last,
+              fallback: const ColoredBox(color: KioskColors.canvasBottom),
             ),
             KioskAttractMode.video => ColoredBox(
               color: KioskColors.canvasBottom,

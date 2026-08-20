@@ -21,7 +21,10 @@ class KioskServiceScreen extends ConsumerWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(kioskAttractAssets.first, fit: BoxFit.cover),
+        KioskFixtureImage(
+          asset: kioskAttractAssets.first,
+          fallback: const ColoredBox(color: KioskColors.canvasBottom),
+        ),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

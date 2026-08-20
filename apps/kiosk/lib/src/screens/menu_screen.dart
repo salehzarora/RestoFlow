@@ -240,7 +240,10 @@ class _ProductCard extends StatelessWidget {
               height: 284,
               width: double.infinity,
               child: item.imageAsset != null
-                  ? Image.asset(item.imageAsset!, fit: BoxFit.cover)
+                  ? KioskFixtureImage(
+                      asset: item.imageAsset,
+                      fallback: const ColoredBox(color: KioskColors.imageWell),
+                    )
                   : ColoredBox(
                       color: KioskColors.imageWell,
                       child: Center(

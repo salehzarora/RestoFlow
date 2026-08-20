@@ -3,6 +3,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
+import 'kiosk_chrome.dart';
 
 /// KIOSK-001 — the V2 gesture-driven vertical category wheel.
 ///
@@ -256,7 +257,12 @@ class _WheelRow extends StatelessWidget {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: category.thumbAsset != null
-                      ? Image.asset(category.thumbAsset!, fit: BoxFit.cover)
+                      ? KioskFixtureImage(
+                          asset: category.thumbAsset,
+                          fallback: const ColoredBox(
+                            color: KioskColors.imageWell,
+                          ),
+                        )
                       : Center(
                           child: Icon(
                             category.iconKind == 'drink'

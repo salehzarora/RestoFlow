@@ -86,6 +86,26 @@ class KioskStage extends StatelessWidget {
   );
 }
 
+/// Fixture image with the kiosk's no-broken-image guarantee: a null asset or
+/// a failed decode renders [fallback] instead of an exception (V2 rule; also
+/// keeps widget tests portable when the asset bundle is unavailable).
+class KioskFixtureImage extends StatelessWidget {
+  const KioskFixtureImage({
+    super.key,
+    required this.asset,
+    required this.fallback,
+    this.fit = BoxFit.cover,
+  });
+  final String? asset;
+  final Widget fallback;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) => asset == null
+      ? fallback
+      : Image.asset(asset!, fit: fit, errorBuilder: (_, _, _) => fallback);
+}
+
 /// Press feedback: V2 `style-active="transform:scale(.97)"`.
 class KioskPressable extends StatefulWidget {
   const KioskPressable({

@@ -418,7 +418,10 @@ class _CartRow extends StatelessWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: item.imageAsset != null
-                  ? Image.asset(item.imageAsset!, fit: BoxFit.cover)
+                  ? KioskFixtureImage(
+                      asset: item.imageAsset,
+                      fallback: const ColoredBox(color: KioskColors.imageWell),
+                    )
                   : Center(
                       child: Text(
                         item.name.of(lang).characters.first,
