@@ -290,8 +290,13 @@ class _CategoryTile extends StatelessWidget {
                       : scheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(RestoflowRadii.sm),
                 ),
+                // OPS-044: the owner's chosen glyph when this build knows the
+                // key. An unset OR unrecognised key keeps the neutral default,
+                // so a category is never blank and a key from a newer build is
+                // shown safely rather than as a broken glyph.
                 child: Icon(
-                  Icons.local_dining_outlined,
+                  MenuCategoryIcons.iconForCategoryKey(category.iconKey) ??
+                      Icons.local_dining_outlined,
                   size: RestoflowIconSizes.md,
                   color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
                 ),

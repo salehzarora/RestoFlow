@@ -108,6 +108,7 @@ class _RecordingWriter extends InMemoryMenuStore {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) {
     lastScope = scope;
     return super.upsertCategory(
@@ -116,6 +117,7 @@ class _RecordingWriter extends InMemoryMenuStore {
       name: name,
       displayOrder: displayOrder,
       isActive: isActive,
+      iconKey: iconKey,
     );
   }
 }

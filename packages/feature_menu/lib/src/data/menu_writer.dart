@@ -1,6 +1,7 @@
 import 'package:restoflow_core/restoflow_core.dart';
 
 import '../models/menu_entity_type.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_write_failure.dart';
 import '../models/menu_write_result.dart';
@@ -20,12 +21,19 @@ abstract class MenuWriter {
   /// null so it never sends a (possibly stale, pre-reorder) order value. On create
   /// null defaults to 0 server-side; on update the PART 5 guard trigger preserves
   /// the live drag-set order regardless (drag reorder is the sole writer).
+  ///
+  /// OPS-044: [iconKey] is a THREE-state instruction, not a value —
+  /// preserve / reset / set. `menu_upsert_category` is a full-state upsert, so
+  /// a plain `String?` would collapse "the caller said nothing" into "clear
+  /// it", and an unrelated rename would wipe the owner's chosen icon. The
+  /// default is [MenuIconKeyWrite.preserve].
   Future<MenuWriteOutcome> upsertCategory({
     required MenuScope scope,
     String? id,
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   });
 
   /// [imagePath] is the RF-110 object key of the item's current image; null

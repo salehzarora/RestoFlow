@@ -49,6 +49,7 @@ class _SpyMenuWriter extends ScriptedMenuWriter {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) {
     ops.add('upsertCategory');
     lastCategoryDisplayOrder = displayOrder;
@@ -58,6 +59,7 @@ class _SpyMenuWriter extends ScriptedMenuWriter {
       name: name,
       displayOrder: displayOrder,
       isActive: isActive,
+      iconKey: iconKey,
     );
   }
 

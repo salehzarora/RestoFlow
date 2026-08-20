@@ -4,6 +4,7 @@ import '../models/item_size.dart';
 import '../models/item_variant.dart';
 import '../models/menu_category.dart';
 import '../models/menu_entity_type.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_item.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
@@ -123,6 +124,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) async {
     if (readOnly) return _denied(MenuEntityType.category);
     final created = id == null;
@@ -136,6 +138,9 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       name: name,
       displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
+      // OPS-044: mirror the server's three-way rule exactly, or a test double
+      // that "passes" would prove nothing about the real writer.
+      iconKey: iconKey.applyTo(existing?.iconKey),
       deletedAt: existing?.deletedAt,
     );
     _upsert(_categories, row, (c) => c.id);

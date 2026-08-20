@@ -2039,6 +2039,107 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get menuCategoryIconLabel => 'סמל הקטגוריה';
+
+  @override
+  String get menuCategoryIconChange => 'שינוי';
+
+  @override
+  String get menuCategoryIconReset => 'איפוס לאוטומטי';
+
+  @override
+  String get menuCategoryIconAutomatic => 'אוטומטי';
+
+  @override
+  String get menuCategoryIconAutomaticHint => 'נבחר אוטומטית';
+
+  @override
+  String get menuCategoryIconCustom => 'סמל מותאם';
+
+  @override
+  String get menuCategoryIconPickerTitle => 'בחירת סמל קטגוריה';
+
+  @override
+  String get menuCategoryIconSearchHint => 'חיפוש סמלים';
+
+  @override
+  String get menuCategoryIconNoResults => 'לא נמצאו סמלים תואמים';
+
+  @override
+  String get menuCategoryIconSelected => 'נבחר';
+
+  @override
+  String menuCategoryIconName(String iconKey) {
+    String _temp0 = intl.Intl.selectLogic(iconKey, {
+      'meals': 'מנות',
+      'dinner': 'ארוחת ערב',
+      'grill': 'גריל',
+      'rice': 'קערת אורז',
+      'noodles': 'נודלס',
+      'soup': 'מרק',
+      'set_meal': 'ארוחה מוגשת',
+      'bento': 'קופסת בנטו',
+      'skewers': 'שיפודים',
+      'tapas': 'מתאבנים',
+      'burger': 'המבורגר',
+      'fast_food': 'מזון מהיר',
+      'pizza': 'פיצה',
+      'takeaway': 'טייק אווי',
+      'delivery': 'משלוח',
+      'room_service': 'שירות חדרים',
+      'kids_meal': 'ארוחת ילדים',
+      'bakery': 'מאפים',
+      'breakfast': 'ארוחת בוקר',
+      'brunch': 'בראנץ',
+      'eggs': 'ביצים',
+      'cake': 'עוגה',
+      'cookie': 'עוגיות',
+      'donut': 'דונאט',
+      'ice_cream': 'גלידה',
+      'celebration': 'חגיגה',
+      'drinks': 'משקאות',
+      'bar': 'קוקטיילים',
+      'wine': 'יין',
+      'spirits': 'אלכוהול',
+      'beer': 'בירה',
+      'nightlife': 'חיי לילה',
+      'water': 'מים',
+      'cold': 'משקאות קרים',
+      'coffee': 'קפה',
+      'espresso': 'אספרסו',
+      'tea': 'תה',
+      'hot_drinks': 'משקאות חמים',
+      'coffee_maker': 'מכונת קפה',
+      'salad': 'סלט',
+      'produce': 'תוצרת טרייה',
+      'herbs': 'עשבי תיבול',
+      'sauces': 'רטבים',
+      'spicy': 'חריף',
+      'kitchen': 'מטבח',
+      'sides': 'תוספות',
+      'offers': 'מבצעים',
+      'general': 'כללי',
+      'menu': 'תפריט',
+      'other': 'סמל',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String menuCategoryIconGroupLabel(String group) {
+    String _temp0 = intl.Intl.selectLogic(group, {
+      'mains': 'מנות עיקריות',
+      'fastFood': 'מזון מהיר',
+      'bakerySweets': 'מאפים וקינוחים',
+      'coldDrinks': 'משקאות קרים',
+      'hotDrinks': 'משקאות חמים',
+      'other': 'אחר',
+      'other': 'אחר',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get menuAddCategory => 'הוסף קטגוריה';
 
   @override

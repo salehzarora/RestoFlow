@@ -3886,6 +3886,78 @@ abstract class AppLocalizations {
   /// **'{count} items'**
   String menuItemCount(int count);
 
+  /// Field label for the icon shown on a POS category.
+  ///
+  /// In en, this message translates to:
+  /// **'Category icon'**
+  String get menuCategoryIconLabel;
+
+  /// Opens the category icon picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get menuCategoryIconChange;
+
+  /// Clears the explicitly chosen category icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to automatic'**
+  String get menuCategoryIconReset;
+
+  /// The default when no icon has been chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get menuCategoryIconAutomatic;
+
+  /// Helper text under the icon field when none is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen automatically'**
+  String get menuCategoryIconAutomaticHint;
+
+  /// Shown when the stored icon key is not in this build's registry.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom icon'**
+  String get menuCategoryIconCustom;
+
+  /// Title of the category icon picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a category icon'**
+  String get menuCategoryIconPickerTitle;
+
+  /// Search field hint inside the icon picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Search icons'**
+  String get menuCategoryIconSearchHint;
+
+  /// Empty state when a search matches no icon.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching icons'**
+  String get menuCategoryIconNoResults;
+
+  /// Accessibility label marking the currently chosen icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get menuCategoryIconSelected;
+
+  /// Owner-facing name of a built-in category icon, selected by its registry key. The `other` branch covers a key chosen by a newer build than this one.
+  ///
+  /// In en, this message translates to:
+  /// **'{iconKey, select, meals{Meals} dinner{Dinner} grill{Grill} rice{Rice bowl} noodles{Noodles} soup{Soup} set_meal{Set meal} bento{Bento box} skewers{Skewers} tapas{Appetizers} burger{Burger} fast_food{Fast food} pizza{Pizza} takeaway{Takeaway} delivery{Delivery} room_service{Room service} kids_meal{Kids meal} bakery{Bakery} breakfast{Breakfast} brunch{Brunch} eggs{Eggs} cake{Cake} cookie{Cookies} donut{Donut} ice_cream{Ice cream} celebration{Celebration} drinks{Drinks} bar{Cocktails} wine{Wine} spirits{Spirits} beer{Beer} nightlife{Nightlife} water{Water} cold{Cold drinks} coffee{Coffee} espresso{Espresso} tea{Tea} hot_drinks{Hot drinks} coffee_maker{Coffee machine} salad{Salad} produce{Produce} herbs{Herbs} sauces{Sauces} spicy{Spicy} kitchen{Kitchen} sides{Sides} offers{Offers} general{General} menu{Menu} other{Icon}}'**
+  String menuCategoryIconName(String iconKey);
+
+  /// Heading for a section of the category icon picker.
+  ///
+  /// In en, this message translates to:
+  /// **'{group, select, mains{Mains} fastFood{Fast food} bakerySweets{Bakery & sweets} coldDrinks{Cold drinks} hotDrinks{Hot drinks} other{Other} other{Other}}'**
+  String menuCategoryIconGroupLabel(String group);
+
   /// Action to create a new menu category.
   ///
   /// In en, this message translates to:

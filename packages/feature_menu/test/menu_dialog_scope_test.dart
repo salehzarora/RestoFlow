@@ -32,6 +32,7 @@ class _ThrowingWriter extends InMemoryMenuStore {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) async {
     throw StateError('secret-internal-detail: writer exploded');
   }

@@ -2069,6 +2069,107 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get menuCategoryIconLabel => 'Category icon';
+
+  @override
+  String get menuCategoryIconChange => 'Change';
+
+  @override
+  String get menuCategoryIconReset => 'Reset to automatic';
+
+  @override
+  String get menuCategoryIconAutomatic => 'Automatic';
+
+  @override
+  String get menuCategoryIconAutomaticHint => 'Chosen automatically';
+
+  @override
+  String get menuCategoryIconCustom => 'Custom icon';
+
+  @override
+  String get menuCategoryIconPickerTitle => 'Choose a category icon';
+
+  @override
+  String get menuCategoryIconSearchHint => 'Search icons';
+
+  @override
+  String get menuCategoryIconNoResults => 'No matching icons';
+
+  @override
+  String get menuCategoryIconSelected => 'Selected';
+
+  @override
+  String menuCategoryIconName(String iconKey) {
+    String _temp0 = intl.Intl.selectLogic(iconKey, {
+      'meals': 'Meals',
+      'dinner': 'Dinner',
+      'grill': 'Grill',
+      'rice': 'Rice bowl',
+      'noodles': 'Noodles',
+      'soup': 'Soup',
+      'set_meal': 'Set meal',
+      'bento': 'Bento box',
+      'skewers': 'Skewers',
+      'tapas': 'Appetizers',
+      'burger': 'Burger',
+      'fast_food': 'Fast food',
+      'pizza': 'Pizza',
+      'takeaway': 'Takeaway',
+      'delivery': 'Delivery',
+      'room_service': 'Room service',
+      'kids_meal': 'Kids meal',
+      'bakery': 'Bakery',
+      'breakfast': 'Breakfast',
+      'brunch': 'Brunch',
+      'eggs': 'Eggs',
+      'cake': 'Cake',
+      'cookie': 'Cookies',
+      'donut': 'Donut',
+      'ice_cream': 'Ice cream',
+      'celebration': 'Celebration',
+      'drinks': 'Drinks',
+      'bar': 'Cocktails',
+      'wine': 'Wine',
+      'spirits': 'Spirits',
+      'beer': 'Beer',
+      'nightlife': 'Nightlife',
+      'water': 'Water',
+      'cold': 'Cold drinks',
+      'coffee': 'Coffee',
+      'espresso': 'Espresso',
+      'tea': 'Tea',
+      'hot_drinks': 'Hot drinks',
+      'coffee_maker': 'Coffee machine',
+      'salad': 'Salad',
+      'produce': 'Produce',
+      'herbs': 'Herbs',
+      'sauces': 'Sauces',
+      'spicy': 'Spicy',
+      'kitchen': 'Kitchen',
+      'sides': 'Sides',
+      'offers': 'Offers',
+      'general': 'General',
+      'menu': 'Menu',
+      'other': 'Icon',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String menuCategoryIconGroupLabel(String group) {
+    String _temp0 = intl.Intl.selectLogic(group, {
+      'mains': 'Mains',
+      'fastFood': 'Fast food',
+      'bakerySweets': 'Bakery & sweets',
+      'coldDrinks': 'Cold drinks',
+      'hotDrinks': 'Hot drinks',
+      'other': 'Other',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get menuAddCategory => 'Add category';
 
   @override
