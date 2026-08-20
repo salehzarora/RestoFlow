@@ -59,11 +59,16 @@ select is((select bool_or(p.prosecdef) from pg_proc p join pg_namespace n on n.o
            where n.nspname = 'public' and p.proname = 'menu_soft_delete'), false, 'public.menu_soft_delete is SECURITY INVOKER');
 
 -- ---- grants: authenticated yes, anon no (2) ----
+-- OPS-044 Phase 2: the signature gained a trailing `p_icon_key text default
+-- null`, so the ACL is asserted against the 8-argument identity. The old
+-- 7-arg function was DROPPED (not left as an overload) precisely so PostgREST
+-- cannot hit PGRST203 on a named-argument call; positional 7-arg callers still
+-- resolve because the new parameter is last and defaulted.
 select ok(has_function_privilege('authenticated',
-  'public.menu_upsert_category(uuid,uuid,uuid,uuid,text,integer,boolean)', 'execute'),
+  'public.menu_upsert_category(uuid,uuid,uuid,uuid,text,integer,boolean,text)', 'execute'),
   'authenticated may execute public.menu_upsert_category');
 select ok(not has_function_privilege('anon',
-  'public.menu_upsert_category(uuid,uuid,uuid,uuid,text,integer,boolean)', 'execute'),
+  'public.menu_upsert_category(uuid,uuid,uuid,uuid,text,integer,boolean,text)', 'execute'),
   'anon may NOT execute public.menu_upsert_category');
 
 -- ---- delegation: public wrapper -> app function actually writes (4) ----
