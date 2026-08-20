@@ -22,19 +22,35 @@ library;
 import 'package:restoflow_domain/restoflow_domain.dart' show KitchenMeat;
 
 import '../state/pos_menu_provider.dart'
-    show PosMenuData, PosModifierGroup, PosModifierOption, kPosCategoryPalette;
+    show
+        PosMenuData,
+        PosModifierGroup,
+        PosModifierOption,
+        resolvePosCategoryStyle;
 import 'demo_menu.dart' show DemoCategory, DemoMenuItem;
 
 /// Encodes the FULL menu the POS sells from. The category icon/colour are NOT
-/// stored: they are presentation only, assigned by category order from the
-/// shared palette (exactly how the live `pos_menu` parse assigns them), so the
-/// decoder re-derives them from list position instead of trusting stored
-/// styling bytes.
+/// stored as styling: they are presentation, re-derived from list position by
+/// the decoder exactly how the live `pos_menu` parse assigns them, instead of
+/// trusting stored styling bytes.
+///
+/// OPS-044 adds ONE optional field, `icon_key` — the owner's abstract choice,
+/// never a codepoint, an [IconData] or a Material name. It is DATA, not
+/// styling: without it a till that reboots offline would silently revert to
+/// positional icons. It is optional in both directions, so `schemaVersion`
+/// deliberately does NOT change: a snapshot written before this build decodes
+/// with the key absent, and an older build reading a newer snapshot ignores it.
+/// Bumping the version would discard every cached menu, stranding any till that
+/// happened to be offline during the upgrade.
 Map<String, Object?> encodePosMenuData(PosMenuData menu) => <String, Object?>{
   'currency_code': menu.currencyCode,
   'categories': <Object?>[
     for (final category in menu.categories)
-      <String, Object?>{'id': category.id, 'name': category.name},
+      <String, Object?>{
+        'id': category.id,
+        'name': category.name,
+        if (category.iconKey != null) 'icon_key': category.iconKey,
+      },
   ],
   'items': <Object?>[for (final item in menu.items) _encodeItem(item)],
   'modifier_groups': <Object?>[
@@ -110,8 +126,22 @@ DemoCategory _decodeCategory(Map<String, Object?> json, int index) {
     throw const FormatException('menu category record has no name');
   }
   // Presentation is re-derived, never stored (see [encodePosMenuData]).
-  final (icon, color) = kPosCategoryPalette[index % kPosCategoryPalette.length];
-  return DemoCategory(id: id, name: name, icon: icon, color: color);
+  // OPS-044: the owner's KEY is the one thing that is stored, and it is kept
+  // verbatim — including a key this build cannot draw, which resolves to the
+  // legacy positional glyph rather than a blank. A non-string is not a key, so
+  // it degrades to unset like every other optional field here.
+  final rawIconKey = json['icon_key'];
+  final iconKey = rawIconKey is String && rawIconKey.isNotEmpty
+      ? rawIconKey
+      : null;
+  final style = resolvePosCategoryStyle(index: index, iconKey: iconKey);
+  return DemoCategory(
+    id: id,
+    name: name,
+    icon: style.icon,
+    color: style.color,
+    iconKey: iconKey,
+  );
 }
 
 Map<String, Object?> _encodeItem(DemoMenuItem item) => <String, Object?>{

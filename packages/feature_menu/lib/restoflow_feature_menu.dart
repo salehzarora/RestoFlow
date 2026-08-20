@@ -14,6 +14,7 @@ export 'src/models/item_variant.dart';
 export 'src/models/menu_category.dart';
 export 'src/models/menu_entity_type.dart';
 export 'src/models/menu_field_error.dart';
+export 'src/models/menu_icon_key_write.dart';
 export 'src/models/menu_item.dart';
 export 'src/models/menu_scope.dart';
 export 'src/models/menu_snapshot.dart';
@@ -45,6 +46,11 @@ export 'src/state/menu_providers.dart';
 // UI (the owner menu management surface + the in-place editor target).
 export 'src/screens/item_editor_screen.dart' show MenuEditorTarget;
 export 'src/screens/menu_management_screen.dart';
+export 'src/widgets/menu_category_icon_picker.dart'
+    show
+        MenuCategoryIconSelection,
+        filterMenuCategoryIcons,
+        showMenuCategoryIconPicker;
 export 'src/widgets/menu_copy_source_picker.dart'
     show
         filterMenuCopySources,

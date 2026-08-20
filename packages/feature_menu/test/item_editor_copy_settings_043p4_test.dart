@@ -73,6 +73,7 @@ class _RecordingStore extends InMemoryMenuStore {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) {
     writes.add('upsertCategory:$name');
     return super.upsertCategory(
@@ -81,6 +82,7 @@ class _RecordingStore extends InMemoryMenuStore {
       name: name,
       displayOrder: displayOrder,
       isActive: isActive,
+      iconKey: iconKey,
     );
   }
 

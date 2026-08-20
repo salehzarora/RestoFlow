@@ -7,9 +7,11 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/menu_validation.dart';
 import '../data/minor_money.dart';
 import '../models/menu_category.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_field_error.dart';
 import '../models/menu_write_failure.dart';
 import '../state/menu_providers.dart';
+import 'menu_category_icon_picker.dart';
 import 'menu_l10n.dart';
 
 /// The structurally-identical priced child entities (name + signed price delta).
@@ -234,6 +236,14 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
   // MENU-ORDER-001 (Codex #6): display_order is owned by drag reorder — a normal
   // edit sends NO order (null); the DB guard trigger preserves the live order.
   late bool _active = widget.existing?.isActive ?? true;
+
+  /// OPS-044. [_originalIconKey] is what the server currently holds; [_iconKey]
+  /// is what the owner has selected in this dialog. The SAVE instruction is
+  /// derived by comparing them, which is what makes an untouched icon a
+  /// PRESERVE rather than a write — and is also why a key this build cannot
+  /// draw is never re-sent and so can never be mangled.
+  late final String? _originalIconKey = widget.existing?.iconKey;
+  late String? _iconKey = widget.existing?.iconKey;
   MenuFieldError? _nameError;
   MenuWriteFailure? _writeError;
   bool _submitting = false;
@@ -259,6 +269,10 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
       displayOrder:
           null, // Codex #6: edit sends no order; guard trigger preserves it
       isActive: _active,
+      iconKey: MenuIconKeyWrite.fromSelection(
+        selected: _iconKey,
+        original: _originalIconKey,
+      ),
     );
     if (!mounted) return;
     outcome.fold(
@@ -292,6 +306,11 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                 : l10n.menuFieldErrorText(_nameError!),
           ),
         ),
+        _CategoryIconField(
+          iconKey: _iconKey,
+          onPick: _pickIcon,
+          onReset: () => setState(() => _iconKey = null),
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.menuActiveLabel),
@@ -299,6 +318,122 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
           onChanged: (value) => setState(() => _active = value),
         ),
       ],
+    );
+  }
+
+  Future<void> _pickIcon() async {
+    final selection = await showMenuCategoryIconPicker(
+      context,
+      selectedKey: _iconKey,
+    );
+    // null = cancelled; a selection whose iconKey is null = "Automatic".
+    if (selection == null || !mounted) return;
+    setState(() => _iconKey = selection.iconKey);
+  }
+}
+
+/// The compact icon row: live preview + localized name + open/reset.
+///
+/// Purely local — it renders [iconKey] and reports taps. Nothing is written
+/// until the dialog's Save.
+class _CategoryIconField extends StatelessWidget {
+  const _CategoryIconField({
+    required this.iconKey,
+    required this.onPick,
+    required this.onReset,
+  });
+
+  final String? iconKey;
+  final VoidCallback onPick;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final resolved = MenuCategoryIcons.iconForCategoryKey(iconKey);
+    // Three states, three captions: nothing chosen, a glyph this build knows,
+    // and a key only a newer build can draw (neutral preview, never the raw
+    // key — an owner should not be shown an internal identifier).
+    final String caption;
+    if (iconKey == null) {
+      caption = l10n.menuCategoryIconAutomatic;
+    } else if (resolved == null) {
+      caption = l10n.menuCategoryIconCustom;
+    } else {
+      caption = l10n.menuCategoryIconName(iconKey!);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      // Preview + caption on one line, actions on their own trailing line.
+      // A single Row overflowed once both Reset and Change were present
+      // inside the dialog's fixed width — and it would overflow sooner in a
+      // locale with longer verbs. This shape cannot overflow at any width.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                key: const ValueKey('menu-category-icon-preview'),
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                ),
+                child: Icon(
+                  resolved ?? Icons.auto_awesome,
+                  size: RestoflowIconSizes.md,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.menuCategoryIconLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      caption,
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              children: [
+                if (iconKey != null)
+                  TextButton(
+                    key: const ValueKey('menu-category-icon-reset'),
+                    onPressed: onReset,
+                    child: Text(l10n.menuCategoryIconReset),
+                  ),
+                TextButton(
+                  key: const ValueKey('menu-category-icon-change'),
+                  onPressed: onPick,
+                  child: Text(l10n.menuCategoryIconChange),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

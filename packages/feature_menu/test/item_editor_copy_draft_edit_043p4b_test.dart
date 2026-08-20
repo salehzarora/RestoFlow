@@ -52,6 +52,7 @@ class _Spy extends InMemoryMenuStore {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) {
     writes.add('upsertCategory');
     return super.upsertCategory(
@@ -60,6 +61,7 @@ class _Spy extends InMemoryMenuStore {
       name: name,
       displayOrder: displayOrder,
       isActive: isActive,
+      iconKey: iconKey,
     );
   }
 

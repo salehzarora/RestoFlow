@@ -9,6 +9,7 @@ import '../data/menu_read_source.dart';
 import '../data/menu_writer.dart';
 import '../data/picked_menu_image.dart';
 import '../models/menu_entity_type.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
 import '../models/menu_write_failure.dart';
@@ -230,6 +231,7 @@ class MenuWriteController {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) => _guarded(
     // Categories' sibling owner is the restaurant.
     _siblingScope(MenuEntityType.category, _scope.restaurantId),
@@ -239,6 +241,7 @@ class MenuWriteController {
       name: name,
       displayOrder: displayOrder,
       isActive: isActive,
+      iconKey: iconKey,
     ),
   );
 

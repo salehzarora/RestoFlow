@@ -319,11 +319,16 @@ const List<PosModifierGroup> kDemoModifierGroups = <PosModifierGroup>[
   ),
 ];
 
-/// A stable, data-driven icon/colour palette for REAL categories (the backend
-/// carries no iconography). Assigned by category order — presentation only.
+/// The legacy icon/colour palette for REAL categories, assigned by category
+/// order — presentation only.
+///
 /// [POS-OFFLINE-OPERATIONS-002] Public so the operational-snapshot codec can
 /// re-derive the SAME presentation for a cached category by list position,
 /// instead of persisting styling bytes it would then have to trust.
+///
+/// OPS-044: still the whole story for COLOUR, and the fallback for an icon the
+/// owner has not chosen (or one this build does not recognise). See
+/// [resolvePosCategoryStyle].
 const List<(IconData, Color)> kPosCategoryPalette = [
   (Icons.lunch_dining, RestoflowCategoryPalette.terracotta),
   (Icons.dinner_dining, RestoflowCategoryPalette.teal),
@@ -332,6 +337,31 @@ const List<(IconData, Color)> kPosCategoryPalette = [
   (Icons.local_cafe, RestoflowCategoryPalette.coffee),
   (Icons.icecream, RestoflowCategoryPalette.berry),
 ];
+
+/// MENU-CATEGORY-ICON-PICKER-OPS-044: the ONE rule that turns a category's list
+/// position plus its optional owner-chosen key into what the POS renders.
+///
+/// Both entry points use it — the live `pos_menu` parse and the operational
+/// snapshot decode — so a cached category and a freshly fetched one can never
+/// disagree, and no widget ever resolves a key for itself.
+///
+///  * a key THIS build knows  -> the owner's glyph;
+///  * null, or a key only a NEWER build knows -> the legacy positional glyph.
+///
+/// COLOUR IS ALWAYS POSITIONAL. OPS-044 gave the owner the icon, not the hue,
+/// so a category with a chosen icon still takes its slot's colour — which is
+/// also why choosing an icon cannot change the look of the rail as a whole.
+({IconData icon, Color color}) resolvePosCategoryStyle({
+  required int index,
+  required String? iconKey,
+}) {
+  final (legacyIcon, legacyColor) =
+      kPosCategoryPalette[index % kPosCategoryPalette.length];
+  return (
+    icon: MenuCategoryIcons.iconForCategoryKey(iconKey) ?? legacyIcon,
+    color: legacyColor,
+  );
+}
 
 /// POS-PRODUCT-DESCRIPTIONS-001: the ONE normalization for an optional free-text
 /// wire field, applied at the parsing boundary so no widget ever normalizes
@@ -466,12 +496,26 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     if (row is! Map) continue;
     final id = (row['id'] ?? '').toString();
     final name = (row['name'] ?? '').toString();
-    final (icon, color) =
-        kPosCategoryPalette[paletteIndex % kPosCategoryPalette.length];
+    // OPS-044: a non-String icon_key is not a key. `_optionalText` is the
+    // repo's one normalization for an optional wire string, so a bad value
+    // degrades to "not chosen" rather than dropping a sellable category.
+    final iconKey = _optionalText(row['icon_key']);
+    final style = resolvePosCategoryStyle(
+      index: paletteIndex,
+      iconKey: iconKey,
+    );
     paletteIndex++;
     names[id] = name;
     catDisplayOrder[id] = menuPrintOrderInt(row['display_order']);
-    categories.add(DemoCategory(id: id, name: name, icon: icon, color: color));
+    categories.add(
+      DemoCategory(
+        id: id,
+        name: name,
+        icon: style.icon,
+        color: style.color,
+        iconKey: iconKey,
+      ),
+    );
   }
 
   var items = <DemoMenuItem>[];

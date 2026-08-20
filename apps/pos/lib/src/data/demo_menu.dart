@@ -25,6 +25,7 @@ class DemoCategory {
     required this.name,
     required this.icon,
     required this.color,
+    this.iconKey,
   });
 
   final String id;
@@ -33,10 +34,28 @@ class DemoCategory {
   final String name;
 
   /// Material icon for the chip and item cards (bundled font — not unicode).
+  ///
+  /// OPS-044: ALREADY RESOLVED. The parse boundary decides once whether this is
+  /// the owner's chosen glyph or the legacy positional one, so every surface
+  /// that renders a category icon reads this single field and no widget ever
+  /// looks a key up for itself.
   final IconData icon;
 
   /// Accent colour used to tint the item card's icon band.
+  ///
+  /// Still assigned by list POSITION. OPS-044 gives the owner control of the
+  /// icon only; colour stays positional so the chip rail keeps its variety and
+  /// this ticket adds no stored styling.
   final Color color;
+
+  /// OPS-044: the owner's raw `menu_categories.icon_key`, or null when none is
+  /// chosen.
+  ///
+  /// Kept VERBATIM and never re-resolved: a key a newer dashboard chose is not
+  /// something this build can draw, but it must still survive an offline
+  /// snapshot round trip untouched. [icon] is what gets rendered; this is what
+  /// gets stored.
+  final String? iconKey;
 }
 
 /// A single demo menu item rendered as a card on the POS menu grid.

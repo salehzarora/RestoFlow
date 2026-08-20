@@ -1,6 +1,7 @@
 import 'package:restoflow_core/restoflow_core.dart';
 
 import '../models/menu_entity_type.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
 import '../models/menu_write_failure.dart';
@@ -31,12 +32,14 @@ class MenuManagementRepository implements MenuWriter {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) => _writer.upsertCategory(
     scope: scope,
     id: id,
     name: name,
     displayOrder: displayOrder,
     isActive: isActive,
+    iconKey: iconKey,
   );
 
   @override

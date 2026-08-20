@@ -47,6 +47,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) => _record('upsertCategory');
 
   @override

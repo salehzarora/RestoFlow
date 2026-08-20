@@ -2,6 +2,7 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import '../models/menu_entity_type.dart';
+import '../models/menu_icon_key_write.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_write_failure.dart';
 import '../models/menu_write_result.dart';
@@ -127,6 +128,7 @@ class RpcMenuWriter implements MenuWriter {
     required String name,
     int? displayOrder,
     bool isActive = true,
+    MenuIconKeyWrite iconKey = const MenuIconKeyWrite.preserve(),
   }) {
     return _invoke(MenuRpcNames.upsertCategory, {
       'p_organization_id': scope.organizationId,
@@ -136,6 +138,10 @@ class RpcMenuWriter implements MenuWriter {
       'p_name': name,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // OPS-044 wire contract (migration 20260820090000): null = preserve,
+      // '' = reset to no-icon, a key = set. Only the abstract registry key
+      // ever travels — never a Material name or codepoint.
+      'p_icon_key': iconKey.wireValue,
     }, MenuEntityType.category);
   }
 

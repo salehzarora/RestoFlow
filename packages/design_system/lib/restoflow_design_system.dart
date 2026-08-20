@@ -38,6 +38,7 @@ export 'src/components/segmented_control.dart';
 export 'src/components/state_view.dart';
 export 'src/components/status_pill.dart';
 export 'src/components/step_tile.dart';
+export 'src/menu_category_icons.dart';
 export 'src/theme.dart';
 export 'src/tokens.dart';
 export 'src/tone.dart';

@@ -2056,6 +2056,107 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get menuCategoryIconLabel => 'أيقونة الفئة';
+
+  @override
+  String get menuCategoryIconChange => 'تغيير';
+
+  @override
+  String get menuCategoryIconReset => 'إعادة إلى التلقائي';
+
+  @override
+  String get menuCategoryIconAutomatic => 'تلقائي';
+
+  @override
+  String get menuCategoryIconAutomaticHint => 'يتم اختيارها تلقائيًا';
+
+  @override
+  String get menuCategoryIconCustom => 'أيقونة مخصصة';
+
+  @override
+  String get menuCategoryIconPickerTitle => 'اختر أيقونة الفئة';
+
+  @override
+  String get menuCategoryIconSearchHint => 'ابحث عن أيقونة';
+
+  @override
+  String get menuCategoryIconNoResults => 'لا توجد أيقونات مطابقة';
+
+  @override
+  String get menuCategoryIconSelected => 'محددة';
+
+  @override
+  String menuCategoryIconName(String iconKey) {
+    String _temp0 = intl.Intl.selectLogic(iconKey, {
+      'meals': 'وجبات',
+      'dinner': 'عشاء',
+      'grill': 'مشويات',
+      'rice': 'أرز',
+      'noodles': 'نودلز',
+      'soup': 'شوربة',
+      'set_meal': 'وجبة كاملة',
+      'bento': 'صندوق بنتو',
+      'skewers': 'أسياخ مشوية',
+      'tapas': 'مقبلات',
+      'burger': 'برجر',
+      'fast_food': 'وجبات سريعة',
+      'pizza': 'بيتزا',
+      'takeaway': 'سفري',
+      'delivery': 'توصيل',
+      'room_service': 'خدمة الغرف',
+      'kids_meal': 'وجبة أطفال',
+      'bakery': 'مخبوزات',
+      'breakfast': 'فطور',
+      'brunch': 'برانش',
+      'eggs': 'بيض',
+      'cake': 'كيك',
+      'cookie': 'كوكيز',
+      'donut': 'دونات',
+      'ice_cream': 'آيس كريم',
+      'celebration': 'احتفال',
+      'drinks': 'مشروبات',
+      'bar': 'كوكتيلات',
+      'wine': 'نبيذ',
+      'spirits': 'مشروبات روحية',
+      'beer': 'بيرة',
+      'nightlife': 'سهرات',
+      'water': 'ماء',
+      'cold': 'مشروبات باردة',
+      'coffee': 'قهوة',
+      'espresso': 'إسبريسو',
+      'tea': 'شاي',
+      'hot_drinks': 'مشروبات ساخنة',
+      'coffee_maker': 'ماكينة قهوة',
+      'salad': 'سلطة',
+      'produce': 'خضار وفواكه',
+      'herbs': 'أعشاب',
+      'sauces': 'صلصات',
+      'spicy': 'حار',
+      'kitchen': 'مطبخ',
+      'sides': 'أطباق جانبية',
+      'offers': 'عروض',
+      'general': 'عام',
+      'menu': 'قائمة الطعام',
+      'other': 'أيقونة',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String menuCategoryIconGroupLabel(String group) {
+    String _temp0 = intl.Intl.selectLogic(group, {
+      'mains': 'أطباق رئيسية',
+      'fastFood': 'وجبات سريعة',
+      'bakerySweets': 'مخبوزات وحلويات',
+      'coldDrinks': 'مشروبات باردة',
+      'hotDrinks': 'مشروبات ساخنة',
+      'other': 'أخرى',
+      'other': 'أخرى',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get menuAddCategory => 'إضافة فئة';
 
   @override
