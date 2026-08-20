@@ -159,6 +159,12 @@ jobs:
       - name: Tests — Admin (Flutter widget)
         run: flutter test apps/admin
 
+      # KIOSK-001 Phase 1: the customer self-service kiosk shell (fixture-only
+      # V2 visual foundation). Listed explicitly like every other app — an
+      # unlisted package is silently never tested.
+      - name: Tests — Kiosk (Flutter widget)
+        run: flutter test apps/kiosk
+
       - name: Tests — feature_auth (pairing + PIN login)
         run: flutter test packages/feature_auth
 

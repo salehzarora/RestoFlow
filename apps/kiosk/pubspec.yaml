@@ -1,0 +1,48 @@
+name: restoflow_kiosk
+description: RestoFlow kiosk app - customer self-service ordering surface. KIOSK-001 Phase 1 is the approved V2 visual foundation on fixture data only (no backend).
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: '>=2.5.0 <3.0.0'
+  restoflow_l10n:
+    path: ../../packages/l10n
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fixtures/
+  # KIOSK-001 Phase 1 typography, from the locked V2 design (design-references/
+  # kiosk-v2/Kiosk Prototype v2.dc.html): Anton carries the LATIN display
+  # headlines; Rubik carries every script's body/UI and takes over DISPLAY
+  # duty at weight 900 for Arabic/Hebrew (letter-spacing 0 in RTL). All fonts
+  # are SIL OFL (license files alongside the assets); Rubik 400-700 are the
+  # same files the POS bundles, 800/900 + Anton are new static instances.
+  fonts:
+    - family: Anton
+      fonts:
+        - asset: assets/fonts/Anton-Regular.ttf
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Rubik-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Rubik-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Rubik-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Rubik-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Rubik-Black.ttf
+          weight: 900

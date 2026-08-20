@@ -8,6 +8,7 @@ workspace:
   - apps/kds
   - apps/dashboard
   - apps/admin
+  - apps/kiosk
   - packages/core
   - packages/domain
   - packages/data_local
