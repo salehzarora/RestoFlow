@@ -359,6 +359,15 @@ class KioskFlowController extends Notifier<KioskState> {
   /// mode). Read per action — a menu refresh mid-flow is picked up naturally.
   KioskMenuData get _menu => ref.read(kioskMenuDataProvider);
 
+  /// KIOSK-001-093: while ONE real submit attempt is in-flight or its
+  /// delivery is unconfirmed, the customer-visible business payload is
+  /// IMMUTABLE — every cart/customer/service/table mutation and every
+  /// navigation that could expose an editable order is blocked, so the
+  /// frozen attempt and what the customer sees can never diverge. Retry and
+  /// the uncertainty notice remain available; a terminal result (accepted or
+  /// definitive rejection) returns the phase to idle and unlocks.
+  bool get _submitLocked => state.submitPhase != KioskSubmitPhase.idle;
+
   // ---- activity / idle engine --------------------------------------------
 
   /// Any customer pointer contact (root Listener) — resets the idle counter.
@@ -397,7 +406,11 @@ class KioskFlowController extends Notifier<KioskState> {
     }
     final exempt =
         state.screen == KioskScreen.attract ||
-        state.screen == KioskScreen.settings;
+        state.screen == KioskScreen.settings ||
+        // 093: the kiosk's own idle engine must never discard an in-flight
+        // or delivery-unconfirmed real order — the retry surface stays until
+        // the attempt resolves (app-close remains the documented exception).
+        state.submitPhase != KioskSubmitPhase.idle;
     if (exempt) return;
     final elapsed = state.secondsSinceActivity + 1;
     final left = state.settings.idleSeconds - elapsed;
@@ -444,9 +457,15 @@ class KioskFlowController extends Notifier<KioskState> {
   void startFromAttract() =>
       state = state.copyWith(screen: KioskScreen.service);
 
-  void backToAttract() => reset();
+  void backToAttract() {
+    if (_submitLocked) return;
+    _backToAttractInner();
+  }
+
+  void _backToAttractInner() => reset();
 
   void pickService(KioskServiceType service) {
+    if (_submitLocked) return;
     if (service == KioskServiceType.takeaway) {
       state = state.copyWith(
         service: service,
@@ -464,12 +483,19 @@ class KioskFlowController extends Notifier<KioskState> {
     }
   }
 
-  void backFromTables() => state = state.copyWith(screen: KioskScreen.service);
+  void backFromTables() {
+    if (_submitLocked) return;
+    _backFromTablesInner();
+  }
+
+  void _backFromTablesInner() =>
+      state = state.copyWith(screen: KioskScreen.service);
 
   /// Selects/deselects a table. [id] is the AUTHORITATIVE identity (the real
   /// submit sends only this); [label] is display copy. A live table without
   /// an id can never be selected for a real order — the picker passes both.
   void toggleTable(String label, {String? id}) {
+    if (_submitLocked) return;
     final deselect =
         state.selectedTable == label && state.selectedTableId == id;
     state = state.copyWith(
@@ -479,11 +505,17 @@ class KioskFlowController extends Notifier<KioskState> {
   }
 
   void confirmTable() {
+    if (_submitLocked) return;
     if (state.selectedTable == null) return;
     state = state.copyWith(screen: KioskScreen.menu);
   }
 
-  void backFromMenu() => state = state.copyWith(
+  void backFromMenu() {
+    if (_submitLocked) return;
+    _backFromMenuInner();
+  }
+
+  void _backFromMenuInner() => state = state.copyWith(
     screen:
         state.settings.tablePickerEnabled &&
             state.service == KioskServiceType.dineIn
@@ -492,7 +524,12 @@ class KioskFlowController extends Notifier<KioskState> {
   );
 
   /// "Change" — re-opens service type; the cart survives (V2 rule).
-  void changeService() =>
+  void changeService() {
+    if (_submitLocked) return;
+    _changeServiceInner();
+  }
+
+  void _changeServiceInner() =>
       state = state.copyWith(screen: KioskScreen.service, sheet: null);
 
   void setCategoryIndex(int index) {
@@ -506,6 +543,7 @@ class KioskFlowController extends Notifier<KioskState> {
   // ---- item sheet ---------------------------------------------------------
 
   void openItem(String itemId) {
+    if (_submitLocked) return;
     final menu = _menu;
     final item = menu.tryItem(itemId);
     // A sold-out/unreadable item stays visible but can never be configured
@@ -525,6 +563,7 @@ class KioskFlowController extends Notifier<KioskState> {
   }
 
   void editCartLine(int lineId) {
+    if (_submitLocked) return;
     final line = state.cart.firstWhere((l) => l.lineId == lineId);
     state = state.copyWith(
       sheet: KioskSheet.item,
@@ -590,6 +629,7 @@ class KioskFlowController extends Notifier<KioskState> {
   /// price is CAPTURED here (what the customer accepted); later menu changes
   /// mark the cart stale instead of silently repricing.
   bool submitDraft() {
+    if (_submitLocked) return false;
     final d = state.draft;
     if (d == null) return false;
     final menu = _menu;
@@ -656,12 +696,20 @@ class KioskFlowController extends Notifier<KioskState> {
     unawaited(refreshBranchTax());
   }
 
-  void closeCart() => state = state.copyWith(sheet: null);
+  void closeCart() {
+    // Locked: the uncertainty/spinner surface must stay in front of the
+    // customer until the attempt resolves.
+    if (_submitLocked) return;
+    _closeCartInner();
+  }
+
+  void _closeCartInner() => state = state.copyWith(sheet: null);
 
   void incrementLine(int lineId) => _mutateLine(lineId, 1);
   void decrementLine(int lineId) => _mutateLine(lineId, -1);
 
   void _mutateLine(int lineId, int delta) {
+    if (_submitLocked) return;
     state = state.copyWith(
       cart: [
         for (final l in state.cart)
@@ -673,12 +721,29 @@ class KioskFlowController extends Notifier<KioskState> {
     );
   }
 
-  void removeLine(int lineId) => state = state.copyWith(
+  void removeLine(int lineId) {
+    if (_submitLocked) return;
+    _removeLineInner(lineId);
+  }
+
+  void _removeLineInner(int lineId) => state = state.copyWith(
     cart: state.cart.where((l) => l.lineId != lineId).toList(),
   );
 
-  void setCustomerName(String v) => state = state.copyWith(customerName: v);
-  void setCustomerPhone(String v) => state = state.copyWith(customerPhone: v);
+  void setCustomerName(String v) {
+    if (_submitLocked) return;
+    _setCustomerNameInner(v);
+  }
+
+  void _setCustomerNameInner(String v) =>
+      state = state.copyWith(customerName: v);
+  void setCustomerPhone(String v) {
+    if (_submitLocked) return;
+    _setCustomerPhoneInner(v);
+  }
+
+  void _setCustomerPhoneInner(String v) =>
+      state = state.copyWith(customerPhone: v);
 
   /// "Place order". DEMO mode (no submitter wired) freezes the Phase-1
   /// FIXTURE snapshot and shows the confirmation — no backend work. REAL mode
@@ -716,7 +781,12 @@ class KioskFlowController extends Notifier<KioskState> {
     );
   }
 
-  void newOrder() => reset();
+  void newOrder() {
+    if (_submitLocked) return;
+    _newOrderInner();
+  }
+
+  void _newOrderInner() => reset();
 
   // ---- REAL submit (KIOSK-001-REAL-SUBMIT-092) ----------------------------
 
@@ -795,6 +865,7 @@ class KioskFlowController extends Notifier<KioskState> {
         cart: state.cart,
         service: state.service!,
         tableId: tableId,
+        tableLabel: state.selectedTable,
         tax: tax,
         customerName: state.customerName,
         customerPhone: state.customerPhone,
@@ -832,6 +903,12 @@ class KioskFlowController extends Notifier<KioskState> {
     }
     final result = await submitter.submit(attempt);
     switch (result) {
+      // 093 client invariant: an acceptance must name OUR frozen order id —
+      // anything else is an unreadable response, treated as UNCONFIRMED
+      // (the retry handle is kept; a success for a different identity is
+      // never shown to the customer).
+      case KioskSubmitAccepted(:final orderId) when orderId != attempt.orderId:
+        state = state.copyWith(submitPhase: KioskSubmitPhase.unconfirmed);
       case KioskSubmitAccepted(:final orderId):
         _confirmAccepted(orderId, attempt);
       case KioskSubmitRejected(:final code, :final invalidField):
@@ -851,22 +928,23 @@ class KioskFlowController extends Notifier<KioskState> {
 
   void _confirmAccepted(String orderId, KioskSubmitAttempt attempt) {
     _pendingAttempt = null;
-    final grand = attempt.params['p_client_grand_total_minor'] as int;
-    final subtotal = attempt.params['p_client_subtotal_minor'] as int;
-    final taxMinor = attempt.params['p_client_tax_total_minor'] as int;
-    final inclusive = state.branchTax?.isInclusive ?? false;
+    // 093: EVERY piece of order content on the confirmation comes from the
+    // FROZEN attempt view — never from the (theoretically mutable) live
+    // state at response time. The live cart/customer/table state is cleared
+    // separately below.
+    final view = attempt.view!;
     state = state.copyWith(
       lastOrder: KioskOrderSnapshot(
         number: state.dailySeq,
         code: displayOrderCode(orderId),
-        lines: state.cart,
-        totalMinor: grand,
-        subtotalMinor: subtotal,
-        taxMinor: taxMinor,
-        taxInclusive: inclusive,
-        service: state.service!,
-        table: state.selectedTable,
-        customerName: state.customerName.trim(),
+        lines: view.lines,
+        totalMinor: view.grandMinor,
+        subtotalMinor: view.subtotalMinor,
+        taxMinor: view.taxMinor,
+        taxInclusive: view.taxInclusive,
+        service: view.service,
+        table: view.tableLabel,
+        customerName: view.customerName,
       ),
       cart: const [],
       customerName: '',
@@ -992,6 +1070,7 @@ class KioskFlowController extends Notifier<KioskState> {
   /// dropped, vanished option ids are dropped, and prices are re-captured at
   /// today's values (visibly — this runs only from the stale banner).
   void refreshCartAgainstMenu() {
+    if (_submitLocked) return;
     final menu = _menu;
     final rebuilt = <KioskCartLine>[];
     for (final line in state.cart) {

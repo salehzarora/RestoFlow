@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -107,7 +109,8 @@ class _FakeTransport implements SyncRpcTransport {
     rpc.calls.add((function, Map<String, dynamic>.from(params)));
     final h = rpc.handlers[function];
     if (h == null) throw StateError('unexpected RPC $function');
-    final out = h(params);
+    var out = h(params);
+    if (out is Future) out = await out; // held/controllable responses
     if (out is Exception) throw out;
     return out;
   }
@@ -136,7 +139,10 @@ const _acceptedEnvelope = {
     'kiosk_menu': (_) => _menuEnvelope(),
     'kiosk_tables': (_) => _tablesEnvelope(),
     'get_device_branch_tax': (_) => _taxEnvelope(),
-    'kiosk_submit_order': (_) => _acceptedEnvelope,
+    'kiosk_submit_order': (p) => {
+      ..._acceptedEnvelope,
+      'order_id': p['p_order_id'],
+    },
     ...?overrides,
   });
   final transport = _FakeTransport(rpc);
@@ -553,7 +559,16 @@ void main() {
         expect(state.cart, isEmpty);
         expect(state.customerName, isEmpty);
         expect(state.selectedTableId, isNull);
-        expect(state.lastOrder!.code, '#EEFFFF'); // displayOrderCode(order_id)
+        final submittedId =
+            h.rpc.calls
+                    .firstWhere((c) => c.$1 == 'kiosk_submit_order')
+                    .$2['p_order_id']
+                as String;
+        expect(
+          state.lastOrder!.code,
+          '#${submittedId.replaceAll('-', '').substring(26).toUpperCase()}',
+          reason: 'the code derives from the ACCEPTED (frozen) order id',
+        );
         expect(state.submitPhase, KioskSubmitPhase.idle);
         expect(flow.debugPendingAttempt, isNull);
         final submits = h.rpc.calls
@@ -583,9 +598,13 @@ void main() {
       var fail = true;
       final h = _harness(
         overrides: {
-          'kiosk_submit_order': (_) => fail
+          'kiosk_submit_order': (p) => fail
               ? SyncTransportException(SyncTransportErrorKind.transient)
-              : {..._acceptedEnvelope, 'idempotency_replay': true},
+              : {
+                  ..._acceptedEnvelope,
+                  'order_id': p['p_order_id'],
+                  'idempotency_replay': true,
+                },
         },
       );
       await _fillCart(h.container);
@@ -621,12 +640,12 @@ void main() {
       final h = _harness(
         overrides: {
           'kiosk_menu': (_) => _menuEnvelope(burgerBase: price),
-          'kiosk_submit_order': (_) {
+          'kiosk_submit_order': (p) {
             if (reject) {
               price = 4100; // the drift behind the server's refusal
               return {'ok': false, 'error': 'menu_price_changed'};
             }
-            return _acceptedEnvelope;
+            return {..._acceptedEnvelope, 'order_id': p['p_order_id']};
           },
         },
       );
@@ -837,6 +856,231 @@ void main() {
       );
     });
   });
+
+  group(
+    '093 frozen-attempt hardening (in-flight/unconfirmed immutability)',
+    () {
+      test('A. while IN-FLIGHT every business mutation is blocked and the '
+          'accepted confirmation is EXACTLY the frozen order', () async {
+        final held = Completer<Object?>();
+        final h = _harness(
+          overrides: {
+            'kiosk_submit_order': (p) => held.future.then(
+              (_) => {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+            ),
+          },
+        );
+        await _fillCart(h.container, note: 'frozen note');
+        final flow = h.container.read(kioskFlowProvider.notifier);
+        flow.openCart(); // Place Order lives in the cart sheet
+        flow.setCustomerName('Frozen Dana');
+        flow.placeOrder();
+        await h.container.settle();
+        expect(
+          h.container.read(kioskFlowProvider).submitPhase,
+          KioskSubmitPhase.inFlight,
+        );
+
+        // Mutation attempts while the response is held open:
+        flow.incrementLine(1);
+        flow.decrementLine(1);
+        flow.removeLine(1);
+        flow.editCartLine(1);
+        flow.setCustomerName('EDITED');
+        flow.setCustomerPhone('999');
+        flow.changeService();
+        flow.toggleTable('T9', id: 'other');
+        flow.closeCart();
+        flow.openItem('i2');
+        flow.backToAttract();
+        var s = h.container.read(kioskFlowProvider);
+        expect(s.cart.single.quantity, 1, reason: 'qty locked');
+        expect(s.cart, hasLength(1), reason: 'remove locked');
+        expect(s.customerName, 'Frozen Dana', reason: 'name locked');
+        expect(s.customerPhone, isEmpty, reason: 'phone locked');
+        expect(s.service, KioskServiceType.takeaway, reason: 'service locked');
+        expect(s.selectedTable, isNull, reason: 'table locked');
+        expect(s.sheet, KioskSheet.cart, reason: 'close-cart locked');
+        expect(s.draft, isNull, reason: 'item sheet locked');
+        expect(s.screen, isNot(KioskScreen.attract), reason: 'reset locked');
+
+        held.complete(null);
+        await h.container.settle();
+        s = h.container.read(kioskFlowProvider);
+        expect(s.screen, KioskScreen.confirm);
+        final order = s.lastOrder!;
+        expect(order.lines.single.quantity, 1);
+        expect(order.lines.single.note, 'frozen note');
+        expect(order.customerName, 'Frozen Dana');
+        expect(order.service, KioskServiceType.takeaway);
+        expect(order.totalMinor, 5500);
+      });
+
+      test('B+C. UNCONFIRMED keeps the frozen view immutable, survives the '
+          'idle engine, and Retry replays the same identity', () async {
+        var fail = true;
+        final h = _harness(
+          overrides: {
+            'kiosk_submit_order': (p) => fail
+                ? SyncTransportException(SyncTransportErrorKind.transient)
+                : {
+                    ..._acceptedEnvelope,
+                    'order_id': p['p_order_id'],
+                    'idempotency_replay': true,
+                  },
+          },
+        );
+        await _fillCart(h.container);
+        final flow = h.container.read(kioskFlowProvider.notifier);
+        flow.placeOrder();
+        await h.container.settle();
+        expect(
+          h.container.read(kioskFlowProvider).submitPhase,
+          KioskSubmitPhase.unconfirmed,
+        );
+        final frozen = flow.debugPendingAttempt!;
+
+        // Edits stay blocked while unconfirmed.
+        flow.incrementLine(1);
+        flow.setCustomerName('EDITED');
+        flow.changeService();
+        var s = h.container.read(kioskFlowProvider);
+        expect(s.cart.single.quantity, 1);
+        expect(s.customerName, isEmpty);
+        expect(s.service, KioskServiceType.takeaway);
+
+        // C: the kiosk idle engine must NOT discard the uncertain handle.
+        for (var i = 0; i < 200; i++) {
+          flow.tick();
+        }
+        s = h.container.read(kioskFlowProvider);
+        expect(
+          s.screen,
+          isNot(KioskScreen.attract),
+          reason: 'idle reset must not run with an unresolved attempt',
+        );
+        expect(flow.debugPendingAttempt, same(frozen));
+
+        fail = false;
+        await flow.retrySubmit();
+        final submits = h.rpc.calls
+            .where((c) => c.$1 == 'kiosk_submit_order')
+            .toList();
+        expect(submits, hasLength(2));
+        expect(submits[1].$2['p_order_id'], frozen.orderId);
+        expect(submits[1].$2['p_local_operation_id'], frozen.localOperationId);
+        s = h.container.read(kioskFlowProvider);
+        expect(s.screen, KioskScreen.confirm);
+        expect(
+          s.lastOrder!.totalMinor,
+          5500,
+          reason: 'confirmation == the frozen attempt',
+        );
+      });
+
+      test('D. a definitive rejection unlocks the controls again', () async {
+        final h = _harness(
+          overrides: {
+            'kiosk_submit_order': (_) => {
+              'ok': false,
+              'error': 'discount_not_allowed',
+            },
+          },
+        );
+        await _fillCart(h.container);
+        final flow = h.container.read(kioskFlowProvider.notifier);
+        flow.placeOrder();
+        await h.container.settle();
+        final s = h.container.read(kioskFlowProvider);
+        expect(
+          s.submitPhase,
+          KioskSubmitPhase.idle,
+          reason: 'terminal => idle',
+        );
+        expect(flow.debugPendingAttempt, isNull);
+        // Unlocked: edits work again.
+        flow.incrementLine(1);
+        expect(h.container.read(kioskFlowProvider).cart.single.quantity, 2);
+        flow.setCustomerName('After');
+        expect(h.container.read(kioskFlowProvider).customerName, 'After');
+      });
+
+      test('E. an accepted envelope naming a DIFFERENT order id fails closed '
+          'to UNCONFIRMED (no foreign confirmation)', () async {
+        final h = _harness(
+          overrides: {
+            'kiosk_submit_order': (_) => {
+              ..._acceptedEnvelope,
+              'order_id': 'ffffffff-0000-4000-8000-000000000000',
+            },
+          },
+        );
+        await _fillCart(h.container);
+        final flow = h.container.read(kioskFlowProvider.notifier);
+        flow.placeOrder();
+        await h.container.settle();
+        final s = h.container.read(kioskFlowProvider);
+        expect(
+          s.submitPhase,
+          KioskSubmitPhase.unconfirmed,
+          reason: 'a foreign id is an unreadable response, never a success',
+        );
+        expect(s.screen, isNot(KioskScreen.confirm));
+        expect(s.cart, isNotEmpty);
+        expect(
+          flow.debugPendingAttempt,
+          isNotNull,
+          reason: 'the retry handle is retained',
+        );
+      });
+
+      test('deep-copy: mutating the ORIGINAL cart structures never leaks into '
+          'the frozen view', () {
+        final menu = mapKioskMenuEnvelope(_menuEnvelope())!;
+        final selected = <String, List<String>>{
+          'g1': ['o2'],
+        };
+        final cart = <KioskCartLine>[
+          KioskCartLine(
+            lineId: 1,
+            itemId: 'i1',
+            quantity: 1,
+            selected: selected,
+            note: 'n',
+            capturedUnitMinor: 5500,
+          ),
+        ];
+        final attempt = buildKioskSubmitAttempt(
+          menu: menu,
+          cart: cart,
+          service: KioskServiceType.takeaway,
+          tableId: null,
+          tax: const KioskBranchTax(
+            enabled: false,
+            rateBp: 0,
+            mode: 'exclusive',
+          ),
+          customerName: 'n',
+          customerPhone: '',
+          clientCreatedAt: DateTime.utc(2026),
+        );
+        selected['g1']!.add('o1'); // mutate the ORIGINAL map after freezing
+        cart.clear();
+        final view = attempt.view!;
+        expect(
+          view.lines.single.selected['g1'],
+          ['o2'],
+          reason: 'the frozen selection must not alias the live map',
+        );
+        expect(view.lines, hasLength(1));
+        expect(
+          () => view.lines.single.selected['g1']!.add('x'),
+          throwsUnsupportedError,
+          reason: 'frozen collections are unmodifiable',
+        );
+      });
+    },
+  );
 }
 
 extension on ProviderContainer {

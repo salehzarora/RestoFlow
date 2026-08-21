@@ -131,16 +131,50 @@ class KioskBranchTaxReader {
 // Submit attempt (frozen identity + payload) and typed results.
 // ---------------------------------------------------------------------------
 
-/// One frozen Place-Order attempt: the D-022 identity plus the exact RPC
-/// parameter map. Retrying an unconfirmed delivery re-sends THIS object
-/// unchanged; only a deliberate NEW attempt after a definitive rejection
-/// builds a new one.
+/// KIOSK-001-093: the complete CUSTOMER-VISIBLE order content frozen at
+/// submit time — deep-copied, never aliasing mutable flow state. The
+/// accepted confirmation renders from THIS (plus the accepted order id),
+/// never from whatever the live state holds when the response lands.
+@immutable
+class KioskFrozenOrderView {
+  const KioskFrozenOrderView({
+    required this.lines,
+    required this.service,
+    required this.tableId,
+    required this.tableLabel,
+    required this.customerName,
+    required this.customerPhone,
+    required this.subtotalMinor,
+    required this.taxMinor,
+    required this.grandMinor,
+    required this.taxInclusive,
+    required this.currencyCode,
+  });
+
+  final List<KioskCartLine> lines;
+  final KioskServiceType service;
+  final String? tableId;
+  final String? tableLabel;
+  final String customerName;
+  final String customerPhone;
+  final int subtotalMinor;
+  final int taxMinor;
+  final int grandMinor;
+  final bool taxInclusive;
+  final String currencyCode;
+}
+
+/// One frozen Place-Order attempt: the D-022 identity, the exact RPC
+/// parameter map, and the frozen customer-visible [view]. Retrying an
+/// unconfirmed delivery re-sends THIS object unchanged; only a deliberate
+/// NEW attempt after a definitive rejection builds a new one.
 @immutable
 class KioskSubmitAttempt {
   const KioskSubmitAttempt({
     required this.orderId,
     required this.localOperationId,
     required this.params,
+    this.view,
   });
 
   final String orderId;
@@ -148,6 +182,10 @@ class KioskSubmitAttempt {
 
   /// The full, frozen `kiosk_submit_order` parameter map.
   final Map<String, dynamic> params;
+
+  /// The frozen customer-visible snapshot (093). Null only in low-level
+  /// tests that exercise the wire alone.
+  final KioskFrozenOrderView? view;
 }
 
 /// Typed outcome of one submit call. UI never sees a raw envelope.
@@ -284,6 +322,7 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
   required DateTime clientCreatedAt,
   String? orderId,
   String? localOperationId,
+  String? tableLabel,
 }) {
   if (cart.isEmpty) {
     throw KioskCartOutOfSyncError('cart is empty');
@@ -348,9 +387,39 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
   final phone = customerPhone.trim();
   final id = orderId ?? generateKioskUuidV4();
   final opId = localOperationId ?? 'kiosk-${generateKioskUuidV4()}';
+  final effectiveTableId = service == KioskServiceType.dineIn ? tableId : null;
+  // 093: DEEP-copy the customer-visible order (lines + their selection maps)
+  // so no later flow-state mutation can alias into this frozen attempt.
+  final frozenLines = List<KioskCartLine>.unmodifiable([
+    for (final l in cart)
+      KioskCartLine(
+        lineId: l.lineId,
+        itemId: l.itemId,
+        quantity: l.quantity,
+        selected: Map<String, List<String>>.unmodifiable({
+          for (final e in l.selected.entries)
+            e.key: List<String>.unmodifiable(e.value),
+        }),
+        note: l.note,
+        capturedUnitMinor: l.capturedUnitMinor,
+      ),
+  ]);
   return KioskSubmitAttempt(
     orderId: id,
     localOperationId: opId,
+    view: KioskFrozenOrderView(
+      lines: frozenLines,
+      service: service,
+      tableId: effectiveTableId,
+      tableLabel: effectiveTableId == null ? null : tableLabel,
+      customerName: name,
+      customerPhone: phone,
+      subtotalMinor: subtotal,
+      taxMinor: taxMinor,
+      grandMinor: grand,
+      taxInclusive: tax.isInclusive,
+      currencyCode: menu.currencyCode,
+    ),
     params: <String, dynamic>{
       'p_order_id': id,
       'p_local_operation_id': opId,
