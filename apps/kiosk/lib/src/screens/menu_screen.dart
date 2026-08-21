@@ -344,6 +344,11 @@ class _ProductCard extends StatelessWidget {
                 child: KioskMenuImage(
                   url: imageUrl,
                   asset: item.imageAsset,
+                  // 086: a fixture asset that fails to load shows the plain
+                  // well (pre-083 exact) — the card title already names it.
+                  assetErrorFallback: const ColoredBox(
+                    color: KioskColors.imageWell,
+                  ),
                   fallback: ColoredBox(
                     color: KioskColors.imageWell,
                     child: Center(

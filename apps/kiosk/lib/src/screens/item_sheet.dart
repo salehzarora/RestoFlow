@@ -415,6 +415,11 @@ class KioskItemSheet extends ConsumerWidget {
                           ),
                         ),
                         asset: item.imageAsset,
+                        // 086: fixture-asset load failure = plain well (the
+                        // sheet title already names the item once).
+                        assetErrorFallback: const ColoredBox(
+                          color: KioskColors.imageWell,
+                        ),
                         fallback: ColoredBox(
                           color: KioskColors.imageWell,
                           child: Center(

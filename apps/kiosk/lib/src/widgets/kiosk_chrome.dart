@@ -109,26 +109,44 @@ class KioskFixtureImage extends StatelessWidget {
 /// Product photo with the same no-broken-image guarantee, now for LIVE menus
 /// (KIOSK-001-PREREQ-083): a resolved short-lived signed [url] renders with a
 /// V2-consistent fade-in over [fallback]; no URL falls back to the fixture
-/// [asset] path (demo mode), and every failure — unresolved key, transport
-/// trouble, decode error — lands on [fallback] (the approved dark image well
-/// carrying the item name). Photos are an enhancement, never load-bearing.
+/// [asset] path (demo mode), and a live no-photo/failed-photo state lands on
+/// [fallback] (the approved dark image well carrying the item name). Photos
+/// are an enhancement, never load-bearing.
+///
+/// KIOSK-001-PREREQ-086: a fixture ASSET that fails to load renders
+/// [assetErrorFallback] — the pre-083 PLAIN dark well, deliberately without
+/// the item name (the card/sheet already shows it once; a name-bearing well
+/// here would duplicate the label, which is exactly what the repo-root CI
+/// environment surfaced). The premium name-well stays reserved for the LIVE
+/// no-photo cases.
 class KioskMenuImage extends StatelessWidget {
   const KioskMenuImage({
     super.key,
     this.url,
     this.asset,
     required this.fallback,
+    this.assetErrorFallback,
     this.fit = BoxFit.cover,
   });
   final String? url;
   final String? asset;
   final Widget fallback;
+
+  /// Rendered when [asset] itself fails to load (never for live URLs).
+  /// Defaults to [fallback] when not provided.
+  final Widget? assetErrorFallback;
   final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
     final url = this.url;
-    if (url == null) return KioskFixtureImage(asset: asset, fallback: fallback);
+    if (url == null) {
+      if (asset == null) return fallback;
+      return KioskFixtureImage(
+        asset: asset,
+        fallback: assetErrorFallback ?? fallback,
+      );
+    }
     return Stack(
       fit: StackFit.expand,
       children: [

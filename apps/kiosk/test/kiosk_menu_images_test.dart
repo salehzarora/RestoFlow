@@ -200,6 +200,52 @@ void main() {
       );
       expect(find.byType(KioskFixtureImage), findsOneWidget);
     });
+
+    // KIOSK-001-PREREQ-086 — the repo-root CI regression pin: a fixture
+    // asset that FAILS to load must render the PLAIN well, never a second
+    // name-bearing fallback (the card/sheet already shows the name once).
+    testWidgets(
+      'a FAILING fixture asset renders the plain well — no duplicate name',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            const KioskMenuImage(
+              asset: 'assets/fixtures/definitely-missing.png',
+              fallback: Text('NAME-WELL'),
+              assetErrorFallback: ColoredBox(
+                key: Key('plain-well'),
+                color: Color(0xFF10141B),
+              ),
+            ),
+          ),
+        );
+        // Let the asset-load failure reach errorBuilder.
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const Key('plain-well')), findsOneWidget);
+        expect(find.text('NAME-WELL'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a failing network URL leaves the PREMIUM live fallback visible',
+      (tester) async {
+        // flutter_test stubs HTTP with a 400 — the live photo load fails,
+        // errorBuilder collapses the image, the name-well stays.
+        await tester.pumpWidget(
+          host(
+            const KioskMenuImage(
+              url: 'https://signed.invalid/x.png',
+              fallback: Text('NAME-WELL'),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('NAME-WELL'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('live menu photo wiring end-to-end (fakes only)', () {
