@@ -60,6 +60,7 @@ class _DevicePairingPanelState extends State<DevicePairingPanel> {
     final typeLabel = switch (req.deviceType.trim().toLowerCase()) {
       'pos' => l10n.adminDeviceTypePos,
       'kds' => l10n.adminDeviceTypeKds,
+      'kiosk' => l10n.adminDeviceTypeKiosk,
       _ => req.deviceType,
     };
     return AlertDialog(

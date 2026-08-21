@@ -24,18 +24,22 @@ String? pairingCodeFromUrl() => kIsWeb ? pairingCodeFromUri(Uri.base) : null;
 
 /// LIVE-OPS-001 — the INVERSE of [pairingCodeFromUri]: build the hosted app link
 /// a Dashboard shows (as a QR + copyable URL) so staff can open a tablet straight
-/// onto the pairing screen with the code prefilled. POS/KDS are served at `/pos`
-/// and `/kds` on the SAME origin as the Dashboard, so the link is
-/// `{origin}/pos?pair=CODE` (or `/kds`). The operator still taps "Pair" — this is
+/// onto the pairing screen with the code prefilled. POS/KDS/Kiosk are served at
+/// `/pos`, `/kds` and `/kiosk` on the SAME origin as the Dashboard, so the link
+/// is `{origin}/pos?pair=CODE` (or `/kds`, `/kiosk`). The operator still taps
+/// "Pair" (kiosk: "Activate") — this is
 /// prefill only, never an auto-redeem. The code is short-lived, single-use and
 /// rate-limited server-side, so it is not a durable secret; it is never logged.
 
-/// The hosted route segment for [deviceType]: `pos` or `kds`. Null for any other
-/// (unknown) type — the caller then shows the manual code only, never a bad link.
+/// The hosted route segment for [deviceType]: `pos`, `kds`, or `kiosk`
+/// (KIOSK-001-DEVICE-088 — the customer self-service kiosk is served at
+/// `/kiosk` on the same origin). Null for any other (unknown) type — the
+/// caller then shows the manual code only, never a bad link.
 String? pairingRouteForDeviceType(String deviceType) =>
     switch (deviceType.trim().toLowerCase()) {
       'pos' => 'pos',
       'kds' => 'kds',
+      'kiosk' => 'kiosk',
       _ => null,
     };
 

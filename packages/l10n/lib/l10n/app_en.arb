@@ -2105,6 +2105,7 @@
   "adminFieldDeviceType": "Device type",
   "adminDeviceTypePos": "POS",
   "adminDeviceTypeKds": "Kitchen display",
+  "adminDeviceTypeKiosk": "Self-service kiosk",
   "adminLifecycleNote": "Lifecycle: issue a code → the device redeems it (pending) → approve (paired) → activate (active) → start a session. Approval and activation are separate steps; a device can’t jump from pending to active.",
   "adminIssueCode": "Issue code",
   "adminRedeem": "Redeem code",

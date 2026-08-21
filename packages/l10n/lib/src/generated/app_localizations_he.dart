@@ -2857,6 +2857,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminDeviceTypeKds => 'מסך מטבח';
 
   @override
+  String get adminDeviceTypeKiosk => 'קיוסק להזמנה עצמית';
+
+  @override
   String get adminLifecycleNote =>
       'מחזור חיים: הנפק קוד, המכשיר פודה אותו (ממתין), לאחר מכן אישור (מצומד), לאחר מכן הפעלה (פעיל), לאחר מכן התחלת מושב. אישור והפעלה הם שלבים נפרדים; מכשיר אינו יכול לקפוץ מממתין לפעיל.';
 

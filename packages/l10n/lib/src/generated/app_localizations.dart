@@ -5338,6 +5338,12 @@ abstract class AppLocalizations {
   /// **'Kitchen display'**
   String get adminDeviceTypeKds;
 
+  /// No description provided for @adminDeviceTypeKiosk.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-service kiosk'**
+  String get adminDeviceTypeKiosk;
+
   /// No description provided for @adminLifecycleNote.
   ///
   /// In en, this message translates to:

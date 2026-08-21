@@ -124,6 +124,19 @@ void main() {
       expect(pairingCodeFromUri(link), 'a b&c=%'); // parser round-trips it
     });
 
+    test('KIOSK routes to /kiosk with the encoded pair query (088)', () {
+      expect(pairingRouteForDeviceType('kiosk'), 'kiosk');
+      expect(pairingRouteForDeviceType('  KIOSK '), 'kiosk');
+      final link = pairingLinkForDeviceType(
+        base: Uri.parse('https://resto.example/settings?tab=devices#x'),
+        code: 'KI-42',
+        deviceType: 'kiosk',
+      )!;
+      // Origin-only (the Dashboard's own path/query/fragment never leak).
+      expect(link.toString(), 'https://resto.example/kiosk?pair=KI-42');
+      expect(pairingCodeFromUri(link), 'KI-42'); // round-trips
+    });
+
     test('null for an unknown device type or a blank code', () {
       expect(
         pairingLinkForDeviceType(

@@ -94,6 +94,30 @@ void main() {
     );
   });
 
+  testWidgets('KIOSK: localized label + link routes to /kiosk (088)', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await _pump(
+      tester,
+      const PairingPanelRequest(
+        deviceLabel: 'Lobby Kiosk',
+        deviceType: 'kiosk',
+        code: 'KI-42',
+      ),
+      base: Uri.parse('https://resto.example/'),
+    );
+    // Localized kiosk type label (never the raw type / POS).
+    expect(find.text(l10n.adminDeviceTypeKiosk), findsOneWidget);
+    expect(find.byKey(const Key('pairing-qr')), findsOneWidget);
+    expect(
+      _selectable(tester, const Key('pairing-link')),
+      'https://resto.example/kiosk?pair=KI-42',
+    );
+    // The manual code stays visible as the fallback.
+    expect(_selectable(tester, const Key('pairing-code')), 'KI-42');
+  });
+
   testWidgets('preserves a localhost origin WITH port', (tester) async {
     await _pump(
       tester,
