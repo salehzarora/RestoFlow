@@ -409,16 +409,42 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
         theme.extension<RestoflowSemanticColors>() ??
         RestoflowSemanticColors.of(theme.brightness);
     final visual = deviceStatusVisual(context, widget.device.status);
-    final isKds = widget.device.deviceType == 'kds';
     final warningStyle = RestoflowTone.warning.styleOf(theme);
-    // POS vs KDS at a glance: distinct icon + a distinctly tinted badge.
-    final typeIcon = isKds ? Icons.countertops_outlined : Icons.point_of_sale;
-    final typeBackground = isKds
-        ? semantic.infoContainer
-        : semantic.accentContainer;
-    final typeForeground = isKds
-        ? semantic.onInfoContainer
-        : semantic.onAccentContainer;
+    // KIOSK-001-DEVICE-088: explicit THREE-way presentation — POS, KDS and
+    // KIOSK each get a distinct icon + tinted badge, and an UNKNOWN future
+    // type renders a neutral raw-type fallback instead of masquerading as POS.
+    final deviceType = widget.device.deviceType.trim().toLowerCase();
+    final (
+      typeIcon,
+      typeBackground,
+      typeForeground,
+      typeLabel,
+    ) = switch (deviceType) {
+      'pos' => (
+        Icons.point_of_sale,
+        semantic.accentContainer,
+        semantic.onAccentContainer,
+        l10n.adminDeviceTypePos,
+      ),
+      'kds' => (
+        Icons.countertops_outlined,
+        semantic.infoContainer,
+        semantic.onInfoContainer,
+        l10n.adminDeviceTypeKds,
+      ),
+      'kiosk' => (
+        Icons.storefront_outlined,
+        semantic.successContainer,
+        semantic.onSuccessContainer,
+        l10n.adminDeviceTypeKiosk,
+      ),
+      _ => (
+        Icons.devices_other_outlined,
+        scheme.surfaceContainerHighest,
+        scheme.onSurfaceVariant,
+        widget.device.deviceType,
+      ),
+    };
     return Card(
       elevation: 0,
       color: scheme.surfaceContainerLow,
@@ -463,9 +489,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           AdminPill(
-                            label: isKds
-                                ? l10n.adminDeviceTypeKds
-                                : l10n.adminDeviceTypePos,
+                            label: typeLabel,
                             color: typeForeground,
                             icon: typeIcon,
                           ),
@@ -676,6 +700,10 @@ class _CreateDeviceDialogState extends State<_CreateDeviceDialog> {
                 DropdownMenuItem(
                   value: 'kds',
                   child: Text(l10n.adminDeviceTypeKds),
+                ),
+                DropdownMenuItem(
+                  value: 'kiosk',
+                  child: Text(l10n.adminDeviceTypeKiosk),
                 ),
               ],
               onChanged: (v) => setState(() => _type = v ?? _type),

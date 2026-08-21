@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show pairingCodeFromUrl;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
@@ -107,6 +109,10 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
       _GatePhase.needsActivation => KioskActivationScreen(
         pairing: widget.pairing,
         onPaired: _onPaired,
+        // KIOSK-001-DEVICE-088: the Dashboard link/QR opens
+        // `/kiosk?pair=CODE` — PREFILL only (shared LIVE-DEVICE-001 seam);
+        // the operator still confirms activation, never an auto-redeem.
+        initialCode: pairingCodeFromUrl(),
       ),
     };
   }
@@ -123,17 +129,24 @@ class KioskActivationScreen extends StatefulWidget {
     super.key,
     required this.pairing,
     required this.onPaired,
+    this.initialCode,
   });
 
   final DevicePairingRepository pairing;
   final void Function(DeviceContext context) onPaired;
+
+  /// Optional enrollment-code PREFILL (from the `?pair=` URL the Dashboard
+  /// generates). Editable, never auto-submitted, never logged.
+  final String? initialCode;
 
   @override
   State<KioskActivationScreen> createState() => _KioskActivationScreenState();
 }
 
 class _KioskActivationScreenState extends State<KioskActivationScreen> {
-  final TextEditingController _code = TextEditingController();
+  late final TextEditingController _code = TextEditingController(
+    text: widget.initialCode ?? '',
+  );
   bool _busy = false;
   PairingFailureKind? _error;
 

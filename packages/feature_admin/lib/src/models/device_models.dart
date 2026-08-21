@@ -18,8 +18,9 @@ enum DeviceLifecycleStatus {
   final String wire;
 }
 
-/// `pos` or `kds` (the existing `devices.device_type` set).
-const List<String> kDeviceTypes = ['pos', 'kds'];
+/// `pos`, `kds` or `kiosk` — the `devices.device_type` set the server
+/// enforces (kiosk added by KIOSK-001; the customer self-service surface).
+const List<String> kDeviceTypes = ['pos', 'kds', 'kiosk'];
 
 /// One device + its current pairing state, shown on the Devices screen.
 class AdminDevice {

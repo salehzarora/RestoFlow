@@ -2894,6 +2894,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDeviceTypeKds => 'Kitchen display';
 
   @override
+  String get adminDeviceTypeKiosk => 'Self-service kiosk';
+
+  @override
   String get adminLifecycleNote =>
       'Lifecycle: issue a code → the device redeems it (pending) → approve (paired) → activate (active) → start a session. Approval and activation are separate steps; a device can’t jump from pending to active.';
 

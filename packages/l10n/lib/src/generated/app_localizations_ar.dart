@@ -2874,6 +2874,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDeviceTypeKds => 'شاشة مطبخ';
 
   @override
+  String get adminDeviceTypeKiosk => 'كشك الطلب الذاتي';
+
+  @override
   String get adminLifecycleNote =>
       'دورة الحياة: أصدر رمزًا، يستردّه الجهاز (قيد الانتظار)، ثم الموافقة (مقترن)، ثم التفعيل (نشط)، ثم بدء جلسة. الموافقة والتفعيل خطوتان منفصلتان؛ لا يمكن للجهاز القفز من قيد الانتظار إلى نشط.';
 

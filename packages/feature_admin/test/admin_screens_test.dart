@@ -2,8 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+/// KIOSK-001-DEVICE-088 — an UNKNOWN future device type must render the
+/// neutral fallback, never masquerade as POS. The demo store refuses unknown
+/// types at create time (correctly), so the listing seam injects one.
+class _UnknownTypeStore extends DemoAdminStore {
+  _UnknownTypeStore({required super.scope});
+
+  @override
+  Future<AdminResult<List<AdminDevice>>> loadDevices() async {
+    final r = await super.loadDevices();
+    return r.fold(
+      (list) => Success([
+        ...list,
+        const AdminDevice(
+          id: 'd-mystery',
+          label: 'Mystery Device',
+          deviceType: 'printer',
+          branchLabel: 'Main',
+          status: DeviceLifecycleStatus.none,
+        ),
+      ]),
+      Failure.new,
+    );
+  }
+}
 
 Future<AppLocalizations> en() =>
     AppLocalizations.delegate.load(const Locale('en'));
@@ -136,4 +162,65 @@ void main() {
     expect(find.text(l10n.adminTokenStartedTitle), findsOneWidget);
     expect(find.text(l10n.adminShownOnce), findsOneWidget);
   });
+
+  testWidgets(
+    'create-device dialog offers POS + KDS + KIOSK, and selecting KIOSK '
+    'creates a device labeled as a kiosk (088)',
+    (tester) async {
+      final l10n = await en();
+      await pumpAdmin(tester, const AdminDevicesScreen());
+      await tester.tap(find.text(l10n.adminCreateDevice));
+      await tester.pumpAndSettle();
+      // All THREE choices exist in the type dropdown.
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.adminDeviceTypePos), findsWidgets);
+      expect(find.text(l10n.adminDeviceTypeKds), findsWidgets);
+      expect(find.text(l10n.adminDeviceTypeKiosk), findsWidgets);
+      await tester.tap(find.text(l10n.adminDeviceTypeKiosk).last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, 'Lobby Kiosk');
+      await tester.tap(find.text(l10n.adminCreate));
+      await tester.pumpAndSettle();
+      // The generic create path persisted device_type kiosk: the new tile
+      // carries the kiosk pill + icon — NEVER the POS label.
+      expect(find.text('Lobby Kiosk'), findsOneWidget);
+      // Icon appears twice per tile by design: the 48px leading box + the pill.
+      expect(find.byIcon(Icons.storefront_outlined), findsNWidgets(2));
+      expect(find.text(l10n.adminDeviceTypeKiosk), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an UNKNOWN device type renders the neutral fallback, never POS (088)',
+    (tester) async {
+      final l10n = await en();
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final scope = AdminScope.demo;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: adminFeatureOverrides(
+            scope: scope,
+            repository: _UnknownTypeStore(scope: scope),
+          ),
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: const Scaffold(body: AdminDevicesScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Mystery Device'), findsOneWidget);
+      // Raw-type neutral pill + neutral icon; POS pills stay bound to the
+      // actual POS devices only (the three seeded ones).
+      expect(find.text('printer'), findsOneWidget);
+      // Leading box + pill both carry the neutral icon.
+      expect(find.byIcon(Icons.devices_other_outlined), findsNWidgets(2));
+      expect(find.text(l10n.adminDeviceTypePos), findsNWidgets(3));
+    },
+  );
 }

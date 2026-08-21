@@ -879,6 +879,7 @@
   "adminFieldDeviceType": "نوع الجهاز",
   "adminDeviceTypePos": "نقطة بيع",
   "adminDeviceTypeKds": "شاشة مطبخ",
+  "adminDeviceTypeKiosk": "كشك الطلب الذاتي",
   "adminLifecycleNote": "دورة الحياة: أصدر رمزًا، يستردّه الجهاز (قيد الانتظار)، ثم الموافقة (مقترن)، ثم التفعيل (نشط)، ثم بدء جلسة. الموافقة والتفعيل خطوتان منفصلتان؛ لا يمكن للجهاز القفز من قيد الانتظار إلى نشط.",
   "adminIssueCode": "إصدار رمز",
   "adminRedeem": "استرداد الرمز",
