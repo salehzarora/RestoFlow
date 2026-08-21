@@ -11,6 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String kPosDeviceSessionPrefix = 'restoflow.pos.device_session.v1';
 const String kKdsDeviceSessionPrefix = 'restoflow.kds.device_session.v1';
 
+/// KIOSK-001 Phase 3: the kiosk surface joins the same origin (a hosted kiosk
+/// web target would live under its own path), so it takes its own prefix for
+/// exactly the reason above — no surface may ever read or clear another's
+/// credential slot.
+const String kKioskDeviceSessionPrefix = 'restoflow.kiosk.device_session.v1';
+
 /// A `shared_preferences`-backed [DeviceSessionSecretStore] (LIVE-DEVICE-001) —
 /// used ON WEB so a paired POS/KDS tablet stays paired across an F5 / browser
 /// restart, which the `flutter_secure_storage` web backing does NOT reliably do

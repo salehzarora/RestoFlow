@@ -6534,4 +6534,100 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kioskResyncDone => 'أُعيدت مزامنة القائمة · بيانات تجريبية';
+
+  @override
+  String get kioskActivationTitle => 'تفعيل الجهاز';
+
+  @override
+  String get kioskActivationSubtitle =>
+      'أدخل رمز التسجيل من لوحة التحكم لإقران هذا الجهاز.';
+
+  @override
+  String get kioskActivationCodeLabel => 'رمز التسجيل';
+
+  @override
+  String get kioskActivationSubmit => 'تفعيل';
+
+  @override
+  String get kioskActivationErrorInvalid =>
+      'الرمز غير صحيح. تحقق منه وحاول مجددًا.';
+
+  @override
+  String get kioskActivationErrorExpired =>
+      'انتهت صلاحية الرمز. أصدر رمزًا جديدًا من لوحة التحكم.';
+
+  @override
+  String get kioskActivationErrorWrongType => 'هذا الرمز يخص نوع جهاز آخر.';
+
+  @override
+  String get kioskActivationErrorLocked =>
+      'محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.';
+
+  @override
+  String get kioskActivationErrorNetwork =>
+      'لا يوجد اتصال. تحقق من الشبكة وحاول مجددًا.';
+
+  @override
+  String get kioskActivationErrorUnknown => 'فشل التفعيل. حاول مجددًا.';
+
+  @override
+  String get kioskBootRestoring => 'جارٍ فحص الجهاز…';
+
+  @override
+  String get kioskReconnectTitle => 'جارٍ إعادة الاتصال…';
+
+  @override
+  String get kioskReconnectBody =>
+      'فقد الجهاز اتصاله بالشبكة. سيعود للعمل قريبًا.';
+
+  @override
+  String get kioskRetry => 'حاول مجددًا';
+
+  @override
+  String get kioskMenuLoadingTitle => 'جارٍ تحميل القائمة…';
+
+  @override
+  String get kioskMenuEmptyTitle => 'القائمة فارغة';
+
+  @override
+  String get kioskMenuEmptyBody => 'يرجى الطلب من الكاونتر.';
+
+  @override
+  String get kioskMenuUnavailableTitle => 'القائمة غير متاحة';
+
+  @override
+  String get kioskMenuUnavailableBody => 'يرجى الطلب من الكاونتر.';
+
+  @override
+  String get kioskTablesLoadingTitle => 'جارٍ فحص الطاولات…';
+
+  @override
+  String get kioskTablesUnavailableTitle => 'الطاولات غير متاحة';
+
+  @override
+  String get kioskTablesUnavailableBody => 'تعذّر فحص الطاولات حاليًا.';
+
+  @override
+  String get kioskTablesRefresh => 'تحديث';
+
+  @override
+  String get kioskItemUnavailableBadge => 'نفدت الكمية';
+
+  @override
+  String get kioskCartStaleTitle => 'تغيّرت القائمة';
+
+  @override
+  String get kioskCartStaleBody =>
+      'تم تحديث بعض الأصناف أو الأسعار في طلبك. راجع طلبك للمتابعة.';
+
+  @override
+  String get kioskCartStaleRefresh => 'تحديث الطلب';
+
+  @override
+  String get kioskOrderingUnavailable =>
+      'الطلب غير متاح من هذا الجهاز حاليًا — يرجى الطلب من الكاونتر.';
+
+  @override
+  String get kioskTableNoLongerAvailable =>
+      'تم حجز هذه الطاولة للتو — يرجى اختيار طاولة أخرى.';
 }

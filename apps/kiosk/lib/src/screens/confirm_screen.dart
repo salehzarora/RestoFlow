@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
+import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -21,6 +22,7 @@ class KioskConfirmScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
+    final menu = ref.watch(kioskMenuDataProvider);
     final order = state.lastOrder;
     if (order == null) return const SizedBox.shrink();
     final rtl = state.rtl;
@@ -238,7 +240,7 @@ class KioskConfirmScreen extends ConsumerWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                kioskItemById(line.itemId).name.of(lang),
+                                menu.tryItem(line.itemId)?.name.of(lang) ?? '',
                                 style: KioskType.body(
                                   21,
                                   FontWeight.w700,
@@ -257,14 +259,18 @@ class KioskConfirmScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        if (KioskCartSheetSummary.of(line, lang).isNotEmpty)
+                        if (KioskCartSheetSummary.of(
+                          menu,
+                          line,
+                          lang,
+                        ).isNotEmpty)
                           Padding(
                             padding: const EdgeInsetsDirectional.only(
                               start: 38,
                               top: 2,
                             ),
                             child: Text(
-                              KioskCartSheetSummary.of(line, lang),
+                              KioskCartSheetSummary.of(menu, line, lang),
                               style: KioskType.body(
                                 18,
                                 FontWeight.w500,
@@ -383,14 +389,18 @@ class KioskConfirmScreen extends ConsumerWidget {
 
 /// Shared modifier-summary helper (same rule the cart rows use).
 abstract final class KioskCartSheetSummary {
-  static String of(KioskCartLine line, String lang) {
-    final item = kioskItemById(line.itemId);
+  static String of(KioskMenuData menu, KioskCartLine line, String lang) {
+    final item = menu.tryItem(line.itemId);
+    if (item == null) return '';
     final parts = <String>[];
     for (final gid in item.groupIds) {
-      final group = kioskFixtureGroups[gid]!;
+      final group = menu.group(gid);
+      if (group == null) continue;
       for (final oid in line.selected[gid] ?? const <String>[]) {
         if (gid == 'weight' && oid == kioskIncludedWeightOptionId) continue;
-        parts.add(group.options.firstWhere((o) => o.id == oid).name.of(lang));
+        for (final o in group.options) {
+          if (o.id == oid) parts.add(o.name.of(lang));
+        }
       }
     }
     return parts.join(' · ');

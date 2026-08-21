@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
+import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -35,18 +36,23 @@ class KioskItemSheet extends ConsumerWidget {
     final controller = ref.read(kioskFlowProvider.notifier);
     final draft = state.draft;
     if (draft == null) return const SizedBox.shrink();
-    final item = draft.item;
+    final menu = ref.watch(kioskMenuDataProvider);
+    final item = menu.tryItem(draft.itemId);
+    // A live refresh can remove the drafted item mid-sheet — close honestly.
+    if (item == null) return const SizedBox.shrink();
     final lang = state.lang;
-    final unmet = draft.unmetRequired;
+    final unmet = draft.unmetRequiredIn(menu);
 
     // Price-math line: base + every positive selected delta (V2 dBreak).
     final parts = <String>[kioskFormatMinor(item.basePriceMinor, lang)];
     for (final gid in item.groupIds) {
-      final group = kioskFixtureGroups[gid]!;
+      final group = menu.group(gid);
+      if (group == null) continue;
       for (final oid in draft.selected[gid] ?? const <String>[]) {
-        final o = group.options.firstWhere((o) => o.id == oid);
-        if (o.priceDeltaMinor > 0) {
-          parts.add(kioskFormatDeltaMinor(o.priceDeltaMinor, lang));
+        for (final o in group.options) {
+          if (o.id == oid && o.priceDeltaMinor > 0) {
+            parts.add(kioskFormatDeltaMinor(o.priceDeltaMinor, lang));
+          }
         }
       }
     }
@@ -193,19 +199,20 @@ class KioskItemSheet extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 34),
-                              for (final gid in item.groupIds) ...[
-                                _GroupSection(
-                                  groupId: gid,
-                                  draft: draft,
-                                  lang: lang,
-                                  showError:
-                                      draft.showRequiredError &&
-                                      unmet.contains(gid),
-                                  onToggle: (oid) =>
-                                      controller.toggleOption(gid, oid),
-                                ),
-                                const SizedBox(height: 34),
-                              ],
+                              for (final gid in item.groupIds)
+                                if (menu.group(gid) case final group?) ...[
+                                  _GroupSection(
+                                    group: group,
+                                    draft: draft,
+                                    lang: lang,
+                                    showError:
+                                        draft.showRequiredError &&
+                                        unmet.contains(gid),
+                                    onToggle: (oid) =>
+                                        controller.toggleOption(gid, oid),
+                                  ),
+                                  const SizedBox(height: 34),
+                                ],
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -348,7 +355,9 @@ class KioskItemSheet extends ConsumerWidget {
                                         '${(draft.editingLineId != null ? l10n.kioskUpdateItem : l10n.kioskAddToOrder).toUpperCase()} · ',
                                     children: [
                                       TextSpan(
-                                        text: context.money(draft.totalMinor),
+                                        text: context.money(
+                                          draft.totalMinorIn(menu),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -493,13 +502,13 @@ class _QtyButton extends StatelessWidget {
 
 class _GroupSection extends StatelessWidget {
   const _GroupSection({
-    required this.groupId,
+    required this.group,
     required this.draft,
     required this.lang,
     required this.showError,
     required this.onToggle,
   });
-  final String groupId;
+  final KioskFixtureGroup group;
   final KioskItemDraft draft;
   final String lang;
   final bool showError;
@@ -508,7 +517,7 @@ class _GroupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final group = kioskFixtureGroups[groupId]!;
+    final groupId = group.id;
     final selectedIds = draft.selected[groupId] ?? const [];
     final single = group.type == KioskGroupType.single;
     // Single-select groups render full-width rows; multi are two columns.
@@ -525,7 +534,10 @@ class _GroupSection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                KioskItemSheet.groupLabel(l10n, groupId),
+                // LIVE groups carry the tenant name; fixtures keep the l10n
+                // heading keyed by the fixture group id.
+                group.displayName?.of(lang) ??
+                    KioskItemSheet.groupLabel(l10n, groupId),
                 style: KioskType.body(27, FontWeight.w800),
               ),
             ),

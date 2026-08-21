@@ -6491,4 +6491,97 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kioskResyncDone => 'התפריט סונכרן מחדש · נתוני דמו';
+
+  @override
+  String get kioskActivationTitle => 'הפעלת העמדה';
+
+  @override
+  String get kioskActivationSubtitle =>
+      'הזינו את קוד הרישום מלוח הבקרה כדי לצמד את המכשיר.';
+
+  @override
+  String get kioskActivationCodeLabel => 'קוד רישום';
+
+  @override
+  String get kioskActivationSubmit => 'הפעלה';
+
+  @override
+  String get kioskActivationErrorInvalid => 'הקוד אינו תקין. בדקו ונסו שוב.';
+
+  @override
+  String get kioskActivationErrorExpired =>
+      'תוקף הקוד פג. הנפיקו קוד חדש מלוח הבקרה.';
+
+  @override
+  String get kioskActivationErrorWrongType => 'הקוד שייך לסוג מכשיר אחר.';
+
+  @override
+  String get kioskActivationErrorLocked =>
+      'יותר מדי ניסיונות. המתינו מעט ונסו שוב.';
+
+  @override
+  String get kioskActivationErrorNetwork => 'אין חיבור. בדקו את הרשת ונסו שוב.';
+
+  @override
+  String get kioskActivationErrorUnknown => 'ההפעלה נכשלה. נסו שוב.';
+
+  @override
+  String get kioskBootRestoring => 'בודק את העמדה…';
+
+  @override
+  String get kioskReconnectTitle => 'מתחבר מחדש…';
+
+  @override
+  String get kioskReconnectBody => 'העמדה איבדה את החיבור לרשת. נחזור בקרוב.';
+
+  @override
+  String get kioskRetry => 'נסו שוב';
+
+  @override
+  String get kioskMenuLoadingTitle => 'טוען את התפריט…';
+
+  @override
+  String get kioskMenuEmptyTitle => 'התפריט ריק';
+
+  @override
+  String get kioskMenuEmptyBody => 'נא להזמין בדלפק.';
+
+  @override
+  String get kioskMenuUnavailableTitle => 'התפריט אינו זמין';
+
+  @override
+  String get kioskMenuUnavailableBody => 'נא להזמין בדלפק.';
+
+  @override
+  String get kioskTablesLoadingTitle => 'בודק את השולחנות…';
+
+  @override
+  String get kioskTablesUnavailableTitle => 'השולחנות אינם זמינים';
+
+  @override
+  String get kioskTablesUnavailableBody => 'לא ניתן לבדוק את השולחנות כרגע.';
+
+  @override
+  String get kioskTablesRefresh => 'רענון';
+
+  @override
+  String get kioskItemUnavailableBadge => 'אזל מהמלאי';
+
+  @override
+  String get kioskCartStaleTitle => 'התפריט השתנה';
+
+  @override
+  String get kioskCartStaleBody =>
+      'חלק מהפריטים או המחירים בהזמנה עודכנו. בדקו את ההזמנה כדי להמשיך.';
+
+  @override
+  String get kioskCartStaleRefresh => 'עדכון ההזמנה';
+
+  @override
+  String get kioskOrderingUnavailable =>
+      'לא ניתן להזמין מהעמדה כרגע — נא להזמין בדלפק.';
+
+  @override
+  String get kioskTableNoLongerAvailable =>
+      'השולחן נתפס הרגע — נא לבחור שולחן אחר.';
 }

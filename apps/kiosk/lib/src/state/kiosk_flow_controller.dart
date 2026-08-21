@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/kiosk_fixtures.dart';
+import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 
 /// KIOSK-001 Phase 1 — the kiosk-local flow state machine.
@@ -29,6 +30,7 @@ class KioskCartLine {
     required this.quantity,
     required this.selected,
     required this.note,
+    required this.capturedUnitMinor,
   });
   final int lineId;
   final String itemId;
@@ -38,16 +40,23 @@ class KioskCartLine {
   final Map<String, List<String>> selected;
   final String note;
 
+  /// The unit price CAPTURED when the customer accepted this line — the cart
+  /// always shows what was accepted. A later menu refresh that would price
+  /// this line differently marks the cart STALE instead of silently changing
+  /// the number (owner rule; the server enforces canonical prices at submit).
+  final int capturedUnitMinor;
+
   KioskCartLine copyWith({int? quantity}) => KioskCartLine(
     lineId: lineId,
     itemId: itemId,
     quantity: quantity ?? this.quantity,
     selected: selected,
     note: note,
+    capturedUnitMinor: capturedUnitMinor,
   );
 
-  int get unitMinor => kioskUnitPriceMinor(kioskItemById(itemId), selected);
-  int get lineTotalMinor => unitMinor * quantity;
+  int get unitMinor => capturedUnitMinor;
+  int get lineTotalMinor => capturedUnitMinor * quantity;
 }
 
 /// The item sheet's working draft (add or edit).
@@ -86,10 +95,12 @@ class KioskItemDraft {
     showRequiredError: showRequiredError ?? this.showRequiredError,
   );
 
-  KioskFixtureItem get item => kioskItemById(itemId);
-  int get unitMinor => kioskUnitPriceMinor(item, selected);
-  int get totalMinor => unitMinor * quantity;
-  List<String> get unmetRequired => kioskUnmetRequiredGroups(item, selected);
+  KioskFixtureItem itemIn(KioskMenuData menu) => menu.itemById(itemId);
+  int unitMinorIn(KioskMenuData menu) =>
+      menu.unitPriceMinor(itemIn(menu), selected);
+  int totalMinorIn(KioskMenuData menu) => unitMinorIn(menu) * quantity;
+  List<String> unmetRequiredIn(KioskMenuData menu) =>
+      menu.unmetRequiredGroups(itemIn(menu), selected);
 }
 
 /// Fixture device settings (in-memory only in Phase 1 — deliberately no
@@ -167,6 +178,7 @@ class KioskState {
     this.toast,
     this.toastTicksLeft = 0,
     this.busyFloor = true,
+    this.cartStale = false,
   });
 
   final String lang; // 'en' | 'he' | 'ar'
@@ -195,6 +207,11 @@ class KioskState {
   /// Fixture switch matching the board's busy-floor preset.
   final bool busyFloor;
 
+  /// True when a live menu refresh priced (or removed) something already in
+  /// the cart — the customer must reconfirm before ordering can continue;
+  /// prices are never changed silently.
+  final bool cartStale;
+
   bool get rtl => lang != 'en';
   int get cartCount => cart.fold(0, (a, l) => a + l.quantity);
   int get cartTotalMinor => cart.fold(0, (a, l) => a + l.lineTotalMinor);
@@ -221,6 +238,7 @@ class KioskState {
     Object? toast = _sentinel,
     int? toastTicksLeft,
     bool? busyFloor,
+    bool? cartStale,
   }) => KioskState(
     lang: lang ?? this.lang,
     screen: screen ?? this.screen,
@@ -251,6 +269,7 @@ class KioskState {
     toast: identical(toast, _sentinel) ? this.toast : toast as String?,
     toastTicksLeft: toastTicksLeft ?? this.toastTicksLeft,
     busyFloor: busyFloor ?? this.busyFloor,
+    cartStale: cartStale ?? this.cartStale,
   );
 
   static const _sentinel = Object();
@@ -269,6 +288,10 @@ class KioskFlowController extends Notifier<KioskState> {
   @override
   KioskState build() =>
       KioskState(lang: const KioskDeviceSettings().defaultLang);
+
+  /// The current menu snapshot (fixtures in demo mode, the live read in real
+  /// mode). Read per action — a menu refresh mid-flow is picked up naturally.
+  KioskMenuData get _menu => ref.read(kioskMenuDataProvider);
 
   // ---- activity / idle engine --------------------------------------------
 
@@ -395,7 +418,8 @@ class KioskFlowController extends Notifier<KioskState> {
       state = state.copyWith(screen: KioskScreen.service, sheet: null);
 
   void setCategoryIndex(int index) {
-    final clamped = index.clamp(0, kioskFixtureMenu.length - 1);
+    final count = _menu.categories.length;
+    final clamped = count == 0 ? 0 : index.clamp(0, count - 1);
     if (clamped != state.categoryIndex) {
       state = state.copyWith(categoryIndex: clamped);
     }
@@ -404,20 +428,19 @@ class KioskFlowController extends Notifier<KioskState> {
   // ---- item sheet ---------------------------------------------------------
 
   void openItem(String itemId) {
-    final item = kioskItemById(itemId);
-    final selected = <String, List<String>>{
-      for (final g in item.groupIds) g: [],
-    };
-    // V2: the included option preselects only where the menu defines one.
-    if (item.groupIds.contains('weight')) {
-      selected['weight'] = [kioskIncludedWeightOptionId];
-    }
+    final menu = _menu;
+    final item = menu.tryItem(itemId);
+    // A sold-out/unreadable item stays visible but can never be configured
+    // or added — the card is disabled; this guard is the belt behind it.
+    if (item == null || !item.available) return;
     state = state.copyWith(
       sheet: KioskSheet.item,
       draft: KioskItemDraft(
         itemId: itemId,
         quantity: 1,
-        selected: selected,
+        // V2: the included option preselects only where the menu defines one
+        // (fixtures); a LIVE menu defines no defaults and none is invented.
+        selected: menu.defaultSelectionFor(item),
         note: '',
       ),
     );
@@ -459,7 +482,8 @@ class KioskFlowController extends Notifier<KioskState> {
   void toggleOption(String groupId, String optionId) {
     final d = state.draft;
     if (d == null) return;
-    final group = kioskFixtureGroups[groupId]!;
+    final group = _menu.group(groupId);
+    if (group == null) return; // menu refreshed the group away mid-draft
     final selected = {
       for (final e in d.selected.entries) e.key: [...e.value],
     };
@@ -484,14 +508,23 @@ class KioskFlowController extends Notifier<KioskState> {
   }
 
   /// Add-to-order / Update-item. Blocked (with the shake flag) while a
-  /// required group is unmet — the CTA names the missing groups.
+  /// required group is unmet — the CTA names the missing groups. The unit
+  /// price is CAPTURED here (what the customer accepted); later menu changes
+  /// mark the cart stale instead of silently repricing.
   bool submitDraft() {
     final d = state.draft;
     if (d == null) return false;
-    if (d.unmetRequired.isNotEmpty) {
+    final menu = _menu;
+    if (menu.tryItem(d.itemId) == null) {
+      // The menu refreshed the item away mid-draft — nothing to add.
+      state = state.copyWith(sheet: null, draft: null);
+      return false;
+    }
+    if (d.unmetRequiredIn(menu).isNotEmpty) {
       state = state.copyWith(draft: d.copyWith(showRequiredError: true));
       return false;
     }
+    final captured = d.unitMinorIn(menu);
     if (d.editingLineId != null) {
       state = state.copyWith(
         cart: [
@@ -503,6 +536,7 @@ class KioskFlowController extends Notifier<KioskState> {
                 quantity: d.quantity,
                 selected: d.selected,
                 note: d.note,
+                capturedUnitMinor: captured,
               )
             else
               l,
@@ -520,6 +554,7 @@ class KioskFlowController extends Notifier<KioskState> {
             quantity: d.quantity,
             selected: d.selected,
             note: d.note,
+            capturedUnitMinor: captured,
           ),
         ],
         sheet: null,
@@ -561,11 +596,22 @@ class KioskFlowController extends Notifier<KioskState> {
   void setCustomerName(String v) => state = state.copyWith(customerName: v);
   void setCustomerPhone(String v) => state = state.copyWith(customerPhone: v);
 
-  /// Phase 1: "Place order" freezes a fixture snapshot and shows the
-  /// confirmation. It performs NO backend work of any kind — the real
-  /// submit path arrives in a later phase.
+  /// "Place order". Demo mode freezes the Phase-1 FIXTURE snapshot and shows
+  /// the confirmation — NO backend work of any kind. In real mode ordering is
+  /// DISABLED (the Phase-3 gate): the submit RPC is deliberately not
+  /// wired — the live server still refuses the owner-approved
+  /// dine-in-without-a-table flow — and a fake "order sent" to a real
+  /// customer would be a lie, so the customer sees an honest notice instead.
   void placeOrder() {
     if (state.cart.isEmpty || state.service == null) return;
+    if (!ref.read(kioskOrderingEnabledProvider)) {
+      state = state.copyWith(toast: 'ordering-unavailable', toastTicksLeft: 3);
+      return;
+    }
+    if (state.cartStale) {
+      state = state.copyWith(toast: 'cart-stale', toastTicksLeft: 3);
+      return;
+    }
     final seq = state.dailySeq + 1;
     state = state.copyWith(
       dailySeq: seq,
@@ -585,6 +631,69 @@ class KioskFlowController extends Notifier<KioskState> {
   }
 
   void newOrder() => reset();
+
+  // ---- live-menu cart integrity (Phase 3) ---------------------------------
+
+  /// Re-checks every cart line against a FRESH menu snapshot. Any line whose
+  /// item vanished, went unavailable, lost a selected option, or would price
+  /// differently marks the whole cart STALE — shown to the customer, never
+  /// silently repriced. Called by the live controller after each successful
+  /// menu read.
+  void revalidateCart(KioskMenuData menu) {
+    if (state.cart.isEmpty) {
+      if (state.cartStale) state = state.copyWith(cartStale: false);
+      return;
+    }
+    final stale = state.cart.any((l) => _lineIsStale(l, menu));
+    if (stale != state.cartStale) state = state.copyWith(cartStale: stale);
+  }
+
+  bool _lineIsStale(KioskCartLine line, KioskMenuData menu) {
+    final item = menu.tryItem(line.itemId);
+    if (item == null || !item.available) return true;
+    for (final entry in line.selected.entries) {
+      final group = menu.group(entry.key);
+      if (entry.value.isEmpty) continue;
+      if (group == null) return true;
+      for (final oid in entry.value) {
+        if (!group.options.any((o) => o.id == oid)) return true;
+      }
+    }
+    return menu.unitPriceMinor(item, line.selected) != line.capturedUnitMinor;
+  }
+
+  /// The customer's reconfirm action on a stale cart: rebuilds the cart
+  /// against the CURRENT menu — lines whose item is gone/unavailable are
+  /// dropped, vanished option ids are dropped, and prices are re-captured at
+  /// today's values (visibly — this runs only from the stale banner).
+  void refreshCartAgainstMenu() {
+    final menu = _menu;
+    final rebuilt = <KioskCartLine>[];
+    for (final line in state.cart) {
+      final item = menu.tryItem(line.itemId);
+      if (item == null || !item.available) continue;
+      final selected = <String, List<String>>{};
+      for (final gid in item.groupIds) {
+        final group = menu.group(gid);
+        if (group == null) continue;
+        selected[gid] = [
+          for (final oid in line.selected[gid] ?? const <String>[])
+            if (group.options.any((o) => o.id == oid)) oid,
+        ];
+      }
+      rebuilt.add(
+        KioskCartLine(
+          lineId: line.lineId,
+          itemId: line.itemId,
+          quantity: line.quantity,
+          selected: selected,
+          note: line.note,
+          capturedUnitMinor: menu.unitPriceMinor(item, selected),
+        ),
+      );
+    }
+    state = state.copyWith(cart: rebuilt, cartStale: false);
+  }
 
   // ---- staff path (VISUAL FIXTURE ONLY in Phase 1) ------------------------
 

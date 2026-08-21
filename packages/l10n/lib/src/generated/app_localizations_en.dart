@@ -6582,4 +6582,102 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kioskResyncDone => 'Menu re-synced · fixture data';
+
+  @override
+  String get kioskActivationTitle => 'Activate this kiosk';
+
+  @override
+  String get kioskActivationSubtitle =>
+      'Enter the enrollment code from the Dashboard to pair this device.';
+
+  @override
+  String get kioskActivationCodeLabel => 'Enrollment code';
+
+  @override
+  String get kioskActivationSubmit => 'Activate';
+
+  @override
+  String get kioskActivationErrorInvalid =>
+      'That code is not valid. Check it and try again.';
+
+  @override
+  String get kioskActivationErrorExpired =>
+      'That code has expired. Issue a new one from the Dashboard.';
+
+  @override
+  String get kioskActivationErrorWrongType =>
+      'That code belongs to a different device type.';
+
+  @override
+  String get kioskActivationErrorLocked =>
+      'Too many attempts. Wait a moment and try again.';
+
+  @override
+  String get kioskActivationErrorNetwork =>
+      'No connection. Check the network and try again.';
+
+  @override
+  String get kioskActivationErrorUnknown => 'Activation failed. Try again.';
+
+  @override
+  String get kioskBootRestoring => 'Checking this kiosk…';
+
+  @override
+  String get kioskReconnectTitle => 'Reconnecting…';
+
+  @override
+  String get kioskReconnectBody =>
+      'This kiosk lost its connection. It will be back shortly.';
+
+  @override
+  String get kioskRetry => 'Try again';
+
+  @override
+  String get kioskMenuLoadingTitle => 'Loading the menu…';
+
+  @override
+  String get kioskMenuEmptyTitle => 'The menu is empty';
+
+  @override
+  String get kioskMenuEmptyBody => 'Please order at the counter.';
+
+  @override
+  String get kioskMenuUnavailableTitle => 'The menu is unavailable';
+
+  @override
+  String get kioskMenuUnavailableBody => 'Please order at the counter.';
+
+  @override
+  String get kioskTablesLoadingTitle => 'Checking the floor…';
+
+  @override
+  String get kioskTablesUnavailableTitle => 'Tables are unavailable';
+
+  @override
+  String get kioskTablesUnavailableBody =>
+      'We can\'t check the tables right now.';
+
+  @override
+  String get kioskTablesRefresh => 'Refresh';
+
+  @override
+  String get kioskItemUnavailableBadge => 'Sold out';
+
+  @override
+  String get kioskCartStaleTitle => 'The menu changed';
+
+  @override
+  String get kioskCartStaleBody =>
+      'Some items or prices in your order were updated. Review your order to continue.';
+
+  @override
+  String get kioskCartStaleRefresh => 'Update order';
+
+  @override
+  String get kioskOrderingUnavailable =>
+      'Ordering is unavailable on this kiosk right now — please order at the counter.';
+
+  @override
+  String get kioskTableNoLongerAvailable =>
+      'That table was just taken — please pick another.';
 }

@@ -176,7 +176,15 @@ class _KioskToast extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(kioskFlowProvider);
-    final text = state.toast == 'added' ? l10n.kioskAddedToOrder : state.toast!;
+    // Semantic tokens → localized copy; anything else is a staff fixture
+    // string shown verbatim (settings shell only).
+    final text = switch (state.toast) {
+      'added' => l10n.kioskAddedToOrder,
+      'ordering-unavailable' => l10n.kioskOrderingUnavailable,
+      'cart-stale' => l10n.kioskCartStaleTitle,
+      'table-taken' => l10n.kioskTableNoLongerAvailable,
+      final other => other!,
+    };
 
     return Positioned(
       bottom: 170,
@@ -205,6 +213,7 @@ class _KioskToast extends ConsumerWidget {
                 ),
               ],
             ),
+            constraints: const BoxConstraints(maxWidth: 900),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -214,10 +223,14 @@ class _KioskToast extends ConsumerWidget {
                   color: KioskColors.accentTop,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  text,
-                  key: const Key('kiosk-toast'),
-                  style: KioskType.body(23, FontWeight.w700),
+                Flexible(
+                  child: Text(
+                    text,
+                    key: const Key('kiosk-toast'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: KioskType.body(23, FontWeight.w700),
+                  ),
                 ),
               ],
             ),

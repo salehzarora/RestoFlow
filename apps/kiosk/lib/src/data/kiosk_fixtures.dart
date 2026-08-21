@@ -1,21 +1,33 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show IconData;
 
-/// KIOSK-001 Phase 1 — FIXTURE DATA ONLY.
+/// KIOSK-001 Phase 1 fixture data + the shared kiosk MENU VIEW-MODEL types.
 ///
-/// This file mirrors the demo dataset embedded in the approved artifact
+/// The fixture half mirrors the demo dataset embedded in the approved artifact
 /// (`Kiosk Prototype v2.dc.html`): the EMBER Burger House brand, five
 /// categories, the mandatory pricing fixture (burger base 40.00 ILS with a
 /// required weight group: 120g included · 240g +15.00 · 360g +25.00), option
-/// sets, and the busy-floor table zones. Everything is in-memory; nothing
-/// here talks to a backend. Item/option names are TENANT DATA in production
-/// (a single stored string), so fixtures carry them as data maps — they are
-/// deliberately NOT l10n keys, matching how the POS treats menu content.
+/// sets, and the busy-floor table zones. Item/option names are TENANT DATA in
+/// production (a single stored string), so fixtures carry them as data maps —
+/// they are deliberately NOT l10n keys, matching how the POS treats menu
+/// content.
+///
+/// Phase 3: the SAME classes are also the UI contract for the LIVE
+/// `kiosk_menu`/`kiosk_tables` reads — the live mapper populates them from the
+/// server envelope ([KioskText3.same]: a live name is one tenant string in
+/// every language). The approved V2 screens render one shape either way, so
+/// fixture (demo) and live (real) mode can never drift visually.
 ///
 /// All money is INTEGER MINOR UNITS (D-007). The fixture currency is ILS
 /// (exponent 2, symbol ₪) to match the approved design's price rendering.
 @immutable
 class KioskText3 {
   const KioskText3({required this.en, required this.he, required this.ar});
+
+  /// A LIVE tenant string: production menu content is a single stored string,
+  /// shown verbatim in every UI language (exactly how the POS renders it).
+  const KioskText3.same(String value) : en = value, he = value, ar = value;
+
   final String en;
   final String he;
   final String ar;
@@ -33,12 +45,18 @@ class KioskFixtureOption {
     required this.id,
     required this.name,
     required this.priceDeltaMinor,
+    this.kitchenMeat,
   });
   final String id;
   final KioskText3 name;
 
   /// Signed integer minor units added to the unit price when selected.
   final int priceDeltaMinor;
+
+  /// LIVE only: the option's opaque preparation snapshot source served by
+  /// `kiosk_menu` (the 021 frozen-prep contract). Carried untouched so the
+  /// future submit phase can build the payload; nothing renders it.
+  final Map<String, dynamic>? kitchenMeat;
 }
 
 enum KioskGroupType { single, multi }
@@ -50,6 +68,10 @@ class KioskFixtureGroup {
     required this.type,
     required this.isRequired,
     this.maxSelect,
+    this.minSelect = 0,
+    this.allowQuantity = false,
+    this.maxQuantity,
+    this.displayName,
     required this.options,
   });
   final String id;
@@ -58,7 +80,27 @@ class KioskFixtureGroup {
 
   /// Only meaningful for [KioskGroupType.multi].
   final int? maxSelect;
+
+  /// LIVE server rule (fixtures encode required-ness via [isRequired] only).
+  final int minSelect;
+
+  /// LIVE server rules, carried for the submit phase. The approved V2 item
+  /// sheet has no per-option quantity steppers, so every selection is
+  /// quantity 1 — always a legal configuration under these rules.
+  final bool allowQuantity;
+  final int? maxQuantity;
+
+  /// LIVE only: the tenant group name. Fixtures keep the l10n heading keyed
+  /// by [id]; live groups show this string verbatim.
+  final KioskText3? displayName;
   final List<KioskFixtureOption> options;
+
+  /// The POS effective-rule mirror (the server enforces the same at submit):
+  /// single ⇒ exactly one pick; a required multiple with min 0 ⇒ at least one.
+  int get effectiveMin => type == KioskGroupType.single
+      ? 1
+      : (isRequired && minSelect == 0 ? 1 : minSelect);
+  int? get effectiveMax => type == KioskGroupType.single ? 1 : maxSelect;
 }
 
 @immutable
@@ -70,6 +112,9 @@ class KioskFixtureItem {
     required this.basePriceMinor,
     required this.groupIds,
     this.imageAsset,
+    this.imagePath,
+    this.available = true,
+    this.availabilityReason,
   });
   final String id;
   final KioskText3 name;
@@ -79,6 +124,16 @@ class KioskFixtureItem {
 
   /// Fixture image asset path, or null for the approved no-photo treatment.
   final String? imageAsset;
+
+  /// LIVE only: the server storage object key. NOT renderable in Phase 3 —
+  /// the menu-image read policy is deliberately POS-only until the kiosk
+  /// media phase — so the approved no-photo treatment renders instead.
+  final String? imagePath;
+
+  /// LIVE availability: an unavailable item stays visible but cannot be
+  /// added (server refuses it at submit anyway).
+  final bool available;
+  final String? availabilityReason;
 }
 
 @immutable
@@ -89,6 +144,7 @@ class KioskFixtureCategory {
     required this.items,
     this.thumbAsset,
     this.iconKind,
+    this.iconData,
   });
   final String id;
   final KioskText3 name;
@@ -97,6 +153,11 @@ class KioskFixtureCategory {
   /// Wheel disc photo, or null → glyph disc ([iconKind]: 'drink'|'dessert').
   final String? thumbAsset;
   final String? iconKind;
+
+  /// LIVE only: the owner-chosen glyph resolved from the category's
+  /// `icon_key` through the shared registry; null/unknown keys fall back to
+  /// the stable Phase-1 glyph treatment.
+  final IconData? iconData;
 }
 
 enum KioskTableState { available, occupied, reserved, outOfService }
@@ -107,19 +168,32 @@ class KioskFixtureTable {
     required this.label,
     required this.seats,
     required this.state,
+    this.id,
   });
   final String label;
   final int seats;
   final KioskTableState state;
+
+  /// LIVE only: the server table id the future submit phase will send.
+  final String? id;
 }
 
 @immutable
 class KioskFixtureZone {
-  const KioskFixtureZone({required this.id, required this.tables});
+  const KioskFixtureZone({
+    required this.id,
+    required this.tables,
+    this.displayName,
+  });
 
-  /// l10n key discriminator: 'hall' | 'patio' | 'bar'.
+  /// l10n key discriminator: 'hall' | 'patio' | 'bar' (fixtures), or an
+  /// opaque live section id.
   final String id;
   final List<KioskFixtureTable> tables;
+
+  /// LIVE only: the tenant section name, shown verbatim; fixtures keep the
+  /// l10n zone labels keyed by [id].
+  final String? displayName;
 }
 
 /// Brand block — the artifact's demo brand. Wordmark stays Latin in every
