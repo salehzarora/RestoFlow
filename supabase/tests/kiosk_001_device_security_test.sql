@@ -406,11 +406,14 @@ select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 't
     '00000000-0000-0000-0000-007100071a01', 'ILS', null, null, null,
     (select items from _line), 1000, 0, 0, 1000)) ->> 'error'),
   'table_not_allowed', 'G1: takeaway with a table is refused (shape rule)');
-select is(((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
+-- KIOSK-001-PREREQ-079: dine-in WITHOUT a table is now the owner-approved
+-- table-selection-OFF flow (no lock, no occupancy). Full matrix + lifecycle:
+-- kiosk_001_dinein_no_table_test.sql.
+select ok((((public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
     '00000000-0000-0000-0000-0071000a1df2', 'kiosk-op-v2', 'dine_in',
     null, 'ILS', null, null, null,
-    (select items from _line), 1000, 0, 0, 1000)) ->> 'error'),
-  'table_required', 'G2: dine-in without a table is refused (shape rule)');
+    (select items from _line), 1000, 0, 0, 1000)) ->> 'ok')::boolean),
+  'G2: dine-in WITHOUT a table is ACCEPTED (079 — the table-selection-OFF flow)');
 select throws_ok(
   $$select public.kiosk_submit_order('00000000-0000-0000-0000-007100004001', 'tok-kiosk-a',
       '00000000-0000-0000-0000-0071000a1df3', 'kiosk-op-v3', 'takeaway', null, 'ILS', null, null, null,
