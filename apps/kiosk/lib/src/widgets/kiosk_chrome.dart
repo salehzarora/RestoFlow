@@ -106,6 +106,70 @@ class KioskFixtureImage extends StatelessWidget {
       : Image.asset(asset!, fit: fit, errorBuilder: (_, _, _) => fallback);
 }
 
+/// Product photo with the same no-broken-image guarantee, now for LIVE menus
+/// (KIOSK-001-PREREQ-083): a resolved short-lived signed [url] renders with a
+/// V2-consistent fade-in over [fallback]; no URL falls back to the fixture
+/// [asset] path (demo mode), and a live no-photo/failed-photo state lands on
+/// [fallback] (the approved dark image well carrying the item name). Photos
+/// are an enhancement, never load-bearing.
+///
+/// KIOSK-001-PREREQ-086: a fixture ASSET that fails to load renders
+/// [assetErrorFallback] — the pre-083 PLAIN dark well, deliberately without
+/// the item name (the card/sheet already shows it once; a name-bearing well
+/// here would duplicate the label, which is exactly what the repo-root CI
+/// environment surfaced). The premium name-well stays reserved for the LIVE
+/// no-photo cases.
+class KioskMenuImage extends StatelessWidget {
+  const KioskMenuImage({
+    super.key,
+    this.url,
+    this.asset,
+    required this.fallback,
+    this.assetErrorFallback,
+    this.fit = BoxFit.cover,
+  });
+  final String? url;
+  final String? asset;
+  final Widget fallback;
+
+  /// Rendered when [asset] itself fails to load (never for live URLs).
+  /// Defaults to [fallback] when not provided.
+  final Widget? assetErrorFallback;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = this.url;
+    if (url == null) {
+      if (asset == null) return fallback;
+      return KioskFixtureImage(
+        asset: asset,
+        fallback: assetErrorFallback ?? fallback,
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        fallback,
+        Image.network(
+          url,
+          fit: fit,
+          // A dead/expired URL quietly leaves the well visible underneath.
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          frameBuilder: (context, child, frame, wasSync) => wasSync
+              ? child
+              : AnimatedOpacity(
+                  opacity: frame == null ? 0 : 1,
+                  duration: KioskMotion.screenFade,
+                  curve: KioskMotion.curve,
+                  child: child,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Press feedback: V2 `style-active="transform:scale(.97)"`.
 class KioskPressable extends StatefulWidget {
   const KioskPressable({

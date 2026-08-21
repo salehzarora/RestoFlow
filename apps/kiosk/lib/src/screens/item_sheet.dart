@@ -6,6 +6,7 @@ import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
+import '../state/kiosk_live_runtime.dart';
 import '../widgets/kiosk_chrome.dart';
 
 /// 05 · Item customization sheet — rises 380ms over a scrim; the product is a
@@ -407,24 +408,33 @@ class KioskItemSheet extends ConsumerWidget {
                         ],
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: item.imageAsset != null
-                          ? KioskFixtureImage(
-                              asset: item.imageAsset,
-                              fallback: const ColoredBox(
-                                color: KioskColors.imageWell,
-                              ),
-                            )
-                          : Center(
-                              child: Text(
-                                item.name.of(lang),
-                                textAlign: TextAlign.center,
-                                style: KioskType.body(
-                                  28,
-                                  FontWeight.w800,
-                                  color: KioskColors.textDisabled,
-                                ),
+                      child: KioskMenuImage(
+                        url: ref.watch(
+                          kioskLiveProvider.select(
+                            (s) => s.imageUrls[item.imagePath],
+                          ),
+                        ),
+                        asset: item.imageAsset,
+                        // 086: fixture-asset load failure = plain well (the
+                        // sheet title already names the item once).
+                        assetErrorFallback: const ColoredBox(
+                          color: KioskColors.imageWell,
+                        ),
+                        fallback: ColoredBox(
+                          color: KioskColors.imageWell,
+                          child: Center(
+                            child: Text(
+                              item.name.of(lang),
+                              textAlign: TextAlign.center,
+                              style: KioskType.body(
+                                28,
+                                FontWeight.w800,
+                                color: KioskColors.textDisabled,
                               ),
                             ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

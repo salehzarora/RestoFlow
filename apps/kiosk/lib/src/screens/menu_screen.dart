@@ -6,6 +6,7 @@ import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
+import '../state/kiosk_live_runtime.dart';
 import '../widgets/category_wheel.dart';
 import '../widgets/kiosk_chrome.dart';
 
@@ -26,6 +27,9 @@ class KioskMenuScreen extends ConsumerWidget {
     final rtl = state.rtl;
     final menu = ref.watch(kioskMenuDataProvider);
     final status = ref.watch(kioskMenuStatusProvider);
+    // KIOSK-001-PREREQ-083: batch-resolved photo URLs for the LIVE menu
+    // (empty in demo mode — fixture cards keep their bundled assets).
+    final imageUrls = ref.watch(kioskLiveProvider.select((s) => s.imageUrls));
     final hasMenu =
         status == KioskMenuStatus.ready && menu.categories.isNotEmpty;
     final category = hasMenu
@@ -197,6 +201,8 @@ class KioskMenuScreen extends ConsumerWidget {
                               itemCount: category.items.length,
                               itemBuilder: (context, i) => _ProductCard(
                                 item: category.items[i],
+                                imageUrl:
+                                    imageUrls[category.items[i].imagePath],
                                 lang: state.lang,
                                 onTap: () =>
                                     controller.openItem(category.items[i].id),
@@ -288,10 +294,15 @@ class _MenuStatepanel extends StatelessWidget {
 class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.item,
+    this.imageUrl,
     required this.lang,
     required this.onTap,
   });
   final KioskFixtureItem item;
+
+  /// Resolved signed URL for [KioskFixtureItem.imagePath] (live mode only);
+  /// null renders the fixture asset or the approved no-photo well.
+  final String? imageUrl;
   final String lang;
   final VoidCallback onTap;
 
@@ -330,30 +341,32 @@ class _ProductCard extends StatelessWidget {
               child: SizedBox(
                 height: 284,
                 width: double.infinity,
-                child: item.imageAsset != null
-                    ? KioskFixtureImage(
-                        asset: item.imageAsset,
-                        fallback: const ColoredBox(
-                          color: KioskColors.imageWell,
-                        ),
-                      )
-                    : ColoredBox(
-                        color: KioskColors.imageWell,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Text(
-                              item.name.of(lang),
-                              textAlign: TextAlign.center,
-                              style: KioskType.body(
-                                24,
-                                FontWeight.w800,
-                                color: KioskColors.textDisabled,
-                              ),
-                            ),
+                child: KioskMenuImage(
+                  url: imageUrl,
+                  asset: item.imageAsset,
+                  // 086: a fixture asset that fails to load shows the plain
+                  // well (pre-083 exact) — the card title already names it.
+                  assetErrorFallback: const ColoredBox(
+                    color: KioskColors.imageWell,
+                  ),
+                  fallback: ColoredBox(
+                    color: KioskColors.imageWell,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          item.name.of(lang),
+                          textAlign: TextAlign.center,
+                          style: KioskType.body(
+                            24,
+                            FontWeight.w800,
+                            color: KioskColors.textDisabled,
                           ),
                         ),
                       ),
+                    ),
+                  ),
+                ),
               ),
             ),
             Padding(

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show DeviceImageUrlResolver;
 
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_live_data.dart';
@@ -24,12 +26,20 @@ class KioskLiveState {
     this.tablesError,
     this.tablesLoadedAt,
     this.sessionInvalid = false,
+    this.imageUrls = const {},
   });
 
   /// Last good live menu (null until the first successful read).
   final KioskMenuData? menu;
   final bool menuLoading;
   final KioskReadFailureKind? menuError;
+
+  /// KIOSK-001-PREREQ-083: object key → short-lived signed URL for the
+  /// CURRENT menu's product photos, resolved in ONE batch through the shared
+  /// device resolver after each successful menu read. In-memory only (URLs
+  /// expire — nothing is persisted); a missing key simply renders the
+  /// approved no-photo fallback.
+  final Map<String, String> imageUrls;
 
   /// Latest live floor read (null until loaded; never cached across errors).
   final List<KioskFixtureZone>? zones;
@@ -50,6 +60,7 @@ class KioskLiveState {
     Object? tablesError = _sentinel,
     Object? tablesLoadedAt = _sentinel,
     bool? sessionInvalid,
+    Map<String, String>? imageUrls,
   }) => KioskLiveState(
     menu: identical(menu, _sentinel) ? this.menu : menu as KioskMenuData?,
     menuLoading: menuLoading ?? this.menuLoading,
@@ -67,6 +78,7 @@ class KioskLiveState {
         ? this.tablesLoadedAt
         : tablesLoadedAt as DateTime?,
     sessionInvalid: sessionInvalid ?? this.sessionInvalid,
+    imageUrls: imageUrls ?? this.imageUrls,
   );
 
   static const _sentinel = Object();
@@ -75,6 +87,15 @@ class KioskLiveState {
 /// The live reads client. Null in demo mode / tests; the real composition
 /// root overrides it with the token-proven repository.
 final kioskLiveReadsProvider = Provider<KioskLiveReads?>((ref) => null);
+
+/// KIOSK-001-PREREQ-083: the device's ONLY media capability — the SHARED
+/// abstract signed-URL resolver (server-gated per device session; read-only).
+/// Null in demo mode / tests; the real composition root overrides it with the
+/// egress-cached resolver from the device bootstrap. The kiosk never touches
+/// a raw backend client or any bucket API directly.
+final kioskImageResolverProvider = Provider<DeviceImageUrlResolver?>(
+  (ref) => null,
+);
 
 /// How the table picker should present itself.
 enum KioskTablesStatus { ready, loading, reconnect, unavailable }
@@ -134,6 +155,7 @@ class KioskLiveController extends Notifier<KioskLiveState> {
           menuError: null,
         );
         ref.read(kioskFlowProvider.notifier).revalidateCart(value);
+        await _resolveMenuImages(value, request);
       case KioskReadError(:final kind):
         if (kind == KioskReadFailureKind.invalidSession) {
           _markSessionInvalid();
@@ -141,6 +163,32 @@ class KioskLiveController extends Notifier<KioskLiveState> {
         }
         state = state.copyWith(menuLoading: false, menuError: kind);
     }
+  }
+
+  /// KIOSK-001-PREREQ-083: one batch signed-URL resolution per successful
+  /// menu read, strictly fail-soft — the menu is already published and stays
+  /// fully usable whether or not any photo resolves. Per-key denials are
+  /// simply absent from the resolver's result (the card renders the approved
+  /// fallback); a transport-level failure degrades to "no photos this load".
+  Future<void> _resolveMenuImages(KioskMenuData menu, int request) async {
+    final resolver = ref.read(kioskImageResolverProvider);
+    final keys = <String>{
+      for (final category in menu.categories)
+        for (final item in category.items)
+          if (item.imagePath case final String path when path.isNotEmpty) path,
+    }.toList();
+    if (resolver == null || keys.isEmpty) {
+      if (request == _menuRequest) state = state.copyWith(imageUrls: const {});
+      return;
+    }
+    Map<String, String> urls;
+    try {
+      urls = await resolver.signedUrlsFor(keys);
+    } catch (_) {
+      urls = const {};
+    }
+    if (request != _menuRequest) return; // superseded
+    state = state.copyWith(imageUrls: urls);
   }
 
   /// Fresh floor read (entering the picker, the refresh affordance, and the

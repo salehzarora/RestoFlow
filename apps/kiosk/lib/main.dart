@@ -106,10 +106,13 @@ Widget buildKioskBootRoot({
 );
 
 /// The real device seams: one anonymous transport, one secret store, the
-/// shared pairing repository, and the kiosk read client over both.
+/// shared pairing repository, the kiosk read client over both, and the
+/// device's only media capability — the shared read-only signed-URL resolver
+/// (KIOSK-001-PREREQ-083), egress-cached, never a raw backend client.
 typedef KioskSeams = ({
   SupabaseDevicePairingRepository pairing,
   KioskLiveReads reads,
+  DeviceImageUrlResolver images,
 });
 
 typedef KioskBootResult = ({KioskSeams? seams, RealDeviceAuthProblem? problem});
@@ -122,10 +125,15 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
     return (seams: null, problem: RealDeviceAuthProblem.unconfigured);
   }
   final SyncRpcTransport transport;
+  final DeviceImageUrlResolver images;
   try {
-    transport = await SupabaseAuthBootstrap(
+    final session = await SupabaseAuthBootstrap(
       config: config,
-    ).createAnonymousDeviceTransport();
+    ).createAnonymousDeviceSession();
+    transport = session.transport;
+    // The POS-proven egress cache: one signing batch per menu load, reused
+    // until near expiry — never a per-image request storm.
+    images = CachingDeviceImageUrlResolver(session.imageUrlResolver);
   } catch (e) {
     return (
       seams: null,
@@ -147,6 +155,7 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
         secretStore: store,
       ),
       reads: KioskLiveReads(transport: transport, secretStore: store),
+      images: images,
     ),
     problem: null,
   );
@@ -158,6 +167,7 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
 /// exists yet, so no fake confirmation either).
 List<Override> kioskRealOverrides(KioskSeams seams) => [
   kioskLiveReadsProvider.overrideWithValue(seams.reads),
+  kioskImageResolverProvider.overrideWithValue(seams.images),
   kioskOrderingEnabledProvider.overrideWithValue(false),
   kioskMenuDataProvider.overrideWith((ref) {
     final live = ref.watch(kioskLiveProvider.select((s) => s.menu));
