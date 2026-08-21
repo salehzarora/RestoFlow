@@ -9,6 +9,8 @@
     { "source": "/pos", "destination": "/pos/index.html" },
     { "source": "/kds/(.*)", "destination": "/kds/index.html" },
     { "source": "/kds", "destination": "/kds/index.html" },
+    { "source": "/kiosk/(.*)", "destination": "/kiosk/index.html" },
+    { "source": "/kiosk", "destination": "/kiosk/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
