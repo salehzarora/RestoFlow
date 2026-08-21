@@ -4386,6 +4386,9 @@
   "kioskSubmitFailed": "The order could not be sent. Please try again or ask at the counter.",
   "kioskTaxUnavailableMsg": "We could not verify prices right now — please try again in a moment.",
   "kioskPhoneInvalidMsg": "That phone number could not be used — check it and try again.",
+  "kioskTotalUpdating": "Updating total…",
+  "kioskTotalUpdated": "The total was updated",
+  "kioskTotalUpdatedBody": "Please review the new total and confirm again.",
   "kioskOrderingUnavailable": "Ordering is unavailable on this kiosk right now — please order at the counter.",
   "kioskTableNoLongerAvailable": "That table was just taken — please pick another."
 }

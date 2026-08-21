@@ -6612,6 +6612,15 @@ class AppLocalizationsHe extends AppLocalizations {
       'לא ניתן להשתמש במספר הטלפון — בדקו אותו ונסו שוב.';
 
   @override
+  String get kioskTotalUpdating => 'מעדכן את הסכום…';
+
+  @override
+  String get kioskTotalUpdated => 'הסכום עודכן';
+
+  @override
+  String get kioskTotalUpdatedBody => 'אנא בדקו את הסכום החדש ואשרו שוב.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'לא ניתן להזמין מהעמדה כרגע — נא להזמין בדלפק.';
 

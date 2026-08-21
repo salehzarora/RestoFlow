@@ -6708,6 +6708,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'That phone number could not be used — check it and try again.';
 
   @override
+  String get kioskTotalUpdating => 'Updating total…';
+
+  @override
+  String get kioskTotalUpdated => 'The total was updated';
+
+  @override
+  String get kioskTotalUpdatedBody =>
+      'Please review the new total and confirm again.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'Ordering is unavailable on this kiosk right now — please order at the counter.';
 

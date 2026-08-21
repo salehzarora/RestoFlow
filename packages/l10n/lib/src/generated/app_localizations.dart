@@ -12076,6 +12076,24 @@ abstract class AppLocalizations {
   /// **'That phone number could not be used — check it and try again.'**
   String get kioskPhoneInvalidMsg;
 
+  /// No description provided for @kioskTotalUpdating.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating total…'**
+  String get kioskTotalUpdating;
+
+  /// No description provided for @kioskTotalUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The total was updated'**
+  String get kioskTotalUpdated;
+
+  /// No description provided for @kioskTotalUpdatedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please review the new total and confirm again.'**
+  String get kioskTotalUpdatedBody;
+
   /// No description provided for @kioskOrderingUnavailable.
   ///
   /// In en, this message translates to:

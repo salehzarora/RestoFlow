@@ -2034,6 +2034,9 @@
   "kioskSubmitFailed": "לא ניתן לשלוח את ההזמנה. נסו שוב או פנו לקופה.",
   "kioskTaxUnavailableMsg": "לא ניתן לאמת את המחירים כרגע — נסו שוב בעוד רגע.",
   "kioskPhoneInvalidMsg": "לא ניתן להשתמש במספר הטלפון — בדקו אותו ונסו שוב.",
+  "kioskTotalUpdating": "מעדכן את הסכום…",
+  "kioskTotalUpdated": "הסכום עודכן",
+  "kioskTotalUpdatedBody": "אנא בדקו את הסכום החדש ואשרו שוב.",
   "kioskOrderingUnavailable": "לא ניתן להזמין מהעמדה כרגע — נא להזמין בדלפק.",
   "kioskTableNoLongerAvailable": "השולחן נתפס הרגע — נא לבחור שולחן אחר."
 }

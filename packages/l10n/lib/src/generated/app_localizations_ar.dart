@@ -6658,6 +6658,16 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر استخدام رقم الهاتف — تحقق منه وحاول مجددًا.';
 
   @override
+  String get kioskTotalUpdating => 'جارٍ تحديث الإجمالي…';
+
+  @override
+  String get kioskTotalUpdated => 'تم تحديث الإجمالي';
+
+  @override
+  String get kioskTotalUpdatedBody =>
+      'يرجى مراجعة الإجمالي الجديد والتأكيد مرة أخرى.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'الطلب غير متاح من هذا الجهاز حاليًا — يرجى الطلب من الكاونتر.';
 

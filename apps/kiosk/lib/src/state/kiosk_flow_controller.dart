@@ -16,6 +16,15 @@ import 'kiosk_live_runtime.dart';
 /// retry the SAME identity; nothing is persisted (ONLINE-REQUIRED phase).
 enum KioskSubmitPhase { idle, inFlight, unconfirmed }
 
+/// KIOSK-001-096 — whether the cart's money summary is AUTHORITATIVE.
+/// A real order may only be placed while [ready]: the customer must see the
+/// exact tax policy/total the submit attempt will carry BEFORE any RPC.
+/// [loading] = a read is in flight (CTA disabled, lightweight updating note);
+/// [unavailable] = the read failed (CTA disabled, retry offered) — a missing
+/// policy is NEVER treated as "tax off". Demo mode has no tax reader and the
+/// phase stays [ready] (fixture totals, unchanged Phase-1 behavior).
+enum KioskTaxDisplayPhase { ready, loading, unavailable }
+
 /// KIOSK-001 Phase 1 — the kiosk-local flow state machine.
 ///
 /// One state owner drives screens, sheets, the fixture cart, the idle engine
@@ -217,6 +226,9 @@ class KioskState {
     this.branchTax,
     this.submitPhase = KioskSubmitPhase.idle,
     this.submitErrorKey,
+    this.taxPhase = KioskTaxDisplayPhase.ready,
+    this.submitReconfirmRequired = false,
+    this.reconfirmReasonKey,
   });
 
   final String lang; // 'en' | 'he' | 'ar'
@@ -245,6 +257,24 @@ class KioskState {
   /// 'phone-invalid', 'tax-unavailable', 'submit-failed'); localized at
   /// render time, never raw backend text.
   final String? submitErrorKey;
+
+  /// 096: where the cart's displayed money summary stands (see
+  /// [KioskTaxDisplayPhase]). Only meaningful in REAL mode — demo never
+  /// leaves [KioskTaxDisplayPhase.ready].
+  final KioskTaxDisplayPhase taxPhase;
+
+  /// 096: STICKY explicit-reconfirm gate. Set when the server refused for a
+  /// drift cause line-level revalidation may not see (tax/currency/prep/rule
+  /// changes) or when the submit-time tax read differed from the displayed
+  /// policy. NEVER touched by [KioskFlowController.revalidateCart]; cleared
+  /// ONLY by the customer's explicit reconfirm action. Place Order stays
+  /// blocked while true; nothing ever auto-submits.
+  final bool submitReconfirmRequired;
+
+  /// 096: why reconfirmation is required — 'total-updated' (tax policy
+  /// changed under the customer) or 'server-drift' (rejection family).
+  /// Localized at render time, never raw backend text.
+  final String? reconfirmReasonKey;
   final List<KioskCartLine> cart;
   final String customerName;
   final String customerPhone;
@@ -302,6 +332,9 @@ class KioskState {
     Object? branchTax = _sentinel,
     KioskSubmitPhase? submitPhase,
     Object? submitErrorKey = _sentinel,
+    KioskTaxDisplayPhase? taxPhase,
+    bool? submitReconfirmRequired,
+    Object? reconfirmReasonKey = _sentinel,
   }) => KioskState(
     lang: lang ?? this.lang,
     screen: screen ?? this.screen,
@@ -343,6 +376,12 @@ class KioskState {
     submitErrorKey: identical(submitErrorKey, _sentinel)
         ? this.submitErrorKey
         : submitErrorKey as String?,
+    taxPhase: taxPhase ?? this.taxPhase,
+    submitReconfirmRequired:
+        submitReconfirmRequired ?? this.submitReconfirmRequired,
+    reconfirmReasonKey: identical(reconfirmReasonKey, _sentinel)
+        ? this.reconfirmReasonKey
+        : reconfirmReasonKey as String?,
   );
 
   static const _sentinel = Object();
@@ -762,11 +801,17 @@ class KioskFlowController extends Notifier<KioskState> {
       state = state.copyWith(toast: 'ordering-unavailable', toastTicksLeft: 3);
       return;
     }
+    // 096: sticky explicit-reconfirm gate — after a server drift refusal or
+    // an updated total, nothing submits until the customer reconfirms.
+    if (state.submitReconfirmRequired) return;
     if (state.cartStale) {
       state = state.copyWith(toast: 'cart-stale', toastTicksLeft: 3);
       return;
     }
     if (ref.read(kioskOrderSubmitterProvider) != null) {
+      // 096: the displayed money summary must be AUTHORITATIVE before any
+      // submit — the CTA is disabled in these phases; this is the belt.
+      if (state.taxPhase != KioskTaxDisplayPhase.ready) return;
       _placeOrderReal();
       return;
     }
@@ -856,13 +901,34 @@ class KioskFlowController extends Notifier<KioskState> {
 
     // 10-11. Authoritative branch tax — a failed read BLOCKS (never guesses
     // OFF: a wrong guess is a guaranteed tax_mismatch or an under-display).
+    // 096: the submit-time re-read may also never silently change the total
+    // the customer approved — the DISPLAYED policy is what they agreed to.
     final taxReader = ref.read(kioskBranchTaxReaderProvider);
+    final displayedTax = state.branchTax;
     final tax = taxReader == null ? null : await taxReader.load();
     if (tax == null) {
+      state = state.copyWith(taxPhase: KioskTaxDisplayPhase.unavailable);
       _abortSubmit('tax-unavailable');
       return;
     }
-    state = state.copyWith(branchTax: tax);
+    if (displayedTax == null || tax != displayedTax) {
+      // The fresh policy differs from what was on screen: show the updated
+      // total, require an explicit reconfirmation, and send NOTHING on this
+      // tap (typed comparison — rate, enabled and mode all count).
+      state = state.copyWith(
+        branchTax: tax,
+        taxPhase: KioskTaxDisplayPhase.ready,
+        submitPhase: KioskSubmitPhase.idle,
+        submitReconfirmRequired: true,
+        reconfirmReasonKey: 'total-updated',
+        submitErrorKey: null,
+      );
+      return;
+    }
+    state = state.copyWith(
+      branchTax: tax,
+      taxPhase: KioskTaxDisplayPhase.ready,
+    );
 
     // Freeze ONE attempt (order id + D-022 identity + payload bytes).
     final KioskSubmitAttempt attempt;
@@ -964,6 +1030,8 @@ class KioskFlowController extends Notifier<KioskState> {
       confirmSecondsLeft: KioskTiming.confirmReturnSeconds,
       submitPhase: KioskSubmitPhase.idle,
       submitErrorKey: null,
+      submitReconfirmRequired: false,
+      reconfirmReasonKey: null,
     );
   }
 
@@ -979,11 +1047,17 @@ class KioskFlowController extends Notifier<KioskState> {
           'currency_mismatch' ||
           'tax_mismatch':
         // Menu/price/tax drift: reload truth, require visible reconfirmation.
-        // Never silently reprice-and-resubmit.
+        // Never silently reprice-and-resubmit. 096: the reconfirm gate is
+        // STICKY — the server's authority changed in a way line-level
+        // revalidation may not see (tax/currency/prep/rules), so the reload
+        // below must NOT be able to clear it; only the customer's explicit
+        // reconfirm action does.
         unawaited(ref.read(kioskLiveProvider.notifier).loadMenu());
+        unawaited(refreshBranchTax());
         state = state.copyWith(
           cartStale: true,
-          branchTax: null,
+          submitReconfirmRequired: true,
+          reconfirmReasonKey: 'server-drift',
           submitPhase: KioskSubmitPhase.idle,
           submitErrorKey: null,
           toast: 'cart-stale',
@@ -1032,15 +1106,25 @@ class KioskFlowController extends Notifier<KioskState> {
     );
   }
 
-  /// Cart-sheet open in REAL mode also refreshes the branch tax so the
-  /// summary shows the figures the server will validate.
+  /// 096: the AUTHORITATIVE cart tax load. In REAL mode the customer may not
+  /// place an order until this has succeeded and the exact policy/total is on
+  /// screen: the phase goes loading → ready (policy stored) or unavailable
+  /// (read failed — NEVER silently treated as "tax off"; the CTA stays
+  /// disabled and the customer gets a retry). Demo has no reader: no-op,
+  /// phase stays ready, fixture totals unchanged.
   Future<void> refreshBranchTax() async {
     final reader = ref.read(kioskBranchTaxReaderProvider);
     if (reader == null) return;
+    state = state.copyWith(taxPhase: KioskTaxDisplayPhase.loading);
     final tax = await reader.load();
-    if (tax != null && tax != state.branchTax) {
-      state = state.copyWith(branchTax: tax);
+    if (tax == null) {
+      state = state.copyWith(taxPhase: KioskTaxDisplayPhase.unavailable);
+      return;
     }
+    state = state.copyWith(
+      taxPhase: KioskTaxDisplayPhase.ready,
+      branchTax: tax,
+    );
   }
 
   // ---- live-menu cart integrity (Phase 3) ---------------------------------
@@ -1104,7 +1188,17 @@ class KioskFlowController extends Notifier<KioskState> {
         ),
       );
     }
-    state = state.copyWith(cart: rebuilt, cartStale: false);
+    // 096: this IS the explicit customer reconfirm action — the ONLY writer
+    // that may clear the sticky gate. The cart was visibly rebuilt against
+    // the latest menu above; the tax display is re-proven right after (the
+    // CTA stays disabled until it is READY again). Nothing auto-submits.
+    state = state.copyWith(
+      cart: rebuilt,
+      cartStale: false,
+      submitReconfirmRequired: false,
+      reconfirmReasonKey: null,
+    );
+    unawaited(refreshBranchTax());
   }
 
   // ---- staff path (VISUAL FIXTURE ONLY in Phase 1) ------------------------

@@ -278,6 +278,124 @@ void main() {
     );
   }, skip: _skip);
 
+  KioskFixtureGroup groupWithOption(bool Function(KioskFixtureOption) pick) =>
+      menu
+          .itemById(_burger)
+          .groupIds
+          .map((g) => menu.group(g)!)
+          .firstWhere((g) => g.options.any(pick));
+
+  KioskSubmitAttempt classifiedAttempt({required bool withCheese}) {
+    final item = menu.itemById(_burger);
+    final weight = groupWithOption((o) => o.priceDeltaMinor > 0);
+    final big = weight.options.firstWhere((o) => o.priceDeltaMinor > 0);
+    final addons = groupWithOption((o) => o.name.of('en') == 'IT Cheese');
+    final cheese = addons.options.firstWhere(
+      (o) => o.name.of('en') == 'IT Cheese',
+    );
+    return buildKioskSubmitAttempt(
+      menu: menu,
+      cart: [
+        KioskCartLine(
+          lineId: 1,
+          itemId: item.id,
+          quantity: 1,
+          selected: {
+            weight.id: [big.id],
+            addons.id: [if (withCheese) cheese.id],
+          },
+          note: '',
+          capturedUnitMinor:
+              item.basePriceMinor +
+              big.priceDeltaMinor +
+              (withCheese ? cheese.priceDeltaMinor : 0),
+        ),
+      ],
+      service: KioskServiceType.takeaway,
+      tableId: null,
+      tax: tax,
+      customerName: 'IT Classifier',
+      customerPhone: '',
+      clientCreatedAt: DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> meatOf(KioskSubmitAttempt a) {
+    final items = a.params['p_order_items'] as List;
+    final mods = (items.single as Map)['modifiers'] as List;
+    final withMeat = mods.firstWhere(
+      (m) => (m as Map).containsKey('meat_snapshot'),
+    );
+    return ((withMeat as Map)['meat_snapshot'] as Map).cast<String, dynamic>();
+  }
+
+  test('I. CLASSIFIER SELECTED via the real client builder is ACCEPTED — '
+      'trusted current name + order-time true, no prep-stale', () async {
+    final attempt = classifiedAttempt(withCheese: true);
+    final meat = meatOf(attempt);
+    expect(meat['classifier_selected'], isTrue);
+    expect(
+      meat['classifier_option_name'],
+      'IT Cheese',
+      reason:
+          'the STALE stored config name (Old Cheese) must be replaced '
+          'by the trusted CURRENT menu name',
+    );
+    final r = await submitter.submit(attempt);
+    expect(r, isA<KioskSubmitAccepted>(), reason: '$r');
+  }, skip: _skip);
+
+  test('J. CLASSIFIER NOT SELECTED via the real client builder is ACCEPTED '
+      'with the order-time false answer', () async {
+    final attempt = classifiedAttempt(withCheese: false);
+    expect(meatOf(attempt)['classifier_selected'], isFalse);
+    final r = await submitter.submit(attempt);
+    expect(r, isA<KioskSubmitAccepted>(), reason: '$r');
+  }, skip: _skip);
+
+  test(
+    'K. the PRE-096 raw-config payload shape (no classifier_selected) '
+    'remains REFUSED — the derivation is what makes ordering possible',
+    () async {
+      final good = classifiedAttempt(withCheese: true);
+      final items = [
+        for (final it in good.params['p_order_items'] as List)
+          {
+            ...(it as Map).cast<String, dynamic>(),
+            'modifiers': [
+              for (final m in (it['modifiers'] as List))
+                (m as Map).containsKey('meat_snapshot')
+                    ? {
+                        ...m.cast<String, dynamic>(),
+                        // The owner CONFIG verbatim — stale stored name, no
+                        // order-time answer — exactly what 092-094 shipped.
+                        'meat_snapshot': {
+                          'quantity': 2,
+                          'unit': 'pc',
+                          'classifier_option_id': (meatOf(
+                            good,
+                          ))['classifier_option_id'],
+                          'classifier_option_name': 'Old Cheese',
+                        },
+                      }
+                    : m.cast<String, dynamic>(),
+            ],
+          },
+      ];
+      final raw = KioskSubmitAttempt(
+        orderId: generateKioskUuidV4(),
+        localOperationId: 'kiosk-${generateKioskUuidV4()}',
+        params: {...good.params, 'p_order_items': items},
+      );
+      raw.params['p_order_id'] = raw.orderId;
+      raw.params['p_local_operation_id'] = raw.localOperationId;
+      final r = await submitter.submit(raw);
+      expect(r, isA<KioskSubmitRejected>(), reason: '$r');
+      expect((r as KioskSubmitRejected).code, 'modifier_prep_snapshot_stale');
+    },
+    skip: _skip,
+  );
+
   test('H. a dead credential is an INVALID SESSION, never an order', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

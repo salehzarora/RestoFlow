@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show KitchenMeat, resolveTrustedMeatClassifier;
 
 import '../state/kiosk_flow_controller.dart';
 import 'kiosk_fixtures.dart';
@@ -365,6 +367,19 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
     if (item == null || !item.available) {
       throw KioskCartOutOfSyncError('item ${line.itemId} is not sellable');
     }
+    // 096: the ORDER-TIME kitchen-classifier inputs for this line — the
+    // complete selected-option-id set across ALL of the line's groups
+    // (presence-based answer), and the SAME-ITEM id→current-name map the
+    // trusted classifier boundary validates a configured link against.
+    // Never a cross-item lookup; ids and same-item scope are authoritative.
+    final selectedOptionIds = <String>{
+      for (final e in line.selected.entries) ...e.value,
+    };
+    final sameItemOptionNamesById = <String, String>{
+      for (final gid in item.groupIds)
+        if (menu.group(gid) case final g?)
+          for (final o in g.options) o.id: o.name.of('en'),
+    };
     final modifiers = <Map<String, dynamic>>[];
     var deltaSum = 0;
     for (final entry in line.selected.entries) {
@@ -387,8 +402,14 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
           // The V2 kiosk UI selects options without per-option quantity;
           // quantity is ALWAYS 1 here (never fabricated, never duplicated).
           'quantity': 1,
-          if (option.kitchenMeat != null)
-            'meat_snapshot': option.kitchenMeat, // order-time frozen (021)
+          // 096: the ORDER-TIME trusted snapshot (021), never the raw owner
+          // config — a classifier link is proven against the item's own
+          // options and answered from THIS line's selections, like the POS.
+          'meat_snapshot': ?_resolvedKioskMeatSnapshot(
+            option,
+            sameItemOptionNamesById: sameItemOptionNamesById,
+            selectedOptionIds: selectedOptionIds,
+          ),
         });
       }
     }
@@ -517,6 +538,41 @@ Object? _deepFreezeWireValue(Object? value) {
     return List<Object?>.unmodifiable(value.map(_deepFreezeWireValue));
   }
   return value;
+}
+
+/// 096: the ORDER-TIME trusted `meat_snapshot` for ONE selected modifier
+/// option — semantically the POS wire contract, built on the shared domain
+/// boundary instead of the raw owner config:
+///
+///  1. [KitchenMeat.tryFromJson] — a non-object / non-positive contribution
+///     yields NO snapshot (never fabricated).
+///  2. [resolveTrustedMeatClassifier] — a configured classifier link survives
+///     ONLY when it names a DIFFERENT option of the SAME item (via
+///     [sameItemOptionNamesById]); the display name is the trusted CURRENT
+///     menu name, never the stored one; an invalid/self/cross-item/deleted
+///     link strips to the ordinary unsplit {quantity, unit} contribution.
+///  3. A surviving link gets the PRESENCE-based order-time answer:
+///     `classifier_selected = selectedOptionIds.contains(id)` — boolean
+///     presence over THIS line's complete selection, never multiplied by any
+///     modifier/item quantity (the wire carries per-selection contribution;
+///     quantities apply exactly once downstream).
+Map<String, Object?>? _resolvedKioskMeatSnapshot(
+  KioskFixtureOption option, {
+  required Map<String, String> sameItemOptionNamesById,
+  required Set<String> selectedOptionIds,
+}) {
+  final trusted = resolveTrustedMeatClassifier(
+    KitchenMeat.tryFromJson(option.kitchenMeat),
+    optionNamesById: sameItemOptionNamesById,
+    selfOptionId: option.id,
+  );
+  if (trusted == null) return null;
+  if (trusted.classifierOptionId.isEmpty) return trusted.toJson();
+  return trusted
+      .withClassifierSelected(
+        selectedOptionIds.contains(trusted.classifierOptionId),
+      )
+      .toJson();
 }
 
 /// 094: the frozen modifier labels of one line, in EXACTLY the order the

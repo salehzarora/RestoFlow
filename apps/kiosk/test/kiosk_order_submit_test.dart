@@ -203,6 +203,14 @@ Future<void> _fillCart(ProviderContainer c, {String note = ''}) async {
   flow.toggleOption('g1', 'o2');
   if (note.isNotEmpty) flow.setDraftNote(note);
   expect(flow.submitDraft(), isTrue);
+  // 096: opening the cart loads + displays the AUTHORITATIVE tax total —
+  // the gate every real Place Order path must pass through. The drain is
+  // MICROTASK-only (`await null`), never Future.delayed: _fillCart also runs
+  // inside testWidgets, where the fake clock strands real timers.
+  flow.openCart();
+  for (var i = 0; i < 30; i++) {
+    await null;
+  }
 }
 
 void main() {
@@ -672,9 +680,11 @@ void main() {
           .single
           .$2['p_order_id'];
 
-      // Customer visibly reconfirms, then orders again.
+      // Customer visibly reconfirms, then orders again (the reconfirm also
+      // re-proves the tax display; Place Order re-arms once it is READY).
       reject = false;
       flow.refreshCartAgainstMenu();
+      await h.container.settle();
       flow.placeOrder();
       await h.container.settle();
       state = h.container.read(kioskFlowProvider);
@@ -699,6 +709,8 @@ void main() {
       flow.openItem('i1');
       flow.toggleOption('g1', 'o1');
       flow.submitDraft();
+      flow.openCart(); // 096: the tax total must be displayed before submit
+      await h.container.settle();
       flow.placeOrder();
       await h.container.settle();
       final params = h.rpc.calls
@@ -723,6 +735,8 @@ void main() {
         flow.openItem('i1');
         flow.toggleOption('g1', 'o1');
         flow.submitDraft();
+        flow.openCart(); // 096: display the authoritative total first
+        await h.container.settle();
         flow.placeOrder();
         await h.container.settle();
         final params = h.rpc.calls
@@ -759,6 +773,8 @@ void main() {
       flow.openItem('i1');
       flow.toggleOption('g1', 'o1');
       flow.submitDraft();
+      flow.openCart(); // 096: display the authoritative total first
+      await h.container.settle();
       flow.placeOrder();
       await h.container.settle();
       final state = h.container.read(kioskFlowProvider);
@@ -796,9 +812,15 @@ void main() {
     });
 
     test('a failed tax read BLOCKS the submit (never guesses OFF)', () async {
+      var taxCalls = 0;
       final h = _harness(
         overrides: {
-          'get_device_branch_tax': (_) => {'ok': false, 'error': 'x'},
+          // The cart-open read succeeds (the total is displayed); the
+          // SUBMIT-TIME re-read fails — the submit must abort, never guess.
+          'get_device_branch_tax': (_) {
+            taxCalls += 1;
+            return taxCalls == 1 ? _taxEnvelope() : {'ok': false, 'error': 'x'};
+          },
         },
       );
       await _fillCart(h.container);
@@ -880,8 +902,9 @@ void main() {
           },
         );
         await _fillCart(h.container, note: 'frozen note');
+        // (096: _fillCart already opened the cart and settled the tax
+        // display to READY — Place Order lives in the cart sheet.)
         final flow = h.container.read(kioskFlowProvider.notifier);
-        flow.openCart(); // Place Order lives in the cart sheet
         flow.setCustomerName('Frozen Dana');
         flow.placeOrder();
         await h.container.settle();
@@ -1171,11 +1194,10 @@ void main() {
       expect(() => mod['price_minor_snapshot'] = 0, throwsUnsupportedError);
       final meat = mod['meat_snapshot'] as Map;
       expect(() => meat['quantity'] = 9, throwsUnsupportedError);
-      expect(
-        () => (meat['parts'] as List).add('x'),
-        throwsUnsupportedError,
-        reason: 'nested prep-snapshot collections are frozen too',
-      );
+      expect(() => meat.remove('unit'), throwsUnsupportedError);
+      // 096: the snapshot is the TRUSTED KitchenMeat shape — an unknown
+      // config key ('parts') is dropped at the boundary, never shipped.
+      expect(meat.containsKey('parts'), isFalse);
     });
 
     test('freezing is wire-equivalent — identical JSON to the unfrozen '
@@ -1282,6 +1304,8 @@ void main() {
       flow.setDraftNote('no salt');
       expect(flow.submitDraft(), isTrue);
       flow.setCustomerName('  Dana  ');
+      flow.openCart(); // 096: the tax total must be displayed before submit
+      await c.settle();
       flow.placeOrder();
       await c.settle();
       final frozen = flow.debugPendingAttempt!;
@@ -1441,6 +1465,503 @@ void main() {
         '240g A',
       );
       expect(s.lastOrder!.code, displayOrderCode(frozen.orderId));
+    });
+  });
+
+  group('096 classifier snapshot (trusted same-item + order-time answer)', () {
+    Map<String, dynamic> env({Object? meat, String cheeseName = 'Cheese'}) {
+      final e = _menuEnvelope();
+      e['modifiers'] = <dynamic>[
+        ...e['modifiers'] as List,
+        {
+          'id': 'g2',
+          'menu_item_id': 'i1',
+          'name': 'Addons',
+          'selection_type': 'multiple',
+          'min_select': 0,
+          'max_select': 1,
+          'is_required': false,
+          'allow_quantity': false,
+          'display_order': 1,
+        },
+        {
+          'id': 'g3',
+          'menu_item_id': 'i2',
+          'name': 'Other Addons',
+          'selection_type': 'multiple',
+          'min_select': 0,
+          'max_select': 1,
+          'is_required': false,
+          'allow_quantity': false,
+          'display_order': 0,
+        },
+      ];
+      e['modifier_options'] = <dynamic>[
+        ...e['modifier_options'] as List,
+        {
+          'id': 'o3',
+          'modifier_id': 'g2',
+          'name': cheeseName,
+          'price_delta_minor': 0,
+          'display_order': 0,
+        },
+        // J: ANOTHER item's option with the SAME display name — ids and
+        // same-item scope are authoritative, names never are.
+        {
+          'id': 'o9',
+          'modifier_id': 'g3',
+          'name': 'Cheese',
+          'price_delta_minor': 0,
+          'display_order': 0,
+        },
+      ];
+      if (meat != null) {
+        e['modifier_options'] = <dynamic>[
+          for (final o in e['modifier_options'] as List)
+            (o as Map)['id'] == 'o2'
+                ? <String, dynamic>{...o, 'kitchen_meat': meat}
+                : o,
+        ];
+      }
+      return e;
+    }
+
+    KioskSubmitAttempt build(
+      Map<String, dynamic> envelope, {
+      Map<String, List<String>> selected = const {
+        'g1': ['o2'],
+        'g2': ['o3'],
+      },
+      int qty = 1,
+    }) => buildKioskSubmitAttempt(
+      menu: mapKioskMenuEnvelope(envelope)!,
+      cart: [
+        KioskCartLine(
+          lineId: 1,
+          itemId: 'i1',
+          quantity: qty,
+          selected: selected,
+          note: '',
+          capturedUnitMinor: 5500,
+        ),
+      ],
+      service: KioskServiceType.takeaway,
+      tableId: null,
+      tax: const KioskBranchTax(enabled: false, rateBp: 0, mode: 'exclusive'),
+      customerName: 'Dana',
+      customerPhone: '',
+      clientCreatedAt: DateTime.utc(2026, 8, 22),
+    );
+
+    Map<String, dynamic>? meatOf(KioskSubmitAttempt a) {
+      final items = a.params['p_order_items'] as List;
+      final mods = (items.single as Map)['modifiers'] as List;
+      final m =
+          mods.firstWhere((x) => (x as Map)['modifier_option_id'] == 'o2')
+              as Map;
+      return (m['meat_snapshot'] as Map?)?.cast<String, dynamic>();
+    }
+
+    const cfg = {
+      'quantity': 2,
+      'unit': 'pc',
+      'classifier_option_id': 'o3',
+      'classifier_option_name': 'Cheese',
+    };
+
+    test('A/I. valid same-item classifier in a DIFFERENT group, SELECTED -> '
+        'classifier_selected true', () {
+      expect(meatOf(build(env(meat: cfg))), {
+        'quantity': 2,
+        'unit': 'pc',
+        'classifier_option_id': 'o3',
+        'classifier_option_name': 'Cheese',
+        'classifier_selected': true,
+      });
+    });
+
+    test('B. valid classifier NOT selected -> classifier_selected false', () {
+      final a = build(
+        env(meat: cfg),
+        selected: const {
+          'g1': ['o2'],
+          'g2': <String>[],
+        },
+      );
+      expect(meatOf(a)!['classifier_selected'], isFalse);
+      expect(meatOf(a)!['classifier_option_id'], 'o3');
+    });
+
+    test('C. a STALE stored classifier name is replaced by the trusted '
+        'CURRENT menu name', () {
+      final a = build(
+        env(meat: {...cfg, 'classifier_option_name': 'Old Cheese'}),
+      );
+      expect(meatOf(a)!['classifier_option_name'], 'Cheese');
+      expect(meatOf(a)!['classifier_selected'], isTrue);
+    });
+
+    test('D/J. a CROSS-ITEM classifier id is stripped to the unsplit '
+        'contribution — even though an option NAMED the same exists', () {
+      final a = build(env(meat: {...cfg, 'classifier_option_id': 'o9'}));
+      expect(meatOf(a), {'quantity': 2, 'unit': 'pc'});
+    });
+
+    test('E. a SELF-referencing classifier is stripped safely', () {
+      final a = build(env(meat: {...cfg, 'classifier_option_id': 'o2'}));
+      expect(meatOf(a), {'quantity': 2, 'unit': 'pc'});
+    });
+
+    test('F. a deleted/unknown classifier id is stripped safely', () {
+      final a = build(env(meat: {...cfg, 'classifier_option_id': 'ghost'}));
+      expect(meatOf(a), {'quantity': 2, 'unit': 'pc'});
+    });
+
+    test('G. a malformed/non-positive contribution emits NO snapshot — '
+        'never fabricated', () {
+      expect(meatOf(build(env(meat: {'quantity': 0, 'unit': 'pc'}))), isNull);
+      expect(meatOf(build(env(meat: 'nonsense'))), isNull);
+    });
+
+    test('H. the answer is PRESENCE-based: a boolean, never scaled by item '
+        'or modifier quantity', () {
+      final m = meatOf(build(env(meat: cfg), qty: 3))!;
+      expect(m['quantity'], 2, reason: 'per-selection contribution, unscaled');
+      expect(m['classifier_selected'], isA<bool>());
+      expect(m['classifier_selected'], isTrue);
+    });
+  });
+
+  group('096 authoritative tax display + sticky reconfirm', () {
+    test('failed cart tax load = UNAVAILABLE, Place Order sends nothing; '
+        'retry recovers to READY and the order submits', () async {
+      var taxFails = true;
+      final h = _harness(
+        overrides: {
+          'get_device_branch_tax': (_) => taxFails
+              ? SyncTransportException(SyncTransportErrorKind.transient)
+              : _taxEnvelope(),
+        },
+      );
+      final c = h.container;
+      await _fillCart(c);
+      expect(
+        c.read(kioskFlowProvider).taxPhase,
+        KioskTaxDisplayPhase.unavailable,
+      );
+      final flow = c.read(kioskFlowProvider.notifier);
+      flow.placeOrder();
+      await c.settle();
+      expect(
+        h.rpc.calls.where((call) => call.$1 == 'kiosk_submit_order'),
+        isEmpty,
+        reason: 'no RPC without an authoritative displayed total',
+      );
+      taxFails = false;
+      await flow.refreshBranchTax();
+      expect(c.read(kioskFlowProvider).taxPhase, KioskTaxDisplayPhase.ready);
+      flow.placeOrder();
+      await c.settle();
+      expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+    });
+
+    test('submit-time tax CHANGE: the discovering tap sends NOTHING, shows '
+        'the new total, and only an explicit reconfirm re-arms', () async {
+      var taxCalls = 0;
+      final h = _harness(
+        overrides: {
+          'get_device_branch_tax': (_) {
+            taxCalls += 1;
+            // Cart-open read: tax OFF. Every later read: 17% exclusive.
+            return taxCalls == 1
+                ? _taxEnvelope()
+                : _taxEnvelope(enabled: true, bp: 1700);
+          },
+        },
+      );
+      final c = h.container;
+      await _fillCart(c); // displays the OFF policy (total = subtotal)
+      final flow = c.read(kioskFlowProvider.notifier);
+      flow.placeOrder();
+      await c.settle();
+      var st = c.read(kioskFlowProvider);
+      expect(
+        h.rpc.calls.where((call) => call.$1 == 'kiosk_submit_order'),
+        isEmpty,
+        reason: 'the first tap that discovers the change must never RPC',
+      );
+      expect(st.submitReconfirmRequired, isTrue);
+      expect(st.reconfirmReasonKey, 'total-updated');
+      expect(st.submitPhase, KioskSubmitPhase.idle);
+      expect(
+        st.branchTax,
+        const KioskBranchTax(enabled: true, rateBp: 1700, mode: 'exclusive'),
+        reason: 'the DISPLAYED policy updates to what would be submitted',
+      );
+      flow.placeOrder(); // still gated — sticky
+      await c.settle();
+      expect(
+        h.rpc.calls.where((call) => call.$1 == 'kiosk_submit_order'),
+        isEmpty,
+      );
+      flow.refreshCartAgainstMenu(); // the explicit customer reconfirm
+      await c.settle();
+      st = c.read(kioskFlowProvider);
+      expect(st.submitReconfirmRequired, isFalse);
+      expect(st.taxPhase, KioskTaxDisplayPhase.ready);
+      flow.placeOrder();
+      await c.settle();
+      final submits = h.rpc.calls
+          .where((call) => call.$1 == 'kiosk_submit_order')
+          .toList();
+      expect(submits, hasLength(1));
+      expect(
+        submits.single.$2['p_client_tax_total_minor'],
+        935, // round(5500*1700/10000) — the total the customer SAW
+      );
+      expect(submits.single.$2['p_client_grand_total_minor'], 6435);
+      expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+    });
+
+    for (final code in [
+      'modifier_prep_snapshot_stale',
+      'tax_mismatch',
+      'currency_mismatch',
+      'modifier_selection_invalid',
+    ]) {
+      test('server drift ($code) sets a STICKY reconfirm that automatic '
+          'revalidation cannot clear; explicit reconfirm re-arms', () async {
+        var reject = true;
+        final h = _harness(
+          overrides: {
+            'kiosk_submit_order': (p) => reject
+                ? {'ok': false, 'error': code}
+                : {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+          },
+        );
+        final c = h.container;
+        await _fillCart(c);
+        final flow = c.read(kioskFlowProvider.notifier);
+        flow.placeOrder();
+        await c.settle();
+        var st = c.read(kioskFlowProvider);
+        expect(st.submitReconfirmRequired, isTrue);
+        expect(st.reconfirmReasonKey, 'server-drift');
+        expect(
+          st.cartStale,
+          isFalse,
+          reason:
+              'the automatic reload finds no line-level drift and clears '
+              'cartStale — exactly why the reconfirm gate must be sticky',
+        );
+        reject = false;
+        flow.placeOrder(); // gated: sticky survives the auto-revalidation
+        await c.settle();
+        expect(
+          h.rpc.calls.where((call) => call.$1 == 'kiosk_submit_order'),
+          hasLength(1),
+          reason: 'no resubmit without the explicit customer action',
+        );
+        flow.refreshCartAgainstMenu();
+        await c.settle();
+        st = c.read(kioskFlowProvider);
+        expect(st.submitReconfirmRequired, isFalse);
+        flow.placeOrder();
+        await c.settle();
+        expect(
+          h.rpc.calls.where((call) => call.$1 == 'kiosk_submit_order'),
+          hasLength(2),
+        );
+        expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+      });
+    }
+
+    test(
+      'line-level price drift: cartStale persists through revalidation, '
+      'the SAME explicit action clears both gates and re-prices visibly',
+      () async {
+        var price = 4000;
+        var reject = true;
+        final h = _harness(
+          overrides: {
+            'kiosk_menu': (_) => _menuEnvelope(burgerBase: price),
+            'kiosk_submit_order': (p) {
+              if (reject) {
+                price = 4100; // the drift behind the server's refusal
+                return {'ok': false, 'error': 'menu_price_changed'};
+              }
+              return {..._acceptedEnvelope, 'order_id': p['p_order_id']};
+            },
+          },
+        );
+        final c = h.container;
+        await _fillCart(c); // captured at 4000+1500
+        final flow = c.read(kioskFlowProvider.notifier);
+        flow.placeOrder();
+        await c.settle();
+        var st = c.read(kioskFlowProvider);
+        expect(st.submitReconfirmRequired, isTrue);
+        expect(
+          st.cartStale,
+          isTrue,
+          reason: 'line-level drift IS visible to revalidation and persists',
+        );
+        reject = false;
+        flow.refreshCartAgainstMenu();
+        await c.settle();
+        st = c.read(kioskFlowProvider);
+        expect(st.cartStale, isFalse);
+        expect(st.submitReconfirmRequired, isFalse);
+        expect(
+          st.cart.single.capturedUnitMinor,
+          5600,
+          reason: 'visibly re-captured at the NEW price, never silently',
+        );
+        flow.placeOrder();
+        await c.settle();
+        final submits = h.rpc.calls
+            .where((call) => call.$1 == 'kiosk_submit_order')
+            .toList();
+        expect(submits, hasLength(2));
+        expect(submits.last.$2['p_client_subtotal_minor'], 5600);
+        expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+      },
+    );
+  });
+
+  group('096 identity-field visual lock', () {
+    Future<void> pumpKiosk(WidgetTester tester, ProviderContainer c) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: Consumer(
+            builder: (context, ref, _) => MaterialApp(
+              locale: Locale(
+                ref.watch(kioskFlowProvider.select((st) => st.lang)),
+              ),
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: const KioskShell(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    Future<void> settleW(WidgetTester tester) async {
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(Duration.zero);
+      }
+    }
+
+    bool fieldEnabled(WidgetTester tester, String key) => tester
+        .widget<TextFormField>(
+          find.descendant(
+            of: find.byKey(Key(key)),
+            matching: find.byType(TextFormField),
+          ),
+        )
+        .enabled;
+
+    testWidgets('fields lock while in-flight AND unconfirmed; the slip keeps '
+        'the frozen name; retry stays available', (tester) async {
+      final held = Completer<Object?>();
+      var heldMode = true;
+      final h = _harness(
+        overrides: {
+          'kiosk_submit_order': (p) => heldMode
+              ? held.future.then(
+                  (_) => throw SyncTransportException(
+                    SyncTransportErrorKind.transient,
+                  ),
+                )
+              : {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+        },
+      );
+      final c = h.container;
+      await _fillCart(c);
+      await pumpKiosk(tester, c);
+      await tester.enterText(find.byKey(const Key('kiosk-cust-name')), 'Dana');
+      await tester.enterText(find.byKey(const Key('kiosk-cust-phone')), '050');
+      expect(c.read(kioskFlowProvider).customerName, 'Dana');
+      expect(fieldEnabled(tester, 'kiosk-cust-name'), isTrue);
+
+      c.read(kioskFlowProvider.notifier).placeOrder();
+      await settleW(tester);
+      expect(c.read(kioskFlowProvider).submitPhase, KioskSubmitPhase.inFlight);
+      expect(fieldEnabled(tester, 'kiosk-cust-name'), isFalse);
+      expect(fieldEnabled(tester, 'kiosk-cust-phone'), isFalse);
+      // A correction attempt during the lock cannot reach the field: the
+      // entry is refused (whether it throws or no-ops, the visible text and
+      // the state may never diverge from the frozen order).
+      try {
+        await tester.enterText(
+          find.byKey(const Key('kiosk-cust-name')),
+          'EDITED',
+        );
+      } catch (_) {
+        // A throw is an acceptable refusal too.
+      }
+      await tester.pump(Duration.zero);
+      expect(c.read(kioskFlowProvider).customerName, 'Dana');
+      expect(find.text('EDITED'), findsNothing);
+      expect(find.text('Dana'), findsOneWidget);
+
+      held.complete(null); // the held transport now fails -> UNCONFIRMED
+      await settleW(tester);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        c.read(kioskFlowProvider).submitPhase,
+        KioskSubmitPhase.unconfirmed,
+      );
+      expect(fieldEnabled(tester, 'kiosk-cust-name'), isFalse);
+      expect(find.byKey(const Key('kiosk-submit-retry')), findsOneWidget);
+
+      heldMode = false;
+      await tester.tap(find.byKey(const Key('kiosk-submit-retry')));
+      await settleW(tester);
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+      expect(
+        c.read(kioskFlowProvider).lastOrder!.customerName,
+        'Dana',
+        reason: 'the slip prints the FROZEN normalized name',
+      );
+      expect(find.text('Dana'), findsOneWidget);
+    });
+
+    testWidgets('a definitive rejection unlocks the fields again', (
+      tester,
+    ) async {
+      var reject = true;
+      final h = _harness(
+        overrides: {
+          'kiosk_submit_order': (p) => reject
+              ? {'ok': false, 'error': 'discount_not_allowed'}
+              : {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+        },
+      );
+      final c = h.container;
+      await _fillCart(c);
+      await pumpKiosk(tester, c);
+      await tester.enterText(find.byKey(const Key('kiosk-cust-name')), 'Dana');
+      c.read(kioskFlowProvider.notifier).placeOrder();
+      await settleW(tester);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(c.read(kioskFlowProvider).submitPhase, KioskSubmitPhase.idle);
+      expect(fieldEnabled(tester, 'kiosk-cust-name'), isTrue);
+      await tester.enterText(
+        find.byKey(const Key('kiosk-cust-name')),
+        'Dana Cohen',
+      );
+      expect(c.read(kioskFlowProvider).customerName, 'Dana Cohen');
+      reject = false;
     });
   });
 }
