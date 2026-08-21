@@ -1,5 +1,5 @@
 name: restoflow_kiosk
-description: RestoFlow kiosk app - customer self-service ordering surface. KIOSK-001 Phase 1 is the approved V2 visual foundation on fixture data only (no backend).
+description: RestoFlow kiosk app - customer self-service ordering surface. KIOSK-001 Phase 3 wires the approved V2 shell to the real paired-device session model and the live kiosk_menu/kiosk_tables reads (order submit deliberately NOT wired).
 publish_to: none
 version: 0.0.1
 environment:
@@ -12,6 +12,17 @@ dependencies:
   flutter_riverpod: '>=2.5.0 <3.0.0'
   restoflow_l10n:
     path: ../../packages/l10n
+  restoflow_auth_identity:
+    path: ../../packages/auth_identity
+  restoflow_core:
+    path: ../../packages/core
+  restoflow_data_remote:
+    path: ../../packages/data_remote
+  restoflow_design_system:
+    path: ../../packages/design_system
+  restoflow_feature_auth:
+    path: ../../packages/feature_auth
+  shared_preferences: '>=2.2.0 <3.0.0'
 
 dev_dependencies:
   flutter_test:

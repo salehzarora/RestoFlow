@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
+import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -16,15 +17,23 @@ import '../widgets/kiosk_chrome.dart';
 class KioskCartSheet extends ConsumerWidget {
   const KioskCartSheet({super.key});
 
-  static String modifierSummary(KioskCartLine line, String lang) {
-    final item = kioskItemById(line.itemId);
+  static String modifierSummary(
+    KioskMenuData menu,
+    KioskCartLine line,
+    String lang,
+  ) {
+    final item = menu.tryItem(line.itemId);
+    if (item == null) return '';
     final parts = <String>[];
     for (final gid in item.groupIds) {
-      final group = kioskFixtureGroups[gid]!;
+      final group = menu.group(gid);
+      if (group == null) continue;
       for (final oid in line.selected[gid] ?? const <String>[]) {
         // V2 rule: the included default weight is not repeated in summaries.
         if (gid == 'weight' && oid == kioskIncludedWeightOptionId) continue;
-        parts.add(group.options.firstWhere((o) => o.id == oid).name.of(lang));
+        for (final o in group.options) {
+          if (o.id == oid) parts.add(o.name.of(lang));
+        }
       }
     }
     return parts.join(' · ');
@@ -35,6 +44,7 @@ class KioskCartSheet extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
+    final menu = ref.watch(kioskMenuDataProvider);
     final rtl = state.rtl;
     final serviceBase = switch (state.service) {
       KioskServiceType.dineIn => l10n.kioskDineIn,
@@ -123,11 +133,93 @@ class KioskCartSheet extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (state.cartStale)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: Container(
+                                  key: const Key('kiosk-cart-stale'),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 26,
+                                    vertical: 20,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: KioskColors.danger.withValues(
+                                      alpha: .12,
+                                    ),
+                                    border: Border.all(
+                                      color: KioskColors.danger.withValues(
+                                        alpha: .5,
+                                      ),
+                                      width: 1.5,
+                                    ),
+                                    borderRadius: BorderRadius.circular(26),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              l10n.kioskCartStaleTitle,
+                                              style: KioskType.body(
+                                                24,
+                                                FontWeight.w800,
+                                                color: KioskColors.dangerSoft,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              l10n.kioskCartStaleBody,
+                                              style: KioskType.body(
+                                                20,
+                                                FontWeight.w500,
+                                                color: KioskColors.textMuted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 18),
+                                      KioskPressable(
+                                        key: const Key(
+                                          'kiosk-cart-stale-refresh',
+                                        ),
+                                        onTap:
+                                            controller.refreshCartAgainstMenu,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 28,
+                                            vertical: 16,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: KioskColors.danger
+                                                .withValues(alpha: .2),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            l10n.kioskCartStaleRefresh,
+                                            style: KioskType.body(
+                                              21,
+                                              FontWeight.w800,
+                                              color: KioskColors.dangerSoft,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             for (final line in state.cart)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 18),
                                 child: _CartRow(
                                   line: line,
+                                  menu: menu,
                                   lang: state.lang,
                                   onEdit: () =>
                                       controller.editCartLine(line.lineId),
@@ -377,6 +469,7 @@ class _EmptyCart extends StatelessWidget {
 class _CartRow extends StatelessWidget {
   const _CartRow({
     required this.line,
+    required this.menu,
     required this.lang,
     required this.onEdit,
     required this.onInc,
@@ -384,6 +477,7 @@ class _CartRow extends StatelessWidget {
     required this.onRemove,
   });
   final KioskCartLine line;
+  final KioskMenuData menu;
   final String lang;
   final VoidCallback onEdit;
   final VoidCallback onInc;
@@ -393,8 +487,9 @@ class _CartRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final item = kioskItemById(line.itemId);
-    final mods = KioskCartSheet.modifierSummary(line, lang);
+    final item = menu.tryItem(line.itemId);
+    if (item == null) return const SizedBox.shrink();
+    final mods = KioskCartSheet.modifierSummary(menu, line, lang);
 
     return GestureDetector(
       onTap: onEdit,

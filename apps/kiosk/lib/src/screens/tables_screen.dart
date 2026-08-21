@@ -5,28 +5,90 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
+import '../state/kiosk_live_runtime.dart';
 import '../widgets/kiosk_chrome.dart';
 
-/// 03 · Table picker (fixture floor) — zone-grouped 4-column grid, legend,
-/// fixed continue bar. Only AVAILABLE tables are tappable; occupied /
-/// reserved / out-of-service stay visible but dimmed with their status dot
-/// and label — the honest floor, no concurrency logic in Phase 1.
-class KioskTablesScreen extends ConsumerWidget {
+/// 03 · Table picker — zone-grouped 4-column grid, legend, fixed continue
+/// bar. Only AVAILABLE tables are tappable; occupied / reserved /
+/// out-of-service stay visible but dimmed with their status dot and label —
+/// the honest floor. Demo mode renders the fixture floor; real mode renders
+/// the live `kiosk_tables` read, refreshed on entry, on demand, and again
+/// before Continue whenever the data has gone stale — a selection is never
+/// allowed to look guaranteed on old truth. NO hold of any kind happens here.
+class KioskTablesScreen extends ConsumerStatefulWidget {
   const KioskTablesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<KioskTablesScreen> createState() => _KioskTablesScreenState();
+}
+
+class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
+  bool _confirming = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fresh floor on entry (live mode only; demo has nothing to fetch).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(kioskTablesViewProvider).live) {
+        ref.read(kioskLiveProvider.notifier).refreshTables();
+      }
+    });
+  }
+
+  /// Continue with the stale-floor guard: live mode re-reads when the data
+  /// is old, and only proceeds if the chosen table is STILL available in the
+  /// fresh floor; otherwise the selection clears with an honest notice.
+  Future<void> _confirm() async {
+    final controller = ref.read(kioskFlowProvider.notifier);
+    final view = ref.read(kioskTablesViewProvider);
+    if (!view.live) {
+      controller.confirmTable();
+      return;
+    }
+    if (_confirming) return;
+    final live = ref.read(kioskLiveProvider.notifier);
+    if (live.tablesStale) {
+      setState(() => _confirming = true);
+      await live.refreshTables();
+      if (!mounted) return;
+      setState(() => _confirming = false);
+      final label = ref.read(kioskFlowProvider).selectedTable;
+      final fresh = ref.read(kioskTablesViewProvider);
+      final stillAvailable =
+          label != null &&
+          fresh.status == KioskTablesStatus.ready &&
+          fresh.zones.any(
+            (z) => z.tables.any(
+              (t) => t.label == label && t.state == KioskTableState.available,
+            ),
+          );
+      if (!stillAvailable) {
+        controller.toggleTable(label ?? '');
+        controller.showStaffToast('table-taken');
+        return;
+      }
+    }
+    controller.confirmTable();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
-    final zones = kioskFixtureZones(busy: state.busyFloor);
+    final view = ref.watch(kioskTablesViewProvider);
+    final zones = view.zones;
     final rtl = state.rtl;
 
-    String zoneName(String id) => switch (id) {
-      'patio' => l10n.kioskZonePatio,
-      'bar' => l10n.kioskZoneBar,
-      _ => l10n.kioskZoneHall,
-    };
+    String zoneName(KioskFixtureZone zone) =>
+        zone.displayName ??
+        switch (zone.id) {
+          'patio' => l10n.kioskZonePatio,
+          'bar' => l10n.kioskZoneBar,
+          _ => l10n.kioskZoneHall,
+        };
 
     return Column(
       children: [
@@ -92,65 +154,179 @@ class KioskTablesScreen extends ConsumerWidget {
             ],
           ),
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(52, 8, 52, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final zone in zones) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
+        if (view.live && view.status != KioskTablesStatus.ready)
+          Expanded(
+            child: Center(
+              child: KioskGlass(
+                radius: 36,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 72,
+                  vertical: 64,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (view.status == KioskTablesStatus.loading)
+                      const SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 5,
+                          color: KioskColors.accentTop,
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.wifi_off_rounded,
+                        size: 84,
+                        color: KioskColors.textMuted,
+                      ),
+                    const SizedBox(height: 34),
+                    Text(
+                      view.status == KioskTablesStatus.loading
+                          ? l10n.kioskTablesLoadingTitle
+                          : l10n.kioskTablesUnavailableTitle,
+                      textAlign: TextAlign.center,
+                      style: KioskType.body(34, FontWeight.w800),
+                    ),
+                    if (view.status != KioskTablesStatus.loading) ...[
+                      const SizedBox(height: 16),
                       Text(
-                        zoneName(zone.id),
-                        style: KioskType.body(30, FontWeight.w800),
+                        l10n.kioskTablesUnavailableBody,
+                        textAlign: TextAlign.center,
+                        style: KioskType.body(
+                          24,
+                          FontWeight.w500,
+                          color: KioskColors.textMuted,
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
+                      const SizedBox(height: 30),
+                      KioskAccentPill(
+                        key: const Key('kiosk-tables-retry'),
+                        onTap: () => ref
+                            .read(kioskLiveProvider.notifier)
+                            .refreshTables(),
                         child: Text(
-                          l10n.kioskFreeCount(
-                            zone.tables
-                                .where(
-                                  (t) => t.state == KioskTableState.available,
-                                )
-                                .length,
-                          ),
+                          l10n.kioskRetry.toUpperCase(),
                           style: KioskType.body(
-                            21,
-                            FontWeight.w600,
-                            color: KioskColors.textMuted,
+                            26,
+                            FontWeight.w900,
+                            color: Colors.white,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  GridView.count(
-                    crossAxisCount: 4,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 20,
-                    crossAxisSpacing: 20,
-                    childAspectRatio: (976 - 3 * 20) / 4 / 196,
-                    children: [
-                      for (final table in zone.tables)
-                        _TableCard(
-                          table: table,
-                          selected: state.selectedTable == table.label,
-                          onTap: table.state == KioskTableState.available
-                              ? () => controller.toggleTable(table.label)
-                              : null,
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(52, 8, 52, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (view.live)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: KioskPressable(
+                          key: const Key('kiosk-tables-refresh'),
+                          onTap: () => ref
+                              .read(kioskLiveProvider.notifier)
+                              .refreshTables(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 26,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: KioskColors.glass(.06),
+                              border: Border.all(
+                                color: KioskColors.glass(.14),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.refresh_rounded,
+                                  size: 26,
+                                  color: KioskColors.textSoft,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  l10n.kioskTablesRefresh,
+                                  style: KioskType.body(
+                                    21,
+                                    FontWeight.w700,
+                                    color: KioskColors.textSoft,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 40),
+                      ),
+                    ),
+                  for (final zone in zones) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          zoneName(zone),
+                          style: KioskType.body(30, FontWeight.w800),
+                        ),
+                        const SizedBox(width: 16),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
+                          child: Text(
+                            l10n.kioskFreeCount(
+                              zone.tables
+                                  .where(
+                                    (t) => t.state == KioskTableState.available,
+                                  )
+                                  .length,
+                            ),
+                            style: KioskType.body(
+                              21,
+                              FontWeight.w600,
+                              color: KioskColors.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    GridView.count(
+                      crossAxisCount: 4,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 20,
+                      crossAxisSpacing: 20,
+                      childAspectRatio: (976 - 3 * 20) / 4 / 196,
+                      children: [
+                        for (final table in zone.tables)
+                          _TableCard(
+                            table: table,
+                            selected: state.selectedTable == table.label,
+                            onTap: table.state == KioskTableState.available
+                                ? () => controller.toggleTable(table.label)
+                                : null,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        ),
         Container(
           padding: const EdgeInsets.fromLTRB(52, 28, 52, 44),
           decoration: const BoxDecoration(
@@ -191,8 +367,8 @@ class KioskTablesScreen extends ConsumerWidget {
               ),
               KioskAccentPill(
                 key: const Key('kiosk-table-continue'),
-                onTap: controller.confirmTable,
-                enabled: state.selectedTable != null,
+                onTap: _confirm,
+                enabled: state.selectedTable != null && !_confirming,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

@@ -11853,6 +11853,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Menu re-synced · fixture data'**
   String get kioskResyncDone;
+
+  /// No description provided for @kioskActivationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate this kiosk'**
+  String get kioskActivationTitle;
+
+  /// No description provided for @kioskActivationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the enrollment code from the Dashboard to pair this device.'**
+  String get kioskActivationSubtitle;
+
+  /// No description provided for @kioskActivationCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Enrollment code'**
+  String get kioskActivationCodeLabel;
+
+  /// No description provided for @kioskActivationSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get kioskActivationSubmit;
+
+  /// No description provided for @kioskActivationErrorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is not valid. Check it and try again.'**
+  String get kioskActivationErrorInvalid;
+
+  /// No description provided for @kioskActivationErrorExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That code has expired. Issue a new one from the Dashboard.'**
+  String get kioskActivationErrorExpired;
+
+  /// No description provided for @kioskActivationErrorWrongType.
+  ///
+  /// In en, this message translates to:
+  /// **'That code belongs to a different device type.'**
+  String get kioskActivationErrorWrongType;
+
+  /// No description provided for @kioskActivationErrorLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a moment and try again.'**
+  String get kioskActivationErrorLocked;
+
+  /// No description provided for @kioskActivationErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check the network and try again.'**
+  String get kioskActivationErrorNetwork;
+
+  /// No description provided for @kioskActivationErrorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Activation failed. Try again.'**
+  String get kioskActivationErrorUnknown;
+
+  /// No description provided for @kioskBootRestoring.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking this kiosk…'**
+  String get kioskBootRestoring;
+
+  /// No description provided for @kioskReconnectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting…'**
+  String get kioskReconnectTitle;
+
+  /// No description provided for @kioskReconnectBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This kiosk lost its connection. It will be back shortly.'**
+  String get kioskReconnectBody;
+
+  /// No description provided for @kioskRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get kioskRetry;
+
+  /// No description provided for @kioskMenuLoadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the menu…'**
+  String get kioskMenuLoadingTitle;
+
+  /// No description provided for @kioskMenuEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu is empty'**
+  String get kioskMenuEmptyTitle;
+
+  /// No description provided for @kioskMenuEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please order at the counter.'**
+  String get kioskMenuEmptyBody;
+
+  /// No description provided for @kioskMenuUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu is unavailable'**
+  String get kioskMenuUnavailableTitle;
+
+  /// No description provided for @kioskMenuUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please order at the counter.'**
+  String get kioskMenuUnavailableBody;
+
+  /// No description provided for @kioskTablesLoadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the floor…'**
+  String get kioskTablesLoadingTitle;
+
+  /// No description provided for @kioskTablesUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables are unavailable'**
+  String get kioskTablesUnavailableTitle;
+
+  /// No description provided for @kioskTablesUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We can\'t check the tables right now.'**
+  String get kioskTablesUnavailableBody;
+
+  /// No description provided for @kioskTablesRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get kioskTablesRefresh;
+
+  /// No description provided for @kioskItemUnavailableBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold out'**
+  String get kioskItemUnavailableBadge;
+
+  /// No description provided for @kioskCartStaleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu changed'**
+  String get kioskCartStaleTitle;
+
+  /// No description provided for @kioskCartStaleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Some items or prices in your order were updated. Review your order to continue.'**
+  String get kioskCartStaleBody;
+
+  /// No description provided for @kioskCartStaleRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Update order'**
+  String get kioskCartStaleRefresh;
+
+  /// No description provided for @kioskOrderingUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Ordering is unavailable on this kiosk right now — please order at the counter.'**
+  String get kioskOrderingUnavailable;
+
+  /// No description provided for @kioskTableNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'That table was just taken — please pick another.'**
+  String get kioskTableNoLongerAvailable;
 }
 
 class _AppLocalizationsDelegate

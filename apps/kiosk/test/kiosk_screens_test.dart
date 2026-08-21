@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_kiosk/src/data/kiosk_menu_data.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
 import 'package:restoflow_kiosk/src/widgets/category_wheel.dart';
@@ -101,10 +102,10 @@ void main() {
         expect(find.text('+25 ₪'), findsOneWidget);
         await tester.tap(find.byKey(const Key('kiosk-option-w240')));
         await tester.pump(const Duration(milliseconds: 200));
-        expect(state().draft!.totalMinor, 5500);
+        expect(state().draft!.totalMinorIn(KioskMenuData.fixtures()), 5500);
         await tester.tap(find.byKey(const Key('kiosk-qty-inc')));
         await tester.pump(const Duration(milliseconds: 200));
-        expect(state().draft!.totalMinor, 11000);
+        expect(state().draft!.totalMinorIn(KioskMenuData.fixtures()), 11000);
         await tester.tap(find.byKey(const Key('kiosk-item-cta')));
         await tester.pump(const Duration(milliseconds: 300));
         expect(state().cart.single.lineTotalMinor, 11000);

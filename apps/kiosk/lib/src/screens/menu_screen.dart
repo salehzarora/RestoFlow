@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
+import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/category_wheel.dart';
@@ -23,7 +24,16 @@ class KioskMenuScreen extends ConsumerWidget {
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
     final rtl = state.rtl;
-    final category = kioskFixtureMenu[state.categoryIndex];
+    final menu = ref.watch(kioskMenuDataProvider);
+    final status = ref.watch(kioskMenuStatusProvider);
+    final hasMenu =
+        status == KioskMenuStatus.ready && menu.categories.isNotEmpty;
+    final category = hasMenu
+        ? menu.categories[state.categoryIndex.clamp(
+            0,
+            menu.categories.length - 1,
+          )]
+        : null;
     final serviceBase = switch (state.service) {
       KioskServiceType.dineIn => l10n.kioskDineIn,
       KioskServiceType.takeaway => l10n.kioskTakeaway,
@@ -143,57 +153,134 @@ class KioskMenuScreen extends ConsumerWidget {
             // direction — inline-start puts the wheel on the RIGHT in AR/HE
             // and mirrors it to the LEFT in EN, exactly like the artifact.
             padding: const EdgeInsetsDirectional.fromSTEB(30, 10, 30, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                KioskCategoryWheel(
-                  categories: kioskFixtureMenu,
-                  activeIndex: state.categoryIndex,
-                  onSelect: controller.setCategoryIndex,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-                    child: AnimatedSwitcher(
-                      duration: KioskMotion.gridSwap,
-                      switchInCurve: KioskMotion.curve,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, .02),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
+            child: !hasMenu
+                ? _MenuStatepanel(status: status)
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      KioskCategoryWheel(
+                        categories: menu.categories,
+                        activeIndex: state.categoryIndex.clamp(
+                          0,
+                          menu.categories.length - 1,
                         ),
+                        onSelect: controller.setCategoryIndex,
                       ),
-                      child: GridView.builder(
-                        key: ValueKey(category.id),
-                        padding: const EdgeInsets.only(bottom: 170),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 24,
-                              crossAxisSpacing: 24,
-                              mainAxisExtent: 536,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                          child: AnimatedSwitcher(
+                            duration: KioskMotion.gridSwap,
+                            switchInCurve: KioskMotion.curve,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0, .02),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                            child: GridView.builder(
+                              key: ValueKey(category!.id),
+                              padding: const EdgeInsets.only(bottom: 170),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 24,
+                                    crossAxisSpacing: 24,
+                                    mainAxisExtent: 536,
+                                  ),
+                              itemCount: category.items.length,
+                              itemBuilder: (context, i) => _ProductCard(
+                                item: category.items[i],
+                                lang: state.lang,
+                                onTap: () =>
+                                    controller.openItem(category.items[i].id),
+                              ),
                             ),
-                        itemCount: category.items.length,
-                        itemBuilder: (context, i) => _ProductCard(
-                          item: category.items[i],
-                          lang: state.lang,
-                          onTap: () =>
-                              controller.openItem(category.items[i].id),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The V2-styled honest state panel replacing the wheel + grid while the live
+/// menu is loading, unreachable, unusable, or genuinely empty. Header, bottom
+/// bar and the whole composition stay exactly V2 around it.
+class _MenuStatepanel extends StatelessWidget {
+  const _MenuStatepanel({required this.status});
+  final KioskMenuStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (title, body) = switch (status) {
+      KioskMenuStatus.loading => (l10n.kioskMenuLoadingTitle, ''),
+      KioskMenuStatus.reconnect => (
+        l10n.kioskReconnectTitle,
+        l10n.kioskReconnectBody,
+      ),
+      KioskMenuStatus.empty => (
+        l10n.kioskMenuEmptyTitle,
+        l10n.kioskMenuEmptyBody,
+      ),
+      _ => (l10n.kioskMenuUnavailableTitle, l10n.kioskMenuUnavailableBody),
+    };
+    return Center(
+      child: KioskGlass(
+        radius: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 64),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (status == KioskMenuStatus.loading)
+              const SizedBox(
+                width: 64,
+                height: 64,
+                child: CircularProgressIndicator(
+                  strokeWidth: 5,
+                  color: KioskColors.accentTop,
+                ),
+              )
+            else
+              Icon(
+                status == KioskMenuStatus.reconnect
+                    ? Icons.wifi_off_rounded
+                    : Icons.restaurant_menu_rounded,
+                size: 84,
+                color: KioskColors.textMuted,
+              ),
+            const SizedBox(height: 34),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: KioskType.body(34, FontWeight.w800),
+            ),
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: KioskType.body(
+                  24,
+                  FontWeight.w500,
+                  color: KioskColors.textMuted,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -210,120 +297,158 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => KioskPressable(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [KioskColors.glass(.06), KioskColors.glass(.02)],
-        ),
-        border: Border.all(color: KioskColors.glass(.1), width: 1.5),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x59000000),
-            offset: Offset(0, 18),
-            blurRadius: 44,
+    // A sold-out/unreadable item stays VISIBLE (the customer sees the truth)
+    // but never opens the configurator — V2's disabled treatment.
+    onTap: item.available ? onTap : null,
+    child: Opacity(
+      opacity: item.available ? 1 : .45,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [KioskColors.glass(.06), KioskColors.glass(.02)],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Photo block: 284 tall, radius 22, cover crop; the approved
-          // no-photo treatment is the dark image well with the item name.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: SizedBox(
-              height: 284,
-              width: double.infinity,
-              child: item.imageAsset != null
-                  ? KioskFixtureImage(
-                      asset: item.imageAsset,
-                      fallback: const ColoredBox(color: KioskColors.imageWell),
-                    )
-                  : ColoredBox(
-                      color: KioskColors.imageWell,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(
-                            item.name.of(lang),
-                            textAlign: TextAlign.center,
-                            style: KioskType.body(
-                              24,
-                              FontWeight.w800,
-                              color: KioskColors.textDisabled,
+          border: Border.all(color: KioskColors.glass(.1), width: 1.5),
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x59000000),
+              offset: Offset(0, 18),
+              blurRadius: 44,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Photo block: 284 tall, radius 22, cover crop; the approved
+            // no-photo treatment is the dark image well with the item name.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: SizedBox(
+                height: 284,
+                width: double.infinity,
+                child: item.imageAsset != null
+                    ? KioskFixtureImage(
+                        asset: item.imageAsset,
+                        fallback: const ColoredBox(
+                          color: KioskColors.imageWell,
+                        ),
+                      )
+                    : ColoredBox(
+                        color: KioskColors.imageWell,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              item.name.of(lang),
+                              textAlign: TextAlign.center,
+                              style: KioskType.body(
+                                24,
+                                FontWeight.w800,
+                                color: KioskColors.textDisabled,
+                              ),
                             ),
                           ),
                         ),
                       ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 20, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 62,
+                    child: Text(
+                      item.name.of(lang),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: KioskType.body(28, FontWeight.w800, height: 1.12),
                     ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 20, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 62,
-                  child: Text(
-                    item.name.of(lang),
-                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    item.description.of(lang),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: KioskType.body(28, FontWeight.w800, height: 1.12),
+                    style: KioskType.body(
+                      20,
+                      FontWeight.w500,
+                      color: KioskColors.textMuted,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.description.of(lang),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: KioskType.body(
-                    20,
-                    FontWeight.w500,
-                    color: KioskColors.textMuted,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  kioskFormatMinor(item.basePriceMinor, lang),
-                  textDirection: TextDirection.ltr,
-                  style: KioskType.body(32, FontWeight.w900),
-                ),
-                Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    gradient: kioskAccentGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: KioskColors.ring.withValues(alpha: .4),
-                        blurRadius: 30,
-                        offset: const Offset(0, 12),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    kioskFormatMinor(item.basePriceMinor, lang),
+                    textDirection: TextDirection.ltr,
+                    style: KioskType.body(32, FontWeight.w900),
+                  ),
+                  if (!item.available)
+                    Flexible(
+                      child: Container(
+                        key: Key('kiosk-item-unavailable-${item.id}'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: KioskColors.glass(.1),
+                          border: Border.all(
+                            color: KioskColors.glass(.16),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          AppLocalizations.of(
+                            context,
+                          ).kioskItemUnavailableBadge.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: KioskType.body(
+                            19,
+                            FontWeight.w800,
+                            color: KioskColors.textMuted,
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.add, size: 40, color: Colors.white),
-                  ),
-                ),
-              ],
+                    )
+                  else
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        gradient: kioskAccentGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: KioskColors.ring.withValues(alpha: .4),
+                            blurRadius: 30,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.add, size: 40, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );

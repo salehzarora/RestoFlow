@@ -265,9 +265,14 @@ class _WheelRow extends StatelessWidget {
                         )
                       : Center(
                           child: Icon(
-                            category.iconKind == 'drink'
-                                ? Icons.local_drink_outlined
-                                : Icons.icecream_outlined,
+                            // LIVE: the owner-chosen registry glyph rides
+                            // along resolved; fixtures keep the Phase-1
+                            // kind switch; unknown/null keys fall back the
+                            // same stable way.
+                            category.iconData ??
+                                (category.iconKind == 'drink'
+                                    ? Icons.local_drink_outlined
+                                    : Icons.icecream_outlined),
                             size: disc * .46,
                             color: KioskColors.textSoft,
                           ),
