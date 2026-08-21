@@ -74,12 +74,41 @@ void main() {
     expect(main.contains('kKdsDeviceSessionPrefix'), isFalse);
   });
 
-  test('no storage-policy or bucket surface was added to the client', () {
+  test('media access goes ONLY through the shared resolver abstraction '
+      '(KIOSK-001-PREREQ-083)', () {
     for (final f in _dartSources()) {
       final src = f.readAsStringSync();
+      // The raw storage SDK, bucket names, and signing calls stay
+      // forbidden in the client — signing happens behind the shared
+      // DeviceImageUrlResolver seam (`createSignedUrl` also covers the
+      // batch `createSignedUrlsResult`).
       expect(src.contains('createSignedUrl'), isFalse, reason: f.path);
-      expect(src.contains('storage.'), isFalse, reason: f.path);
+      expect(src.contains('SupabaseClient'), isFalse, reason: f.path);
+      expect(src.contains('.storage'), isFalse, reason: f.path);
+      expect(src.contains('StorageFileApi'), isFalse, reason: f.path);
       expect(src.contains('menu-images'), isFalse, reason: f.path);
+    }
+    // The one allowed media seam exists where the runtime consumes it.
+    final runtime = File(
+      '${_libDir().path}/src/state/kiosk_live_runtime.dart',
+    ).readAsStringSync();
+    expect(runtime.contains('DeviceImageUrlResolver'), isTrue);
+  });
+
+  test('no signed URL is ever persisted (in-memory state only)', () {
+    // URLs expire in minutes; persisting one would serve dead images after
+    // a restart and leak a (time-limited) capability into device storage.
+    for (final f in _dartSources()) {
+      final src = f.readAsStringSync();
+      if (src.contains('imageUrls') || src.contains('signedUrlsFor')) {
+        expect(
+          src.contains('SharedPreferences'),
+          f.path.endsWith('main.dart'),
+          reason:
+              '${f.path}: prefs may appear only in the composition root '
+              '(the session secret store), never beside URL state',
+        );
+      }
     }
   });
 }

@@ -34,6 +34,15 @@ final String? _skip = _url.isEmpty || _anon.isEmpty
 
 const _kioskDeviceId = '00000000-0000-0000-0000-00713d000001';
 const _posDeviceId = '00000000-0000-0000-0000-00713d000002';
+const _kdsDeviceId = '00000000-0000-0000-0000-00713d000003';
+
+// KIOSK-001-PREREQ-083 — the seeded object keys (bytes uploaded by the driver).
+const _ownImageKey =
+    '00000000-0000-0000-0000-00713d0000a0/00000000-0000-0000-0000-00713d0000a1/00000000-0000-0000-0000-00713d0000b1/menu_item/00000000-0000-0000-0000-00713d00a001/00000000-0000-0000-0000-00713d001101.png';
+const _globalImageKey =
+    '00000000-0000-0000-0000-00713d0000a0/00000000-0000-0000-0000-00713d0000a1/global/menu_item/00000000-0000-0000-0000-00713d00a003/00000000-0000-0000-0000-00713d001102.png';
+const _siblingImageKey =
+    '00000000-0000-0000-0000-00713d0000a0/00000000-0000-0000-0000-00713d0000a1/00000000-0000-0000-0000-00713d0000b2/menu_item/00000000-0000-0000-0000-00713d00a001/00000000-0000-0000-0000-00713d001103.png';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +50,7 @@ void main() {
   late SupabaseDevicePairingRepository pairing;
   late SharedPreferencesDeviceSessionSecretStore store;
   late KioskLiveReads reads;
+  late DeviceImageUrlResolver resolver;
 
   setUpAll(() async {
     if (_skip != null) return;
@@ -53,14 +63,16 @@ void main() {
       prefs,
       keyPrefix: kKioskDeviceSessionPrefix,
     );
-    final transport = await SupabaseAuthBootstrap(
+    final session = await SupabaseAuthBootstrap(
       config: SupabaseBootstrapConfig.fromValues(url: _url, anonKey: _anon),
-    ).createAnonymousDeviceTransport();
+    ).createAnonymousDeviceSession();
     pairing = SupabaseDevicePairingRepository(
-      transport: transport,
+      transport: session.transport,
       secretStore: store,
     );
-    reads = KioskLiveReads(transport: transport, secretStore: store);
+    reads = KioskLiveReads(transport: session.transport, secretStore: store);
+    // The exact production wrapper: the egress-cached shared resolver.
+    resolver = CachingDeviceImageUrlResolver(session.imageUrlResolver);
   });
 
   test(
@@ -131,6 +143,119 @@ void main() {
     expect(states['IT3'], KioskTableState.reserved);
     expect(states['IT4'], KioskTableState.outOfService);
   }, skip: _skip);
+
+  test(
+    'MEDIA-083: the live menu carries image_path; the kiosk resolver signs '
+    'own+global, DENIES the sibling branch, and the URL actually serves',
+    () async {
+      // The live menu exposes the seeded pointers.
+      final menu =
+          ((await reads.fetchMenu()) as KioskReadOk<KioskMenuData>).value;
+      expect(
+        menu.tryItem('00000000-0000-0000-0000-00713d00a001')!.imagePath,
+        _ownImageKey,
+      );
+      expect(
+        menu.tryItem('00000000-0000-0000-0000-00713d00a003')!.imagePath,
+        _globalImageKey,
+      );
+
+      // One batch through the PRODUCTION resolver stack: own-branch and
+      // restaurant-global sign; the sibling-branch key is silently ABSENT.
+      final urls = await resolver.signedUrlsFor([
+        _ownImageKey,
+        _globalImageKey,
+        _siblingImageKey,
+      ]);
+      expect(urls.keys.toSet(), {_ownImageKey, _globalImageKey});
+
+      // End to end: the signed URL serves the REAL uploaded PNG bytes.
+      final client = HttpClient();
+      try {
+        final rq = await client.getUrl(Uri.parse(urls[_ownImageKey]!));
+        final rs = await rq.close();
+        expect(rs.statusCode, 200);
+        final bytes = <int>[for (final chunk in await rs.toList()) ...chunk];
+        // PNG magic: 0x89 'P' 'N' 'G'.
+        expect(bytes.length, greaterThan(8));
+        expect(bytes.sublist(0, 4), [0x89, 0x50, 0x4e, 0x47]);
+      } finally {
+        client.close(force: true);
+      }
+    },
+    skip: _skip,
+  );
+
+  test(
+    'MEDIA-083: a live POS session still signs (preserved contract)',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final posStore = SharedPreferencesDeviceSessionSecretStore(
+        prefs,
+        keyPrefix: kPosDeviceSessionPrefix,
+      );
+      await posStore.write(
+        const DeviceSessionCredential(
+          deviceId: _posDeviceId,
+          sessionToken: 'pos-it-token',
+        ),
+      );
+      final session = await SupabaseAuthBootstrap(
+        config: SupabaseBootstrapConfig.fromValues(url: _url, anonKey: _anon),
+      ).createAnonymousDeviceSession();
+      // The canonical restore binds THIS anonymous principal to the session.
+      final posPairing = SupabaseDevicePairingRepository(
+        transport: session.transport,
+        secretStore: posStore,
+      );
+      expect(
+        await posPairing.restoreOutcome(expectedDeviceType: 'pos'),
+        isA<DeviceSessionRestored>(),
+      );
+      final urls = await CachingDeviceImageUrlResolver(
+        session.imageUrlResolver,
+      ).signedUrlsFor([_ownImageKey]);
+      expect(urls.keys, contains(_ownImageKey));
+    },
+    skip: _skip,
+  );
+
+  test(
+    'MEDIA-083: a live KDS session gets NOTHING from the resolver (T-014)',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final kdsStore = SharedPreferencesDeviceSessionSecretStore(
+        prefs,
+        keyPrefix: kKdsDeviceSessionPrefix,
+      );
+      await kdsStore.write(
+        const DeviceSessionCredential(
+          deviceId: _kdsDeviceId,
+          sessionToken: 'kds-it-token',
+        ),
+      );
+      final session = await SupabaseAuthBootstrap(
+        config: SupabaseBootstrapConfig.fromValues(url: _url, anonKey: _anon),
+      ).createAnonymousDeviceSession();
+      final kdsPairing = SupabaseDevicePairingRepository(
+        transport: session.transport,
+        secretStore: kdsStore,
+      );
+      // The KDS session itself is perfectly LIVE (restore succeeds and binds
+      // the principal) — yet the media gate still denies every key.
+      expect(
+        await kdsPairing.restoreOutcome(expectedDeviceType: 'kds'),
+        isA<DeviceSessionRestored>(),
+      );
+      final urls = await CachingDeviceImageUrlResolver(
+        session.imageUrlResolver,
+      ).signedUrlsFor([_ownImageKey, _globalImageKey]);
+      expect(urls, isEmpty);
+    },
+    skip: _skip,
+  );
 
   test('a POS token is refused by the kiosk read family', () async {
     SharedPreferences.setMockInitialValues({});
