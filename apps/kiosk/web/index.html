@@ -18,12 +18,12 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="RestoFlow Kiosk — customer self-service ordering surface.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="restoflow_kiosk">
+  <meta name="apple-mobile-web-app-title" content="RestoFlow Kiosk">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
@@ -41,6 +41,58 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!--
+    WEB-AUTH-SESSION-ISOLATION-001 — this device surface must not join the
+    cross-tab Supabase auth channel.
+
+    RestoFlow serves the Dashboard, POS, KDS and Kiosk from ONE origin (/,
+    /pos/, /kds/, /kiosk/). GoTrue opens a BroadcastChannel named
+    "sb-<project-ref>-auth-token" in its client constructor, unconditionally on
+    web, and names it from the project URL — there is no public option to
+    rename or disable it. Every client on the origin therefore joins the SAME
+    channel, and a client that RECEIVES a message adopts the broadcast session
+    as its own.
+
+    Measured on production (POS): with the Dashboard open in another tab, a
+    device surface's anonymous sign-in was adopted by the Dashboard, persisted
+    there, and after a reload the Dashboard was running as an anonymous
+    principal — every tenant RPC returned 403 and the operator was stuck on a
+    generic error until they cleared site data. The reverse is worse: a
+    broadcast Dashboard STAFF session would hand this customer-facing kiosk
+    staff authority.
+
+    So this app declines that one channel — the exact guard POS and KDS ship
+    (KIOSK-001-WEB-089 copied it verbatim when /kiosk joined the shared
+    origin). Nothing is lost: the device session is anonymous, per-tab and
+    never persisted, so it has nothing to synchronise. Every other
+    BroadcastChannel is untouched, and this file does not exist on
+    Android/iOS, so native behaviour is unchanged.
+  -->
+  <script>
+    (function () {
+      var Native = window.BroadcastChannel;
+      if (!Native) return;
+      var SUPABASE_AUTH = /^sb-.*-auth-token$/;
+      function Isolated(name) {
+        if (SUPABASE_AUTH.test(String(name))) {
+          // A silent stand-in: same shape, no cross-tab traffic either way.
+          return {
+            name: String(name),
+            onmessage: null,
+            onmessageerror: null,
+            postMessage: function () {},
+            close: function () {},
+            addEventListener: function () {},
+            removeEventListener: function () {},
+            dispatchEvent: function () { return false; }
+          };
+        }
+        return new Native(name);
+      }
+      Isolated.prototype = Native.prototype;
+      window.BroadcastChannel = Isolated;
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
