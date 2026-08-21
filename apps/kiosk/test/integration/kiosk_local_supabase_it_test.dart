@@ -26,6 +26,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///   * a live POS device session with token pos-it-token
 ///   * a small live menu (incl. a sold-out item + a required group) + tables
 ///     in all four states
+///   * media (083/084): image_path pointers + uploaded PNGs (own/global/
+///     sibling) and two 90-second sessions (kiosk-it-expiring /
+///     pos-it-expiring) for the natural-expiry proof
 const _url = String.fromEnvironment('RESTOFLOW_KIOSK_IT_URL');
 const _anon = String.fromEnvironment('RESTOFLOW_KIOSK_IT_ANON');
 final String? _skip = _url.isEmpty || _anon.isEmpty
@@ -35,6 +38,9 @@ final String? _skip = _url.isEmpty || _anon.isEmpty
 const _kioskDeviceId = '00000000-0000-0000-0000-00713d000001';
 const _posDeviceId = '00000000-0000-0000-0000-00713d000002';
 const _kdsDeviceId = '00000000-0000-0000-0000-00713d000003';
+// 084: the natural-expiry kiosk session lives on its OWN device — redeeming
+// the main kiosk enforces one-active-session-per-device and would revoke it.
+const _expiringKioskDeviceId = '00000000-0000-0000-0000-00713d000004';
 
 // KIOSK-001-PREREQ-083 — the seeded object keys (bytes uploaded by the driver).
 const _ownImageKey =
@@ -352,5 +358,105 @@ void main() {
       );
     },
     skip: _skip,
+  );
+
+  test(
+    'MEDIA-084: NATURAL EXPIRY — a bound kiosk/POS principal signs while '
+    'live, then loses signing the moment its session expires; restore '
+    'classifies it invalid (RF-118 parity at the storage boundary)',
+    () async {
+      // Bind the two 90-second sessions the driver seeded, WHILE still live.
+      Future<
+        ({DeviceImageUrlResolver raw, SupabaseDevicePairingRepository pairing})
+      >
+      bind(String prefix, String deviceId, String token, String type) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final store = SharedPreferencesDeviceSessionSecretStore(
+          prefs,
+          keyPrefix: prefix,
+        );
+        await store.write(
+          DeviceSessionCredential(deviceId: deviceId, sessionToken: token),
+        );
+        final session = await SupabaseAuthBootstrap(
+          config: SupabaseBootstrapConfig.fromValues(url: _url, anonKey: _anon),
+        ).createAnonymousDeviceSession();
+        final repo = SupabaseDevicePairingRepository(
+          transport: session.transport,
+          secretStore: store,
+        );
+        // The canonical restore: proves the session live AND binds auth.uid().
+        expect(
+          await repo.restoreOutcome(expectedDeviceType: type),
+          isA<DeviceSessionRestored>(),
+          reason: 'the expiring $type session must still be LIVE at bind time',
+        );
+        return (raw: session.imageUrlResolver, pairing: repo);
+      }
+
+      final kiosk = await bind(
+        kKioskDeviceSessionPrefix,
+        _expiringKioskDeviceId,
+        'kiosk-it-expiring',
+        'kiosk',
+      );
+      final pos = await bind(
+        kPosDeviceSessionPrefix,
+        _posDeviceId,
+        'pos-it-expiring',
+        'pos',
+      );
+
+      // BEFORE expiry: both principals sign the own-branch image (a fresh
+      // cache wrapper each time so every check is a REAL signing round-trip).
+      Future<bool> signs(DeviceImageUrlResolver raw) async =>
+          (await CachingDeviceImageUrlResolver(
+            raw,
+          ).signedUrlsFor([_ownImageKey])).containsKey(_ownImageKey);
+      expect(
+        await signs(kiosk.raw),
+        isTrue,
+        reason: 'live non-expired kiosk must sign',
+      );
+      expect(
+        await signs(pos.raw),
+        isTrue,
+        reason: 'live non-expired POS must sign',
+      );
+
+      // Poll until the seeded 90-second expiry lands: NEW signing must go
+      // dark for BOTH principals (no revocation happened — expiry alone).
+      var kioskSigns = true, posSigns = true;
+      final deadline = DateTime.now().add(const Duration(seconds: 150));
+      while ((kioskSigns || posSigns) && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        kioskSigns = await signs(kiosk.raw);
+        posSigns = await signs(pos.raw);
+      }
+      expect(
+        kioskSigns,
+        isFalse,
+        reason: 'an EXPIRED kiosk session must not mint new signed URLs',
+      );
+      expect(
+        posSigns,
+        isFalse,
+        reason: 'an EXPIRED POS session must not mint new signed URLs',
+      );
+
+      // The session path agrees: restore now classifies the same sessions
+      // invalid (RF-118), so the client returns to activation honestly.
+      expect(
+        await kiosk.pairing.restoreOutcome(expectedDeviceType: 'kiosk'),
+        isA<DeviceSessionRestoreRejected>(),
+      );
+      expect(
+        await pos.pairing.restoreOutcome(expectedDeviceType: 'pos'),
+        isA<DeviceSessionRestoreRejected>(),
+      );
+    },
+    skip: _skip,
+    timeout: const Timeout(Duration(minutes: 4)),
   );
 }

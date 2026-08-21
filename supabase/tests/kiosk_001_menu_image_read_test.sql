@@ -14,7 +14,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(22);
+select plan(28);
 
 -- ===== fixtures: Org A (rest A1: branches A1a/A1b + rest A2), Org B =========
 insert into organizations (id, name, slug, default_currency) values
@@ -47,15 +47,27 @@ insert into device_pairings (id, organization_id, restaurant_id, branch_id, devi
 -- principals: a801 POS · a802 KIOSK · a803 KDS · a804 kiosk-inactive-session ·
 -- a805 kiosk-revoked-session · a806 kiosk-on-revoked-pairing ·
 -- a807 kiosk-inactive-device · a808 Org-B kiosk · a809 unbound.
-insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at, auth_user_id) values
-  ('00000000-0000-0000-0000-008300004051', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004001', '00000000-0000-0000-0000-008300004011', app.hash_provisioning_secret('kmi-pos'),   true,  null,  '00000000-0000-0000-0000-008300000801'),
-  ('00000000-0000-0000-0000-008300004052', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k1'),    true,  null,  '00000000-0000-0000-0000-008300000802'),
-  ('00000000-0000-0000-0000-008300004053', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004003', '00000000-0000-0000-0000-008300004013', app.hash_provisioning_secret('kmi-kds'),   true,  null,  '00000000-0000-0000-0000-008300000803'),
-  ('00000000-0000-0000-0000-008300004054', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k2'),    false, null,  '00000000-0000-0000-0000-008300000804'),
-  ('00000000-0000-0000-0000-008300004055', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k3'),    true,  now(), '00000000-0000-0000-0000-008300000805'),
-  ('00000000-0000-0000-0000-008300004056', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004014', app.hash_provisioning_secret('kmi-k4'),    true,  null,  '00000000-0000-0000-0000-008300000806'),
-  ('00000000-0000-0000-0000-008300004057', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004004', '00000000-0000-0000-0000-008300004015', app.hash_provisioning_secret('kmi-k5'),    true,  null,  '00000000-0000-0000-0000-008300000807'),
-  ('00000000-0000-0000-0000-008300004058', '00000000-0000-0000-0000-008300000b00', '00000000-0000-0000-0000-008300000b10', '00000000-0000-0000-0000-008300000b1a', '00000000-0000-0000-0000-008300004005', '00000000-0000-0000-0000-008300004016', app.hash_provisioning_secret('kmi-kb'),    true,  null,  '00000000-0000-0000-0000-008300000808');
+-- RF-118 (084): the three primary live sessions carry an explicit FUTURE
+-- expires_at, so every allow-case below also proves the non-expired path.
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at, expires_at, auth_user_id) values
+  ('00000000-0000-0000-0000-008300004051', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004001', '00000000-0000-0000-0000-008300004011', app.hash_provisioning_secret('kmi-pos'),   true,  null,  now() + interval '1 day', '00000000-0000-0000-0000-008300000801'),
+  ('00000000-0000-0000-0000-008300004052', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k1'),    true,  null,  now() + interval '1 day', '00000000-0000-0000-0000-008300000802'),
+  ('00000000-0000-0000-0000-008300004053', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004003', '00000000-0000-0000-0000-008300004013', app.hash_provisioning_secret('kmi-kds'),   true,  null,  now() + interval '1 day', '00000000-0000-0000-0000-008300000803'),
+  ('00000000-0000-0000-0000-008300004054', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k2'),    false, null,  null,                     '00000000-0000-0000-0000-008300000804'),
+  ('00000000-0000-0000-0000-008300004055', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k3'),    true,  now(), null,                     '00000000-0000-0000-0000-008300000805'),
+  ('00000000-0000-0000-0000-008300004056', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004014', app.hash_provisioning_secret('kmi-k4'),    true,  null,  null,                     '00000000-0000-0000-0000-008300000806'),
+  ('00000000-0000-0000-0000-008300004057', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004004', '00000000-0000-0000-0000-008300004015', app.hash_provisioning_secret('kmi-k5'),    true,  null,  null,                     '00000000-0000-0000-0000-008300000807'),
+  ('00000000-0000-0000-0000-008300004058', '00000000-0000-0000-0000-008300000b00', '00000000-0000-0000-0000-008300000b10', '00000000-0000-0000-0000-008300000b1a', '00000000-0000-0000-0000-008300004005', '00000000-0000-0000-0000-008300004016', app.hash_provisioning_secret('kmi-kb'),    true,  null,  now() + interval '1 day', '00000000-0000-0000-0000-008300000808');
+-- RF-118 (084) expiry fixtures on the SAME live devices/pairings (the helper
+-- keys purely off ds.auth_user_id, so each principal is its own identity):
+-- a810 kiosk EXPIRED (past) · a811 kiosk BOUNDARY (exactly now()) ·
+-- a812 kiosk NULL-legacy · a813 POS EXPIRED · a814 POS NULL-legacy.
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at, expires_at, auth_user_id) values
+  ('00000000-0000-0000-0000-008300004059', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k6'),    true,  null,  now() - interval '1 hour', '00000000-0000-0000-0000-008300000810'),
+  ('00000000-0000-0000-0000-00830000405a', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k7'),    true,  null,  now(),                     '00000000-0000-0000-0000-008300000811'),
+  ('00000000-0000-0000-0000-00830000405b', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004002', '00000000-0000-0000-0000-008300004012', app.hash_provisioning_secret('kmi-k8'),    true,  null,  null,                      '00000000-0000-0000-0000-008300000812'),
+  ('00000000-0000-0000-0000-00830000405c', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004001', '00000000-0000-0000-0000-008300004011', app.hash_provisioning_secret('kmi-p2'),    true,  null,  now() - interval '1 hour', '00000000-0000-0000-0000-008300000813'),
+  ('00000000-0000-0000-0000-00830000405d', '00000000-0000-0000-0000-008300000a00', '00000000-0000-0000-0000-008300000a10', '00000000-0000-0000-0000-008300000a1a', '00000000-0000-0000-0000-008300004001', '00000000-0000-0000-0000-008300004011', app.hash_provisioning_secret('kmi-p3'),    true,  null,  null,                      '00000000-0000-0000-0000-008300000814');
 
 -- storage objects (BYPASSRLS seed): own-branch, global, sibling-branch,
 -- other-restaurant, other-org, malformed key, wrong bucket.
@@ -77,7 +89,7 @@ insert into storage.objects (bucket_id, name) values
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000801"}';
 select is((select count(*)::int from storage.objects where name like '%0083000f0001.png'), 1,
-  '1. POS still reads its own-branch image (preserved)');
+  '1. an ACTIVE NON-EXPIRED POS still reads its own-branch image (preserved)');
 select is((select count(*)::int from storage.objects where name like '%0083000f0002.png'), 1,
   '2. POS still reads a restaurant-global image (preserved)');
 
@@ -86,7 +98,7 @@ select is((select count(*)::int from storage.objects where name like '%0083000f0
 -- ============================================================================
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000802"}';
 select is((select count(*)::int from storage.objects where name like '%0083000f0001.png'), 1,
-  '3. a live KIOSK reads its own-branch image (NEW — the 083 widening)');
+  '3. an ACTIVE NON-EXPIRED KIOSK reads its own-branch image (083 widening)');
 select is((select count(*)::int from storage.objects where name like '%0083000f0002.png'), 1,
   '4. a live KIOSK reads a restaurant-global image (NEW)');
 select is((select count(*)::int from storage.objects where name like '%0083000f0005.png'), 0,
@@ -110,7 +122,7 @@ select is((select count(*)::int from storage.objects where name like '%0083000f0
 -- ============================================================================
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000803"}';
 select is((select count(*)::int from storage.objects where bucket_id = 'menu-images'), 0,
-  '5. a live KDS still sees ZERO menu images (T-014 preserved)');
+  '5. a live NON-EXPIRED KDS still sees ZERO menu images (T-014 preserved)');
 
 -- ============================================================================
 -- SESSION / DEVICE LIVENESS (12-16)
@@ -152,6 +164,26 @@ select throws_ok(
   '19. a kiosk cannot DELETE a storage object (refused outright)');
 
 -- ============================================================================
+-- RF-118 EXPIRY PARITY (23-27) — KIOSK-001-PREREQ-084. now() is frozen for
+-- the whole pgTAP transaction, so the exactly-now boundary is deterministic.
+-- ============================================================================
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000810"}';
+select is((select count(*)::int from storage.objects where bucket_id = 'menu-images'), 0,
+  '23. an EXPIRED kiosk session (past expires_at) sees ZERO images');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000811"}';
+select is((select count(*)::int from storage.objects where bucket_id = 'menu-images'), 0,
+  '24. the exactly-now expiry boundary is DENIED (expires_at > now() is strict)');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000812"}';
+select is((select count(*)::int from storage.objects where name like '%0083000f0001.png'), 1,
+  '25. a legacy NULL-expiry kiosk session is still accepted (restore parity)');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000813"}';
+select is((select count(*)::int from storage.objects where bucket_id = 'menu-images'), 0,
+  '26. an EXPIRED POS session sees ZERO images (RF-118 applied to POS too)');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-008300000814"}';
+select is((select count(*)::int from storage.objects where name like '%0083000f0001.png'), 1,
+  '27. a legacy NULL-expiry POS session is still accepted (restore parity)');
+
+-- ============================================================================
 -- ROLE / ACL SURFACE (20-22)
 -- ============================================================================
 reset role;
@@ -170,6 +202,12 @@ select ok(
      where n.nspname = 'app' and p.proname = 'device_can_read_menu_image')
   like '%in (''pos'', ''kiosk'')%',
   '22. the live allowlist is EXACTLY pos+kiosk (KDS excluded by construction)');
+select ok(
+  (select pg_get_functiondef(p.oid) from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'app' and p.proname = 'device_can_read_menu_image')
+  like '%(ds.expires_at is null or ds.expires_at > now())%',
+  '28. the LIVE definition carries the exact RF-118 expiry predicate (084)');
 
 select * from finish();
 rollback;
