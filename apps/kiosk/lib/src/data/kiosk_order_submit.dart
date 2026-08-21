@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import '../state/kiosk_flow_controller.dart';
+import 'kiosk_fixtures.dart';
 import 'kiosk_menu_data.dart';
 
 /// KIOSK-001-REAL-SUBMIT-092 — the ONLINE-REQUIRED real submit seam around
@@ -131,6 +133,30 @@ class KioskBranchTaxReader {
 // Submit attempt (frozen identity + payload) and typed results.
 // ---------------------------------------------------------------------------
 
+/// KIOSK-001-094: the DISPLAY strings of one ordered line, captured from the
+/// same refreshed menu snapshot the payload was built from. The accepted
+/// confirmation renders THESE — never the current menu, which may have been
+/// renamed, repriced, or had the item removed after the order was accepted.
+@immutable
+class KioskFrozenLineDisplay {
+  const KioskFrozenLineDisplay({
+    required this.lineId,
+    required this.itemName,
+    required this.modifierNames,
+  });
+
+  final int lineId;
+
+  /// The item's display name (live tenant menus carry one string shown in
+  /// every UI language; fixtures are per-language — [KioskText3] covers both).
+  final KioskText3 itemName;
+
+  /// Selected modifier option labels in the exact order the slip summary
+  /// shows them (the item's group order, the customer's pick order within a
+  /// group, the fixture included-weight option skipped).
+  final List<KioskText3> modifierNames;
+}
+
 /// KIOSK-001-093: the complete CUSTOMER-VISIBLE order content frozen at
 /// submit time — deep-copied, never aliasing mutable flow state. The
 /// accepted confirmation renders from THIS (plus the accepted order id),
@@ -139,6 +165,7 @@ class KioskBranchTaxReader {
 class KioskFrozenOrderView {
   const KioskFrozenOrderView({
     required this.lines,
+    required this.lineDisplays,
     required this.service,
     required this.tableId,
     required this.tableLabel,
@@ -152,6 +179,10 @@ class KioskFrozenOrderView {
   });
 
   final List<KioskCartLine> lines;
+
+  /// 094: submit-time display strings per line (item + modifier names), so
+  /// the confirmation never consults the live menu for accepted content.
+  final List<KioskFrozenLineDisplay> lineDisplays;
   final KioskServiceType service;
   final String? tableId;
   final String? tableLabel;
@@ -383,7 +414,14 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
 
   final taxMinor = kioskTaxMinor(subtotal, tax);
   final grand = kioskGrandMinor(subtotal, tax);
-  final name = customerName.trim();
+  // 094: normalize the customer name ONCE — trim, then cap to the server's
+  // 80-char column. The SAME canonical value goes on the wire AND into the
+  // frozen customer-visible view, so what the server stores and what the
+  // confirmation prints can never disagree.
+  final trimmedName = customerName.trim();
+  final name = trimmedName.length > 80
+      ? trimmedName.substring(0, 80)
+      : trimmedName;
   final phone = customerPhone.trim();
   final id = orderId ?? generateKioskUuidV4();
   final opId = localOperationId ?? 'kiosk-${generateKioskUuidV4()}';
@@ -404,11 +442,23 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
         capturedUnitMinor: l.capturedUnitMinor,
       ),
   ]);
+  // 094: freeze the DISPLAY strings too (item + modifier names, in slip
+  // order) from the SAME menu snapshot the payload used — the confirmation
+  // must never consult the live menu for accepted order content.
+  final frozenDisplays = List<KioskFrozenLineDisplay>.unmodifiable([
+    for (final l in cart)
+      KioskFrozenLineDisplay(
+        lineId: l.lineId,
+        itemName: menu.itemById(l.itemId).name,
+        modifierNames: _slipModifierNames(menu, menu.itemById(l.itemId), l),
+      ),
+  ]);
   return KioskSubmitAttempt(
     orderId: id,
     localOperationId: opId,
     view: KioskFrozenOrderView(
       lines: frozenLines,
+      lineDisplays: frozenDisplays,
       service: service,
       tableId: effectiveTableId,
       tableLabel: effectiveTableId == null ? null : tableLabel,
@@ -420,7 +470,10 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
       taxInclusive: tax.isInclusive,
       currencyCode: menu.currencyCode,
     ),
-    params: <String, dynamic>{
+    // 094: the D-022 retry payload is structurally immutable — the whole
+    // parameter graph (map, item list, item maps, modifier lists/maps and
+    // any nested prep snapshot) is recursively frozen, wire-equivalent.
+    params: _deepFreezeWire(<String, dynamic>{
       'p_order_id': id,
       'p_local_operation_id': opId,
       'p_order_type': service == KioskServiceType.dineIn
@@ -439,9 +492,50 @@ KioskSubmitAttempt buildKioskSubmitAttempt({
       'p_client_tax_total_minor': taxMinor,
       'p_client_grand_total_minor': grand,
       'p_client_created_at': clientCreatedAt.toUtc().toIso8601String(),
-    },
+    }),
   );
 }
+
+/// 094: recursively freezes a JSON-shaped wire value. Maps become
+/// unmodifiable views over FRESH insertion-ordered copies (every write
+/// throws; nobody holds the inner map), lists become unmodifiable copies,
+/// scalars pass through untouched — wire-equivalent by construction, no
+/// serialization roundtrip, no numeric conversion anywhere.
+Map<String, dynamic> _deepFreezeWire(Map<String, dynamic> map) =>
+    UnmodifiableMapView<String, dynamic>({
+      for (final e in map.entries) e.key: _deepFreezeWireValue(e.value),
+    });
+
+Object? _deepFreezeWireValue(Object? value) {
+  if (value is Map) {
+    return UnmodifiableMapView<String, dynamic>({
+      for (final e in value.entries)
+        e.key as String: _deepFreezeWireValue(e.value),
+    });
+  }
+  if (value is List) {
+    return List<Object?>.unmodifiable(value.map(_deepFreezeWireValue));
+  }
+  return value;
+}
+
+/// 094: the frozen modifier labels of one line, in EXACTLY the order the
+/// slip summary renders them (the item's group order, then the customer's
+/// pick order within each group; the fixture included-weight option is
+/// skipped, matching the demo slip rule — live group ids are UUIDs, so the
+/// rule is inert there).
+List<KioskText3> _slipModifierNames(
+  KioskMenuData menu,
+  KioskFixtureItem item,
+  KioskCartLine line,
+) => List<KioskText3>.unmodifiable([
+  for (final gid in item.groupIds)
+    if (menu.group(gid) case final group?)
+      for (final oid in line.selected[gid] ?? const <String>[])
+        if (!(gid == 'weight' && oid == kioskIncludedWeightOptionId))
+          for (final o in group.options)
+            if (o.id == oid) o.name,
+]);
 
 /// RFC-4122 v4 UUID from a cryptographically secure source — no extra
 /// dependency, used only for the order id + D-022 operation identity.

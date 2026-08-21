@@ -160,9 +160,16 @@ class KioskOrderSnapshot {
     this.subtotalMinor,
     this.taxMinor,
     this.taxInclusive = false,
+    this.lineDisplays,
   });
   final int number;
   final List<KioskCartLine> lines;
+
+  /// KIOSK-001-094 (REAL mode): the submit-time FROZEN display strings per
+  /// line (item + modifier names). When present, the slip renders these and
+  /// never consults the live menu for accepted order content. Null in demo
+  /// mode — the Phase-1 fixture confirmation keeps its menu lookup.
+  final List<KioskFrozenLineDisplay>? lineDisplays;
   final int totalMinor;
   final KioskServiceType service;
   final String? table;
@@ -938,6 +945,7 @@ class KioskFlowController extends Notifier<KioskState> {
         number: state.dailySeq,
         code: displayOrderCode(orderId),
         lines: view.lines,
+        lineDisplays: view.lineDisplays,
         totalMinor: view.grandMinor,
         subtotalMinor: view.subtotalMinor,
         taxMinor: view.taxMinor,

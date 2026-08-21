@@ -1,15 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show displayOrderCode;
 import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_live_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_menu_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_order_submit.dart';
+import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_live_runtime.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// KIOSK-001-REAL-SUBMIT-092 — the real submit layer, no network anywhere:
 /// tax math parity, canonical payload separation (base price vs modifier
@@ -17,60 +22,64 @@ import 'package:restoflow_kiosk/src/state/kiosk_live_runtime.dart';
 /// freshness + recovery orchestration through fakes.
 const _tableId = '00000000-0000-0000-0000-000000000t01';
 
-Map<String, dynamic> _menuEnvelope({int burgerBase = 4000, int delta = 1500}) =>
+Map<String, dynamic> _menuEnvelope({
+  int burgerBase = 4000,
+  int delta = 1500,
+  String burgerName = 'Classic Burger',
+  String bigName = '240g',
+}) => {
+  'ok': true,
+  'currency_code': 'ILS',
+  'categories': [
+    {'id': 'c1', 'name': 'Burgers', 'display_order': 0},
+  ],
+  'items': [
     {
-      'ok': true,
-      'currency_code': 'ILS',
-      'categories': [
-        {'id': 'c1', 'name': 'Burgers', 'display_order': 0},
-      ],
-      'items': [
-        {
-          'id': 'i1',
-          'menu_category_id': 'c1',
-          'name': 'Classic Burger',
-          'base_price_minor': burgerBase,
-          'availability': 'available',
-        },
-        {
-          'id': 'i2',
-          'menu_category_id': 'c1',
-          'name': 'Cola',
-          'base_price_minor': 1000,
-        },
-      ],
-      'modifiers': [
-        {
-          'id': 'g1',
-          'menu_item_id': 'i1',
-          'name': 'Weight',
-          'selection_type': 'single',
-          'min_select': 1,
-          'max_select': 1,
-          'is_required': true,
-          'allow_quantity': false,
-          'display_order': 0,
-        },
-      ],
-      'modifier_options': [
-        {
-          'id': 'o1',
-          'modifier_id': 'g1',
-          'name': '120g',
-          'price_delta_minor': 0,
-          'display_order': 0,
-          'kitchen_meat': {'quantity': 1, 'unit': 'pc'},
-        },
-        {
-          'id': 'o2',
-          'modifier_id': 'g1',
-          'name': '240g',
-          'price_delta_minor': delta,
-          'display_order': 1,
-          'kitchen_meat': {'quantity': 2, 'unit': 'pc'},
-        },
-      ],
-    };
+      'id': 'i1',
+      'menu_category_id': 'c1',
+      'name': burgerName,
+      'base_price_minor': burgerBase,
+      'availability': 'available',
+    },
+    {
+      'id': 'i2',
+      'menu_category_id': 'c1',
+      'name': 'Cola',
+      'base_price_minor': 1000,
+    },
+  ],
+  'modifiers': [
+    {
+      'id': 'g1',
+      'menu_item_id': 'i1',
+      'name': 'Weight',
+      'selection_type': 'single',
+      'min_select': 1,
+      'max_select': 1,
+      'is_required': true,
+      'allow_quantity': false,
+      'display_order': 0,
+    },
+  ],
+  'modifier_options': [
+    {
+      'id': 'o1',
+      'modifier_id': 'g1',
+      'name': '120g',
+      'price_delta_minor': 0,
+      'display_order': 0,
+      'kitchen_meat': {'quantity': 1, 'unit': 'pc'},
+    },
+    {
+      'id': 'o2',
+      'modifier_id': 'g1',
+      'name': bigName,
+      'price_delta_minor': delta,
+      'display_order': 1,
+      'kitchen_meat': {'quantity': 2, 'unit': 'pc'},
+    },
+  ],
+};
 
 Map<String, dynamic> _tablesEnvelope({String state = 'available'}) => {
   'ok': true,
@@ -1081,6 +1090,359 @@ void main() {
       });
     },
   );
+
+  group('094 final snapshot parity (frozen display + immutable wire)', () {
+    KioskMenuData menu() => mapKioskMenuEnvelope(_menuEnvelope())!;
+    const taxOff = KioskBranchTax(enabled: false, rateBp: 0, mode: 'exclusive');
+
+    KioskSubmitAttempt build({
+      String name = 'Dana',
+      Map<String, dynamic>? envelope,
+    }) => buildKioskSubmitAttempt(
+      menu: envelope == null ? menu() : mapKioskMenuEnvelope(envelope)!,
+      cart: [
+        const KioskCartLine(
+          lineId: 1,
+          itemId: 'i1',
+          quantity: 2,
+          selected: {
+            'g1': ['o2'],
+          },
+          note: 'no salt',
+          capturedUnitMinor: 5500,
+        ),
+      ],
+      service: KioskServiceType.takeaway,
+      tableId: null,
+      tax: taxOff,
+      customerName: name,
+      customerPhone: '050',
+      clientCreatedAt: DateTime.utc(2026, 8, 22, 12),
+    );
+
+    test('customer name normalizes ONCE — wire and frozen view carry the '
+        'SAME canonical value at every boundary', () {
+      String? wire(KioskSubmitAttempt a) =>
+          a.params['p_customer_name'] as String?;
+      final n79 = 'x' * 79, n80 = 'y' * 80, n81 = 'z' * 81;
+      final a79 = build(name: n79);
+      expect(wire(a79), n79);
+      expect(a79.view!.customerName, n79);
+      final a80 = build(name: n80);
+      expect(wire(a80), n80);
+      expect(a80.view!.customerName, n80);
+      final a81 = build(name: n81);
+      expect(wire(a81)!.length, 80);
+      expect(wire(a81), n81.substring(0, 80));
+      expect(
+        a81.view!.customerName,
+        wire(a81),
+        reason: 'confirmation must print EXACTLY what the server stores',
+      );
+      final padded = build(name: '   ${'w' * 81}   ');
+      expect(wire(padded), 'w' * 80, reason: 'trim BEFORE capping');
+      expect(padded.view!.customerName, wire(padded));
+      final empty = build(name: '   ');
+      expect(wire(empty), isNull);
+      expect(empty.view!.customerName, isEmpty);
+    });
+
+    test('the RPC parameter graph is RECURSIVELY immutable — every mutation '
+        'attempt throws (D-022 frozen payload, structural)', () {
+      final env = _menuEnvelope();
+      ((env['modifier_options'] as List)[1] as Map)['kitchen_meat'] = {
+        'quantity': 2,
+        'unit': 'pc',
+        'parts': ['patty'],
+      };
+      final a = build(envelope: env);
+      final params = a.params;
+      expect(() => params['p_notes'] = 'x', throwsUnsupportedError);
+      expect(() => params.remove('p_order_id'), throwsUnsupportedError);
+      final items = params['p_order_items'] as List;
+      expect(() => items.add(<String, dynamic>{}), throwsUnsupportedError);
+      expect(() => items.removeAt(0), throwsUnsupportedError);
+      final item = items.single as Map;
+      expect(() => item['quantity'] = 9, throwsUnsupportedError);
+      final mods = item['modifiers'] as List;
+      expect(mods, hasLength(1));
+      expect(() => mods.clear(), throwsUnsupportedError);
+      final mod = mods.single as Map;
+      expect(() => mod['price_minor_snapshot'] = 0, throwsUnsupportedError);
+      final meat = mod['meat_snapshot'] as Map;
+      expect(() => meat['quantity'] = 9, throwsUnsupportedError);
+      expect(
+        () => (meat['parts'] as List).add('x'),
+        throwsUnsupportedError,
+        reason: 'nested prep-snapshot collections are frozen too',
+      );
+    });
+
+    test('freezing is wire-equivalent — identical JSON to the unfrozen '
+        'literal payload', () {
+      final a = buildKioskSubmitAttempt(
+        menu: menu(),
+        cart: [
+          const KioskCartLine(
+            lineId: 1,
+            itemId: 'i1',
+            quantity: 2,
+            selected: {
+              'g1': ['o2'],
+            },
+            note: 'no salt',
+            capturedUnitMinor: 5500,
+          ),
+        ],
+        service: KioskServiceType.dineIn,
+        tableId: _tableId,
+        tableLabel: 'T1',
+        tax: const KioskBranchTax(
+          enabled: true,
+          rateBp: 1700,
+          mode: 'exclusive',
+        ),
+        customerName: ' Dana ',
+        customerPhone: ' 050-123 ',
+        clientCreatedAt: DateTime.utc(2026, 8, 22, 12),
+        orderId: 'oid-fixed',
+        localOperationId: 'kiosk-fixed',
+      );
+      final expected = <String, dynamic>{
+        'p_order_id': 'oid-fixed',
+        'p_local_operation_id': 'kiosk-fixed',
+        'p_order_type': 'dine_in',
+        'p_table_id': _tableId,
+        'p_currency_code': 'ILS',
+        'p_notes': null,
+        'p_customer_name': 'Dana',
+        'p_customer_phone': '050-123',
+        'p_order_items': [
+          {
+            'menu_item_id': 'i1',
+            'menu_item_name_snapshot': 'Classic Burger',
+            'quantity': 2,
+            'unit_price_minor_snapshot': 4000,
+            'line_total_minor': 11000,
+            'notes': 'no salt',
+            'modifiers': [
+              {
+                'modifier_option_id': 'o2',
+                'option_name_snapshot': '240g',
+                'modifier_name_snapshot': 'Weight',
+                'price_minor_snapshot': 1500,
+                'quantity': 1,
+                'meat_snapshot': {'quantity': 2, 'unit': 'pc'},
+              },
+            ],
+          },
+        ],
+        'p_client_subtotal_minor': 11000,
+        'p_client_discount_total_minor': 0,
+        'p_client_tax_total_minor': 1870,
+        'p_client_grand_total_minor': 12870,
+        'p_client_created_at': '2026-08-22T12:00:00.000Z',
+      };
+      expect(jsonEncode(a.params), jsonEncode(expected));
+    });
+
+    test('line display strings freeze at submit time in slip order and are '
+        'unmodifiable', () {
+      final a = build();
+      final d = a.view!.lineDisplays.single;
+      expect(d.lineId, 1);
+      expect(d.itemName.of('en'), 'Classic Burger');
+      expect(d.modifierNames.map((n) => n.of('en')), ['240g']);
+      expect(() => a.view!.lineDisplays.add(d), throwsUnsupportedError);
+      expect(() => d.modifierNames.clear(), throwsUnsupportedError);
+    });
+
+    test('ACCEPTED SNAPSHOT: every business field of the confirmation comes '
+        'from the frozen attempt (not live state, not live menu)', () async {
+      final held = Completer<Object?>();
+      final h = _harness(
+        tablePicker: true,
+        overrides: {
+          'get_device_branch_tax': (_) => _taxEnvelope(enabled: true, bp: 1700),
+          'kiosk_submit_order': (p) => held.future.then(
+            (_) => {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+          ),
+        },
+      );
+      final c = h.container;
+      await c.read(kioskLiveProvider.notifier).loadMenu();
+      await c.read(kioskLiveProvider.notifier).refreshTables();
+      final flow = c.read(kioskFlowProvider.notifier);
+      flow.startFromAttract();
+      flow.pickService(KioskServiceType.dineIn);
+      flow.toggleTable('T1', id: _tableId);
+      flow.confirmTable();
+      flow.openItem('i1');
+      flow.toggleOption('g1', 'o2');
+      flow.setDraftNote('no salt');
+      expect(flow.submitDraft(), isTrue);
+      flow.setCustomerName('  Dana  ');
+      flow.placeOrder();
+      await c.settle();
+      final frozen = flow.debugPendingAttempt!;
+      final view = frozen.view!;
+      held.complete(null);
+      await c.settle();
+      final s = c.read(kioskFlowProvider);
+      expect(s.screen, KioskScreen.confirm);
+      final order = s.lastOrder!;
+      expect(order.code, displayOrderCode(frozen.orderId));
+      expect(identical(order.lines, view.lines), isTrue);
+      expect(identical(order.lineDisplays, view.lineDisplays), isTrue);
+      expect(order.lines.single.quantity, 1);
+      expect(order.lines.single.note, 'no salt');
+      expect(order.lineDisplays!.single.itemName.of('en'), 'Classic Burger');
+      expect(order.lineDisplays!.single.modifierNames.single.of('en'), '240g');
+      expect(order.service, KioskServiceType.dineIn);
+      expect(order.table, 'T1');
+      expect(order.customerName, 'Dana');
+      expect(order.subtotalMinor, view.subtotalMinor);
+      expect(order.taxMinor, view.taxMinor);
+      expect(order.totalMinor, view.grandMinor);
+      expect(order.subtotalMinor, 5500);
+      expect(order.taxMinor, 935); // round(5500*1700/10000)
+      expect(order.totalMinor, 6435);
+      expect(order.taxInclusive, isFalse);
+    });
+
+    testWidgets('menu drift after freeze: the slip renders the ORDERED names '
+        '(A), never the new menu (B), even if the item is removed', (
+      tester,
+    ) async {
+      var version = 'A';
+      var removed = false;
+      final held = Completer<Object?>();
+      final h = _harness(
+        overrides: {
+          'kiosk_menu': (_) {
+            final env = _menuEnvelope(
+              burgerName: 'Burger $version',
+              bigName: '240g $version',
+            );
+            if (removed) {
+              (env['items'] as List).removeWhere(
+                (it) => (it as Map)['id'] == 'i1',
+              );
+            }
+            return env;
+          },
+          'kiosk_submit_order': (p) => held.future.then(
+            (_) => {..._acceptedEnvelope, 'order_id': p['p_order_id']},
+          ),
+        },
+      );
+      final c = h.container;
+      // testWidgets runs under a fake clock: Future.delayed-based settling
+      // hangs, so the submit chain (pure microtasks) is driven by pumps.
+      Future<void> settleW() async {
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(Duration.zero);
+        }
+      }
+
+      await _fillCart(c, note: 'x');
+      final flow = c.read(kioskFlowProvider.notifier);
+      flow.placeOrder();
+      await settleW();
+      expect(c.read(kioskFlowProvider).submitPhase, KioskSubmitPhase.inFlight);
+      // The tenant publishes a RENAMED menu while acceptance is in flight.
+      version = 'B';
+      await c.read(kioskLiveProvider.notifier).loadMenu();
+      held.complete(null);
+      await settleW();
+      expect(c.read(kioskFlowProvider).screen, KioskScreen.confirm);
+
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: Consumer(
+            builder: (context, ref, _) => MaterialApp(
+              locale: Locale(
+                ref.watch(kioskFlowProvider.select((st) => st.lang)),
+              ),
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: const KioskShell(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('Burger A'), findsOneWidget);
+      expect(find.text('240g A'), findsOneWidget);
+      expect(find.textContaining('Burger B'), findsNothing);
+      expect(find.textContaining('240g B'), findsNothing);
+
+      // Even REMOVING the item entirely cannot blank the accepted slip.
+      removed = true;
+      await c.read(kioskLiveProvider.notifier).loadMenu();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Burger A'), findsOneWidget);
+      expect(find.text('240g A'), findsOneWidget);
+    });
+
+    test('unconfirmed + menu drift + same-identity replay: the confirmation '
+        'still shows the ORDERED names', () async {
+      var version = 'A';
+      var fail = true;
+      final h = _harness(
+        overrides: {
+          'kiosk_menu': (_) => _menuEnvelope(
+            burgerName: 'Burger $version',
+            bigName: '240g $version',
+          ),
+          'kiosk_submit_order': (p) => fail
+              ? SyncTransportException(SyncTransportErrorKind.transient)
+              : {
+                  ..._acceptedEnvelope,
+                  'order_id': p['p_order_id'],
+                  'idempotency_replay': true,
+                },
+        },
+      );
+      final c = h.container;
+      await _fillCart(c);
+      final flow = c.read(kioskFlowProvider.notifier);
+      flow.placeOrder();
+      await c.settle();
+      expect(
+        c.read(kioskFlowProvider).submitPhase,
+        KioskSubmitPhase.unconfirmed,
+      );
+      final frozen = flow.debugPendingAttempt!;
+      version = 'B';
+      await c.read(kioskLiveProvider.notifier).loadMenu();
+      fail = false;
+      await flow.retrySubmit();
+      final s = c.read(kioskFlowProvider);
+      expect(s.screen, KioskScreen.confirm);
+      final submits = h.rpc.calls
+          .where((call) => call.$1 == 'kiosk_submit_order')
+          .toList();
+      expect(submits, hasLength(2));
+      expect(submits[1].$2['p_order_id'], frozen.orderId);
+      expect(
+        s.lastOrder!.lineDisplays!.single.itemName.of('en'),
+        'Burger A',
+        reason: 'replayed confirmation = frozen submit-time content',
+      );
+      expect(
+        s.lastOrder!.lineDisplays!.single.modifierNames.single.of('en'),
+        '240g A',
+      );
+      expect(s.lastOrder!.code, displayOrderCode(frozen.orderId));
+    });
+  });
 }
 
 extension on ProviderContainer {

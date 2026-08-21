@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
+import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -32,6 +33,14 @@ class KioskConfirmScreen extends ConsumerWidget {
     // demo keeps the Phase-1 fixture daily number.
     final numberText =
         order.code ?? '#${order.number.toString().padLeft(3, '0')}';
+    // 094: a REAL accepted order renders its item/modifier display strings
+    // from the FROZEN submit-time snapshot — never from the current menu,
+    // which may have been renamed or had the item removed since acceptance.
+    // Demo has no frozen displays and keeps the Phase-1 fixture lookup.
+    final frozenLines = {
+      for (final d in order.lineDisplays ?? const <KioskFrozenLineDisplay>[])
+        d.lineId: d,
+    };
     final serviceText = order.service == KioskServiceType.dineIn
         ? l10n.kioskDineIn
         : l10n.kioskTakeaway;
@@ -244,7 +253,9 @@ class KioskConfirmScreen extends ConsumerWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                menu.tryItem(line.itemId)?.name.of(lang) ?? '',
+                                frozenLines[line.lineId]?.itemName.of(lang) ??
+                                    menu.tryItem(line.itemId)?.name.of(lang) ??
+                                    '',
                                 style: KioskType.body(
                                   21,
                                   FontWeight.w700,
@@ -263,7 +274,8 @@ class KioskConfirmScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        if (KioskCartSheetSummary.of(
+                        if (_slipSummary(
+                          frozenLines[line.lineId],
                           menu,
                           line,
                           lang,
@@ -274,7 +286,12 @@ class KioskConfirmScreen extends ConsumerWidget {
                               top: 2,
                             ),
                             child: Text(
-                              KioskCartSheetSummary.of(menu, line, lang),
+                              _slipSummary(
+                                frozenLines[line.lineId],
+                                menu,
+                                line,
+                                lang,
+                              ),
                               style: KioskType.body(
                                 18,
                                 FontWeight.w500,
@@ -374,13 +391,18 @@ class KioskConfirmScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 18),
-              Text(
-                l10n.kioskBackToStartIn(state.confirmSecondsLeft),
-                key: const Key('kiosk-confirm-countdown'),
-                style: KioskType.body(
-                  22,
-                  FontWeight.w600,
-                  color: KioskColors.textMuted,
+              // Loose Flexible: natural width whenever it fits (identical
+              // layout on device); only a wider-than-row measurement (e.g.
+              // the test font) is constrained instead of overflowing.
+              Flexible(
+                child: Text(
+                  l10n.kioskBackToStartIn(state.confirmSecondsLeft),
+                  key: const Key('kiosk-confirm-countdown'),
+                  style: KioskType.body(
+                    22,
+                    FontWeight.w600,
+                    color: KioskColors.textMuted,
+                  ),
                 ),
               ),
             ],
@@ -390,6 +412,18 @@ class KioskConfirmScreen extends ConsumerWidget {
     );
   }
 }
+
+/// 094: one slip line's modifier summary — the FROZEN submit-time labels for
+/// a real accepted order; the live-menu rule (below) only when no frozen
+/// display exists (demo mode).
+String _slipSummary(
+  KioskFrozenLineDisplay? frozen,
+  KioskMenuData menu,
+  KioskCartLine line,
+  String lang,
+) => frozen != null
+    ? frozen.modifierNames.map((n) => n.of(lang)).join(' · ')
+    : KioskCartSheetSummary.of(menu, line, lang);
 
 /// Shared modifier-summary helper (same rule the cart rows use).
 abstract final class KioskCartSheetSummary {
