@@ -4377,6 +4377,15 @@
   "kioskCartStaleTitle": "The menu changed",
   "kioskCartStaleBody": "Some items or prices in your order were updated. Review your order to continue.",
   "kioskCartStaleRefresh": "Update order",
+  "kioskSubtotal": "Subtotal",
+  "kioskTax": "Tax",
+  "kioskTaxIncludedNote": "Tax included",
+  "kioskSubmitUnconfirmedTitle": "Could not confirm the order",
+  "kioskSubmitUnconfirmedBody": "The connection was interrupted before we got an answer. Your order may have been received — tap Retry to check safely (it will never be sent twice).",
+  "kioskSubmitRetry": "Retry",
+  "kioskSubmitFailed": "The order could not be sent. Please try again or ask at the counter.",
+  "kioskTaxUnavailableMsg": "We could not verify prices right now — please try again in a moment.",
+  "kioskPhoneInvalidMsg": "That phone number could not be used — check it and try again.",
   "kioskOrderingUnavailable": "Ordering is unavailable on this kiosk right now — please order at the counter.",
   "kioskTableNoLongerAvailable": "That table was just taken — please pick another."
 }

@@ -6677,6 +6677,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskCartStaleRefresh => 'Update order';
 
   @override
+  String get kioskSubtotal => 'Subtotal';
+
+  @override
+  String get kioskTax => 'Tax';
+
+  @override
+  String get kioskTaxIncludedNote => 'Tax included';
+
+  @override
+  String get kioskSubmitUnconfirmedTitle => 'Could not confirm the order';
+
+  @override
+  String get kioskSubmitUnconfirmedBody =>
+      'The connection was interrupted before we got an answer. Your order may have been received — tap Retry to check safely (it will never be sent twice).';
+
+  @override
+  String get kioskSubmitRetry => 'Retry';
+
+  @override
+  String get kioskSubmitFailed =>
+      'The order could not be sent. Please try again or ask at the counter.';
+
+  @override
+  String get kioskTaxUnavailableMsg =>
+      'We could not verify prices right now — please try again in a moment.';
+
+  @override
+  String get kioskPhoneInvalidMsg =>
+      'That phone number could not be used — check it and try again.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'Ordering is unavailable on this kiosk right now — please order at the counter.';
 

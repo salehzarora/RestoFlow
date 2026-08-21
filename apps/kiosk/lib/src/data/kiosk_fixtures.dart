@@ -661,6 +661,9 @@ KioskFixtureItem kioskItemById(String id) {
 /// flips the B-marked tables to occupied (the board's "busy floor" preset).
 List<KioskFixtureZone> kioskFixtureZones({required bool busy}) {
   KioskFixtureTable t(String l, int s, String st) => KioskFixtureTable(
+    // Deterministic fixture identity so demo selection state mirrors the
+    // real id+label model (092) without changing any visual/test output.
+    id: 'fixture-table-$l',
     label: l,
     seats: s,
     state: switch (st) {

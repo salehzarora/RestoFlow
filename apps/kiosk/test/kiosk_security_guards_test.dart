@@ -25,15 +25,26 @@ Iterable<File> _dartSources() => _libDir()
     .where((f) => f.path.endsWith('.dart'));
 
 void main() {
-  test('no kiosk_submit_order reference exists anywhere in the client', () {
+  test('the submit RPC is referenced ONLY inside the dedicated submitter seam '
+      '(KIOSK-001-REAL-SUBMIT-092)', () {
+    final allowed = '${_libDir().path}/src/data/kiosk_order_submit.dart'
+        .replaceAll('\\', '/');
+    var seen = false;
     for (final f in _dartSources()) {
+      final path = f.path.replaceAll('\\', '/');
+      final has = f.readAsStringSync().contains('kiosk_submit_order');
+      if (path == allowed) {
+        seen = has;
+        continue;
+      }
       expect(
-        f.readAsStringSync().contains('kiosk_submit_order'),
+        has,
         isFalse,
         reason:
-            '${f.path} references the submit RPC — Phase 3 must not wire it',
+            '${f.path} references the submit RPC outside the submitter seam',
       );
     }
+    expect(seen, isTrue, reason: 'the submitter seam must own the RPC name');
   });
 
   test('no privileged credential material can appear in the client', () {

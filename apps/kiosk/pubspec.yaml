@@ -20,6 +20,8 @@ dependencies:
     path: ../../packages/data_remote
   restoflow_design_system:
     path: ../../packages/design_system
+  restoflow_domain:
+    path: ../../packages/domain
   restoflow_feature_auth:
     path: ../../packages/feature_auth
   shared_preferences: '>=2.2.0 <3.0.0'

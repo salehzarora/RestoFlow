@@ -2025,6 +2025,15 @@
   "kioskCartStaleTitle": "התפריט השתנה",
   "kioskCartStaleBody": "חלק מהפריטים או המחירים בהזמנה עודכנו. בדקו את ההזמנה כדי להמשיך.",
   "kioskCartStaleRefresh": "עדכון ההזמנה",
+  "kioskSubtotal": "סכום ביניים",
+  "kioskTax": "מס",
+  "kioskTaxIncludedNote": "כולל מס",
+  "kioskSubmitUnconfirmedTitle": "לא ניתן לאשר את ההזמנה",
+  "kioskSubmitUnconfirmedBody": "החיבור נקטע לפני שקיבלנו תשובה. ייתכן שההזמנה התקבלה — הקישו על “נסו שוב” לבדיקה בטוחה (היא לעולם לא תישלח פעמיים).",
+  "kioskSubmitRetry": "נסו שוב",
+  "kioskSubmitFailed": "לא ניתן לשלוח את ההזמנה. נסו שוב או פנו לקופה.",
+  "kioskTaxUnavailableMsg": "לא ניתן לאמת את המחירים כרגע — נסו שוב בעוד רגע.",
+  "kioskPhoneInvalidMsg": "לא ניתן להשתמש במספר הטלפון — בדקו אותו ונסו שוב.",
   "kioskOrderingUnavailable": "לא ניתן להזמין מהעמדה כרגע — נא להזמין בדלפק.",
   "kioskTableNoLongerAvailable": "השולחן נתפס הרגע — נא לבחור שולחן אחר."
 }

@@ -27,7 +27,11 @@ class KioskConfirmScreen extends ConsumerWidget {
     if (order == null) return const SizedBox.shrink();
     final rtl = state.rtl;
     final lang = state.lang;
-    final numberText = '#${order.number.toString().padLeft(3, '0')}';
+    // 092: a REAL accepted order shows the shared cross-surface display code
+    // (derived from the accepted order id — the SAME label POS/KDS show);
+    // demo keeps the Phase-1 fixture daily number.
+    final numberText =
+        order.code ?? '#${order.number.toString().padLeft(3, '0')}';
     final serviceText = order.service == KioskServiceType.dineIn
         ? l10n.kioskDineIn
         : l10n.kioskTakeaway;

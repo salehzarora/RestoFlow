@@ -1,9 +1,20 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show displayOrderCode;
 
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
+import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
+import 'kiosk_live_runtime.dart';
+
+/// KIOSK-001-REAL-SUBMIT-092 — where one Place-Order attempt currently
+/// stands. [unconfirmed] means delivery is UNKNOWN (the server may have
+/// committed): the frozen attempt is retained in memory and the customer may
+/// retry the SAME identity; nothing is persisted (ONLINE-REQUIRED phase).
+enum KioskSubmitPhase { idle, inFlight, unconfirmed }
 
 /// KIOSK-001 Phase 1 — the kiosk-local flow state machine.
 ///
@@ -145,6 +156,10 @@ class KioskOrderSnapshot {
     required this.service,
     required this.table,
     required this.customerName,
+    this.code,
+    this.subtotalMinor,
+    this.taxMinor,
+    this.taxInclusive = false,
   });
   final int number;
   final List<KioskCartLine> lines;
@@ -152,6 +167,18 @@ class KioskOrderSnapshot {
   final KioskServiceType service;
   final String? table;
   final String customerName;
+
+  /// REAL mode: the shared cross-surface display code derived from the
+  /// ACCEPTED order id ([displayOrderCode]) — the SAME label POS/KDS show.
+  /// Null in demo mode (the fixture daily number renders instead).
+  final String? code;
+
+  /// REAL mode with tax enabled: the frozen subtotal/tax figures behind
+  /// [totalMinor] (exclusive: total = subtotal + tax; inclusive: total =
+  /// subtotal with [taxMinor] already inside it).
+  final int? subtotalMinor;
+  final int? taxMinor;
+  final bool taxInclusive;
 }
 
 @immutable
@@ -179,13 +206,38 @@ class KioskState {
     this.toastTicksLeft = 0,
     this.busyFloor = true,
     this.cartStale = false,
+    this.selectedTableId,
+    this.branchTax,
+    this.submitPhase = KioskSubmitPhase.idle,
+    this.submitErrorKey,
   });
 
   final String lang; // 'en' | 'he' | 'ar'
   final KioskScreen screen;
   final KioskSheet? sheet;
   final KioskServiceType? service;
+
+  /// The DISPLAY label of the selected table ("T1"). Copy only — never sent
+  /// to the server (labels may repeat across zones).
   final String? selectedTable;
+
+  /// KIOSK-001-REAL-SUBMIT-092: the AUTHORITATIVE table UUID behind
+  /// [selectedTable] — the only value a real submit sends. Fixture tables
+  /// carry deterministic ids so demo stays identical.
+  final String? selectedTableId;
+
+  /// The last successfully loaded branch tax policy (real mode; refreshed
+  /// before every submit and on cart open). Null until read / in demo.
+  final KioskBranchTax? branchTax;
+
+  /// Where the current real Place-Order attempt stands (single-flight guard
+  /// + the unconfirmed-delivery UX).
+  final KioskSubmitPhase submitPhase;
+
+  /// A stable recovery-message key for the cart sheet ('table-taken',
+  /// 'phone-invalid', 'tax-unavailable', 'submit-failed'); localized at
+  /// render time, never raw backend text.
+  final String? submitErrorKey;
   final List<KioskCartLine> cart;
   final String customerName;
   final String customerPhone;
@@ -239,6 +291,10 @@ class KioskState {
     int? toastTicksLeft,
     bool? busyFloor,
     bool? cartStale,
+    Object? selectedTableId = _sentinel,
+    Object? branchTax = _sentinel,
+    KioskSubmitPhase? submitPhase,
+    Object? submitErrorKey = _sentinel,
   }) => KioskState(
     lang: lang ?? this.lang,
     screen: screen ?? this.screen,
@@ -270,6 +326,16 @@ class KioskState {
     toastTicksLeft: toastTicksLeft ?? this.toastTicksLeft,
     busyFloor: busyFloor ?? this.busyFloor,
     cartStale: cartStale ?? this.cartStale,
+    selectedTableId: identical(selectedTableId, _sentinel)
+        ? this.selectedTableId
+        : selectedTableId as String?,
+    branchTax: identical(branchTax, _sentinel)
+        ? this.branchTax
+        : branchTax as KioskBranchTax?,
+    submitPhase: submitPhase ?? this.submitPhase,
+    submitErrorKey: identical(submitErrorKey, _sentinel)
+        ? this.submitErrorKey
+        : submitErrorKey as String?,
   );
 
   static const _sentinel = Object();
@@ -357,6 +423,9 @@ class KioskFlowController extends Notifier<KioskState> {
     final settings = state.settings;
     final seq = state.dailySeq;
     final busy = state.busyFloor;
+    // A reset abandons any unconfirmed submit handle (in-memory only by
+    // design); the server-side outcome, if any, stands for staff surfaces.
+    _pendingAttempt = null;
     state = KioskState(
       lang: settings.defaultLang,
       settings: settings,
@@ -382,6 +451,7 @@ class KioskFlowController extends Notifier<KioskState> {
       state = state.copyWith(
         service: service,
         selectedTable: null,
+        selectedTableId: null,
         screen: KioskScreen.menu,
       );
     } else {
@@ -396,9 +466,17 @@ class KioskFlowController extends Notifier<KioskState> {
 
   void backFromTables() => state = state.copyWith(screen: KioskScreen.service);
 
-  void toggleTable(String label) => state = state.copyWith(
-    selectedTable: state.selectedTable == label ? null : label,
-  );
+  /// Selects/deselects a table. [id] is the AUTHORITATIVE identity (the real
+  /// submit sends only this); [label] is display copy. A live table without
+  /// an id can never be selected for a real order — the picker passes both.
+  void toggleTable(String label, {String? id}) {
+    final deselect =
+        state.selectedTable == label && state.selectedTableId == id;
+    state = state.copyWith(
+      selectedTable: deselect ? null : label,
+      selectedTableId: deselect ? null : id,
+    );
+  }
 
   void confirmTable() {
     if (state.selectedTable == null) return;
@@ -571,7 +649,13 @@ class KioskFlowController extends Notifier<KioskState> {
 
   // ---- cart ---------------------------------------------------------------
 
-  void openCart() => state = state.copyWith(sheet: KioskSheet.cart);
+  void openCart() {
+    state = state.copyWith(sheet: KioskSheet.cart);
+    // 092: real mode shows the server-validated totals — refresh the branch
+    // tax when the checkout opens (no-op in demo).
+    unawaited(refreshBranchTax());
+  }
+
   void closeCart() => state = state.copyWith(sheet: null);
 
   void incrementLine(int lineId) => _mutateLine(lineId, 1);
@@ -596,12 +680,10 @@ class KioskFlowController extends Notifier<KioskState> {
   void setCustomerName(String v) => state = state.copyWith(customerName: v);
   void setCustomerPhone(String v) => state = state.copyWith(customerPhone: v);
 
-  /// "Place order". Demo mode freezes the Phase-1 FIXTURE snapshot and shows
-  /// the confirmation — NO backend work of any kind. In real mode ordering is
-  /// DISABLED (the Phase-3 gate): the submit RPC is deliberately not
-  /// wired — the live server still refuses the owner-approved
-  /// dine-in-without-a-table flow — and a fake "order sent" to a real
-  /// customer would be a lie, so the customer sees an honest notice instead.
+  /// "Place order". DEMO mode (no submitter wired) freezes the Phase-1
+  /// FIXTURE snapshot and shows the confirmation — no backend work. REAL mode
+  /// (KIOSK-001-REAL-SUBMIT-092) runs the ONLINE-REQUIRED submit flow against
+  /// the hardened kiosk submit RPC via [_placeOrderReal].
   void placeOrder() {
     if (state.cart.isEmpty || state.service == null) return;
     if (!ref.read(kioskOrderingEnabledProvider)) {
@@ -610,6 +692,10 @@ class KioskFlowController extends Notifier<KioskState> {
     }
     if (state.cartStale) {
       state = state.copyWith(toast: 'cart-stale', toastTicksLeft: 3);
+      return;
+    }
+    if (ref.read(kioskOrderSubmitterProvider) != null) {
+      _placeOrderReal();
       return;
     }
     final seq = state.dailySeq + 1;
@@ -631,6 +717,245 @@ class KioskFlowController extends Notifier<KioskState> {
   }
 
   void newOrder() => reset();
+
+  // ---- REAL submit (KIOSK-001-REAL-SUBMIT-092) ----------------------------
+
+  /// The frozen in-flight/unconfirmed attempt. IN MEMORY ONLY (this phase is
+  /// deliberately offline-free): closing the app during an uncertain submit
+  /// loses the retry handle — the server outcome stands and staff surfaces
+  /// show it. One customer Place-Order action mints exactly one identity.
+  KioskSubmitAttempt? _pendingAttempt;
+
+  @visibleForTesting
+  KioskSubmitAttempt? get debugPendingAttempt => _pendingAttempt;
+
+  Future<void> _placeOrderReal() async {
+    if (state.submitPhase != KioskSubmitPhase.idle) return; // single-flight
+    state = state.copyWith(
+      submitPhase: KioskSubmitPhase.inFlight,
+      submitErrorKey: null,
+    );
+    final live = ref.read(kioskLiveProvider.notifier);
+    // 1-2. Fresh menu; loadMenu revalidates the cart against it.
+    await live.loadMenu();
+    if (ref.read(kioskLiveProvider).sessionInvalid) {
+      _abortSubmit(null); // the pairing gate takes over
+      return;
+    }
+    if (ref.read(kioskLiveProvider).menu == null) {
+      _abortSubmit('submit-failed');
+      return;
+    }
+    if (state.cartStale) {
+      _abortSubmit('cart-stale-toast');
+      return;
+    }
+
+    // 3. Table gate (authoritative UUID; fresh floor truth).
+    String? tableId;
+    if (state.service == KioskServiceType.dineIn &&
+        state.settings.tablePickerEnabled) {
+      if (live.tablesStale) await live.refreshTables();
+      if (ref.read(kioskLiveProvider).sessionInvalid) {
+        _abortSubmit(null);
+        return;
+      }
+      final zones = ref.read(kioskLiveProvider).zones;
+      final id = state.selectedTableId;
+      final stillAvailable =
+          id != null &&
+          zones != null &&
+          zones.any(
+            (z) => z.tables.any(
+              (t) => t.id == id && t.state == KioskTableState.available,
+            ),
+          );
+      if (!stillAvailable) {
+        _recoverTableTaken();
+        return;
+      }
+      tableId = id;
+    }
+
+    // 10-11. Authoritative branch tax — a failed read BLOCKS (never guesses
+    // OFF: a wrong guess is a guaranteed tax_mismatch or an under-display).
+    final taxReader = ref.read(kioskBranchTaxReaderProvider);
+    final tax = taxReader == null ? null : await taxReader.load();
+    if (tax == null) {
+      _abortSubmit('tax-unavailable');
+      return;
+    }
+    state = state.copyWith(branchTax: tax);
+
+    // Freeze ONE attempt (order id + D-022 identity + payload bytes).
+    final KioskSubmitAttempt attempt;
+    try {
+      attempt = buildKioskSubmitAttempt(
+        menu: ref.read(kioskMenuDataProvider),
+        cart: state.cart,
+        service: state.service!,
+        tableId: tableId,
+        tax: tax,
+        customerName: state.customerName,
+        customerPhone: state.customerPhone,
+        clientCreatedAt: ref.read(kioskClockProvider)(),
+      );
+    } on KioskCartOutOfSyncError {
+      state = state.copyWith(cartStale: true);
+      _abortSubmit('cart-stale-toast');
+      return;
+    }
+    _pendingAttempt = attempt;
+    await _dispatchAttempt(attempt);
+  }
+
+  /// The customer's retry of an UNCONFIRMED delivery: the SAME frozen
+  /// identity + payload go out again; D-022 replays the terminal result.
+  Future<void> retrySubmit() async {
+    final attempt = _pendingAttempt;
+    if (attempt == null || state.submitPhase != KioskSubmitPhase.unconfirmed) {
+      return;
+    }
+    state = state.copyWith(
+      submitPhase: KioskSubmitPhase.inFlight,
+      submitErrorKey: null,
+    );
+    await _dispatchAttempt(attempt);
+  }
+
+  Future<void> _dispatchAttempt(KioskSubmitAttempt attempt) async {
+    final submitter = ref.read(kioskOrderSubmitterProvider);
+    if (submitter == null) {
+      _pendingAttempt = null;
+      _abortSubmit('submit-failed');
+      return;
+    }
+    final result = await submitter.submit(attempt);
+    switch (result) {
+      case KioskSubmitAccepted(:final orderId):
+        _confirmAccepted(orderId, attempt);
+      case KioskSubmitRejected(:final code, :final invalidField):
+        // Terminal server refusal: this identity is spent — a later
+        // deliberate re-order mints a NEW one.
+        _pendingAttempt = null;
+        _recoverRejected(code, invalidField);
+      case KioskSubmitUnconfirmed():
+        // Delivery unknown — keep the attempt, offer retry.
+        state = state.copyWith(submitPhase: KioskSubmitPhase.unconfirmed);
+      case KioskSubmitInvalidSession():
+        _pendingAttempt = null;
+        state = state.copyWith(submitPhase: KioskSubmitPhase.idle);
+        ref.read(kioskLiveProvider.notifier).signalSessionInvalid();
+    }
+  }
+
+  void _confirmAccepted(String orderId, KioskSubmitAttempt attempt) {
+    _pendingAttempt = null;
+    final grand = attempt.params['p_client_grand_total_minor'] as int;
+    final subtotal = attempt.params['p_client_subtotal_minor'] as int;
+    final taxMinor = attempt.params['p_client_tax_total_minor'] as int;
+    final inclusive = state.branchTax?.isInclusive ?? false;
+    state = state.copyWith(
+      lastOrder: KioskOrderSnapshot(
+        number: state.dailySeq,
+        code: displayOrderCode(orderId),
+        lines: state.cart,
+        totalMinor: grand,
+        subtotalMinor: subtotal,
+        taxMinor: taxMinor,
+        taxInclusive: inclusive,
+        service: state.service!,
+        table: state.selectedTable,
+        customerName: state.customerName.trim(),
+      ),
+      cart: const [],
+      customerName: '',
+      customerPhone: '',
+      selectedTable: null,
+      selectedTableId: null,
+      sheet: null,
+      screen: KioskScreen.confirm,
+      confirmSecondsLeft: KioskTiming.confirmReturnSeconds,
+      submitPhase: KioskSubmitPhase.idle,
+      submitErrorKey: null,
+    );
+  }
+
+  void _recoverRejected(String code, String? invalidField) {
+    switch (code) {
+      case 'table_no_longer_available' || 'table_not_available':
+        _recoverTableTaken();
+      case 'item_unavailable' ||
+          'menu_price_changed' ||
+          'modifier_selection_invalid' ||
+          'modifier_option_not_in_scope' ||
+          'modifier_prep_snapshot_stale' ||
+          'currency_mismatch' ||
+          'tax_mismatch':
+        // Menu/price/tax drift: reload truth, require visible reconfirmation.
+        // Never silently reprice-and-resubmit.
+        unawaited(ref.read(kioskLiveProvider.notifier).loadMenu());
+        state = state.copyWith(
+          cartStale: true,
+          branchTax: null,
+          submitPhase: KioskSubmitPhase.idle,
+          submitErrorKey: null,
+          toast: 'cart-stale',
+          toastTicksLeft: 3,
+        );
+      case 'invalid_payload' when invalidField == 'customer_phone':
+        state = state.copyWith(
+          submitPhase: KioskSubmitPhase.idle,
+          submitErrorKey: 'phone-invalid',
+        );
+      default:
+        state = state.copyWith(
+          submitPhase: KioskSubmitPhase.idle,
+          submitErrorKey: 'submit-failed',
+        );
+    }
+  }
+
+  /// The selected table is gone (pre-flight or server race): honest recovery
+  /// — cart/customer kept, invalid identity cleared, fresh floor, picker
+  /// shown. Never a silent different table, never a success claim.
+  void _recoverTableTaken() {
+    unawaited(ref.read(kioskLiveProvider.notifier).refreshTables());
+    state = state.copyWith(
+      selectedTable: null,
+      selectedTableId: null,
+      submitPhase: KioskSubmitPhase.idle,
+      submitErrorKey: null,
+      sheet: null,
+      screen: state.settings.tablePickerEnabled
+          ? KioskScreen.tables
+          : state.screen,
+      toast: 'table-taken',
+      toastTicksLeft: 3,
+    );
+  }
+
+  void _abortSubmit(String? errorKey) {
+    state = state.copyWith(
+      submitPhase: KioskSubmitPhase.idle,
+      submitErrorKey: (errorKey == null || errorKey == 'cart-stale-toast')
+          ? null
+          : errorKey,
+      toast: errorKey == 'cart-stale-toast' ? 'cart-stale' : state.toast,
+      toastTicksLeft: errorKey == 'cart-stale-toast' ? 3 : state.toastTicksLeft,
+    );
+  }
+
+  /// Cart-sheet open in REAL mode also refreshes the branch tax so the
+  /// summary shows the figures the server will validate.
+  Future<void> refreshBranchTax() async {
+    final reader = ref.read(kioskBranchTaxReaderProvider);
+    if (reader == null) return;
+    final tax = await reader.load();
+    if (tax != null && tax != state.branchTax) {
+      state = state.copyWith(branchTax: tax);
+    }
+  }
 
   // ---- live-menu cart integrity (Phase 3) ---------------------------------
 
@@ -698,8 +1023,12 @@ class KioskFlowController extends Notifier<KioskState> {
   // ---- staff path (VISUAL FIXTURE ONLY in Phase 1) ------------------------
 
   /// The discreet ••• target: three taps inside the decay window open the
-  /// PIN gate (the artifact's 1.6s window ≈ 2 ticks).
+  /// PIN gate (the artifact's 1.6s window ≈ 2 ticks). In REAL mode the whole
+  /// unlock is DISABLED (KIOSK-001-REAL-SUBMIT-092 §18): the fixture PIN is a
+  /// demo/design surface, never a production security boundary — REAL STAFF
+  /// SETTINGS/PIN AUTH REMAINS A SEPARATE PHASE.
   void staffTap() {
+    if (!ref.read(kioskStaffSettingsEnabledProvider)) return;
     _staffTaps += 1;
     _staffTapTicks = 2;
     if (_staffTaps >= 3) {

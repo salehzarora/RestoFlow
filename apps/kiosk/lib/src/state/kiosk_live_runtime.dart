@@ -238,6 +238,10 @@ class KioskLiveController extends Notifier<KioskLiveState> {
     );
   }
 
+  /// KIOSK-001-REAL-SUBMIT-092: a submit proved the session dead — the same
+  /// signal the reads raise, so the pairing gate re-validates identically.
+  void signalSessionInvalid() => _markSessionInvalid();
+
   /// The pairing gate consumed the signal (re-validated the session).
   void acknowledgeSessionInvalid() =>
       state = state.copyWith(sessionInvalid: false);
