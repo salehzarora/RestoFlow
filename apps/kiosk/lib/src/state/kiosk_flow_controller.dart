@@ -167,6 +167,7 @@ class KioskOrderSnapshot {
     required this.table,
     required this.customerName,
     this.code,
+    this.orderId,
     this.subtotalMinor,
     this.taxMinor,
     this.taxInclusive = false,
@@ -189,6 +190,11 @@ class KioskOrderSnapshot {
   /// ACCEPTED order id ([displayOrderCode]) — the SAME label POS/KDS show.
   /// Null in demo mode (the fixture daily number renders instead).
   final String? code;
+
+  /// KIOSK-001-103: the ACCEPTED order UUID (REAL mode only) — the
+  /// exactly-once auto-print dedup identity. Null in demo mode, which
+  /// never prints.
+  final String? orderId;
 
   /// REAL mode with tax enabled: the frozen subtotal/tax figures behind
   /// [totalMinor] (exclusive: total = subtotal + tax; inclusive: total =
@@ -387,6 +393,17 @@ class KioskState {
 
   static const _sentinel = Object();
 }
+
+/// KIOSK-001-103 §10 seam: invoked EXACTLY at the definitive-acceptance
+/// transition with the frozen snapshot + UI language. Null everywhere except
+/// the REAL composition root (which wires the auto-print controller); demo
+/// and tests without printing stay print-free.
+typedef KioskAcceptedOrderHook =
+    void Function(KioskOrderSnapshot order, String lang);
+
+final kioskAcceptedOrderHookProvider = Provider<KioskAcceptedOrderHook?>(
+  (ref) => null,
+);
 
 final kioskFlowProvider = NotifierProvider<KioskFlowController, KioskState>(
   KioskFlowController.new,
@@ -1011,6 +1028,7 @@ class KioskFlowController extends Notifier<KioskState> {
       lastOrder: KioskOrderSnapshot(
         number: state.dailySeq,
         code: displayOrderCode(orderId),
+        orderId: orderId,
         lines: view.lines,
         lineDisplays: view.lineDisplays,
         totalMinor: view.grandMinor,
@@ -1034,6 +1052,14 @@ class KioskFlowController extends Notifier<KioskState> {
       submitReconfirmRequired: false,
       reconfirmReasonKey: null,
     );
+    // KIOSK-001-103 §10: the ONLY print trigger — a DEFINITIVELY ACCEPTED
+    // order. In-flight, unconfirmed, rejected and cart states never reach
+    // this line. Fire-and-forget: a print problem never becomes an order
+    // problem, and dedup lives behind the hook.
+    final acceptedHook = ref.read(kioskAcceptedOrderHookProvider);
+    if (acceptedHook != null) {
+      acceptedHook(state.lastOrder!, state.lang);
+    }
   }
 
   void _recoverRejected(String code, String? invalidField) {

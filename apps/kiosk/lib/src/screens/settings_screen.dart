@@ -9,6 +9,7 @@ import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_staff_access.dart';
 import '../widgets/kiosk_chrome.dart';
 import 'appearance_settings.dart';
+import 'printer_settings.dart';
 
 /// 09 · Device settings (staff) — FIXTURE SHELL. Controls mutate in-memory
 /// fixture settings only (table toggle, idle timeout, attract content,
@@ -90,7 +91,16 @@ class KioskSettingsScreen extends ConsumerWidget {
               ),
             ),
             const Expanded(
-              child: SingleChildScrollView(child: KioskAppearanceSection()),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    KioskAppearanceSection(),
+                    // KIOSK-001-103: the REAL receipt-printer section (kiosk
+                    // namespace; customer receipt only).
+                    KioskPrinterSection(),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

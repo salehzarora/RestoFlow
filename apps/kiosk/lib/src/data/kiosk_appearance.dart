@@ -93,6 +93,47 @@ abstract final class KioskAppearanceLimits {
   static const int logoBytes = 262144; // 256 KB
 
   static const List<int> intervalChoices = [4, 5, 6, 8];
+
+  // KIOSK-001-103 §3 — curated attract media bounds.
+  /// Operator-curated hero photos: an explicit selection is 4–8 items (all
+  /// usable items with a warning when the whole menu has fewer than 4).
+  static const int featuredMin = 4;
+  static const int featuredMax = 8;
+  static const int featuredIdLength = 64;
+
+  /// External attract background image: full-bleed photo, so a larger cap
+  /// than the logo — still bounded and decode-proven before storing.
+  static const int attractImageBytes = 6 << 20; // 6 MB
+
+  /// External looping video: bounded file size + playable duration.
+  static const int attractVideoBytes = 80 << 20; // 80 MB
+  static const int attractVideoMaxSeconds = 180;
+}
+
+/// KIOSK-001-103 §3 — how the attract screen sources its imagery.
+enum KioskAttractMediaMode {
+  /// Rotate ONLY operator-selected live-menu hero photos (empty selection =
+  /// the Phase-102 automatic category-diverse rotation until curated).
+  selectedMenuPhotos,
+
+  /// One device-local external image as a STATIC background (no carousel).
+  customImage,
+
+  /// One device-local external video, looping and muted.
+  customVideo;
+
+  String get wire => switch (this) {
+    selectedMenuPhotos => 'selected_menu_photos',
+    customImage => 'custom_image',
+    customVideo => 'custom_video',
+  };
+
+  static KioskAttractMediaMode? tryParse(Object? raw) => switch (raw) {
+    'selected_menu_photos' => selectedMenuPhotos,
+    'custom_image' => customImage,
+    'custom_video' => customVideo,
+    _ => null,
+  };
 }
 
 /// The compact curated palette offered beside strict hex input.
@@ -125,6 +166,10 @@ class KioskAppearanceSettings {
     required this.menuSubtitle,
     required this.logoOverridePngB64,
     required this.attractIntervalSeconds,
+    this.attractMediaMode = KioskAttractMediaMode.selectedMenuPhotos,
+    this.featuredMenuItemIds = const [],
+    this.customImageRef,
+    this.customVideoRef,
   });
 
   /// REAL defaults: derived from the paired device/restaurant label — the one
@@ -179,6 +224,19 @@ class KioskAppearanceSettings {
 
   final int attractIntervalSeconds;
 
+  // ---- KIOSK-001-103 §3: curated attract media --------------------------
+  final KioskAttractMediaMode attractMediaMode;
+
+  /// Operator-picked hero items — STABLE menu item ids in the chosen display
+  /// order. Never image paths, never signed URLs. Stale/deleted/no-image
+  /// entries are skipped at render time, never silently substituted.
+  final List<String> featuredMenuItemIds;
+
+  /// Device-local media REFS (generated file names, resolved through
+  /// KioskAttractMediaStore) — never absolute paths, never URLs.
+  final String? customImageRef;
+  final String? customVideoRef;
+
   Uint8List? get logoOverrideBytes {
     final b64 = logoOverridePngB64;
     if (b64 == null || b64.isEmpty) return null;
@@ -213,6 +271,10 @@ class KioskAppearanceSettings {
     KioskLocalizedCopy? menuSubtitle,
     Object? logoOverridePngB64 = _sentinel,
     int? attractIntervalSeconds,
+    KioskAttractMediaMode? attractMediaMode,
+    List<String>? featuredMenuItemIds,
+    Object? customImageRef = _sentinel,
+    Object? customVideoRef = _sentinel,
   }) => KioskAppearanceSettings(
     restaurantDisplayName: restaurantDisplayName ?? this.restaurantDisplayName,
     brandTitlePrimary: brandTitlePrimary ?? this.brandTitlePrimary,
@@ -227,6 +289,14 @@ class KioskAppearanceSettings {
         : logoOverridePngB64 as String?,
     attractIntervalSeconds:
         attractIntervalSeconds ?? this.attractIntervalSeconds,
+    attractMediaMode: attractMediaMode ?? this.attractMediaMode,
+    featuredMenuItemIds: featuredMenuItemIds ?? this.featuredMenuItemIds,
+    customImageRef: identical(customImageRef, _sentinel)
+        ? this.customImageRef
+        : customImageRef as String?,
+    customVideoRef: identical(customVideoRef, _sentinel)
+        ? this.customVideoRef
+        : customVideoRef as String?,
   );
 
   Map<String, Object?> toJson() => {
@@ -241,6 +311,10 @@ class KioskAppearanceSettings {
     'menu_subtitle': menuSubtitle.toJson(),
     if (logoOverridePngB64 != null) 'logo_override_b64': logoOverridePngB64,
     'attract_interval_seconds': attractIntervalSeconds,
+    'attract_media_mode': attractMediaMode.wire,
+    'featured_menu_item_ids': featuredMenuItemIds,
+    if (customImageRef != null) 'custom_image_ref': customImageRef,
+    if (customVideoRef != null) 'custom_video_ref': customVideoRef,
   };
 
   /// Tolerant, bounded decode: any malformed field falls back to [fallback]'s
@@ -264,6 +338,30 @@ class KioskAppearanceSettings {
 
     final b64 = raw['logo_override_b64'];
     final interval = raw['attract_interval_seconds'];
+    // KIOSK-001-103: bounded featured-id list — strings only, deduped in
+    // stored order, each id length-capped, list capped at featuredMax.
+    final rawFeatured = raw['featured_menu_item_ids'];
+    final featured = <String>[];
+    if (rawFeatured is List) {
+      for (final entry in rawFeatured) {
+        if (featured.length >= KioskAppearanceLimits.featuredMax) break;
+        if (entry is! String) continue;
+        final id = entry.trim();
+        if (id.isEmpty ||
+            id.length > KioskAppearanceLimits.featuredIdLength ||
+            featured.contains(id)) {
+          continue;
+        }
+        featured.add(id);
+      }
+    }
+    String? mediaRef(String key) {
+      final v = raw[key];
+      if (v is! String) return null;
+      final t = v.trim();
+      return t.isEmpty || t.length > 60 ? null : t;
+    }
+
     return KioskAppearanceSettings(
       restaurantDisplayName: str(
         'restaurant_display_name',
@@ -303,6 +401,12 @@ class KioskAppearanceSettings {
               KioskAppearanceLimits.intervalChoices.contains(interval)
           ? interval
           : fallback.attractIntervalSeconds,
+      attractMediaMode:
+          KioskAttractMediaMode.tryParse(raw['attract_media_mode']) ??
+          fallback.attractMediaMode,
+      featuredMenuItemIds: List.unmodifiable(featured),
+      customImageRef: mediaRef('custom_image_ref'),
+      customVideoRef: mediaRef('custom_video_ref'),
     );
   }
 
@@ -432,6 +536,33 @@ List<String> kioskAttractCarouselUrls(
       final url = resolvedUrls[path];
       if (url != null && !urls.contains(url)) urls.add(url);
     }
+  }
+  return urls;
+}
+
+/// KIOSK-001-103 §7 — the CURATED carousel list: stored featured item ids
+/// mapped onto the CURRENT live menu in the operator's chosen order. An id
+/// that no longer exists, is unavailable, has no image, or has no resolved
+/// signed URL is SKIPPED (shown stale in the picker) — never substituted
+/// with an unrelated product.
+List<String> kioskFeaturedCarouselUrls(
+  KioskMenuData menu,
+  Map<String, String> resolvedUrls,
+  List<String> featuredIds,
+) {
+  if (featuredIds.isEmpty) return const [];
+  final itemsById = <String, KioskFixtureItem>{
+    for (final category in menu.categories)
+      for (final item in category.items) item.id: item,
+  };
+  final urls = <String>[];
+  for (final id in featuredIds) {
+    final item = itemsById[id];
+    if (item == null || !item.available) continue;
+    final path = item.imagePath;
+    if (path == null) continue;
+    final url = resolvedUrls[path];
+    if (url != null && !urls.contains(url)) urls.add(url);
   }
   return urls;
 }

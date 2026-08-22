@@ -1,13 +1,16 @@
 import 'dart:convert' show base64Encode;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_appearance.dart';
+import '../data/kiosk_attract_media.dart';
 import '../data/kiosk_logo_picker.dart';
 import '../design/kiosk_theme.dart';
 import '../widgets/kiosk_chrome.dart';
+import 'featured_picker.dart';
 
 /// KIOSK-001-102 §13 — the REAL Appearance section of Device Settings.
 ///
@@ -59,6 +62,121 @@ class _KioskAppearanceSectionState
     if (!mounted) return;
     setState(() => _saved = true);
   }
+
+  // ---- KIOSK-001-103: curated attract media -------------------------------
+  String? _mediaStatusKey; // invalid | too-large | too-long | store-failed
+  KioskAttractMediaStore? get _mediaStore =>
+      ref.read(kioskAttractMediaStoreProvider);
+  String? get _mediaDeviceId =>
+      ref.read(kioskAppearanceScopeProvider)?.deviceId;
+
+  Future<void> _pickFeatured() async {
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (_) =>
+          KioskFeaturedPickerDialog(initial: _draft.featuredMenuItemIds),
+    );
+    if (!mounted || result == null) return;
+    _update(_draft.copyWith(featuredMenuItemIds: result));
+  }
+
+  Future<void> _chooseCustomImage() async {
+    setState(() => _mediaStatusKey = null);
+    final store = _mediaStore;
+    final deviceId = _mediaDeviceId;
+    if (store == null || !store.supported || deviceId == null) return;
+    final picked = await pickKioskAttractImage();
+    if (!mounted || picked == null) return; // cancelled
+    if (picked is KioskAttractMediaResult) {
+      setState(() => _mediaStatusKey = _statusOf(picked.error!));
+      return;
+    }
+    final previous = _draft.customImageRef;
+    final stored = await store.persistImage(
+      deviceId: deviceId,
+      bytes: picked as Uint8List,
+    );
+    if (!mounted) return;
+    if (stored.ref == null) {
+      setState(() => _mediaStatusKey = _statusOf(stored.error!));
+      return;
+    }
+    if (previous != null) {
+      await store.delete(deviceId: deviceId, ref: previous);
+    }
+    _update(_draft.copyWith(customImageRef: stored.ref));
+  }
+
+  Future<void> _chooseCustomVideo() async {
+    setState(() => _mediaStatusKey = null);
+    final store = _mediaStore;
+    final deviceId = _mediaDeviceId;
+    if (store == null || !store.supported || deviceId == null) return;
+    final picked = await pickKioskAttractVideo();
+    if (!mounted || picked == null) return; // cancelled
+    if (picked is KioskAttractMediaResult) {
+      setState(() => _mediaStatusKey = _statusOf(picked.error!));
+      return;
+    }
+    final video = picked as KioskPickedVideo;
+    final previous = _draft.customVideoRef;
+    final stored = await store.persistVideoFromPath(
+      deviceId: deviceId,
+      sourcePath: video.sourcePath,
+      ext: video.ext,
+    );
+    if (!mounted) return;
+    if (stored.ref == null) {
+      setState(() => _mediaStatusKey = _statusOf(stored.error!));
+      return;
+    }
+    // §6: bounded PLAYABLE duration, proven by a real decode when the root
+    // wires the probe; an undecodable or over-long file is deleted + refused.
+    final probe = ref.read(kioskVideoProbeProvider);
+    if (probe != null) {
+      final path = await store.absolutePathOf(
+        deviceId: deviceId,
+        ref: stored.ref!,
+      );
+      final duration = path == null ? null : await probe(path);
+      if (duration == null) {
+        await store.delete(deviceId: deviceId, ref: stored.ref!);
+        if (mounted) setState(() => _mediaStatusKey = 'invalid');
+        return;
+      }
+      if (duration.inSeconds > KioskAppearanceLimits.attractVideoMaxSeconds) {
+        await store.delete(deviceId: deviceId, ref: stored.ref!);
+        if (mounted) setState(() => _mediaStatusKey = 'too-long');
+        return;
+      }
+    }
+    if (previous != null) {
+      await store.delete(deviceId: deviceId, ref: previous);
+    }
+    if (mounted) _update(_draft.copyWith(customVideoRef: stored.ref));
+  }
+
+  Future<void> _removeCustomMedia({required bool image}) async {
+    final store = _mediaStore;
+    final deviceId = _mediaDeviceId;
+    final removedRef = image ? _draft.customImageRef : _draft.customVideoRef;
+    if (store != null && deviceId != null && removedRef != null) {
+      await store.delete(deviceId: deviceId, ref: removedRef);
+    }
+    if (!mounted) return;
+    _update(
+      image
+          ? _draft.copyWith(customImageRef: null)
+          : _draft.copyWith(customVideoRef: null),
+    );
+  }
+
+  static String _statusOf(KioskAttractMediaError error) => switch (error) {
+    KioskAttractMediaError.tooLarge => 'too-large',
+    KioskAttractMediaError.tooLong => 'too-long',
+    KioskAttractMediaError.unsupportedPlatform => 'unsupported-platform',
+    _ => 'invalid',
+  };
 
   Future<void> _reset() async {
     final l10n = AppLocalizations.of(context);
@@ -268,33 +386,118 @@ class _KioskAppearanceSectionState
           ),
           const SizedBox(height: 26),
 
-          // ---- E. attract media ---------------------------------------------
+          // ---- E. attract media (KIOSK-001-103: curated modes) ---------------
           _Label(l10n.kioskAppearanceMedia),
           const SizedBox(height: 10),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                '${l10n.kioskAppearanceLiveMenuPhotos} · '
-                '${l10n.kioskAppearanceInterval}:',
-                style: KioskType.body(
-                  20,
-                  FontWeight.w600,
-                  color: KioskColors.textSoft,
-                ),
-              ),
-              for (final seconds in KioskAppearanceLimits.intervalChoices)
+              for (final mode in KioskAttractMediaMode.values)
                 _SmallPill(
-                  key: Key('kiosk-appearance-interval-$seconds'),
-                  label: '${seconds}s',
-                  active: _draft.attractIntervalSeconds == seconds,
-                  onTap: () =>
-                      _update(_draft.copyWith(attractIntervalSeconds: seconds)),
+                  key: Key('kiosk-attract-mode-${mode.wire}'),
+                  label: switch (mode) {
+                    KioskAttractMediaMode.selectedMenuPhotos =>
+                      l10n.kioskAttractModeMenuPhotos,
+                    KioskAttractMediaMode.customImage =>
+                      l10n.kioskAttractModeImage,
+                    KioskAttractMediaMode.customVideo =>
+                      l10n.kioskAttractModeVideo,
+                  },
+                  active: _draft.attractMediaMode == mode,
+                  onTap: () => _update(_draft.copyWith(attractMediaMode: mode)),
                 ),
             ],
           ),
+          const SizedBox(height: 14),
+          switch (_draft.attractMediaMode) {
+            KioskAttractMediaMode.selectedMenuPhotos => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '${l10n.kioskAppearanceInterval}:',
+                      style: KioskType.body(
+                        20,
+                        FontWeight.w600,
+                        color: KioskColors.textSoft,
+                      ),
+                    ),
+                    for (final seconds in KioskAppearanceLimits.intervalChoices)
+                      _SmallPill(
+                        key: Key('kiosk-appearance-interval-$seconds'),
+                        label: '${seconds}s',
+                        active: _draft.attractIntervalSeconds == seconds,
+                        onTap: () => _update(
+                          _draft.copyWith(attractIntervalSeconds: seconds),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _SmallPill(
+                      key: const Key('kiosk-featured-pick'),
+                      label: l10n.kioskFeaturedPickAction,
+                      active: false,
+                      onTap: _pickFeatured,
+                    ),
+                    Text(
+                      _draft.featuredMenuItemIds.isEmpty
+                          ? l10n.kioskFeaturedAutoNote
+                          : '${_draft.featuredMenuItemIds.length}'
+                                '/${KioskAppearanceLimits.featuredMax}',
+                      key: const Key('kiosk-featured-summary'),
+                      style: KioskType.body(
+                        19,
+                        FontWeight.w600,
+                        color: KioskColors.textMuted,
+                      ),
+                    ),
+                    if (_draft.featuredMenuItemIds.isNotEmpty)
+                      _SmallPill(
+                        key: const Key('kiosk-featured-clear'),
+                        label: l10n.kioskFeaturedClear,
+                        active: false,
+                        onTap: () => _update(
+                          _draft.copyWith(
+                            featuredMenuItemIds: const <String>[],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            KioskAttractMediaMode.customImage => _CustomMediaControls(
+              kindKey: 'image',
+              supported: _mediaStore?.supported ?? false,
+              hasMedia: _draft.customImageRef != null,
+              chooseLabel: l10n.kioskAttractChooseImage,
+              onChoose: _chooseCustomImage,
+              onRemove: () => _removeCustomMedia(image: true),
+              statusKey: _mediaStatusKey,
+              l10n: l10n,
+            ),
+            KioskAttractMediaMode.customVideo => _CustomMediaControls(
+              kindKey: 'video',
+              supported: _mediaStore?.supported ?? false,
+              hasMedia: _draft.customVideoRef != null,
+              chooseLabel: l10n.kioskAttractChooseVideo,
+              onChoose: _chooseCustomVideo,
+              onRemove: () => _removeCustomMedia(image: false),
+              statusKey: _mediaStatusKey,
+              l10n: l10n,
+            ),
+          },
           const SizedBox(height: 30),
 
           // ---- F. save / reset ----------------------------------------------
@@ -711,4 +914,88 @@ class _Card extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// KIOSK-001-103 §5/§6 — choose/remove controls for ONE custom attract image
+/// or video. On web the store is honestly unsupported: the pickers hide and
+/// the installed-device-only note renders instead.
+class _CustomMediaControls extends StatelessWidget {
+  const _CustomMediaControls({
+    required this.kindKey,
+    required this.supported,
+    required this.hasMedia,
+    required this.chooseLabel,
+    required this.onChoose,
+    required this.onRemove,
+    required this.statusKey,
+    required this.l10n,
+  });
+
+  final String kindKey;
+  final bool supported;
+  final bool hasMedia;
+  final String chooseLabel;
+  final VoidCallback onChoose;
+  final VoidCallback onRemove;
+  final String? statusKey;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!supported) {
+      return Text(
+        l10n.kioskAttractMediaWebOnlyNote,
+        key: Key('kiosk-attract-$kindKey-unsupported'),
+        style: KioskType.body(
+          19,
+          FontWeight.w500,
+          color: KioskColors.textMuted,
+        ),
+      );
+    }
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _SmallPill(
+          key: Key('kiosk-attract-$kindKey-choose'),
+          label: chooseLabel,
+          active: false,
+          onTap: onChoose,
+        ),
+        if (hasMedia) ...[
+          Text(
+            l10n.kioskAttractMediaSet,
+            key: Key('kiosk-attract-$kindKey-set'),
+            style: KioskType.body(
+              19,
+              FontWeight.w600,
+              color: const Color(0xFF4ADE80),
+            ),
+          ),
+          _SmallPill(
+            key: Key('kiosk-attract-$kindKey-remove'),
+            label: l10n.kioskAppearanceRemoveLogo,
+            active: false,
+            onTap: onRemove,
+          ),
+        ],
+        if (statusKey != null)
+          Text(
+            switch (statusKey!) {
+              'too-large' => l10n.kioskAttractMediaTooLarge,
+              'too-long' => l10n.kioskAttractMediaTooLong,
+              _ => l10n.kioskAttractMediaInvalid,
+            },
+            key: Key('kiosk-attract-$kindKey-error'),
+            style: KioskType.body(
+              19,
+              FontWeight.w600,
+              color: const Color(0xFFFFB020),
+            ),
+          ),
+      ],
+    );
+  }
 }

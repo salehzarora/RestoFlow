@@ -10,6 +10,7 @@ import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_live_runtime.dart';
 import '../state/kiosk_staff_access.dart';
+import '../widgets/attract_media_background.dart';
 import '../widgets/kiosk_chrome.dart';
 
 /// 01 · Attract / idle — full-bleed cinematic media behind a scrim, brand
@@ -31,14 +32,20 @@ class KioskAttractScreen extends ConsumerStatefulWidget {
 
 class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _kenBurns = AnimationController(
-    vsync: this,
-    duration: KioskMotion.kenBurns,
-  )..repeat(reverse: true);
+  // Lazily created ONLY by the demo fixture branch that animates it.
+  // KIOSK-001-103: a nullable backing field (not `late final`) so dispose()
+  // never instantiates a ticker on an already-deactivated element when the
+  // REAL branches never touched it.
+  AnimationController? _kenBurnsController;
+  AnimationController get _kenBurns =>
+      _kenBurnsController ??= AnimationController(
+        vsync: this,
+        duration: KioskMotion.kenBurns,
+      )..repeat(reverse: true);
 
   @override
   void dispose() {
-    _kenBurns.dispose();
+    _kenBurnsController?.dispose();
     super.dispose();
   }
 
@@ -50,12 +57,20 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
     final rtl = state.rtl;
     final appearance = ref.watch(kioskAppearanceProvider);
     final live = ref.watch(kioskLiveProvider);
-    // §7: LIVE product photos — one representative per category first,
-    // capped, resolved once per menu read through the shared signed-URL
-    // cache (never per frame).
+    // §7 (102) + KIOSK-001-103 §3: the carousel rotates the operator's
+    // CURATED hero photos when a selection exists (stored ids mapped to the
+    // CURRENT live menu — stale entries skipped, never substituted); an
+    // uncurated device keeps the 102 automatic category-diverse pick. All
+    // URLs come from the shared signed-URL cache (never signed per frame).
     final carouselUrls = live.menu == null
         ? const <String>[]
-        : kioskAttractCarouselUrls(live.menu!, live.imageUrls);
+        : (appearance.featuredMenuItemIds.isNotEmpty
+              ? kioskFeaturedCarouselUrls(
+                  live.menu!,
+                  live.imageUrls,
+                  appearance.featuredMenuItemIds,
+                )
+              : kioskAttractCarouselUrls(live.menu!, live.imageUrls));
     // Editable copy with honest fallbacks: demo keeps the fixture l10n
     // strings; real collapses an empty tagline instead of faking one.
     final isReal = ref.watch(kioskRealModeProvider);
@@ -77,68 +92,93 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          switch (state.settings.attractMode) {
-            KioskAttractMode.photos when carouselUrls.isNotEmpty =>
-              _LiveAttractCarousel(
-                urls: carouselUrls,
-                holdSeconds: appearance.attractIntervalSeconds,
+          // KIOSK-001-103 §7: in REAL mode the operator's saved media MODE is
+          // the routing authority — curated photo rotation, ONE static custom
+          // image (no timer), or ONE looping muted custom video (no photo
+          // timer). Each branch is its own widget subtree, so switching modes
+          // disposes the previous timer/controller. Demo keeps the fixture
+          // attract modes untouched.
+          if (isReal)
+            switch (appearance.attractMediaMode) {
+              KioskAttractMediaMode.selectedMenuPhotos
+                  when carouselUrls.isNotEmpty =>
+                _LiveAttractCarousel(
+                  urls: carouselUrls,
+                  holdSeconds: appearance.attractIntervalSeconds,
+                ),
+              KioskAttractMediaMode.selectedMenuPhotos => const ColoredBox(
+                color: KioskColors.canvasBottom,
               ),
-            KioskAttractMode.photos => AnimatedBuilder(
-              animation: _kenBurns,
-              builder: (context, child) => Transform.scale(
-                scale: 1.03 + .13 * _kenBurns.value,
-                child: child,
+              KioskAttractMediaMode.customImage => KioskCustomImageBackground(
+                mediaRef: appearance.customImageRef,
               ),
-              child: KioskFixtureImage(
-                asset: kioskAttractAssets.first,
+              KioskAttractMediaMode.customVideo => KioskCustomVideoBackground(
+                mediaRef: appearance.customVideoRef,
+              ),
+            }
+          else
+            switch (state.settings.attractMode) {
+              KioskAttractMode.photos when carouselUrls.isNotEmpty =>
+                _LiveAttractCarousel(
+                  urls: carouselUrls,
+                  holdSeconds: appearance.attractIntervalSeconds,
+                ),
+              KioskAttractMode.photos => AnimatedBuilder(
+                animation: _kenBurns,
+                builder: (context, child) => Transform.scale(
+                  scale: 1.03 + .13 * _kenBurns.value,
+                  child: child,
+                ),
+                child: KioskFixtureImage(
+                  asset: kioskAttractAssets.first,
+                  fallback: const ColoredBox(color: KioskColors.canvasBottom),
+                ),
+              ),
+              KioskAttractMode.promo => KioskFixtureImage(
+                asset: kioskAttractAssets.last,
                 fallback: const ColoredBox(color: KioskColors.canvasBottom),
               ),
-            ),
-            KioskAttractMode.promo => KioskFixtureImage(
-              asset: kioskAttractAssets.last,
-              fallback: const ColoredBox(color: KioskColors.canvasBottom),
-            ),
-            KioskAttractMode.video => ColoredBox(
-              color: KioskColors.canvasBottom,
-              child: Center(
-                child: Opacity(
-                  opacity: .75,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 150,
-                        height: 150,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: KioskColors.frameLine,
-                            width: 5,
+              KioskAttractMode.video => ColoredBox(
+                color: KioskColors.canvasBottom,
+                child: Center(
+                  child: Opacity(
+                    opacity: .75,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 150,
+                          height: 150,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: KioskColors.frameLine,
+                              width: 5,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              size: 64,
+                              color: KioskColors.accentTop,
+                            ),
                           ),
                         ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            size: 64,
-                            color: KioskColors.accentTop,
+                        const SizedBox(height: 24),
+                        Text(
+                          l10n.kioskSettingsAttractVideo,
+                          style: KioskType.body(
+                            24,
+                            FontWeight.w500,
+                            color: KioskColors.textMuted,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        l10n.kioskSettingsAttractVideo,
-                        style: KioskType.body(
-                          24,
-                          FontWeight.w500,
-                          color: KioskColors.textMuted,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          },
+            },
           // §7 scrim: photo first, cinematic darkening second. The middle
           // band stays nearly open so the meal reads unmistakably as a
           // photo; only the header and CTA floor keep deep contrast.

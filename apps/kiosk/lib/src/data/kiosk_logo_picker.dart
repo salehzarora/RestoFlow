@@ -54,11 +54,20 @@ bool _sniffAllowedImage(Uint8List b) {
       b[11] == 0x50;
 }
 
-Future<KioskLogoPickResult> validateKioskLogoBytes(Uint8List bytes) async {
+Future<KioskLogoPickResult> validateKioskLogoBytes(Uint8List bytes) =>
+    validateKioskImageBytes(bytes, maxBytes: KioskAppearanceLimits.logoBytes);
+
+/// KIOSK-001-103: the same magic-byte + cap + real-decode validation, with a
+/// caller-chosen size bound (the attract background allows a larger photo
+/// than the 256KB logo).
+Future<KioskLogoPickResult> validateKioskImageBytes(
+  Uint8List bytes, {
+  required int maxBytes,
+}) async {
   if (!_sniffAllowedImage(bytes)) {
     return const KioskLogoPickResult.failed(KioskLogoPickError.unsupportedType);
   }
-  if (bytes.length > KioskAppearanceLimits.logoBytes) {
+  if (bytes.length > maxBytes) {
     return const KioskLogoPickResult.failed(KioskLogoPickError.tooLarge);
   }
   try {

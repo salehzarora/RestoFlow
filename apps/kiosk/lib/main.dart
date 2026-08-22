@@ -10,15 +10,24 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show
+        nativePrintRasterizerProvider,
+        nativePrinterDeviceIdProvider,
+        nativePrinterNamespaceProvider;
+
 import 'src/data/kiosk_live_data.dart';
 import 'src/data/kiosk_appearance.dart';
+import 'src/data/kiosk_attract_media.dart';
 import 'src/data/kiosk_menu_data.dart';
 import 'src/data/kiosk_order_submit.dart';
 import 'src/design/kiosk_theme.dart';
+import 'src/print/kiosk_receipt_auto_print.dart';
 import 'src/screens/kiosk_activation.dart';
 import 'src/screens/kiosk_shell.dart';
 import 'src/state/kiosk_flow_controller.dart';
 import 'src/state/kiosk_live_runtime.dart';
+import 'src/state/kiosk_receipt_branding.dart';
 import 'src/state/kiosk_staff_access.dart';
 
 /// KIOSK-001 Phase 3 — RestoFlow customer self-service kiosk.
@@ -131,6 +140,14 @@ typedef KioskSeams = ({
   KioskBranchTaxReader tax,
   KioskStaffAccess staff,
   KioskAppearanceStore appearance,
+  // KIOSK-001-103: the receipt-branding context (restaurant name + Dashboard
+  // receipt-logo pointer via the widened token-proven RPC), the raw-bytes
+  // logo reader on the SAME anonymous client, the device-local attract media
+  // store, and the durable printed-receipt ledger.
+  DevicePrinterAssignmentsReader assignments,
+  DeviceReceiptLogoReader logoReader,
+  KioskAttractMediaStore attractMedia,
+  KioskPrintedReceiptLedger printedLedger,
 });
 
 typedef KioskBootResult = ({KioskSeams? seams, RealDeviceAuthProblem? problem});
@@ -144,6 +161,7 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
   }
   final SyncRpcTransport transport;
   final DeviceImageUrlResolver images;
+  final DeviceReceiptLogoReader logoReader;
   try {
     final session = await SupabaseAuthBootstrap(
       config: config,
@@ -152,6 +170,9 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
     // The POS-proven egress cache: one signing batch per menu load, reused
     // until near expiry — never a per-image request storm.
     images = CachingDeviceImageUrlResolver(session.imageUrlResolver);
+    // KIOSK-001-103 §15: the raw-bytes Dashboard receipt-logo reader on the
+    // SAME anonymous client (no second Supabase client, no signed URL).
+    logoReader = session.receiptLogoReader;
   } catch (e) {
     return (
       seams: null,
@@ -182,6 +203,13 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
       // POS/KDS) and the device-local appearance store.
       staff: KioskStaffAccess(transport: transport, secretStore: store),
       appearance: KioskAppearanceStore(prefs),
+      assignments: SupabaseDevicePrinterAssignmentsRepository(
+        transport: transport,
+        secretStore: store,
+      ),
+      logoReader: logoReader,
+      attractMedia: const KioskAttractMediaStore(),
+      printedLedger: KioskPrintedReceiptLedger(prefs),
     ),
     problem: null,
   );
@@ -207,6 +235,42 @@ List<Override> kioskRealOverrides(KioskSeams seams) => [
   kioskRealModeProvider.overrideWithValue(true),
   kioskStaffAccessProvider.overrideWithValue(seams.staff),
   kioskAppearanceStoreProvider.overrideWithValue(seams.appearance),
+  // KIOSK-001-103: receipt branding authority (Dashboard logo + restaurant
+  // name via the widened device RPC), curated attract media, and the
+  // exactly-once auto-print of the ACCEPTED customer receipt.
+  kioskPrinterAssignmentsReaderProvider.overrideWithValue(seams.assignments),
+  kioskReceiptLogoReaderProvider.overrideWithValue(seams.logoReader),
+  kioskAttractMediaStoreProvider.overrideWithValue(seams.attractMedia),
+  kioskVideoProbeProvider.overrideWithValue(kioskPlatformVideoProbe),
+  kioskPrintedReceiptLedgerProvider.overrideWithValue(seams.printedLedger),
+  // The shared native printer store under the KIOSK namespace — its keys
+  // (`restoflow.printer.*.kiosk.<deviceId>`) can never collide with POS/KDS.
+  nativePrinterNamespaceProvider.overrideWithValue('kiosk'),
+  nativePrinterDeviceIdProvider.overrideWith(
+    (ref) => ref.watch(kioskDeviceContextProvider)?.deviceId,
+  ),
+  // PRINT-RTL-001: ar/he receipts rasterize (GS v 0) instead of "?????".
+  nativePrintRasterizerProvider.overrideWithValue(
+    const FlutterReceiptRasterizer(),
+  ),
+  // Dashboard-logo decode for the printed header (fail-soft to text-only).
+  kioskLogoDecoderProvider.overrideWithValue((bytes) async {
+    try {
+      return await const FlutterLogoDecoder().decode(Uint8List.fromList(bytes));
+    } catch (_) {
+      return null;
+    }
+  }),
+  // §10: the ONLY print trigger — the definitive-acceptance transition.
+  kioskAcceptedOrderHookProvider.overrideWith((ref) {
+    return (order, lang) {
+      unawaited(
+        ref
+            .read(kioskReceiptAutoPrintProvider)
+            .onOrderAccepted(order: order, lang: lang),
+      );
+    };
+  }),
   kioskMenuDataProvider.overrideWith((ref) {
     final live = ref.watch(kioskLiveProvider.select((s) => s.menu));
     return live ?? const KioskMenuData.empty();

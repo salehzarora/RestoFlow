@@ -6471,6 +6471,137 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskAppearancePreview => 'תצוגה מקדימה';
 
   @override
+  String get kioskPrintFailedNotice =>
+      'לא ניתן היה להדפיס את הקבלה — בקשו עותק מהקופאי.';
+
+  @override
+  String get kioskPrinterSection => 'מדפסת קבלות';
+
+  @override
+  String get kioskPrinterWebUnavailable =>
+      'הגדרת המדפסת זמינה רק במכשיר הקיוסק המותקן. ההזמנות אינן מושפעות.';
+
+  @override
+  String get kioskPrinterAutoPrint => 'הדפסת קבלה אוטומטית';
+
+  @override
+  String get kioskPrinterAutoPrintHint =>
+      'קבלת הלקוח מודפסת אוטומטית כשההזמנה מתקבלת.';
+
+  @override
+  String get kioskPrinterTransportWifi => 'Wi-Fi';
+
+  @override
+  String get kioskPrinterTransportBluetooth => 'Bluetooth';
+
+  @override
+  String get kioskPrinterHost => 'כתובת המדפסת (IP)';
+
+  @override
+  String get kioskPrinterPort => 'פורט';
+
+  @override
+  String get kioskPrinterInvalidHost => 'הזינו כתובת מדפסת תקינה.';
+
+  @override
+  String get kioskPrinterInvalidPort => 'הזינו פורט תקין (1–65535).';
+
+  @override
+  String get kioskPrinterSave => 'שמירת מדפסת';
+
+  @override
+  String get kioskPrinterSaved => 'המדפסת נשמרה';
+
+  @override
+  String get kioskPrinterTest => 'הדפסת ניסיון';
+
+  @override
+  String get kioskPrinterTestOk => 'הניסיון נשלח למדפסת.';
+
+  @override
+  String get kioskPrinterTestFailed => 'הדפסת הניסיון נכשלה — בדקו את המדפסת.';
+
+  @override
+  String get kioskPrinterBtPick => 'בחירת מדפסת מצומדת';
+
+  @override
+  String get kioskPrinterBtNone =>
+      'אין מכשירי Bluetooth מצומדים — צמדו את המדפסת בהגדרות אנדרואיד תחילה.';
+
+  @override
+  String get kioskPrinterBtUnavailable =>
+      'Bluetooth אינו זמין או שההרשאה נדחתה.';
+
+  @override
+  String get kioskPrinterNotConfigured => 'עדיין לא הוגדרה מדפסת.';
+
+  @override
+  String get kioskPrinterCurrentSaved => 'המדפסת השמורה:';
+
+  @override
+  String get kioskAttractModeMenuPhotos => 'תמונות נבחרות מהתפריט';
+
+  @override
+  String get kioskAttractModeImage => 'תמונה חיצונית';
+
+  @override
+  String get kioskAttractModeVideo => 'סרטון חיצוני';
+
+  @override
+  String get kioskFeaturedPickAction => 'בחירת תמונות';
+
+  @override
+  String get kioskFeaturedAutoNote =>
+      'אין בחירה עדיין — מוצגות תמונות תפריט אוטומטיות.';
+
+  @override
+  String get kioskFeaturedClear => 'ניקוי הבחירה';
+
+  @override
+  String get kioskFeaturedTitle => 'תמונות תפריט מובילות';
+
+  @override
+  String get kioskFeaturedHint => 'בחרו 4–8 מוצרים שיובילו את מסך הפתיחה.';
+
+  @override
+  String get kioskFeaturedFewWarning =>
+      'בתפריט פחות מ-4 תמונות שמישות — אפשר לבחור את כל השמישות.';
+
+  @override
+  String get kioskFeaturedSearch => 'חיפוש מוצר';
+
+  @override
+  String get kioskFeaturedAllCategories => 'הכל';
+
+  @override
+  String get kioskFeaturedNoPhoto => 'ללא תמונה';
+
+  @override
+  String get kioskFeaturedStale => 'לא זמין';
+
+  @override
+  String get kioskAttractChooseImage => 'בחירת תמונה';
+
+  @override
+  String get kioskAttractChooseVideo => 'בחירת סרטון';
+
+  @override
+  String get kioskAttractMediaWebOnlyNote =>
+      'מדיה מותאמת נקבעת רק במכשיר הקיוסק המותקן.';
+
+  @override
+  String get kioskAttractMediaSet => 'המדיה שמורה במכשיר הזה';
+
+  @override
+  String get kioskAttractMediaTooLarge => 'הקובץ גדול מדי לקיוסק.';
+
+  @override
+  String get kioskAttractMediaTooLong => 'הסרטון ארוך מדי — עד 3 דקות.';
+
+  @override
+  String get kioskAttractMediaInvalid => 'אי אפשר להשתמש בקובץ הזה בקיוסק.';
+
+  @override
   String get kioskCancel => 'ביטול';
 
   @override

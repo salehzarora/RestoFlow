@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
+import '../print/kiosk_receipt_auto_print.dart';
 import '../state/kiosk_flow_controller.dart';
+import '../state/kiosk_receipt_branding.dart';
 import '../widgets/kiosk_chrome.dart';
 
 /// 07 · Confirmation — green success pop, "Order sent!", the fixture daily
@@ -171,36 +174,11 @@ class KioskConfirmScreen extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                Text.rich(
-                  TextSpan(
-                    text: KioskBrand.wordmark,
-                    children: [
-                      TextSpan(
-                        text: KioskBrand.wordmarkSuffix,
-                        style: const TextStyle(color: KioskColors.slipAccent),
-                      ),
-                    ],
-                  ),
-                  textDirection: TextDirection.ltr,
-                  style: const TextStyle(
-                    fontFamily: KioskType.latinDisplayFamily,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 42,
-                    letterSpacing: .5,
-                    color: KioskColors.slipInk,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  KioskBrand.subtitle,
-                  textDirection: TextDirection.ltr,
-                  style: KioskType.body(
-                    18,
-                    FontWeight.w600,
-                    color: KioskColors.slipSoft,
-                    letterSpacing: 4,
-                  ),
-                ),
+                // KIOSK-001-103 §16: the slip identity. REAL mode renders the
+                // AUTHORITATIVE Dashboard receipt branding (logo when enabled
+                // + readable, else the real restaurant name) — never EMBER.
+                // Demo keeps the Phase-1 fixture header byte-for-byte.
+                const _SlipBrandHeader(),
                 const SizedBox(height: 4),
                 Text(
                   l10n.kioskMadeFresh,
@@ -355,7 +333,11 @@ class KioskConfirmScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '${l10n.kioskPrintingSlip} · Powered by RestoFlow',
+                  // REAL mode never claims a print it may not make; demo
+                  // keeps the fixture line.
+                  ref.watch(kioskRealModeProvider)
+                      ? 'Powered by RestoFlow'
+                      : '${l10n.kioskPrintingSlip} · Powered by RestoFlow',
                   style: KioskType.body(
                     16,
                     FontWeight.w500,
@@ -407,7 +389,100 @@ class KioskConfirmScreen extends ConsumerWidget {
               ),
             ],
           ),
+          // KIOSK-001-103 §10: a PRINT failure never blocks the accepted
+          // confirmation — a quiet localized notice is all it gets (no
+          // automatic retry). Only for THIS order's status.
+          if (ref.watch(kioskReceiptPrintStatusProvider) case final status?)
+            if (status.orderId == order.orderId &&
+                status.outcome == KioskReceiptPrintOutcome.failed) ...[
+              const SizedBox(height: 18),
+              Text(
+                l10n.kioskPrintFailedNotice,
+                key: const Key('kiosk-print-failed-notice'),
+                textAlign: TextAlign.center,
+                style: KioskType.body(
+                  20,
+                  FontWeight.w600,
+                  color: const Color(0xFFFFB020),
+                ),
+              ),
+            ],
         ],
+      ),
+    );
+  }
+}
+
+/// KIOSK-001-103 §16: the slip identity header. REAL mode = the Dashboard
+/// receipt logo (centered, restrained receipt size) or the real restaurant
+/// name — NEVER the EMBER fixture; branding read failures fall back to the
+/// device appearance display name (still the real tenant). Demo mode keeps
+/// the Phase-1 fixture header byte-for-byte.
+class _SlipBrandHeader extends ConsumerWidget {
+  const _SlipBrandHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(kioskRealModeProvider)) {
+      return Column(
+        children: [
+          Text.rich(
+            TextSpan(
+              text: KioskBrand.wordmark,
+              children: [
+                TextSpan(
+                  text: KioskBrand.wordmarkSuffix,
+                  style: const TextStyle(color: KioskColors.slipAccent),
+                ),
+              ],
+            ),
+            textDirection: TextDirection.ltr,
+            style: const TextStyle(
+              fontFamily: KioskType.latinDisplayFamily,
+              fontWeight: FontWeight.w400,
+              fontSize: 42,
+              letterSpacing: .5,
+              color: KioskColors.slipInk,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            KioskBrand.subtitle,
+            textDirection: TextDirection.ltr,
+            style: KioskType.body(
+              18,
+              FontWeight.w600,
+              color: KioskColors.slipSoft,
+              letterSpacing: 4,
+            ),
+          ),
+        ],
+      );
+    }
+    final branding = ref.watch(kioskReceiptBrandingProvider).valueOrNull;
+    final appearance = ref.watch(kioskAppearanceProvider);
+    final name = (branding?.restaurantName?.isNotEmpty ?? false)
+        ? branding!.restaurantName!
+        : appearance.restaurantDisplayName;
+    final nameText = Text(
+      name,
+      key: const Key('kiosk-slip-restaurant-name'),
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: KioskType.body(34, FontWeight.w800, color: KioskColors.slipInk),
+    );
+    final logoBytes = branding?.logoBytes;
+    if (logoBytes == null) return nameText;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 96, maxWidth: 320),
+      child: Image.memory(
+        logoBytes,
+        key: const Key('kiosk-slip-receipt-logo'),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        // Corrupt bytes degrade to the real name, never a broken image.
+        errorBuilder: (_, _, _) => nameText,
       ),
     );
   }

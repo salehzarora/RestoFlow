@@ -6513,6 +6513,137 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskAppearancePreview => 'معاينة';
 
   @override
+  String get kioskPrintFailedNotice =>
+      'تعذّرت طباعة الإيصال — اطلب نسخة من الكاشير.';
+
+  @override
+  String get kioskPrinterSection => 'طابعة الإيصالات';
+
+  @override
+  String get kioskPrinterWebUnavailable =>
+      'إعداد الطابعة متاح على جهاز الكشك المثبّت فقط. الطلب لا يتأثر.';
+
+  @override
+  String get kioskPrinterAutoPrint => 'طباعة الإيصال تلقائيًا';
+
+  @override
+  String get kioskPrinterAutoPrintHint =>
+      'يُطبع إيصال الزبون تلقائيًا عند قبول الطلب.';
+
+  @override
+  String get kioskPrinterTransportWifi => 'Wi-Fi';
+
+  @override
+  String get kioskPrinterTransportBluetooth => 'بلوتوث';
+
+  @override
+  String get kioskPrinterHost => 'عنوان الطابعة IP';
+
+  @override
+  String get kioskPrinterPort => 'المنفذ';
+
+  @override
+  String get kioskPrinterInvalidHost => 'أدخل عنوان طابعة صالحًا.';
+
+  @override
+  String get kioskPrinterInvalidPort => 'أدخل منفذًا صالحًا (1–65535).';
+
+  @override
+  String get kioskPrinterSave => 'حفظ الطابعة';
+
+  @override
+  String get kioskPrinterSaved => 'تم حفظ الطابعة';
+
+  @override
+  String get kioskPrinterTest => 'طباعة تجريبية';
+
+  @override
+  String get kioskPrinterTestOk => 'أُرسلت التجربة إلى الطابعة.';
+
+  @override
+  String get kioskPrinterTestFailed =>
+      'فشلت الطباعة التجريبية — تحقق من الطابعة.';
+
+  @override
+  String get kioskPrinterBtPick => 'اختيار طابعة مقترنة';
+
+  @override
+  String get kioskPrinterBtNone =>
+      'لا توجد أجهزة بلوتوث مقترنة — اقرن الطابعة من إعدادات أندرويد أولًا.';
+
+  @override
+  String get kioskPrinterBtUnavailable => 'البلوتوث غير متاح أو رُفض الإذن.';
+
+  @override
+  String get kioskPrinterNotConfigured => 'لا توجد طابعة مُعدّة بعد.';
+
+  @override
+  String get kioskPrinterCurrentSaved => 'الطابعة المحفوظة:';
+
+  @override
+  String get kioskAttractModeMenuPhotos => 'صور مختارة من القائمة';
+
+  @override
+  String get kioskAttractModeImage => 'صورة خارجية';
+
+  @override
+  String get kioskAttractModeVideo => 'فيديو خارجي';
+
+  @override
+  String get kioskFeaturedPickAction => 'اختيار الصور';
+
+  @override
+  String get kioskFeaturedAutoNote =>
+      'لا يوجد اختيار بعد — تُعرض صور القائمة تلقائيًا.';
+
+  @override
+  String get kioskFeaturedClear => 'مسح الاختيار';
+
+  @override
+  String get kioskFeaturedTitle => 'صور القائمة المميزة';
+
+  @override
+  String get kioskFeaturedHint => 'اختر 4–8 أصناف لتتصدّر شاشة الاستقبال.';
+
+  @override
+  String get kioskFeaturedFewWarning =>
+      'تحتوي القائمة على أقل من 4 صور صالحة — يمكن اختيار كل الصور الصالحة.';
+
+  @override
+  String get kioskFeaturedSearch => 'بحث عن صنف';
+
+  @override
+  String get kioskFeaturedAllCategories => 'الكل';
+
+  @override
+  String get kioskFeaturedNoPhoto => 'بلا صورة';
+
+  @override
+  String get kioskFeaturedStale => 'غير متاح';
+
+  @override
+  String get kioskAttractChooseImage => 'اختيار صورة';
+
+  @override
+  String get kioskAttractChooseVideo => 'اختيار فيديو';
+
+  @override
+  String get kioskAttractMediaWebOnlyNote =>
+      'الوسائط المخصصة تُضبط على جهاز الكشك المثبّت فقط.';
+
+  @override
+  String get kioskAttractMediaSet => 'الوسائط محفوظة على هذا الجهاز';
+
+  @override
+  String get kioskAttractMediaTooLarge => 'الملف كبير جدًا على الكشك.';
+
+  @override
+  String get kioskAttractMediaTooLong => 'الفيديو طويل جدًا — حتى 3 دقائق.';
+
+  @override
+  String get kioskAttractMediaInvalid => 'لا يمكن استخدام هذا الملف على الكشك.';
+
+  @override
   String get kioskCancel => 'إلغاء';
 
   @override
