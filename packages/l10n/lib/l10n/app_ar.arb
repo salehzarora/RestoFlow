@@ -2025,6 +2025,18 @@
   "kioskCartStaleTitle": "تغيّرت القائمة",
   "kioskCartStaleBody": "تم تحديث بعض الأصناف أو الأسعار في طلبك. راجع طلبك للمتابعة.",
   "kioskCartStaleRefresh": "تحديث الطلب",
+  "kioskSubtotal": "المجموع الفرعي",
+  "kioskTax": "الضريبة",
+  "kioskTaxIncludedNote": "شامل الضريبة",
+  "kioskSubmitUnconfirmedTitle": "تعذّر تأكيد الطلب",
+  "kioskSubmitUnconfirmedBody": "انقطع الاتصال قبل وصول الرد. قد يكون طلبك وصل — اضغط “إعادة المحاولة” للتحقق بأمان (لن يُرسل مرتين أبدًا).",
+  "kioskSubmitRetry": "إعادة المحاولة",
+  "kioskSubmitFailed": "تعذّر إرسال الطلب. حاول مجددًا أو راجع الكاشير.",
+  "kioskTaxUnavailableMsg": "تعذّر التحقق من الأسعار حاليًا — حاول مجددًا بعد قليل.",
+  "kioskPhoneInvalidMsg": "تعذّر استخدام رقم الهاتف — تحقق منه وحاول مجددًا.",
+  "kioskTotalUpdating": "جارٍ تحديث الإجمالي…",
+  "kioskTotalUpdated": "تم تحديث الإجمالي",
+  "kioskTotalUpdatedBody": "يرجى مراجعة الإجمالي الجديد والتأكيد مرة أخرى.",
   "kioskOrderingUnavailable": "الطلب غير متاح من هذا الجهاز حاليًا — يرجى الطلب من الكاونتر.",
   "kioskTableNoLongerAvailable": "تم حجز هذه الطاولة للتو — يرجى اختيار طاولة أخرى."
 }

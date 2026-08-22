@@ -140,10 +140,9 @@ final kioskMenuStatusProvider = Provider<KioskMenuStatus>(
   (ref) => KioskMenuStatus.ready,
 );
 
-/// Whether "Place order" is allowed to run the Phase-1 LOCAL confirmation.
-/// True in demo mode (fixture slip, exactly Phase 1). The real-mode root
-/// overrides this to FALSE: Phase 3 must not create real orders — the server
-/// submit contract still refuses the owner-approved "dine-in without a table"
-/// flow, so the submit phase is deliberately not wired — and a fake
-/// "order sent" to a REAL customer would be a lie.
+/// Whether "Place order" is allowed to proceed at all. True in demo mode
+/// (the Phase-1 fixture confirmation). The real-mode root ALSO sets it true
+/// since KIOSK-001-REAL-SUBMIT-092 (real submits through the hardened RPC);
+/// it remains a testable safety seam — overriding it FALSE anywhere shows
+/// the honest "ordering unavailable" notice instead of any submit path.
 final kioskOrderingEnabledProvider = Provider<bool>((ref) => true);

@@ -6627,6 +6627,47 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskCartStaleRefresh => 'تحديث الطلب';
 
   @override
+  String get kioskSubtotal => 'المجموع الفرعي';
+
+  @override
+  String get kioskTax => 'الضريبة';
+
+  @override
+  String get kioskTaxIncludedNote => 'شامل الضريبة';
+
+  @override
+  String get kioskSubmitUnconfirmedTitle => 'تعذّر تأكيد الطلب';
+
+  @override
+  String get kioskSubmitUnconfirmedBody =>
+      'انقطع الاتصال قبل وصول الرد. قد يكون طلبك وصل — اضغط “إعادة المحاولة” للتحقق بأمان (لن يُرسل مرتين أبدًا).';
+
+  @override
+  String get kioskSubmitRetry => 'إعادة المحاولة';
+
+  @override
+  String get kioskSubmitFailed =>
+      'تعذّر إرسال الطلب. حاول مجددًا أو راجع الكاشير.';
+
+  @override
+  String get kioskTaxUnavailableMsg =>
+      'تعذّر التحقق من الأسعار حاليًا — حاول مجددًا بعد قليل.';
+
+  @override
+  String get kioskPhoneInvalidMsg =>
+      'تعذّر استخدام رقم الهاتف — تحقق منه وحاول مجددًا.';
+
+  @override
+  String get kioskTotalUpdating => 'جارٍ تحديث الإجمالي…';
+
+  @override
+  String get kioskTotalUpdated => 'تم تحديث الإجمالي';
+
+  @override
+  String get kioskTotalUpdatedBody =>
+      'يرجى مراجعة الإجمالي الجديد والتأكيد مرة أخرى.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'الطلب غير متاح من هذا الجهاز حاليًا — يرجى الطلب من الكاونتر.';
 

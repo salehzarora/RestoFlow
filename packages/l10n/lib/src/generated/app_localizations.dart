@@ -12022,6 +12022,78 @@ abstract class AppLocalizations {
   /// **'Update order'**
   String get kioskCartStaleRefresh;
 
+  /// No description provided for @kioskSubtotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get kioskSubtotal;
+
+  /// No description provided for @kioskTax.
+  ///
+  /// In en, this message translates to:
+  /// **'Tax'**
+  String get kioskTax;
+
+  /// No description provided for @kioskTaxIncludedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Tax included'**
+  String get kioskTaxIncludedNote;
+
+  /// No description provided for @kioskSubmitUnconfirmedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm the order'**
+  String get kioskSubmitUnconfirmedTitle;
+
+  /// No description provided for @kioskSubmitUnconfirmedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection was interrupted before we got an answer. Your order may have been received — tap Retry to check safely (it will never be sent twice).'**
+  String get kioskSubmitUnconfirmedBody;
+
+  /// No description provided for @kioskSubmitRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get kioskSubmitRetry;
+
+  /// No description provided for @kioskSubmitFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The order could not be sent. Please try again or ask at the counter.'**
+  String get kioskSubmitFailed;
+
+  /// No description provided for @kioskTaxUnavailableMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not verify prices right now — please try again in a moment.'**
+  String get kioskTaxUnavailableMsg;
+
+  /// No description provided for @kioskPhoneInvalidMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'That phone number could not be used — check it and try again.'**
+  String get kioskPhoneInvalidMsg;
+
+  /// No description provided for @kioskTotalUpdating.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating total…'**
+  String get kioskTotalUpdating;
+
+  /// No description provided for @kioskTotalUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The total was updated'**
+  String get kioskTotalUpdated;
+
+  /// No description provided for @kioskTotalUpdatedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please review the new total and confirm again.'**
+  String get kioskTotalUpdatedBody;
+
   /// No description provided for @kioskOrderingUnavailable.
   ///
   /// In en, this message translates to:

@@ -6581,6 +6581,46 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskCartStaleRefresh => 'עדכון ההזמנה';
 
   @override
+  String get kioskSubtotal => 'סכום ביניים';
+
+  @override
+  String get kioskTax => 'מס';
+
+  @override
+  String get kioskTaxIncludedNote => 'כולל מס';
+
+  @override
+  String get kioskSubmitUnconfirmedTitle => 'לא ניתן לאשר את ההזמנה';
+
+  @override
+  String get kioskSubmitUnconfirmedBody =>
+      'החיבור נקטע לפני שקיבלנו תשובה. ייתכן שההזמנה התקבלה — הקישו על “נסו שוב” לבדיקה בטוחה (היא לעולם לא תישלח פעמיים).';
+
+  @override
+  String get kioskSubmitRetry => 'נסו שוב';
+
+  @override
+  String get kioskSubmitFailed =>
+      'לא ניתן לשלוח את ההזמנה. נסו שוב או פנו לקופה.';
+
+  @override
+  String get kioskTaxUnavailableMsg =>
+      'לא ניתן לאמת את המחירים כרגע — נסו שוב בעוד רגע.';
+
+  @override
+  String get kioskPhoneInvalidMsg =>
+      'לא ניתן להשתמש במספר הטלפון — בדקו אותו ונסו שוב.';
+
+  @override
+  String get kioskTotalUpdating => 'מעדכן את הסכום…';
+
+  @override
+  String get kioskTotalUpdated => 'הסכום עודכן';
+
+  @override
+  String get kioskTotalUpdatedBody => 'אנא בדקו את הסכום החדש ואשרו שוב.';
+
+  @override
   String get kioskOrderingUnavailable =>
       'לא ניתן להזמין מהעמדה כרגע — נא להזמין בדלפק.';
 

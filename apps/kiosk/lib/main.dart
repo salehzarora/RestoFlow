@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/kiosk_live_data.dart';
 import 'src/data/kiosk_menu_data.dart';
+import 'src/data/kiosk_order_submit.dart';
 import 'src/design/kiosk_theme.dart';
 import 'src/screens/kiosk_activation.dart';
 import 'src/screens/kiosk_shell.dart';
@@ -29,11 +30,10 @@ import 'src/state/kiosk_live_runtime.dart';
 /// anonymous device principal → staff activation by enrollment code
 /// (device type hardcoded `kiosk`) → token-proven `kiosk_menu` /
 /// `kiosk_tables` live reads driving the approved V2 UI. ONLINE-REQUIRED: no
-/// offline order queue, no stale floor truth. Order submit is deliberately
-/// NOT wired in this phase (the submit RPC is never referenced) — the
-/// known dine-in-without-a-table server contract mismatch blocks the submit
-/// phase, so real mode shows an honest "ordering unavailable" notice instead
-/// of a fake confirmation.
+/// offline order queue, no stale floor truth. KIOSK-001-REAL-SUBMIT-092:
+/// Place Order now submits REAL unpaid orders through the hardened submit
+/// RPC (frozen D-022 attempt identity, authoritative table UUID, canonical
+/// integer tax) — payment stays at the cashier.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Kiosk posture: portrait only, immersive fullscreen. Keep-screen-on is
@@ -113,6 +113,8 @@ typedef KioskSeams = ({
   SupabaseDevicePairingRepository pairing,
   KioskLiveReads reads,
   DeviceImageUrlResolver images,
+  KioskOrderSubmitter submit,
+  KioskBranchTaxReader tax,
 });
 
 typedef KioskBootResult = ({KioskSeams? seams, RealDeviceAuthProblem? problem});
@@ -156,6 +158,10 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
       ),
       reads: KioskLiveReads(transport: transport, secretStore: store),
       images: images,
+      // KIOSK-001-REAL-SUBMIT-092: the ONLINE-REQUIRED submit + tax seams on
+      // the SAME transport/credential (no second client, no offline queue).
+      submit: KioskOrderSubmitter(transport: transport, secretStore: store),
+      tax: KioskBranchTaxReader(transport: transport, secretStore: store),
     ),
     problem: null,
   );
@@ -168,7 +174,15 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
 List<Override> kioskRealOverrides(KioskSeams seams) => [
   kioskLiveReadsProvider.overrideWithValue(seams.reads),
   kioskImageResolverProvider.overrideWithValue(seams.images),
-  kioskOrderingEnabledProvider.overrideWithValue(false),
+  // KIOSK-001-REAL-SUBMIT-092: real ordering is ON — the customer's Place
+  // Order calls the hardened submit RPC through the frozen-attempt
+  // submitter seam. The gate provider stays as a testable safety seam.
+  kioskOrderingEnabledProvider.overrideWithValue(true),
+  kioskOrderSubmitterProvider.overrideWithValue(seams.submit),
+  kioskBranchTaxReaderProvider.overrideWithValue(seams.tax),
+  // §18: the fixture staff PIN is a demo/design surface — never a live
+  // production boundary. REAL STAFF SETTINGS/PIN AUTH IS A SEPARATE PHASE.
+  kioskStaffSettingsEnabledProvider.overrideWithValue(false),
   kioskMenuDataProvider.overrideWith((ref) {
     final live = ref.watch(kioskLiveProvider.select((s) => s.menu));
     return live ?? const KioskMenuData.empty();

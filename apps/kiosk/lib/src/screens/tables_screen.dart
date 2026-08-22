@@ -54,18 +54,24 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
       await live.refreshTables();
       if (!mounted) return;
       setState(() => _confirming = false);
-      final label = ref.read(kioskFlowProvider).selectedTable;
+      // 092: re-check by the AUTHORITATIVE table id (labels can repeat).
+      final flow = ref.read(kioskFlowProvider);
+      final label = flow.selectedTable;
+      final id = flow.selectedTableId;
       final fresh = ref.read(kioskTablesViewProvider);
       final stillAvailable =
           label != null &&
           fresh.status == KioskTablesStatus.ready &&
           fresh.zones.any(
             (z) => z.tables.any(
-              (t) => t.label == label && t.state == KioskTableState.available,
+              (t) =>
+                  t.label == label &&
+                  (id == null || t.id == id) &&
+                  t.state == KioskTableState.available,
             ),
           );
       if (!stillAvailable) {
-        controller.toggleTable(label ?? '');
+        controller.toggleTable(label ?? '', id: id);
         controller.showStaffToast('table-taken');
         return;
       }
@@ -316,7 +322,10 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
                             table: table,
                             selected: state.selectedTable == table.label,
                             onTap: table.state == KioskTableState.available
-                                ? () => controller.toggleTable(table.label)
+                                ? () => controller.toggleTable(
+                                    table.label,
+                                    id: table.id,
+                                  )
                                 : null,
                           ),
                       ],

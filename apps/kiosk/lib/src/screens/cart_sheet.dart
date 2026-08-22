@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
+import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -133,7 +134,12 @@ class KioskCartSheet extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (state.cartStale)
+                            // 096: the banner also carries the STICKY
+                            // explicit-reconfirm gate (server drift / updated
+                            // total) — its button is the ONE action that
+                            // clears it; automatic revalidation cannot.
+                            if (state.cartStale ||
+                                state.submitReconfirmRequired)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 18),
                                 child: Container(
@@ -162,7 +168,10 @@ class KioskCartSheet extends ConsumerWidget {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              l10n.kioskCartStaleTitle,
+                                              state.reconfirmReasonKey ==
+                                                      'total-updated'
+                                                  ? l10n.kioskTotalUpdated
+                                                  : l10n.kioskCartStaleTitle,
                                               style: KioskType.body(
                                                 24,
                                                 FontWeight.w800,
@@ -171,7 +180,10 @@ class KioskCartSheet extends ConsumerWidget {
                                             ),
                                             const SizedBox(height: 6),
                                             Text(
-                                              l10n.kioskCartStaleBody,
+                                              state.reconfirmReasonKey ==
+                                                      'total-updated'
+                                                  ? l10n.kioskTotalUpdatedBody
+                                                  : l10n.kioskCartStaleBody,
                                               style: KioskType.body(
                                                 20,
                                                 FontWeight.w500,
@@ -214,6 +226,33 @@ class KioskCartSheet extends ConsumerWidget {
                                   ),
                                 ),
                               ),
+                            if (state.submitPhase ==
+                                KioskSubmitPhase.unconfirmed)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: _CartNotice(
+                                  key: const Key('kiosk-submit-unconfirmed'),
+                                  title: l10n.kioskSubmitUnconfirmedTitle,
+                                  body: l10n.kioskSubmitUnconfirmedBody,
+                                  actionKey: const Key('kiosk-submit-retry'),
+                                  actionLabel: l10n.kioskSubmitRetry,
+                                  onAction: controller.retrySubmit,
+                                ),
+                              ),
+                            if (state.submitErrorKey != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: _CartNotice(
+                                  key: const Key('kiosk-submit-error'),
+                                  title: switch (state.submitErrorKey) {
+                                    'phone-invalid' =>
+                                      l10n.kioskPhoneInvalidMsg,
+                                    'tax-unavailable' =>
+                                      l10n.kioskTaxUnavailableMsg,
+                                    _ => l10n.kioskSubmitFailed,
+                                  },
+                                ),
+                              ),
                             for (final line in state.cart)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 18),
@@ -251,12 +290,20 @@ class KioskCartSheet extends ConsumerWidget {
                             const SizedBox(height: 14),
                             Row(
                               children: [
+                                // 096: while a real submit is in flight or
+                                // unconfirmed the fields are VISUALLY locked
+                                // too — the frozen order owns these values,
+                                // so typed text may never sit in the field
+                                // while the state (correctly) ignores it.
                                 Expanded(
                                   child: _IdentityField(
                                     key: const Key('kiosk-cust-name'),
                                     hint: l10n.kioskNameOptional,
                                     initialValue: state.customerName,
                                     onChanged: controller.setCustomerName,
+                                    enabled:
+                                        state.submitPhase ==
+                                        KioskSubmitPhase.idle,
                                   ),
                                 ),
                                 const SizedBox(width: 16),
@@ -267,6 +314,9 @@ class KioskCartSheet extends ConsumerWidget {
                                     initialValue: state.customerPhone,
                                     onChanged: controller.setCustomerPhone,
                                     ltr: true,
+                                    enabled:
+                                        state.submitPhase ==
+                                        KioskSubmitPhase.idle,
                                   ),
                                 ),
                               ],
@@ -329,24 +379,151 @@ class KioskCartSheet extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                l10n.kioskTotal,
-                                style: KioskType.body(28, FontWeight.w800),
+                          // 096: the money summary is rendered ONLY while the
+                          // tax display is AUTHORITATIVE. While a read is in
+                          // flight the customer sees an updating note; after
+                          // a failed read, an unavailable note with retry —
+                          // never a silently untaxed total. (Demo never
+                          // leaves ready.)
+                          if (state.taxPhase ==
+                              KioskTaxDisplayPhase.loading) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                key: const Key('kiosk-total-loading'),
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(
+                                    width: 26,
+                                    height: 26,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: KioskColors.textMuted,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Text(
+                                    l10n.kioskTotalUpdating,
+                                    style: KioskType.body(
+                                      22,
+                                      FontWeight.w600,
+                                      color: KioskColors.textMuted,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                context.money(state.cartTotalMinor),
-                                key: const Key('kiosk-cart-total'),
-                                textDirection: TextDirection.ltr,
-                                style: KioskType.body(44, FontWeight.w900),
+                            ),
+                          ] else if (state.taxPhase ==
+                              KioskTaxDisplayPhase.unavailable) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                key: const Key('kiosk-total-unavailable'),
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      l10n.kioskTaxUnavailableMsg,
+                                      style: KioskType.body(
+                                        22,
+                                        FontWeight.w600,
+                                        color: KioskColors.dangerSoft,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  KioskPressable(
+                                    key: const Key('kiosk-total-retry'),
+                                    onTap: controller.refreshBranchTax,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: KioskColors.danger.withValues(
+                                          alpha: .2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        l10n.kioskSubmitRetry,
+                                        style: KioskType.body(
+                                          20,
+                                          FontWeight.w800,
+                                          color: KioskColors.dangerSoft,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                          ] else ...[
+                            // 092: with a live tax policy the summary shows the
+                            // EXACT figures the server will validate — integer
+                            // minor units, no float, no hidden add-on.
+                            if (state.branchTax?.addsTax ?? false) ...[
+                              _SummaryRow(
+                                label: l10n.kioskSubtotal,
+                                valueKey: const Key('kiosk-cart-subtotal'),
+                                value: context.money(state.cartTotalMinor),
+                              ),
+                              const SizedBox(height: 6),
+                              _SummaryRow(
+                                label: state.branchTax!.isInclusive
+                                    ? l10n.kioskTaxIncludedNote
+                                    : l10n.kioskTax,
+                                valueKey: const Key('kiosk-cart-tax'),
+                                value: context.money(
+                                  kioskTaxMinor(
+                                    state.cartTotalMinor,
+                                    state.branchTax!,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
                             ],
-                          ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  l10n.kioskTotal,
+                                  style: KioskType.body(28, FontWeight.w800),
+                                ),
+                                Text(
+                                  context.money(
+                                    state.branchTax == null
+                                        ? state.cartTotalMinor
+                                        : kioskGrandMinor(
+                                            state.cartTotalMinor,
+                                            state.branchTax!,
+                                          ),
+                                  ),
+                                  key: const Key('kiosk-cart-total'),
+                                  textDirection: TextDirection.ltr,
+                                  style: KioskType.body(44, FontWeight.w900),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           KioskPressable(
-                            onTap: controller.placeOrder,
+                            // 092 single-flight: an in-flight submit disables
+                            // the CTA. 096: it is also disabled until the tax
+                            // display is AUTHORITATIVE and while an explicit
+                            // reconfirm is pending — the customer can only
+                            // ever submit the exact total on screen.
+                            onTap:
+                                state.submitPhase ==
+                                        KioskSubmitPhase.inFlight ||
+                                    state.taxPhase !=
+                                        KioskTaxDisplayPhase.ready ||
+                                    state.submitReconfirmRequired
+                                ? null
+                                : controller.placeOrder,
                             pressedScale: .98,
                             child: Container(
                               key: const Key('kiosk-place-order'),
@@ -365,28 +542,39 @@ class KioskCartSheet extends ConsumerWidget {
                                   ),
                                 ],
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    l10n.kioskPlaceOrder.toUpperCase(),
-                                    style: KioskType.body(
-                                      31,
-                                      FontWeight.w900,
-                                      color: Colors.white,
-                                      letterSpacing: .5,
+                              child:
+                                  state.submitPhase == KioskSubmitPhase.inFlight
+                                  ? const SizedBox(
+                                      key: Key('kiosk-place-order-busy'),
+                                      width: 40,
+                                      height: 40,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 4,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          l10n.kioskPlaceOrder.toUpperCase(),
+                                          style: KioskType.body(
+                                            31,
+                                            FontWeight.w900,
+                                            color: Colors.white,
+                                            letterSpacing: .5,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Icon(
+                                          rtl
+                                              ? Icons.arrow_back_rounded
+                                              : Icons.arrow_forward_rounded,
+                                          size: 34,
+                                          color: Colors.white,
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Icon(
-                                    rtl
-                                        ? Icons.arrow_back_rounded
-                                        : Icons.arrow_forward_rounded,
-                                    size: 34,
-                                    color: Colors.white,
-                                  ),
-                                ],
-                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -667,11 +855,17 @@ class _IdentityField extends StatelessWidget {
     required this.initialValue,
     required this.onChanged,
     this.ltr = false,
+    this.enabled = true,
   });
   final String hint;
   final String initialValue;
   final ValueChanged<String> onChanged;
   final bool ltr;
+
+  /// 096: false while a real submit is in flight or unconfirmed — the field
+  /// is read-only AND non-interactive, so the visible text can never diverge
+  /// from the frozen order the customer is waiting on.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -679,9 +873,12 @@ class _IdentityField extends StatelessWidget {
     child: TextFormField(
       initialValue: initialValue,
       onChanged: onChanged,
+      enabled: enabled,
       textDirection: ltr ? TextDirection.ltr : null,
       keyboardType: ltr ? TextInputType.phone : TextInputType.name,
-      style: KioskType.body(23, FontWeight.w500),
+      style: enabled
+          ? KioskType.body(23, FontWeight.w500)
+          : KioskType.body(23, FontWeight.w500, color: KioskColors.textMuted),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: KioskType.body(
@@ -690,8 +887,12 @@ class _IdentityField extends StatelessWidget {
           color: KioskColors.textFaint,
         ),
         filled: true,
-        fillColor: KioskColors.glass(.05),
+        fillColor: KioskColors.glass(enabled ? .05 : .03),
         contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: KioskColors.glass(.08), width: 2),
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide(color: KioskColors.glass(.14), width: 2),
@@ -701,6 +902,122 @@ class _IdentityField extends StatelessWidget {
           borderSide: const BorderSide(color: KioskColors.accentTop, width: 2),
         ),
       ),
+    ),
+  );
+}
+
+/// 092: one summary line above the total (subtotal / tax), V2-toned.
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.label, required this.value, this.valueKey});
+  final String label;
+  final String value;
+  final Key? valueKey;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: KioskType.body(
+          22,
+          FontWeight.w600,
+          color: KioskColors.textMuted,
+        ),
+      ),
+      Text(
+        value,
+        key: valueKey,
+        textDirection: TextDirection.ltr,
+        style: KioskType.body(
+          26,
+          FontWeight.w800,
+          color: KioskColors.textMuted,
+        ),
+      ),
+    ],
+  );
+}
+
+/// 092: a customer-facing recovery notice in the cart (same visual family as
+/// the stale banner) with an optional action pill (e.g. retry).
+class _CartNotice extends StatelessWidget {
+  const _CartNotice({
+    super.key,
+    required this.title,
+    this.body,
+    this.actionKey,
+    this.actionLabel,
+    this.onAction,
+  });
+  final String title;
+  final String? body;
+  final Key? actionKey;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 20),
+    decoration: BoxDecoration(
+      color: KioskColors.danger.withValues(alpha: .12),
+      border: Border.all(
+        color: KioskColors.danger.withValues(alpha: .5),
+        width: 1.5,
+      ),
+      borderRadius: BorderRadius.circular(26),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: KioskType.body(
+                  24,
+                  FontWeight.w800,
+                  color: KioskColors.dangerSoft,
+                ),
+              ),
+              if (body != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  body!,
+                  style: KioskType.body(
+                    20,
+                    FontWeight.w500,
+                    color: KioskColors.textMuted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (actionLabel != null) ...[
+          const SizedBox(width: 18),
+          KioskPressable(
+            key: actionKey,
+            onTap: onAction,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+              decoration: BoxDecoration(
+                color: KioskColors.danger.withValues(alpha: .2),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                actionLabel!,
+                style: KioskType.body(
+                  21,
+                  FontWeight.w800,
+                  color: KioskColors.dangerSoft,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     ),
   );
 }
