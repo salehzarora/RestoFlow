@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
+import '../state/kiosk_staff_access.dart';
 import '../widgets/kiosk_chrome.dart';
+import 'appearance_settings.dart';
 
 /// 09 · Device settings (staff) — FIXTURE SHELL. Controls mutate in-memory
 /// fixture settings only (table toggle, idle timeout, attract content,
@@ -22,6 +25,77 @@ class KioskSettingsScreen extends ConsumerWidget {
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
     final settings = state.settings;
+
+    // KIOSK-001-102 §13: REAL mode exposes ONLY what is genuinely real —
+    // the persisted Appearance editor. The fixture panels (printer binding,
+    // fake diagnostics, resync, attract uploads) are demo/design surfaces
+    // and are NOT shown as production truth.
+    if (ref.watch(kioskRealModeProvider)) {
+      final deviceLabel =
+          ref.watch(kioskDeviceContextProvider)?.displayName ?? 'Kiosk';
+      final appearance = ref.watch(kioskAppearanceProvider);
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(44, 34, 44, 34),
+              decoration: BoxDecoration(
+                color: const Color(0xD9080F1C),
+                border: Border(
+                  bottom: BorderSide(color: KioskColors.glass(.09), width: 1.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.kioskSettingsTitle,
+                          style: KioskType.body(32, FontWeight.w800),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$deviceLabel · '
+                          '${appearance.restaurantDisplayName} · '
+                          '${l10n.kioskSettingsSignedIn}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: KioskType.body(
+                            20,
+                            FontWeight.w500,
+                            color: KioskColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  KioskAccentPill(
+                    key: const Key('kiosk-settings-exit'),
+                    onTap: controller.exitSettings,
+                    height: 84,
+                    horizontalPadding: 44,
+                    child: Text(
+                      l10n.kioskSettingsExit,
+                      style: KioskType.body(
+                        24,
+                        FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Expanded(
+              child: SingleChildScrollView(child: KioskAppearanceSection()),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Directionality(
       textDirection: TextDirection.ltr,

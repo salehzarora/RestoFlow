@@ -11233,12 +11233,6 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Now preparing'**
-  String get kioskNowPreparing;
-
-  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
-  ///
-  /// In en, this message translates to:
   /// **'How do you want your meal?'**
   String get kioskHow;
 
@@ -11655,6 +11649,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter your employee PIN — same PIN as the POS.'**
   String get kioskStaffPinPrompt;
+
+  /// No description provided for @kioskStaffChooseName.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your name'**
+  String get kioskStaffChooseName;
+
+  /// No description provided for @kioskStaffPinWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN — try again.'**
+  String get kioskStaffPinWrong;
+
+  /// No description provided for @kioskStaffPinNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection problem — try again.'**
+  String get kioskStaffPinNetwork;
+
+  /// No description provided for @kioskAppearanceSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get kioskAppearanceSection;
+
+  /// No description provided for @kioskAppearanceIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant identity'**
+  String get kioskAppearanceIdentity;
+
+  /// No description provided for @kioskAppearanceDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant name'**
+  String get kioskAppearanceDisplayName;
+
+  /// No description provided for @kioskAppearanceLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo'**
+  String get kioskAppearanceLogo;
+
+  /// No description provided for @kioskAppearanceChooseLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose logo'**
+  String get kioskAppearanceChooseLogo;
+
+  /// No description provided for @kioskAppearanceRemoveLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove logo'**
+  String get kioskAppearanceRemoveLogo;
+
+  /// No description provided for @kioskAppearanceLogoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That file can\'t be used — PNG, JPEG or WebP up to 256 KB.'**
+  String get kioskAppearanceLogoInvalid;
+
+  /// No description provided for @kioskAppearanceLogoUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo upload isn\'t available on this device.'**
+  String get kioskAppearanceLogoUnsupported;
+
+  /// No description provided for @kioskAppearanceWordmark.
+  ///
+  /// In en, this message translates to:
+  /// **'Wordmark'**
+  String get kioskAppearanceWordmark;
+
+  /// No description provided for @kioskAppearanceTitlePrimary.
+  ///
+  /// In en, this message translates to:
+  /// **'Main text'**
+  String get kioskAppearanceTitlePrimary;
+
+  /// No description provided for @kioskAppearanceTitleAccent.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent text (optional)'**
+  String get kioskAppearanceTitleAccent;
+
+  /// No description provided for @kioskAppearancePrimaryColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Main color'**
+  String get kioskAppearancePrimaryColor;
+
+  /// No description provided for @kioskAppearanceAccentColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent color'**
+  String get kioskAppearanceAccentColor;
+
+  /// No description provided for @kioskAppearanceHexHint.
+  ///
+  /// In en, this message translates to:
+  /// **'HEX #RRGGBB'**
+  String get kioskAppearanceHexHint;
+
+  /// No description provided for @kioskAppearanceTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand tagline'**
+  String get kioskAppearanceTagline;
+
+  /// No description provided for @kioskAppearanceMenuCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu copy'**
+  String get kioskAppearanceMenuCopy;
+
+  /// No description provided for @kioskAppearanceMenuHeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu heading'**
+  String get kioskAppearanceMenuHeadline;
+
+  /// No description provided for @kioskAppearanceMenuSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu subtitle'**
+  String get kioskAppearanceMenuSubtitle;
+
+  /// No description provided for @kioskAppearanceMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Attract media'**
+  String get kioskAppearanceMedia;
+
+  /// No description provided for @kioskAppearanceInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo hold'**
+  String get kioskAppearanceInterval;
+
+  /// No description provided for @kioskAppearanceLiveMenuPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Live menu photos'**
+  String get kioskAppearanceLiveMenuPhotos;
+
+  /// No description provided for @kioskAppearanceReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset appearance'**
+  String get kioskAppearanceReset;
+
+  /// No description provided for @kioskAppearanceResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset all appearance settings on this device?'**
+  String get kioskAppearanceResetConfirm;
+
+  /// No description provided for @kioskAppearanceSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get kioskAppearanceSave;
+
+  /// No description provided for @kioskAppearanceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance saved'**
+  String get kioskAppearanceSaved;
+
+  /// No description provided for @kioskAppearancePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get kioskAppearancePreview;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///

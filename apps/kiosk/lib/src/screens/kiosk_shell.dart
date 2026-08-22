@@ -13,6 +13,7 @@ import 'menu_screen.dart';
 import 'pin_gate.dart';
 import 'service_screen.dart';
 import 'settings_screen.dart';
+import 'staff_pin_sheet.dart';
 import 'tables_screen.dart';
 
 /// The kiosk shell: state-driven screen stack inside the 1080×1920 stage.
@@ -57,6 +58,7 @@ class KioskShell extends ConsumerWidget {
             if (state.sheet == KioskSheet.item) const KioskItemSheet(),
             if (state.sheet == KioskSheet.cart) const KioskCartSheet(),
             if (state.sheet == KioskSheet.pin) const KioskPinGate(),
+            if (state.sheet == KioskSheet.staffPin) const KioskStaffPinSheet(),
             if (state.idleSecondsLeft != null) const _IdleWarningOverlay(),
             if (state.toast != null) const _KioskToast(),
           ],

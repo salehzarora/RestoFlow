@@ -70,7 +70,13 @@ void main() {
       // token can never reach one. Tighten deliberately: any future logging
       // must come back through this guard with a redaction argument.
       expect(src.contains('print('), isFalse, reason: f.path);
-      expect(src.contains('log('), isFalse, reason: f.path);
+      // Word-boundary: catches log(/logger( but not showDialog(/
+      // AlertDialog( — dialogs are not logging sinks.
+      expect(
+        RegExp(r'(?<![A-Za-z])log\(').hasMatch(src),
+        isFalse,
+        reason: f.path,
+      );
       // The token is only ever passed as the RPC param / secret-store value —
       // never interpolated into a string.
       expect(src.contains(r'$sessionToken'), isFalse, reason: f.path);

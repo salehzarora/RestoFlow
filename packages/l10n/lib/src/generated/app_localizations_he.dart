@@ -6157,9 +6157,6 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskTouchStart => 'געו במסך כדי להתחיל';
 
   @override
-  String get kioskNowPreparing => 'בהכנה כעת';
-
-  @override
   String get kioskHow => 'איך תרצו את הארוחה?';
 
   @override
@@ -6382,6 +6379,96 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kioskStaffPinPrompt => 'הזינו קוד עובד — אותו קוד כמו בקופה.';
+
+  @override
+  String get kioskStaffChooseName => 'בחרו את שמכם';
+
+  @override
+  String get kioskStaffPinWrong => 'קוד PIN שגוי — נסו שוב.';
+
+  @override
+  String get kioskStaffPinNetwork => 'בעיית תקשורת — נסו שוב.';
+
+  @override
+  String get kioskAppearanceSection => 'מראה';
+
+  @override
+  String get kioskAppearanceIdentity => 'זהות המסעדה';
+
+  @override
+  String get kioskAppearanceDisplayName => 'שם המסעדה';
+
+  @override
+  String get kioskAppearanceLogo => 'לוגו';
+
+  @override
+  String get kioskAppearanceChooseLogo => 'בחירת לוגו';
+
+  @override
+  String get kioskAppearanceRemoveLogo => 'הסרת הלוגו';
+
+  @override
+  String get kioskAppearanceLogoInvalid =>
+      'אי אפשר להשתמש בקובץ הזה — PNG, JPEG או WebP עד 256KB.';
+
+  @override
+  String get kioskAppearanceLogoUnsupported =>
+      'העלאת לוגו אינה זמינה במכשיר הזה.';
+
+  @override
+  String get kioskAppearanceWordmark => 'לוגוטייפ';
+
+  @override
+  String get kioskAppearanceTitlePrimary => 'טקסט ראשי';
+
+  @override
+  String get kioskAppearanceTitleAccent => 'טקסט מודגש (רשות)';
+
+  @override
+  String get kioskAppearancePrimaryColor => 'צבע ראשי';
+
+  @override
+  String get kioskAppearanceAccentColor => 'צבע הדגשה';
+
+  @override
+  String get kioskAppearanceHexHint => 'HEX #RRGGBB';
+
+  @override
+  String get kioskAppearanceTagline => 'סלוגן';
+
+  @override
+  String get kioskAppearanceMenuCopy => 'טקסטים בתפריט';
+
+  @override
+  String get kioskAppearanceMenuHeadline => 'כותרת התפריט';
+
+  @override
+  String get kioskAppearanceMenuSubtitle => 'כותרת משנה';
+
+  @override
+  String get kioskAppearanceMedia => 'מדיית מסך המתנה';
+
+  @override
+  String get kioskAppearanceInterval => 'משך הצגת תמונה';
+
+  @override
+  String get kioskAppearanceLiveMenuPhotos => 'תמונות תפריט חיות';
+
+  @override
+  String get kioskAppearanceReset => 'איפוס המראה';
+
+  @override
+  String get kioskAppearanceResetConfirm =>
+      'לאפס את כל הגדרות המראה במכשיר הזה?';
+
+  @override
+  String get kioskAppearanceSave => 'שמירת שינויים';
+
+  @override
+  String get kioskAppearanceSaved => 'המראה נשמר';
+
+  @override
+  String get kioskAppearancePreview => 'תצוגה מקדימה';
 
   @override
   String get kioskCancel => 'ביטול';

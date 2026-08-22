@@ -6245,9 +6245,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskTouchStart => 'Touch anywhere to begin';
 
   @override
-  String get kioskNowPreparing => 'Now preparing';
-
-  @override
   String get kioskHow => 'How do you want your meal?';
 
   @override
@@ -6473,6 +6470,96 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kioskStaffPinPrompt =>
       'Enter your employee PIN — same PIN as the POS.';
+
+  @override
+  String get kioskStaffChooseName => 'Choose your name';
+
+  @override
+  String get kioskStaffPinWrong => 'Wrong PIN — try again.';
+
+  @override
+  String get kioskStaffPinNetwork => 'Connection problem — try again.';
+
+  @override
+  String get kioskAppearanceSection => 'Appearance';
+
+  @override
+  String get kioskAppearanceIdentity => 'Restaurant identity';
+
+  @override
+  String get kioskAppearanceDisplayName => 'Restaurant name';
+
+  @override
+  String get kioskAppearanceLogo => 'Logo';
+
+  @override
+  String get kioskAppearanceChooseLogo => 'Choose logo';
+
+  @override
+  String get kioskAppearanceRemoveLogo => 'Remove logo';
+
+  @override
+  String get kioskAppearanceLogoInvalid =>
+      'That file can\'t be used — PNG, JPEG or WebP up to 256 KB.';
+
+  @override
+  String get kioskAppearanceLogoUnsupported =>
+      'Logo upload isn\'t available on this device.';
+
+  @override
+  String get kioskAppearanceWordmark => 'Wordmark';
+
+  @override
+  String get kioskAppearanceTitlePrimary => 'Main text';
+
+  @override
+  String get kioskAppearanceTitleAccent => 'Accent text (optional)';
+
+  @override
+  String get kioskAppearancePrimaryColor => 'Main color';
+
+  @override
+  String get kioskAppearanceAccentColor => 'Accent color';
+
+  @override
+  String get kioskAppearanceHexHint => 'HEX #RRGGBB';
+
+  @override
+  String get kioskAppearanceTagline => 'Brand tagline';
+
+  @override
+  String get kioskAppearanceMenuCopy => 'Menu copy';
+
+  @override
+  String get kioskAppearanceMenuHeadline => 'Menu heading';
+
+  @override
+  String get kioskAppearanceMenuSubtitle => 'Menu subtitle';
+
+  @override
+  String get kioskAppearanceMedia => 'Attract media';
+
+  @override
+  String get kioskAppearanceInterval => 'Photo hold';
+
+  @override
+  String get kioskAppearanceLiveMenuPhotos => 'Live menu photos';
+
+  @override
+  String get kioskAppearanceReset => 'Reset appearance';
+
+  @override
+  String get kioskAppearanceResetConfirm =>
+      'Reset all appearance settings on this device?';
+
+  @override
+  String get kioskAppearanceSave => 'Save changes';
+
+  @override
+  String get kioskAppearanceSaved => 'Appearance saved';
+
+  @override
+  String get kioskAppearancePreview => 'Preview';
 
   @override
   String get kioskCancel => 'Cancel';

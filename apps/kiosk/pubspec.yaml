@@ -24,6 +24,7 @@ dependencies:
     path: ../../packages/domain
   restoflow_feature_auth:
     path: ../../packages/feature_auth
+  image_picker: ^1.1.2
   shared_preferences: '>=2.2.0 <3.0.0'
 
 dev_dependencies:

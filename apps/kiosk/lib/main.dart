@@ -11,6 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/kiosk_live_data.dart';
+import 'src/data/kiosk_appearance.dart';
 import 'src/data/kiosk_menu_data.dart';
 import 'src/data/kiosk_order_submit.dart';
 import 'src/design/kiosk_theme.dart';
@@ -18,6 +19,7 @@ import 'src/screens/kiosk_activation.dart';
 import 'src/screens/kiosk_shell.dart';
 import 'src/state/kiosk_flow_controller.dart';
 import 'src/state/kiosk_live_runtime.dart';
+import 'src/state/kiosk_staff_access.dart';
 
 /// KIOSK-001 Phase 3 — RestoFlow customer self-service kiosk.
 ///
@@ -93,11 +95,23 @@ Widget buildKioskBootRoot({
       overrides: kioskRealOverrides(seams),
       child: KioskApp(
         home: KioskTicker(
-          child: KioskPairingGate(
-            outcomes: seams.pairing,
-            pairing: seams.pairing,
-            onActivated: (_) {},
-            shellBuilder: (_) => const _KioskLiveShell(),
+          child: Consumer(
+            builder: (context, ref, _) => KioskPairingGate(
+              outcomes: seams.pairing,
+              pairing: seams.pairing,
+              shellBuilder: (_) => const _KioskLiveShell(),
+              // KIOSK-001-102: publish the paired context (device-session
+              // handle for the staff gate; device id scopes the appearance
+              // store; the device label seeds real-mode branding defaults).
+              onActivated: (deviceContext) {
+                ref.read(kioskDeviceContextProvider.notifier).state =
+                    deviceContext;
+                ref.read(kioskAppearanceScopeProvider.notifier).state = (
+                  deviceId: deviceContext.deviceId ?? 'unpaired',
+                  fallbackName: deviceContext.displayName ?? 'Kiosk',
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -115,6 +129,8 @@ typedef KioskSeams = ({
   DeviceImageUrlResolver images,
   KioskOrderSubmitter submit,
   KioskBranchTaxReader tax,
+  KioskStaffAccess staff,
+  KioskAppearanceStore appearance,
 });
 
 typedef KioskBootResult = ({KioskSeams? seams, RealDeviceAuthProblem? problem});
@@ -162,6 +178,10 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
       // the SAME transport/credential (no second client, no offline queue).
       submit: KioskOrderSubmitter(transport: transport, secretStore: store),
       tax: KioskBranchTaxReader(transport: transport, secretStore: store),
+      // KIOSK-001-102: the REAL staff gate (same employee PIN system as
+      // POS/KDS) and the device-local appearance store.
+      staff: KioskStaffAccess(transport: transport, secretStore: store),
+      appearance: KioskAppearanceStore(prefs),
     ),
     problem: null,
   );
@@ -180,9 +200,13 @@ List<Override> kioskRealOverrides(KioskSeams seams) => [
   kioskOrderingEnabledProvider.overrideWithValue(true),
   kioskOrderSubmitterProvider.overrideWithValue(seams.submit),
   kioskBranchTaxReaderProvider.overrideWithValue(seams.tax),
-  // §18: the fixture staff PIN is a demo/design surface — never a live
-  // production boundary. REAL STAFF SETTINGS/PIN AUTH IS A SEPARATE PHASE.
+  // §18/102: the fixture staff PIN stays a demo/design surface — the REAL
+  // gate below (kioskStaffAccessProvider) is the production boundary, backed
+  // by list_device_staff + start_pin_session (server lockout authoritative).
   kioskStaffSettingsEnabledProvider.overrideWithValue(false),
+  kioskRealModeProvider.overrideWithValue(true),
+  kioskStaffAccessProvider.overrideWithValue(seams.staff),
+  kioskAppearanceStoreProvider.overrideWithValue(seams.appearance),
   kioskMenuDataProvider.overrideWith((ref) {
     final live = ref.watch(kioskLiveProvider.select((s) => s.menu));
     return live ?? const KioskMenuData.empty();

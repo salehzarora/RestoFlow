@@ -6197,9 +6197,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskTouchStart => 'المس الشاشة للبدء';
 
   @override
-  String get kioskNowPreparing => 'قيد التحضير الآن';
-
-  @override
   String get kioskHow => 'كيف تفضّل وجبتك؟';
 
   @override
@@ -6424,6 +6421,96 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get kioskStaffPinPrompt =>
       'أدخل رمز الموظف — نفس الرمز المستخدم في نقطة البيع.';
+
+  @override
+  String get kioskStaffChooseName => 'اختر اسمك';
+
+  @override
+  String get kioskStaffPinWrong => 'رمز PIN غير صحيح — حاول مجددًا.';
+
+  @override
+  String get kioskStaffPinNetwork => 'مشكلة اتصال — حاول مجددًا.';
+
+  @override
+  String get kioskAppearanceSection => 'المظهر';
+
+  @override
+  String get kioskAppearanceIdentity => 'هوية المطعم';
+
+  @override
+  String get kioskAppearanceDisplayName => 'اسم المطعم';
+
+  @override
+  String get kioskAppearanceLogo => 'الشعار';
+
+  @override
+  String get kioskAppearanceChooseLogo => 'اختيار شعار';
+
+  @override
+  String get kioskAppearanceRemoveLogo => 'إزالة الشعار';
+
+  @override
+  String get kioskAppearanceLogoInvalid =>
+      'لا يمكن استخدام هذا الملف — PNG أو JPEG أو WebP حتى 256 ك.ب.';
+
+  @override
+  String get kioskAppearanceLogoUnsupported =>
+      'رفع الشعار غير متاح على هذا الجهاز.';
+
+  @override
+  String get kioskAppearanceWordmark => 'الاسم الكبير';
+
+  @override
+  String get kioskAppearanceTitlePrimary => 'النص الأساسي';
+
+  @override
+  String get kioskAppearanceTitleAccent => 'نص مميز (اختياري)';
+
+  @override
+  String get kioskAppearancePrimaryColor => 'اللون الأساسي';
+
+  @override
+  String get kioskAppearanceAccentColor => 'لون التمييز';
+
+  @override
+  String get kioskAppearanceHexHint => 'HEX #RRGGBB';
+
+  @override
+  String get kioskAppearanceTagline => 'الشعار النصي';
+
+  @override
+  String get kioskAppearanceMenuCopy => 'نصوص القائمة';
+
+  @override
+  String get kioskAppearanceMenuHeadline => 'عنوان القائمة';
+
+  @override
+  String get kioskAppearanceMenuSubtitle => 'العنوان الفرعي للقائمة';
+
+  @override
+  String get kioskAppearanceMedia => 'وسائط شاشة الانتظار';
+
+  @override
+  String get kioskAppearanceInterval => 'مدة عرض الصورة';
+
+  @override
+  String get kioskAppearanceLiveMenuPhotos => 'صور القائمة الحية';
+
+  @override
+  String get kioskAppearanceReset => 'إعادة تعيين المظهر';
+
+  @override
+  String get kioskAppearanceResetConfirm =>
+      'إعادة تعيين جميع إعدادات المظهر على هذا الجهاز؟';
+
+  @override
+  String get kioskAppearanceSave => 'حفظ التغييرات';
+
+  @override
+  String get kioskAppearanceSaved => 'تم حفظ المظهر';
+
+  @override
+  String get kioskAppearancePreview => 'معاينة';
 
   @override
   String get kioskCancel => 'إلغاء';

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
@@ -32,14 +33,18 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    MaterialApp(
-      locale: const Locale('en'),
-      localizationsDelegates: restoflowLocalizationsDelegates,
-      supportedLocales: kSupportedLocales,
-      home: KioskActivationScreen(
-        pairing: pairing,
-        onPaired: (_) {},
-        initialCode: initialCode,
+    // 102: the brand badge reads the appearance provider — the production
+    // tree always has a ProviderScope, so the harness provides one too.
+    ProviderScope(
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        home: KioskActivationScreen(
+          pairing: pairing,
+          onPaired: (_) {},
+          initialCode: initialCode,
+        ),
       ),
     ),
   );
