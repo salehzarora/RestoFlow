@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'kiosk_theme_pair.dart';
+
+export 'kiosk_theme_pair.dart';
+
 /// KIOSK-001 Phase 1 — the V2 design lock, token for token.
 ///
 /// Every constant here is transcribed from the approved artifact
@@ -9,18 +13,41 @@ import 'package:flutter/material.dart';
 /// through [KioskStage]'s uniform scale, so a value that reads "px" in the
 /// artifact is the same number here. Do not "improve" values — the design is
 /// locked; deviations must be surfaced in the difference register.
+///
+/// KIOSK-001-107: the IDENTITY tokens (navy structural family + orange
+/// action family) now RESOLVE through the bound [KioskThemePair] so the
+/// owner's global device theme recolors the whole kiosk consistently. The
+/// bound default is the exact locked pair, so untouched devices, demo mode
+/// and bare widget tests render byte-identical V2 colors. NEUTRALS,
+/// SEMANTICS (success/danger/table states) and the RECEIPT SLIP stay
+/// constants — a restaurant theme must never carry meaning or repaint the
+/// receipt paper.
 abstract final class KioskColors {
-  // Canvas / depth.
-  static const canvasTop = Color(0xFF0A1526);
-  static const canvasBottom = Color(0xFF070E1B);
-  static const canvasGlow = Color(0xFF13233E); // radial at 82% 4%
-  static const frameRing = Color(0xFF101B2E);
-  static const frameLine = Color(0xFF223A5E);
+  /// The bound global device theme. The composition root (KioskShell) keeps
+  /// this in sync with the device's saved appearance; widgets keep reading
+  /// the stable `KioskColors.x` roles.
+  static KioskThemePair pair = KioskThemePair.navyEmber;
 
-  // Orange family — the ONE accent, reserved for primary action + selection.
-  static const ring = Color(0xFFF97316);
-  static const accentTop = Color(0xFFFB923C);
-  static const accentBottom = Color(0xFFEA580C);
+  /// Test/hot-restart hygiene.
+  static void resetToDefault() => pair = KioskThemePair.navyEmber;
+
+  // Canvas / depth (structural identity — theme-resolved).
+  static Color get canvasTop => pair.structuralCanvasTop;
+  static Color get canvasBottom => pair.structuralCanvasBottom;
+  static Color get canvasGlow => pair.structuralGlow; // radial at 82% 4%
+  static Color get frameRing => pair.structuralFrameRing;
+  static Color get frameLine => pair.structuralBorder;
+  static Color get frameLineHi => pair.structuralBorderHi;
+
+  // Action family — the ONE accent, reserved for primary action + selection
+  // (theme-resolved; default = the locked orange family).
+  static Color get ring => pair.actionRing;
+  static Color get accentTop => pair.actionHi;
+  static Color get accentBottom => pair.actionDeep;
+
+  /// Ink on action-filled surfaces (CTA labels). White on the locked ember;
+  /// contrast-derived for light custom actions (e.g. gold).
+  static Color get onAction => pair.onAction;
 
   // Text on dark.
   static const textPrimary = Color(0xFFF4F7FB);
@@ -45,12 +72,12 @@ abstract final class KioskColors {
   static const danger = Color(0xFFDC2626);
   static const dangerSoft = Color(0xFFF87171);
 
-  // Sheet surfaces.
-  static const sheetTop = Color(0xFF12233F);
-  static const sheetBottom = Color(0xFF0A1526);
-  static const pinCardBottom = Color(0xFF0B1830);
-  static const imageWell = Color(0xFF0E1C31);
-  static const wheelActiveTop = Color(0xFF1A2C49);
+  // Sheet surfaces (structural identity — theme-resolved).
+  static Color get sheetTop => pair.structuralPanel;
+  static Color get sheetBottom => pair.structuralPanelDeep;
+  static Color get pinCardBottom => pair.structuralPinCard;
+  static Color get imageWell => pair.structuralPanelSoft;
+  static Color get wheelActiveTop => pair.structuralWheelActive;
 
   // The printed-slip facsimile is the ONE white surface.
   static const slipPaper = Color(0xFFFFFFFF);
@@ -62,14 +89,35 @@ abstract final class KioskColors {
 
   // Glass fills/borders (white at the artifact's opacities).
   static Color glass(double opacity) => Colors.white.withValues(alpha: opacity);
+
+  // Media scrims stay NEUTRAL near-black (readability over photos/video is
+  // independent of the restaurant identity — KIOSK-001-107 §10).
   static const scrim = Color(0xB303060C); // rgba(3,6,12,.7)
   static const scrimDeep = Color(0xCC03060C); // rgba(3,6,12,.8)
-  static const barGlass = Color(0xC7080F1C); // rgba(8,15,28,.78)
-  static const cardGlass = Color(0xA80A1220); // rgba(10,18,32,.66)
+
+  // Tinted glass bars/cards derive from the structural family at the
+  // artifact's exact opacities.
+  static Color get barGlass =>
+      pair.structuralBarBase.withValues(alpha: 0xC7 / 255); // .78
+  static Color get cardGlass =>
+      pair.structuralCardBase.withValues(alpha: 0xA8 / 255); // .66
+
+  /// The letterbox behind [KioskStage] (was the literal 0xFF05080F).
+  static Color get stageBase => pair.structuralStageBase;
+
+  /// Structural bar tints at arbitrary artifact opacities (settings headers,
+  /// attract scrim stops and similar identity-tinted washes).
+  static Color barTint(double opacity) =>
+      pair.structuralBarBase.withValues(alpha: opacity);
+  static Color canvasTint(double opacity) =>
+      pair.structuralCanvasBottom.withValues(alpha: opacity);
+  static Color cardTint(double opacity) =>
+      pair.structuralCardBase.withValues(alpha: opacity);
 }
 
-/// Orange gradient used by every primary control (V2: linear 180deg).
-const kioskAccentGradient = LinearGradient(
+/// Action gradient used by every primary control (V2: linear 180deg;
+/// theme-resolved — default is the locked orange pair).
+LinearGradient get kioskAccentGradient => LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
   colors: [KioskColors.accentTop, KioskColors.accentBottom],
@@ -81,10 +129,10 @@ const kioskSuccessGradient = LinearGradient(
   colors: [KioskColors.successTop, KioskColors.successBottom],
 );
 
-const kioskSheetGradient = LinearGradient(
+LinearGradient get kioskSheetGradient => LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
-  stops: [0, .3],
+  stops: const [0, .3],
   colors: [KioskColors.sheetTop, KioskColors.sheetBottom],
 );
 
@@ -190,7 +238,7 @@ ThemeData kioskTheme() => ThemeData(
   brightness: Brightness.dark,
   fontFamily: KioskType.family,
   scaffoldBackgroundColor: KioskColors.canvasBottom,
-  colorScheme: const ColorScheme.dark(
+  colorScheme: ColorScheme.dark(
     primary: KioskColors.ring,
     secondary: KioskColors.accentTop,
     surface: KioskColors.canvasTop,

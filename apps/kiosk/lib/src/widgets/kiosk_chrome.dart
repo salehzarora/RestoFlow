@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
 
@@ -20,7 +22,7 @@ class KioskStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0xFF05080F),
+    color: KioskColors.stageBase,
     child: SafeArea(
       child: Center(
         child: FittedBox(
@@ -32,7 +34,7 @@ class KioskStage extends StatelessWidget {
             child: Material(
               type: MaterialType.transparency,
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -241,15 +243,131 @@ class KioskGlass extends StatelessWidget {
   );
 }
 
-/// The rotated EMBER brand badge (attract 118px, inner screens 104px).
-class KioskBrandBadge extends StatelessWidget {
+/// KIOSK-001-102: true when [text] should use the Latin display face
+/// (Anton). Arabic/Hebrew wordmarks get Rubik 900 with zero letter-spacing —
+/// forcing Anton onto RTL text is a typography bug, not a style choice.
+bool kioskLatinDisplayFits(String text) => !RegExp(r'[֐-׿؀-ۿ]').hasMatch(text);
+
+/// Display style for a BRAND wordmark segment (auto per script).
+TextStyle kioskBrandTitleStyle(
+  String text,
+  double size, {
+  required Color color,
+  double height = 1,
+}) {
+  final latin = kioskLatinDisplayFits(text);
+  return TextStyle(
+    fontFamily: latin ? KioskType.latinDisplayFamily : KioskType.family,
+    fontWeight: latin ? FontWeight.w400 : FontWeight.w900,
+    letterSpacing: latin ? 1 : 0,
+    fontSize: size,
+    height: height,
+    color: color,
+  );
+}
+
+/// The rotated circular brand badge (attract 118px, inner screens 104px).
+///
+/// KIOSK-001-102: appearance-driven — a device-local logo override renders
+/// inside the orange V2 ring; otherwise the editable wordmark (primary +
+/// accent segments in their configured colors) over the restaurant display
+/// name; a logo-less, text-less identity falls back to an elegant monogram.
+/// Demo defaults reproduce the Phase-1 EMBER badge byte for byte.
+class KioskBrandBadge extends ConsumerWidget {
   const KioskBrandBadge({super.key, this.size = 104});
   final double size;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appearance = ref.watch(kioskAppearanceProvider);
     final wordmarkSize = size * (27 / 104);
     final subSize = size * (8.5 / 104);
+    final logo = appearance.logoOverrideBytes;
+    final primary = appearance.brandTitlePrimary;
+    final Widget inner;
+    if (logo != null) {
+      inner = ClipOval(
+        child: Image.memory(
+          logo,
+          fit: BoxFit.cover,
+          width: size,
+          height: size,
+          errorBuilder: (_, _, _) => Center(
+            child: Text(
+              appearance.monogram,
+              style: kioskBrandTitleStyle(
+                appearance.monogram,
+                wordmarkSize,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (primary.isNotEmpty &&
+        (primary + appearance.brandTitleAccent).characters.length <= 7) {
+      // The full wordmark only fits the small ring for short brands (the V2
+      // fixture "EMBER." shape). Longer wordmarks fall through to the
+      // monogram instead of clipping mid-word.
+      inner = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: size * (10 / 104)),
+            child: Text.rich(
+              TextSpan(
+                text: primary,
+                style: kioskBrandTitleStyle(
+                  primary,
+                  wordmarkSize,
+                  color: appearance.brandPrimaryColor,
+                ),
+                children: [
+                  if (appearance.brandTitleAccent.isNotEmpty)
+                    TextSpan(
+                      text: appearance.brandTitleAccent,
+                      style: TextStyle(color: appearance.brandAccentColor),
+                    ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (appearance.restaurantDisplayName.isNotEmpty) ...[
+            SizedBox(height: size * (3 / 104)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: size * (8 / 104)),
+              child: Text(
+                appearance.restaurantDisplayName.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KioskType.body(
+                  subSize,
+                  FontWeight.w700,
+                  color: KioskColors.textSoft,
+                  letterSpacing:
+                      kioskLatinDisplayFits(appearance.restaurantDisplayName)
+                      ? 2
+                      : 0,
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    } else {
+      inner = Center(
+        child: Text(
+          appearance.monogram,
+          style: kioskBrandTitleStyle(
+            appearance.monogram,
+            size * (34 / 104),
+            color: Colors.white,
+          ),
+        ),
+      );
+    }
     return Transform.rotate(
       angle: -8 * 3.1415926535 / 180,
       child: Container(
@@ -257,7 +375,7 @@ class KioskBrandBadge extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xB8070E1B),
+          color: KioskColors.canvasTint(0xB8 / 255),
           border: Border.all(
             color: KioskColors.ring,
             width: size >= 118 ? 3.5 : 3,
@@ -269,41 +387,8 @@ class KioskBrandBadge extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text.rich(
-              TextSpan(
-                text: KioskBrand.wordmark,
-                style: TextStyle(
-                  fontFamily: KioskType.latinDisplayFamily,
-                  fontWeight: FontWeight.w400,
-                  fontSize: wordmarkSize,
-                  height: 1,
-                  color: Colors.white,
-                ),
-                children: [
-                  TextSpan(
-                    text: KioskBrand.wordmarkSuffix,
-                    style: const TextStyle(color: KioskColors.accentTop),
-                  ),
-                ],
-              ),
-              textDirection: TextDirection.ltr,
-            ),
-            SizedBox(height: size * (3 / 104)),
-            Text(
-              KioskBrand.subtitle,
-              textDirection: TextDirection.ltr,
-              style: KioskType.body(
-                subSize,
-                FontWeight.w700,
-                color: KioskColors.textSoft,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
-        ),
+        clipBehavior: Clip.antiAlias,
+        child: inner,
       ),
     );
   }

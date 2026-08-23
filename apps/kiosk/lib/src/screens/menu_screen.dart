@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../design/kiosk_theme.dart';
@@ -30,6 +31,19 @@ class KioskMenuScreen extends ConsumerWidget {
     // KIOSK-001-PREREQ-083: batch-resolved photo URLs for the LIVE menu
     // (empty in demo mode — fixture cards keep their bundled assets).
     final imageUrls = ref.watch(kioskLiveProvider.select((s) => s.imageUrls));
+    // KIOSK-001-102: editable menu copy + per-category representative photos.
+    final appearance = ref.watch(kioskAppearanceProvider);
+    final isReal = ref.watch(kioskRealModeProvider);
+    final headlineText = appearance.menuHeadline.of(state.lang).isNotEmpty
+        ? appearance.menuHeadline.of(state.lang)
+        : l10n.kioskMenuTitle; // sane non-empty fallback in every mode
+    final subtitleText = appearance.menuSubtitle.of(state.lang).isNotEmpty
+        ? appearance.menuSubtitle.of(state.lang)
+        : (isReal ? '' : l10n.kioskTagline);
+    final headerTagline = appearance.tagline.of(state.lang).isNotEmpty
+        ? appearance.tagline.of(state.lang)
+        : (isReal ? '' : l10n.kioskTagline);
+    final categoryImageUrls = kioskCategoryImageUrls(menu, imageUrls);
     final hasMenu =
         status == KioskMenuStatus.ready && menu.categories.isNotEmpty;
     final category = hasMenu
@@ -60,22 +74,24 @@ class KioskMenuScreen extends ConsumerWidget {
                   Row(
                     children: [
                       const KioskBrandBadge(),
-                      const SizedBox(width: 18),
-                      SizedBox(
-                        width: 190,
-                        child: Transform.rotate(
-                          angle: -3 * 3.1415926535 / 180,
-                          child: Text(
-                            l10n.kioskTagline,
-                            style: KioskType.body(
-                              19,
-                              FontWeight.w700,
-                              color: KioskColors.accentTop,
-                              height: 1.35,
+                      if (headerTagline.isNotEmpty) ...[
+                        const SizedBox(width: 18),
+                        SizedBox(
+                          width: 190,
+                          child: Transform.rotate(
+                            angle: -3 * 3.1415926535 / 180,
+                            child: Text(
+                              headerTagline,
+                              style: KioskType.body(
+                                19,
+                                FontWeight.w700,
+                                color: KioskColors.accentTop,
+                                height: 1.35,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   Row(
@@ -99,7 +115,7 @@ class KioskMenuScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 34),
               Text(
-                l10n.kioskMenuTitle,
+                headlineText,
                 style: KioskType.display(rtl, 84, height: 1.02),
               ),
               const SizedBox(height: 10),
@@ -109,7 +125,7 @@ class KioskMenuScreen extends ConsumerWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      l10n.kioskTagline,
+                      subtitleText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: KioskType.body(
@@ -169,6 +185,9 @@ class KioskMenuScreen extends ConsumerWidget {
                           menu.categories.length - 1,
                         ),
                         onSelect: controller.setCategoryIndex,
+                        // §11: representative LIVE product photo per category
+                        // (signed once per menu read; icon fallback below).
+                        categoryImageUrls: categoryImageUrls,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -250,7 +269,7 @@ class _MenuStatepanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (status == KioskMenuStatus.loading)
-              const SizedBox(
+              SizedBox(
                 width: 64,
                 height: 64,
                 child: CircularProgressIndicator(
@@ -346,9 +365,7 @@ class _ProductCard extends StatelessWidget {
                   asset: item.imageAsset,
                   // 086: a fixture asset that fails to load shows the plain
                   // well (pre-083 exact) — the card title already names it.
-                  assetErrorFallback: const ColoredBox(
-                    color: KioskColors.imageWell,
-                  ),
+                  assetErrorFallback: ColoredBox(color: KioskColors.imageWell),
                   fallback: ColoredBox(
                     color: KioskColors.imageWell,
                     child: Center(
@@ -534,7 +551,7 @@ class KioskBottomBar extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0x73070E1B),
+                          color: KioskColors.canvasTint(0x73 / 255),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(

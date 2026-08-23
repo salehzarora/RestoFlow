@@ -173,7 +173,7 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (view.status == KioskTablesStatus.loading)
-                      const SizedBox(
+                      SizedBox(
                         width: 64,
                         height: 64,
                         child: CircularProgressIndicator(
@@ -338,12 +338,12 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
           ),
         Container(
           padding: const EdgeInsets.fromLTRB(52, 28, 52, 44),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               stops: [0, .3],
-              colors: [Color(0x00070E1B), KioskColors.canvasBottom],
+              colors: [KioskColors.canvasTint(0), KioskColors.canvasBottom],
             ),
           ),
           child: Row(

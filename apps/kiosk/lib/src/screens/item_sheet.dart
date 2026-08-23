@@ -263,7 +263,7 @@ class KioskItemSheet extends ConsumerWidget {
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(20),
-                                        borderSide: const BorderSide(
+                                        borderSide: BorderSide(
                                           color: KioskColors.accentTop,
                                           width: 2,
                                         ),
@@ -280,7 +280,7 @@ class KioskItemSheet extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.fromLTRB(52, 24, 52, 40),
                         decoration: BoxDecoration(
-                          color: const Color(0xB3080F1C),
+                          color: KioskColors.barTint(0xB3 / 255),
                           border: Border(
                             top: BorderSide(
                               color: KioskColors.glass(.09),
@@ -417,7 +417,7 @@ class KioskItemSheet extends ConsumerWidget {
                         asset: item.imageAsset,
                         // 086: fixture-asset load failure = plain well (the
                         // sheet title already names the item once).
-                        assetErrorFallback: const ColoredBox(
+                        assetErrorFallback: ColoredBox(
                           color: KioskColors.imageWell,
                         ),
                         fallback: ColoredBox(

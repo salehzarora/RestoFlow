@@ -37,12 +37,19 @@ class KioskCategoryWheel extends StatefulWidget {
     required this.activeIndex,
     required this.onSelect,
     this.height,
+    this.categoryImageUrls = const {},
   });
 
   final List<KioskFixtureCategory> categories;
   final int activeIndex;
   final ValueChanged<int> onSelect;
   final double? height;
+
+  /// KIOSK-001-102 §11: category id → representative LIVE product photo
+  /// (already signed + cached upstream). A category without an entry keeps
+  /// its fixture thumb / registry icon — never a broken blank circle. Only
+  /// the node ARTWORK changes; every gesture/snap/geometry constant stays.
+  final Map<String, String> categoryImageUrls;
 
   @override
   State<KioskCategoryWheel> createState() => _KioskCategoryWheelState();
@@ -148,6 +155,10 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
                                 _WheelRow(
                                   key: ValueKey(widget.categories[i].id),
                                   category: widget.categories[i],
+                                  imageUrl:
+                                      widget.categoryImageUrls[widget
+                                          .categories[i]
+                                          .id],
                                   distance: (i - _clampedIndex).abs(),
                                   lang: lang,
                                   onTap: () => _onDiscTap(i),
@@ -173,14 +184,30 @@ class _WheelRow extends StatelessWidget {
   const _WheelRow({
     super.key,
     required this.category,
+    required this.imageUrl,
     required this.distance,
     required this.lang,
     required this.onTap,
   });
   final KioskFixtureCategory category;
+  final String? imageUrl;
   final int distance;
   final String lang;
   final VoidCallback onTap;
+
+  Widget _iconFallback(double disc) => Center(
+    child: Icon(
+      // LIVE: the owner-chosen registry glyph rides along resolved;
+      // fixtures keep the Phase-1 kind switch; unknown/null keys fall
+      // back the same stable way.
+      category.iconData ??
+          (category.iconKind == 'drink'
+              ? Icons.local_drink_outlined
+              : Icons.icecream_outlined),
+      size: disc * .46,
+      color: KioskColors.textSoft,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +257,7 @@ class _WheelRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: active
-                        ? const RadialGradient(
+                        ? RadialGradient(
                             colors: [
                               KioskColors.wheelActiveTop,
                               KioskColors.imageWell,
@@ -256,27 +283,33 @@ class _WheelRow extends StatelessWidget {
                         : null,
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: category.thumbAsset != null
+                  child: imageUrl != null
+                      // §11: the category node reads as FOOD — a clipped
+                      // cover photo of a real product from THIS category,
+                      // with a mild dark veil for label/ring contrast. A
+                      // failed load falls back to the icon path below.
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              imageUrl!,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                              errorBuilder: (_, _, _) => _iconFallback(disc),
+                            ),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color(0x24000000),
+                              ),
+                            ),
+                          ],
+                        )
+                      : category.thumbAsset != null
                       ? KioskFixtureImage(
                           asset: category.thumbAsset,
-                          fallback: const ColoredBox(
-                            color: KioskColors.imageWell,
-                          ),
+                          fallback: ColoredBox(color: KioskColors.imageWell),
                         )
-                      : Center(
-                          child: Icon(
-                            // LIVE: the owner-chosen registry glyph rides
-                            // along resolved; fixtures keep the Phase-1
-                            // kind switch; unknown/null keys fall back the
-                            // same stable way.
-                            category.iconData ??
-                                (category.iconKind == 'drink'
-                                    ? Icons.local_drink_outlined
-                                    : Icons.icecream_outlined),
-                            size: disc * .46,
-                            color: KioskColors.textSoft,
-                          ),
-                        ),
+                      : _iconFallback(disc),
                 ),
               ),
               const SizedBox(height: 9),
@@ -321,7 +354,7 @@ class _SwipeHint extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (pointsUp)
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_up,
               size: 26,
               color: KioskColors.accentTop,
@@ -340,7 +373,7 @@ class _SwipeHint extends StatelessWidget {
             ),
           ),
           if (!pointsUp)
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_down,
               size: 26,
               color: KioskColors.accentTop,

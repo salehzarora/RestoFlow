@@ -23,15 +23,19 @@ class KioskServiceScreen extends ConsumerWidget {
       children: [
         KioskFixtureImage(
           asset: kioskAttractAssets.first,
-          fallback: const ColoredBox(color: KioskColors.canvasBottom),
+          fallback: ColoredBox(color: KioskColors.canvasBottom),
         ),
-        const DecoratedBox(
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               stops: [0, .45, 1],
-              colors: [Color(0xE6070E1B), Color(0x9E070E1B), Color(0xF2070E1B)],
+              colors: [
+                Color(0xE6070E1B),
+                Color(0x9E070E1B),
+                KioskColors.canvasTint(0xF2 / 255),
+              ],
             ),
           ),
         ),

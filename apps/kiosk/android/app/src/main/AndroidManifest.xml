@@ -2,6 +2,21 @@
     <!-- KIOSK-001: the kiosk talks to Supabase over the network in release too;
          flutter create grants INTERNET only in debug/profile. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- KIOSK-001-103: Bluetooth Classic (SPP) receipt printing — the same
+         grants as POS/KDS (ANDROID-003). Android 12+ (API 31+) uses runtime
+         BLUETOOTH_CONNECT (connect to a bonded printer) + BLUETOOTH_SCAN;
+         "neverForLocation" declares scan does not derive location, so
+         ACCESS_FINE_LOCATION is NOT needed (already-paired devices only, no
+         in-app discovery). Older Android uses the legacy BLUETOOTH /
+         BLUETOOTH_ADMIN (capped at API 30). Wi-Fi/TCP printing needs only
+         INTERNET above. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
     <application
         android:label="RestoFlow Kiosk"
         android:name="${applicationName}"

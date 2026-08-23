@@ -9,6 +9,7 @@ import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
 import 'kiosk_live_runtime.dart';
+import 'kiosk_staff_access.dart';
 
 /// KIOSK-001-REAL-SUBMIT-092 — where one Place-Order attempt currently
 /// stands. [unconfirmed] means delivery is UNKNOWN (the server may have
@@ -36,7 +37,7 @@ enum KioskTaxDisplayPhase { ready, loading, unavailable }
 /// from a 1s periodic timer.
 enum KioskScreen { attract, service, tables, menu, confirm, settings }
 
-enum KioskSheet { item, cart, pin }
+enum KioskSheet { item, cart, pin, staffPin }
 
 enum KioskServiceType { dineIn, takeaway }
 
@@ -166,6 +167,7 @@ class KioskOrderSnapshot {
     required this.table,
     required this.customerName,
     this.code,
+    this.orderId,
     this.subtotalMinor,
     this.taxMinor,
     this.taxInclusive = false,
@@ -188,6 +190,11 @@ class KioskOrderSnapshot {
   /// ACCEPTED order id ([displayOrderCode]) — the SAME label POS/KDS show.
   /// Null in demo mode (the fixture daily number renders instead).
   final String? code;
+
+  /// KIOSK-001-103: the ACCEPTED order UUID (REAL mode only) — the
+  /// exactly-once auto-print dedup identity. Null in demo mode, which
+  /// never prints.
+  final String? orderId;
 
   /// REAL mode with tax enabled: the frozen subtotal/tax figures behind
   /// [totalMinor] (exclusive: total = subtotal + tax; inclusive: total =
@@ -386,6 +393,17 @@ class KioskState {
 
   static const _sentinel = Object();
 }
+
+/// KIOSK-001-103 §10 seam: invoked EXACTLY at the definitive-acceptance
+/// transition with the frozen snapshot + UI language. Null everywhere except
+/// the REAL composition root (which wires the auto-print controller); demo
+/// and tests without printing stay print-free.
+typedef KioskAcceptedOrderHook =
+    void Function(KioskOrderSnapshot order, String lang);
+
+final kioskAcceptedOrderHookProvider = Provider<KioskAcceptedOrderHook?>(
+  (ref) => null,
+);
 
 final kioskFlowProvider = NotifierProvider<KioskFlowController, KioskState>(
   KioskFlowController.new,
@@ -1010,6 +1028,7 @@ class KioskFlowController extends Notifier<KioskState> {
       lastOrder: KioskOrderSnapshot(
         number: state.dailySeq,
         code: displayOrderCode(orderId),
+        orderId: orderId,
         lines: view.lines,
         lineDisplays: view.lineDisplays,
         totalMinor: view.grandMinor,
@@ -1033,6 +1052,14 @@ class KioskFlowController extends Notifier<KioskState> {
       submitReconfirmRequired: false,
       reconfirmReasonKey: null,
     );
+    // KIOSK-001-103 §10: the ONLY print trigger — a DEFINITIVELY ACCEPTED
+    // order. In-flight, unconfirmed, rejected and cart states never reach
+    // this line. Fire-and-forget: a print problem never becomes an order
+    // problem, and dedup lives behind the hook.
+    final acceptedHook = ref.read(kioskAcceptedOrderHookProvider);
+    if (acceptedHook != null) {
+      acceptedHook(state.lastOrder!, state.lang);
+    }
   }
 
   void _recoverRejected(String code, String? invalidField) {
@@ -1209,18 +1236,29 @@ class KioskFlowController extends Notifier<KioskState> {
   /// demo/design surface, never a production security boundary — REAL STAFF
   /// SETTINGS/PIN AUTH REMAINS A SEPARATE PHASE.
   void staffTap() {
-    if (!ref.read(kioskStaffSettingsEnabledProvider)) return;
+    // KIOSK-001-102 §5: REAL mode routes the discreet ••• target to the REAL
+    // staff PIN gate (list_device_staff + start_pin_session) — the fixture
+    // 2468 sheet stays a demo/design surface only.
+    final real = ref.read(kioskStaffAccessProvider) != null;
+    if (!real && !ref.read(kioskStaffSettingsEnabledProvider)) return;
     _staffTaps += 1;
     _staffTapTicks = 2;
     if (_staffTaps >= 3) {
       _staffTaps = 0;
       state = state.copyWith(
-        sheet: KioskSheet.pin,
+        sheet: real ? KioskSheet.staffPin : KioskSheet.pin,
         pinEntry: '',
         pinError: false,
       );
     }
   }
+
+  /// The REAL staff gate verified an employee PIN server-side — open Device
+  /// Settings. (Exit relocks: leaving settings resets the whole session.)
+  void enterSettingsAfterStaffAuth() =>
+      state = state.copyWith(sheet: null, screen: KioskScreen.settings);
+
+  void closeStaffPinSheet() => state = state.copyWith(sheet: null);
 
   void pinPress(String digit) {
     if (state.pinError) return;

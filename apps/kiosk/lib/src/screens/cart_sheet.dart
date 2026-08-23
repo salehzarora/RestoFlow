@@ -369,7 +369,7 @@ class KioskCartSheet extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.fromLTRB(52, 22, 52, 40),
                       decoration: BoxDecoration(
-                        color: const Color(0xB3080F1C),
+                        color: KioskColors.barTint(0xB3 / 255),
                         border: Border(
                           top: BorderSide(
                             color: KioskColors.glass(.09),
@@ -703,7 +703,7 @@ class _CartRow extends StatelessWidget {
               child: item.imageAsset != null
                   ? KioskFixtureImage(
                       asset: item.imageAsset,
-                      fallback: const ColoredBox(color: KioskColors.imageWell),
+                      fallback: ColoredBox(color: KioskColors.imageWell),
                     )
                   : Center(
                       child: Text(
@@ -899,7 +899,7 @@ class _IdentityField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
-          borderSide: const BorderSide(color: KioskColors.accentTop, width: 2),
+          borderSide: BorderSide(color: KioskColors.accentTop, width: 2),
         ),
       ),
     ),

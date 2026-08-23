@@ -11233,12 +11233,6 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Now preparing'**
-  String get kioskNowPreparing;
-
-  /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
-  ///
-  /// In en, this message translates to:
   /// **'How do you want your meal?'**
   String get kioskHow;
 
@@ -11655,6 +11649,522 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter your employee PIN — same PIN as the POS.'**
   String get kioskStaffPinPrompt;
+
+  /// No description provided for @kioskStaffChooseName.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your name'**
+  String get kioskStaffChooseName;
+
+  /// No description provided for @kioskStaffPinWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN — try again.'**
+  String get kioskStaffPinWrong;
+
+  /// No description provided for @kioskStaffPinNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection problem — try again.'**
+  String get kioskStaffPinNetwork;
+
+  /// No description provided for @kioskAppearanceSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get kioskAppearanceSection;
+
+  /// No description provided for @kioskAppearanceIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant identity'**
+  String get kioskAppearanceIdentity;
+
+  /// No description provided for @kioskAppearanceDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant name'**
+  String get kioskAppearanceDisplayName;
+
+  /// No description provided for @kioskAppearanceLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo'**
+  String get kioskAppearanceLogo;
+
+  /// No description provided for @kioskAppearanceChooseLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose logo'**
+  String get kioskAppearanceChooseLogo;
+
+  /// No description provided for @kioskAppearanceRemoveLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove logo'**
+  String get kioskAppearanceRemoveLogo;
+
+  /// No description provided for @kioskAppearanceLogoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That file can\'t be used — PNG, JPEG or WebP up to 256 KB.'**
+  String get kioskAppearanceLogoInvalid;
+
+  /// No description provided for @kioskAppearanceLogoUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo upload isn\'t available on this device.'**
+  String get kioskAppearanceLogoUnsupported;
+
+  /// No description provided for @kioskAppearanceWordmark.
+  ///
+  /// In en, this message translates to:
+  /// **'Wordmark'**
+  String get kioskAppearanceWordmark;
+
+  /// No description provided for @kioskAppearanceTitlePrimary.
+  ///
+  /// In en, this message translates to:
+  /// **'Main text'**
+  String get kioskAppearanceTitlePrimary;
+
+  /// No description provided for @kioskAppearanceTitleAccent.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent text (optional)'**
+  String get kioskAppearanceTitleAccent;
+
+  /// No description provided for @kioskAppearancePrimaryColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Name color (main)'**
+  String get kioskAppearancePrimaryColor;
+
+  /// No description provided for @kioskAppearanceAccentColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Name color (accent)'**
+  String get kioskAppearanceAccentColor;
+
+  /// No description provided for @kioskAppearanceHexHint.
+  ///
+  /// In en, this message translates to:
+  /// **'HEX #RRGGBB'**
+  String get kioskAppearanceHexHint;
+
+  /// No description provided for @kioskAppearanceTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand tagline'**
+  String get kioskAppearanceTagline;
+
+  /// No description provided for @kioskAppearanceMenuCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu copy'**
+  String get kioskAppearanceMenuCopy;
+
+  /// No description provided for @kioskAppearanceMenuHeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu heading'**
+  String get kioskAppearanceMenuHeadline;
+
+  /// No description provided for @kioskAppearanceMenuSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu subtitle'**
+  String get kioskAppearanceMenuSubtitle;
+
+  /// No description provided for @kioskAppearanceMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Attract media'**
+  String get kioskAppearanceMedia;
+
+  /// No description provided for @kioskAppearanceInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo hold'**
+  String get kioskAppearanceInterval;
+
+  /// No description provided for @kioskAppearanceLiveMenuPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Live menu photos'**
+  String get kioskAppearanceLiveMenuPhotos;
+
+  /// No description provided for @kioskAppearanceReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset appearance'**
+  String get kioskAppearanceReset;
+
+  /// No description provided for @kioskAppearanceResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset all appearance settings on this device?'**
+  String get kioskAppearanceResetConfirm;
+
+  /// No description provided for @kioskAppearanceSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get kioskAppearanceSave;
+
+  /// No description provided for @kioskAppearanceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance saved'**
+  String get kioskAppearanceSaved;
+
+  /// No description provided for @kioskAppearancePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get kioskAppearancePreview;
+
+  /// No description provided for @kioskUiThemeSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Device interface colors'**
+  String get kioskUiThemeSection;
+
+  /// No description provided for @kioskUiThemeExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the two core colors for THIS device’s interface only.'**
+  String get kioskUiThemeExplainer;
+
+  /// No description provided for @kioskUiThemeVsWordmarkNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Separate from the restaurant name/identity colors above.'**
+  String get kioskUiThemeVsWordmarkNote;
+
+  /// No description provided for @kioskUiThemePresetNavy.
+  ///
+  /// In en, this message translates to:
+  /// **'Navy + Orange'**
+  String get kioskUiThemePresetNavy;
+
+  /// No description provided for @kioskUiThemePresetForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest + Orange'**
+  String get kioskUiThemePresetForest;
+
+  /// No description provided for @kioskUiThemePresetAubergine.
+  ///
+  /// In en, this message translates to:
+  /// **'Aubergine + Brick'**
+  String get kioskUiThemePresetAubergine;
+
+  /// No description provided for @kioskUiThemePresetCharcoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Charcoal + Gold'**
+  String get kioskUiThemePresetCharcoal;
+
+  /// No description provided for @kioskUiThemeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get kioskUiThemeCustom;
+
+  /// No description provided for @kioskUiThemeCustomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom device colors'**
+  String get kioskUiThemeCustomTitle;
+
+  /// No description provided for @kioskUiThemePrimaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Structural color (primary)'**
+  String get kioskUiThemePrimaryLabel;
+
+  /// No description provided for @kioskUiThemeActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Buttons color (action)'**
+  String get kioskUiThemeActionLabel;
+
+  /// No description provided for @kioskUiThemeApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get kioskUiThemeApply;
+
+  /// No description provided for @kioskUiThemeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore default colors'**
+  String get kioskUiThemeReset;
+
+  /// No description provided for @kioskUiThemePreviewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Main button'**
+  String get kioskUiThemePreviewAction;
+
+  /// No description provided for @kioskUiThemePreviewBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Readable text'**
+  String get kioskUiThemePreviewBody;
+
+  /// No description provided for @kioskUiThemeAdvancedHex.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced HEX'**
+  String get kioskUiThemeAdvancedHex;
+
+  /// No description provided for @kioskPrintFailedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt could not be printed — please ask the cashier for a copy.'**
+  String get kioskPrintFailedNotice;
+
+  /// No description provided for @kioskPrinterSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt printer'**
+  String get kioskPrinterSection;
+
+  /// No description provided for @kioskPrinterWebUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer setup is available on the installed kiosk device only. Ordering is not affected.'**
+  String get kioskPrinterWebUnavailable;
+
+  /// No description provided for @kioskPrinterAutoPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print receipt'**
+  String get kioskPrinterAutoPrint;
+
+  /// No description provided for @kioskPrinterAutoPrintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Print the customer receipt automatically when an order is accepted.'**
+  String get kioskPrinterAutoPrintHint;
+
+  /// No description provided for @kioskPrinterTransportWifi.
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi'**
+  String get kioskPrinterTransportWifi;
+
+  /// No description provided for @kioskPrinterTransportBluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get kioskPrinterTransportBluetooth;
+
+  /// No description provided for @kioskPrinterHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer IP / host'**
+  String get kioskPrinterHost;
+
+  /// No description provided for @kioskPrinterPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get kioskPrinterPort;
+
+  /// No description provided for @kioskPrinterInvalidHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid printer address.'**
+  String get kioskPrinterInvalidHost;
+
+  /// No description provided for @kioskPrinterInvalidPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid port (1–65535).'**
+  String get kioskPrinterInvalidPort;
+
+  /// No description provided for @kioskPrinterSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save printer'**
+  String get kioskPrinterSave;
+
+  /// No description provided for @kioskPrinterSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer saved'**
+  String get kioskPrinterSaved;
+
+  /// No description provided for @kioskPrinterTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print'**
+  String get kioskPrinterTest;
+
+  /// No description provided for @kioskPrinterTestOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Test sent to the printer.'**
+  String get kioskPrinterTestOk;
+
+  /// No description provided for @kioskPrinterTestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print failed — check the printer.'**
+  String get kioskPrinterTestFailed;
+
+  /// No description provided for @kioskPrinterBtPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a paired printer'**
+  String get kioskPrinterBtPick;
+
+  /// No description provided for @kioskPrinterBtNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No paired Bluetooth devices — pair the printer in Android settings first.'**
+  String get kioskPrinterBtNone;
+
+  /// No description provided for @kioskPrinterBtUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is unavailable or permission was denied.'**
+  String get kioskPrinterBtUnavailable;
+
+  /// No description provided for @kioskPrinterNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer is configured yet.'**
+  String get kioskPrinterNotConfigured;
+
+  /// No description provided for @kioskPrinterCurrentSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved printer:'**
+  String get kioskPrinterCurrentSaved;
+
+  /// No description provided for @kioskAttractModeMenuPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected menu photos'**
+  String get kioskAttractModeMenuPhotos;
+
+  /// No description provided for @kioskAttractModeImage.
+  ///
+  /// In en, this message translates to:
+  /// **'External image'**
+  String get kioskAttractModeImage;
+
+  /// No description provided for @kioskAttractModeVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'External video'**
+  String get kioskAttractModeVideo;
+
+  /// No description provided for @kioskFeaturedPickAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose photos'**
+  String get kioskFeaturedPickAction;
+
+  /// No description provided for @kioskFeaturedAutoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No selection yet — rotating automatic menu photos.'**
+  String get kioskFeaturedAutoNote;
+
+  /// No description provided for @kioskFeaturedClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get kioskFeaturedClear;
+
+  /// No description provided for @kioskFeaturedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured menu photos'**
+  String get kioskFeaturedTitle;
+
+  /// No description provided for @kioskFeaturedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick 4–8 products to headline the welcome screen.'**
+  String get kioskFeaturedHint;
+
+  /// No description provided for @kioskFeaturedFewWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This menu has fewer than 4 usable photos — all usable ones can be selected.'**
+  String get kioskFeaturedFewWarning;
+
+  /// No description provided for @kioskFeaturedSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search products'**
+  String get kioskFeaturedSearch;
+
+  /// No description provided for @kioskFeaturedAllCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get kioskFeaturedAllCategories;
+
+  /// No description provided for @kioskFeaturedNoPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'No photo'**
+  String get kioskFeaturedNoPhoto;
+
+  /// No description provided for @kioskFeaturedStale.
+  ///
+  /// In en, this message translates to:
+  /// **'unavailable'**
+  String get kioskFeaturedStale;
+
+  /// No description provided for @kioskAttractChooseImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image'**
+  String get kioskAttractChooseImage;
+
+  /// No description provided for @kioskAttractChooseVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose video'**
+  String get kioskAttractChooseVideo;
+
+  /// No description provided for @kioskAttractMediaWebOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom media can be set on the installed kiosk device only.'**
+  String get kioskAttractMediaWebOnlyNote;
+
+  /// No description provided for @kioskAttractMediaSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Media saved on this device'**
+  String get kioskAttractMediaSet;
+
+  /// No description provided for @kioskAttractMediaTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too large for the kiosk.'**
+  String get kioskAttractMediaTooLarge;
+
+  /// No description provided for @kioskAttractMediaTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That video is too long — up to 3 minutes.'**
+  String get kioskAttractMediaTooLong;
+
+  /// No description provided for @kioskAttractMediaInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That file can\'t be used on the kiosk.'**
+  String get kioskAttractMediaInvalid;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///

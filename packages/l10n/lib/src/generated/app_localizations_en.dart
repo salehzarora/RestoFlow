@@ -6245,9 +6245,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskTouchStart => 'Touch anywhere to begin';
 
   @override
-  String get kioskNowPreparing => 'Now preparing';
-
-  @override
   String get kioskHow => 'How do you want your meal?';
 
   @override
@@ -6473,6 +6470,281 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kioskStaffPinPrompt =>
       'Enter your employee PIN — same PIN as the POS.';
+
+  @override
+  String get kioskStaffChooseName => 'Choose your name';
+
+  @override
+  String get kioskStaffPinWrong => 'Wrong PIN — try again.';
+
+  @override
+  String get kioskStaffPinNetwork => 'Connection problem — try again.';
+
+  @override
+  String get kioskAppearanceSection => 'Appearance';
+
+  @override
+  String get kioskAppearanceIdentity => 'Restaurant identity';
+
+  @override
+  String get kioskAppearanceDisplayName => 'Restaurant name';
+
+  @override
+  String get kioskAppearanceLogo => 'Logo';
+
+  @override
+  String get kioskAppearanceChooseLogo => 'Choose logo';
+
+  @override
+  String get kioskAppearanceRemoveLogo => 'Remove logo';
+
+  @override
+  String get kioskAppearanceLogoInvalid =>
+      'That file can\'t be used — PNG, JPEG or WebP up to 256 KB.';
+
+  @override
+  String get kioskAppearanceLogoUnsupported =>
+      'Logo upload isn\'t available on this device.';
+
+  @override
+  String get kioskAppearanceWordmark => 'Wordmark';
+
+  @override
+  String get kioskAppearanceTitlePrimary => 'Main text';
+
+  @override
+  String get kioskAppearanceTitleAccent => 'Accent text (optional)';
+
+  @override
+  String get kioskAppearancePrimaryColor => 'Name color (main)';
+
+  @override
+  String get kioskAppearanceAccentColor => 'Name color (accent)';
+
+  @override
+  String get kioskAppearanceHexHint => 'HEX #RRGGBB';
+
+  @override
+  String get kioskAppearanceTagline => 'Brand tagline';
+
+  @override
+  String get kioskAppearanceMenuCopy => 'Menu copy';
+
+  @override
+  String get kioskAppearanceMenuHeadline => 'Menu heading';
+
+  @override
+  String get kioskAppearanceMenuSubtitle => 'Menu subtitle';
+
+  @override
+  String get kioskAppearanceMedia => 'Attract media';
+
+  @override
+  String get kioskAppearanceInterval => 'Photo hold';
+
+  @override
+  String get kioskAppearanceLiveMenuPhotos => 'Live menu photos';
+
+  @override
+  String get kioskAppearanceReset => 'Reset appearance';
+
+  @override
+  String get kioskAppearanceResetConfirm =>
+      'Reset all appearance settings on this device?';
+
+  @override
+  String get kioskAppearanceSave => 'Save changes';
+
+  @override
+  String get kioskAppearanceSaved => 'Appearance saved';
+
+  @override
+  String get kioskAppearancePreview => 'Preview';
+
+  @override
+  String get kioskUiThemeSection => 'Device interface colors';
+
+  @override
+  String get kioskUiThemeExplainer =>
+      'Choose the two core colors for THIS device’s interface only.';
+
+  @override
+  String get kioskUiThemeVsWordmarkNote =>
+      'Separate from the restaurant name/identity colors above.';
+
+  @override
+  String get kioskUiThemePresetNavy => 'Navy + Orange';
+
+  @override
+  String get kioskUiThemePresetForest => 'Forest + Orange';
+
+  @override
+  String get kioskUiThemePresetAubergine => 'Aubergine + Brick';
+
+  @override
+  String get kioskUiThemePresetCharcoal => 'Charcoal + Gold';
+
+  @override
+  String get kioskUiThemeCustom => 'Custom';
+
+  @override
+  String get kioskUiThemeCustomTitle => 'Custom device colors';
+
+  @override
+  String get kioskUiThemePrimaryLabel => 'Structural color (primary)';
+
+  @override
+  String get kioskUiThemeActionLabel => 'Buttons color (action)';
+
+  @override
+  String get kioskUiThemeApply => 'Apply';
+
+  @override
+  String get kioskUiThemeReset => 'Restore default colors';
+
+  @override
+  String get kioskUiThemePreviewAction => 'Main button';
+
+  @override
+  String get kioskUiThemePreviewBody => 'Readable text';
+
+  @override
+  String get kioskUiThemeAdvancedHex => 'Advanced HEX';
+
+  @override
+  String get kioskPrintFailedNotice =>
+      'The receipt could not be printed — please ask the cashier for a copy.';
+
+  @override
+  String get kioskPrinterSection => 'Receipt printer';
+
+  @override
+  String get kioskPrinterWebUnavailable =>
+      'Printer setup is available on the installed kiosk device only. Ordering is not affected.';
+
+  @override
+  String get kioskPrinterAutoPrint => 'Auto-print receipt';
+
+  @override
+  String get kioskPrinterAutoPrintHint =>
+      'Print the customer receipt automatically when an order is accepted.';
+
+  @override
+  String get kioskPrinterTransportWifi => 'Wi-Fi';
+
+  @override
+  String get kioskPrinterTransportBluetooth => 'Bluetooth';
+
+  @override
+  String get kioskPrinterHost => 'Printer IP / host';
+
+  @override
+  String get kioskPrinterPort => 'Port';
+
+  @override
+  String get kioskPrinterInvalidHost => 'Enter a valid printer address.';
+
+  @override
+  String get kioskPrinterInvalidPort => 'Enter a valid port (1–65535).';
+
+  @override
+  String get kioskPrinterSave => 'Save printer';
+
+  @override
+  String get kioskPrinterSaved => 'Printer saved';
+
+  @override
+  String get kioskPrinterTest => 'Test print';
+
+  @override
+  String get kioskPrinterTestOk => 'Test sent to the printer.';
+
+  @override
+  String get kioskPrinterTestFailed => 'Test print failed — check the printer.';
+
+  @override
+  String get kioskPrinterBtPick => 'Choose a paired printer';
+
+  @override
+  String get kioskPrinterBtNone =>
+      'No paired Bluetooth devices — pair the printer in Android settings first.';
+
+  @override
+  String get kioskPrinterBtUnavailable =>
+      'Bluetooth is unavailable or permission was denied.';
+
+  @override
+  String get kioskPrinterNotConfigured => 'No printer is configured yet.';
+
+  @override
+  String get kioskPrinterCurrentSaved => 'Saved printer:';
+
+  @override
+  String get kioskAttractModeMenuPhotos => 'Selected menu photos';
+
+  @override
+  String get kioskAttractModeImage => 'External image';
+
+  @override
+  String get kioskAttractModeVideo => 'External video';
+
+  @override
+  String get kioskFeaturedPickAction => 'Choose photos';
+
+  @override
+  String get kioskFeaturedAutoNote =>
+      'No selection yet — rotating automatic menu photos.';
+
+  @override
+  String get kioskFeaturedClear => 'Clear selection';
+
+  @override
+  String get kioskFeaturedTitle => 'Featured menu photos';
+
+  @override
+  String get kioskFeaturedHint =>
+      'Pick 4–8 products to headline the welcome screen.';
+
+  @override
+  String get kioskFeaturedFewWarning =>
+      'This menu has fewer than 4 usable photos — all usable ones can be selected.';
+
+  @override
+  String get kioskFeaturedSearch => 'Search products';
+
+  @override
+  String get kioskFeaturedAllCategories => 'All';
+
+  @override
+  String get kioskFeaturedNoPhoto => 'No photo';
+
+  @override
+  String get kioskFeaturedStale => 'unavailable';
+
+  @override
+  String get kioskAttractChooseImage => 'Choose image';
+
+  @override
+  String get kioskAttractChooseVideo => 'Choose video';
+
+  @override
+  String get kioskAttractMediaWebOnlyNote =>
+      'Custom media can be set on the installed kiosk device only.';
+
+  @override
+  String get kioskAttractMediaSet => 'Media saved on this device';
+
+  @override
+  String get kioskAttractMediaTooLarge =>
+      'That file is too large for the kiosk.';
+
+  @override
+  String get kioskAttractMediaTooLong =>
+      'That video is too long — up to 3 minutes.';
+
+  @override
+  String get kioskAttractMediaInvalid =>
+      'That file can\'t be used on the kiosk.';
 
   @override
   String get kioskCancel => 'Cancel';

@@ -6197,9 +6197,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskTouchStart => 'المس الشاشة للبدء';
 
   @override
-  String get kioskNowPreparing => 'قيد التحضير الآن';
-
-  @override
   String get kioskHow => 'كيف تفضّل وجبتك؟';
 
   @override
@@ -6424,6 +6421,277 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get kioskStaffPinPrompt =>
       'أدخل رمز الموظف — نفس الرمز المستخدم في نقطة البيع.';
+
+  @override
+  String get kioskStaffChooseName => 'اختر اسمك';
+
+  @override
+  String get kioskStaffPinWrong => 'رمز PIN غير صحيح — حاول مجددًا.';
+
+  @override
+  String get kioskStaffPinNetwork => 'مشكلة اتصال — حاول مجددًا.';
+
+  @override
+  String get kioskAppearanceSection => 'المظهر';
+
+  @override
+  String get kioskAppearanceIdentity => 'هوية المطعم';
+
+  @override
+  String get kioskAppearanceDisplayName => 'اسم المطعم';
+
+  @override
+  String get kioskAppearanceLogo => 'الشعار';
+
+  @override
+  String get kioskAppearanceChooseLogo => 'اختيار شعار';
+
+  @override
+  String get kioskAppearanceRemoveLogo => 'إزالة الشعار';
+
+  @override
+  String get kioskAppearanceLogoInvalid =>
+      'لا يمكن استخدام هذا الملف — PNG أو JPEG أو WebP حتى 256 ك.ب.';
+
+  @override
+  String get kioskAppearanceLogoUnsupported =>
+      'رفع الشعار غير متاح على هذا الجهاز.';
+
+  @override
+  String get kioskAppearanceWordmark => 'الاسم الكبير';
+
+  @override
+  String get kioskAppearanceTitlePrimary => 'النص الأساسي';
+
+  @override
+  String get kioskAppearanceTitleAccent => 'نص مميز (اختياري)';
+
+  @override
+  String get kioskAppearancePrimaryColor => 'لون اسم المطعم (الأساسي)';
+
+  @override
+  String get kioskAppearanceAccentColor => 'لون اسم المطعم (المميز)';
+
+  @override
+  String get kioskAppearanceHexHint => 'HEX #RRGGBB';
+
+  @override
+  String get kioskAppearanceTagline => 'الشعار النصي';
+
+  @override
+  String get kioskAppearanceMenuCopy => 'نصوص القائمة';
+
+  @override
+  String get kioskAppearanceMenuHeadline => 'عنوان القائمة';
+
+  @override
+  String get kioskAppearanceMenuSubtitle => 'العنوان الفرعي للقائمة';
+
+  @override
+  String get kioskAppearanceMedia => 'وسائط شاشة الانتظار';
+
+  @override
+  String get kioskAppearanceInterval => 'مدة عرض الصورة';
+
+  @override
+  String get kioskAppearanceLiveMenuPhotos => 'صور القائمة الحية';
+
+  @override
+  String get kioskAppearanceReset => 'إعادة تعيين المظهر';
+
+  @override
+  String get kioskAppearanceResetConfirm =>
+      'إعادة تعيين جميع إعدادات المظهر على هذا الجهاز؟';
+
+  @override
+  String get kioskAppearanceSave => 'حفظ التغييرات';
+
+  @override
+  String get kioskAppearanceSaved => 'تم حفظ المظهر';
+
+  @override
+  String get kioskAppearancePreview => 'معاينة';
+
+  @override
+  String get kioskUiThemeSection => 'ألوان واجهة الجهاز';
+
+  @override
+  String get kioskUiThemeExplainer =>
+      'اختر اللونين الأساسيين لواجهة هذا الجهاز فقط.';
+
+  @override
+  String get kioskUiThemeVsWordmarkNote =>
+      'منفصلة عن ألوان اسم/هوية المطعم أعلاه.';
+
+  @override
+  String get kioskUiThemePresetNavy => 'كحلي + برتقالي';
+
+  @override
+  String get kioskUiThemePresetForest => 'أخضر غامق + برتقالي';
+
+  @override
+  String get kioskUiThemePresetAubergine => 'باذنجاني + طوبي';
+
+  @override
+  String get kioskUiThemePresetCharcoal => 'فحمي + ذهبي';
+
+  @override
+  String get kioskUiThemeCustom => 'مخصص';
+
+  @override
+  String get kioskUiThemeCustomTitle => 'ألوان مخصصة للجهاز';
+
+  @override
+  String get kioskUiThemePrimaryLabel => 'اللون الهيكلي (الأساسي)';
+
+  @override
+  String get kioskUiThemeActionLabel => 'لون الأزرار (الإجراء)';
+
+  @override
+  String get kioskUiThemeApply => 'تطبيق';
+
+  @override
+  String get kioskUiThemeReset => 'استعادة الألوان الافتراضية';
+
+  @override
+  String get kioskUiThemePreviewAction => 'زر رئيسي';
+
+  @override
+  String get kioskUiThemePreviewBody => 'نص للقراءة';
+
+  @override
+  String get kioskUiThemeAdvancedHex => 'HEX متقدم';
+
+  @override
+  String get kioskPrintFailedNotice =>
+      'تعذّرت طباعة الإيصال — اطلب نسخة من الكاشير.';
+
+  @override
+  String get kioskPrinterSection => 'طابعة الإيصالات';
+
+  @override
+  String get kioskPrinterWebUnavailable =>
+      'إعداد الطابعة متاح على جهاز الكشك المثبّت فقط. الطلب لا يتأثر.';
+
+  @override
+  String get kioskPrinterAutoPrint => 'طباعة الإيصال تلقائيًا';
+
+  @override
+  String get kioskPrinterAutoPrintHint =>
+      'يُطبع إيصال الزبون تلقائيًا عند قبول الطلب.';
+
+  @override
+  String get kioskPrinterTransportWifi => 'Wi-Fi';
+
+  @override
+  String get kioskPrinterTransportBluetooth => 'بلوتوث';
+
+  @override
+  String get kioskPrinterHost => 'عنوان الطابعة IP';
+
+  @override
+  String get kioskPrinterPort => 'المنفذ';
+
+  @override
+  String get kioskPrinterInvalidHost => 'أدخل عنوان طابعة صالحًا.';
+
+  @override
+  String get kioskPrinterInvalidPort => 'أدخل منفذًا صالحًا (1–65535).';
+
+  @override
+  String get kioskPrinterSave => 'حفظ الطابعة';
+
+  @override
+  String get kioskPrinterSaved => 'تم حفظ الطابعة';
+
+  @override
+  String get kioskPrinterTest => 'طباعة تجريبية';
+
+  @override
+  String get kioskPrinterTestOk => 'أُرسلت التجربة إلى الطابعة.';
+
+  @override
+  String get kioskPrinterTestFailed =>
+      'فشلت الطباعة التجريبية — تحقق من الطابعة.';
+
+  @override
+  String get kioskPrinterBtPick => 'اختيار طابعة مقترنة';
+
+  @override
+  String get kioskPrinterBtNone =>
+      'لا توجد أجهزة بلوتوث مقترنة — اقرن الطابعة من إعدادات أندرويد أولًا.';
+
+  @override
+  String get kioskPrinterBtUnavailable => 'البلوتوث غير متاح أو رُفض الإذن.';
+
+  @override
+  String get kioskPrinterNotConfigured => 'لا توجد طابعة مُعدّة بعد.';
+
+  @override
+  String get kioskPrinterCurrentSaved => 'الطابعة المحفوظة:';
+
+  @override
+  String get kioskAttractModeMenuPhotos => 'صور مختارة من القائمة';
+
+  @override
+  String get kioskAttractModeImage => 'صورة خارجية';
+
+  @override
+  String get kioskAttractModeVideo => 'فيديو خارجي';
+
+  @override
+  String get kioskFeaturedPickAction => 'اختيار الصور';
+
+  @override
+  String get kioskFeaturedAutoNote =>
+      'لا يوجد اختيار بعد — تُعرض صور القائمة تلقائيًا.';
+
+  @override
+  String get kioskFeaturedClear => 'مسح الاختيار';
+
+  @override
+  String get kioskFeaturedTitle => 'صور القائمة المميزة';
+
+  @override
+  String get kioskFeaturedHint => 'اختر 4–8 أصناف لتتصدّر شاشة الاستقبال.';
+
+  @override
+  String get kioskFeaturedFewWarning =>
+      'تحتوي القائمة على أقل من 4 صور صالحة — يمكن اختيار كل الصور الصالحة.';
+
+  @override
+  String get kioskFeaturedSearch => 'بحث عن صنف';
+
+  @override
+  String get kioskFeaturedAllCategories => 'الكل';
+
+  @override
+  String get kioskFeaturedNoPhoto => 'بلا صورة';
+
+  @override
+  String get kioskFeaturedStale => 'غير متاح';
+
+  @override
+  String get kioskAttractChooseImage => 'اختيار صورة';
+
+  @override
+  String get kioskAttractChooseVideo => 'اختيار فيديو';
+
+  @override
+  String get kioskAttractMediaWebOnlyNote =>
+      'الوسائط المخصصة تُضبط على جهاز الكشك المثبّت فقط.';
+
+  @override
+  String get kioskAttractMediaSet => 'الوسائط محفوظة على هذا الجهاز';
+
+  @override
+  String get kioskAttractMediaTooLarge => 'الملف كبير جدًا على الكشك.';
+
+  @override
+  String get kioskAttractMediaTooLong => 'الفيديو طويل جدًا — حتى 3 دقائق.';
+
+  @override
+  String get kioskAttractMediaInvalid => 'لا يمكن استخدام هذا الملف على الكشك.';
 
   @override
   String get kioskCancel => 'إلغاء';
