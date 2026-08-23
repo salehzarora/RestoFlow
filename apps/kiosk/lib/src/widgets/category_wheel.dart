@@ -257,7 +257,7 @@ class _WheelRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: active
-                        ? const RadialGradient(
+                        ? RadialGradient(
                             colors: [
                               KioskColors.wheelActiveTop,
                               KioskColors.imageWell,
@@ -307,9 +307,7 @@ class _WheelRow extends StatelessWidget {
                       : category.thumbAsset != null
                       ? KioskFixtureImage(
                           asset: category.thumbAsset,
-                          fallback: const ColoredBox(
-                            color: KioskColors.imageWell,
-                          ),
+                          fallback: ColoredBox(color: KioskColors.imageWell),
                         )
                       : _iconFallback(disc),
                 ),
@@ -356,7 +354,7 @@ class _SwipeHint extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (pointsUp)
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_up,
               size: 26,
               color: KioskColors.accentTop,
@@ -375,7 +373,7 @@ class _SwipeHint extends StatelessWidget {
             ),
           ),
           if (!pointsUp)
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_down,
               size: 26,
               color: KioskColors.accentTop,

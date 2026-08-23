@@ -42,7 +42,7 @@ class KioskSettingsScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(44, 34, 44, 34),
               decoration: BoxDecoration(
-                color: const Color(0xD9080F1C),
+                color: KioskColors.barTint(0xD9 / 255),
                 border: Border(
                   bottom: BorderSide(color: KioskColors.glass(.09), width: 1.5),
                 ),
@@ -114,7 +114,7 @@ class KioskSettingsScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(44, 34, 44, 34),
             decoration: BoxDecoration(
-              color: const Color(0xD9080F1C),
+              color: KioskColors.barTint(0xD9 / 255),
               border: Border(
                 bottom: BorderSide(color: KioskColors.glass(.09), width: 1.5),
               ),

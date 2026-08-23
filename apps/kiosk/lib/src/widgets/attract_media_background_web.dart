@@ -10,7 +10,7 @@ class KioskCustomImageBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const ColoredBox(color: KioskColors.canvasBottom);
+      ColoredBox(color: KioskColors.canvasBottom);
 }
 
 class KioskCustomVideoBackground extends StatelessWidget {
@@ -19,5 +19,5 @@ class KioskCustomVideoBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const ColoredBox(color: KioskColors.canvasBottom);
+      ColoredBox(color: KioskColors.canvasBottom);
 }

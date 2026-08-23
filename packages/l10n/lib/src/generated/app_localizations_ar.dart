@@ -6467,10 +6467,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskAppearanceTitleAccent => 'نص مميز (اختياري)';
 
   @override
-  String get kioskAppearancePrimaryColor => 'اللون الأساسي';
+  String get kioskAppearancePrimaryColor => 'لون اسم المطعم (الأساسي)';
 
   @override
-  String get kioskAppearanceAccentColor => 'لون التمييز';
+  String get kioskAppearanceAccentColor => 'لون اسم المطعم (المميز)';
 
   @override
   String get kioskAppearanceHexHint => 'HEX #RRGGBB';
@@ -6511,6 +6511,56 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'معاينة';
+
+  @override
+  String get kioskUiThemeSection => 'ألوان واجهة الجهاز';
+
+  @override
+  String get kioskUiThemeExplainer =>
+      'اختر اللونين الأساسيين لواجهة هذا الجهاز فقط.';
+
+  @override
+  String get kioskUiThemeVsWordmarkNote =>
+      'منفصلة عن ألوان اسم/هوية المطعم أعلاه.';
+
+  @override
+  String get kioskUiThemePresetNavy => 'كحلي + برتقالي';
+
+  @override
+  String get kioskUiThemePresetForest => 'أخضر غامق + برتقالي';
+
+  @override
+  String get kioskUiThemePresetAubergine => 'باذنجاني + طوبي';
+
+  @override
+  String get kioskUiThemePresetCharcoal => 'فحمي + ذهبي';
+
+  @override
+  String get kioskUiThemeCustom => 'مخصص';
+
+  @override
+  String get kioskUiThemeCustomTitle => 'ألوان مخصصة للجهاز';
+
+  @override
+  String get kioskUiThemePrimaryLabel => 'اللون الهيكلي (الأساسي)';
+
+  @override
+  String get kioskUiThemeActionLabel => 'لون الأزرار (الإجراء)';
+
+  @override
+  String get kioskUiThemeApply => 'تطبيق';
+
+  @override
+  String get kioskUiThemeReset => 'استعادة الألوان الافتراضية';
+
+  @override
+  String get kioskUiThemePreviewAction => 'زر رئيسي';
+
+  @override
+  String get kioskUiThemePreviewBody => 'نص للقراءة';
+
+  @override
+  String get kioskUiThemeAdvancedHex => 'HEX متقدم';
 
   @override
   String get kioskPrintFailedNotice =>

@@ -101,7 +101,7 @@ class _KioskFeaturedPickerDialogState
     ];
 
     return Dialog(
-      backgroundColor: const Color(0xFF0B1322),
+      backgroundColor: KioskColors.sheetBottom,
       insetPadding: const EdgeInsets.all(40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Padding(
@@ -373,7 +373,7 @@ class _ItemTile extends StatelessWidget {
                         url!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) =>
-                            const ColoredBox(color: KioskColors.canvasBottom),
+                            ColoredBox(color: KioskColors.canvasBottom),
                       )
                     else
                       Center(
@@ -394,7 +394,7 @@ class _ItemTile extends StatelessWidget {
                           width: 40,
                           height: 40,
                           alignment: Alignment.center,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: KioskColors.accentTop,
                             shape: BoxShape.circle,
                           ),

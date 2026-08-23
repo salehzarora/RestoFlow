@@ -11737,13 +11737,13 @@ abstract class AppLocalizations {
   /// No description provided for @kioskAppearancePrimaryColor.
   ///
   /// In en, this message translates to:
-  /// **'Main color'**
+  /// **'Name color (main)'**
   String get kioskAppearancePrimaryColor;
 
   /// No description provided for @kioskAppearanceAccentColor.
   ///
   /// In en, this message translates to:
-  /// **'Accent color'**
+  /// **'Name color (accent)'**
   String get kioskAppearanceAccentColor;
 
   /// No description provided for @kioskAppearanceHexHint.
@@ -11823,6 +11823,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get kioskAppearancePreview;
+
+  /// No description provided for @kioskUiThemeSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Device interface colors'**
+  String get kioskUiThemeSection;
+
+  /// No description provided for @kioskUiThemeExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the two core colors for THIS device’s interface only.'**
+  String get kioskUiThemeExplainer;
+
+  /// No description provided for @kioskUiThemeVsWordmarkNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Separate from the restaurant name/identity colors above.'**
+  String get kioskUiThemeVsWordmarkNote;
+
+  /// No description provided for @kioskUiThemePresetNavy.
+  ///
+  /// In en, this message translates to:
+  /// **'Navy + Orange'**
+  String get kioskUiThemePresetNavy;
+
+  /// No description provided for @kioskUiThemePresetForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest + Orange'**
+  String get kioskUiThemePresetForest;
+
+  /// No description provided for @kioskUiThemePresetAubergine.
+  ///
+  /// In en, this message translates to:
+  /// **'Aubergine + Brick'**
+  String get kioskUiThemePresetAubergine;
+
+  /// No description provided for @kioskUiThemePresetCharcoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Charcoal + Gold'**
+  String get kioskUiThemePresetCharcoal;
+
+  /// No description provided for @kioskUiThemeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get kioskUiThemeCustom;
+
+  /// No description provided for @kioskUiThemeCustomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom device colors'**
+  String get kioskUiThemeCustomTitle;
+
+  /// No description provided for @kioskUiThemePrimaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Structural color (primary)'**
+  String get kioskUiThemePrimaryLabel;
+
+  /// No description provided for @kioskUiThemeActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Buttons color (action)'**
+  String get kioskUiThemeActionLabel;
+
+  /// No description provided for @kioskUiThemeApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get kioskUiThemeApply;
+
+  /// No description provided for @kioskUiThemeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore default colors'**
+  String get kioskUiThemeReset;
+
+  /// No description provided for @kioskUiThemePreviewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Main button'**
+  String get kioskUiThemePreviewAction;
+
+  /// No description provided for @kioskUiThemePreviewBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Readable text'**
+  String get kioskUiThemePreviewBody;
+
+  /// No description provided for @kioskUiThemeAdvancedHex.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced HEX'**
+  String get kioskUiThemeAdvancedHex;
 
   /// No description provided for @kioskPrintFailedNotice.
   ///

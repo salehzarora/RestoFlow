@@ -10,6 +10,7 @@ import '../data/kiosk_attract_media.dart';
 import '../data/kiosk_logo_picker.dart';
 import '../design/kiosk_theme.dart';
 import '../widgets/kiosk_chrome.dart';
+import 'device_theme_picker.dart';
 import 'featured_picker.dart';
 
 /// KIOSK-001-102 §13 — the REAL Appearance section of Device Settings.
@@ -69,6 +70,19 @@ class _KioskAppearanceSectionState
       ref.read(kioskAttractMediaStoreProvider);
   String? get _mediaDeviceId =>
       ref.read(kioskAppearanceScopeProvider)?.deviceId;
+
+  // ---- KIOSK-001-107: global device UI theme (draft-only until Save) ----
+  KioskThemePair get _draftThemePair =>
+      KioskThemePair.fromWire(_draft.uiThemeWire);
+
+  Future<void> _editCustomTheme() async {
+    final wire = await showDialog<String>(
+      context: context,
+      builder: (_) => KioskDeviceThemeCustomDialog(initial: _draftThemePair),
+    );
+    if (!mounted || wire == null) return; // Cancel changes nothing
+    _update(_draft.copyWith(uiThemeWire: wire));
+  }
 
   Future<void> _pickFeatured() async {
     final result = await showDialog<List<String>>(
@@ -500,8 +514,78 @@ class _KioskAppearanceSectionState
           },
           const SizedBox(height: 30),
 
+          // ---- G. GLOBAL device UI theme (KIOSK-001-107) ---------------------
+          // A clearly separate section from the wordmark/name colors above:
+          // this pair recolors the WHOLE kiosk chrome. Draft-only until the
+          // section's Save (the kiosk settings idiom: preview + Apply).
+          _Label(l10n.kioskUiThemeSection),
+          const SizedBox(height: 6),
+          Text(
+            l10n.kioskUiThemeExplainer,
+            style: KioskType.body(
+              19,
+              FontWeight.w500,
+              color: KioskColors.textMuted,
+            ),
+          ),
+          Text(
+            l10n.kioskUiThemeVsWordmarkNote,
+            style: KioskType.body(
+              17,
+              FontWeight.w500,
+              color: KioskColors.textGhost,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final preset in KioskThemePair.presets)
+                _ThemePresetCard(
+                  key: Key('kiosk-uitheme-${preset.wire}'),
+                  pair: preset,
+                  label: switch (preset.wire) {
+                    'navy_ember' => l10n.kioskUiThemePresetNavy,
+                    'forest_ember' => l10n.kioskUiThemePresetForest,
+                    'aubergine_brick' => l10n.kioskUiThemePresetAubergine,
+                    _ => l10n.kioskUiThemePresetCharcoal,
+                  },
+                  selected: _draft.uiThemeWire == preset.wire,
+                  onTap: () =>
+                      _update(_draft.copyWith(uiThemeWire: preset.wire)),
+                ),
+              _ThemePresetCard(
+                key: const Key('kiosk-uitheme-custom'),
+                pair: _draftThemePair.isCustom
+                    ? _draftThemePair
+                    : KioskThemePair.navyEmber,
+                label: l10n.kioskUiThemeCustom,
+                selected: _draftThemePair.isCustom,
+                customBadge: true,
+                onTap: _editCustomTheme,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          KioskThemePreview(pair: _draftThemePair),
+          const SizedBox(height: 12),
+          if (_draft.uiThemeWire != 'navy_ember')
+            _SmallPill(
+              key: const Key('kiosk-uitheme-reset'),
+              label: l10n.kioskUiThemeReset,
+              active: false,
+              onTap: () => _update(_draft.copyWith(uiThemeWire: 'navy_ember')),
+            ),
+          const SizedBox(height: 26),
+
           // ---- F. save / reset ----------------------------------------------
-          Row(
+          // Wrap, not Row: wide-locale measurement (e.g. the EN test font)
+          // must fold instead of overflowing; real fonts stay on one line.
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               KioskAccentPill(
                 key: const Key('kiosk-appearance-save'),
@@ -517,7 +601,6 @@ class _KioskAppearanceSectionState
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
               if (_saved)
                 Text(
                   l10n.kioskAppearanceSaved,
@@ -528,7 +611,6 @@ class _KioskAppearanceSectionState
                     color: KioskColors.successTop,
                   ),
                 ),
-              const Spacer(),
               _SmallPill(
                 key: const Key('kiosk-appearance-reset'),
                 label: l10n.kioskAppearanceReset,
@@ -567,7 +649,7 @@ class _PreviewCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [KioskColors.canvasTop, KioskColors.canvasBottom],
@@ -582,7 +664,7 @@ class _PreviewCard extends StatelessWidget {
             height: 84,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xB8070E1B),
+              color: KioskColors.canvasTint(0xB8 / 255),
               border: Border.all(color: KioskColors.ring, width: 3),
             ),
             clipBehavior: Clip.antiAlias,
@@ -786,10 +868,7 @@ class _ColorRowState extends State<_ColorRow> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
-                color: KioskColors.accentTop,
-                width: 2,
-              ),
+              borderSide: BorderSide(color: KioskColors.accentTop, width: 2),
             ),
           ),
           onFieldSubmitted: (raw) {
@@ -844,7 +923,7 @@ class _Field extends StatelessWidget {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: KioskColors.accentTop, width: 2),
+        borderSide: BorderSide(color: KioskColors.accentTop, width: 2),
       ),
     ),
     onChanged: (v) => onChanged(v.trim()),
@@ -998,4 +1077,105 @@ class _CustomMediaControls extends StatelessWidget {
       ],
     );
   }
+}
+
+/// KIOSK-001-107 — one preset pair card: both colors visible, the selected
+/// state carries a ring AND a check (never color-only).
+class _ThemePresetCard extends StatelessWidget {
+  const _ThemePresetCard({
+    super.key,
+    required this.pair,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.customBadge = false,
+  });
+
+  final KioskThemePair pair;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool customBadge;
+
+  @override
+  Widget build(BuildContext context) => KioskPressable(
+    onTap: onTap,
+    child: Container(
+      width: 208,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: KioskColors.glass(.05),
+        border: Border.all(
+          color: selected ? KioskColors.ring : KioskColors.glass(.16),
+          width: selected ? 3 : 1.5,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [pair.structuralCanvasTop, pair.structuralPanel],
+                    ),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(10),
+                    ),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: customBadge
+                      ? const Center(
+                          child: Icon(
+                            Icons.palette_outlined,
+                            size: 20,
+                            color: Colors.white70,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [pair.actionHi, pair.actionDeep],
+                    ),
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KioskType.body(17, FontWeight.w700),
+                ),
+              ),
+              if (selected)
+                Icon(
+                  Icons.check_circle,
+                  key: const Key('kiosk-uitheme-selected-check'),
+                  size: 22,
+                  color: KioskColors.ring,
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }

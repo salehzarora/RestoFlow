@@ -41,7 +41,7 @@ class KioskPinGate extends ConsumerWidget {
               width: 560,
               padding: const EdgeInsets.fromLTRB(44, 48, 44, 40),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [KioskColors.sheetTop, KioskColors.pinCardBottom],
@@ -213,7 +213,7 @@ class _PinDotsState extends State<_PinDots>
                     ? KioskColors.danger
                     : i < widget.entry.length
                     ? KioskColors.accentTop
-                    : const Color(0xFF3B527A),
+                    : KioskColors.frameLineHi,
                 width: 3,
               ),
             ),

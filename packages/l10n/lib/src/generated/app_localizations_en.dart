@@ -6516,10 +6516,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskAppearanceTitleAccent => 'Accent text (optional)';
 
   @override
-  String get kioskAppearancePrimaryColor => 'Main color';
+  String get kioskAppearancePrimaryColor => 'Name color (main)';
 
   @override
-  String get kioskAppearanceAccentColor => 'Accent color';
+  String get kioskAppearanceAccentColor => 'Name color (accent)';
 
   @override
   String get kioskAppearanceHexHint => 'HEX #RRGGBB';
@@ -6560,6 +6560,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'Preview';
+
+  @override
+  String get kioskUiThemeSection => 'Device interface colors';
+
+  @override
+  String get kioskUiThemeExplainer =>
+      'Choose the two core colors for THIS device’s interface only.';
+
+  @override
+  String get kioskUiThemeVsWordmarkNote =>
+      'Separate from the restaurant name/identity colors above.';
+
+  @override
+  String get kioskUiThemePresetNavy => 'Navy + Orange';
+
+  @override
+  String get kioskUiThemePresetForest => 'Forest + Orange';
+
+  @override
+  String get kioskUiThemePresetAubergine => 'Aubergine + Brick';
+
+  @override
+  String get kioskUiThemePresetCharcoal => 'Charcoal + Gold';
+
+  @override
+  String get kioskUiThemeCustom => 'Custom';
+
+  @override
+  String get kioskUiThemeCustomTitle => 'Custom device colors';
+
+  @override
+  String get kioskUiThemePrimaryLabel => 'Structural color (primary)';
+
+  @override
+  String get kioskUiThemeActionLabel => 'Buttons color (action)';
+
+  @override
+  String get kioskUiThemeApply => 'Apply';
+
+  @override
+  String get kioskUiThemeReset => 'Restore default colors';
+
+  @override
+  String get kioskUiThemePreviewAction => 'Main button';
+
+  @override
+  String get kioskUiThemePreviewBody => 'Readable text';
+
+  @override
+  String get kioskUiThemeAdvancedHex => 'Advanced HEX';
 
   @override
   String get kioskPrintFailedNotice =>

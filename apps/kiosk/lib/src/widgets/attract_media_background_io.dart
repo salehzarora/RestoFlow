@@ -18,7 +18,7 @@ Future<String?> _resolve(WidgetRef ref, String? mediaRef) async {
   return store.absolutePathOf(deviceId: scope.deviceId, ref: mediaRef);
 }
 
-const _fallback = ColoredBox(color: KioskColors.canvasBottom);
+ColoredBox get _fallback => ColoredBox(color: KioskColors.canvasBottom);
 
 /// §5 — ONE static external image, full-bleed cover, no carousel, no timer.
 /// Missing/corrupt files degrade to the neutral canvas.

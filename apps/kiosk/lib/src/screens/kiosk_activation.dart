@@ -252,10 +252,7 @@ class _KioskActivationScreenState extends State<KioskActivationScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(
-                      color: KioskColors.ring,
-                      width: 2,
-                    ),
+                    borderSide: BorderSide(color: KioskColors.ring, width: 2),
                   ),
                 ),
                 onSubmitted: (_) => _submit(),
@@ -348,7 +345,7 @@ class _KioskGateSpinner extends StatelessWidget {
       children: [
         const KioskBrandBadge(),
         const SizedBox(height: 46),
-        const SizedBox(
+        SizedBox(
           width: 64,
           height: 64,
           child: CircularProgressIndicator(

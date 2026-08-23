@@ -139,7 +139,7 @@ enum KioskAttractMediaMode {
 /// The compact curated palette offered beside strict hex input.
 const List<Color> kKioskBrandPalette = [
   Colors.white,
-  KioskColors.accentTop, // the V2 orange
+  Color(0xFFFB923C), // the V2 orange (static swatch, not the device theme)
   Color(0xFFFFD166), // warm gold
   Color(0xFF4ADE80), // fresh green
   Color(0xFF60A5FA), // cool blue
@@ -166,6 +166,7 @@ class KioskAppearanceSettings {
     required this.menuSubtitle,
     required this.logoOverridePngB64,
     required this.attractIntervalSeconds,
+    this.uiThemeWire = 'navy_ember',
     this.attractMediaMode = KioskAttractMediaMode.selectedMenuPhotos,
     this.featuredMenuItemIds = const [],
     this.customImageRef,
@@ -224,6 +225,13 @@ class KioskAppearanceSettings {
 
   final int attractIntervalSeconds;
 
+  /// KIOSK-001-107: the GLOBAL device UI theme wire — a preset id or
+  /// `custom:RRGGBB:RRGGBB`. Resolved through [KioskThemePair.fromWire]
+  /// (unknown/corrupt => the locked Navy+Ember default). This is the WHOLE
+  /// kiosk chrome identity; the wordmark/logo colors above remain their own
+  /// independent branding fields.
+  final String uiThemeWire;
+
   // ---- KIOSK-001-103 §3: curated attract media --------------------------
   final KioskAttractMediaMode attractMediaMode;
 
@@ -271,6 +279,7 @@ class KioskAppearanceSettings {
     KioskLocalizedCopy? menuSubtitle,
     Object? logoOverridePngB64 = _sentinel,
     int? attractIntervalSeconds,
+    String? uiThemeWire,
     KioskAttractMediaMode? attractMediaMode,
     List<String>? featuredMenuItemIds,
     Object? customImageRef = _sentinel,
@@ -289,6 +298,7 @@ class KioskAppearanceSettings {
         : logoOverridePngB64 as String?,
     attractIntervalSeconds:
         attractIntervalSeconds ?? this.attractIntervalSeconds,
+    uiThemeWire: uiThemeWire ?? this.uiThemeWire,
     attractMediaMode: attractMediaMode ?? this.attractMediaMode,
     featuredMenuItemIds: featuredMenuItemIds ?? this.featuredMenuItemIds,
     customImageRef: identical(customImageRef, _sentinel)
@@ -311,6 +321,7 @@ class KioskAppearanceSettings {
     'menu_subtitle': menuSubtitle.toJson(),
     if (logoOverridePngB64 != null) 'logo_override_b64': logoOverridePngB64,
     'attract_interval_seconds': attractIntervalSeconds,
+    'ui_theme_wire': uiThemeWire,
     'attract_media_mode': attractMediaMode.wire,
     'featured_menu_item_ids': featuredMenuItemIds,
     if (customImageRef != null) 'custom_image_ref': customImageRef,
@@ -401,6 +412,7 @@ class KioskAppearanceSettings {
               KioskAppearanceLimits.intervalChoices.contains(interval)
           ? interval
           : fallback.attractIntervalSeconds,
+      uiThemeWire: str('ui_theme_wire', fallback.uiThemeWire, 60),
       attractMediaMode:
           KioskAttractMediaMode.tryParse(raw['attract_media_mode']) ??
           fallback.attractMediaMode,
@@ -588,3 +600,12 @@ Map<String, String> kioskCategoryImageUrls(
   }
   return byCategory;
 }
+
+/// KIOSK-001-107 — the resolved GLOBAL device theme. Presets load exactly;
+/// `custom:RRGGBB:RRGGBB` decodes; anything unknown/corrupt falls back to the
+/// locked Navy+Ember (a bad stored value must never break a kiosk).
+final kioskUiThemeProvider = Provider<KioskThemePair>(
+  (ref) => KioskThemePair.fromWire(
+    ref.watch(kioskAppearanceProvider.select((a) => a.uiThemeWire)),
+  ),
+);

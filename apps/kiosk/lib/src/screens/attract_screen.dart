@@ -106,7 +106,7 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                   urls: carouselUrls,
                   holdSeconds: appearance.attractIntervalSeconds,
                 ),
-              KioskAttractMediaMode.selectedMenuPhotos => const ColoredBox(
+              KioskAttractMediaMode.selectedMenuPhotos => ColoredBox(
                 color: KioskColors.canvasBottom,
               ),
               KioskAttractMediaMode.customImage => KioskCustomImageBackground(
@@ -131,12 +131,12 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                 ),
                 child: KioskFixtureImage(
                   asset: kioskAttractAssets.first,
-                  fallback: const ColoredBox(color: KioskColors.canvasBottom),
+                  fallback: ColoredBox(color: KioskColors.canvasBottom),
                 ),
               ),
               KioskAttractMode.promo => KioskFixtureImage(
                 asset: kioskAttractAssets.last,
-                fallback: const ColoredBox(color: KioskColors.canvasBottom),
+                fallback: ColoredBox(color: KioskColors.canvasBottom),
               ),
               KioskAttractMode.video => ColoredBox(
                 color: KioskColors.canvasBottom,
@@ -156,7 +156,7 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                               width: 5,
                             ),
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Icon(
                               Icons.play_arrow_rounded,
                               size: 64,
@@ -182,7 +182,7 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
           // §7 scrim: photo first, cinematic darkening second. The middle
           // band stays nearly open so the meal reads unmistakably as a
           // photo; only the header and CTA floor keep deep contrast.
-          const DecoratedBox(
+          DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -191,8 +191,8 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                 colors: [
                   Color(0xB3060A14),
                   Color(0x21060A14),
-                  Color(0x3D070E1B),
-                  Color(0xE6070E1B),
+                  KioskColors.canvasTint(0x3D / 255),
+                  KioskColors.canvasTint(0xE6 / 255),
                 ],
               ),
             ),
@@ -573,8 +573,7 @@ class _KenBurnsPhoto extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       gaplessPlayback: true,
-      errorBuilder: (_, _, _) =>
-          const ColoredBox(color: KioskColors.canvasBottom),
+      errorBuilder: (_, _, _) => ColoredBox(color: KioskColors.canvasBottom),
     ),
   );
 }

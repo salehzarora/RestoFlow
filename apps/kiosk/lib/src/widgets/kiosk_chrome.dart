@@ -22,7 +22,7 @@ class KioskStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0xFF05080F),
+    color: KioskColors.stageBase,
     child: SafeArea(
       child: Center(
         child: FittedBox(
@@ -34,7 +34,7 @@ class KioskStage extends StatelessWidget {
             child: Material(
               type: MaterialType.transparency,
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -375,7 +375,7 @@ class KioskBrandBadge extends ConsumerWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xB8070E1B),
+          color: KioskColors.canvasTint(0xB8 / 255),
           border: Border.all(
             color: KioskColors.ring,
             width: size >= 118 ? 3.5 : 3,

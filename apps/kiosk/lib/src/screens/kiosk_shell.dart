@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kiosk_appearance.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../widgets/kiosk_chrome.dart';
@@ -27,6 +28,11 @@ class KioskShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(kioskFlowProvider);
     final controller = ref.read(kioskFlowProvider.notifier);
+    // KIOSK-001-107: bind the GLOBAL device theme before any child builds —
+    // the watch makes the whole shell rebuild when the owner APPLIES a new
+    // pair, so every `KioskColors.*` identity role resolves consistently.
+    // Bare tests / demo without a saved theme keep the locked Navy+Ember.
+    KioskColors.pair = ref.watch(kioskUiThemeProvider);
 
     return Listener(
       onPointerDown: (_) => controller.touch(),
@@ -197,7 +203,7 @@ class _KioskToast extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
             decoration: BoxDecoration(
-              color: const Color(0xEB0A1220),
+              color: KioskColors.cardTint(0xEB / 255),
               border: Border.all(
                 color: KioskColors.ring.withValues(alpha: .55),
                 width: 1.5,
@@ -219,7 +225,7 @@ class _KioskToast extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.check_rounded,
                   size: 26,
                   color: KioskColors.accentTop,

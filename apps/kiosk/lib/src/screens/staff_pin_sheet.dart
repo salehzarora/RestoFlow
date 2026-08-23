@@ -126,7 +126,7 @@ class _KioskStaffPinSheetState extends ConsumerState<KioskStaffPinSheet> {
             width: 640,
             padding: const EdgeInsets.fromLTRB(44, 40, 44, 36),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [KioskColors.sheetTop, KioskColors.pinCardBottom],
@@ -161,7 +161,7 @@ class _KioskStaffPinSheetState extends ConsumerState<KioskStaffPinSheet> {
                 const SizedBox(height: 22),
                 // --- staff picker (token-proven projection) ---
                 if (staff == null && !_staffFailed)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
                     child: SizedBox(
                       width: 34,
@@ -279,7 +279,7 @@ class _KioskStaffPinSheetState extends ConsumerState<KioskStaffPinSheet> {
                   SizedBox(
                     height: 30,
                     child: _busy
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(

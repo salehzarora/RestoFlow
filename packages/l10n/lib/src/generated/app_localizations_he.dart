@@ -6425,10 +6425,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskAppearanceTitleAccent => 'טקסט מודגש (רשות)';
 
   @override
-  String get kioskAppearancePrimaryColor => 'צבע ראשי';
+  String get kioskAppearancePrimaryColor => 'צבע שם המסעדה (ראשי)';
 
   @override
-  String get kioskAppearanceAccentColor => 'צבע הדגשה';
+  String get kioskAppearanceAccentColor => 'צבע שם המסעדה (הדגשה)';
 
   @override
   String get kioskAppearanceHexHint => 'HEX #RRGGBB';
@@ -6469,6 +6469,55 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'תצוגה מקדימה';
+
+  @override
+  String get kioskUiThemeSection => 'צבעי ממשק המכשיר';
+
+  @override
+  String get kioskUiThemeExplainer =>
+      'בחרו את שני הצבעים המרכזיים לממשק המכשיר הזה בלבד.';
+
+  @override
+  String get kioskUiThemeVsWordmarkNote => 'נפרד מצבעי שם/זהות המסעדה שלמעלה.';
+
+  @override
+  String get kioskUiThemePresetNavy => 'כחול כהה + כתום';
+
+  @override
+  String get kioskUiThemePresetForest => 'ירוק יער + כתום';
+
+  @override
+  String get kioskUiThemePresetAubergine => 'חציל + לבנה';
+
+  @override
+  String get kioskUiThemePresetCharcoal => 'פחם + זהב';
+
+  @override
+  String get kioskUiThemeCustom => 'מותאם אישית';
+
+  @override
+  String get kioskUiThemeCustomTitle => 'צבעי מכשיר מותאמים';
+
+  @override
+  String get kioskUiThemePrimaryLabel => 'צבע מבני (ראשי)';
+
+  @override
+  String get kioskUiThemeActionLabel => 'צבע הכפתורים (פעולה)';
+
+  @override
+  String get kioskUiThemeApply => 'החלה';
+
+  @override
+  String get kioskUiThemeReset => 'שחזור צבעי ברירת המחדל';
+
+  @override
+  String get kioskUiThemePreviewAction => 'כפתור ראשי';
+
+  @override
+  String get kioskUiThemePreviewBody => 'טקסט קריא';
+
+  @override
+  String get kioskUiThemeAdvancedHex => 'HEX מתקדם';
 
   @override
   String get kioskPrintFailedNotice =>

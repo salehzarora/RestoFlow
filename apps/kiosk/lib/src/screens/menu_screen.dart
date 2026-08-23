@@ -269,7 +269,7 @@ class _MenuStatepanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (status == KioskMenuStatus.loading)
-              const SizedBox(
+              SizedBox(
                 width: 64,
                 height: 64,
                 child: CircularProgressIndicator(
@@ -365,9 +365,7 @@ class _ProductCard extends StatelessWidget {
                   asset: item.imageAsset,
                   // 086: a fixture asset that fails to load shows the plain
                   // well (pre-083 exact) — the card title already names it.
-                  assetErrorFallback: const ColoredBox(
-                    color: KioskColors.imageWell,
-                  ),
+                  assetErrorFallback: ColoredBox(color: KioskColors.imageWell),
                   fallback: ColoredBox(
                     color: KioskColors.imageWell,
                     child: Center(
@@ -553,7 +551,7 @@ class KioskBottomBar extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0x73070E1B),
+                          color: KioskColors.canvasTint(0x73 / 255),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
