@@ -72,7 +72,11 @@ void _expectNoOverflow(WidgetTester tester, String at) {
 Future<void> _pumpPos(
   WidgetTester tester, {
   required double width,
-  double height = 1200,
+  // PERF-110: the two-pane band under test is a LANDSCAPE contract — portrait
+  // is single-pane by posture now, however wide. 800 keeps every sweep width
+  // (820..1366) landscape AND above the 640 compact hinge, so the cart widths
+  // this file pins (340 at 1024, 400 at desktop) are unchanged.
+  double height = 800,
   bool loading = false,
   Locale locale = const Locale('en'),
   bool demo = true,
@@ -171,7 +175,7 @@ void main() {
         // The surface really is the two-pane one under test, with live content
         // in BOTH panes — not an empty or collapsed frame that cannot overflow.
         expect(
-          posLayoutModeFor(width: width, height: 1200),
+          posLayoutModeFor(width: width, height: 800),
           isNot(PosLayoutMode.phone),
         );
         expect(find.byType(CartPanel), findsOneWidget);

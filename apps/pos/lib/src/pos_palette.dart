@@ -309,6 +309,93 @@ PosLayoutMode posLayoutModeFor({
   return PosLayoutMode.phone;
 }
 
+// ---------------------------------------------------------------------------
+// DEVICE-RUNTIME-LARGE-TABLET-PERF-110 — shell POSTURE is a separate axis from
+// the width band.
+//
+// [posLayoutModeFor] is a pure WIDTH band once the landscape-compact test is
+// out of the way, so a physically large / low-density PORTRAIT tablet (a 16"
+// 1920×1200 panel held upright → 1200dp wide) used to read as `tablet` and
+// got menu + a fixed 360dp side cart squeezed into a portrait window — the
+// "panels enter each other" symptom. Posture now answers ONE question
+// ("persistent side cart, or bottom bar + sheet?") from ORIENTATION first;
+// the column count and density stay separate resolvers.
+//
+// Contract:
+// - PORTRAIT (height >= width) below the DESKTOP band (width < 1360) ⇒
+//   [PosShellPosture.singlePane]: full-width menu, cart through the bottom
+//   bar / sheet, NEVER a side cart just because the width is ≥ 820. Columns:
+//   2 on phones, 3 from [kPosPortraitThreeColumnMinWidth] up (tablet-class
+//   portrait). No Android tablet reaches 1360 logical px in portrait even at
+//   dpr 1.0 — that band is a desktop monitor or a tall browser window, where
+//   a 954+dp menu pane beside the cart is the better shell, so desktop-class
+//   portrait keeps the two-pane layout it has today.
+// - LANDSCAPE ⇒ byte-identical to the frozen PosLayoutMode tables
+//   (desktop/tablet/smallTablet/narrowTablet/compactLandscape two-pane,
+//   phone single-pane). `pos_large_tablet_posture_110_test.dart` pins this
+//   parity over a landscape sweep.
+// ---------------------------------------------------------------------------
+
+/// Whether the POS shell shows the persistent side cart (two-pane) or the
+/// full-width menu with the bottom cart bar / slide-up sheet (single-pane).
+enum PosShellPosture { singlePane, twoPane }
+
+/// Portrait is the non-landscape half-plane INCLUDING the square diagonal —
+/// the same boundary [posLayoutModeFor] uses (`landscape = width > height`),
+/// so no viewport can be landscape for one resolver and portrait for another.
+bool posIsPortrait({required double width, required double height}) =>
+    !(width > height);
+
+/// PORTRAIT widths at or above this use 3 menu columns (tablet-class);
+/// narrower portrait devices (phones) keep 2.
+const double kPosPortraitThreeColumnMinWidth = 760;
+
+/// PORTRAIT viewports at or above this width are desktop-class (monitors /
+/// tall browser windows, never tablets) and keep the two-pane shell.
+const double kPosPortraitDesktopMinWidth = 1360;
+
+/// Whether a portrait viewport is a tablet/phone-class one that must be
+/// single pane (vs a desktop-class portrait window).
+bool posIsPortraitTablet({required double width, required double height}) =>
+    posIsPortrait(width: width, height: height) &&
+    width < kPosPortraitDesktopMinWidth;
+
+/// The shell posture for a viewport. Tablet/phone-class portrait ⇒ single
+/// pane; desktop-class portrait and every landscape ⇒ the frozen mode rule.
+PosShellPosture posShellPostureFor({
+  required double width,
+  required double height,
+}) {
+  if (posIsPortraitTablet(width: width, height: height)) {
+    return PosShellPosture.singlePane;
+  }
+  return posLayoutModeFor(width: width, height: height) == PosLayoutMode.phone
+      ? PosShellPosture.singlePane
+      : PosShellPosture.twoPane;
+}
+
+/// Side-cart width for the viewport — the frozen [posCartWidthFor] table in
+/// landscape, 0 whenever the posture is single pane.
+double posShellCartWidthFor({required double width, required double height}) =>
+    posShellPostureFor(width: width, height: height) == PosShellPosture.twoPane
+    ? posCartWidthFor(posLayoutModeFor(width: width, height: height))
+    : 0;
+
+/// Product-grid column count for the viewport: the frozen [posMenuColumnsFor]
+/// table in landscape; 2 / 3 in portrait by [kPosPortraitThreeColumnMinWidth].
+int posMenuColumnsForViewport({required double width, required double height}) {
+  if (!posIsPortraitTablet(width: width, height: height)) {
+    return posMenuColumnsFor(posLayoutModeFor(width: width, height: height));
+  }
+  return width >= kPosPortraitThreeColumnMinWidth ? 3 : 2;
+}
+
+/// The tighter grid/shell paddings — exactly the compact-landscape class;
+/// portrait is never compact.
+bool posCompactDensityFor({required double width, required double height}) =>
+    posLayoutModeFor(width: width, height: height) ==
+    PosLayoutMode.compactLandscape;
+
 /// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved floating two-surface
 /// shell (tokens §5/§6/§8): page pad 16, panel gap 14, r18 borderless panels
 /// on a soft floating shadow.

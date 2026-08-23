@@ -9,6 +9,7 @@ import '../data/kiosk_appearance.dart';
 import '../data/kiosk_attract_media.dart';
 import '../data/kiosk_logo_picker.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 import '../widgets/kiosk_chrome.dart';
 import 'device_theme_picker.dart';
 import 'featured_picker.dart';
@@ -669,7 +670,11 @@ class _PreviewCard extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: logo != null
-                ? Image.memory(logo, fit: BoxFit.cover)
+                ? Image.memory(
+                    logo,
+                    fit: BoxFit.cover,
+                    cacheWidth: kioskDecodeWidth(context, 84),
+                  )
                 : Center(
                     child: Text(
                       draft.monogram,
@@ -760,7 +765,11 @@ class _LogoWell extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: logo != null
-          ? Image.memory(logo, fit: BoxFit.cover)
+          ? Image.memory(
+              logo,
+              fit: BoxFit.cover,
+              cacheWidth: kioskDecodeWidth(context, 120),
+            )
           : Center(
               child: Text(
                 draft.monogram,

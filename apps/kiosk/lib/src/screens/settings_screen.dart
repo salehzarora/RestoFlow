@@ -9,6 +9,7 @@ import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_staff_access.dart';
 import '../widgets/kiosk_chrome.dart';
 import 'appearance_settings.dart';
+import 'perf_diagnostics_section.dart';
 import 'printer_settings.dart';
 
 /// 09 · Device settings (staff) — FIXTURE SHELL. Controls mutate in-memory
@@ -23,7 +24,11 @@ class KioskSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (settings: s.settings, dailySeq: s.dailySeq),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final settings = state.settings;
 
@@ -90,14 +95,19 @@ class KioskSettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const Expanded(
+            Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    KioskAppearanceSection(),
+                    const KioskAppearanceSection(),
                     // KIOSK-001-103: the REAL receipt-printer section (kiosk
                     // namespace; customer receipt only).
-                    KioskPrinterSection(),
+                    const KioskPrinterSection(),
+                    // PERF-110: TEST-BUILD-ONLY device metrics + frame
+                    // timing (RESTOFLOW_PERF_DIAGNOSTICS=true). Absent
+                    // otherwise.
+                    if (ref.watch(kioskPerfDiagnosticsEnabledProvider))
+                      const KioskPerfDiagnosticsSection(),
                   ],
                 ),
               ),

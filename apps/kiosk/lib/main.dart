@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show PerfFrameRecorder, perfDiagnosticsEnabled;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +49,9 @@ import 'src/state/kiosk_staff_access.dart';
 /// integer tax) — payment stays at the cashier.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // PERF-110: TEST-BUILD-ONLY frame recorder (RESTOFLOW_PERF_DIAGNOSTICS=true).
+  // Compile-time false in production builds — this line is then dead code.
+  if (perfDiagnosticsEnabled()) PerfFrameRecorder.instance.start();
   // Kiosk posture: portrait only, immersive fullscreen. Keep-screen-on is
   // applied on Android in MainActivity (FLAG_KEEP_SCREEN_ON).
   unawaited(

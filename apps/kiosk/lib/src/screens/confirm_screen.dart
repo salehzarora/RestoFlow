@@ -7,6 +7,7 @@ import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 import '../print/kiosk_receipt_auto_print.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_receipt_branding.dart';
@@ -24,7 +25,18 @@ class KioskConfirmScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    // The auto-return countdown legitimately updates once per second —
+    // but only THIS screen, never the rest of the stage.
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (
+          rtl: s.rtl,
+          lang: s.lang,
+          lastOrder: s.lastOrder,
+          confirmSecondsLeft: s.confirmSecondsLeft,
+        ),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final menu = ref.watch(kioskMenuDataProvider);
     final order = state.lastOrder;
@@ -481,6 +493,7 @@ class _SlipBrandHeader extends ConsumerWidget {
         key: const Key('kiosk-slip-receipt-logo'),
         fit: BoxFit.contain,
         gaplessPlayback: true,
+        cacheWidth: kioskDecodeWidth(context, 320),
         // Corrupt bytes degrade to the real name, never a broken image.
         errorBuilder: (_, _, _) => nameText,
       ),

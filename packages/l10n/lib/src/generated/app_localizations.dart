@@ -7954,6 +7954,24 @@ abstract class AppLocalizations {
   /// **'This device can print directly to a network printer (set up above) — no print bridge needed.'**
   String get deviceSettingsNativeNetworkNote;
 
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: heading of the TEST-BUILD-ONLY device metrics + frame-timing section in POS/Kiosk staff Device Settings (present only when the build was made with RESTOFLOW_PERF_DIAGNOSTICS=true).
+  ///
+  /// In en, this message translates to:
+  /// **'Performance diagnostics (test build)'**
+  String get deviceSettingsPerfDiagnosticsTitle;
+
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: explainer under the perf diagnostics heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Local only — nothing is stored or sent. Leave the app on a busy screen for 30 seconds, then read the frame numbers here.'**
+  String get deviceSettingsPerfDiagnosticsNote;
+
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: button that clears the rolling frame-timing window.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset samples'**
+  String get deviceSettingsPerfDiagnosticsReset;
+
   /// Device-settings status pill for an enabled assigned printer on the native Android app, replacing 'Requires print bridge' when direct network printing is available (ANDROID-002).
   ///
   /// In en, this message translates to:

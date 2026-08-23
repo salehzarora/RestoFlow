@@ -4305,6 +4305,16 @@ class AppLocalizationsHe extends AppLocalizations {
       'מכשיר זה יכול להדפיס ישירות למדפסת רשת (מוגדרת למעלה) — אין צורך בגשר הדפסה.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle => 'אבחון ביצועים (גרסת בדיקה)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'מקומי בלבד — שום דבר לא נשמר ולא נשלח. השאירו את האפליקציה על מסך עמוס 30 שניות ואז קראו כאן את מספרי הפריימים.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'איפוס דגימות';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'מוגדרת';
 
   @override

@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../data/kiosk_appearance.dart';
 import '../data/kiosk_attract_media.dart';
+import '../media/kiosk_media_image.dart';
 import '../design/kiosk_theme.dart';
 
 /// Resolves a stored media REF to its absolute device-local path (null =>
@@ -32,8 +33,14 @@ class KioskCustomImageBackground extends ConsumerWidget {
     builder: (context, snapshot) {
       final path = snapshot.data;
       if (path == null) return _fallback;
-      return Image.file(
-        File(path),
+      // PERF-110: an operator upload has no size contract — cap the decode
+      // at the full-stage physical need instead of the file's native size.
+      return Image(
+        image: kioskCappedImageProvider(
+          context,
+          FileImage(File(path)),
+          designWidth: kioskDesignSize.width,
+        ),
         key: const Key('kiosk-attract-custom-image'),
         fit: BoxFit.cover,
         gaplessPlayback: true,

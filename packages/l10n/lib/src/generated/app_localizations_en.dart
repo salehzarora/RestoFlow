@@ -4363,6 +4363,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This device can print directly to a network printer (set up above) — no print bridge needed.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle =>
+      'Performance diagnostics (test build)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'Local only — nothing is stored or sent. Leave the app on a busy screen for 30 seconds, then read the frame numbers here.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'Reset samples';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'Configured';
 
   @override

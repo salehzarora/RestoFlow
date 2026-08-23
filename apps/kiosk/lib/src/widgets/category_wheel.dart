@@ -3,6 +3,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 import 'kiosk_chrome.dart';
 
 /// KIOSK-001 — the V2 gesture-driven vertical category wheel.
@@ -118,11 +119,15 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
             top: 0,
             bottom: 0,
             child: IgnorePointer(
-              child: CustomPaint(
-                size: const Size(120, double.infinity),
-                painter: _WheelArcPainter(
-                  // V2 arcFlip: the belly turns toward the discs in RTL.
-                  flip: Directionality.of(context) == TextDirection.rtl,
+              // PERF-110: the arc is static (shouldRepaint only on flip) yet
+              // rebuilt its shader + full-height path on every rail repaint.
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  size: const Size(120, double.infinity),
+                  painter: _WheelArcPainter(
+                    // V2 arcFlip: the belly turns toward the discs in RTL.
+                    flip: Directionality.of(context) == TextDirection.rtl,
+                  ),
                 ),
               ),
             ),
@@ -291,8 +296,14 @@ class _WheelRow extends StatelessWidget {
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.network(
-                              imageUrl!,
+                            Image(
+                              // PERF-110: a 64–150px disc must never decode
+                              // the full product photo.
+                              image: kioskNetworkImageProvider(
+                                context,
+                                imageUrl!,
+                                designWidth: disc,
+                              ),
                               fit: BoxFit.cover,
                               gaplessPlayback: true,
                               errorBuilder: (_, _, _) => _iconFallback(disc),

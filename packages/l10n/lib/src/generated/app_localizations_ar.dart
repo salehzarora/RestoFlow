@@ -4337,6 +4337,16 @@ class AppLocalizationsAr extends AppLocalizations {
       'يمكن لهذا الجهاز الطباعة مباشرة على طابعة شبكة (تُضبط أعلاه) — لا حاجة إلى جسر الطباعة.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle => 'تشخيص الأداء (نسخة اختبار)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'محلي فقط — لا يُحفظ شيء ولا يُرسل. اترك التطبيق على شاشة مزدحمة 30 ثانية ثم اقرأ أرقام الإطارات هنا.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'إعادة تعيين العينات';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'مُهيّأة';
 
   @override

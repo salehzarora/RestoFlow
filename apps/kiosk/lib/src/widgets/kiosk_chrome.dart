@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 
 /// Shared V2 chrome: the fixed 1080×1920 stage, glass surfaces, pills, the
 /// brand badge, the language capsule and the accent underline — the pieces
@@ -24,60 +25,83 @@ class KioskStage extends StatelessWidget {
   Widget build(BuildContext context) => ColoredBox(
     color: KioskColors.stageBase,
     child: SafeArea(
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox.fromSize(
-            size: kioskDesignSize,
-            // Transparent Material: text fields/ink need a Material ancestor;
-            // the kiosk paints every surface itself.
-            child: Material(
-              type: MaterialType.transparency,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [KioskColors.canvasTop, KioskColors.canvasBottom],
+      // PERF-110: publish the exact scale FittedBox.contain will resolve so
+      // image decode caps (and the diagnostics page) can convert design px
+      // to device px. Same box, same arithmetic — nothing about the fit
+      // changes.
+      child: LayoutBuilder(
+        builder: (context, constraints) => KioskStageScale(
+          scale: KioskStageScale.forBox(constraints.biggest, kioskDesignSize),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox.fromSize(
+                size: kioskDesignSize,
+                // Transparent Material: text fields/ink need a Material
+                // ancestor; the kiosk paints every surface itself.
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          KioskColors.canvasTop,
+                          KioskColors.canvasBottom,
+                        ],
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        // V2 canvas depth: navy bloom top-end + faint ember
+                        // floor. PERF-110: one RepaintBoundary keeps these
+                        // two static full-stage radial fills in a retained
+                        // layer instead of re-rastering them on every
+                        // animation frame of every screen.
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: RadialGradient(
+                                        center: const Alignment(.64, -.92),
+                                        radius: 1.0,
+                                        colors: [
+                                          KioskColors.canvasGlow,
+                                          KioskColors.canvasGlow.withValues(
+                                            alpha: 0,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: RadialGradient(
+                                        center: const Alignment(-.84, 1.0),
+                                        radius: 1.1,
+                                        colors: [
+                                          KioskColors.ring.withValues(
+                                            alpha: .09,
+                                          ),
+                                          KioskColors.ring.withValues(alpha: 0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        child,
+                      ],
+                    ),
                   ),
-                ),
-                child: Stack(
-                  children: [
-                    // V2 canvas depth: navy bloom top-end + faint ember floor.
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(.64, -.92),
-                              radius: 1.0,
-                              colors: [
-                                KioskColors.canvasGlow,
-                                KioskColors.canvasGlow.withValues(alpha: 0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(-.84, 1.0),
-                              radius: 1.1,
-                              colors: [
-                                KioskColors.ring.withValues(alpha: .09),
-                                KioskColors.ring.withValues(alpha: 0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    child,
-                  ],
                 ),
               ),
             ),
@@ -129,6 +153,7 @@ class KioskMenuImage extends StatelessWidget {
     required this.fallback,
     this.assetErrorFallback,
     this.fit = BoxFit.cover,
+    this.designWidth,
   });
   final String? url;
   final String? asset;
@@ -138,6 +163,11 @@ class KioskMenuImage extends StatelessWidget {
   /// Defaults to [fallback] when not provided.
   final Widget? assetErrorFallback;
   final BoxFit fit;
+
+  /// PERF-110: the destination width in DESIGN px used for the decode cap.
+  /// Null = measure the incoming constraints (inside the stage those ARE
+  /// design px); unbounded constraints leave the decode uncapped.
+  final double? designWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -149,27 +179,36 @@ class KioskMenuImage extends StatelessWidget {
         fallback: assetErrorFallback ?? fallback,
       );
     }
+    final fixedWidth = designWidth;
     return Stack(
       fit: StackFit.expand,
       children: [
         fallback,
-        Image.network(
-          url,
-          fit: fit,
-          // A dead/expired URL quietly leaves the well visible underneath.
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          frameBuilder: (context, child, frame, wasSync) => wasSync
-              ? child
-              : AnimatedOpacity(
-                  opacity: frame == null ? 0 : 1,
-                  duration: KioskMotion.screenFade,
-                  curve: KioskMotion.curve,
-                  child: child,
-                ),
-        ),
+        if (fixedWidth != null)
+          _photo(context, url, fixedWidth)
+        else
+          LayoutBuilder(
+            builder: (context, constraints) =>
+                _photo(context, url, constraints.maxWidth),
+          ),
       ],
     );
   }
+
+  Widget _photo(BuildContext context, String url, double width) => Image(
+    image: kioskNetworkImageProvider(context, url, designWidth: width),
+    fit: fit,
+    // A dead/expired URL quietly leaves the well visible underneath.
+    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    frameBuilder: (context, child, frame, wasSync) => wasSync
+        ? child
+        : AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: KioskMotion.screenFade,
+            curve: KioskMotion.curve,
+            child: child,
+          ),
+  );
 }
 
 /// Press feedback: V2 `style-active="transform:scale(.97)"`.
@@ -292,6 +331,7 @@ class KioskBrandBadge extends ConsumerWidget {
           fit: BoxFit.cover,
           width: size,
           height: size,
+          cacheWidth: kioskDecodeWidth(context, size),
           errorBuilder: (_, _, _) => Center(
             child: Text(
               appearance.monogram,

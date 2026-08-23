@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show PerfFrameRecorder, perfDiagnosticsEnabled;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
@@ -51,6 +53,9 @@ import 'src/widgets/pos_sync_lifecycle.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // PERF-110: TEST-BUILD-ONLY frame recorder (RESTOFLOW_PERF_DIAGNOSTICS=true).
+  // Compile-time false in production builds — this line is then dead code.
+  if (perfDiagnosticsEnabled()) PerfFrameRecorder.instance.start();
   // Language before first frame: the persisted per-device choice wins; the
   // FIRST-LAUNCH default is ARABIC (the official language — sprint).
   final persistedLocale = await readPersistedLocale();

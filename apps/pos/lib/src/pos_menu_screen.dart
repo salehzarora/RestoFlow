@@ -220,12 +220,15 @@ class PosMenuScreen extends StatelessWidget {
               // this also stops the cart width and the column count disagreeing
               // while the keyboard is open.
               final viewport = MediaQuery.sizeOf(context);
-              final mode = posLayoutModeFor(
+              // PERF-110: posture (side cart vs bottom bar) is decided by
+              // ORIENTATION first — portrait is always single pane; landscape
+              // keeps the frozen PosLayoutMode contract.
+              final posture = posShellPostureFor(
                 width: viewport.width,
                 height: viewport.height,
               );
 
-              if (mode == PosLayoutMode.phone) {
+              if (posture == PosShellPosture.singlePane) {
                 // 007 FRAMELESS: the phone pane paints its own WHITE base.
                 // The frameless cards rely on the workspace surface being
                 // white; without this they would sit transparently on the
@@ -245,7 +248,10 @@ class PosMenuScreen extends StatelessWidget {
                 );
               }
 
-              final compact = mode == PosLayoutMode.compactLandscape;
+              final compact = posCompactDensityFor(
+                width: viewport.width,
+                height: viewport.height,
+              );
               // POS-REFERENCE-VISUAL-SURGERY-003: TWO floating surfaces on
               // the ivory canvas — the rounded white menu WORKSPACE and the
               // rounded white ORDER SUMMARY panel — separated by real
@@ -261,7 +267,10 @@ class PosMenuScreen extends StatelessWidget {
                     const Expanded(child: _ShellSurface(child: _MenuPane())),
                     SizedBox(width: gap),
                     SizedBox(
-                      width: posCartWidthFor(mode),
+                      width: posShellCartWidthFor(
+                        width: viewport.width,
+                        height: viewport.height,
+                      ),
                       child: _ShellSurface(child: CartPanel(compact: compact)),
                     ),
                   ],
@@ -333,9 +342,10 @@ class _MenuPane extends ConsumerWidget {
     // POS-OPEN-ORDERS-STRIP-011: the strip needs the denser band exactly where
     // the grid itself goes compact (the 1024x600 class of viewports).
     final viewport = MediaQuery.sizeOf(context);
-    final compactStrip =
-        posLayoutModeFor(width: viewport.width, height: viewport.height) ==
-        PosLayoutMode.compactLandscape;
+    final compactStrip = posCompactDensityFor(
+      width: viewport.width,
+      height: viewport.height,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,28 +610,34 @@ class PosMenuGridGeometry {
     required this.cellWidth,
   });
 
-  /// Resolves the geometry for the [availableWidth] the grid is given.
-  factory PosMenuGridGeometry.of(
-    double availableWidth,
-    double availableHeight,
-  ) {
-    final mode = posLayoutModeFor(
-      width: availableWidth,
-      height: availableHeight,
+  /// Resolves the geometry for a grid [availableWidth] wide on a device whose
+  /// WHOLE viewport is [viewportWidth]×[viewportHeight]. (PERF-110: the
+  /// former `.of(availableWidth, availableHeight)` derived the layout class
+  /// from the PANE — the exact disagreement POS-PHASE1-FOLLOWUP-008 removed —
+  /// and had no callers; the viewport-based rule is now the only one.)
+  factory PosMenuGridGeometry.forViewport({
+    required double availableWidth,
+    required double viewportWidth,
+    required double viewportHeight,
+  }) {
+    final compact = posCompactDensityFor(
+      width: viewportWidth,
+      height: viewportHeight,
     );
-    final compact = mode == PosLayoutMode.compactLandscape;
     final padding = compact ? 12.0 : RestoflowSpacing.lg;
     // 007 FRAMELESS: with the card box gone, the GAP is what separates
     // products — one step wider (14) on roomy modes; compact keeps 10.
     final spacing = compact ? 10.0 : 14.0;
-    final columns = posMenuColumnsFor(mode);
+    final columns = posMenuColumnsForViewport(
+      width: viewportWidth,
+      height: viewportHeight,
+    );
     final content = availableWidth - 2 * padding;
-    final cellWidth = (content - (columns - 1) * spacing) / columns;
     return PosMenuGridGeometry(
       columns: columns,
       padding: padding,
       spacing: spacing,
-      cellWidth: cellWidth,
+      cellWidth: (content - (columns - 1) * spacing) / columns,
     );
   }
 
@@ -650,18 +666,10 @@ PosMenuGridGeometry posMenuGridGeometryOf(
   double availableWidth,
 ) {
   final size = MediaQuery.sizeOf(context);
-  final mode = posLayoutModeFor(width: size.width, height: size.height);
-  final compact = mode == PosLayoutMode.compactLandscape;
-  final padding = compact ? 12.0 : RestoflowSpacing.lg;
-  // 007: matches PosMenuGridGeometry.of — the gap separates products now.
-  final spacing = compact ? 10.0 : 14.0;
-  final columns = posMenuColumnsFor(mode);
-  final content = availableWidth - 2 * padding;
-  return PosMenuGridGeometry(
-    columns: columns,
-    padding: padding,
-    spacing: spacing,
-    cellWidth: (content - (columns - 1) * spacing) / columns,
+  return PosMenuGridGeometry.forViewport(
+    availableWidth: availableWidth,
+    viewportWidth: size.width,
+    viewportHeight: size.height,
   );
 }
 
@@ -793,26 +801,29 @@ class _MenuGrid extends ConsumerWidget {
     // PILOT-OPERATIONS-CORRECTIONS-001: the deliberate availability-management
     // action is shown ONLY to an operator the SERVER says holds
     // manage_menu_availability (unknown => hidden; the server enforces anyway).
-    final canManageAvailability =
-        ref
-            .watch(staffCapabilitiesProvider)
-            .valueOrNull
-            ?.manageMenuAvailability ??
-        false;
+    // PERF-110: a bool select — the capability envelope re-emits for many
+    // unrelated reasons; the grid only cares about this one flag.
+    final canManageAvailability = ref.watch(
+      staffCapabilitiesProvider.select(
+        (caps) => caps.valueOrNull?.manageMenuAvailability ?? false,
+      ),
+    );
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final query = ref.watch(searchQueryProvider);
     final items = filterMenuItems(menu.items, selectedCategory, query);
 
-    // In-cart quantities per item id (presentation only — for the card badge).
-    final cart = ref.watch(cartControllerProvider);
-    final inCart = <String, int>{};
-    for (final line in cart.lines) {
-      inCart[line.menuItemId] = (inCart[line.menuItemId] ?? 0) + line.quantity;
-    }
     // PSC-001C cart-safety: while a frozen addition attempt owns the cart the
     // add gestures are DISABLED (the controller refuses the mutation
     // regardless; the cart banner explains the pending/refresh state).
-    final cartLocked = cart.lockedByAddition;
+    //
+    // PERF-110: the grid used to watch the WHOLE cart state (no value
+    // equality) — every add/remove/note/quantity change rebuilt every visible
+    // product card. Now the grid selects only the lock flag; each card's
+    // in-cart badge selects its OWN quantity (`_inCartQuantityOf`), so an add
+    // rebuilds exactly the card whose count changed.
+    final cartLocked = ref.watch(
+      cartControllerProvider.select((c) => c.lockedByAddition),
+    );
 
     if (menu.items.isEmpty) {
       // 017: no vertical scroll here either — the strip keeps its fixed spot
@@ -872,66 +883,76 @@ class _MenuGrid extends ConsumerWidget {
                   // transform): the grid's measured geometry, the card's keys
                   // and every tap target are untouched, and both render the
                   // final state immediately under reduced motion.
-                  return PosEntrance(
-                    index: index,
-                    child: PosTapBump(
-                      enabled: !cartLocked && !item.isUnavailable,
-                      child: MenuItemCard(
-                        item: item,
-                        category: menu.categoryOf(item.categoryId),
-                        currencyCode: menu.currencyCode,
-                        optionGroupCount: groups.length,
-                        inCartQuantity: inCart[item.id] ?? 0,
-                        interactionAccent: accent,
-                        onManageAvailability: canManageAvailability
-                            ? () => MenuAvailabilitySheet.show(
-                                context,
-                                item: item,
-                              )
-                            : null,
-                        onAdd: cartLocked
-                            ? null
-                            : groups.isEmpty
-                            ? () {
-                                // Celebrate ONLY an APPLIED mutation: if the
-                                // addition freeze lands between frame build
-                                // and tap, the controller refuses — no fly
-                                // ghost, no "added" toast for a refused add.
-                                if (controller.addItem(item) ==
-                                    CartMutationResult.applied) {
-                                  _celebrateAdd(
+                  return Consumer(
+                    builder: (context, ref, _) {
+                      // PERF-110: this card's badge count only.
+                      final inCartQuantity = ref.watch(
+                        cartControllerProvider.select(
+                          (c) => _inCartQuantityOf(c, item.id),
+                        ),
+                      );
+                      return PosEntrance(
+                        index: index,
+                        child: PosTapBump(
+                          enabled: !cartLocked && !item.isUnavailable,
+                          child: MenuItemCard(
+                            item: item,
+                            category: menu.categoryOf(item.categoryId),
+                            currencyCode: menu.currencyCode,
+                            optionGroupCount: groups.length,
+                            inCartQuantity: inCartQuantity,
+                            interactionAccent: accent,
+                            onManageAvailability: canManageAvailability
+                                ? () => MenuAvailabilitySheet.show(
                                     context,
-                                    l10n,
-                                    item.name,
-                                    accent,
-                                  );
-                                }
-                              }
-                            : () => ModifierSelectionSheet.show(
-                                context,
-                                item: item,
-                                groups: groups,
-                                currencyCode: menu.currencyCode,
-                                category: menu.categoryOf(item.categoryId),
-                                onConfirm: (selections, note, quantity) {
-                                  if (controller.addItemWithModifiers(
-                                        item,
-                                        selections,
-                                        note: note,
-                                        quantity: quantity,
-                                      ) ==
-                                      CartMutationResult.applied) {
-                                    _celebrateAdd(
-                                      context,
-                                      l10n,
-                                      item.name,
-                                      accent,
-                                    );
+                                    item: item,
+                                  )
+                                : null,
+                            onAdd: cartLocked
+                                ? null
+                                : groups.isEmpty
+                                ? () {
+                                    // Celebrate ONLY an APPLIED mutation: if the
+                                    // addition freeze lands between frame build
+                                    // and tap, the controller refuses — no fly
+                                    // ghost, no "added" toast for a refused add.
+                                    if (controller.addItem(item) ==
+                                        CartMutationResult.applied) {
+                                      _celebrateAdd(
+                                        context,
+                                        l10n,
+                                        item.name,
+                                        accent,
+                                      );
+                                    }
                                   }
-                                },
-                              ),
-                      ),
-                    ),
+                                : () => ModifierSelectionSheet.show(
+                                    context,
+                                    item: item,
+                                    groups: groups,
+                                    currencyCode: menu.currencyCode,
+                                    category: menu.categoryOf(item.categoryId),
+                                    onConfirm: (selections, note, quantity) {
+                                      if (controller.addItemWithModifiers(
+                                            item,
+                                            selections,
+                                            note: note,
+                                            quantity: quantity,
+                                          ) ==
+                                          CartMutationResult.applied) {
+                                        _celebrateAdd(
+                                          context,
+                                          l10n,
+                                          item.name,
+                                          accent,
+                                        );
+                                      }
+                                    },
+                                  ),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               );
@@ -946,43 +967,36 @@ class _MenuGrid extends ConsumerWidget {
     // the snapshot's server fetch time (locale-formatted, never hand-rolled).
     // SURGERY-003: the grid sits directly on the white workspace surface;
     // the ivory canvas (the ambience) lives in the shell gutters around it.
-    final offline = ref.watch(posOfflineModeProvider);
-    if (offline.phase != PosOfflinePhase.offlineCached) {
+    // PERF-110: the grid selects ONLY the phase bit. The 25-second reconnect
+    // probe flips `probing` and `snapshotFetchedAt` on every tick — those now
+    // rebuild the slim banner alone (`_OfflineCachedBanner`), never the
+    // product grid.
+    final offlineCached = ref.watch(
+      posOfflineModeProvider.select(
+        (o) => o.phase == PosOfflinePhase.offlineCached,
+      ),
+    );
+    if (!offlineCached) {
       return grid;
     }
-    final fetchedAt = offline.snapshotFetchedAt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(
-            RestoflowSpacing.lg,
-            RestoflowSpacing.sm,
-            RestoflowSpacing.lg,
-            0,
-          ),
-          child: RestoflowNoticeBanner(
-            key: const Key('pos-offline-banner'),
-            tone: RestoflowTone.warning,
-            icon: Icons.cloud_off_outlined,
-            title: fetchedAt == null ? null : l10n.posOfflineModeBanner,
-            // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] While a
-            // reconnect PROBE's fetch is in flight the body says so, then
-            // reverts to the snapshot age when that attempt lands (each
-            // `record*` outcome clears `probing`). The PHASE is untouched, so
-            // this is honest: the POS is still offline and every server-backed
-            // action stays refused until a fetch genuinely succeeds. The
-            // banner's key is unchanged so nothing keyed on it moves.
-            body: offline.probing
-                ? l10n.posOfflineBannerReconnecting
-                : fetchedAt == null
-                ? l10n.posOfflineModeBanner
-                : l10n.posOfflineDataAge(_snapshotAgeLabel(context, fetchedAt)),
-          ),
-        ),
+        const _OfflineCachedBanner(),
         Expanded(child: grid),
       ],
     );
+  }
+
+  /// PERF-110: the quantity of [itemId] currently in the cart (the card's
+  /// badge). Summed per card on demand — lines are few, cards are many, and
+  /// selecting an int means only the touched card rebuilds.
+  static int _inCartQuantityOf(CartViewState cart, String itemId) {
+    var total = 0;
+    for (final line in cart.lines) {
+      if (line.menuItemId == itemId) total += line.quantity;
+    }
+    return total;
   }
 
   /// POS-PREMIUM-VISUAL-POLISH-001: the add celebration — a FLIP ghost flying
@@ -999,10 +1013,12 @@ class _MenuGrid extends ConsumerWidget {
     if (!cardContext.mounted) return;
     posFlyToCart(cardContext, color: accent);
     final size = MediaQuery.sizeOf(cardContext);
-    final phone =
-        posLayoutModeFor(width: size.width, height: size.height) ==
-        PosLayoutMode.phone;
-    if (phone) {
+    // PERF-110: the toast exists because the cart is OFF-SCREEN — that is the
+    // single-pane posture (phones AND portrait tablets), not the phone band.
+    final cartOffScreen =
+        posShellPostureFor(width: size.width, height: size.height) ==
+        PosShellPosture.singlePane;
+    if (cartOffScreen) {
       showPosSpringToast(
         cardContext,
         message: l10n.posItemAddedToast(itemName),
@@ -1026,6 +1042,54 @@ class _MenuGrid extends ConsumerWidget {
     return sameDay
         ? material.formatTimeOfDay(TimeOfDay.fromDateTime(local))
         : material.formatMediumDate(local);
+  }
+}
+
+/// [POS-OFFLINE-OPERATIONS-002] The slim offline banner that sits ABOVE the
+/// merchandise ONLY while the menu being sold from is the durable snapshot
+/// (phase == offlineCached). PERF-110 moved it into its own consumer so the
+/// reconnect probe's `probing` / `snapshotFetchedAt` flips repaint THIS strip
+/// only — the product grid below never hears about them.
+class _OfflineCachedBanner extends ConsumerWidget {
+  const _OfflineCachedBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final offline = ref.watch(
+      posOfflineModeProvider.select(
+        (o) => (probing: o.probing, fetchedAt: o.snapshotFetchedAt),
+      ),
+    );
+    final fetchedAt = offline.fetchedAt;
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.lg,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.lg,
+        0,
+      ),
+      child: RestoflowNoticeBanner(
+        key: const Key('pos-offline-banner'),
+        tone: RestoflowTone.warning,
+        icon: Icons.cloud_off_outlined,
+        title: fetchedAt == null ? null : l10n.posOfflineModeBanner,
+        // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass A] While a
+        // reconnect PROBE's fetch is in flight the body says so, then
+        // reverts to the snapshot age when that attempt lands (each
+        // `record*` outcome clears `probing`). The PHASE is untouched, so
+        // this is honest: the POS is still offline and every server-backed
+        // action stays refused until a fetch genuinely succeeds. The
+        // banner's key is unchanged so nothing keyed on it moves.
+        body: offline.probing
+            ? l10n.posOfflineBannerReconnecting
+            : fetchedAt == null
+            ? l10n.posOfflineModeBanner
+            : l10n.posOfflineDataAge(
+                _MenuGrid._snapshotAgeLabel(context, fetchedAt),
+              ),
+      ),
+    );
   }
 }
 

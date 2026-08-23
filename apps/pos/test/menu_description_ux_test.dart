@@ -224,7 +224,10 @@ void main() {
           greaterThan(0),
         );
 
-        final mode = posLayoutModeFor(width: width, height: 1200);
+        // PERF-110: portrait widths (everything below 1200 here) are
+        // single-pane with their own 2/3 column rule; the viewport resolver
+        // is the one source of truth for both grids.
+        final columns = posMenuColumnsForViewport(width: width, height: 1200);
         // The SKELETON grid at the SAME width, with the menu still loading.
         await _pumpMenu(tester, size: Size(width, 1200), loading: true);
         _expectCleanFrame(tester);
@@ -236,7 +239,7 @@ void main() {
           reason: 'a skeleton of a different height makes the grid jump',
         );
         expect(skeleton.crossAxisCount, loaded.crossAxisCount);
-        expect(loaded.crossAxisCount, posMenuColumnsFor(mode));
+        expect(loaded.crossAxisCount, columns);
         // The extent really is the INSET 4:3 band + the shared body height
         // (POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — see kPosCardImageInset /
         // kPosCardImageAspect).

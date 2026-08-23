@@ -33,7 +33,11 @@ class KioskItemSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (rtl: s.rtl, lang: s.lang, draft: s.draft),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final draft = state.draft;
     if (draft == null) return const SizedBox.shrink();

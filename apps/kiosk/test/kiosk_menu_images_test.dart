@@ -5,6 +5,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_live_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_menu_data.dart';
+import 'package:restoflow_kiosk/src/media/kiosk_media_image.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_live_runtime.dart';
@@ -174,7 +175,13 @@ void main() {
         host(const KioskMenuImage(url: _urlA, fallback: Text('WELL'))),
       );
       final image = tester.widget<Image>(find.byType(Image));
-      expect((image.image as NetworkImage).url, _urlA);
+      // PERF-110: live photos are decode-capped (ResizeImage over the
+      // NetworkImage); the URL identity is unchanged underneath.
+      expect(image.image, isA<ResizeImage>());
+      expect(
+        (kioskUnwrapImageProvider(image.image) as NetworkImage).url,
+        _urlA,
+      );
       // The approved fallback stays underneath (shows through on failure).
       expect(find.text('WELL'), findsOneWidget);
     });
@@ -286,10 +293,11 @@ void main() {
       return container;
     }
 
-    bool isNetworkImageWith(Widget w, String url) =>
-        w is Image &&
-        w.image is NetworkImage &&
-        (w.image as NetworkImage).url == url;
+    bool isNetworkImageWith(Widget w, String url) {
+      if (w is! Image) return false;
+      final base = kioskUnwrapImageProvider(w.image);
+      return base is NetworkImage && base.url == url;
+    }
 
     testWidgets(
       'the card shows the resolved photo; the unresolved card falls back',
@@ -307,8 +315,9 @@ void main() {
           find.byWidgetPredicate(
             (w) =>
                 w is Image &&
-                w.image is NetworkImage &&
-                (w.image as NetworkImage).url.contains('b.png'),
+                kioskUnwrapImageProvider(w.image) is NetworkImage &&
+                (kioskUnwrapImageProvider(w.image) as NetworkImage).url
+                    .contains('b.png'),
           ),
           findsNothing,
         );

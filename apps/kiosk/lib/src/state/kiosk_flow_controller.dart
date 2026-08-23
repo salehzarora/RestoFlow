@@ -435,12 +435,16 @@ class KioskFlowController extends Notifier<KioskState> {
   // ---- activity / idle engine --------------------------------------------
 
   /// Any customer pointer contact (root Listener) — resets the idle counter.
+  ///
+  /// PERF-110: a TRUE no-op when there is nothing to reset (counter already
+  /// 0, no warning showing). Emitting a fresh identical [KioskState] here
+  /// used to force a redundant root rebuild on EVERY pointer-down, right
+  /// before the real interaction mutation — pure churn on weak tablets.
   void touch() {
-    if (state.secondsSinceActivity != 0 || state.idleSecondsLeft != null) {
-      state = state.copyWith(secondsSinceActivity: 0, idleSecondsLeft: null);
-    } else {
-      state = state.copyWith(secondsSinceActivity: 0);
+    if (state.secondsSinceActivity == 0 && state.idleSecondsLeft == null) {
+      return;
     }
+    state = state.copyWith(secondsSinceActivity: 0, idleSecondsLeft: null);
   }
 
   /// Advances all clocks by one second. V2 rules: attract + settings are

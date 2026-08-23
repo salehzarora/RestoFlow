@@ -10,6 +10,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../pos_palette.dart';
+
 import '../media/pos_media_image.dart' show PosMediaCache;
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../print/print_bridge.dart';
@@ -201,6 +203,14 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                     const Divider(height: 1),
                     const SizedBox(height: RestoflowSpacing.md),
                     _DeviceAccentSection(l10n: l10n),
+                    // PERF-110: TEST-BUILD-ONLY device metrics + frame timing
+                    // (RESTOFLOW_PERF_DIAGNOSTICS=true). Absent otherwise.
+                    if (ref.watch(perfDiagnosticsEnabledProvider)) ...[
+                      const SizedBox(height: RestoflowSpacing.md),
+                      const Divider(height: 1),
+                      const SizedBox(height: RestoflowSpacing.md),
+                      _PerfDiagnosticsSection(l10n: l10n),
+                    ],
                   ],
                 ),
               ),
@@ -1396,6 +1406,59 @@ class _AccentSwatch extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// PERF-110: whether the TEST-BUILD-ONLY perf diagnostics section is present.
+/// Reads the compile-time flag once; overridable in widget tests.
+final perfDiagnosticsEnabledProvider = Provider<bool>(
+  (ref) => perfDiagnosticsEnabled(),
+);
+
+/// PERF-110 — device metrics + rolling Flutter frame timings, plus the POS
+/// layout facts (mode / posture / columns) for the CURRENT viewport. Local
+/// only; never logged, persisted or sent.
+class _PerfDiagnosticsSection extends StatelessWidget {
+  const _PerfDiagnosticsSection({required this.l10n});
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final mode = posLayoutModeFor(width: size.width, height: size.height);
+    final posture = posShellPostureFor(width: size.width, height: size.height);
+    final columns = posMenuColumnsForViewport(
+      width: size.width,
+      height: size.height,
+    );
+    return Column(
+      key: const Key('perf-diagnostics-section'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.deviceSettingsPerfDiagnosticsTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        Text(
+          l10n.deviceSettingsPerfDiagnosticsNote,
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        PerfDiagnosticsPanel(
+          appLabel: 'POS',
+          resetLabel: l10n.deviceSettingsPerfDiagnosticsReset,
+          extraRows: [
+            (label: 'pos layout mode', value: mode.name),
+            (label: 'pos shell posture', value: posture.name),
+            (label: 'pos menu columns', value: '$columns'),
+          ],
+        ),
+      ],
     );
   }
 }

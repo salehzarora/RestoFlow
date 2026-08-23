@@ -17,7 +17,11 @@ class KioskPinGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (pinEntry: s.pinEntry, pinError: s.pinError),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
 
     return Stack(

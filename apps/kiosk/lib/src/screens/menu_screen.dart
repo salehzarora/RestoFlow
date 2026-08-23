@@ -23,7 +23,18 @@ class KioskMenuScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    // PERF-110: only the slices this screen renders — never the idle clock.
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (
+          lang: s.lang,
+          rtl: s.rtl,
+          categoryIndex: s.categoryIndex,
+          service: s.service,
+          selectedTable: s.selectedTable,
+        ),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final rtl = state.rtl;
     final menu = ref.watch(kioskMenuDataProvider);
@@ -178,16 +189,20 @@ class KioskMenuScreen extends ConsumerWidget {
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      KioskCategoryWheel(
-                        categories: menu.categories,
-                        activeIndex: state.categoryIndex.clamp(
-                          0,
-                          menu.categories.length - 1,
+                      // PERF-110: drag/snap frames of the rail stay off the
+                      // header, the grid and the bottom bar.
+                      RepaintBoundary(
+                        child: KioskCategoryWheel(
+                          categories: menu.categories,
+                          activeIndex: state.categoryIndex.clamp(
+                            0,
+                            menu.categories.length - 1,
+                          ),
+                          onSelect: controller.setCategoryIndex,
+                          // §11: representative LIVE product photo per category
+                          // (signed once per menu read; icon fallback below).
+                          categoryImageUrls: categoryImageUrls,
                         ),
-                        onSelect: controller.setCategoryIndex,
-                        // §11: representative LIVE product photo per category
-                        // (signed once per menu read; icon fallback below).
-                        categoryImageUrls: categoryImageUrls,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -493,7 +508,18 @@ class KioskBottomBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    // PERF-110: cart facts only (the list identity changes on every real
+    // cart mutation; the idle clock never touches it).
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (
+          rtl: s.rtl,
+          cart: s.cart,
+          cartCount: s.cartCount,
+          cartTotalMinor: s.cartTotalMinor,
+        ),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final rtl = state.rtl;
 

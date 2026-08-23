@@ -361,7 +361,8 @@ void main() {
 
     testWidgets('D-no-giant-gap an empty cart does not create a scroll region '
         'taller than the panel at a TALL height', (tester) async {
-      await pumpPos(tester, width: 1024, height: 1366);
+      // PERF-110: a tall LANDSCAPE viewport — portrait has no side cart now.
+      await pumpPos(tester, width: 1600, height: 1366);
       final panel = tester.getSize(find.byType(CartPanel));
       final scrollable = cartScrollable();
       expect(scrollable, findsWidgets);
@@ -428,7 +429,8 @@ void main() {
     for (final width in <double>[820, 940, 1024, 1099, 1100, 1366]) {
       testWidgets('G-$width no HORIZONTAL overflow and the drawer figure '
           'still wraps rather than clipping', (tester) async {
-        await pumpPos(tester, width: width, height: 1200, lines: 2);
+        // PERF-110: landscape height — the side cart is a landscape surface.
+        await pumpPos(tester, width: width, height: 800, lines: 2);
         expect(find.byType(ShiftContextBar), findsOneWidget);
         final item = find.byKey(const Key('cash-in-drawer'));
         expect(item, findsOneWidget);
