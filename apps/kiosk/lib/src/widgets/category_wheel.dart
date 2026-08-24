@@ -12,16 +12,21 @@ import 'kiosk_chrome.dart';
 /// interaction model exactly (`Kiosk Prototype v2.dc.html`):
 ///
 ///  * rows are [KioskWheel.rowExtent] tall; the whole column is translated
-///    by `railShift = KioskWheel.centerShift − activeIndex·rowExtent
-///    (+ live drag delta)` — KIOSK-UX-114A anchors the active row at the
-///    TOP of the rail (small centerShift) instead of mid-rail;
+///    by `railShift = KioskWheel.baseShiftFor(activeIndex, N)
+///    (+ live drag delta)` — KIOSK-CATEGORY-RAIL-115's Model B: the active
+///    row rests at [KioskWheel.focusTop] and the stack translates on every
+///    selection, clamping only at the list tail (never pinned, never
+///    wrapping);
 ///  * while the finger drags, the column FOLLOWS it with no animation;
 ///  * on release the wheel snaps to `round(activeIndex − dragDy/rowExtent)`,
 ///    clamped to the category range, animating 450ms on cubic(.22,.9,.26,1);
 ///  * disc size / label size / opacity fall off with distance from the
-///    active index ([KioskWheel.discByDistance] · 24/20/17 · 1/.78/.5/.32),
-///    each disc animating its style change over 400ms;
-///  * the active disc carries the 3.5px #F97316 ring, the dual orange glow
+///    active index ([KioskWheel.discByDistance] · [KioskWheel
+///    .labelSizeByDistance] · [KioskWheel.opacityByDistance]), and each row
+///    bows horizontally by [KioskWheel.xOffsetByDistance] (outward active,
+///    receding neighbors — the curved-carousel silhouette), every style
+///    morph animating over 400ms;
+///  * the active disc carries the 5px #F97316 ring, the dual orange glow
 ///    halo and a navy radial fill;
 ///  * a tap selects a category ONLY when the gesture moved ≤ 8 design px —
 ///    farther means it was a drag;
@@ -103,84 +108,95 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final lang = Localizations.localeOf(context).languageCode;
+    // KIOSK-CATEGORY-RAIL-115 Model B: the active row rests at the focus
+    // band and the stack still translates on every ordinary selection —
+    // an unclamped one-row swipe settles exactly where the finger left the
+    // rows (zero spring-back); only the list tail clamps.
     final shift =
-        KioskWheel.centerShift -
-        _clampedIndex * KioskWheel.rowExtent +
+        KioskWheel.baseShiftFor(_clampedIndex, widget.categories.length) +
         (_dragging ? _dragDy : 0);
+    // The orange guide's apex rides the active row: live with the finger
+    // during a drag, easing onto the focus alongside the 450ms snap.
+    final apexTarget =
+        shift + _clampedIndex * KioskWheel.rowExtent + KioskWheel.rowExtent / 2;
 
     return SizedBox(
       width: KioskWheel.railWidth,
       height: widget.height,
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
         children: [
-          // The vertical orange arc hugging the rail's outer edge. In the V2
-          // frame it sits at inset-inline-end −6 (the screen edge side).
-          PositionedDirectional(
-            end: -6,
-            top: 0,
-            bottom: 0,
-            child: IgnorePointer(
-              // PERF-110: the arc is static (shouldRepaint only on flip) yet
-              // rebuilt its shader + full-height path on every rail repaint.
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  size: const Size(120, double.infinity),
-                  painter: _WheelArcPainter(
-                    // V2 arcFlip: the belly turns toward the discs in RTL.
-                    flip: Directionality.of(context) == TextDirection.rtl,
-                  ),
+          _SwipeHint(text: l10n.kioskSwipeMore, pointsUp: true),
+          Expanded(
+            child: ClipRect(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragStart: _onDragStart,
+                onVerticalDragUpdate: _onDragUpdate,
+                onVerticalDragEnd: _onDragEnd,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 115: the curved orange guide lives BEHIND the rows in
+                    // the SAME clip-local coordinate space (its apex math IS
+                    // the row math). While dragging the tween is zero-length
+                    // (tracks the finger); at rest it is complete — zero
+                    // animation frames (PERF-110). V2 keeps the arc at
+                    // inset-inline-end −6, belly toward the discs in RTL.
+                    PositionedDirectional(
+                      end: -6,
+                      top: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: RepaintBoundary(
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween<double>(end: apexTarget),
+                            duration: _dragging
+                                ? Duration.zero
+                                : KioskWheel.snapDuration,
+                            curve: KioskWheel.curve,
+                            builder: (context, apexY, _) => CustomPaint(
+                              size: const Size(120, double.infinity),
+                              painter: _WheelArcPainter(
+                                flip:
+                                    Directionality.of(context) ==
+                                    TextDirection.rtl,
+                                apexY: apexY,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    AnimatedPositioned(
+                      duration: _dragging
+                          ? Duration.zero
+                          : KioskWheel.snapDuration,
+                      curve: KioskWheel.curve,
+                      top: shift,
+                      left: 0,
+                      right: 0,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < widget.categories.length; i++)
+                            _WheelRow(
+                              key: ValueKey(widget.categories[i].id),
+                              category: widget.categories[i],
+                              imageUrl: widget
+                                  .categoryImageUrls[widget.categories[i].id],
+                              distance: (i - _clampedIndex).abs(),
+                              lang: lang,
+                              onTap: () => _onDiscTap(i),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          Column(
-            children: [
-              _SwipeHint(text: l10n.kioskSwipeMore, pointsUp: true),
-              Expanded(
-                child: ClipRect(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragStart: _onDragStart,
-                    onVerticalDragUpdate: _onDragUpdate,
-                    onVerticalDragEnd: _onDragEnd,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        AnimatedPositioned(
-                          duration: _dragging
-                              ? Duration.zero
-                              : KioskWheel.snapDuration,
-                          curve: KioskWheel.curve,
-                          top: shift,
-                          left: 0,
-                          right: 0,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              for (var i = 0; i < widget.categories.length; i++)
-                                _WheelRow(
-                                  key: ValueKey(widget.categories[i].id),
-                                  category: widget.categories[i],
-                                  imageUrl:
-                                      widget.categoryImageUrls[widget
-                                          .categories[i]
-                                          .id],
-                                  distance: (i - _clampedIndex).abs(),
-                                  lang: lang,
-                                  onTap: () => _onDiscTap(i),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              _SwipeHint(text: l10n.kioskSwipeMore, pointsUp: false),
-            ],
-          ),
+          _SwipeHint(text: l10n.kioskSwipeMore, pointsUp: false),
         ],
       ),
     );
@@ -235,117 +251,173 @@ class _WheelRow extends StatelessWidget {
           KioskWheel.opacityByDistance.length - 1,
         )];
 
-    // V2 rows are a fixed 172px with the active disc+label deliberately
+    final outward =
+        KioskWheel.xOffsetByDistance[distance.clamp(
+          0,
+          KioskWheel.xOffsetByDistance.length - 1,
+        )];
+    // Outward = toward the screen edge: +x under the RTL right-side rail,
+    // mirrored in LTR.
+    final dxTarget = Directionality.of(context) == TextDirection.rtl
+        ? outward
+        : -outward;
+
+    // V2 rows are fixed-extent with the active disc+label deliberately
     // taller — CSS lets the content overflow the row visually; OverflowBox
-    // reproduces that without a layout error.
+    // reproduces that without a layout error (115: +100 headroom hosts the
+    // centered 210 active disc plus its label window).
     return SizedBox(
       height: KioskWheel.rowExtent,
       child: OverflowBox(
-        maxHeight: KioskWheel.rowExtent + 60,
+        maxHeight: KioskWheel.rowExtent + 100,
         alignment: Alignment.center,
-        child: GestureDetector(
-          // The whole row (disc + label) is the tap target — kiosk-safe touch
-          // area; the rail's drag detector still owns vertical drags.
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedOpacity(
-                duration: KioskWheel.discDuration,
-                curve: KioskWheel.curve,
-                opacity: opacity,
-                child: AnimatedContainer(
-                  duration: KioskWheel.discDuration,
-                  curve: KioskWheel.curve,
-                  width: disc,
-                  height: disc,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: active
-                        ? RadialGradient(
-                            colors: [
-                              KioskColors.wheelActiveTop,
-                              KioskColors.imageWell,
-                            ],
-                          )
-                        : null,
-                    color: active ? null : KioskColors.glass(.05),
-                    border: Border.all(
-                      color: active ? KioskColors.ring : KioskColors.glass(.14),
-                      width: active ? 3.5 : 2,
+        // 115: the horizontal bow — animated with the same cadence as the
+        // disc morph. Transform.translate transforms hit-tests, so the tap
+        // target follows the visual node. Idle between selections: the
+        // tween is complete, zero animation frames.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: dxTarget),
+          duration: KioskWheel.discDuration,
+          curve: KioskWheel.curve,
+          builder: (context, dx, child) =>
+              Transform.translate(offset: Offset(dx, 0), child: child),
+          child: GestureDetector(
+            // The whole row (disc + label) is the tap target — kiosk-safe
+            // touch area; the rail's drag detector still owns vertical
+            // drags.
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: SizedBox(
+              height: KioskWheel.rowExtent + 100,
+              child: Column(
+                children: [
+                  // 115: the disc's CENTER sits exactly on the row's center
+                  // (focusTop + rowExtent/2 at rest), whatever the label
+                  // wraps to — every disc rides the 200px bow grid and the
+                  // path marker stays concentric with the active disc. The
+                  // spacer animates with the disc morph (TweenAnimation-
+                  // Builder, NOT a second AnimatedContainer, so the disc
+                  // stays the row's unique AnimatedContainer).
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(
+                      end: (KioskWheel.rowExtent + 100) / 2 - disc / 2,
                     ),
-                    boxShadow: active
-                        ? [
-                            BoxShadow(
-                              color: KioskColors.ring.withValues(alpha: .5),
-                              blurRadius: 46,
-                            ),
-                            BoxShadow(
-                              color: KioskColors.ring.withValues(alpha: .14),
-                              spreadRadius: 9,
-                            ),
-                          ]
-                        : null,
+                    duration: KioskWheel.discDuration,
+                    curve: KioskWheel.curve,
+                    builder: (context, h, _) => SizedBox(height: h),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: imageUrl != null
-                      // §11: the category node reads as FOOD — a clipped
-                      // cover photo of a real product from THIS category,
-                      // with a mild dark veil for label/ring contrast. A
-                      // failed load falls back to the icon path below.
-                      ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image(
-                              // PERF-110: a 64–150px disc must never decode
-                              // the full product photo.
-                              image: kioskNetworkImageProvider(
-                                context,
-                                imageUrl!,
-                                designWidth: disc,
+                  AnimatedOpacity(
+                    duration: KioskWheel.discDuration,
+                    curve: KioskWheel.curve,
+                    opacity: opacity,
+                    child: AnimatedContainer(
+                      duration: KioskWheel.discDuration,
+                      curve: KioskWheel.curve,
+                      width: disc,
+                      height: disc,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: active
+                            ? RadialGradient(
+                                colors: [
+                                  KioskColors.wheelActiveTop,
+                                  KioskColors.imageWell,
+                                ],
+                              )
+                            : null,
+                        color: active ? null : KioskColors.glass(.05),
+                        // 115: heavier active emphasis — 5px ring + stronger
+                        // static glow (same BoxShadow primitive; no filters).
+                        border: Border.all(
+                          color: active
+                              ? KioskColors.ring
+                              : KioskColors.glass(.14),
+                          width: active ? 5 : 2,
+                        ),
+                        boxShadow: active
+                            ? [
+                                BoxShadow(
+                                  color: KioskColors.ring.withValues(
+                                    alpha: .55,
+                                  ),
+                                  blurRadius: 56,
+                                ),
+                                BoxShadow(
+                                  color: KioskColors.ring.withValues(
+                                    alpha: .16,
+                                  ),
+                                  spreadRadius: 12,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: imageUrl != null
+                          // §11: the category node reads as FOOD — a clipped
+                          // cover photo of a real product from THIS category,
+                          // with a mild dark veil for label/ring contrast. A
+                          // failed load falls back to the icon path below.
+                          ? Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image(
+                                  // PERF-110: a 78–210px disc must never decode
+                                  // the full product photo.
+                                  image: kioskNetworkImageProvider(
+                                    context,
+                                    imageUrl!,
+                                    designWidth: disc,
+                                  ),
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (_, _, _) =>
+                                      _iconFallback(disc),
+                                ),
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Color(0x24000000),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : category.thumbAsset != null
+                          ? KioskFixtureImage(
+                              asset: category.thumbAsset,
+                              fallback: ColoredBox(
+                                color: KioskColors.imageWell,
                               ),
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
-                              errorBuilder: (_, _, _) => _iconFallback(disc),
-                            ),
-                            const DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Color(0x24000000),
-                              ),
-                            ),
-                          ],
-                        )
-                      : category.thumbAsset != null
-                      ? KioskFixtureImage(
-                          asset: category.thumbAsset,
-                          fallback: ColoredBox(color: KioskColors.imageWell),
-                        )
-                      : _iconFallback(disc),
-                ),
-              ),
-              const SizedBox(height: 9),
-              AnimatedOpacity(
-                duration: KioskWheel.discDuration,
-                opacity: opacity,
-                child: AnimatedDefaultTextStyle(
-                  duration: KioskWheel.discDuration,
-                  style: KioskType.body(
-                    labelSize,
-                    FontWeight.w800,
-                    color: active ? Colors.white : KioskColors.wheelLabel,
-                    height: 1.15,
+                            )
+                          : _iconFallback(disc),
+                    ),
                   ),
-                  child: Text(
-                    category.name.of(lang),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 9),
+                  // The label takes whatever the fixed row box leaves under
+                  // the centered disc (Flexible, never an overflow error);
+                  // long names ellipsize inside that window.
+                  Flexible(
+                    child: AnimatedOpacity(
+                      duration: KioskWheel.discDuration,
+                      opacity: opacity,
+                      child: AnimatedDefaultTextStyle(
+                        duration: KioskWheel.discDuration,
+                        style: KioskType.body(
+                          labelSize,
+                          FontWeight.w800,
+                          color: active ? Colors.white : KioskColors.wheelLabel,
+                          height: 1.15,
+                        ),
+                        child: Text(
+                          category.name.of(lang),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -397,16 +469,53 @@ class _SwipeHint extends StatelessWidget {
   );
 }
 
-/// The tall orange gradient arc beside the rail (V2: a 120×1200 SVG path with
-/// a vertical fade-in/out gradient stroke, flipped horizontally in LTR).
+/// The curved orange guide beside the rail — the V2 arc re-anchored by
+/// KIOSK-CATEGORY-RAIL-115: one cubic bow whose apex rides the ACTIVE row
+/// (apexY, clip-local), a bright marker ring+dot at the apex, and fading
+/// connector dots one/two rows out — all simple strokes and circles, no
+/// filters. Repaints ONLY when the apex or direction changes (drag/snap
+/// frames); at rest it contributes zero frames (PERF-110/PowerVR-safe).
 class _WheelArcPainter extends CustomPainter {
-  const _WheelArcPainter({required this.flip});
+  const _WheelArcPainter({required this.flip, required this.apexY});
   final bool flip;
+  final double apexY;
+
+  /// Bow geometry: inner x at both fading ends, control x pushing the cubic
+  /// midpoint (the apex) out to ≈97.5 inside the 120-wide paint box.
+  static const double _innerX = 36;
+  static const double _controlX = 118;
+
+  /// Vertical half-window of the bow around the apex.
+  static double get _span => 2.2 * KioskWheel.rowExtent;
+
+  /// Point on the bow at parameter [t] (0..1; the apex is t = .5).
+  Offset _pointAt(double t) {
+    final u = 1 - t;
+    final x =
+        _innerX * u * u * u +
+        3 * _controlX * t * u * u +
+        3 * _controlX * t * t * u +
+        _innerX * t * t * t;
+    final y0 = apexY - _span;
+    final y1 = apexY - _span * .28;
+    final y2 = apexY + _span * .28;
+    final y3 = apexY + _span;
+    final y =
+        y0 * u * u * u +
+        3 * y1 * t * u * u +
+        3 * y2 * t * t * u +
+        y3 * t * t * t;
+    return Offset(x, y);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final h = size.height.isFinite ? size.height : 1200.0;
-    final paint = Paint()
+    if (flip) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+    final span = _span;
+    final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
       ..shader = LinearGradient(
@@ -418,18 +527,50 @@ class _WheelArcPainter extends CustomPainter {
           KioskColors.ring.withValues(alpha: 0),
         ],
         stops: const [0, .5, 1],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, h));
-    if (flip) {
-      canvas.translate(size.width, 0);
-      canvas.scale(-1, 1);
-    }
+      ).createShader(Rect.fromLTRB(0, apexY - span, size.width, apexY + span));
     final path = Path()
-      ..moveTo(112, 0)
-      ..cubicTo(30, h * (320 / 1200), 30, h * (880 / 1200), 112, h);
+      ..moveTo(_innerX, apexY - span)
+      ..cubicTo(
+        _controlX,
+        apexY - span * .28,
+        _controlX,
+        apexY + span * .28,
+        _innerX,
+        apexY + span,
+      );
     // (the artifact's container opacity .9 is folded into the gradient stops)
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, stroke);
+
+    // Active marker ON the bow's apex: bright ring + filled dot.
+    final apex = _pointAt(.5);
+    canvas.drawCircle(
+      apex,
+      16,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = KioskColors.ring.withValues(alpha: .9),
+    );
+    canvas.drawCircle(apex, 7, Paint()..color = KioskColors.ring);
+
+    // Connector dots ON the bow. The t values put them ≈ ±1 row
+    // (t .265/.735) and ≈ ±2 rows (t .043/.957) from the apex — solved
+    // numerically for this cubic's y() once, hardcoded as constants.
+    for (final (t, r, a) in const [
+      (.265, 5.0, .5),
+      (.735, 5.0, .5),
+      (.043, 3.5, .3),
+      (.957, 3.5, .3),
+    ]) {
+      canvas.drawCircle(
+        _pointAt(t),
+        r,
+        Paint()..color = KioskColors.ring.withValues(alpha: a),
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_WheelArcPainter oldDelegate) => oldDelegate.flip != flip;
+  bool shouldRepaint(_WheelArcPainter oldDelegate) =>
+      oldDelegate.flip != flip || oldDelegate.apexY != apexY;
 }

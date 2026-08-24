@@ -151,27 +151,51 @@ const kioskDesignSize = Size(1080, 1920);
 const double kioskStageMaxDesignWidth = 1280;
 
 /// Category wheel constants — the artifact's exact interaction model.
-/// KIOSK-UX-114A retunes the GEOMETRY only (owner-approved values): larger
-/// discs and a TOP-anchored stack — the active category starts just under
-/// the rail's top hint instead of ~550 px down. Every interaction rule
-/// (drag-follow, snap math, tap slop, easing) is untouched.
+/// KIOSK-CATEGORY-RAIL-115 turns the rail into a curved, focus-anchored
+/// carousel (owner-approved geometry): a dominant active disc, per-distance
+/// outward/inward x-offsets, and the Model B FOCUS BAND — the active row
+/// rests at [focusTop] and the whole stack translates on selection exactly
+/// like the shipped wheel, clamping only at the list tail (never a pinned
+/// stack, never wrapping). Drag-follow, snap math, tap slop and easing are
+/// untouched.
 abstract final class KioskWheel {
   /// One category row in the rail (px in design space).
-  static const double rowExtent = 190;
+  static const double rowExtent = 200;
 
-  /// The active row's top offset: railShift = [centerShift] − idx·[rowExtent].
-  /// 114A: 38 anchors the active disc a small breath below the top swipe
-  /// hint (was 550 — a mid-rail anchor that left the upper rail empty).
-  static const double centerShift = 38;
+  /// Model B focus band (clip-local design px, measured below the top swipe
+  /// hint): the active row's preferred TOP…
+  static const double focusTop = 220;
+
+  /// …and the lowest active-row top the tail clamp may reach. The active
+  /// disc center therefore rests at focusTop + rowExtent/2 = 320 for every
+  /// index except the final clamped one (420 for N=5).
+  static const double focusBottom = 320;
+
+  /// The resting rail translation for [activeIndex] of [categoryCount]
+  /// categories: the active row sits at [focusTop], clamped near the list
+  /// end so real neighbors stay on stage instead of exposing a dead rail.
+  /// The tail/[focusTop] min-guard keeps the clamp well-ordered for
+  /// 1–2-category menus.
+  static double baseShiftFor(int activeIndex, int categoryCount) {
+    final tail = focusBottom - (categoryCount - 1) * rowExtent;
+    final lower = tail < focusTop ? tail : focusTop;
+    return (focusTop - activeIndex * rowExtent).clamp(lower, focusTop);
+  }
 
   /// Disc diameter by distance from the active index: 0 / 1 / 2 / 3+.
-  static const List<double> discByDistance = [170, 112, 90, 74];
+  static const List<double> discByDistance = [210, 132, 100, 78];
+
+  /// Horizontal bow by distance, in OUTWARD units (toward the screen edge:
+  /// +x in RTL where the rail sits on the right; mirrored in LTR). The
+  /// active node swings outward, neighbors recess progressively inward —
+  /// with the size falloff this is the curved-carousel silhouette.
+  static const List<double> xOffsetByDistance = [22, -4, -20, -34];
 
   /// Label font size by distance.
-  static const List<double> labelSizeByDistance = [24, 20, 17];
+  static const List<double> labelSizeByDistance = [28, 20, 17];
 
   /// Opacity falloff by distance.
-  static const List<double> opacityByDistance = [1, .78, .5, .32];
+  static const List<double> opacityByDistance = [1, .75, .45, .28];
 
   /// Movement past this (design px) turns a tap into a drag.
   static const double tapSlop = 8;
@@ -185,8 +209,9 @@ abstract final class KioskWheel {
   /// cubic-bezier(.22,.9,.26,1) — the V2 easing for surfaces and the wheel.
   static const curve = Cubic(.22, .9, .26, 1);
 
-  /// Rail column width (114A: 240 hosts the 170 active disc + its ring).
-  static const double railWidth = 240;
+  /// Rail column width (115: 272 hosts the 210 active disc, its 5px ring
+  /// and the +22 outward bow inside the clip).
+  static const double railWidth = 272;
 }
 
 /// Motion tokens (V2: fast waiter, never bouncy).

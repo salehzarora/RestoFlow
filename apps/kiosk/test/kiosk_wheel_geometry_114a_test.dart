@@ -8,10 +8,11 @@ import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
 import 'package:restoflow_kiosk/src/widgets/category_wheel.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// KIOSK-UX-114A — category wheel polish: modestly LARGER discs with the
-/// same active > neighbor > farther hierarchy, and the wheel TOP-ANCHORED so
-/// the first/active category starts just below the rail's top hint instead
-/// of ~550 design px down (the old centered-anchor dead space).
+/// KIOSK-UX-114A (geometry retuned by KIOSK-CATEGORY-RAIL-115) — the rail's
+/// size hierarchy and anchor contract. 115 supersedes the 114A fixed
+/// top-anchor with the Model B FOCUS BAND: the active row rests at
+/// [KioskWheel.focusTop] (clip-local) for every index except the clamped
+/// list tail, where it slides down to at most [KioskWheel.focusBottom].
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -60,9 +61,9 @@ void main() {
 
   group('A. approved geometry constants', () {
     test(
-      'discs grow to [170,112,90,74] with a strictly descending hierarchy',
+      'discs grow to [210,132,100,78] with a strictly descending hierarchy',
       () {
-        expect(KioskWheel.discByDistance, const [170.0, 112.0, 90.0, 74.0]);
+        expect(KioskWheel.discByDistance, const [210.0, 132.0, 100.0, 78.0]);
         for (var i = 1; i < KioskWheel.discByDistance.length; i++) {
           expect(
             KioskWheel.discByDistance[i],
@@ -80,18 +81,20 @@ void main() {
       },
     );
 
-    test(
-      'row extent 190, rail width 240, TOP anchor 38 (was centered 550)',
-      () {
-        expect(KioskWheel.rowExtent, 190);
-        expect(KioskWheel.railWidth, 240);
-        expect(KioskWheel.centerShift, 38);
-      },
-    );
+    test('row extent 200, rail width 272, focus band 220..320 (centerShift '
+        'retired by 115)', () {
+      expect(KioskWheel.rowExtent, 200);
+      expect(KioskWheel.railWidth, 272);
+      expect(KioskWheel.focusTop, 220);
+      expect(KioskWheel.focusBottom, 320);
+    });
 
-    test('untouched: labels, opacity falloff, tap slop, snap duration', () {
-      expect(KioskWheel.labelSizeByDistance, const [24.0, 20.0, 17.0]);
-      expect(KioskWheel.opacityByDistance, const [1, .78, .5, .32]);
+    test('115 emphasis tables: labels [28,20,17], opacity [1,.75,.45,.28]', () {
+      expect(KioskWheel.labelSizeByDistance, const [28.0, 20.0, 17.0]);
+      expect(KioskWheel.opacityByDistance, const [1, .75, .45, .28]);
+    });
+
+    test('untouched: tap slop and snap duration', () {
       expect(KioskWheel.tapSlop, 8);
       expect(KioskWheel.snapDuration, const Duration(milliseconds: 450));
     });
@@ -103,8 +106,10 @@ void main() {
       ('Acer 16" full-bleed 1200x1920', Size(1200, 1920), 1.0),
       ('11" 16:10 800x1280', Size(800, 1280), 1.0),
     ]) {
-      testWidgets('${view.$1}: active disc is 170, top-anchored with a small '
-          'gap, inside the body, no overflow', (tester) async {
+      testWidgets('${view.$1}: active disc renders at discByDistance[0], '
+          'rests at the 115 focus, inside the body, no overflow', (
+        tester,
+      ) async {
         await pumpMenu(tester, physical: view.$2, dpr: view.$3);
         expect(tester.takeException(), isNull);
 
@@ -115,21 +120,23 @@ void main() {
         // the render box's OWN coordinates, i.e. design px on scaled stages).
         expect(tester.getSize(active).width, KioskWheel.discByDistance[0]);
 
-        // TOP ANCHOR: the active disc's top sits just below the rail's top
-        // hint — a small intentional gap, not the old ~600 px dead space.
-        // (All values in the wheel's own design-space coordinates.)
-        final wheelTop = tester.getRect(wheel).top;
-        final discTop = tester.getRect(active).top;
+        // 115 FOCUS CONTRACT: at activeIndex 0 the active disc's CENTER
+        // rests at focusTop + rowExtent/2 = 320 clip-local design px (the
+        // drag viewport below the top swipe hint), scale-normalized.
+        final clip = tester.getRect(
+          find.descendant(of: wheel, matching: find.byType(ClipRect)).first,
+        );
         final scale =
             tester.getRect(wheel).height / // proportion-safe on
             tester.getSize(wheel).height; // scaled stages
-        final gapDesignPx = (discTop - wheelTop) / scale;
+        final centerClipLocal =
+            (tester.getCenter(active).dy - clip.top) / scale;
         expect(
-          gapDesignPx,
-          inInclusiveRange(60, 135),
+          centerClipLocal,
+          closeTo(KioskWheel.focusTop + KioskWheel.rowExtent / 2, 2),
           reason:
-              'active disc must start near the rail top '
-              '(hint + small gap), got $gapDesignPx design px',
+              'active disc center must rest at the focus, '
+              'got $centerClipLocal clip-local design px',
         );
 
         // Collision guard: the rail's clip region has ALWAYS run the full
