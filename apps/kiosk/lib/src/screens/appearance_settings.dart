@@ -515,6 +515,51 @@ class _KioskAppearanceSectionState
           },
           const SizedBox(height: 30),
 
+          // ---- E2. inactivity delay (KIOSK-UX-114A) --------------------------
+          // How long the kiosk stays quiet BEFORE the "Still there?" warning;
+          // the 10s warning window itself never changes. UNSET renders NO
+          // active chip and says so — the device keeps the legacy timing
+          // (warning at 50s) rather than silently adopting a new default.
+          _Label(l10n.kioskIdleDelaySection),
+          const SizedBox(height: 6),
+          Text(
+            l10n.kioskIdleDelayHelper,
+            style: KioskType.body(
+              19,
+              FontWeight.w500,
+              color: KioskColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final seconds in KioskAppearanceLimits.idleDelayChoices)
+                _SmallPill(
+                  key: Key('kiosk-idle-delay-$seconds'),
+                  label: '${seconds}s',
+                  active: _draft.idleDelaySeconds == seconds,
+                  onTap: () =>
+                      _update(_draft.copyWith(idleDelaySeconds: seconds)),
+                ),
+            ],
+          ),
+          if (_draft.idleDelaySeconds == null) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.kioskIdleDelayLegacyNote,
+              key: const Key('kiosk-idle-delay-legacy-note'),
+              style: KioskType.body(
+                17,
+                FontWeight.w500,
+                color: KioskColors.textGhost,
+              ),
+            ),
+          ],
+          const SizedBox(height: 30),
+
           // ---- G. GLOBAL device UI theme (KIOSK-001-107) ---------------------
           // A clearly separate section from the wordmark/name colors above:
           // this pair recolors the WHOLE kiosk chrome. Draft-only until the

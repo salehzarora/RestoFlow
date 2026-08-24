@@ -11,14 +11,16 @@ import 'kiosk_chrome.dart';
 /// This is the design's HIGHEST-PRIORITY component and follows the artifact's
 /// interaction model exactly (`Kiosk Prototype v2.dc.html`):
 ///
-///  * rows are [KioskWheel.rowExtent] (172) tall; the whole column is
-///    translated by `railShift = 550 − activeIndex·172 (+ live drag delta)`;
+///  * rows are [KioskWheel.rowExtent] tall; the whole column is translated
+///    by `railShift = KioskWheel.centerShift − activeIndex·rowExtent
+///    (+ live drag delta)` — KIOSK-UX-114A anchors the active row at the
+///    TOP of the rail (small centerShift) instead of mid-rail;
 ///  * while the finger drags, the column FOLLOWS it with no animation;
-///  * on release the wheel snaps to `round(activeIndex − dragDy/172)`,
+///  * on release the wheel snaps to `round(activeIndex − dragDy/rowExtent)`,
 ///    clamped to the category range, animating 450ms on cubic(.22,.9,.26,1);
 ///  * disc size / label size / opacity fall off with distance from the
-///    active index (150/98/78/64 · 24/20/17 · 1/.78/.5/.32), each disc
-///    animating its style change over 400ms;
+///    active index ([KioskWheel.discByDistance] · 24/20/17 · 1/.78/.5/.32),
+///    each disc animating its style change over 400ms;
 ///  * the active disc carries the 3.5px #F97316 ring, the dual orange glow
 ///    halo and a navy radial fill;
 ///  * a tap selects a category ONLY when the gesture moved ≤ 8 design px —

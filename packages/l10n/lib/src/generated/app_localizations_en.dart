@@ -6573,6 +6573,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskAppearancePreview => 'Preview';
 
   @override
+  String get kioskIdleDelaySection => 'Inactivity timeout';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'Quiet time before the “Still there?” warning appears. The 10-second warning window itself never changes.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'Not set — this device keeps the original timing (warning after 50 seconds).';
+
+  @override
   String get kioskUiThemeSection => 'Device interface colors';
 
   @override

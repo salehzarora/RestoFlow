@@ -6523,6 +6523,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskAppearancePreview => 'معاينة';
 
   @override
+  String get kioskIdleDelaySection => 'مهلة عدم النشاط';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'مدة الهدوء قبل ظهور تنبيه «هل ما زلت هنا؟». نافذة التنبيه (10 ثوانٍ) لا تتغير.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'غير محدد — يحتفظ هذا الجهاز بالتوقيت الأصلي (التنبيه بعد 50 ثانية).';
+
+  @override
   String get kioskUiThemeSection => 'ألوان واجهة الجهاز';
 
   @override

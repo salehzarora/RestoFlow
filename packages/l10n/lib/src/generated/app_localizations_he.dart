@@ -6481,6 +6481,17 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskAppearancePreview => 'תצוגה מקדימה';
 
   @override
+  String get kioskIdleDelaySection => 'זמן חוסר פעילות';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'זמן השקט לפני שמופיעה ההתראה «עדיין כאן?». חלון ההתראה (10 שניות) אינו משתנה.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'לא הוגדר — המכשיר שומר על התזמון המקורי (התראה אחרי 50 שניות).';
+
+  @override
   String get kioskUiThemeSection => 'צבעי ממשק המכשיר';
 
   @override

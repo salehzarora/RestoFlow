@@ -11842,6 +11842,24 @@ abstract class AppLocalizations {
   /// **'Preview'**
   String get kioskAppearancePreview;
 
+  /// No description provided for @kioskIdleDelaySection.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactivity timeout'**
+  String get kioskIdleDelaySection;
+
+  /// No description provided for @kioskIdleDelayHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiet time before the “Still there?” warning appears. The 10-second warning window itself never changes.'**
+  String get kioskIdleDelayHelper;
+
+  /// No description provided for @kioskIdleDelayLegacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set — this device keeps the original timing (warning after 50 seconds).'**
+  String get kioskIdleDelayLegacyNote;
+
   /// No description provided for @kioskUiThemeSection.
   ///
   /// In en, this message translates to:

@@ -151,15 +151,21 @@ const kioskDesignSize = Size(1080, 1920);
 const double kioskStageMaxDesignWidth = 1280;
 
 /// Category wheel constants — the artifact's exact interaction model.
+/// KIOSK-UX-114A retunes the GEOMETRY only (owner-approved values): larger
+/// discs and a TOP-anchored stack — the active category starts just under
+/// the rail's top hint instead of ~550 px down. Every interaction rule
+/// (drag-follow, snap math, tap slop, easing) is untouched.
 abstract final class KioskWheel {
   /// One category row in the rail (px in design space).
-  static const double rowExtent = 172;
+  static const double rowExtent = 190;
 
-  /// The active row's center offset: railShift = [centerShift] − idx·[rowExtent].
-  static const double centerShift = 550;
+  /// The active row's top offset: railShift = [centerShift] − idx·[rowExtent].
+  /// 114A: 38 anchors the active disc a small breath below the top swipe
+  /// hint (was 550 — a mid-rail anchor that left the upper rail empty).
+  static const double centerShift = 38;
 
   /// Disc diameter by distance from the active index: 0 / 1 / 2 / 3+.
-  static const List<double> discByDistance = [150, 98, 78, 64];
+  static const List<double> discByDistance = [170, 112, 90, 74];
 
   /// Label font size by distance.
   static const List<double> labelSizeByDistance = [24, 20, 17];
@@ -179,8 +185,8 @@ abstract final class KioskWheel {
   /// cubic-bezier(.22,.9,.26,1) — the V2 easing for surfaces and the wheel.
   static const curve = Cubic(.22, .9, .26, 1);
 
-  /// Rail column width.
-  static const double railWidth = 218;
+  /// Rail column width (114A: 240 hosts the 170 active disc + its ring).
+  static const double railWidth = 240;
 }
 
 /// Motion tokens (V2: fast waiter, never bouncy).

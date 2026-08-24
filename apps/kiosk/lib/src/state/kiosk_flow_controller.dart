@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show displayOrderCode;
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
@@ -481,7 +482,7 @@ class KioskFlowController extends Notifier<KioskState> {
         state.submitPhase != KioskSubmitPhase.idle;
     if (exempt) return;
     final elapsed = state.secondsSinceActivity + 1;
-    final left = state.settings.idleSeconds - elapsed;
+    final left = _idleTotalSeconds - elapsed;
     if (left <= 0) {
       reset();
     } else if (left <= KioskTiming.idleWarningSeconds) {
@@ -513,6 +514,20 @@ class KioskFlowController extends Notifier<KioskState> {
       dailySeq: seq,
       busyFloor: busy,
     );
+  }
+
+  /// KIOSK-UX-114A — the session's total quiet budget before reset. A VALID
+  /// operator-configured pre-warning delay yields `delay + 10` (the warning
+  /// window itself never changes); unset or out-of-range keeps the legacy
+  /// fixture total ([KioskDeviceSettings.idleSeconds], 60 → warning at 50)
+  /// byte-for-byte. Read per tick so a settings save applies immediately.
+  int get _idleTotalSeconds {
+    final delay = ref.read(kioskAppearanceProvider).idleDelaySeconds;
+    if (delay != null &&
+        KioskAppearanceLimits.idleDelayChoices.contains(delay)) {
+      return delay + KioskTiming.idleWarningSeconds;
+    }
+    return state.settings.idleSeconds;
   }
 
   void dismissIdleWarning() =>
