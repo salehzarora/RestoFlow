@@ -175,9 +175,12 @@ void main() {
       final painterFinder = find.descendant(
         of: find.descendant(of: wheel(), matching: find.byType(ClipRect)).first,
         matching: find.byWidgetPredicate(
+          // 115A: static spine painter + apex-driven marker foreground.
           (w) =>
               w is CustomPaint &&
-              w.painter.runtimeType.toString() == '_WheelArcPainter',
+              w.painter.runtimeType.toString() == '_WheelRailPainter' &&
+              w.foregroundPainter.runtimeType.toString() ==
+                  '_WheelMarkerPainter',
         ),
       );
       expect(painterFinder, findsOneWidget);
@@ -404,10 +407,11 @@ void main() {
         find.byWidgetPredicate(
           (w) =>
               w is CustomPaint &&
-              w.painter.runtimeType.toString() == '_WheelArcPainter',
+              w.painter.runtimeType.toString() == '_WheelRailPainter',
         ),
       );
-      return (paint.painter as dynamic).apexY as double;
+      // 115A: the apex lives ONLY on the marker foreground layer.
+      return (paint.foregroundPainter as dynamic).apexY as double;
     }
 
     testWidgets('apex settles at the focus center after selection (320), '

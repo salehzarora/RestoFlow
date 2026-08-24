@@ -212,6 +212,46 @@ abstract final class KioskWheel {
   /// Rail column width (115: 272 hosts the 210 active disc, its 5px ring
   /// and the +22 outward bow inside the clip).
   static const double railWidth = 272;
+
+  // ---- 115A: the orange guide's STATIC spine -----------------------------
+  // The guide is split into a fixed full-height spine (this curve, painted
+  // faint) and a moving marker layer that travels ALONG it — so a category
+  // swipe moves the highlighted point, never the whole line.
+
+  /// Spine x at both fading ends (inside the 120-wide guide paint box).
+  static const double railSpineInnerX = 36;
+
+  /// Cubic control x — puts the spine's belly at ≈97.5 at mid-height.
+  static const double railSpineControlX = 118;
+
+  /// x of the STATIC spine at height [y] within a guide viewport of
+  /// [height]: the cubic (innerX, 0) → ctrl(controlX, .32h)/(controlX,
+  /// .68h) → (innerX, height), inverted by binary search (y(t) is
+  /// monotone). Both guide painters and the marker share this, so the
+  /// marker always sits exactly ON the rail.
+  static double railSpineX(double y, double height) {
+    if (height <= 0) return railSpineInnerX;
+    final target = y.clamp(0.0, height);
+    var lo = 0.0, hi = 1.0;
+    for (var i = 0; i < 32; i++) {
+      final mid = (lo + hi) / 2;
+      final u = 1 - mid;
+      final yMid =
+          height *
+          (3 * .32 * mid * u * u + 3 * .68 * mid * mid * u + mid * mid * mid);
+      if (yMid < target) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    final t = (lo + hi) / 2;
+    final u = 1 - t;
+    return railSpineInnerX * u * u * u +
+        3 * railSpineControlX * t * u * u +
+        3 * railSpineControlX * t * t * u +
+        railSpineInnerX * t * t * t;
+  }
 }
 
 /// Motion tokens (V2: fast waiter, never bouncy).

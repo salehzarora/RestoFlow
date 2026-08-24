@@ -136,12 +136,14 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    // 115: the curved orange guide lives BEHIND the rows in
-                    // the SAME clip-local coordinate space (its apex math IS
-                    // the row math). While dragging the tween is zero-length
-                    // (tracks the finger); at rest it is complete — zero
-                    // animation frames (PERF-110). V2 keeps the arc at
-                    // inset-inline-end −6, belly toward the discs in RTL.
+                    // 115/115A: the orange guide lives BEHIND the rows in
+                    // the SAME clip-local coordinate space. 115A splits it:
+                    // the base painter is the STATIC full-height spine
+                    // (flip-only — a swipe can never translate it), and the
+                    // foreground marker layer is the ONLY apex-driven paint,
+                    // traveling ALONG the spine (live with the finger while
+                    // dragging, easing onto the focus with the 450ms snap;
+                    // complete at rest — zero animation frames, PERF-110).
                     PositionedDirectional(
                       end: -6,
                       top: 0,
@@ -154,15 +156,19 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
                                 ? Duration.zero
                                 : KioskWheel.snapDuration,
                             curve: KioskWheel.curve,
-                            builder: (context, apexY, _) => CustomPaint(
-                              size: const Size(120, double.infinity),
-                              painter: _WheelArcPainter(
-                                flip:
-                                    Directionality.of(context) ==
-                                    TextDirection.rtl,
-                                apexY: apexY,
-                              ),
-                            ),
+                            builder: (context, apexY, _) {
+                              final rtl =
+                                  Directionality.of(context) ==
+                                  TextDirection.rtl;
+                              return CustomPaint(
+                                size: const Size(120, double.infinity),
+                                painter: _WheelRailPainter(flip: rtl),
+                                foregroundPainter: _WheelMarkerPainter(
+                                  flip: rtl,
+                                  apexY: apexY,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -469,53 +475,22 @@ class _SwipeHint extends StatelessWidget {
   );
 }
 
-/// The curved orange guide beside the rail — the V2 arc re-anchored by
-/// KIOSK-CATEGORY-RAIL-115: one cubic bow whose apex rides the ACTIVE row
-/// (apexY, clip-local), a bright marker ring+dot at the apex, and fading
-/// connector dots one/two rows out — all simple strokes and circles, no
-/// filters. Repaints ONLY when the apex or direction changes (drag/snap
-/// frames); at rest it contributes zero frames (PERF-110/PowerVR-safe).
-class _WheelArcPainter extends CustomPainter {
-  const _WheelArcPainter({required this.flip, required this.apexY});
+/// 115A — the guide's STATIC layer: the faint full-height spine, fixed in
+/// rail-local space. `flip` is its ONLY input, so a category swipe can
+/// never translate it (the v11 "whole line drags along" defect). Repaints
+/// only on a direction flip.
+class _WheelRailPainter extends CustomPainter {
+  const _WheelRailPainter({required this.flip});
   final bool flip;
-  final double apexY;
-
-  /// Bow geometry: inner x at both fading ends, control x pushing the cubic
-  /// midpoint (the apex) out to ≈97.5 inside the 120-wide paint box.
-  static const double _innerX = 36;
-  static const double _controlX = 118;
-
-  /// Vertical half-window of the bow around the apex.
-  static double get _span => 2.2 * KioskWheel.rowExtent;
-
-  /// Point on the bow at parameter [t] (0..1; the apex is t = .5).
-  Offset _pointAt(double t) {
-    final u = 1 - t;
-    final x =
-        _innerX * u * u * u +
-        3 * _controlX * t * u * u +
-        3 * _controlX * t * t * u +
-        _innerX * t * t * t;
-    final y0 = apexY - _span;
-    final y1 = apexY - _span * .28;
-    final y2 = apexY + _span * .28;
-    final y3 = apexY + _span;
-    final y =
-        y0 * u * u * u +
-        3 * y1 * t * u * u +
-        3 * y2 * t * t * u +
-        y3 * t * t * t;
-    return Offset(x, y);
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
+    final h = size.height.isFinite ? size.height : 1200.0;
     if (flip) {
       canvas.translate(size.width, 0);
       canvas.scale(-1, 1);
     }
-    final span = _span;
-    final stroke = Paint()
+    final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
       ..shader = LinearGradient(
@@ -523,26 +498,88 @@ class _WheelArcPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [
           KioskColors.ring.withValues(alpha: 0),
-          KioskColors.ring,
+          KioskColors.ring.withValues(alpha: .5),
           KioskColors.ring.withValues(alpha: 0),
         ],
         stops: const [0, .5, 1],
-      ).createShader(Rect.fromLTRB(0, apexY - span, size.width, apexY + span));
+      ).createShader(Rect.fromLTWH(0, 0, size.width, h));
     final path = Path()
-      ..moveTo(_innerX, apexY - span)
+      ..moveTo(KioskWheel.railSpineInnerX, 0)
       ..cubicTo(
-        _controlX,
-        apexY - span * .28,
-        _controlX,
-        apexY + span * .28,
-        _innerX,
-        apexY + span,
+        KioskWheel.railSpineControlX,
+        h * .32,
+        KioskWheel.railSpineControlX,
+        h * .68,
+        KioskWheel.railSpineInnerX,
+        h,
       );
     // (the artifact's container opacity .9 is folded into the gradient stops)
-    canvas.drawPath(path, stroke);
+    canvas.drawPath(path, paint);
+  }
 
-    // Active marker ON the bow's apex: bright ring + filled dot.
-    final apex = _pointAt(.5);
+  @override
+  bool shouldRepaint(_WheelRailPainter oldDelegate) => oldDelegate.flip != flip;
+}
+
+/// 115A — the guide's MOVING layer, the ONLY apex-driven paint: a bright
+/// local segment of the shared spine hugging the active point, the marker
+/// ring + dot sitting exactly ON the spine, and fading connector dots
+/// one/two rows out. Simple strokes and circles, no filters; repaints only
+/// while the apex changes (drag/snap frames — zero at rest).
+class _WheelMarkerPainter extends CustomPainter {
+  const _WheelMarkerPainter({required this.flip, required this.apexY});
+  final bool flip;
+  final double apexY;
+
+  /// Half-height of the bright spine segment around the marker.
+  static const double _segment = 90;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = size.height.isFinite ? size.height : 1200.0;
+    if (flip) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+
+    // Bright segment of the SAME spine around the marker (sampled polyline
+    // on KioskWheel.railSpineX, so it hugs the static rail exactly).
+    final top = (apexY - _segment).clamp(0.0, h);
+    final bottom = (apexY + _segment).clamp(0.0, h);
+    if (bottom > top) {
+      final seg = Path();
+      const steps = 12;
+      for (var i = 0; i <= steps; i++) {
+        final y = top + (bottom - top) * i / steps;
+        final x = KioskWheel.railSpineX(y, h);
+        if (i == 0) {
+          seg.moveTo(x, y);
+        } else {
+          seg.lineTo(x, y);
+        }
+      }
+      canvas.drawPath(
+        seg,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5
+          ..strokeCap = StrokeCap.round
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              KioskColors.ring.withValues(alpha: 0),
+              KioskColors.ring,
+              KioskColors.ring.withValues(alpha: 0),
+            ],
+            stops: const [0, .5, 1],
+          ).createShader(Rect.fromLTRB(0, top, size.width, bottom)),
+      );
+    }
+
+    // Marker ring + filled dot ON the spine.
+    final markerY = apexY.clamp(0.0, h);
+    final apex = Offset(KioskWheel.railSpineX(markerY, h), markerY);
     canvas.drawCircle(
       apex,
       16,
@@ -553,17 +590,17 @@ class _WheelArcPainter extends CustomPainter {
     );
     canvas.drawCircle(apex, 7, Paint()..color = KioskColors.ring);
 
-    // Connector dots ON the bow. The t values put them ≈ ±1 row
-    // (t .265/.735) and ≈ ±2 rows (t .043/.957) from the apex — solved
-    // numerically for this cubic's y() once, hardcoded as constants.
-    for (final (t, r, a) in const [
-      (.265, 5.0, .5),
-      (.735, 5.0, .5),
-      (.043, 3.5, .3),
-      (.957, 3.5, .3),
+    // Connector dots ON the spine at ±1/±2 rows (skipped outside the rail).
+    for (final (dy, r, a) in [
+      (-KioskWheel.rowExtent, 5.0, .5),
+      (KioskWheel.rowExtent, 5.0, .5),
+      (-2 * KioskWheel.rowExtent, 3.5, .3),
+      (2 * KioskWheel.rowExtent, 3.5, .3),
     ]) {
+      final y = apexY + dy;
+      if (y < 0 || y > h) continue;
       canvas.drawCircle(
-        _pointAt(t),
+        Offset(KioskWheel.railSpineX(y, h), y),
         r,
         Paint()..color = KioskColors.ring.withValues(alpha: a),
       );
@@ -571,6 +608,6 @@ class _WheelArcPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WheelArcPainter oldDelegate) =>
+  bool shouldRepaint(_WheelMarkerPainter oldDelegate) =>
       oldDelegate.flip != flip || oldDelegate.apexY != apexY;
 }
