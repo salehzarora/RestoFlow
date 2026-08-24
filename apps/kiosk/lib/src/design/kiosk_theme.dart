@@ -139,6 +139,17 @@ LinearGradient get kioskSheetGradient => LinearGradient(
 /// The canonical design frame (portrait FHD).
 const kioskDesignSize = Size(1080, 1920);
 
+/// KIOSK-UI-113 — the stage's design WIDTH is aspect-adaptive: on portrait
+/// viewports WIDER than 9:16 (both owner tablets are 16:10) the canvas
+/// widens from the canonical 1080 up to this cap so the kiosk surface is
+/// full-bleed instead of leaving app-painted side gutters. 1280 covers every
+/// 16:10 / 3:2 tablet exactly (16:10 -> 1200); 4:3-class viewports clamp
+/// here and keep small, deliberate gutters. The SCALE never changes —
+/// [KioskStageScale] keeps its canonical min(w/1080, h/1920) meaning, so
+/// pointer transforms and decode caps are untouched, and a 1080-wide
+/// viewport renders the canonical composition byte-identically.
+const double kioskStageMaxDesignWidth = 1280;
+
 /// Category wheel constants — the artifact's exact interaction model.
 abstract final class KioskWheel {
   /// One category row in the rail (px in design space).

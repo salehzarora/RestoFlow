@@ -35,8 +35,12 @@ class KioskStage extends StatelessWidget {
           child: Center(
             child: FittedBox(
               fit: BoxFit.contain,
+              // KIOSK-UI-113: the canvas WIDTH adapts to the viewport aspect
+              // (1080..kioskStageMaxDesignWidth) so 16:10 portrait tablets
+              // are full-bleed; the resolved scale is provably identical to
+              // the canonical one, so nothing else moves.
               child: SizedBox.fromSize(
-                size: kioskDesignSize,
+                size: KioskStageScale.stageSizeFor(constraints.biggest),
                 // Transparent Material: text fields/ink need a Material
                 // ancestor; the kiosk paints every surface itself.
                 child: Material(
@@ -287,6 +291,25 @@ class KioskGlass extends StatelessWidget {
 /// forcing Anton onto RTL text is a typography bug, not a style choice.
 bool kioskLatinDisplayFits(String text) => !RegExp(r'[֐-׿؀-ۿ]').hasMatch(text);
 
+/// KIOSK-UI-113 — the renderer-owned separator between the wordmark's
+/// PRIMARY and ACCENT segments. The stored model keeps both pieces clean and
+/// trimmed (persistence strips edge whitespace on every load), so the visual
+/// gap is a PRESENTATION rule: two word segments get one natural space in
+/// every script (AR/HE/EN), while an accent that STARTS with punctuation
+/// stays attached — preserving the shipped `EMBER` + `.` -> `EMBER.`
+/// identity. No data migration, no punctuation workarounds.
+String kioskWordmarkSeparator(String primary, String accent) {
+  if (primary.isEmpty || accent.isEmpty) return '';
+  final first = accent.characters.first;
+  final attaches = RegExp(r'^\p{P}', unicode: true).hasMatch(first);
+  return attaches ? '' : ' ';
+}
+
+/// The joined plain wordmark ([kioskWordmarkSeparator] applied) — the ONE
+/// string every render site and length gate agrees on.
+String kioskWordmarkText(String primary, String accent) =>
+    '$primary${kioskWordmarkSeparator(primary, accent)}$accent';
+
 /// Display style for a BRAND wordmark segment (auto per script).
 TextStyle kioskBrandTitleStyle(
   String text,
@@ -345,7 +368,13 @@ class KioskBrandBadge extends ConsumerWidget {
         ),
       );
     } else if (primary.isNotEmpty &&
-        (primary + appearance.brandTitleAccent).characters.length <= 7) {
+        // KIOSK-UI-113: the gate measures the JOINED wordmark (separator
+        // included) so badge fit agrees with what actually renders.
+        kioskWordmarkText(
+              primary,
+              appearance.brandTitleAccent,
+            ).characters.length <=
+            7) {
       // The full wordmark only fits the small ring for short brands (the V2
       // fixture "EMBER." shape). Longer wordmarks fall through to the
       // monogram instead of clipping mid-word.
@@ -365,7 +394,12 @@ class KioskBrandBadge extends ConsumerWidget {
                 children: [
                   if (appearance.brandTitleAccent.isNotEmpty)
                     TextSpan(
-                      text: appearance.brandTitleAccent,
+                      text:
+                          kioskWordmarkSeparator(
+                            primary,
+                            appearance.brandTitleAccent,
+                          ) +
+                          appearance.brandTitleAccent,
                       style: TextStyle(color: appearance.brandAccentColor),
                     ),
                 ],

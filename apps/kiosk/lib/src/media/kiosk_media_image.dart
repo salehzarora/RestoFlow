@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../design/kiosk_theme.dart'
+    show kioskDesignSize, kioskStageMaxDesignWidth;
+
 /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110 — the kiosk's image DECODE budget.
 ///
 /// The kiosk is authored in a fixed 1080×1920 design space and letterboxed
@@ -35,6 +38,24 @@ class KioskStageScale extends InheritedWidget {
     if (box.width <= 0 || box.height <= 0) return 1.0;
     final s = math.min(box.width / design.width, box.height / design.height);
     return (s.isFinite && s > 0) ? s : 1.0;
+  }
+
+  /// KIOSK-UI-113 — the ADAPTIVE stage size for a viewport [box]: the design
+  /// height stays the canonical 1920; the design width widens from 1080 to
+  /// `box.width / scale` (clamped to [kioskStageMaxDesignWidth]) so wider
+  /// portrait tablets get a full-bleed surface. By construction
+  /// `forBox(box, stageSizeFor(box)) == forBox(box, kioskDesignSize)` — the
+  /// published scale (pointer transforms, decode caps) NEVER changes.
+  static Size stageSizeFor(Size box) {
+    final scale = forBox(box, kioskDesignSize);
+    if (!box.width.isFinite || box.width <= 0 || scale <= 0) {
+      return kioskDesignSize;
+    }
+    final width = (box.width / scale).clamp(
+      kioskDesignSize.width,
+      kioskStageMaxDesignWidth,
+    );
+    return Size(width, kioskDesignSize.height);
   }
 
   @override

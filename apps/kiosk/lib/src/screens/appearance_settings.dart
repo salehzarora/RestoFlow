@@ -691,24 +691,37 @@ class _PreviewCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    text: draft.brandTitlePrimary,
-                    style: kioskBrandTitleStyle(
-                      draft.brandTitlePrimary,
-                      44,
-                      color: draft.brandPrimaryColor,
+                // KIOSK-UI-113: the preview mirrors the attract contract —
+                // the same renderer-owned separator and the same one-line
+                // scale-down (never ellipsis), so what the owner sees here
+                // is exactly what the attract hero will do.
+                FittedBox(
+                  key: const Key('kiosk-appearance-wordmark-preview'),
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text.rich(
+                    TextSpan(
+                      text: draft.brandTitlePrimary,
+                      style: kioskBrandTitleStyle(
+                        draft.brandTitlePrimary,
+                        44,
+                        color: draft.brandPrimaryColor,
+                      ),
+                      children: [
+                        if (draft.brandTitleAccent.isNotEmpty)
+                          TextSpan(
+                            text:
+                                kioskWordmarkSeparator(
+                                  draft.brandTitlePrimary,
+                                  draft.brandTitleAccent,
+                                ) +
+                                draft.brandTitleAccent,
+                            style: TextStyle(color: draft.brandAccentColor),
+                          ),
+                      ],
                     ),
-                    children: [
-                      if (draft.brandTitleAccent.isNotEmpty)
-                        TextSpan(
-                          text: draft.brandTitleAccent,
-                          style: TextStyle(color: draft.brandAccentColor),
-                        ),
-                    ],
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 if (draft.restaurantDisplayName.isNotEmpty)
                   Text(

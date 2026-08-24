@@ -33,18 +33,23 @@ class KioskCustomImageBackground extends ConsumerWidget {
     builder: (context, snapshot) {
       final path = snapshot.data;
       if (path == null) return _fallback;
-      // PERF-110: an operator upload has no size contract — cap the decode
-      // at the full-stage physical need instead of the file's native size.
-      return Image(
-        image: kioskCappedImageProvider(
-          context,
-          FileImage(File(path)),
-          designWidth: kioskDesignSize.width,
+      // PERF-110 / KIOSK-UI-113: an operator upload has no size contract —
+      // cap the decode at the REAL full-stage physical need (the canvas may
+      // widen on 16:10 tablets) instead of the file's native size.
+      return LayoutBuilder(
+        builder: (context, constraints) => Image(
+          image: kioskCappedImageProvider(
+            context,
+            FileImage(File(path)),
+            designWidth: constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : kioskDesignSize.width,
+          ),
+          key: const Key('kiosk-attract-custom-image'),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => _fallback,
         ),
-        key: const Key('kiosk-attract-custom-image'),
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => _fallback,
       );
     },
   );

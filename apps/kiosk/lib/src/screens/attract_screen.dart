@@ -256,37 +256,51 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                       // auto display face per script (Anton never forced onto
                       // Arabic/Hebrew).
                       if (appearance.brandTitlePrimary.isNotEmpty)
-                        Text.rich(
-                          TextSpan(
-                            text: appearance.brandTitlePrimary,
-                            style:
-                                kioskBrandTitleStyle(
-                                  appearance.brandTitlePrimary,
-                                  176,
-                                  color: appearance.brandPrimaryColor,
-                                  height: .94,
-                                ).copyWith(
-                                  shadows: const [
-                                    Shadow(
-                                      color: Color(0x8C000000),
-                                      offset: Offset(0, 8),
-                                      blurRadius: 60,
-                                    ),
-                                  ],
-                                ),
-                            children: [
-                              if (appearance.brandTitleAccent.isNotEmpty)
-                                TextSpan(
-                                  text: appearance.brandTitleAccent,
-                                  style: TextStyle(
-                                    color: appearance.brandAccentColor,
+                        // KIOSK-UI-113: one-line brand, NEVER ellipsized —
+                        // short names keep the exact 176px look; longer
+                        // (especially Arabic/Hebrew, whose display face is
+                        // wider than condensed Latin) scale down uniformly so
+                        // the FULL configured name always renders. The accent
+                        // segment carries the renderer-owned separator.
+                        FittedBox(
+                          key: const Key('kiosk-attract-wordmark'),
+                          fit: BoxFit.scaleDown,
+                          child: Text.rich(
+                            TextSpan(
+                              text: appearance.brandTitlePrimary,
+                              style:
+                                  kioskBrandTitleStyle(
+                                    appearance.brandTitlePrimary,
+                                    176,
+                                    color: appearance.brandPrimaryColor,
+                                    height: .94,
+                                  ).copyWith(
+                                    shadows: const [
+                                      Shadow(
+                                        color: Color(0x8C000000),
+                                        offset: Offset(0, 8),
+                                        blurRadius: 60,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                            ],
+                              children: [
+                                if (appearance.brandTitleAccent.isNotEmpty)
+                                  TextSpan(
+                                    text:
+                                        kioskWordmarkSeparator(
+                                          appearance.brandTitlePrimary,
+                                          appearance.brandTitleAccent,
+                                        ) +
+                                        appearance.brandTitleAccent,
+                                    style: TextStyle(
+                                      color: appearance.brandAccentColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       if (appearance.restaurantDisplayName.isNotEmpty)
                         Text(
@@ -584,19 +598,24 @@ class _KenBurnsPhoto extends StatelessWidget {
         child: Transform.scale(scale: 1.0 + .08 * t, child: child),
       ),
     ),
-    child: Image(
-      // PERF-110: decode for the stage's physical need at the Ken Burns
-      // peak (1080 × 1.08), never the camera's original resolution.
-      image: kioskNetworkImageProvider(
-        context,
-        url,
-        designWidth: kioskDesignSize.width * 1.08,
+    child: LayoutBuilder(
+      // PERF-110 / KIOSK-UI-113: decode for the REAL stage width (the
+      // canvas may widen up to kioskStageMaxDesignWidth on 16:10 tablets)
+      // at the Ken Burns peak, never the camera's original resolution.
+      builder: (context, constraints) => Image(
+        image: kioskNetworkImageProvider(
+          context,
+          url,
+          designWidth: constraints.maxWidth.isFinite
+              ? constraints.maxWidth * 1.08
+              : kioskDesignSize.width * 1.08,
+        ),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => ColoredBox(color: KioskColors.canvasBottom),
       ),
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      gaplessPlayback: true,
-      errorBuilder: (_, _, _) => ColoredBox(color: KioskColors.canvasBottom),
     ),
   );
 }
