@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/design/kiosk_theme.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
@@ -54,8 +53,10 @@ void main() {
   }
 
   /// The disc of the row at [index] (the sized AnimatedContainer circle).
+  /// 116: wrap-mode rows carry VIRTUAL slot keys; this suite never changes
+  /// the selection before measuring, so slot == real index throughout.
   Finder discOf(int index) => find.descendant(
-    of: find.byKey(ValueKey(kioskFixtureMenu[index].id)),
+    of: find.byKey(ValueKey('wrap-slot-$index')),
     matching: find.byType(AnimatedContainer),
   );
 

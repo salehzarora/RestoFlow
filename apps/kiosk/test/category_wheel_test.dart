@@ -69,21 +69,25 @@ void main() {
     expect(selected, 1);
   });
 
-  testWidgets('a long fling clamps at the last category', (tester) async {
+  testWidgets('a long fling advances by the per-swipe cap (wrapping mode)', (
+    tester,
+  ) async {
+    // KIOSK-CATEGORY-LOOP-116: the fixture menu (N=5 >= wrapMinCount) now
+    // WRAPS — there is no end clamp; one gesture is capped instead.
     int? selected;
     await pumpWheel(tester, activeIndex: 0, onSelect: (i) => selected = i);
     await railDrag(tester, -KioskWheel.rowExtent * 20);
-    expect(selected, kioskFixtureMenu.length - 1);
+    expect(selected, KioskWheel.wheelMaxRowsPerSwipe);
   });
 
-  testWidgets('dragging down from the first category stays clamped at 0', (
+  testWidgets('dragging down from the first category WRAPS backward', (
     tester,
   ) async {
     int? selected;
     await pumpWheel(tester, activeIndex: 0, onSelect: (i) => selected = i);
     await railDrag(tester, KioskWheel.rowExtent * 3);
-    // The snap lands on the same index, so no selection change fires.
-    expect(selected, isNull);
+    // 116: -3 rows from 0 resolves to (0-3) mod 5 = 2 — no clamp-at-0.
+    expect(selected, 2);
   });
 
   testWidgets('partial-row drags round to the nearest index', (tester) async {
@@ -107,7 +111,12 @@ void main() {
     tester,
   ) async {
     await pumpWheel(tester, activeIndex: 0, onSelect: (_) {});
-    final label = find.text(kioskFixtureMenu[0].name.of('ar'));
+    // 116: wrap duplicates make plain find.text ambiguous — anchor on the
+    // active virtual slot (initial virtual == activeIndex here).
+    final label = find.descendant(
+      of: find.byKey(const ValueKey('wrap-slot-0')),
+      matching: find.text(kioskFixtureMenu[0].name.of('ar')),
+    );
     final gesture = await tester.startGesture(tester.getCenter(rail()));
     await gesture.moveBy(const Offset(0, -19)); // arena acceptance (slop)
     await tester.pump();
@@ -124,7 +133,12 @@ void main() {
   testWidgets('tapping a neighboring disc selects it', (tester) async {
     int? selected;
     await pumpWheel(tester, activeIndex: 0, onSelect: (i) => selected = i);
-    await tester.tap(find.text(kioskFixtureMenu[1].name.of('ar')));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('wrap-slot-1')),
+        matching: find.text(kioskFixtureMenu[1].name.of('ar')),
+      ),
+    );
     expect(selected, 1);
   });
 
@@ -135,7 +149,10 @@ void main() {
         tester
             .getSize(
               find.descendant(
-                of: find.byKey(ValueKey(kioskFixtureMenu[i].id)),
+                // 116: wrap-mode rows are keyed by VIRTUAL slot; with the
+                // harness's fixed activeIndex the primary occurrences sit
+                // at slot == real index.
+                of: find.byKey(ValueKey('wrap-slot-$i')),
                 matching: find.byType(AnimatedContainer),
               ),
             )
@@ -156,7 +173,7 @@ void main() {
         .widget<AnimatedOpacity>(
           find
               .descendant(
-                of: find.byKey(ValueKey(kioskFixtureMenu[index].id)),
+                of: find.byKey(ValueKey('wrap-slot-$index')),
                 matching: find.byType(AnimatedOpacity),
               )
               .first,

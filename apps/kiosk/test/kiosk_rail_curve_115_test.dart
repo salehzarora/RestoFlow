@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/design/kiosk_theme.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
@@ -67,11 +66,9 @@ void main() {
 
   Finder wheel() => find.byType(KioskCategoryWheel);
 
-  // Scoped to the wheel: the menu grid reuses ValueKey(category.id).
-  Finder rowOf(int index) => find.descendant(
-    of: wheel(),
-    matching: find.byKey(ValueKey(kioskFixtureMenu[index].id)),
-  );
+  // 116: wrap-mode rows carry VIRTUAL slot keys. Every selection walk in
+  // this suite moves stepwise (+1), so slot == real index throughout.
+  Finder rowOf(int index) => find.byKey(ValueKey('wrap-slot-$index'));
 
   Finder discOf(int index) => find.descendant(
     of: rowOf(index),
@@ -191,16 +188,16 @@ void main() {
     });
   });
 
-  group('B. focus contract (N=5)', () {
-    testWidgets('indices 0..3 rest with the active disc center at 320 '
-        'clip-local; index 4 clamps to 420', (tester) async {
+  group('B. focus contract (N=5, 116 wrapping)', () {
+    testWidgets('EVERY index rests with the active disc center at 320 '
+        'clip-local — the finite 420 tail no longer exists', (tester) async {
       await pumpMenu(tester);
       for (var a = 0; a <= 4; a++) {
         await selectAndSettle(tester, a);
         final center = clipLocalYOf(tester, tester.getCenter(discOf(a).first));
         expect(
           center,
-          closeTo(a == 4 ? 420 : 320, 2),
+          closeTo(320, 2),
           reason: 'active $a disc center off focus: $center',
         );
       }
@@ -246,30 +243,32 @@ void main() {
     });
   });
 
-  group('D. tail clamp (a=3 -> a=4)', () {
-    testWidgets('the last transition settles with 100px net stack motion and '
-        'the active center at 420', (tester) async {
+  group('D. wrap replaces the tail clamp (116)', () {
+    testWidgets('one forward swipe from the LAST category is a normal '
+        'one-row slide onto the FIRST — no clamp, no half-step', (
+      tester,
+    ) async {
       await pumpMenu(tester);
-      await selectAndSettle(tester, 3);
-      final row4Before = clipLocalYOf(
-        tester,
-        tester.getRect(rowOf(4)).topCenter,
+      for (var a = 1; a <= 4; a++) {
+        await selectAndSettle(tester, a); // stepwise: slot == real index
+      }
+      expect(
+        clipLocalYOf(tester, tester.getRect(rowOf(4)).topCenter),
+        closeTo(220, 2), // the last category rests at the FULL focus
       );
-      expect(row4Before, closeTo(420, 2));
-
       final gesture = await startRailDrag(tester, -KioskWheel.rowExtent);
       await gesture.up();
       await tester.pump(KioskWheel.snapDuration);
       await tester.pump(KioskWheel.snapDuration);
-      expect(container.read(kioskFlowProvider).categoryIndex, 4);
-      final row4After = clipLocalYOf(
-        tester,
-        tester.getRect(rowOf(4)).topCenter,
-      );
-      expect(row4After, closeTo(320, 2)); // net -100, not -200
+      await tester.pump(KioskWheel.snapDuration);
+      expect(container.read(kioskFlowProvider).categoryIndex, 0);
+      // The wrapped-in FIRST category occupies the focus slot (virtual 5).
       expect(
-        clipLocalYOf(tester, tester.getCenter(discOf(4).first)),
-        closeTo(420, 2),
+        clipLocalYOf(
+          tester,
+          tester.getRect(find.byKey(const ValueKey('wrap-slot-5'))).topCenter,
+        ),
+        closeTo(220, 2),
       );
     });
   });
@@ -317,51 +316,52 @@ void main() {
       );
     });
 
-    testWidgets('active 4: rows 2/3/4 in view, earlier rows clipped above, '
-        'exactly ONE widget per category — no wrap, no duplicates', (
+    testWidgets('active 4 (116): the rail below the LAST category is '
+        'populated by wrapped categories — no dead tail, focus unchanged', (
       tester,
     ) async {
       await pumpMenu(tester);
-      await selectAndSettle(tester, 4);
+      for (var a = 1; a <= 4; a++) {
+        await selectAndSettle(tester, a); // stepwise: slot == real index
+      }
       expect(
-        clipLocalYOf(tester, tester.getRect(rowOf(2)).topCenter),
-        closeTo(-80, 2),
+        clipLocalYOf(tester, tester.getRect(rowOf(4)).topCenter),
+        closeTo(220, 2), // full focus — the finite 320 tail state is gone
       );
       expect(
         clipLocalYOf(tester, tester.getRect(rowOf(3)).topCenter),
-        closeTo(120, 2),
+        closeTo(20, 2), // real neighbor above
+      );
+      // WRAPPED rows below: virtual slots 5/6 resolve to real 0/1.
+      expect(
+        clipLocalYOf(
+          tester,
+          tester.getRect(find.byKey(const ValueKey('wrap-slot-5'))).topCenter,
+        ),
+        closeTo(420, 2),
       );
       expect(
-        clipLocalYOf(tester, tester.getRect(rowOf(4)).topCenter),
-        closeTo(320, 2),
+        clipLocalYOf(
+          tester,
+          tester.getRect(find.byKey(const ValueKey('wrap-slot-6'))).topCenter,
+        ),
+        closeTo(620, 2),
       );
-      // Row 0 scrolled fully out of the clip above.
-      expect(
-        clipLocalYOf(tester, tester.getRect(rowOf(0)).bottomCenter),
-        lessThanOrEqualTo(0),
-      );
-      for (var i = 0; i < 5; i++) {
-        expect(rowOf(i), findsOneWidget); // one widget per category, no wrap
-      }
     });
   });
 
   group('F. base() tiny-N unit contract', () {
-    test(
-      'N=5 bases are [220,20,-180,-380,-480]; N=1/N=2 stay well-ordered',
-      () {
-        expect(KioskWheel.baseShiftFor(0, 5), 220);
-        expect(KioskWheel.baseShiftFor(1, 5), 20);
-        expect(KioskWheel.baseShiftFor(2, 5), -180);
-        expect(KioskWheel.baseShiftFor(3, 5), -380);
-        expect(KioskWheel.baseShiftFor(4, 5), -480);
-        // Tiny lists: the lower bound may exceed focusTop — the guard keeps
-        // the clamp valid and the single/second item near the focus.
-        expect(KioskWheel.baseShiftFor(0, 1), 220);
-        expect(KioskWheel.baseShiftFor(0, 2), 220);
-        expect(KioskWheel.baseShiftFor(1, 2), 120);
-      },
-    );
+    test('finite-mode bases (116: baseShiftFor drives ONLY N < wrapMinCount): '
+        'N=3/N=2/N=1 stay well-ordered', () {
+      expect(KioskWheel.baseShiftFor(0, 3), 220);
+      expect(KioskWheel.baseShiftFor(1, 3), 20);
+      expect(KioskWheel.baseShiftFor(2, 3), -80);
+      // Tiny lists: the lower bound may exceed focusTop — the guard keeps
+      // the clamp valid and the single/second item near the focus.
+      expect(KioskWheel.baseShiftFor(0, 1), 220);
+      expect(KioskWheel.baseShiftFor(0, 2), 220);
+      expect(KioskWheel.baseShiftFor(1, 2), 120);
+    });
   });
 
   group('G. hit testing follows the transform', () {
@@ -378,26 +378,24 @@ void main() {
       expect(container.read(kioskFlowProvider).categoryIndex, 2);
     });
 
-    testWidgets('a drag starting on EMPTY rail space still turns the wheel', (
+    testWidgets('a drag starting LOW on the rail (116: always populated — '
+        'there is no empty tail anymore) still turns the wheel', (
       tester,
     ) async {
       await pumpMenu(tester);
-      // At the list tail the rail's lower half is real empty space (rows
-      // end at clip-local 520): start a downward one-row drag there.
-      await selectAndSettle(tester, 4);
       final origin = Offset(
         tester.getCenter(wheel()).dx,
-        clipTop(tester) + 800 * stageScale(tester),
+        clipTop(tester) + 1100 * stageScale(tester),
       );
       final gesture = await tester.startGesture(origin);
-      await gesture.moveBy(const Offset(0, 19));
+      await gesture.moveBy(const Offset(0, -19));
       await tester.pump();
-      await gesture.moveBy(Offset(0, KioskWheel.rowExtent));
+      await gesture.moveBy(Offset(0, -KioskWheel.rowExtent));
       await tester.pump();
       await gesture.up();
       await tester.pump(KioskWheel.snapDuration);
       await tester.pump(KioskWheel.snapDuration);
-      expect(container.read(kioskFlowProvider).categoryIndex, 3);
+      expect(container.read(kioskFlowProvider).categoryIndex, 1);
     });
   });
 
@@ -414,13 +412,13 @@ void main() {
       return (paint.foregroundPainter as dynamic).apexY as double;
     }
 
-    testWidgets('apex settles at the focus center after selection (320), '
-        'and at 420 on the clamped tail', (tester) async {
+    testWidgets('apex settles at the focus center (320) after EVERY '
+        'selection — 116 removes the 420 tail state', (tester) async {
       await pumpMenu(tester);
       await selectAndSettle(tester, 2);
       expect(apexOf(tester), closeTo(320, 2));
       await selectAndSettle(tester, 4);
-      expect(apexOf(tester), closeTo(420, 2));
+      expect(apexOf(tester), closeTo(320, 2));
     });
   });
 

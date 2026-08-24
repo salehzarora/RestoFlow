@@ -213,6 +213,22 @@ abstract final class KioskWheel {
   /// and the +22 outward bow inside the clip).
   static const double railWidth = 272;
 
+  // ---- 116: circular / wrapping rail -------------------------------------
+
+  /// OWNER DECISION (KIOSK-CATEGORY-LOOP-116): categories LOOP circularly
+  /// at or above this count; 1–3 categories keep the finite Model B
+  /// behavior (the N=3 loop shows awkward near-duplicates, so it stays
+  /// finite by choice).
+  static const int wrapMinCount = 4;
+
+  /// Virtual slots rendered on each side of the window base in wrapping
+  /// mode (17 rows total — the visible span plus the largest capped swipe).
+  static const int wheelWindowRadius = 8;
+
+  /// One gesture advances at most this many rows (the wheel has no
+  /// inertia; the cap keeps the render window's coverage provable).
+  static const int wheelMaxRowsPerSwipe = 3;
+
   // ---- 115A: the orange guide's STATIC spine -----------------------------
   // The guide is split into a fixed full-height spine (this curve, painted
   // faint) and a moving marker layer that travels ALONG it — so a category

@@ -68,14 +68,58 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
   double _dragDy = 0;
   bool _moved = false;
 
+  // KIOSK-CATEGORY-LOOP-116 — wrapping-mode wheel-local state: the
+  // unbounded VIRTUAL active index (real = _virtualActive mod N) and the
+  // strip window's recenter anchor. Pure UI state, like [_dragDy]; the
+  // provider/menu contract keeps seeing only real indices.
+  int _virtualActive = 0;
+  int _windowBase = 0;
+
   int get _clampedIndex =>
       widget.activeIndex.clamp(0, widget.categories.length - 1);
+
+  /// OWNER DECISION: loop only at [KioskWheel.wrapMinCount]+ categories.
+  bool get _wrapping => widget.categories.length >= KioskWheel.wrapMinCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _virtualActive = widget.categories.isEmpty ? 0 : _clampedIndex;
+    _windowBase = _virtualActive;
+  }
+
+  @override
+  void didUpdateWidget(KioskCategoryWheel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final n = widget.categories.length;
+    if (n == 0) return;
+    if (!_wrapping || n != oldWidget.categories.length) {
+      // Finite mode (or a changed category set): keep the virtual mirrors
+      // aligned with the real index so a later mode switch starts clean.
+      _virtualActive = _clampedIndex;
+      _windowBase = _virtualActive;
+      return;
+    }
+    final real = _clampedIndex;
+    final current = _virtualActive % n;
+    if (real != current) {
+      // External selection: travel the SHORTEST circular path (positive
+      // bias on exact ties — N=4: 0 -> 2 goes +2). The lagging window
+      // recenters after the settle.
+      var delta = (real - current) % n;
+      if (delta > n / 2) delta -= n;
+      _virtualActive += delta;
+    }
+  }
 
   void _onDragStart(DragStartDetails details) {
     setState(() {
       _dragging = true;
       _dragDy = 0;
       _moved = false;
+      // 116: normalize the window before following the finger — the drag
+      // build has zero duration, so this recenter is pixel-compensated.
+      if (_wrapping) _windowBase = _virtualActive;
     });
   }
 
@@ -86,6 +130,24 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
   }
 
   void _onDragEnd(DragEndDetails details) {
+    if (_wrapping) {
+      // 116: NO end clamp — the wheel loops. One gesture advances at most
+      // wheelMaxRowsPerSwipe rows (no inertia; window coverage stays
+      // provable).
+      final d = (-(_dragDy / KioskWheel.rowExtent).round()).clamp(
+        -KioskWheel.wheelMaxRowsPerSwipe,
+        KioskWheel.wheelMaxRowsPerSwipe,
+      );
+      setState(() {
+        _dragging = false;
+        _dragDy = 0;
+        _virtualActive += d;
+      });
+      if (d != 0) {
+        widget.onSelect(_virtualActive % widget.categories.length);
+      }
+      return;
+    }
     final snapped = (_clampedIndex - _dragDy / KioskWheel.rowExtent)
         .round()
         .clamp(0, widget.categories.length - 1);
@@ -96,6 +158,14 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
     if (snapped != _clampedIndex) widget.onSelect(snapped);
   }
 
+  /// Post-settle window recenter (wrapping mode): pixel-compensated — the
+  /// content shifts by the lag while the configured top jumps the same
+  /// amount the other way, and the rebuild's duration resolves to zero.
+  void _recenterWindow() {
+    if (!_wrapping || _dragging || _windowBase == _virtualActive) return;
+    setState(() => _windowBase = _virtualActive);
+  }
+
   void _onDiscTap(int index) {
     if (_moved) {
       _moved = false;
@@ -104,21 +174,46 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
     widget.onSelect(index);
   }
 
+  /// 116: a tap on virtual slot [j] rotates toward THAT occurrence (circle
+  /// semantics — tapping the wrapped copy above the first category turns
+  /// the wheel upward to the last one).
+  void _onWrappedTap(int j) {
+    if (_moved) {
+      _moved = false;
+      return;
+    }
+    setState(() => _virtualActive = j);
+    widget.onSelect(j % widget.categories.length);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final lang = Localizations.localeOf(context).languageCode;
-    // KIOSK-CATEGORY-RAIL-115 Model B: the active row rests at the focus
-    // band and the stack still translates on every ordinary selection —
-    // an unclamped one-row swipe settles exactly where the finger left the
-    // rows (zero spring-back); only the list tail clamps.
-    final shift =
-        KioskWheel.baseShiftFor(_clampedIndex, widget.categories.length) +
-        (_dragging ? _dragDy : 0);
+    final n = widget.categories.length;
+    final wrapping = _wrapping;
+    final k = KioskWheel.wheelWindowRadius;
+    // 116 wrapping: the modulo strip window translates so the active
+    // virtual slot rests at the focus; the whole stack still follows the
+    // finger 1:1 and an unclamped one-row swipe settles exactly where the
+    // finger left the rows (zero spring-back). There is NO tail — the
+    // finite Model B (baseShiftFor) survives only for N < wrapMinCount.
+    final shift = wrapping
+        ? KioskWheel.focusTop -
+              (k + _virtualActive - _windowBase) * KioskWheel.rowExtent +
+              (_dragging ? _dragDy : 0)
+        : KioskWheel.baseShiftFor(_clampedIndex, n) + (_dragging ? _dragDy : 0);
     // The orange guide's apex rides the active row: live with the finger
-    // during a drag, easing onto the focus alongside the 450ms snap.
-    final apexTarget =
-        shift + _clampedIndex * KioskWheel.rowExtent + KioskWheel.rowExtent / 2;
+    // during a drag, easing onto the focus alongside the 450ms snap. In
+    // wrapping mode the rest apex is the CONSTANT focus (320) — the finite
+    // 420 tail state does not exist on a circle.
+    final apexTarget = wrapping
+        ? KioskWheel.focusTop +
+              KioskWheel.rowExtent / 2 +
+              (_dragging ? _dragDy : 0)
+        : shift +
+              _clampedIndex * KioskWheel.rowExtent +
+              KioskWheel.rowExtent / 2;
 
     return SizedBox(
       width: KioskWheel.railWidth,
@@ -174,9 +269,15 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
                       ),
                     ),
                     AnimatedPositioned(
-                      duration: _dragging
+                      // 116: the recenter build (windowBase == virtual) is
+                      // pixel-compensated and must not animate; drags stay
+                      // zero-duration as always.
+                      duration:
+                          _dragging ||
+                              (wrapping && _windowBase == _virtualActive)
                           ? Duration.zero
                           : KioskWheel.snapDuration,
+                      onEnd: wrapping ? _recenterWindow : null,
                       curve: KioskWheel.curve,
                       top: shift,
                       left: 0,
@@ -184,16 +285,38 @@ class _KioskCategoryWheelState extends State<KioskCategoryWheel> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (var i = 0; i < widget.categories.length; i++)
-                            _WheelRow(
-                              key: ValueKey(widget.categories[i].id),
-                              category: widget.categories[i],
-                              imageUrl: widget
-                                  .categoryImageUrls[widget.categories[i].id],
-                              distance: (i - _clampedIndex).abs(),
-                              lang: lang,
-                              onTap: () => _onDiscTap(i),
-                            ),
+                          if (wrapping)
+                            // 116: modulo strip — virtual slot j shows the
+                            // real category j mod N. Keys are VIRTUAL (the
+                            // same real category may occupy two slots at
+                            // once on a small circle).
+                            for (
+                              var j = _windowBase - k;
+                              j <= _windowBase + k;
+                              j++
+                            )
+                              _WheelRow(
+                                key: ValueKey('wrap-slot-$j'),
+                                category: widget.categories[j % n],
+                                imageUrl:
+                                    widget.categoryImageUrls[widget
+                                        .categories[j % n]
+                                        .id],
+                                distance: (j - _virtualActive).abs(),
+                                lang: lang,
+                                onTap: () => _onWrappedTap(j),
+                              )
+                          else
+                            for (var i = 0; i < n; i++)
+                              _WheelRow(
+                                key: ValueKey(widget.categories[i].id),
+                                category: widget.categories[i],
+                                imageUrl: widget
+                                    .categoryImageUrls[widget.categories[i].id],
+                                distance: (i - _clampedIndex).abs(),
+                                lang: lang,
+                                onTap: () => _onDiscTap(i),
+                              ),
                         ],
                       ),
                     ),

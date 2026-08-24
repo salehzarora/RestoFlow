@@ -164,14 +164,14 @@ void main() {
       expect(markerApex(tester), closeTo(320, 2));
     });
 
-    testWidgets('marker rest positions keep the 115 focus contract: 320 for '
-        'indices 0..3, 420 at the clamped tail', (tester) async {
+    testWidgets('marker rest positions: 320 for EVERY index (116 wrapping '
+        'mode has no finite tail — 420 never occurs)', (tester) async {
       await pumpMenu(tester);
       for (var a = 0; a <= 4; a++) {
         await selectAndSettle(tester, a);
         expect(
           markerApex(tester),
-          closeTo(a == 4 ? 420 : 320, 2),
+          closeTo(320, 2),
           reason: 'marker off focus at active $a',
         );
       }
