@@ -10,13 +10,13 @@ void main() {
   });
 
   group('PerfFrameStats.fromSamples', () {
-    PerfFrameSample s(double total, {double build = 0, double raster = 0}) =>
-        PerfFrameSample(buildMs: build, rasterMs: raster, totalMs: total);
+    PerfFrameSample s(double frame, {double build = 0, double raster = 0}) =>
+        PerfFrameSample(buildMs: build, rasterMs: raster, frameMs: frame);
 
     test('empty → zeros', () {
       final st = PerfFrameStats.fromSamples(const []);
       expect(st.sampleCount, 0);
-      expect(st.p95TotalMs, 0);
+      expect(st.p95FrameMs, 0);
       expect(st.jankyFrames, 0);
       expect(st.severeJankFrames, 0);
     });
@@ -31,7 +31,7 @@ void main() {
       expect(st.averageBuildMs, closeTo(10.5 * 0.5, 1e-9));
       expect(st.averageRasterMs, closeTo(10.5 * 0.25, 1e-9));
       // nearest rank: ceil(0.95 * 20) = 19 → 19.0
-      expect(st.p95TotalMs, 19);
+      expect(st.p95FrameMs, 19);
       // > 16.7 ms: 17,18,19,20 → 4 ; > 33.3: none
       expect(st.jankyFrames, 4);
       expect(st.severeJankFrames, 0);
@@ -41,11 +41,11 @@ void main() {
       final st = PerfFrameStats.fromSamples([s(10), s(20), s(40), s(100)]);
       expect(st.jankyFrames, 3);
       expect(st.severeJankFrames, 2);
-      expect(st.p95TotalMs, 100);
+      expect(st.p95FrameMs, 100);
     });
 
     test('a single sample is its own p95', () {
-      expect(PerfFrameStats.fromSamples([s(7)]).p95TotalMs, 7);
+      expect(PerfFrameStats.fromSamples([s(7)]).p95FrameMs, 7);
     });
   });
 
@@ -54,11 +54,11 @@ void main() {
       final r = PerfFrameRecorder(capacity: 3);
       for (var i = 1; i <= 5; i++) {
         r.addSample(
-          PerfFrameSample(buildMs: 0, rasterMs: 0, totalMs: i.toDouble()),
+          PerfFrameSample(buildMs: 0, rasterMs: 0, frameMs: i.toDouble()),
         );
       }
       expect(r.sampleCount, 3);
-      expect(r.stats.p95TotalMs, 5); // only 3,4,5 remain
+      expect(r.stats.p95FrameMs, 5); // only 3,4,5 remain
       r.reset();
       expect(r.sampleCount, 0);
       expect(r.stats, PerfFrameStats.empty);
@@ -86,8 +86,8 @@ void main() {
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.reset);
       final r = PerfFrameRecorder(capacity: 10);
-      r.addSample(const PerfFrameSample(buildMs: 4, rasterMs: 6, totalMs: 40));
-      r.addSample(const PerfFrameSample(buildMs: 2, rasterMs: 2, totalMs: 8));
+      r.addSample(const PerfFrameSample(buildMs: 4, rasterMs: 6, frameMs: 40));
+      r.addSample(const PerfFrameSample(buildMs: 2, rasterMs: 2, frameMs: 8));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

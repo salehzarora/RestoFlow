@@ -27,11 +27,11 @@ class PerfFrameSample {
   const PerfFrameSample({
     required this.buildMs,
     required this.rasterMs,
-    required this.totalMs,
+    required this.frameMs,
   });
   final double buildMs;
   final double rasterMs;
-  final double totalMs;
+  final double frameMs;
 }
 
 /// Rolling summary of the most recent frames (see [PerfFrameRecorder]).
@@ -41,7 +41,7 @@ class PerfFrameStats {
     required this.sampleCount,
     required this.averageBuildMs,
     required this.averageRasterMs,
-    required this.p95TotalMs,
+    required this.p95FrameMs,
     required this.jankyFrames,
     required this.severeJankFrames,
   });
@@ -50,7 +50,7 @@ class PerfFrameStats {
     sampleCount: 0,
     averageBuildMs: 0,
     averageRasterMs: 0,
-    p95TotalMs: 0,
+    p95FrameMs: 0,
     jankyFrames: 0,
     severeJankFrames: 0,
   );
@@ -63,7 +63,7 @@ class PerfFrameStats {
   final int sampleCount;
   final double averageBuildMs;
   final double averageRasterMs;
-  final double p95TotalMs;
+  final double p95FrameMs;
   final int jankyFrames;
   final int severeJankFrames;
 
@@ -81,9 +81,9 @@ class PerfFrameStats {
       final s = list[i];
       build += s.buildMs;
       raster += s.rasterMs;
-      totals[i] = s.totalMs;
-      if (s.totalMs > jankThresholdMs) janky++;
-      if (s.totalMs > severeJankThresholdMs) severe++;
+      totals[i] = s.frameMs;
+      if (s.frameMs > jankThresholdMs) janky++;
+      if (s.frameMs > severeJankThresholdMs) severe++;
     }
     totals.sort();
     final rank = (0.95 * totals.length).ceil().clamp(1, totals.length);
@@ -91,7 +91,7 @@ class PerfFrameStats {
       sampleCount: list.length,
       averageBuildMs: build / list.length,
       averageRasterMs: raster / list.length,
-      p95TotalMs: totals[rank - 1],
+      p95FrameMs: totals[rank - 1],
       jankyFrames: janky,
       severeJankFrames: severe,
     );
@@ -148,7 +148,7 @@ class PerfFrameRecorder {
         PerfFrameSample(
           buildMs: t.buildDuration.inMicroseconds / 1000,
           rasterMs: t.rasterDuration.inMicroseconds / 1000,
-          totalMs: t.totalSpan.inMicroseconds / 1000,
+          frameMs: t.totalSpan.inMicroseconds / 1000,
         ),
       );
     }
@@ -259,7 +259,7 @@ class _PerfDiagnosticsPanelState extends State<PerfDiagnosticsPanel> {
       ),
       (label: 'avg build ms', value: _f(stats.averageBuildMs, 2)),
       (label: 'avg raster ms', value: _f(stats.averageRasterMs, 2)),
-      (label: 'p95 frame ms', value: _f(stats.p95TotalMs, 1)),
+      (label: 'p95 frame ms', value: _f(stats.p95FrameMs, 1)),
       (label: 'janky >16.7ms', value: '${stats.jankyFrames}'),
       (label: 'severe >33.3ms', value: '${stats.severeJankFrames}'),
     ];
