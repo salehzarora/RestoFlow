@@ -9,6 +9,8 @@ import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
+import '../print/kiosk_printer_purpose.dart'
+    show kioskKitchenClaimDecisionProvider;
 import 'kiosk_live_runtime.dart';
 import 'kiosk_staff_access.dart';
 
@@ -400,7 +402,13 @@ class KioskState {
 /// the REAL composition root (which wires the auto-print controller); demo
 /// and tests without printing stay print-free.
 typedef KioskAcceptedOrderHook =
-    void Function(KioskOrderSnapshot order, String lang);
+    void Function(
+      KioskOrderSnapshot order,
+      String lang,
+      // KIOSK-PRINT-114B.2: the kitchen dispatch THIS submit claimed (null
+      // when no claim landed) — the kitchen print lane's only input.
+      KioskClaimedKitchenDispatch? kitchenDispatch,
+    );
 
 final kioskAcceptedOrderHookProvider = Provider<KioskAcceptedOrderHook?>(
   (ref) => null,
@@ -1011,7 +1019,20 @@ class KioskFlowController extends Notifier<KioskState> {
       _abortSubmit('submit-failed');
       return;
     }
-    final result = await submitter.submit(attempt);
+    // KIOSK-PRINT-114B.2: ask the submit transaction to claim the kitchen
+    // dispatch ONLY when this device is actually configured to print it
+    // (printer_only support + auto-print + usable destination). Fail-closed:
+    // any resolution problem means no claim — the POS drain stays owner.
+    var claimKitchen = false;
+    try {
+      claimKitchen = await ref.read(kioskKitchenClaimDecisionProvider.future);
+    } catch (_) {
+      claimKitchen = false;
+    }
+    final result = await submitter.submit(
+      attempt,
+      claimKitchenDispatch: claimKitchen,
+    );
     switch (result) {
       // 093 client invariant: an acceptance must name OUR frozen order id —
       // anything else is an unreadable response, treated as UNCONFIRMED
@@ -1019,8 +1040,8 @@ class KioskFlowController extends Notifier<KioskState> {
       // never shown to the customer).
       case KioskSubmitAccepted(:final orderId) when orderId != attempt.orderId:
         state = state.copyWith(submitPhase: KioskSubmitPhase.unconfirmed);
-      case KioskSubmitAccepted(:final orderId):
-        _confirmAccepted(orderId, attempt);
+      case KioskSubmitAccepted(:final orderId, :final kitchenDispatch):
+        _confirmAccepted(orderId, attempt, kitchenDispatch);
       case KioskSubmitRejected(:final code, :final invalidField):
         // Terminal server refusal: this identity is spent — a later
         // deliberate re-order mints a NEW one.
@@ -1036,7 +1057,11 @@ class KioskFlowController extends Notifier<KioskState> {
     }
   }
 
-  void _confirmAccepted(String orderId, KioskSubmitAttempt attempt) {
+  void _confirmAccepted(
+    String orderId,
+    KioskSubmitAttempt attempt, [
+    KioskClaimedKitchenDispatch? kitchenDispatch,
+  ]) {
     _pendingAttempt = null;
     // 093: EVERY piece of order content on the confirmation comes from the
     // FROZEN attempt view — never from the (theoretically mutable) live
@@ -1077,7 +1102,7 @@ class KioskFlowController extends Notifier<KioskState> {
     // problem, and dedup lives behind the hook.
     final acceptedHook = ref.read(kioskAcceptedOrderHookProvider);
     if (acceptedHook != null) {
-      acceptedHook(state.lastOrder!, state.lang);
+      acceptedHook(state.lastOrder!, state.lang, kitchenDispatch);
     }
   }
 

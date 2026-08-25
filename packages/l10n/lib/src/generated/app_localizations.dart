@@ -11842,6 +11842,60 @@ abstract class AppLocalizations {
   /// **'Preview'**
   String get kioskAppearancePreview;
 
+  /// No description provided for @kioskKitchenRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket'**
+  String get kioskKitchenRole;
+
+  /// No description provided for @kioskKitchenGovernedByKds.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen printing on this branch is handled by the kitchen display workflow. The kiosk prints customer receipts only.'**
+  String get kioskKitchenGovernedByKds;
+
+  /// No description provided for @kioskKitchenAutoPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Print kitchen ticket automatically'**
+  String get kioskKitchenAutoPrint;
+
+  /// No description provided for @kioskKitchenAutoPrintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After a successful order, the kiosk prints the kitchen ticket on its own kitchen printer.'**
+  String get kioskKitchenAutoPrintHint;
+
+  /// No description provided for @kioskKitchenCopyCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Use customer printer'**
+  String get kioskKitchenCopyCustomer;
+
+  /// No description provided for @kioskKitchenTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test kitchen ticket'**
+  String get kioskKitchenTest;
+
+  /// No description provided for @kioskKitchenLastFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last kitchen ticket did not print.'**
+  String get kioskKitchenLastFailed;
+
+  /// No description provided for @kioskKitchenLastPossibly.
+  ///
+  /// In en, this message translates to:
+  /// **'Last kitchen ticket may have printed — not repeated automatically.'**
+  String get kioskKitchenLastPossibly;
+
+  /// No description provided for @kioskKitchenRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get kioskKitchenRetry;
+
   /// No description provided for @kioskIdleDelaySection.
   ///
   /// In en, this message translates to:

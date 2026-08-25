@@ -6481,6 +6481,36 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kioskAppearancePreview => 'תצוגה מקדימה';
 
   @override
+  String get kioskKitchenRole => 'כרטיס מטבח';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'הדפסת המטבח בסניף זה מנוהלת דרך מסך המטבח. העמדה מדפיסה קבלות לקוח בלבד.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'הדפסת כרטיס מטבח אוטומטית';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'לאחר הזמנה מוצלחת, העמדה מדפיסה את כרטיס המטבח במדפסת המטבח שלה.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'שימוש במדפסת הלקוחות';
+
+  @override
+  String get kioskKitchenTest => 'בדיקת כרטיס מטבח';
+
+  @override
+  String get kioskKitchenLastFailed => 'כרטיס המטבח האחרון לא הודפס.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'ייתכן שכרטיס המטבח האחרון הודפס — לא יודפס שוב אוטומטית.';
+
+  @override
+  String get kioskKitchenRetry => 'ניסיון חוזר';
+
+  @override
   String get kioskIdleDelaySection => 'זמן חוסר פעילות';
 
   @override

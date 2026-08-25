@@ -6573,6 +6573,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kioskAppearancePreview => 'Preview';
 
   @override
+  String get kioskKitchenRole => 'Kitchen ticket';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'Kitchen printing on this branch is handled by the kitchen display workflow. The kiosk prints customer receipts only.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'Print kitchen ticket automatically';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'After a successful order, the kiosk prints the kitchen ticket on its own kitchen printer.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'Use customer printer';
+
+  @override
+  String get kioskKitchenTest => 'Test kitchen ticket';
+
+  @override
+  String get kioskKitchenLastFailed => 'Last kitchen ticket did not print.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'Last kitchen ticket may have printed — not repeated automatically.';
+
+  @override
+  String get kioskKitchenRetry => 'Retry';
+
+  @override
   String get kioskIdleDelaySection => 'Inactivity timeout';
 
   @override

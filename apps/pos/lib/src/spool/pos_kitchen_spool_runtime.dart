@@ -25,7 +25,6 @@ import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
 import 'kitchen_dispatch_import_coordinator.dart';
 import 'kitchen_print_worker.dart';
-import 'kitchen_ticket_renderer.dart';
 import 'kitchen_void_reconciliation.dart';
 import 'pending_kitchen_ack_coordinator.dart';
 import 'pos_kitchen_spool_hooks.dart';

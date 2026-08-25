@@ -6523,6 +6523,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kioskAppearancePreview => 'معاينة';
 
   @override
+  String get kioskKitchenRole => 'تذكرة المطبخ';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'طباعة المطبخ في هذا الفرع تُدار عبر شاشة المطبخ. الجهاز يطبع إيصالات الزبائن فقط.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'طباعة تذكرة المطبخ تلقائياً';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'بعد نجاح الطلب، يطبع الجهاز تذكرة المطبخ على طابعة المطبخ الخاصة به.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'استخدام طابعة الزبائن';
+
+  @override
+  String get kioskKitchenTest => 'اختبار تذكرة المطبخ';
+
+  @override
+  String get kioskKitchenLastFailed => 'آخر تذكرة مطبخ لم تُطبع.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'آخر تذكرة مطبخ ربما طُبعت — لن تُكرر تلقائياً.';
+
+  @override
+  String get kioskKitchenRetry => 'إعادة المحاولة';
+
+  @override
   String get kioskIdleDelaySection => 'مهلة عدم النشاط';
 
   @override

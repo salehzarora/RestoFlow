@@ -23,7 +23,6 @@ import 'package:restoflow_pos/src/data/round_print_claim_store.dart'
     show PosRoundPrintClaimState;
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
-import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 

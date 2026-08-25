@@ -19,6 +19,7 @@ export 'src/kitchen_spool/kitchen_spool_aad.dart';
 export 'src/kitchen_spool/kitchen_spool_cipher.dart';
 export 'src/kitchen_spool/kitchen_spool_key_manager.dart';
 export 'src/kitchen_spool/kitchen_spool_payload.dart';
+export 'src/kitchen_spool/kitchen_ticket_renderer.dart';
 export 'src/kitchen_spool/kitchen_spool_status.dart';
 // KITCHEN-MODE-001C2B: the DEDICATED runtime kitchen-spool database (Android
 // backup-excluded path) + its fail-closed factory. Opening the spool through

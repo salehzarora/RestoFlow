@@ -16,6 +16,10 @@ dependencies:
     path: ../../packages/auth_identity
   restoflow_core:
     path: ../../packages/core
+  # KIOSK-PRINT-114B.2: the claimed kitchen dispatch payload + the shared
+  # extracted printer_only renderer.
+  restoflow_data_local:
+    path: ../../packages/data_local
   restoflow_data_remote:
     path: ../../packages/data_remote
   restoflow_design_system:

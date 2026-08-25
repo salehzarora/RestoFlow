@@ -17,7 +17,6 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
-import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/kitchen_void_reconciliation.dart';
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';

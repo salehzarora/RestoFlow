@@ -15,7 +15,6 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import 'kitchen_dispatch_import_coordinator.dart'
     show KitchenAckFlushOutcome, KitchenImportScope, flushAck;
-import 'kitchen_ticket_renderer.dart';
 
 /// KITCHEN-MODE-001C2C — the crash-safe, bounded kitchen print worker.
 ///
