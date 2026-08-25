@@ -25,15 +25,27 @@ final RegExp _importDirective = RegExp(
 
 String _join(List<String> parts) => parts.join(Platform.pathSeparator);
 
+/// CI-portable kiosk package-root resolution (mirrors the POS
+/// `locatePosPackageRoot` test support): CI runs `flutter test apps/kiosk`
+/// from the REPOSITORY ROOT while local runs usually start inside the app, so
+/// the current directory, its `apps/kiosk` child and each ancestor (with the
+/// same child probe) are tried in that order; the root is identified by its
+/// own pubspec name, never by directory shape alone.
 Directory _kioskLib() {
-  var dir = Directory.current;
-  for (var i = 0; i < 4; i++) {
-    final candidate = Directory(_join([dir.path, 'lib', 'src', 'print']));
-    if (candidate.existsSync() &&
-        File(_join([dir.path, 'pubspec.yaml'])).existsSync()) {
-      return Directory(_join([dir.path, 'lib']));
-    }
-    dir = dir.parent;
+  bool isKioskRoot(Directory dir) {
+    final pubspec = File(_join([dir.path, 'pubspec.yaml']));
+    return pubspec.existsSync() &&
+        pubspec.readAsStringSync().contains('name: restoflow_kiosk');
+  }
+
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 10; depth++) {
+    if (isKioskRoot(dir)) return Directory(_join([dir.path, 'lib']));
+    final nested = Directory(_join([dir.path, 'apps', 'kiosk']));
+    if (isKioskRoot(nested)) return Directory(_join([nested.path, 'lib']));
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
   }
   throw StateError('kiosk package root not found from ${Directory.current}');
 }
