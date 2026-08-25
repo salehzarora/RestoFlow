@@ -1366,6 +1366,8 @@ class CartController extends Notifier<CartViewState> {
     String? outboxEntryId,
     String? localOperationId,
     String? orderId,
+    // KIOSK-PRINT-114B.6: the outbox entry's clientCreatedAt (order creation).
+    DateTime? createdAt,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
     // 017 (Codex HIGH #3): the AUTHORITATIVE prep snapshot of the operation that
@@ -1457,6 +1459,7 @@ class CartController extends Notifier<CartViewState> {
       outboxEntryId: outboxEntryId,
       localOperationId: localOperationId,
       orderId: orderId,
+      createdAt: createdAt,
       currencyCode: order.currencyCode,
       subtotalMinor: order.subtotalMinorPreview + modifiersTotal,
       // RF-117: tax computed at submit from the branch setting (0 when disabled).
@@ -1493,6 +1496,8 @@ class CartController extends Notifier<CartViewState> {
     String? outboxEntryId,
     String? localOperationId,
     String? orderId,
+    // KIOSK-PRINT-114B.6: the outbox entry's clientCreatedAt (order creation).
+    DateTime? createdAt,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
     // 018 (Codex HIGH #2): the AUTHORITATIVE prep snapshot of the operation that
@@ -1565,6 +1570,7 @@ class CartController extends Notifier<CartViewState> {
       outboxEntryId: outboxEntryId,
       localOperationId: localOperationId,
       orderId: orderId,
+      createdAt: createdAt,
       currencyCode: draft.currencyCode,
       subtotalMinor: subtotal,
       taxTotalMinor: taxTotalMinor,

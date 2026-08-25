@@ -236,30 +236,36 @@ void main() {
     });
 
     test(
-      'KITCHEN-PRINT-DUAL-001B (Finding 4): the printed kitchen ticket renders '
-      'NO creation/submission time — established KDS behavior. submittedAt drives '
-      'only the board FIFO/elapsed pill, never the print, so the POS carries no '
-      'timestamp either and the two surfaces stay aligned.',
+      'KIOSK-PRINT-114B.6 (supersedes KITCHEN-PRINT-DUAL-001B Finding 4): the '
+      'printed kitchen ticket renders the ORDER CREATION date + time from '
+      'submittedAt in the header meta block — every canonical path (POS direct, '
+      'kiosk/drain dispatch, POS reprint, KDS bridge) prints the same stamp; '
+      'without a known creation time the ticket is byte-identical to before.',
       () {
         final labels = _labels();
         final withoutTime = buildKdsTicketPrintDocument(
           ticket: _ticket(),
           labels: labels,
         );
+        final createdAt = DateTime.utc(2026, 7, 22, 10, 30, 45);
         final withTime = buildKdsTicketPrintDocument(
-          ticket: _ticket(submittedAt: DateTime.utc(2026, 7, 22, 10, 30, 45)),
+          ticket: _ticket(submittedAt: createdAt),
           labels: labels,
         );
-        // The submission time changes NOTHING in the printed document.
-        expect(
-          [for (final l in withTime.lines) '${l.kind}|${l.left}|${l.right}'],
-          [for (final l in withoutTime.lines) '${l.kind}|${l.left}|${l.right}'],
-        );
-        // And no line carries a timestamp-looking value.
-        for (final line in withTime.lines) {
+        final stamp = formatKitchenTicketTimestamp(createdAt);
+        // Exactly ONE extra line: the centered creation stamp, in the header
+        // meta block (before the rule that precedes the counts/items).
+        final withTexts = [for (final l in withTime.lines) l.left ?? ''];
+        final withoutTexts = [for (final l in withoutTime.lines) l.left ?? ''];
+        expect(withTime.lines.length, withoutTime.lines.length + 1);
+        final at = withTexts.indexOf(stamp);
+        expect(at, greaterThan(0));
+        expect(withTime.lines[at].kind, PrintLineKind.center);
+        expect([...withTexts]..removeAt(at), withoutTexts);
+        // No line without a known creation time carries a timestamp value.
+        for (final line in withoutTime.lines) {
           final text = '${line.left ?? ''} ${line.right ?? ''}';
-          expect(text.contains('2026-07-22'), isFalse);
-          expect(text.contains('10:30'), isFalse);
+          expect(RegExp(r'\d\d/\d\d/\d{4}').hasMatch(text), isFalse);
         }
       },
     );

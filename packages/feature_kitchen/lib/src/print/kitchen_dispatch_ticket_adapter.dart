@@ -98,6 +98,12 @@ KdsTicketView kdsTicketViewFromKitchenDispatch(
     customerName: dispatch.customerDisplayName,
     customerPhone: customerPhoneOverride ?? dispatch.customerPhone,
     notes: dispatch.orderNote,
+    // KIOSK-PRINT-114B.6: the ORDER CREATION instant the server stamped on the
+    // dispatch (`created_at`, ISO-8601), in local time for the ticket header;
+    // absent/unparseable => no timestamp line (never the print time).
+    submittedAt: dispatch.createdAt == null
+        ? null
+        : DateTime.tryParse(dispatch.createdAt!)?.toLocal(),
     kitchenCounts: aggregateOrderKitchenCounts(countInputs),
     // DEFERRED-ORDER-AMENDMENTS-001: null on an initial order (the shared
     // builder then prints no addition marker); the applied round identity on a

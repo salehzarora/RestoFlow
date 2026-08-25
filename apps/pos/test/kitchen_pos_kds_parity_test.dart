@@ -115,6 +115,8 @@ KdsTicketView _kdsTicket() {
 
 /// The SAME representative order expressed as the POS immutable cart snapshot.
 KdsTicketView _posTicket() => kdsTicketViewFromCartLines(
+  // 114B.6: the SAME creation instant the KDS rows carry (created_at).
+  createdAt: DateTime.parse('2026-07-22T10:00:00Z').toLocal(),
   orderCode: displayOrderCode(_orderId),
   orderType: OrderType.dineIn,
   tableLabel: '5',

@@ -8,6 +8,8 @@ import 'package:restoflow_data_local/kitchen_dispatch_document.dart'
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
     show
         CanonicalKitchenDispatchRenderer,
+        formatKitchenTicketTimestamp,
+        kitchenServiceModeBadge,
         kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show KitchenAckAccepted, KitchenAckResult, KitchenImportAckStatus;
@@ -38,6 +40,7 @@ void main() {
 
   final payload = <String, Object?>{
     'v': 1,
+    'created_at': '2026-08-25T11:07:00+00:00',
     'kind': 'initial_order',
     'order_code': '#1234',
     'order_type': 'takeaway',
@@ -182,6 +185,18 @@ void main() {
       expect(
         text.indexOf('Kitchen total'),
         lessThan(text.indexOf('B2 Burger')),
+      );
+      // KIOSK-PRINT-114B.6: the canonical header — the LARGE service-mode
+      // badge and the ORDER CREATION stamp (server created_at, local time).
+      final labels = kitchenTicketPrintLabelsForLanguageCode('en');
+      expect(text, contains(kitchenServiceModeBadge(labels, 'takeaway')!));
+      expect(
+        text,
+        contains(
+          formatKitchenTicketTimestamp(
+            DateTime.parse('2026-08-25T11:07:00Z').toLocal(),
+          ),
+        ),
       );
       final status = c.read(kioskKitchenPrintStatusProvider);
       expect(status?.outcome, KioskKitchenPrintOutcome.sent);

@@ -38,6 +38,7 @@ class PosOrderDetail {
     this.customerPhone,
     this.receiptNumber,
     this.payment,
+    this.createdAt,
   });
 
   final String orderId;
@@ -57,6 +58,11 @@ class PosOrderDetail {
   final List<PosOrderDetailItem> items;
   final List<PosOrderDetailRound> rounds;
   final PosOrderDetailPayment? payment;
+
+  /// KIOSK-PRINT-114B.6: the server's `order.created_at` (the ORDER CREATION
+  /// instant) for the canonical kitchen ticket header; tolerant — null when
+  /// absent/unparseable (an RPC predating the key). Non-money.
+  final DateTime? createdAt;
 
   static PosOrderDetail? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -147,6 +153,9 @@ class PosOrderDetail {
       items: items,
       rounds: rounds,
       payment: payment,
+      createdAt: order['created_at'] is String
+          ? DateTime.tryParse(order['created_at'] as String)
+          : null,
     );
   }
 }
@@ -528,6 +537,8 @@ SubmittedOrderView submittedOrderViewFromDetail(PosOrderDetail d) {
     customerName: d.customerName,
     customerPhone: d.customerPhone,
     orderId: d.orderId,
+    // KIOSK-PRINT-114B.6: the server creation instant, local time for the header.
+    createdAt: d.createdAt?.toLocal(),
     lines: [
       for (final i in sortedItems)
         SubmittedLineView(

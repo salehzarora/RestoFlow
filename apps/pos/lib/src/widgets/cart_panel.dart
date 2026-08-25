@@ -1038,6 +1038,7 @@ Future<void> submitOrderFromCart({
       outboxEntryId: result.entry.id,
       localOperationId: result.entry.localOperationId,
       orderId: result.entry.targetId,
+      createdAt: result.entry.clientCreatedAt,
       taxTotalMinor: taxTotalMinor,
       taxRateBp: taxRateBp,
       // 017 (Codex HIGH #3): the SAME immutable prep snapshot the authoritative
@@ -1143,6 +1144,7 @@ Future<void> submitOrderFromCart({
           isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
           ticket: kdsTicketViewFromCartLines(
             orderCode: result.orderNumber,
+            createdAt: result.entry.clientCreatedAt,
             orderType: orderTypeBefore,
             lines: cart.lines,
             prepByItemId: kitchenPrepByItemId,
@@ -1173,6 +1175,7 @@ Future<void> submitOrderFromCart({
           // order. Manual "Print kitchen ticket" on the confirmation stays available.
           ticket: kdsTicketViewFromCartLines(
             orderCode: result.orderNumber,
+            createdAt: result.entry.clientCreatedAt,
             orderType: orderTypeBefore,
             lines: cart.lines,
             prepByItemId: kitchenPrepByItemId,
@@ -1264,6 +1267,7 @@ void _retainDepartedSessionResult({
               outboxEntryId: result.entry.id,
               localOperationId: result.entry.localOperationId,
               orderId: result.entry.targetId,
+              createdAt: result.entry.clientCreatedAt,
               taxTotalMinor: taxTotalMinor,
               taxRateBp: taxRateBp,
               submittedPrepByItemId: submittedPrepByItemId,
@@ -1323,6 +1327,7 @@ void _retainDepartedSessionResult({
     outboxEntryId: result.entry.id,
     localOperationId: result.entry.localOperationId,
     orderId: result.entry.targetId,
+    createdAt: result.entry.clientCreatedAt,
     taxTotalMinor: taxTotalMinor,
     taxRateBp: taxRateBp,
     submittedPrepByItemId: submittedPrepByItemId,

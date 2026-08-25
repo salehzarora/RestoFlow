@@ -224,6 +224,8 @@ void main() {
       orderType: 'takeaway',
       customerName: 'Saleh',
       notes: 'no sauce on the side',
+      // 114B.6: the dispatch fixture's created_at, as the adapter carries it.
+      submittedAt: DateTime.parse('2026-08-25T10:00:00Z').toLocal(),
       items: const [
         KdsItemView(
           name: 'Classic Burger',

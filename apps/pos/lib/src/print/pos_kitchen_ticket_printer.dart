@@ -864,6 +864,10 @@ KdsTicketView kdsTicketViewFromCartLines({
   String? orderNote,
   String? roundId,
   int? roundNumber,
+  // KIOSK-PRINT-114B.6: the order's creation instant (the outbox entry's
+  // clientCreatedAt on submit) — printed in the canonical header; never the
+  // print time.
+  DateTime? createdAt,
 }) {
   // MENU-ORDER-001: order items by the shared canonical print order (category ->
   // item display order -> cart index) so the POS-direct kitchen ticket matches
@@ -875,6 +879,7 @@ KdsTicketView kdsTicketViewFromCartLines({
     (l) => [l.categoryDisplayOrder, l.itemDisplayOrder],
   );
   return _kdsTicketViewFromKitchenLines(
+    createdAt: createdAt,
     orderCode: orderCode,
     orderType: orderType,
     tableLabel: tableLabel,
@@ -948,6 +953,9 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
   String? orderNote,
   String? roundId,
   int? roundNumber,
+  // KIOSK-PRINT-114B.6: the ORDER CREATION instant (the submit's client time /
+  // the detail's created_at) for the canonical header stamp; null => none.
+  DateTime? createdAt,
 }) {
   final items = <KdsItemView>[];
   final countInputs = <KitchenCountItemInput>[];
@@ -994,6 +1002,7 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
     // identity on an addition.
     roundId: roundId,
     roundNumber: roundNumber,
+    submittedAt: createdAt,
   );
 }
 
@@ -1013,6 +1022,7 @@ KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) {
   // getter) so the manual kitchen reprint matches the cashier receipt + KDS.
   final sortedLines = order.printOrderedLines;
   return _kdsTicketViewFromKitchenLines(
+    createdAt: order.createdAt,
     orderCode: order.orderNumber,
     orderType: order.orderType,
     tableLabel: order.tableLabel,

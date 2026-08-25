@@ -37,6 +37,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
 /// option (2 meat per selection), and the item's menu-joined bun prep.
 KdsTicketView _posDirectTicket() => kdsTicketViewFromCartLines(
   orderCode: '#ABC123',
+  // 114B.6: the same creation instant the dispatch fixture carries.
+  createdAt: DateTime.parse('2026-08-25T10:00:00Z').toLocal(),
   orderType: OrderType.takeaway,
   customerName: 'Saleh',
   orderNote: 'no sauce on the side',

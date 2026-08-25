@@ -534,6 +534,8 @@ Map<String, Object?> _orderToJson(SubmittedOrderView o) => <String, Object?>{
   if (o.orderId != null) 'order_id': o.orderId,
   if (o.outboxEntryId != null) 'outbox_entry_id': o.outboxEntryId,
   if (o.localOperationId != null) 'local_operation_id': o.localOperationId,
+  // KIOSK-PRINT-114B.6: additive; absent on records persisted before it.
+  if (o.createdAt != null) 'created_at': o.createdAt!.toIso8601String(),
   'lines': [for (final l in o.lines) _lineToJson(l)],
 };
 
@@ -592,6 +594,10 @@ SubmittedOrderView _orderFromJson(Map<String, Object?> j) {
       'order',
       'local_operation_id',
     ),
+    // KIOSK-PRINT-114B.6: tolerant — a missing/unparseable stamp is null.
+    createdAt: j['created_at'] is String
+        ? DateTime.tryParse(j['created_at'] as String)
+        : null,
     lines: lines,
   );
 }
