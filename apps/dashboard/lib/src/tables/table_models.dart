@@ -8,6 +8,8 @@ library;
 
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
+        FloorPreset,
+        TableVisualPreset,
         aggregateTableGroup,
         TableGroupAggregate,
         TableGroupMember,
@@ -44,6 +46,7 @@ class DashboardTableSection {
     required this.displayOrder,
     required this.isActive,
     required this.branchId,
+    this.floorPreset = FloorPreset.plainLight,
   });
 
   final String id;
@@ -51,6 +54,25 @@ class DashboardTableSection {
   final int displayOrder;
   final bool isActive;
   final String branchId;
+
+  /// TABLE-VISUAL-LAYOUT-118: how this section's floor is painted (a
+  /// presentation-only key; `table_sections.floor_preset`, NULL = plain
+  /// light). Written only through the dedicated setter.
+  final FloorPreset floorPreset;
+
+  DashboardTableSection copyWith({
+    String? name,
+    int? displayOrder,
+    bool? isActive,
+    FloorPreset? floorPreset,
+  }) => DashboardTableSection(
+    id: id,
+    name: name ?? this.name,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+    branchId: branchId,
+    floorPreset: floorPreset ?? this.floorPreset,
+  );
 }
 
 /// TABLE-FLOOR-MAP-POLISH-027: one VISUAL-ONLY floor fixture (a row of
@@ -146,9 +168,16 @@ class DashboardTable {
     this.sectionDisplayOrder,
     this.layoutX,
     this.layoutY,
+    this.visualPreset = TableVisualPreset.classicRectTable,
   });
 
   final String id;
+
+  /// TABLE-VISUAL-LAYOUT-118: how the table is DRAWN on the floor map (a
+  /// presentation-only key; `tables.visual_preset`, NULL = classic). Never
+  /// changes the footprint or the saved placement; written only through the
+  /// dedicated setter, so the full-replace upsert can never erase it.
+  final TableVisualPreset visualPreset;
 
   /// The table's name or number as printed on tickets (e.g. "T1", "Window 2").
   final String label;
@@ -219,6 +248,28 @@ class DashboardTable {
     sectionDisplayOrder: sectionDisplayOrder,
     layoutX: layoutX,
     layoutY: layoutY,
+    visualPreset: visualPreset,
+  );
+
+  /// TABLE-VISUAL-LAYOUT-118: a copy with a different visual preset (the
+  /// in-memory demo store + the dialog's optimistic apply).
+  DashboardTable copyWith({TableVisualPreset? visualPreset}) => DashboardTable(
+    id: id,
+    label: label,
+    status: status,
+    isActive: isActive,
+    branchId: branchId,
+    seats: seats,
+    area: area,
+    activeOrderCount: activeOrderCount,
+    effectiveState: effectiveState,
+    groupId: groupId,
+    sectionId: sectionId,
+    sectionName: sectionName,
+    sectionDisplayOrder: sectionDisplayOrder,
+    layoutX: layoutX,
+    layoutY: layoutY,
+    visualPreset: visualPreset ?? this.visualPreset,
   );
 
   /// TABLE-FLOOR-LAYOUT-021: a copy with a different section/placement (the
@@ -245,6 +296,7 @@ class DashboardTable {
     sectionDisplayOrder: sectionDisplayOrder,
     layoutX: layoutX,
     layoutY: layoutY,
+    visualPreset: visualPreset,
   );
 }
 

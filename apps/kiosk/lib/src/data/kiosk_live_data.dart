@@ -1,6 +1,8 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
 
 import 'kiosk_fixtures.dart';
 import 'kiosk_menu_data.dart';
@@ -274,6 +276,9 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
   final tablesBySection = <String, List<KioskFixtureTable>>{};
   final sectionNames = <String, String?>{};
   final sectionOrder = <String, int>{};
+  // TABLE-VISUAL-LAYOUT-118: the section floor rides on each row (no section
+  // catalog on this wire); the first non-default key wins.
+  final sectionFloor = <String, FloorPreset>{};
   for (final row in rows) {
     if (row is! Map) continue;
     final id = _optionalText(row['id']);
@@ -284,14 +289,70 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
     sectionNames[sectionId] ??= _optionalText(row['section_name']);
     final order = row['section_display_order'];
     if (order is int) sectionOrder[sectionId] = order;
+    final floor = FloorPreset.fromWire(row['section_floor_preset']);
+    if (floor != FloorPreset.plainLight) sectionFloor[sectionId] ??= floor;
+    // 118: the saved placement — both-or-neither (never trust one axis) and
+    // inside the room; anything else renders as unplaced (list card).
+    final rawX = row['layout_x'];
+    final rawY = row['layout_y'];
+    final placed =
+        rawX is int &&
+        rawY is int &&
+        rawX >= 0 &&
+        rawX <= 10000 &&
+        rawY >= 0 &&
+        rawY <= 10000;
     (tablesBySection[sectionId] ??= []).add(
       KioskFixtureTable(
         id: id,
         label: label,
         seats: seats is int && seats > 0 ? seats : 0,
         state: _tableState(row['effective_state']),
+        layoutX: placed ? rawX : null,
+        layoutY: placed ? rawY : null,
+        visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
       ),
     );
+  }
+  // 118: the fixture catalog (visual only). Malformed rows degrade to
+  // nothing — decoration is never worth failing a floor read.
+  final elementsBySection = <String, List<KioskFloorElement>>{};
+  final rawElements = raw['floor_elements'];
+  if (rawElements is List) {
+    for (final row in rawElements) {
+      if (row is! Map) continue;
+      final id = _optionalText(row['id']);
+      final sectionId = _optionalText(row['section_id']);
+      final kind = _optionalText(row['kind']);
+      final x = row['layout_x'];
+      final y = row['layout_y'];
+      final w = row['width_norm'];
+      final h = row['height_norm'];
+      if (id == null ||
+          sectionId == null ||
+          kind == null ||
+          x is! int ||
+          y is! int ||
+          w is! int ||
+          h is! int) {
+        continue;
+      }
+      final orient = row['orientation_quarter_turns'];
+      (elementsBySection[sectionId] ??= []).add(
+        KioskFloorElement(
+          id: id,
+          kind: kind,
+          layoutX: x,
+          layoutY: y,
+          widthNorm: w,
+          heightNorm: h,
+          orientationQuarterTurns: orient is int && orient >= 0 && orient <= 3
+              ? orient
+              : 0,
+          label: _optionalText(row['label']),
+        ),
+      );
+    }
   }
   final sectionIds = tablesBySection.keys.toList()
     ..sort((a, b) {
@@ -306,6 +367,8 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
         id: sid.isEmpty ? 'hall' : sid,
         displayName: sectionNames[sid],
         tables: tablesBySection[sid]!,
+        floorPreset: sectionFloor[sid] ?? FloorPreset.plainLight,
+        elements: elementsBySection[sid] ?? const [],
       ),
   ];
 }

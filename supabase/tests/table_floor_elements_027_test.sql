@@ -301,8 +301,9 @@ select is(
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
-        'layout_y','seats','section_display_order','section_id','section_name','status'],
-  'the per-TABLE row shape is UNCHANGED (the 021 thirteen-key pin still holds)');
+        'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
+        'status','visual_preset'],
+  'the per-TABLE row shape is the 021 thirteen keys + the two TABLE-VISUAL-LAYOUT-118 presentation keys');
 select is(
   (select (res->'floor_elements'->0->>'kind', res->'floor_elements'->0->>'layout_x',
            res->'floor_elements'->0->>'width_norm') = ('wall', '100', '5000') from pos_read),

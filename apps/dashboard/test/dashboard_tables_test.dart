@@ -7,6 +7,8 @@ import 'package:restoflow_dashboard/src/tables/table_models.dart';
 import 'package:restoflow_dashboard/src/tables/tables_repository.dart';
 import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show
         AdminPermissionDenied,
@@ -92,6 +94,18 @@ class _EmptyTablesRepo implements TablesAdminRepository {
   @override
   Future<AdminResult<void>> reorderSections(List<String> ids) async =>
       const Success(null);
+
+  @override
+  Future<AdminResult<void>> setTableVisualPreset(
+    String tableId,
+    TableVisualPreset preset,
+  ) async => const Success(null);
+
+  @override
+  Future<AdminResult<void>> setSectionFloorPreset(
+    String sectionId,
+    FloorPreset preset,
+  ) async => const Success(null);
 }
 
 /// A repository returning a FIXED table list (for presentation tests).

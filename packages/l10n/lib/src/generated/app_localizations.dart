@@ -7180,6 +7180,72 @@ abstract class AppLocalizations {
   /// **'Plant'**
   String get floorElementPlant;
 
+  /// TABLE-VISUAL-LAYOUT-118: label of the per-table visual preset picker (Dashboard table dialog).
+  ///
+  /// In en, this message translates to:
+  /// **'Table shape'**
+  String get tablesVisualPreset;
+
+  /// TABLE-VISUAL-LAYOUT-118: caption of the live preview tile next to the preset picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get tablesVisualPresetPreview;
+
+  /// TABLE-VISUAL-LAYOUT-118: table preset classic_rect_table.
+  ///
+  /// In en, this message translates to:
+  /// **'Classic rectangle'**
+  String get tablesVisualPresetClassicRect;
+
+  /// TABLE-VISUAL-LAYOUT-118: table preset round_table.
+  ///
+  /// In en, this message translates to:
+  /// **'Round table'**
+  String get tablesVisualPresetRound;
+
+  /// TABLE-VISUAL-LAYOUT-118: table preset table_with_barrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Table with barrels'**
+  String get tablesVisualPresetBarrels;
+
+  /// TABLE-VISUAL-LAYOUT-118: table preset booth_table.
+  ///
+  /// In en, this message translates to:
+  /// **'Booth'**
+  String get tablesVisualPresetBooth;
+
+  /// TABLE-VISUAL-LAYOUT-118: label/tooltip of the per-section floor preset picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Floor style'**
+  String get tablesFloorPreset;
+
+  /// TABLE-VISUAL-LAYOUT-118: floor preset plain_light.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain light'**
+  String get tablesFloorPresetPlainLight;
+
+  /// TABLE-VISUAL-LAYOUT-118: floor preset wood_dark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark wood'**
+  String get tablesFloorPresetWoodDark;
+
+  /// TABLE-VISUAL-LAYOUT-118: floor preset tile_modern.
+  ///
+  /// In en, this message translates to:
+  /// **'Modern tile'**
+  String get tablesFloorPresetTileModern;
+
+  /// TABLE-VISUAL-LAYOUT-118: floor preset stone_neutral.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral stone'**
+  String get tablesFloorPresetStoneNeutral;
+
   /// Element menu action: rotate a quarter turn.
   ///
   /// In en, this message translates to:

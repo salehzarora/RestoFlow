@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
+        FloorPreset,
         floorClusterSeamRect,
         floorElementRoomRect,
         floorFractionOf,
@@ -391,7 +392,12 @@ class _MoveSectionZone extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final ({String sectionId, String sectionName, List<DemoTable> tables})
+  final ({
+    String sectionId,
+    String sectionName,
+    FloorPreset floorPreset,
+    List<DemoTable> tables,
+  })
   section;
 
   /// 027: this section's read-only visual fixtures.
@@ -478,6 +484,8 @@ class _MoveSectionZone extends StatelessWidget {
                 }
                 return RestoflowFloorSectionCanvas(
                   key: Key('move-table-section-canvas-${section.sectionId}'),
+                  // 118: the section's saved floor style (shared painter).
+                  floorPreset: section.floorPreset,
                   // 027 z-order: fixtures under seams under tables; read-only.
                   background: [
                     for (final e in elements)
@@ -580,6 +588,8 @@ class _MoveFloorTile extends StatelessWidget {
             final floorTile = RestoflowFloorTable(
               label: table.label,
               seats: table.seats,
+              // 118: the saved shape, drawn inside the unchanged footprint.
+              preset: table.visualPreset,
               fill: selected
                   ? scheme.primaryContainer
                   : isCurrent
