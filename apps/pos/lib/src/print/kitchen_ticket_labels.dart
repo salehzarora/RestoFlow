@@ -1,35 +1,8 @@
-import 'package:restoflow_feature_kitchen/kitchen_print.dart'
-    show KitchenTicketPrintLabels;
-import 'package:restoflow_l10n/restoflow_l10n.dart';
+/// KIOSK-PRINT-114B.5A: the kitchen-ticket chrome label mapper MOVED VERBATIM to
+/// `restoflow_feature_kitchen` (`kitchen_print.dart`) so the kiosk claimed print
+/// and the POS printer-only drain map the SAME l10n keys the POS direct print
+/// uses. This shim keeps the established import path; wording is unchanged.
+library;
 
-/// KITCHEN-PRINT-DUAL-001B — adapts the shared kitchen-ticket CHROME labels from
-/// the POS `AppLocalizations`.
-///
-/// Uses the SAME l10n keys the KDS adapter uses (`kds_ticket_document.dart`), so
-/// a ticket printed straight from the POS carries the SAME chrome as the KDS
-/// ticket. Only the label mapping is duplicated here (both apps read the same
-/// shared ARB); the LAYOUT is the one shared `buildKdsTicketPrintDocument`.
-KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
-  AppLocalizations l10n,
-) => KitchenTicketPrintLabels(
-  ticketLabel: l10n.kdsTicketLabel,
-  previewTitle: l10n.kdsTicketPreviewTitle,
-  dineIn: l10n.posOrderTypeDineIn,
-  takeaway: l10n.posOrderTypeTakeaway,
-  tableLabel: l10n.posTableLabel,
-  customerLabel: l10n.customerNameKitchenLabel,
-  customerPhoneLabel: l10n.customerPhoneKitchenLabel,
-  stationLabel: l10n.kdsStationLabel,
-  noteLabel: l10n.kdsNoteLabel,
-  kitchenTotal: l10n.kdsMeatTotalLabel,
-  // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the localized with/without wording
-  // for a preparation resource split by a classifying modifier option — the SAME
-  // two keys the KDS card and the KDS ticket document use.
-  prepWithOption: l10n.kitchenPrepResourceWithOption,
-  prepWithoutOption: l10n.kitchenPrepResourceWithoutOption,
-  // DEFERRED-ORDER-AMENDMENTS-001: the SAME two keys the KDS board's round pill
-  // uses, so an addition reads identically on screen and on paper.
-  additionLabel: l10n.kdsAdditionLabel,
-  roundLabel: l10n.kdsRoundLabel,
-  restaurantNameFallback: l10n.printRestaurantNameFallback,
-);
+export 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show kitchenTicketPrintLabelsFromL10n;

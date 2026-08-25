@@ -153,7 +153,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     Future<KitchenModeResult> Function()? fetchMode,
     Future<KitchenDestinationResolution> Function()? destinationResolver,
     String Function()? localJobIdGenerator,
-    KitchenTicketRenderer? renderer,
+    KitchenDispatchBytesRenderer? renderer,
     KitchenNetworkSend? networkSend,
     KitchenBluetoothSend? bluetoothSend,
     PrinterDestinationSendGate? sendGate,
@@ -206,7 +206,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final Future<KitchenModeResult> Function()? _fetchModeOverride;
   final Future<KitchenDestinationResolution> Function()? _destinationResolver;
   final String Function()? _localJobIdGenerator;
-  final KitchenTicketRenderer? _renderer;
+  final KitchenDispatchBytesRenderer? _renderer;
   final KitchenNetworkSend? _networkSend;
   final KitchenBluetoothSend? _bluetoothSend;
   final PrinterDestinationSendGate? _sendGate;

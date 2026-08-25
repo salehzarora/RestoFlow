@@ -1,19 +1,25 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:restoflow_data_local/restoflow_data_local.dart'
+import 'package:restoflow_data_local/kitchen_dispatch_document.dart'
     show
+        KitchenDispatchBytesRenderer,
         KitchenDispatchDocument,
         KitchenTicketLabels,
         KitchenTicketRenderer,
         rejectHostileKitchenKeys;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show KitchenAckResult, KitchenImportAckStatus;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        CanonicalKitchenDispatchRenderer,
+        kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/kiosk_order_submit.dart' show KioskClaimedKitchenDispatch;
 import '../state/kiosk_flow_controller.dart' show KioskOrderSnapshot;
+import '../state/kiosk_receipt_branding.dart' show kioskReceiptBrandingProvider;
 import 'kiosk_printer_purpose.dart';
 
 /// KIOSK-PRINT-114B.2 — the kiosk KITCHEN TICKET auto-print lane.
@@ -65,6 +71,12 @@ typedef KioskKitchenTransportSend =
 final kioskKitchenTransportSendProvider = Provider<KioskKitchenTransportSend?>(
   (ref) => null,
 );
+
+/// KIOSK-PRINT-114B.5A: the dispatch bytes renderer seam. Null (production)
+/// => the CANONICAL renderer built per print for the order language; tests
+/// inject a renderer to pin bytes without a widget/l10n context.
+final kioskKitchenDispatchRendererProvider =
+    Provider<KitchenDispatchBytesRenderer?>((ref) => null);
 
 /// Honest per-dispatch status for the settings surface.
 enum KioskKitchenPrintOutcome {
@@ -132,6 +144,20 @@ class KioskKitchenTicketPrinter {
     } catch (_) {}
   }
 
+  /// The brand header for the canonical ticket: the Dashboard receipt
+  /// branding's restaurant name when readable; null => the shared builder's
+  /// localized fallback. Never throws on the print path.
+  Future<String?> _restaurantName() async {
+    try {
+      final name = (await _ref.read(
+        kioskReceiptBrandingProvider.future,
+      ))?.restaurantName?.trim();
+      return (name == null || name.isEmpty) ? null : name;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _run({
     required KioskOrderSnapshot order,
     required String lang,
@@ -180,11 +206,25 @@ class KioskKitchenTicketPrinter {
         return;
       }
 
-      // The SHARED extracted printer_only renderer — the exact POS ticket.
-      final renderer = KitchenTicketRenderer(
-        labels: KitchenTicketLabels.forLanguageCode(lang),
-        rasterizer: _ref.read(nativePrintRasterizerProvider),
-      );
+      // KIOSK-PRINT-114B.5A: the CANONICAL kitchen ticket — the claimed
+      // dispatch is adapted into the SAME KdsTicketView the POS direct print
+      // builds and encoded through the ONE shared bytes seam, so the kiosk
+      // paper carries the whole-order counts on top (per-unit prep × line
+      // quantity, exactly once) in the exact POS layout. Labels come from the
+      // shared l10n mapper for the ORDER language; the brand header is the
+      // Dashboard receipt branding when readable (else the labels' fallback).
+      final rasterizer = _ref.read(nativePrintRasterizerProvider);
+      final renderer =
+          _ref.read(kioskKitchenDispatchRendererProvider) ??
+          CanonicalKitchenDispatchRenderer(
+            labels: kitchenTicketPrintLabelsForLanguageCode(lang),
+            rasterizer: rasterizer,
+            restaurantName: await _restaurantName(),
+            voidRenderer: KitchenTicketRenderer(
+              labels: KitchenTicketLabels.forLanguageCode(lang),
+              rasterizer: rasterizer,
+            ),
+          );
       final bytes = await renderer.renderToBytes(doc);
 
       // ONE physical attempt, serialized per destination by the process-wide

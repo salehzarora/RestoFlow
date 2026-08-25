@@ -1,9 +1,14 @@
+import 'dart:convert' show utf8;
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_data_local/restoflow_data_local.dart'
+import 'package:restoflow_data_local/kitchen_dispatch_document.dart'
     show KitchenDispatchDocument, KitchenTicketLabels, KitchenTicketRenderer;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        CanonicalKitchenDispatchRenderer,
+        kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show KitchenAckAccepted, KitchenAckResult, KitchenImportAckStatus;
 import 'package:restoflow_kiosk/src/data/kiosk_order_submit.dart'
@@ -155,12 +160,29 @@ void main() {
           status: KitchenImportAckStatus.transportAccepted,
         ),
       ]);
-      // The bytes ARE the shared printer_only renderer's output (no second
-      // kiosk formatter can exist).
-      final expected = await const KitchenTicketRenderer(
-        labels: KitchenTicketLabels.en,
+      // KIOSK-PRINT-114B.5A: the bytes ARE the CANONICAL kitchen ticket — the
+      // dispatch adapted into the shared POS/KDS KdsTicketView and encoded
+      // through the ONE shared bytes seam (no second kiosk formatter can
+      // exist; the legacy per-unit spool frame is no longer on this lane).
+      final expected = await CanonicalKitchenDispatchRenderer(
+        labels: kitchenTicketPrintLabelsForLanguageCode('en'),
       ).renderToBytes(KitchenDispatchDocument.fromJson(payload));
       expect(sends.single, expected);
+      final legacy = await const KitchenTicketRenderer(
+        labels: KitchenTicketLabels.en,
+      ).renderToBytes(KitchenDispatchDocument.fromJson(payload));
+      expect(sends.single, isNot(legacy));
+      final text = utf8.decode(sends.single, allowMalformed: true);
+      // The fixture: qty 2 × (Patty 1/unit classified + Bun 2/unit) and the
+      // Large option's 1 patty per unit => counts multiplied by the line qty.
+      // ('×' is non-ASCII and leaves the text encoder as a codepage byte —
+      // assert on the ASCII part of the item line.)
+      expect(text, contains('B2 Burger'));
+      expect(text, contains('Kitchen total'));
+      expect(
+        text.indexOf('Kitchen total'),
+        lessThan(text.indexOf('B2 Burger')),
+      );
       final status = c.read(kioskKitchenPrintStatusProvider);
       expect(status?.outcome, KioskKitchenPrintOutcome.sent);
     });

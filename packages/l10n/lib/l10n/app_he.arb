@@ -1837,6 +1837,8 @@
   "posReprintKitchenTicket": "פתק מטבח",
   "posReprintKitchenTicketHint": "מדפיסה את פתק ההזמנה במדפסת המטבח.",
   "posReprintKitchenUnavailable": "להזמנה זו אין פתק מטבח להדפסה במכשיר זה.",
+  "posReprintKitchenFetchFailed": "לא ניתן לטעון הזמנה זו מהשרת להדפסה חוזרת של כרטיס המטבח. בדקו את החיבור ונסו שוב.",
+  "posReprintKitchenCountsUnavailable": "סיכומי ההכנה אינם זמינים להזמנה זו; הכרטיס הודפס ללא מקטע הסיכומים.",
   "posPrintAction": "הדפסה",
   "posPrintChooserTitle": "אפשרויות הדפסה",
   "posPrintCustomerBill": "חשבון לקוח",

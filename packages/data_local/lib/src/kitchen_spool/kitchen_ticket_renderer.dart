@@ -134,7 +134,25 @@ final class KitchenTicketLabels {
       };
 }
 
-final class KitchenTicketRenderer {
+/// KIOSK-PRINT-114B.5A — the ONE seam every dispatch consumer (the POS
+/// printer-only drain worker, the kiosk claimed-dispatch lane) renders
+/// through. The CANONICAL implementation lives in `restoflow_feature_kitchen`
+/// (`CanonicalKitchenDispatchRenderer`: dispatch → the shared POS/KDS
+/// `KdsTicketView` → `buildKdsTicketPrintDocument`, so every kitchen paper is
+/// the same ticket with the whole-order counts on top). This legacy renderer
+/// implements the same seam and stays for the dispatch kinds the canonical
+/// builder cannot represent (VOID notices).
+abstract interface class KitchenDispatchBytesRenderer {
+  /// Renders one money-free dispatch to printer bytes. [customerPhoneOverride]
+  /// is the OPTIONAL phone from the encrypted local payload (crash-recovery
+  /// replay); null keeps the document's own (always-null persisted) value.
+  Future<Uint8List> renderToBytes(
+    KitchenDispatchDocument dispatch, {
+    String? customerPhoneOverride,
+  });
+}
+
+final class KitchenTicketRenderer implements KitchenDispatchBytesRenderer {
   const KitchenTicketRenderer({
     this.labels = KitchenTicketLabels.en,
     this.rasterizer,
@@ -355,6 +373,7 @@ final class KitchenTicketRenderer {
   /// Renders the ticket to 80mm ESC/POS bytes through the shared RTL raster
   /// seam. A rasterizer failure falls back to the text document — a ticket
   /// with '?' glyphs still beats no kitchen ticket.
+  @override
   Future<Uint8List> renderToBytes(
     KitchenDispatchDocument dispatch, {
     String? customerPhoneOverride,

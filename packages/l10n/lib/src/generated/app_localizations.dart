@@ -10906,6 +10906,18 @@ abstract class AppLocalizations {
   /// **'This order has no printable kitchen ticket on this device.'**
   String get posReprintKitchenUnavailable;
 
+  /// KIOSK-PRINT-114B.5A: honest KITCHEN-only failure when a branch-discovered order (kiosk / another till) could not be fetched from the authoritative detail for a manual kitchen reprint. Nothing printed; never a receipt instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this order from the server for a kitchen reprint. Check the connection and try again.'**
+  String get posReprintKitchenFetchFailed;
+
+  /// KIOSK-PRINT-114B.5A: informational status after a manual kitchen reprint of a branch-discovered order printed WITHOUT the whole-order prep/meat counts (the authoritative detail carries no prep snapshot until 114B.5B). The ticket did print.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen prep counts are not available for this order; the ticket printed without the counts block.'**
+  String get posReprintKitchenCountsUnavailable;
+
   /// OPEN-ORDER-PRINT-CHOOSER-040: the print action on an OPEN/unpaid order. Deliberately not "reprint" — an unpaid pre-bill has not necessarily been printed before.
   ///
   /// In en, this message translates to:

@@ -26,8 +26,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// render/routing). These drive the real renderer and real send gate and
 /// CAPTURE the routed endpoint + bytes — never a "helper was called" mock.
 
+// KIOSK-PRINT-114B.5A: the bare token 'total' was a landmine — the canonical
+// kitchen ticket legitimately prints "Kitchen total: N <resource>" (a COUNT,
+// never money), so the money heuristic names MONEY totals explicitly; the
+// scans additionally reject any decimal amount via [_hasDecimalAmount].
 const _money = [
-  'total',
+  'grand total',
+  'total due',
   'subtotal',
   'tax',
   'discount',
@@ -39,6 +44,10 @@ const _money = [
   '9000',
   '₪',
 ];
+
+/// KIOSK-PRINT-114B.5A: a money AMOUNT pattern (two decimals) — a kitchen
+/// ticket carries counts, never amounts.
+bool _hasDecimalAmount(String text) => RegExp(r'\d+\.\d{2}').hasMatch(text);
 
 /// Records the bytes + the resolved destination key it was routed to.
 class _CapturingTransport implements pp.PrintTransport {
@@ -250,6 +259,7 @@ void main() {
             reason: 'no money "$t"',
           );
         }
+        expect(_hasDecimalAmount(text), isFalse, reason: 'no money amount');
       },
     );
   });
@@ -290,6 +300,11 @@ void main() {
       for (final t in _money) {
         expect(kitchenText.contains(t.toLowerCase()), isFalse);
       }
+      expect(
+        _hasDecimalAmount(kitchenText),
+        isFalse,
+        reason: 'no money amount',
+      );
       expect(kitchenText.contains('shawarma'), isTrue);
     });
 

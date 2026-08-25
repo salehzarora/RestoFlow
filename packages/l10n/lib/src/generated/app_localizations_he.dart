@@ -5953,6 +5953,14 @@ class AppLocalizationsHe extends AppLocalizations {
       'להזמנה זו אין פתק מטבח להדפסה במכשיר זה.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'לא ניתן לטעון הזמנה זו מהשרת להדפסה חוזרת של כרטיס המטבח. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'סיכומי ההכנה אינם זמינים להזמנה זו; הכרטיס הודפס ללא מקטע הסיכומים.';
+
+  @override
   String get posPrintAction => 'הדפסה';
 
   @override

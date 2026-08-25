@@ -5993,6 +5993,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'تعذّر تحميل هذا الطلب من الخادم لإعادة طباعة تذكرة المطبخ. تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'إجماليات التحضير غير متوفرة لهذا الطلب؛ طُبعت التذكرة بدون قسم الإجماليات.';
+
+  @override
   String get posPrintAction => 'طباعة';
 
   @override

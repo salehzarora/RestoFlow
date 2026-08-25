@@ -666,6 +666,41 @@ printableUnpaidOrderSource({
   return localView == null ? null : (view: localView, isLocalSnapshot: true);
 }
 
+/// KIOSK-PRINT-114B.5A — the KITCHEN sibling of [authoritativeReceiptSource].
+///
+/// The manual "Kitchen ticket" reprint used to read ONLY this device's
+/// order-time snapshot (`PosRecentOrder.order`), which is null by construction
+/// for every BRANCH-DISCOVERED order (a kiosk order, or one taken on another
+/// till) — so the tile refused and nothing printed. This resolves the printable
+/// [SubmittedOrderView] the way the receipt already does:
+///
+///  * a DEVICE-OWNED order keeps its local order-time snapshot (unchanged —
+///    it carries the order-time meat/prep snapshots);
+///  * demo mode never leaves the device (local or nothing);
+///  * a branch-discovered order with a server identity is fetched from the
+///    AUTHORITATIVE `pos_order_detail` and mapped through the existing detail
+///    mapper — items, quantities, modifiers and notes print; the whole-order
+///    prep/meat counts are ABSENT until 114B.5B exposes the snapshots on the
+///    detail (the caller surfaces that honestly; nothing is re-derived from the
+///    live menu — D-008);
+///  * a fetch failure returns null (the caller shows an honest failure).
+///
+/// Read-only: never claims/acks a dispatch, never creates or mutates an order.
+Future<SubmittedOrderView?> authoritativeKitchenSource({
+  required bool isDemoMode,
+  required String? orderId,
+  required SubmittedOrderView? localView,
+  required OrderDetailRepository repository,
+}) async {
+  if (localView != null) return localView;
+  if (isDemoMode || orderId == null) return null;
+  try {
+    return submittedOrderViewFromDetail(await repository.fetch(orderId));
+  } on PosOrderDetailException {
+    return null;
+  }
+}
+
 Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
   required bool isDemoMode,
   required String? orderId,

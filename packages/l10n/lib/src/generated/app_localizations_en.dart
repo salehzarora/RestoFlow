@@ -6040,6 +6040,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'This order has no printable kitchen ticket on this device.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'Could not load this order from the server for a kitchen reprint. Check the connection and try again.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'Kitchen prep counts are not available for this order; the ticket printed without the counts block.';
+
+  @override
   String get posPrintAction => 'Print';
 
   @override

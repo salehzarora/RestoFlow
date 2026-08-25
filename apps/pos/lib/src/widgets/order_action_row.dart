@@ -629,16 +629,34 @@ class OrderActionRow extends ConsumerWidget {
     WidgetRef ref,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final view = order.order;
+    final container = ProviderScope.containerOf(context, listen: false);
+    // KIOSK-PRINT-114B.5A: a DEVICE-OWNED order prints its local order-time
+    // snapshot exactly as before. A BRANCH-DISCOVERED order (a kiosk order, or
+    // one taken on another till) has no local snapshot — it used to refuse here
+    // and nothing printed — so it is now resolved from the AUTHORITATIVE
+    // detail, the same source the receipt reprint already trusts.
+    final local = order.order;
+    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
+    final view =
+        local ??
+        await authoritativeKitchenSource(
+          isDemoMode: isDemo,
+          orderId: order.orderId,
+          localView: null,
+          repository: ref.read(orderDetailRepositoryProvider),
+        );
     if (view == null) {
-      // Honest KITCHEN-only refusal — never a silent receipt instead.
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posReprintKitchenUnavailable)),
-      );
+      // Honest KITCHEN-only refusal — never a silent receipt instead. Demo /
+      // no server identity: there is nothing to fetch; otherwise the fetch
+      // itself failed (offline, malformed) — say so, print nothing.
+      final message = (isDemo || order.orderId == null)
+          ? l10n.posReprintKitchenUnavailable
+          : l10n.posReprintKitchenFetchFailed;
+      messenger.showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     final outcome = await ref.read(posKitchenReprintProvider)(
-      container: ProviderScope.containerOf(context, listen: false),
+      container: container,
       order: view,
       labels: kitchenTicketPrintLabelsFromL10n(l10n),
     );
@@ -655,6 +673,19 @@ class OrderActionRow extends ConsumerWidget {
         }),
       ),
     );
+    // 114B.5A DETAIL-SOURCED LIMITATION (until 114B.5B): the authoritative
+    // detail carries no prep/meat snapshots, so a branch-discovered reprint
+    // prints WITHOUT the whole-order counts block. Say so — informational,
+    // after the honest print outcome; never a silent omission.
+    if (local == null &&
+        outcome == PosKitchenPrintOutcome.printed &&
+        view.lines.every(
+          (l) => l.kitchenMeats.isEmpty && l.prepComponents.isEmpty,
+        )) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posReprintKitchenCountsUnavailable)),
+      );
+    }
   }
 
   Future<void> _reprintCustomerReceipt(

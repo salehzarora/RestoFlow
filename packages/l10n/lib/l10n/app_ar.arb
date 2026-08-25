@@ -1837,6 +1837,8 @@
   "posReprintKitchenTicket": "إيصال المطبخ",
   "posReprintKitchenTicketHint": "طباعة تذكرة الطلب من طابعة المطبخ.",
   "posReprintKitchenUnavailable": "لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.",
+  "posReprintKitchenFetchFailed": "تعذّر تحميل هذا الطلب من الخادم لإعادة طباعة تذكرة المطبخ. تحقّق من الاتصال وحاول مجددًا.",
+  "posReprintKitchenCountsUnavailable": "إجماليات التحضير غير متوفرة لهذا الطلب؛ طُبعت التذكرة بدون قسم الإجماليات.",
   "posPrintAction": "طباعة",
   "posPrintChooserTitle": "خيارات الطباعة",
   "posPrintCustomerBill": "حساب الزبون",
