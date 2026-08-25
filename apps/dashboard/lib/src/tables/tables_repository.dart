@@ -32,7 +32,12 @@ abstract class TablesAdminRepository {
   /// the section/placement are owned by [setTableSection]/[setTablePosition]
   /// (deliberately OUTSIDE this full-replace call so a stale client can never
   /// erase layout).
-  Future<AdminResult<void>> upsertTable({
+  ///
+  /// TABLE-118B: resolves to the AUTHORITATIVE table id — server-minted on a
+  /// create, echoed on an update — so a follow-up write (the visual preset)
+  /// targets exactly the row this call created, never a row discovered by
+  /// diffing snapshots or matching labels.
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -444,7 +449,7 @@ class InMemoryTablesStore implements TablesAdminRepository {
   }
 
   @override
-  Future<AdminResult<void>> upsertTable({
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -478,7 +483,8 @@ class InMemoryTablesStore implements TablesAdminRepository {
     } else {
       _tables.add(table);
     }
-    return const Success(null);
+    // 118B: the store-minted (or echoed) id is the authoritative target.
+    return Success(table.id);
   }
 
   @override
@@ -702,7 +708,7 @@ class SupabaseTablesRepository implements TablesAdminRepository {
   });
 
   @override
-  Future<AdminResult<void>> upsertTable({
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -741,7 +747,16 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       return const Failure(AdminTransient());
     }
     if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
-    return const Success(null);
+    // 118B: `app.upsert_table` returns the authoritative row id on BOTH the
+    // create and the update path (and preserves it on an idempotent replay).
+    // An update may fall back to the id we addressed; a create without an id
+    // fails CLOSED — the client never guesses which row it made.
+    final returned = raw['id'];
+    final authoritativeId = returned is String && returned.isNotEmpty
+        ? returned
+        : id;
+    if (authoritativeId == null) return const Failure(AdminTransient());
+    return Success(authoritativeId);
   }
 
   @override

@@ -41,13 +41,13 @@ class _EmptyTablesRepo implements TablesAdminRepository {
   );
 
   @override
-  Future<AdminResult<void>> upsertTable({
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
     String? area,
     required bool isActive,
-  }) async => const Success(null);
+  }) async => Success(id ?? 'new-table');
 
   @override
   Future<AdminResult<void>> setStatus(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_core/restoflow_core.dart' show Failure, Success;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
@@ -50,7 +51,14 @@ class _TablesScreenState extends State<TablesScreen> {
     });
   }
 
-  Future<void> _run(Future<AdminResult<void>> Function() op) async {
+  /// TABLE-118B: [reloadOnFailure] re-reads the authoritative list BEFORE
+  /// the error is shown — for a two-step save whose first step already
+  /// persisted (the table exists; only the preset write failed), so the new
+  /// row is never left hidden behind an error snackbar.
+  Future<void> _run(
+    Future<AdminResult<void>> Function() op, {
+    bool reloadOnFailure = false,
+  }) async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final result = await op();
@@ -60,9 +68,12 @@ class _TablesScreenState extends State<TablesScreen> {
         messenger.showSnackBar(SnackBar(content: Text(l10n.tablesSaved)));
         _reload();
       },
-      (failure) => messenger.showSnackBar(
-        SnackBar(content: Text(adminFailureMessage(l10n, failure))),
-      ),
+      (failure) {
+        if (reloadOnFailure) _reload();
+        messenger.showSnackBar(
+          SnackBar(content: Text(adminFailureMessage(l10n, failure))),
+        );
+      },
     );
   }
 
@@ -308,12 +319,15 @@ class _TablesScreenState extends State<TablesScreen> {
     ),
   );
 
-  /// TABLE-VISUAL-LAYOUT-118: the dialog save = the legacy full-replace
-  /// upsert (label/seats/area/active) PLUS, when the shape changed, ONE call
-  /// to the dedicated preset setter — the shape never rides the upsert, so a
-  /// stale client can never erase it. A brand-new table has no id until the
-  /// store minted it: the fresh snapshot is read back and the one new row is
-  /// the target (a default shape needs no second write at all).
+  /// TABLE-VISUAL-LAYOUT-118 / 118B: the dialog save = the legacy
+  /// full-replace upsert (label/seats/area/active) PLUS, only when the shape
+  /// changed, ONE call to the dedicated preset setter — the shape never rides
+  /// the upsert, so a stale client can never erase it. The setter targets the
+  /// AUTHORITATIVE id `upsert_table` returned (server-minted on create,
+  /// echoed on update): no snapshot diff, no label matching, so a table
+  /// another owner created at the same moment can never receive this preset.
+  /// A failed preset write reloads the list first (the table itself IS
+  /// saved) and then shows the honest error — never "Table saved".
   Future<void> _saveTable({
     required DashboardTable? table,
     required String label,
@@ -323,14 +337,6 @@ class _TablesScreenState extends State<TablesScreen> {
     required TableVisualPreset visualPreset,
   }) async {
     final repository = widget.repository;
-    final before = table == null
-        ? await repository.load().then(
-            (r) => r.fold(
-              (s) => {for (final t in s.tables) t.id},
-              (_) => <String>{},
-            ),
-          )
-        : const <String>{};
     final upsert = await repository.upsertTable(
       id: table?.id,
       label: label,
@@ -339,32 +345,27 @@ class _TablesScreenState extends State<TablesScreen> {
       isActive: isActive,
     );
     if (!mounted) return;
-    final failed = upsert.fold((_) => false, (_) => true);
-    if (failed) {
-      await _run(() async => upsert);
-      return;
-    }
-    String? targetId = table?.id;
-    final changed = table == null
-        ? visualPreset != TableVisualPreset.classicRectTable
-        : visualPreset != table.visualPreset;
-    if (changed && targetId == null) {
-      final after = await repository.load();
-      final created = after.fold(
-        (s) => [
-          for (final t in s.tables)
-            if (!before.contains(t.id) && t.label == label.trim()) t.id,
-        ],
-        (_) => const <String>[],
+    final targetId = upsert.fold((id) => id, (_) => null);
+    if (targetId == null) {
+      await _run(
+        () async => upsert.fold(
+          (_) => const Success(null),
+          (failure) => Failure(failure),
+        ),
       );
-      if (created.length == 1) targetId = created.single;
-    }
-    if (changed && targetId != null) {
-      final id = targetId;
-      await _run(() => repository.setTableVisualPreset(id, visualPreset));
       return;
     }
-    await _run(() async => upsert);
+    final changed = table == null
+        ? visualPreset != TableVisualPreset.defaultPreset
+        : visualPreset != table.visualPreset;
+    if (!changed) {
+      await _run(() async => const Success(null));
+      return;
+    }
+    await _run(
+      () => repository.setTableVisualPreset(targetId, visualPreset),
+      reloadOnFailure: true,
+    );
   }
 
   Future<void> _confirmDelete(
