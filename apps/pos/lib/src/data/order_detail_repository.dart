@@ -166,6 +166,7 @@ class PosOrderDetailItem {
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
     this.linePosition = 0,
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   final String name;
@@ -188,6 +189,14 @@ class PosOrderDetailItem {
   /// Null for the ORIGINAL submission; the owning round otherwise.
   final String? serviceRoundId;
   final int? roundNumber;
+
+  /// KIOSK-PRINT-114B.5B: the item's ORDER-TIME PER-UNIT prep snapshot as the
+  /// detail now exposes it (`items[].prep_snapshot`, already allowlisted by
+  /// app.kitchen_prep_projection). Decoded through the SAME tolerant domain
+  /// parser the KDS mapper uses; JSON null / absent / malformed => empty —
+  /// nothing is ever re-derived from the live menu (D-008). Never multiplied
+  /// here: the canonical aggregator applies the line quantity exactly once.
+  final List<KitchenPrepComponent> prepComponents;
 
   static PosOrderDetailItem? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -237,6 +246,8 @@ class PosOrderDetailItem {
       ),
       itemDisplayOrder: menuPrintOrderInt(raw['item_display_order_snapshot']),
       linePosition: menuPrintOrderInt(raw['line_position']),
+      // 114B.5B: tolerant, per unit, never fails the (money-strict) detail.
+      prepComponents: parseKitchenPrepComponents(raw['prep_snapshot']),
     );
   }
 }
@@ -247,12 +258,21 @@ class PosOrderDetailModifier {
     required this.priceMinor,
     required this.quantity,
     this.modifierName,
+    this.meat,
   });
 
   final String optionName;
   final int priceMinor;
   final int quantity;
   final String? modifierName;
+
+  /// KIOSK-PRINT-114B.5B: the option's ORDER-TIME meat contribution PER ONE
+  /// MODIFIER UNIT as the detail now exposes it (`modifiers[].meat_snapshot`,
+  /// already allowlisted by app.kitchen_modifier_prep_projection, carrying the
+  /// order-time classifier answer). Decoded through the SAME domain parser the
+  /// KDS mapper uses; JSON null / absent / malformed => null. Not multiplied
+  /// here — see [submittedOrderViewFromDetail].
+  final KitchenMeat? meat;
 
   static PosOrderDetailModifier? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -277,6 +297,8 @@ class PosOrderDetailModifier {
       modifierName: raw['modifier_name_snapshot'] is String
           ? raw['modifier_name_snapshot'] as String
           : null,
+      // 114B.5B: tolerant, per modifier unit, never fails the detail.
+      meat: KitchenMeat.tryFromJson(raw['meat_snapshot']),
     );
   }
 }
@@ -521,6 +543,17 @@ SubmittedOrderView submittedOrderViewFromDetail(PosOrderDetail d) {
           categoryDisplayOrder: i.categoryDisplayOrder,
           itemDisplayOrder: i.itemDisplayOrder,
           linePosition: i.linePosition,
+          // KIOSK-PRINT-114B.5B: the order-time kitchen snapshots, on the SAME
+          // contract the device-owned view carries — prep PER UNIT, each meat
+          // ALREADY × its modifier's units (exactly `kitchenMeatSnapshots` on
+          // the cart path); the canonical aggregator then applies the line
+          // quantity exactly once => 2 × Classic 240g = 4 meat / 2 bun.
+          prepComponents: i.prepComponents,
+          kitchenMeats: [
+            for (final m in i.modifiers)
+              if (m.meat case final meat?)
+                if (m.quantity > 0) meat.scaledBy(m.quantity),
+          ],
         ),
     ],
   );
