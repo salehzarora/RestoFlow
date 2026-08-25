@@ -94,6 +94,11 @@ abstract final class KioskAppearanceLimits {
 
   static const List<int> intervalChoices = [4, 5, 6, 8];
 
+  /// KIOSK-UX-114A — configurable inactivity delay BEFORE the idle warning
+  /// (seconds). The ONLY selectable values; anything else stored resolves to
+  /// the legacy timing (fixture 60s total → warning after 50 quiet seconds).
+  static const List<int> idleDelayChoices = [10, 15, 20, 25, 30, 60];
+
   // KIOSK-001-103 §3 — curated attract media bounds.
   /// Operator-curated hero photos: an explicit selection is 4–8 items (all
   /// usable items with a warning when the whole menu has fewer than 4).
@@ -171,6 +176,7 @@ class KioskAppearanceSettings {
     this.featuredMenuItemIds = const [],
     this.customImageRef,
     this.customVideoRef,
+    this.idleDelaySeconds,
   });
 
   /// REAL defaults: derived from the paired device/restaurant label — the one
@@ -245,6 +251,13 @@ class KioskAppearanceSettings {
   final String? customImageRef;
   final String? customVideoRef;
 
+  /// KIOSK-UX-114A — operator-chosen quiet seconds BEFORE the idle warning
+  /// appears (one of [KioskAppearanceLimits.idleDelayChoices]; effective
+  /// session total = this + the unchanged 10s warning window). Null = UNSET:
+  /// the device keeps the legacy timing (warning after 50 quiet seconds,
+  /// reset at 60) — never silently migrated to a new default.
+  final int? idleDelaySeconds;
+
   Uint8List? get logoOverrideBytes {
     final b64 = logoOverridePngB64;
     if (b64 == null || b64.isEmpty) return null;
@@ -284,6 +297,7 @@ class KioskAppearanceSettings {
     List<String>? featuredMenuItemIds,
     Object? customImageRef = _sentinel,
     Object? customVideoRef = _sentinel,
+    Object? idleDelaySeconds = _sentinel,
   }) => KioskAppearanceSettings(
     restaurantDisplayName: restaurantDisplayName ?? this.restaurantDisplayName,
     brandTitlePrimary: brandTitlePrimary ?? this.brandTitlePrimary,
@@ -307,6 +321,9 @@ class KioskAppearanceSettings {
     customVideoRef: identical(customVideoRef, _sentinel)
         ? this.customVideoRef
         : customVideoRef as String?,
+    idleDelaySeconds: identical(idleDelaySeconds, _sentinel)
+        ? this.idleDelaySeconds
+        : idleDelaySeconds as int?,
   );
 
   Map<String, Object?> toJson() => {
@@ -326,6 +343,7 @@ class KioskAppearanceSettings {
     'featured_menu_item_ids': featuredMenuItemIds,
     if (customImageRef != null) 'custom_image_ref': customImageRef,
     if (customVideoRef != null) 'custom_video_ref': customVideoRef,
+    if (idleDelaySeconds != null) 'idle_delay_seconds': idleDelaySeconds,
   };
 
   /// Tolerant, bounded decode: any malformed field falls back to [fallback]'s
@@ -349,6 +367,7 @@ class KioskAppearanceSettings {
 
     final b64 = raw['logo_override_b64'];
     final interval = raw['attract_interval_seconds'];
+    final idleDelay = raw['idle_delay_seconds'];
     // KIOSK-001-103: bounded featured-id list — strings only, deduped in
     // stored order, each id length-capped, list capped at featuredMax.
     final rawFeatured = raw['featured_menu_item_ids'];
@@ -419,6 +438,13 @@ class KioskAppearanceSettings {
       featuredMenuItemIds: List.unmodifiable(featured),
       customImageRef: mediaRef('custom_image_ref'),
       customVideoRef: mediaRef('custom_video_ref'),
+      // 114A: only an EXACT allowed choice loads; anything else (missing,
+      // wrong type, out-of-range) is UNSET → the legacy idle timing.
+      idleDelaySeconds:
+          idleDelay is int &&
+              KioskAppearanceLimits.idleDelayChoices.contains(idleDelay)
+          ? idleDelay
+          : null,
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 
 /// Shared V2 chrome: the fixed 1080×1920 stage, glass surfaces, pills, the
 /// brand badge, the language capsule and the accent underline — the pieces
@@ -24,60 +25,87 @@ class KioskStage extends StatelessWidget {
   Widget build(BuildContext context) => ColoredBox(
     color: KioskColors.stageBase,
     child: SafeArea(
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox.fromSize(
-            size: kioskDesignSize,
-            // Transparent Material: text fields/ink need a Material ancestor;
-            // the kiosk paints every surface itself.
-            child: Material(
-              type: MaterialType.transparency,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [KioskColors.canvasTop, KioskColors.canvasBottom],
+      // PERF-110: publish the exact scale FittedBox.contain will resolve so
+      // image decode caps (and the diagnostics page) can convert design px
+      // to device px. Same box, same arithmetic — nothing about the fit
+      // changes.
+      child: LayoutBuilder(
+        builder: (context, constraints) => KioskStageScale(
+          scale: KioskStageScale.forBox(constraints.biggest, kioskDesignSize),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              // KIOSK-UI-113: the canvas WIDTH adapts to the viewport aspect
+              // (1080..kioskStageMaxDesignWidth) so 16:10 portrait tablets
+              // are full-bleed; the resolved scale is provably identical to
+              // the canonical one, so nothing else moves.
+              child: SizedBox.fromSize(
+                size: KioskStageScale.stageSizeFor(constraints.biggest),
+                // Transparent Material: text fields/ink need a Material
+                // ancestor; the kiosk paints every surface itself.
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          KioskColors.canvasTop,
+                          KioskColors.canvasBottom,
+                        ],
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        // V2 canvas depth: navy bloom top-end + faint ember
+                        // floor. PERF-110: one RepaintBoundary keeps these
+                        // two static full-stage radial fills in a retained
+                        // layer instead of re-rastering them on every
+                        // animation frame of every screen.
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: RadialGradient(
+                                        center: const Alignment(.64, -.92),
+                                        radius: 1.0,
+                                        colors: [
+                                          KioskColors.canvasGlow,
+                                          KioskColors.canvasGlow.withValues(
+                                            alpha: 0,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: RadialGradient(
+                                        center: const Alignment(-.84, 1.0),
+                                        radius: 1.1,
+                                        colors: [
+                                          KioskColors.ring.withValues(
+                                            alpha: .09,
+                                          ),
+                                          KioskColors.ring.withValues(alpha: 0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        child,
+                      ],
+                    ),
                   ),
-                ),
-                child: Stack(
-                  children: [
-                    // V2 canvas depth: navy bloom top-end + faint ember floor.
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(.64, -.92),
-                              radius: 1.0,
-                              colors: [
-                                KioskColors.canvasGlow,
-                                KioskColors.canvasGlow.withValues(alpha: 0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(-.84, 1.0),
-                              radius: 1.1,
-                              colors: [
-                                KioskColors.ring.withValues(alpha: .09),
-                                KioskColors.ring.withValues(alpha: 0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    child,
-                  ],
                 ),
               ),
             ),
@@ -129,6 +157,7 @@ class KioskMenuImage extends StatelessWidget {
     required this.fallback,
     this.assetErrorFallback,
     this.fit = BoxFit.cover,
+    this.designWidth,
   });
   final String? url;
   final String? asset;
@@ -138,6 +167,11 @@ class KioskMenuImage extends StatelessWidget {
   /// Defaults to [fallback] when not provided.
   final Widget? assetErrorFallback;
   final BoxFit fit;
+
+  /// PERF-110: the destination width in DESIGN px used for the decode cap.
+  /// Null = measure the incoming constraints (inside the stage those ARE
+  /// design px); unbounded constraints leave the decode uncapped.
+  final double? designWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -149,27 +183,36 @@ class KioskMenuImage extends StatelessWidget {
         fallback: assetErrorFallback ?? fallback,
       );
     }
+    final fixedWidth = designWidth;
     return Stack(
       fit: StackFit.expand,
       children: [
         fallback,
-        Image.network(
-          url,
-          fit: fit,
-          // A dead/expired URL quietly leaves the well visible underneath.
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          frameBuilder: (context, child, frame, wasSync) => wasSync
-              ? child
-              : AnimatedOpacity(
-                  opacity: frame == null ? 0 : 1,
-                  duration: KioskMotion.screenFade,
-                  curve: KioskMotion.curve,
-                  child: child,
-                ),
-        ),
+        if (fixedWidth != null)
+          _photo(context, url, fixedWidth)
+        else
+          LayoutBuilder(
+            builder: (context, constraints) =>
+                _photo(context, url, constraints.maxWidth),
+          ),
       ],
     );
   }
+
+  Widget _photo(BuildContext context, String url, double width) => Image(
+    image: kioskNetworkImageProvider(context, url, designWidth: width),
+    fit: fit,
+    // A dead/expired URL quietly leaves the well visible underneath.
+    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    frameBuilder: (context, child, frame, wasSync) => wasSync
+        ? child
+        : AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: KioskMotion.screenFade,
+            curve: KioskMotion.curve,
+            child: child,
+          ),
+  );
 }
 
 /// Press feedback: V2 `style-active="transform:scale(.97)"`.
@@ -248,6 +291,25 @@ class KioskGlass extends StatelessWidget {
 /// forcing Anton onto RTL text is a typography bug, not a style choice.
 bool kioskLatinDisplayFits(String text) => !RegExp(r'[֐-׿؀-ۿ]').hasMatch(text);
 
+/// KIOSK-UI-113 — the renderer-owned separator between the wordmark's
+/// PRIMARY and ACCENT segments. The stored model keeps both pieces clean and
+/// trimmed (persistence strips edge whitespace on every load), so the visual
+/// gap is a PRESENTATION rule: two word segments get one natural space in
+/// every script (AR/HE/EN), while an accent that STARTS with punctuation
+/// stays attached — preserving the shipped `EMBER` + `.` -> `EMBER.`
+/// identity. No data migration, no punctuation workarounds.
+String kioskWordmarkSeparator(String primary, String accent) {
+  if (primary.isEmpty || accent.isEmpty) return '';
+  final first = accent.characters.first;
+  final attaches = RegExp(r'^\p{P}', unicode: true).hasMatch(first);
+  return attaches ? '' : ' ';
+}
+
+/// The joined plain wordmark ([kioskWordmarkSeparator] applied) — the ONE
+/// string every render site and length gate agrees on.
+String kioskWordmarkText(String primary, String accent) =>
+    '$primary${kioskWordmarkSeparator(primary, accent)}$accent';
+
 /// Display style for a BRAND wordmark segment (auto per script).
 TextStyle kioskBrandTitleStyle(
   String text,
@@ -292,6 +354,7 @@ class KioskBrandBadge extends ConsumerWidget {
           fit: BoxFit.cover,
           width: size,
           height: size,
+          cacheWidth: kioskDecodeWidth(context, size),
           errorBuilder: (_, _, _) => Center(
             child: Text(
               appearance.monogram,
@@ -305,7 +368,13 @@ class KioskBrandBadge extends ConsumerWidget {
         ),
       );
     } else if (primary.isNotEmpty &&
-        (primary + appearance.brandTitleAccent).characters.length <= 7) {
+        // KIOSK-UI-113: the gate measures the JOINED wordmark (separator
+        // included) so badge fit agrees with what actually renders.
+        kioskWordmarkText(
+              primary,
+              appearance.brandTitleAccent,
+            ).characters.length <=
+            7) {
       // The full wordmark only fits the small ring for short brands (the V2
       // fixture "EMBER." shape). Longer wordmarks fall through to the
       // monogram instead of clipping mid-word.
@@ -325,7 +394,12 @@ class KioskBrandBadge extends ConsumerWidget {
                 children: [
                   if (appearance.brandTitleAccent.isNotEmpty)
                     TextSpan(
-                      text: appearance.brandTitleAccent,
+                      text:
+                          kioskWordmarkSeparator(
+                            primary,
+                            appearance.brandTitleAccent,
+                          ) +
+                          appearance.brandTitleAccent,
                       style: TextStyle(color: appearance.brandAccentColor),
                     ),
                 ],

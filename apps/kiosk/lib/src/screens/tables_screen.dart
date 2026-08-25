@@ -82,7 +82,11 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (rtl: s.rtl, selectedTable: s.selectedTable),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final view = ref.watch(kioskTablesViewProvider);
     final zones = view.zones;

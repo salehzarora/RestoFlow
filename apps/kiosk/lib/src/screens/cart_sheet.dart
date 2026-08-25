@@ -43,7 +43,27 @@ class KioskCartSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (
+          rtl: s.rtl,
+          lang: s.lang,
+          cart: s.cart,
+          cartTotalMinor: s.cartTotalMinor,
+          cartStale: s.cartStale,
+          service: s.service,
+          selectedTable: s.selectedTable,
+          customerName: s.customerName,
+          customerPhone: s.customerPhone,
+          submitPhase: s.submitPhase,
+          submitErrorKey: s.submitErrorKey,
+          submitReconfirmRequired: s.submitReconfirmRequired,
+          reconfirmReasonKey: s.reconfirmReasonKey,
+          taxPhase: s.taxPhase,
+          branchTax: s.branchTax,
+        ),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final menu = ref.watch(kioskMenuDataProvider);
     final rtl = state.rtl;

@@ -31,6 +31,7 @@ export 'src/components/metric_card.dart';
 export 'src/components/notice_banner.dart';
 export 'src/components/numeric_keypad.dart';
 export 'src/components/page_header.dart';
+export 'src/perf/perf_diagnostics.dart';
 export 'src/components/rank_row.dart';
 export 'src/components/readiness_strip.dart';
 export 'src/components/section_card.dart';

@@ -4,10 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show displayOrderCode;
 
+import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../data/kiosk_menu_data.dart';
 import '../data/kiosk_order_submit.dart';
 import '../design/kiosk_theme.dart';
+import '../print/kiosk_printer_purpose.dart'
+    show kioskKitchenClaimDecisionProvider;
 import 'kiosk_live_runtime.dart';
 import 'kiosk_staff_access.dart';
 
@@ -399,7 +402,13 @@ class KioskState {
 /// the REAL composition root (which wires the auto-print controller); demo
 /// and tests without printing stay print-free.
 typedef KioskAcceptedOrderHook =
-    void Function(KioskOrderSnapshot order, String lang);
+    void Function(
+      KioskOrderSnapshot order,
+      String lang,
+      // KIOSK-PRINT-114B.2: the kitchen dispatch THIS submit claimed (null
+      // when no claim landed) — the kitchen print lane's only input.
+      KioskClaimedKitchenDispatch? kitchenDispatch,
+    );
 
 final kioskAcceptedOrderHookProvider = Provider<KioskAcceptedOrderHook?>(
   (ref) => null,
@@ -435,12 +444,16 @@ class KioskFlowController extends Notifier<KioskState> {
   // ---- activity / idle engine --------------------------------------------
 
   /// Any customer pointer contact (root Listener) — resets the idle counter.
+  ///
+  /// PERF-110: a TRUE no-op when there is nothing to reset (counter already
+  /// 0, no warning showing). Emitting a fresh identical [KioskState] here
+  /// used to force a redundant root rebuild on EVERY pointer-down, right
+  /// before the real interaction mutation — pure churn on weak tablets.
   void touch() {
-    if (state.secondsSinceActivity != 0 || state.idleSecondsLeft != null) {
-      state = state.copyWith(secondsSinceActivity: 0, idleSecondsLeft: null);
-    } else {
-      state = state.copyWith(secondsSinceActivity: 0);
+    if (state.secondsSinceActivity == 0 && state.idleSecondsLeft == null) {
+      return;
     }
+    state = state.copyWith(secondsSinceActivity: 0, idleSecondsLeft: null);
   }
 
   /// Advances all clocks by one second. V2 rules: attract + settings are
@@ -477,7 +490,7 @@ class KioskFlowController extends Notifier<KioskState> {
         state.submitPhase != KioskSubmitPhase.idle;
     if (exempt) return;
     final elapsed = state.secondsSinceActivity + 1;
-    final left = state.settings.idleSeconds - elapsed;
+    final left = _idleTotalSeconds - elapsed;
     if (left <= 0) {
       reset();
     } else if (left <= KioskTiming.idleWarningSeconds) {
@@ -509,6 +522,20 @@ class KioskFlowController extends Notifier<KioskState> {
       dailySeq: seq,
       busyFloor: busy,
     );
+  }
+
+  /// KIOSK-UX-114A — the session's total quiet budget before reset. A VALID
+  /// operator-configured pre-warning delay yields `delay + 10` (the warning
+  /// window itself never changes); unset or out-of-range keeps the legacy
+  /// fixture total ([KioskDeviceSettings.idleSeconds], 60 → warning at 50)
+  /// byte-for-byte. Read per tick so a settings save applies immediately.
+  int get _idleTotalSeconds {
+    final delay = ref.read(kioskAppearanceProvider).idleDelaySeconds;
+    if (delay != null &&
+        KioskAppearanceLimits.idleDelayChoices.contains(delay)) {
+      return delay + KioskTiming.idleWarningSeconds;
+    }
+    return state.settings.idleSeconds;
   }
 
   void dismissIdleWarning() =>
@@ -992,7 +1019,20 @@ class KioskFlowController extends Notifier<KioskState> {
       _abortSubmit('submit-failed');
       return;
     }
-    final result = await submitter.submit(attempt);
+    // KIOSK-PRINT-114B.2: ask the submit transaction to claim the kitchen
+    // dispatch ONLY when this device is actually configured to print it
+    // (printer_only support + auto-print + usable destination). Fail-closed:
+    // any resolution problem means no claim — the POS drain stays owner.
+    var claimKitchen = false;
+    try {
+      claimKitchen = await ref.read(kioskKitchenClaimDecisionProvider.future);
+    } catch (_) {
+      claimKitchen = false;
+    }
+    final result = await submitter.submit(
+      attempt,
+      claimKitchenDispatch: claimKitchen,
+    );
     switch (result) {
       // 093 client invariant: an acceptance must name OUR frozen order id —
       // anything else is an unreadable response, treated as UNCONFIRMED
@@ -1000,8 +1040,8 @@ class KioskFlowController extends Notifier<KioskState> {
       // never shown to the customer).
       case KioskSubmitAccepted(:final orderId) when orderId != attempt.orderId:
         state = state.copyWith(submitPhase: KioskSubmitPhase.unconfirmed);
-      case KioskSubmitAccepted(:final orderId):
-        _confirmAccepted(orderId, attempt);
+      case KioskSubmitAccepted(:final orderId, :final kitchenDispatch):
+        _confirmAccepted(orderId, attempt, kitchenDispatch);
       case KioskSubmitRejected(:final code, :final invalidField):
         // Terminal server refusal: this identity is spent — a later
         // deliberate re-order mints a NEW one.
@@ -1017,7 +1057,11 @@ class KioskFlowController extends Notifier<KioskState> {
     }
   }
 
-  void _confirmAccepted(String orderId, KioskSubmitAttempt attempt) {
+  void _confirmAccepted(
+    String orderId,
+    KioskSubmitAttempt attempt, [
+    KioskClaimedKitchenDispatch? kitchenDispatch,
+  ]) {
     _pendingAttempt = null;
     // 093: EVERY piece of order content on the confirmation comes from the
     // FROZEN attempt view — never from the (theoretically mutable) live
@@ -1058,7 +1102,7 @@ class KioskFlowController extends Notifier<KioskState> {
     // problem, and dedup lives behind the hook.
     final acceptedHook = ref.read(kioskAcceptedOrderHookProvider);
     if (acceptedHook != null) {
-      acceptedHook(state.lastOrder!, state.lang);
+      acceptedHook(state.lastOrder!, state.lang, kitchenDispatch);
     }
   }
 

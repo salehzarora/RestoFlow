@@ -4305,6 +4305,16 @@ class AppLocalizationsHe extends AppLocalizations {
       'מכשיר זה יכול להדפיס ישירות למדפסת רשת (מוגדרת למעלה) — אין צורך בגשר הדפסה.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle => 'אבחון ביצועים (גרסת בדיקה)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'מקומי בלבד — שום דבר לא נשמר ולא נשלח. השאירו את האפליקציה על מסך עמוס 30 שניות ואז קראו כאן את מספרי הפריימים.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'איפוס דגימות';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'מוגדרת';
 
   @override
@@ -5943,6 +5953,14 @@ class AppLocalizationsHe extends AppLocalizations {
       'להזמנה זו אין פתק מטבח להדפסה במכשיר זה.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'לא ניתן לטעון הזמנה זו מהשרת להדפסה חוזרת של כרטיס המטבח. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'סיכומי ההכנה אינם זמינים להזמנה זו; הכרטיס הודפס ללא מקטע הסיכומים.';
+
+  @override
   String get posPrintAction => 'הדפסה';
 
   @override
@@ -6469,6 +6487,47 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'תצוגה מקדימה';
+
+  @override
+  String get kioskKitchenRole => 'כרטיס מטבח';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'הדפסת המטבח בסניף זה מנוהלת דרך מסך המטבח. העמדה מדפיסה קבלות לקוח בלבד.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'הדפסת כרטיס מטבח אוטומטית';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'לאחר הזמנה מוצלחת, העמדה מדפיסה את כרטיס המטבח במדפסת המטבח שלה.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'שימוש במדפסת הלקוחות';
+
+  @override
+  String get kioskKitchenTest => 'בדיקת כרטיס מטבח';
+
+  @override
+  String get kioskKitchenLastFailed => 'כרטיס המטבח האחרון לא הודפס.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'ייתכן שכרטיס המטבח האחרון הודפס — לא יודפס שוב אוטומטית.';
+
+  @override
+  String get kioskKitchenRetry => 'ניסיון חוזר';
+
+  @override
+  String get kioskIdleDelaySection => 'זמן חוסר פעילות';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'זמן השקט לפני שמופיעה ההתראה «עדיין כאן?». חלון ההתראה (10 שניות) אינו משתנה.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'לא הוגדר — המכשיר שומר על התזמון המקורי (התראה אחרי 50 שניות).';
 
   @override
   String get kioskUiThemeSection => 'צבעי ממשק המכשיר';

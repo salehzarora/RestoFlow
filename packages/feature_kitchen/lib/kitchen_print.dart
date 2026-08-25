@@ -11,4 +11,9 @@
 library;
 
 export 'src/print/kds_ticket_print_builder.dart';
+// KIOSK-PRINT-114B.5A: the canonical dispatch → ticket adapter + renderer, the
+// shared bytes seam and the shared l10n label mapper (moved from the POS).
+export 'src/print/kitchen_dispatch_ticket_adapter.dart';
 export 'src/print/kitchen_print_document.dart';
+export 'src/print/kitchen_ticket_labels.dart';
+export 'src/print/kitchen_ticket_render.dart';

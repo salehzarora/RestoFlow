@@ -226,6 +226,44 @@ sealed class KioskSubmitResult {
   const KioskSubmitResult();
 }
 
+/// KIOSK-PRINT-114B.2 — the kitchen dispatch this device's submit CLAIMED
+/// (114B.1 claim-at-submit on a printer_only branch): the id to acknowledge,
+/// the money-free payload to render locally, and the lease expiry after
+/// which the POS drain recovers the work. Absent (null) whenever no claim
+/// landed (claim not requested, kds branch, pre-114B server).
+@immutable
+class KioskClaimedKitchenDispatch {
+  const KioskClaimedKitchenDispatch({
+    required this.id,
+    required this.payload,
+    required this.claimExpiresAt,
+  });
+
+  final String id;
+  final Map<String, Object?> payload;
+  final DateTime? claimExpiresAt;
+
+  /// Tolerant decode of the submit response's `kitchen_dispatch` object.
+  /// Anything malformed yields null — a print concern must never corrupt an
+  /// accepted-order result.
+  static KioskClaimedKitchenDispatch? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final payload = raw['money_free_payload'];
+    if (id is! String || id.isEmpty || payload is! Map) return null;
+    final expiresRaw = raw['claim_expires_at'];
+    DateTime? expires;
+    if (expiresRaw is String) {
+      expires = DateTime.tryParse(expiresRaw);
+    }
+    return KioskClaimedKitchenDispatch(
+      id: id,
+      payload: payload.map((k, v) => MapEntry(k.toString(), v)),
+      claimExpiresAt: expires,
+    );
+  }
+}
+
 class KioskSubmitAccepted extends KioskSubmitResult {
   const KioskSubmitAccepted({
     required this.orderId,
@@ -233,12 +271,16 @@ class KioskSubmitAccepted extends KioskSubmitResult {
     required this.orderStatus,
     required this.idempotencyReplay,
     required this.autoCompleted,
+    this.kitchenDispatch,
   });
   final String orderId;
   final int revision;
   final String orderStatus;
   final bool idempotencyReplay;
   final bool autoCompleted;
+
+  /// 114B.2: present only when this submit claimed the kitchen dispatch.
+  final KioskClaimedKitchenDispatch? kitchenDispatch;
 }
 
 /// A DEFINITIVE server refusal: the operation ledger recorded a terminal
@@ -276,7 +318,10 @@ class KioskOrderSubmitter {
   final SyncRpcTransport _transport;
   final DeviceSessionSecretStore _store;
 
-  Future<KioskSubmitResult> submit(KioskSubmitAttempt attempt) async {
+  Future<KioskSubmitResult> submit(
+    KioskSubmitAttempt attempt, {
+    bool claimKitchenDispatch = false,
+  }) async {
     final DeviceSessionCredential? cred;
     try {
       cred = await _store.read();
@@ -291,6 +336,10 @@ class KioskOrderSubmitter {
         'p_device_id': cred.deviceId,
         'p_session_token': cred.sessionToken,
         ...attempt.params,
+        // 114B.2: the claim argument is sent ONLY when true, so the wire
+        // stays byte-compatible with a pre-114B hosted backend (the decision
+        // can only be true after the server itself reported kitchen support).
+        if (claimKitchenDispatch) 'p_claim_kitchen_dispatch': true,
       });
     } on SyncTransportException catch (e) {
       return e.kind == SyncTransportErrorKind.auth
@@ -314,6 +363,9 @@ class KioskOrderSubmitter {
             : 'submitted',
         idempotencyReplay: raw['idempotency_replay'] == true,
         autoCompleted: raw['auto_completed'] == true,
+        kitchenDispatch: KioskClaimedKitchenDispatch.tryParse(
+          raw['kitchen_dispatch'],
+        ),
       );
     }
     final code = raw['error'];

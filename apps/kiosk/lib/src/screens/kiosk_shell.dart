@@ -26,7 +26,21 @@ class KioskShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(kioskFlowProvider);
+    // PERF-110: the root composes ONLY from these four facts. Watching the
+    // whole KioskState made the 1-second idle clock (`secondsSinceActivity`)
+    // rebuild the entire 1080×1920 stage — menu grid, wheel, images, text —
+    // once per second with nothing visible changing. Records compare by
+    // value, so this subtree now rebuilds only when the composition changes.
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (
+          screen: s.screen,
+          sheet: s.sheet,
+          idleWarningVisible: s.idleSecondsLeft != null,
+          toastVisible: s.toast != null,
+        ),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     // KIOSK-001-107: bind the GLOBAL device theme before any child builds —
     // the watch makes the whole shell rebuild when the owner APPLIES a new
@@ -59,14 +73,16 @@ class KioskShell extends ConsumerWidget {
             if (state.screen == KioskScreen.menu)
               const Align(
                 alignment: Alignment.bottomCenter,
-                child: KioskBottomBar(),
+                // PERF-110: the glowing bar lives in its own layer so grid
+                // scrolling never re-rasters its blur.
+                child: RepaintBoundary(child: KioskBottomBar()),
               ),
             if (state.sheet == KioskSheet.item) const KioskItemSheet(),
             if (state.sheet == KioskSheet.cart) const KioskCartSheet(),
             if (state.sheet == KioskSheet.pin) const KioskPinGate(),
             if (state.sheet == KioskSheet.staffPin) const KioskStaffPinSheet(),
-            if (state.idleSecondsLeft != null) const _IdleWarningOverlay(),
-            if (state.toast != null) const _KioskToast(),
+            if (state.idleWarningVisible) const _IdleWarningOverlay(),
+            if (state.toastVisible) const _KioskToast(),
           ],
         ),
       ),
@@ -82,7 +98,12 @@ class _IdleWarningOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    // The warning countdown is the ONE legitimately per-second surface.
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (idleSecondsLeft: s.idleSecondsLeft, rtl: s.rtl),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final rtl = state.rtl;
 
@@ -183,10 +204,10 @@ class _KioskToast extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final toast = ref.watch(kioskFlowProvider.select((s) => s.toast));
     // Semantic tokens → localized copy; anything else is a staff fixture
     // string shown verbatim (settings shell only).
-    final text = switch (state.toast) {
+    final text = switch (toast) {
       'added' => l10n.kioskAddedToOrder,
       'ordering-unavailable' => l10n.kioskOrderingUnavailable,
       'cart-stale' => l10n.kioskCartStaleTitle,

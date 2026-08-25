@@ -11,11 +11,22 @@ dependencies:
     sdk: flutter
   # RF-063: Riverpod state management (DECISION D-009 / ARCHITECTURE §4).
   flutter_riverpod: '>=2.5.0 <3.0.0'
+  # KIOSK-PRINT-114B.5A: the WEB-SAFE dispatch document library only
+  # (`package:restoflow_data_local/kitchen_dispatch_document.dart`) — the
+  # canonical dispatch → ticket adapter needs the payload model; the drift
+  # stores in the package barrel are never imported from here.
+  restoflow_data_local:
+    path: ../data_local
   # RF-058: the realtime invalidation-source type for the optional KDS bridge.
   restoflow_data_remote:
     path: ../data_remote
   restoflow_domain:
     path: ../domain
+  # KIOSK-PRINT-114B.5A: the shared kitchen-ticket chrome labels are derived
+  # from the ONE `AppLocalizations` (moved here from the POS so the kiosk and
+  # the POS drain map the same keys).
+  restoflow_l10n:
+    path: ../l10n
   # RF-072: render-neutral PrintDocument + durable PrintSpool/PrintJob for
   # kitchen-ticket printing (RF-070/RF-071). Consumed, never modified.
   restoflow_printing:

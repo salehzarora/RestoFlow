@@ -27,6 +27,7 @@ class SubmittedOrderView {
     this.outboxEntryId,
     this.localOperationId,
     this.orderId,
+    this.createdAt,
   });
 
   final String orderNumber;
@@ -93,7 +94,15 @@ class SubmittedOrderView {
     outboxEntryId: outboxEntryId,
     localOperationId: localOperationId,
     orderId: orderId,
+    createdAt: createdAt,
   );
+
+  /// KIOSK-PRINT-114B.6: the ORDER CREATION instant — the outbox entry's
+  /// clientCreatedAt on the device that submitted the order, or the server's
+  /// created_at on a detail-sourced view. Printed in the canonical kitchen
+  /// ticket header (never the print time). Optional + additive: a record
+  /// persisted before this field decodes to null and prints no stamp.
+  final DateTime? createdAt;
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;

@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show PerfFrameRecorder, perfDiagnosticsEnabled;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,7 @@ import 'src/data/kiosk_attract_media.dart';
 import 'src/data/kiosk_menu_data.dart';
 import 'src/data/kiosk_order_submit.dart';
 import 'src/design/kiosk_theme.dart';
+import 'src/print/kiosk_kitchen_auto_print.dart';
 import 'src/print/kiosk_receipt_auto_print.dart';
 import 'src/screens/kiosk_activation.dart';
 import 'src/screens/kiosk_shell.dart';
@@ -47,6 +50,9 @@ import 'src/state/kiosk_staff_access.dart';
 /// integer tax) — payment stays at the cashier.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // PERF-110: TEST-BUILD-ONLY frame recorder (RESTOFLOW_PERF_DIAGNOSTICS=true).
+  // Compile-time false in production builds — this line is then dead code.
+  if (perfDiagnosticsEnabled()) PerfFrameRecorder.instance.start();
   // Kiosk posture: portrait only, immersive fullscreen. Keep-screen-on is
   // applied on Android in MainActivity (FLAG_KEEP_SCREEN_ON).
   unawaited(
@@ -148,6 +154,9 @@ typedef KioskSeams = ({
   DeviceReceiptLogoReader logoReader,
   KioskAttractMediaStore attractMedia,
   KioskPrintedReceiptLedger printedLedger,
+  // KIOSK-PRINT-114B.2: the kitchen dispatch acknowledgement repository on
+  // the SAME transport/credential as everything else.
+  SupabaseKitchenDispatchAckRepository kitchenAck,
 });
 
 typedef KioskBootResult = ({KioskSeams? seams, RealDeviceAuthProblem? problem});
@@ -210,6 +219,10 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
       logoReader: logoReader,
       attractMedia: const KioskAttractMediaStore(),
       printedLedger: KioskPrintedReceiptLedger(prefs),
+      kitchenAck: SupabaseKitchenDispatchAckRepository(
+        transport: transport,
+        secretStore: store,
+      ),
     ),
     problem: null,
   );
@@ -261,15 +274,38 @@ List<Override> kioskRealOverrides(KioskSeams seams) => [
       return null;
     }
   }),
-  // §10: the ONLY print trigger — the definitive-acceptance transition.
+  // §10 + 114B.2: the ONLY print trigger — the definitive-acceptance
+  // transition. TWO independent lanes fire from the ONE seam: the customer
+  // receipt (ledger, record-on-success) and the claimed kitchen ticket
+  // (server-claim durability). Each lane latches and fails independently.
   kioskAcceptedOrderHookProvider.overrideWith((ref) {
-    return (order, lang) {
+    return (order, lang, kitchenDispatch) {
       unawaited(
         ref
             .read(kioskReceiptAutoPrintProvider)
             .onOrderAccepted(order: order, lang: lang),
       );
+      unawaited(
+        ref
+            .read(kioskKitchenTicketPrinterProvider)
+            .onOrderAccepted(
+              order: order,
+              lang: lang,
+              dispatch: kitchenDispatch,
+            ),
+      );
     };
+  }),
+  // 114B.2: the kitchen dispatch acknowledgement over the SAME device
+  // credential/transport (the shared feature_auth repository).
+  kioskKitchenAckProvider.overrideWith((ref) {
+    final repo = seams.kitchenAck;
+    return ({required dispatchId, required status, errorCode}) =>
+        repo.acknowledge(
+          dispatchId: dispatchId,
+          status: status,
+          errorCode: errorCode,
+        );
   }),
   kioskMenuDataProvider.overrideWith((ref) {
     final live = ref.watch(kioskLiveProvider.select((s) => s.menu));

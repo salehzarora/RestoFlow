@@ -15,7 +15,6 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import 'kitchen_dispatch_import_coordinator.dart'
     show KitchenAckFlushOutcome, KitchenImportScope, flushAck;
-import 'kitchen_ticket_renderer.dart';
 
 /// KITCHEN-MODE-001C2C — the crash-safe, bounded kitchen print worker.
 ///
@@ -100,7 +99,7 @@ final class KitchenPrintWorker {
     required KitchenSpoolStore store,
     required KitchenSpoolCipher cipher,
     required SecretValue key,
-    required KitchenTicketRenderer renderer,
+    required KitchenDispatchBytesRenderer renderer,
     required KitchenNetworkSend networkSend,
     required KitchenBluetoothSend bluetoothSend,
     required PrinterDestinationSendGate sendGate,
@@ -128,7 +127,10 @@ final class KitchenPrintWorker {
   final KitchenSpoolStore _store;
   final KitchenSpoolCipher _cipher;
   final SecretValue _key;
-  final KitchenTicketRenderer _renderer;
+  // KIOSK-PRINT-114B.5A: the ONE dispatch bytes seam — production injects the
+  // CANONICAL renderer (dispatch -> shared KdsTicketView -> the POS/KDS ticket
+  // builder); the legacy KitchenTicketRenderer still satisfies it for tests.
+  final KitchenDispatchBytesRenderer _renderer;
   final KitchenNetworkSend _networkSend;
   final KitchenBluetoothSend _bluetoothSend;
   final PrinterDestinationSendGate _sendGate;

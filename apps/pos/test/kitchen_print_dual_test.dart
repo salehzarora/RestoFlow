@@ -119,8 +119,13 @@ ProviderContainer _onContainer() => _container(
   ],
 );
 
+// KIOSK-PRINT-114B.5A: the bare token 'total' was a landmine — the canonical
+// kitchen ticket legitimately prints "Kitchen total: N <resource>" (a COUNT,
+// never money), so the money heuristic names MONEY totals explicitly; the
+// scans additionally reject any decimal amount via [_hasDecimalAmount].
 const _moneyTokens = [
-  'total',
+  'grand total',
+  'total due',
   'subtotal',
   'tax',
   'discount',
@@ -132,6 +137,10 @@ const _moneyTokens = [
   r'$',
   '€',
 ];
+
+/// KIOSK-PRINT-114B.5A: a money AMOUNT pattern (two decimals) — a kitchen
+/// ticket carries counts, never amounts.
+bool _hasDecimalAmount(String text) => RegExp(r'\d+\.\d{2}').hasMatch(text);
 
 ProviderContainer _container({List<Override> overrides = const []}) {
   final c = ProviderContainer(
@@ -260,6 +269,7 @@ void main() {
           reason: 'no money token "$token" on a kitchen ticket',
         );
       }
+      expect(_hasDecimalAmount(text), isFalse, reason: 'no money amount');
     });
 
     test(
@@ -312,6 +322,7 @@ void main() {
         for (final token in [..._moneyTokens, '1500', '3000', '300']) {
           expect(text.contains(token.toLowerCase()), isFalse);
         }
+        expect(_hasDecimalAmount(text), isFalse, reason: 'no money amount');
       },
     );
   });
@@ -413,6 +424,7 @@ void main() {
         for (final token in _moneyTokens) {
           expect(text.contains(token.toLowerCase()), isFalse);
         }
+        expect(_hasDecimalAmount(text), isFalse, reason: 'no money amount');
       },
     );
 

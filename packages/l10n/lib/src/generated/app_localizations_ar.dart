@@ -4337,6 +4337,16 @@ class AppLocalizationsAr extends AppLocalizations {
       'يمكن لهذا الجهاز الطباعة مباشرة على طابعة شبكة (تُضبط أعلاه) — لا حاجة إلى جسر الطباعة.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle => 'تشخيص الأداء (نسخة اختبار)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'محلي فقط — لا يُحفظ شيء ولا يُرسل. اترك التطبيق على شاشة مزدحمة 30 ثانية ثم اقرأ أرقام الإطارات هنا.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'إعادة تعيين العينات';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'مُهيّأة';
 
   @override
@@ -5983,6 +5993,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا توجد تذكرة مطبخ قابلة للطباعة لهذا الطلب على هذا الجهاز.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'تعذّر تحميل هذا الطلب من الخادم لإعادة طباعة تذكرة المطبخ. تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'إجماليات التحضير غير متوفرة لهذا الطلب؛ طُبعت التذكرة بدون قسم الإجماليات.';
+
+  @override
   String get posPrintAction => 'طباعة';
 
   @override
@@ -6511,6 +6529,47 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'معاينة';
+
+  @override
+  String get kioskKitchenRole => 'تذكرة المطبخ';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'طباعة المطبخ في هذا الفرع تُدار عبر شاشة المطبخ. الجهاز يطبع إيصالات الزبائن فقط.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'طباعة تذكرة المطبخ تلقائياً';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'بعد نجاح الطلب، يطبع الجهاز تذكرة المطبخ على طابعة المطبخ الخاصة به.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'استخدام طابعة الزبائن';
+
+  @override
+  String get kioskKitchenTest => 'اختبار تذكرة المطبخ';
+
+  @override
+  String get kioskKitchenLastFailed => 'آخر تذكرة مطبخ لم تُطبع.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'آخر تذكرة مطبخ ربما طُبعت — لن تُكرر تلقائياً.';
+
+  @override
+  String get kioskKitchenRetry => 'إعادة المحاولة';
+
+  @override
+  String get kioskIdleDelaySection => 'مهلة عدم النشاط';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'مدة الهدوء قبل ظهور تنبيه «هل ما زلت هنا؟». نافذة التنبيه (10 ثوانٍ) لا تتغير.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'غير محدد — يحتفظ هذا الجهاز بالتوقيت الأصلي (التنبيه بعد 50 ثانية).';
 
   @override
   String get kioskUiThemeSection => 'ألوان واجهة الجهاز';

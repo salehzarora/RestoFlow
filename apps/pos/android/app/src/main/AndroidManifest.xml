@@ -55,6 +55,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- PERF-112: production compatibility policy (owner-accepted). PowerVR
+             hardware (Acer Iconia A16 / Allwinner A733 / PowerVR BXM) showed severe
+             Impeller/Vulkan jank and ghosted/stale frames; the same-device PERF-111
+             A/B with only this flag changed was "MUCH BETTER" on Skia/OpenGL.
+             Keep Impeller disabled for POS/Kiosk until a verified Flutter engine
+             upgrade resolves the affected device class (re-test on the Acer before
+             removing). See docs/android-renderer-compatibility.md. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

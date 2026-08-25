@@ -199,6 +199,13 @@ PrintDocument buildKdsTicketPrintDocument({
       // delta belongs to that order"). Large heading style — the kitchen must
       // not have to hunt for it. Absent on an initial order.
       if (additionMarker != null) PrintLine.title(additionMarker),
+      // KIOSK-PRINT-114B.6: the LARGE service-mode badge right under the order
+      // code (after the addition marker when one exists) — the kitchen tells
+      // dine-in from takeaway at arm's length. ASCII-framed so the text path
+      // and the raster path print it identically on every device (POS, kiosk,
+      // KDS bridge); unknown types print nothing.
+      if (kitchenServiceModeBadge(labels, ticket.orderType) case final badge?)
+        PrintLine.title(badge),
       PrintLine.rule(),
       if (dineIn || takeaway)
         PrintLine.center(dineIn ? labels.dineIn : labels.takeaway),
@@ -213,6 +220,12 @@ PrintDocument buildKdsTicketPrintDocument({
         PrintLine.center('${labels.customerPhoneLabel}: $phone'),
       if (showStation)
         PrintLine.center('${labels.stationLabel}: ${ticket.stationId}'),
+      // KIOSK-PRINT-114B.6: the ORDER CREATION date + time (never the print
+      // time) closes the header meta block — every path feeds the same
+      // [KdsTicketView.submittedAt] (POS submit client time, the dispatch's
+      // server created_at, the detail's created_at); absent => nothing.
+      if (ticket.submittedAt case final createdAt?)
+        PrintLine.center(formatKitchenTicketTimestamp(createdAt)),
       PrintLine.rule(),
       if (ticket.kitchenCounts.isNotEmpty) ...[
         for (final count in ticket.kitchenCounts)
@@ -252,6 +265,30 @@ PrintDocument buildKdsTicketPrintDocument({
       if (dineIn) PrintLine.banner(),
     ],
   );
+}
+
+/// KIOSK-PRINT-114B.6: the LARGE service-mode badge text for [orderType]
+/// (`dine_in` / `takeaway`), or null for an unknown type. Deliberately ASCII
+/// only: an emoji would be dropped by the ESC/POS text encoder and thresholded
+/// to an unreadable blob by the 1-bit rasterizer, so the marker is a distinct
+/// ASCII frame around the localized word — the same on POS, kiosk and KDS.
+String? kitchenServiceModeBadge(
+  KitchenTicketPrintLabels labels,
+  String? orderType,
+) => switch (orderType) {
+  'dine_in' => '=== ${labels.dineIn} ===',
+  'takeaway' => '>>> ${labels.takeaway} >>>',
+  _ => null,
+};
+
+/// KIOSK-PRINT-114B.6: the ONE compact order-creation stamp on every kitchen
+/// ticket — `dd/MM/yyyy HH:mm` in the device's local time, ASCII digits (the
+/// raster path renders them LTR inside ar/he tickets). Callers pass the
+/// creation instant; the builder never reads the clock.
+String formatKitchenTicketTimestamp(DateTime createdAt) {
+  final t = createdAt.isUtc ? createdAt.toLocal() : createdAt;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(t.day)}/${two(t.month)}/${t.year} ${two(t.hour)}:${two(t.minute)}';
 }
 
 /// Converts the kitchen-ticket [doc] into a render-neutral ESC/POS

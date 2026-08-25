@@ -254,7 +254,7 @@ void main() {
           extraOverrides: [
             kioskAcceptedOrderHookProvider.overrideWith(
               (ref) =>
-                  (order, lang) => fired.add((order.orderId, lang)),
+                  (order, lang, dispatch) => fired.add((order.orderId, lang)),
             ),
           ],
         );
@@ -286,7 +286,7 @@ void main() {
         extraOverrides: [
           kioskAcceptedOrderHookProvider.overrideWith(
             (ref) =>
-                (order, lang) => fired.add(order.orderId),
+                (order, lang, dispatch) => fired.add(order.orderId),
           ),
         ],
       );

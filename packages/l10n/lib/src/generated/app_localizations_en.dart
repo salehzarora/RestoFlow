@@ -4363,6 +4363,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This device can print directly to a network printer (set up above) — no print bridge needed.';
 
   @override
+  String get deviceSettingsPerfDiagnosticsTitle =>
+      'Performance diagnostics (test build)';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsNote =>
+      'Local only — nothing is stored or sent. Leave the app on a busy screen for 30 seconds, then read the frame numbers here.';
+
+  @override
+  String get deviceSettingsPerfDiagnosticsReset => 'Reset samples';
+
+  @override
   String get deviceSettingsPrinterConfigured => 'Configured';
 
   @override
@@ -6029,6 +6040,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'This order has no printable kitchen ticket on this device.';
 
   @override
+  String get posReprintKitchenFetchFailed =>
+      'Could not load this order from the server for a kitchen reprint. Check the connection and try again.';
+
+  @override
+  String get posReprintKitchenCountsUnavailable =>
+      'Kitchen prep counts are not available for this order; the ticket printed without the counts block.';
+
+  @override
   String get posPrintAction => 'Print';
 
   @override
@@ -6560,6 +6579,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kioskAppearancePreview => 'Preview';
+
+  @override
+  String get kioskKitchenRole => 'Kitchen ticket';
+
+  @override
+  String get kioskKitchenGovernedByKds =>
+      'Kitchen printing on this branch is handled by the kitchen display workflow. The kiosk prints customer receipts only.';
+
+  @override
+  String get kioskKitchenAutoPrint => 'Print kitchen ticket automatically';
+
+  @override
+  String get kioskKitchenAutoPrintHint =>
+      'After a successful order, the kiosk prints the kitchen ticket on its own kitchen printer.';
+
+  @override
+  String get kioskKitchenCopyCustomer => 'Use customer printer';
+
+  @override
+  String get kioskKitchenTest => 'Test kitchen ticket';
+
+  @override
+  String get kioskKitchenLastFailed => 'Last kitchen ticket did not print.';
+
+  @override
+  String get kioskKitchenLastPossibly =>
+      'Last kitchen ticket may have printed — not repeated automatically.';
+
+  @override
+  String get kioskKitchenRetry => 'Retry';
+
+  @override
+  String get kioskIdleDelaySection => 'Inactivity timeout';
+
+  @override
+  String get kioskIdleDelayHelper =>
+      'Quiet time before the “Still there?” warning appears. The 10-second warning window itself never changes.';
+
+  @override
+  String get kioskIdleDelayLegacyNote =>
+      'Not set — this device keeps the original timing (warning after 50 seconds).';
 
   @override
   String get kioskUiThemeSection => 'Device interface colors';

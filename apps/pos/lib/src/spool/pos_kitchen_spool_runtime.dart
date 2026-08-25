@@ -25,7 +25,6 @@ import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
 import 'kitchen_dispatch_import_coordinator.dart';
 import 'kitchen_print_worker.dart';
-import 'kitchen_ticket_renderer.dart';
 import 'kitchen_void_reconciliation.dart';
 import 'pending_kitchen_ack_coordinator.dart';
 import 'pos_kitchen_spool_hooks.dart';
@@ -154,7 +153,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     Future<KitchenModeResult> Function()? fetchMode,
     Future<KitchenDestinationResolution> Function()? destinationResolver,
     String Function()? localJobIdGenerator,
-    KitchenTicketRenderer? renderer,
+    KitchenDispatchBytesRenderer? renderer,
     KitchenNetworkSend? networkSend,
     KitchenBluetoothSend? bluetoothSend,
     PrinterDestinationSendGate? sendGate,
@@ -207,7 +206,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final Future<KitchenModeResult> Function()? _fetchModeOverride;
   final Future<KitchenDestinationResolution> Function()? _destinationResolver;
   final String Function()? _localJobIdGenerator;
-  final KitchenTicketRenderer? _renderer;
+  final KitchenDispatchBytesRenderer? _renderer;
   final KitchenNetworkSend? _networkSend;
   final KitchenBluetoothSend? _bluetoothSend;
   final PrinterDestinationSendGate? _sendGate;

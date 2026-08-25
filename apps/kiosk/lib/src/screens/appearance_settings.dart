@@ -9,6 +9,7 @@ import '../data/kiosk_appearance.dart';
 import '../data/kiosk_attract_media.dart';
 import '../data/kiosk_logo_picker.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 import '../widgets/kiosk_chrome.dart';
 import 'device_theme_picker.dart';
 import 'featured_picker.dart';
@@ -514,6 +515,51 @@ class _KioskAppearanceSectionState
           },
           const SizedBox(height: 30),
 
+          // ---- E2. inactivity delay (KIOSK-UX-114A) --------------------------
+          // How long the kiosk stays quiet BEFORE the "Still there?" warning;
+          // the 10s warning window itself never changes. UNSET renders NO
+          // active chip and says so — the device keeps the legacy timing
+          // (warning at 50s) rather than silently adopting a new default.
+          _Label(l10n.kioskIdleDelaySection),
+          const SizedBox(height: 6),
+          Text(
+            l10n.kioskIdleDelayHelper,
+            style: KioskType.body(
+              19,
+              FontWeight.w500,
+              color: KioskColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final seconds in KioskAppearanceLimits.idleDelayChoices)
+                _SmallPill(
+                  key: Key('kiosk-idle-delay-$seconds'),
+                  label: '${seconds}s',
+                  active: _draft.idleDelaySeconds == seconds,
+                  onTap: () =>
+                      _update(_draft.copyWith(idleDelaySeconds: seconds)),
+                ),
+            ],
+          ),
+          if (_draft.idleDelaySeconds == null) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.kioskIdleDelayLegacyNote,
+              key: const Key('kiosk-idle-delay-legacy-note'),
+              style: KioskType.body(
+                17,
+                FontWeight.w500,
+                color: KioskColors.textGhost,
+              ),
+            ),
+          ],
+          const SizedBox(height: 30),
+
           // ---- G. GLOBAL device UI theme (KIOSK-001-107) ---------------------
           // A clearly separate section from the wordmark/name colors above:
           // this pair recolors the WHOLE kiosk chrome. Draft-only until the
@@ -669,7 +715,11 @@ class _PreviewCard extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: logo != null
-                ? Image.memory(logo, fit: BoxFit.cover)
+                ? Image.memory(
+                    logo,
+                    fit: BoxFit.cover,
+                    cacheWidth: kioskDecodeWidth(context, 84),
+                  )
                 : Center(
                     child: Text(
                       draft.monogram,
@@ -686,24 +736,37 @@ class _PreviewCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    text: draft.brandTitlePrimary,
-                    style: kioskBrandTitleStyle(
-                      draft.brandTitlePrimary,
-                      44,
-                      color: draft.brandPrimaryColor,
+                // KIOSK-UI-113: the preview mirrors the attract contract —
+                // the same renderer-owned separator and the same one-line
+                // scale-down (never ellipsis), so what the owner sees here
+                // is exactly what the attract hero will do.
+                FittedBox(
+                  key: const Key('kiosk-appearance-wordmark-preview'),
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text.rich(
+                    TextSpan(
+                      text: draft.brandTitlePrimary,
+                      style: kioskBrandTitleStyle(
+                        draft.brandTitlePrimary,
+                        44,
+                        color: draft.brandPrimaryColor,
+                      ),
+                      children: [
+                        if (draft.brandTitleAccent.isNotEmpty)
+                          TextSpan(
+                            text:
+                                kioskWordmarkSeparator(
+                                  draft.brandTitlePrimary,
+                                  draft.brandTitleAccent,
+                                ) +
+                                draft.brandTitleAccent,
+                            style: TextStyle(color: draft.brandAccentColor),
+                          ),
+                      ],
                     ),
-                    children: [
-                      if (draft.brandTitleAccent.isNotEmpty)
-                        TextSpan(
-                          text: draft.brandTitleAccent,
-                          style: TextStyle(color: draft.brandAccentColor),
-                        ),
-                    ],
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 if (draft.restaurantDisplayName.isNotEmpty)
                   Text(
@@ -760,7 +823,11 @@ class _LogoWell extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: logo != null
-          ? Image.memory(logo, fit: BoxFit.cover)
+          ? Image.memory(
+              logo,
+              fit: BoxFit.cover,
+              cacheWidth: kioskDecodeWidth(context, 120),
+            )
           : Center(
               child: Text(
                 draft.monogram,

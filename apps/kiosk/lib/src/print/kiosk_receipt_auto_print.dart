@@ -11,6 +11,7 @@ import '../data/kiosk_appearance.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_receipt_branding.dart';
 import '../state/kiosk_staff_access.dart';
+import 'kiosk_printer_purpose.dart';
 import 'kiosk_receipt_document.dart';
 
 /// KIOSK-001-103 §10 — optional EXACTLY-ONCE auto-print of the customer
@@ -253,7 +254,14 @@ class KioskReceiptAutoPrint {
       } catch (_) {
         rendered = doc;
       }
-      final result = await send(rendered);
+      // 114B.2: the physical send serializes through the ONE process-wide
+      // destination gate, so a same-printer kitchen ticket never interleaves
+      // with this receipt. Semantics are otherwise byte-unchanged.
+      final gate = _ref.read(kioskPrinterDestinationSendGateProvider);
+      final result = await gate.withDestination(
+        _customerDestinationKey(),
+        () => send(rendered),
+      );
       if (result.ok) {
         _sentThisRun.add(orderId);
         if (deviceId != null) await ledger?.record(deviceId, orderId);
@@ -264,6 +272,33 @@ class KioskReceiptAutoPrint {
     } finally {
       _inFlight.remove(orderId);
     }
+  }
+
+  /// The customer role's canonical destination key for the gate (the saved
+  /// shared-store config; a resolvable-but-unread config degrades to one
+  /// conservative shared key so serialization still holds).
+  String _customerDestinationKey() {
+    try {
+      final kind =
+          _ref.read(selectedPrinterTransportProvider).valueOrNull ??
+          PrinterTransportKind.network;
+      switch (kind) {
+        case PrinterTransportKind.network:
+          final config = _ref.read(networkPrinterConfigProvider).valueOrNull;
+          if (config != null) {
+            return pp.PrinterDestinationSendGate.networkKey(
+              config.host,
+              config.port,
+            );
+          }
+        case PrinterTransportKind.bluetooth:
+          final config = _ref.read(bluetoothPrinterConfigProvider).valueOrNull;
+          if (config != null) {
+            return pp.PrinterDestinationSendGate.bluetoothKey(config.address);
+          }
+      }
+    } catch (_) {}
+    return 'kiosk|receipt|unresolved';
   }
 
   void _publish(String orderId, KioskReceiptPrintOutcome outcome) {

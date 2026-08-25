@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
-import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 /// KITCHEN-MODIFIER-PREP-CLASSIFIER-CODEX-FIX-020 — Codex HIGH #3, the CLIENT

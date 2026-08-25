@@ -7954,6 +7954,24 @@ abstract class AppLocalizations {
   /// **'This device can print directly to a network printer (set up above) — no print bridge needed.'**
   String get deviceSettingsNativeNetworkNote;
 
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: heading of the TEST-BUILD-ONLY device metrics + frame-timing section in POS/Kiosk staff Device Settings (present only when the build was made with RESTOFLOW_PERF_DIAGNOSTICS=true).
+  ///
+  /// In en, this message translates to:
+  /// **'Performance diagnostics (test build)'**
+  String get deviceSettingsPerfDiagnosticsTitle;
+
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: explainer under the perf diagnostics heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Local only — nothing is stored or sent. Leave the app on a busy screen for 30 seconds, then read the frame numbers here.'**
+  String get deviceSettingsPerfDiagnosticsNote;
+
+  /// DEVICE-RUNTIME-LARGE-TABLET-PERF-110: button that clears the rolling frame-timing window.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset samples'**
+  String get deviceSettingsPerfDiagnosticsReset;
+
   /// Device-settings status pill for an enabled assigned printer on the native Android app, replacing 'Requires print bridge' when direct network printing is available (ANDROID-002).
   ///
   /// In en, this message translates to:
@@ -10888,6 +10906,18 @@ abstract class AppLocalizations {
   /// **'This order has no printable kitchen ticket on this device.'**
   String get posReprintKitchenUnavailable;
 
+  /// KIOSK-PRINT-114B.5A: honest KITCHEN-only failure when a branch-discovered order (kiosk / another till) could not be fetched from the authoritative detail for a manual kitchen reprint. Nothing printed; never a receipt instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this order from the server for a kitchen reprint. Check the connection and try again.'**
+  String get posReprintKitchenFetchFailed;
+
+  /// KIOSK-PRINT-114B.5A: informational status after a manual kitchen reprint of a branch-discovered order printed WITHOUT the whole-order prep/meat counts (the authoritative detail carries no prep snapshot until 114B.5B). The ticket did print.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen prep counts are not available for this order; the ticket printed without the counts block.'**
+  String get posReprintKitchenCountsUnavailable;
+
   /// OPEN-ORDER-PRINT-CHOOSER-040: the print action on an OPEN/unpaid order. Deliberately not "reprint" — an unpaid pre-bill has not necessarily been printed before.
   ///
   /// In en, this message translates to:
@@ -11823,6 +11853,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get kioskAppearancePreview;
+
+  /// No description provided for @kioskKitchenRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket'**
+  String get kioskKitchenRole;
+
+  /// No description provided for @kioskKitchenGovernedByKds.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen printing on this branch is handled by the kitchen display workflow. The kiosk prints customer receipts only.'**
+  String get kioskKitchenGovernedByKds;
+
+  /// No description provided for @kioskKitchenAutoPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Print kitchen ticket automatically'**
+  String get kioskKitchenAutoPrint;
+
+  /// No description provided for @kioskKitchenAutoPrintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After a successful order, the kiosk prints the kitchen ticket on its own kitchen printer.'**
+  String get kioskKitchenAutoPrintHint;
+
+  /// No description provided for @kioskKitchenCopyCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Use customer printer'**
+  String get kioskKitchenCopyCustomer;
+
+  /// No description provided for @kioskKitchenTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test kitchen ticket'**
+  String get kioskKitchenTest;
+
+  /// No description provided for @kioskKitchenLastFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last kitchen ticket did not print.'**
+  String get kioskKitchenLastFailed;
+
+  /// No description provided for @kioskKitchenLastPossibly.
+  ///
+  /// In en, this message translates to:
+  /// **'Last kitchen ticket may have printed — not repeated automatically.'**
+  String get kioskKitchenLastPossibly;
+
+  /// No description provided for @kioskKitchenRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get kioskKitchenRetry;
+
+  /// No description provided for @kioskIdleDelaySection.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactivity timeout'**
+  String get kioskIdleDelaySection;
+
+  /// No description provided for @kioskIdleDelayHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiet time before the “Still there?” warning appears. The 10-second warning window itself never changes.'**
+  String get kioskIdleDelayHelper;
+
+  /// No description provided for @kioskIdleDelayLegacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set — this device keeps the original timing (warning after 50 seconds).'**
+  String get kioskIdleDelayLegacyNote;
 
   /// No description provided for @kioskUiThemeSection.
   ///

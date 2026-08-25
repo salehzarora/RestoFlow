@@ -139,22 +139,63 @@ LinearGradient get kioskSheetGradient => LinearGradient(
 /// The canonical design frame (portrait FHD).
 const kioskDesignSize = Size(1080, 1920);
 
+/// KIOSK-UI-113 — the stage's design WIDTH is aspect-adaptive: on portrait
+/// viewports WIDER than 9:16 (both owner tablets are 16:10) the canvas
+/// widens from the canonical 1080 up to this cap so the kiosk surface is
+/// full-bleed instead of leaving app-painted side gutters. 1280 covers every
+/// 16:10 / 3:2 tablet exactly (16:10 -> 1200); 4:3-class viewports clamp
+/// here and keep small, deliberate gutters. The SCALE never changes —
+/// [KioskStageScale] keeps its canonical min(w/1080, h/1920) meaning, so
+/// pointer transforms and decode caps are untouched, and a 1080-wide
+/// viewport renders the canonical composition byte-identically.
+const double kioskStageMaxDesignWidth = 1280;
+
 /// Category wheel constants — the artifact's exact interaction model.
+/// KIOSK-CATEGORY-RAIL-115 turns the rail into a curved, focus-anchored
+/// carousel (owner-approved geometry): a dominant active disc, per-distance
+/// outward/inward x-offsets, and the Model B FOCUS BAND — the active row
+/// rests at [focusTop] and the whole stack translates on selection exactly
+/// like the shipped wheel, clamping only at the list tail (never a pinned
+/// stack, never wrapping). Drag-follow, snap math, tap slop and easing are
+/// untouched.
 abstract final class KioskWheel {
   /// One category row in the rail (px in design space).
-  static const double rowExtent = 172;
+  static const double rowExtent = 200;
 
-  /// The active row's center offset: railShift = [centerShift] − idx·[rowExtent].
-  static const double centerShift = 550;
+  /// Model B focus band (clip-local design px, measured below the top swipe
+  /// hint): the active row's preferred TOP…
+  static const double focusTop = 220;
+
+  /// …and the lowest active-row top the tail clamp may reach. The active
+  /// disc center therefore rests at focusTop + rowExtent/2 = 320 for every
+  /// index except the final clamped one (420 for N=5).
+  static const double focusBottom = 320;
+
+  /// The resting rail translation for [activeIndex] of [categoryCount]
+  /// categories: the active row sits at [focusTop], clamped near the list
+  /// end so real neighbors stay on stage instead of exposing a dead rail.
+  /// The tail/[focusTop] min-guard keeps the clamp well-ordered for
+  /// 1–2-category menus.
+  static double baseShiftFor(int activeIndex, int categoryCount) {
+    final tail = focusBottom - (categoryCount - 1) * rowExtent;
+    final lower = tail < focusTop ? tail : focusTop;
+    return (focusTop - activeIndex * rowExtent).clamp(lower, focusTop);
+  }
 
   /// Disc diameter by distance from the active index: 0 / 1 / 2 / 3+.
-  static const List<double> discByDistance = [150, 98, 78, 64];
+  static const List<double> discByDistance = [210, 132, 100, 78];
+
+  /// Horizontal bow by distance, in OUTWARD units (toward the screen edge:
+  /// +x in RTL where the rail sits on the right; mirrored in LTR). The
+  /// active node swings outward, neighbors recess progressively inward —
+  /// with the size falloff this is the curved-carousel silhouette.
+  static const List<double> xOffsetByDistance = [22, -4, -20, -34];
 
   /// Label font size by distance.
-  static const List<double> labelSizeByDistance = [24, 20, 17];
+  static const List<double> labelSizeByDistance = [28, 20, 17];
 
   /// Opacity falloff by distance.
-  static const List<double> opacityByDistance = [1, .78, .5, .32];
+  static const List<double> opacityByDistance = [1, .75, .45, .28];
 
   /// Movement past this (design px) turns a tap into a drag.
   static const double tapSlop = 8;
@@ -168,8 +209,65 @@ abstract final class KioskWheel {
   /// cubic-bezier(.22,.9,.26,1) — the V2 easing for surfaces and the wheel.
   static const curve = Cubic(.22, .9, .26, 1);
 
-  /// Rail column width.
-  static const double railWidth = 218;
+  /// Rail column width (115: 272 hosts the 210 active disc, its 5px ring
+  /// and the +22 outward bow inside the clip).
+  static const double railWidth = 272;
+
+  // ---- 116: circular / wrapping rail -------------------------------------
+
+  /// OWNER DECISION (KIOSK-CATEGORY-LOOP-116): categories LOOP circularly
+  /// at or above this count; 1–3 categories keep the finite Model B
+  /// behavior (the N=3 loop shows awkward near-duplicates, so it stays
+  /// finite by choice).
+  static const int wrapMinCount = 4;
+
+  /// Virtual slots rendered on each side of the window base in wrapping
+  /// mode (17 rows total — the visible span plus the largest capped swipe).
+  static const int wheelWindowRadius = 8;
+
+  /// One gesture advances at most this many rows (the wheel has no
+  /// inertia; the cap keeps the render window's coverage provable).
+  static const int wheelMaxRowsPerSwipe = 3;
+
+  // ---- 115A: the orange guide's STATIC spine -----------------------------
+  // The guide is split into a fixed full-height spine (this curve, painted
+  // faint) and a moving marker layer that travels ALONG it — so a category
+  // swipe moves the highlighted point, never the whole line.
+
+  /// Spine x at both fading ends (inside the 120-wide guide paint box).
+  static const double railSpineInnerX = 36;
+
+  /// Cubic control x — puts the spine's belly at ≈97.5 at mid-height.
+  static const double railSpineControlX = 118;
+
+  /// x of the STATIC spine at height [y] within a guide viewport of
+  /// [height]: the cubic (innerX, 0) → ctrl(controlX, .32h)/(controlX,
+  /// .68h) → (innerX, height), inverted by binary search (y(t) is
+  /// monotone). Both guide painters and the marker share this, so the
+  /// marker always sits exactly ON the rail.
+  static double railSpineX(double y, double height) {
+    if (height <= 0) return railSpineInnerX;
+    final target = y.clamp(0.0, height);
+    var lo = 0.0, hi = 1.0;
+    for (var i = 0; i < 32; i++) {
+      final mid = (lo + hi) / 2;
+      final u = 1 - mid;
+      final yMid =
+          height *
+          (3 * .32 * mid * u * u + 3 * .68 * mid * mid * u + mid * mid * mid);
+      if (yMid < target) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    final t = (lo + hi) / 2;
+    final u = 1 - t;
+    return railSpineInnerX * u * u * u +
+        3 * railSpineControlX * t * u * u +
+        3 * railSpineControlX * t * t * u +
+        railSpineInnerX * t * t * t;
+  }
 }
 
 /// Motion tokens (V2: fast waiter, never bouncy).

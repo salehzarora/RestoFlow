@@ -7,6 +7,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/kiosk_appearance.dart';
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
+import '../media/kiosk_media_image.dart';
 import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_live_runtime.dart';
 import '../state/kiosk_staff_access.dart';
@@ -52,7 +53,11 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(kioskFlowProvider);
+    final state = ref.watch(
+      kioskFlowProvider.select(
+        (s) => (lang: s.lang, rtl: s.rtl, settings: s.settings),
+      ),
+    );
     final controller = ref.read(kioskFlowProvider.notifier);
     final rtl = state.rtl;
     final appearance = ref.watch(kioskAppearanceProvider);
@@ -98,87 +103,93 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
           // timer). Each branch is its own widget subtree, so switching modes
           // disposes the previous timer/controller. Demo keeps the fixture
           // attract modes untouched.
-          if (isReal)
-            switch (appearance.attractMediaMode) {
-              KioskAttractMediaMode.selectedMenuPhotos
-                  when carouselUrls.isNotEmpty =>
-                _LiveAttractCarousel(
-                  urls: carouselUrls,
-                  holdSeconds: appearance.attractIntervalSeconds,
-                ),
-              KioskAttractMediaMode.selectedMenuPhotos => ColoredBox(
-                color: KioskColors.canvasBottom,
-              ),
-              KioskAttractMediaMode.customImage => KioskCustomImageBackground(
-                mediaRef: appearance.customImageRef,
-              ),
-              KioskAttractMediaMode.customVideo => KioskCustomVideoBackground(
-                mediaRef: appearance.customVideoRef,
-              ),
-            }
-          else
-            switch (state.settings.attractMode) {
-              KioskAttractMode.photos when carouselUrls.isNotEmpty =>
-                _LiveAttractCarousel(
-                  urls: carouselUrls,
-                  holdSeconds: appearance.attractIntervalSeconds,
-                ),
-              KioskAttractMode.photos => AnimatedBuilder(
-                animation: _kenBurns,
-                builder: (context, child) => Transform.scale(
-                  scale: 1.03 + .13 * _kenBurns.value,
-                  child: child,
-                ),
-                child: KioskFixtureImage(
-                  asset: kioskAttractAssets.first,
-                  fallback: ColoredBox(color: KioskColors.canvasBottom),
-                ),
-              ),
-              KioskAttractMode.promo => KioskFixtureImage(
-                asset: kioskAttractAssets.last,
-                fallback: ColoredBox(color: KioskColors.canvasBottom),
-              ),
-              KioskAttractMode.video => ColoredBox(
-                color: KioskColors.canvasBottom,
-                child: Center(
-                  child: Opacity(
-                    opacity: .75,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 150,
-                          height: 150,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: KioskColors.frameLine,
-                              width: 5,
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.play_arrow_rounded,
-                              size: 64,
-                              color: KioskColors.accentTop,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          l10n.kioskSettingsAttractVideo,
-                          style: KioskType.body(
-                            24,
-                            FontWeight.w500,
-                            color: KioskColors.textMuted,
-                          ),
-                        ),
-                      ],
+          // PERF-110: the media layer animates continuously (Ken Burns /
+          // crossfade); its own RepaintBoundary stops every frame from
+          // re-rastering the scrim, the stage glows and the blurred shadows.
+          RepaintBoundary(
+            child: isReal
+                ? switch (appearance.attractMediaMode) {
+                    KioskAttractMediaMode.selectedMenuPhotos
+                        when carouselUrls.isNotEmpty =>
+                      _LiveAttractCarousel(
+                        urls: carouselUrls,
+                        holdSeconds: appearance.attractIntervalSeconds,
+                      ),
+                    KioskAttractMediaMode.selectedMenuPhotos => ColoredBox(
+                      color: KioskColors.canvasBottom,
                     ),
-                  ),
-                ),
-              ),
-            },
+                    KioskAttractMediaMode.customImage =>
+                      KioskCustomImageBackground(
+                        mediaRef: appearance.customImageRef,
+                      ),
+                    KioskAttractMediaMode.customVideo =>
+                      KioskCustomVideoBackground(
+                        mediaRef: appearance.customVideoRef,
+                      ),
+                  }
+                : switch (state.settings.attractMode) {
+                    KioskAttractMode.photos when carouselUrls.isNotEmpty =>
+                      _LiveAttractCarousel(
+                        urls: carouselUrls,
+                        holdSeconds: appearance.attractIntervalSeconds,
+                      ),
+                    KioskAttractMode.photos => AnimatedBuilder(
+                      animation: _kenBurns,
+                      builder: (context, child) => Transform.scale(
+                        scale: 1.03 + .13 * _kenBurns.value,
+                        child: child,
+                      ),
+                      child: KioskFixtureImage(
+                        asset: kioskAttractAssets.first,
+                        fallback: ColoredBox(color: KioskColors.canvasBottom),
+                      ),
+                    ),
+                    KioskAttractMode.promo => KioskFixtureImage(
+                      asset: kioskAttractAssets.last,
+                      fallback: ColoredBox(color: KioskColors.canvasBottom),
+                    ),
+                    KioskAttractMode.video => ColoredBox(
+                      color: KioskColors.canvasBottom,
+                      child: Center(
+                        child: Opacity(
+                          opacity: .75,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 150,
+                                height: 150,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: KioskColors.frameLine,
+                                    width: 5,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 64,
+                                    color: KioskColors.accentTop,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                l10n.kioskSettingsAttractVideo,
+                                style: KioskType.body(
+                                  24,
+                                  FontWeight.w500,
+                                  color: KioskColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  },
+          ),
           // §7 scrim: photo first, cinematic darkening second. The middle
           // band stays nearly open so the meal reads unmistakably as a
           // photo; only the header and CTA floor keep deep contrast.
@@ -245,37 +256,51 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                       // auto display face per script (Anton never forced onto
                       // Arabic/Hebrew).
                       if (appearance.brandTitlePrimary.isNotEmpty)
-                        Text.rich(
-                          TextSpan(
-                            text: appearance.brandTitlePrimary,
-                            style:
-                                kioskBrandTitleStyle(
-                                  appearance.brandTitlePrimary,
-                                  176,
-                                  color: appearance.brandPrimaryColor,
-                                  height: .94,
-                                ).copyWith(
-                                  shadows: const [
-                                    Shadow(
-                                      color: Color(0x8C000000),
-                                      offset: Offset(0, 8),
-                                      blurRadius: 60,
-                                    ),
-                                  ],
-                                ),
-                            children: [
-                              if (appearance.brandTitleAccent.isNotEmpty)
-                                TextSpan(
-                                  text: appearance.brandTitleAccent,
-                                  style: TextStyle(
-                                    color: appearance.brandAccentColor,
+                        // KIOSK-UI-113: one-line brand, NEVER ellipsized —
+                        // short names keep the exact 176px look; longer
+                        // (especially Arabic/Hebrew, whose display face is
+                        // wider than condensed Latin) scale down uniformly so
+                        // the FULL configured name always renders. The accent
+                        // segment carries the renderer-owned separator.
+                        FittedBox(
+                          key: const Key('kiosk-attract-wordmark'),
+                          fit: BoxFit.scaleDown,
+                          child: Text.rich(
+                            TextSpan(
+                              text: appearance.brandTitlePrimary,
+                              style:
+                                  kioskBrandTitleStyle(
+                                    appearance.brandTitlePrimary,
+                                    176,
+                                    color: appearance.brandPrimaryColor,
+                                    height: .94,
+                                  ).copyWith(
+                                    shadows: const [
+                                      Shadow(
+                                        color: Color(0x8C000000),
+                                        offset: Offset(0, 8),
+                                        blurRadius: 60,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                            ],
+                              children: [
+                                if (appearance.brandTitleAccent.isNotEmpty)
+                                  TextSpan(
+                                    text:
+                                        kioskWordmarkSeparator(
+                                          appearance.brandTitlePrimary,
+                                          appearance.brandTitleAccent,
+                                        ) +
+                                        appearance.brandTitleAccent,
+                                    style: TextStyle(
+                                      color: appearance.brandAccentColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       if (appearance.restaurantDisplayName.isNotEmpty)
                         Text(
@@ -425,54 +450,60 @@ class _PulsingStartPillState extends State<_PulsingStartPill>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _glow,
-    builder: (context, child) => Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: KioskColors.ring.withValues(alpha: .5 * (1 - _glow.value)),
-            spreadRadius: 30 * _glow.value,
-          ),
-          BoxShadow(
-            color: KioskColors.ring.withValues(alpha: .4),
-            blurRadius: 50,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: child,
-    ),
-    child: Container(
-      height: 112,
-      padding: const EdgeInsets.symmetric(horizontal: 74),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        gradient: kioskAccentGradient,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            widget.label,
-            style: KioskType.body(
-              32,
-              FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: .5,
+  // PERF-110: the pill's 2.4s glow loop mutates a BoxShadow forever; its own
+  // layer keeps that 60fps repaint off the rest of the attract stage.
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: AnimatedBuilder(
+      animation: _glow,
+      builder: (context, child) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: KioskColors.ring.withValues(alpha: .5 * (1 - _glow.value)),
+              spreadRadius: 30 * _glow.value,
             ),
-          ),
-          const SizedBox(width: 18),
-          // Rubik carries no arrow glyphs; the icon mirrors with the
-          // ambient direction exactly like the artifact's flipped arrow.
-          Icon(
-            widget.rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded,
-            size: 38,
-            color: Colors.white,
-          ),
-        ],
+            BoxShadow(
+              color: KioskColors.ring.withValues(alpha: .4),
+              blurRadius: 50,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: child,
+      ),
+      child: Container(
+        height: 112,
+        padding: const EdgeInsets.symmetric(horizontal: 74),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: kioskAccentGradient,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.label,
+              style: KioskType.body(
+                32,
+                FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: .5,
+              ),
+            ),
+            const SizedBox(width: 18),
+            // Rubik carries no arrow glyphs; the icon mirrors with the
+            // ambient direction exactly like the artifact's flipped arrow.
+            Icon(
+              widget.rtl
+                  ? Icons.arrow_back_rounded
+                  : Icons.arrow_forward_rounded,
+              size: 38,
+              color: Colors.white,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -567,13 +598,24 @@ class _KenBurnsPhoto extends StatelessWidget {
         child: Transform.scale(scale: 1.0 + .08 * t, child: child),
       ),
     ),
-    child: Image.network(
-      url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      gaplessPlayback: true,
-      errorBuilder: (_, _, _) => ColoredBox(color: KioskColors.canvasBottom),
+    child: LayoutBuilder(
+      // PERF-110 / KIOSK-UI-113: decode for the REAL stage width (the
+      // canvas may widen up to kioskStageMaxDesignWidth on 16:10 tablets)
+      // at the Ken Burns peak, never the camera's original resolution.
+      builder: (context, constraints) => Image(
+        image: kioskNetworkImageProvider(
+          context,
+          url,
+          designWidth: constraints.maxWidth.isFinite
+              ? constraints.maxWidth * 1.08
+              : kioskDesignSize.width * 1.08,
+        ),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => ColoredBox(color: KioskColors.canvasBottom),
+      ),
     ),
   );
 }

@@ -222,17 +222,32 @@
   ],
 
   "nextOfficialRelease": {
-    "versionName": "0.0.28",
-    "versionCode": 28,
+    "versionName": "0.0.42",
+    "versionCode": 42,
     "signing": "restoflow-production",
     "status": "planned - not built",
     "intendedSource": "to be pinned when the next release is planned (main, after its content merges)",
     "notes": [
-      "Reserved so build_official_pair.ps1 always has a single next target.",
-      "No v28 content, scope or date has been decided; this entry only keeps",
-      "the versionCode lineage monotonic (28 > 27) and the runner contract",
-      "satisfied. POS and KDS ship as a synchronized pair per versionSymmetry."
+      "PERF-112 ledger correction: this entry had gone stale at 28 while the",
+      "per-phase POS lane consumed versionCodes 29..38 (acceptance/final",
+      "artifacts, see dist/*/BUILD-METADATA.txt) and the PERF lane consumed",
+      "39 (PERF-110 diagnostics test), 40 (PERF-111 renderer A/B test) and",
+      "41 (PERF-112 final PowerVR-compat production build), all on",
+      "com.restoflow.pos with the production certificate. 42 is the next",
+      "free POS code; codes are never reused.",
+      "KDS has NOT tracked these codes (versionSymmetry has been broken de",
+      "facto since v28); before the next OFFICIAL pair build, decide whether",
+      "to jump KDS to the same code or formally retire the pair rule.",
+      "The customer kiosk (com.restoflow.kiosk) runs its own independent",
+      "lineage (v2..v8 as of PERF-112) and is intentionally outside this",
+      "pair contract."
     ]
+  },
+
+  "androidRendererPolicy": {
+    "policy": "com.restoflow.pos and com.restoflow.kiosk ship with io.flutter.embedding.android.EnableImpeller=false (Skia/OpenGL); com.restoflow.kds is unchanged",
+    "since": "PERF-112 (2026-08-23), owner-accepted after the PERF-111 same-device A/B on the Acer Iconia A16 (PowerVR BXM)",
+    "details": "docs/android-renderer-compatibility.md"
   },
 
   "skippedOfficialReleases": [

@@ -208,6 +208,11 @@ void main() {
         size: const Size(900, 1400),
         locale: const Locale('en'),
       );
+      // PERF-110: portrait is single-pane — the customer fields live in the
+      // slide-up cart sheet behind the bottom cart bar.
+      expect(find.byKey(const Key('pos-bottom-cart-bar')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('pos-bottom-cart-bar')));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(_phone));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(_phone));

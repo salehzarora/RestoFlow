@@ -13,7 +13,10 @@ Future<void> _pump(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
 }) async {
-  tester.view.physicalSize = const Size(1100, 2200);
+  // PERF-110: tablet-class portrait (< 1360 wide) is single-pane now; this
+  // flow drives the SIDE cart, so it runs on a desktop-class portrait window
+  // (the same tall height, 1400 wide) where the two-pane shell is unchanged.
+  tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

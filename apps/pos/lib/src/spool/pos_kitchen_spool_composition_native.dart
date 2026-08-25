@@ -7,6 +7,10 @@ import 'package:path_provider/path_provider.dart'
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart'
     show KitchenSpoolDatabaseFactory, KitchenSpoolKeyManager;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        CanonicalKitchenDispatchRenderer,
+        kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show
         FlutterSecureDeviceSessionStore,
@@ -38,6 +42,7 @@ import '../data/round_print_claim_store.dart'
     show PosRoundPrintClaimState, posInitialKitchenPrintClaimKey;
 import '../print/pos_kitchen_ticket_printer.dart'
     show posRoundPrintClaimStoreProvider;
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../data/kitchen_mode_readiness.dart'
     show
         KitchenModeReadinessResolved,
@@ -173,11 +178,25 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     // has a filed readiness report (which this POS's heartbeat files), so
     // every safety property here must hold on its own, never by presumed
     // dormancy.
-    renderer: KitchenTicketRenderer(
-      labels: KitchenTicketLabels.forLanguageCode(
+    // KIOSK-PRINT-114B.5A: the CANONICAL dispatch renderer — a drained
+    // dispatch is adapted into the SAME KdsTicketView the POS direct print
+    // builds and encoded through the ONE shared bytes seam, so a drain ticket
+    // carries the whole-order counts on top exactly like the direct ticket
+    // (labels from the shared l10n mapper for the device locale; brand header
+    // from the same restaurant-name provider the direct print reads). A VOID
+    // dispatch keeps the legacy frame (device-locale bundle) byte-for-byte.
+    renderer: CanonicalKitchenDispatchRenderer(
+      labels: kitchenTicketPrintLabelsForLanguageCode(
         ui.PlatformDispatcher.instance.locale.languageCode,
       ),
       rasterizer: ref.watch(nativePrintRasterizerProvider),
+      restaurantName: ref.watch(posRestaurantNameProvider),
+      voidRenderer: KitchenTicketRenderer(
+        labels: KitchenTicketLabels.forLanguageCode(
+          ui.PlatformDispatcher.instance.locale.languageCode,
+        ),
+        rasterizer: ref.watch(nativePrintRasterizerProvider),
+      ),
     ),
     networkSend: ({required host, required port, required bytes}) =>
         sendKitchenBytesOverTcp(

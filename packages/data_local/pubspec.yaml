@@ -32,6 +32,11 @@ dependencies:
   # printing has no deps). data_local provides the Drift-backed PrintSpoolStore.
   restoflow_printing:
     path: ../printing
+  # KIOSK-PRINT-114B.2: the extracted printer_only kitchen ticket renderer
+  # words classified prep through the shared domain composer (pure Dart,
+  # no cycle - domain has no data_local dependency).
+  restoflow_domain:
+    path: ../domain
 
 dev_dependencies:
   drift_dev: '>=2.18.0 <3.0.0'
