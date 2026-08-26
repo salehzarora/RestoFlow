@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
-    show RestoflowFloorPresetPainter, RestoflowTableShapePainter;
+    show
+        RestoflowFloorFixture,
+        RestoflowFloorPresetPainter,
+        RestoflowTableShapePainter;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show DiningTable, FloorPreset, OrderType, TableVisualPreset;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
@@ -64,8 +67,21 @@ class _FakeTablesRepo extends TablesRepository {
   @override
   Future<List<DemoTable>> loadTables() async => rows;
   @override
-  Future<PosFloorSnapshot> loadFloorSnapshot() async =>
-      PosFloorSnapshot(tables: rows);
+  Future<PosFloorSnapshot> loadFloorSnapshot() async => PosFloorSnapshot(
+    tables: rows,
+    floorElements: const [
+      PosFloorElement(
+        id: 'w1',
+        sectionId: 's1',
+        kind: 'window',
+        layoutX: 0,
+        layoutY: 4500,
+        widthNorm: 2400,
+        heightNorm: 150,
+        orientationQuarterTurns: 3,
+      ),
+    ],
+  );
 }
 
 class _Launcher extends StatelessWidget {
@@ -269,15 +285,23 @@ void main() {
         ),
         findsOneWidget,
       );
-      // The classic tile keeps the pre-118 tree (no shape painter).
+      // 119A: the classic tile paints through the SAME shared painter now
+      // (real chairs); geometry and interaction semantics unchanged.
       expect(
         find.descendant(
           of: find.byKey(const Key('table-floor-tile-b1')),
-          matching: find.byWidgetPredicate(
-            (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
-          ),
+          matching: _shapePainter(TableVisualPreset.classicRectTable),
         ),
-        findsNothing,
+        findsOneWidget,
+      );
+      // 119A: the fixture's authoritative orientation reaches the widget.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('pos-floor-element-w1')),
+            )
+            .quarterTurns,
+        3,
       );
       // Occupied stays non-assignable regardless of its shape.
       await tester.tap(find.byKey(const Key('table-floor-tile-a2')));

@@ -644,6 +644,7 @@ class _SectionZone extends StatelessWidget {
                           child: RestoflowFloorFixture(
                             key: Key('pos-floor-element-${e.id}'),
                             kind: e.kind,
+                            quarterTurns: e.orientationQuarterTurns,
                             label: e.label,
                           ),
                         ),

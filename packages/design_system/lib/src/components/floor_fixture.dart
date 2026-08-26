@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../tokens.dart';
 import '../tone.dart';
+import 'floor_presets.dart';
 
 /// TABLE-FLOOR-MAP-POLISH-027 — the shared VISUAL-ONLY floor fixture tile
 /// (wall / door / window / cashier / plant).
@@ -18,6 +19,7 @@ class RestoflowFloorFixture extends StatelessWidget {
     required this.kind,
     this.label,
     this.selected = false,
+    this.quarterTurns = 0,
   });
 
   /// One of `wall` / `door` / `window` / `cashier` / `plant` (an unknown kind
@@ -30,6 +32,11 @@ class RestoflowFloorFixture extends StatelessWidget {
 
   /// Element-arrange highlight (Dashboard only).
   final bool selected;
+
+  /// TABLE-119A: the AUTHORITATIVE `orientation_quarter_turns` from the wire
+  /// - rotates directional artwork (door leaf/swing, window sill). The room
+  /// rect already carries the swapped footprint; this never changes geometry.
+  final int quarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +75,11 @@ class RestoflowFloorFixture extends StatelessWidget {
           side < 24 ? side / 4 : RestoflowRadii.sm,
         );
         final text = label;
-        final showIcon = icon != null && side >= 18;
+        // TABLE-119A: recognizable vector artwork replaces the flat icon box
+        // whenever there is room (walls need only a sliver for their joints);
+        // tiny fixtures keep the lightweight flat fallback.
+        final paintArt = kind == 'wall' ? side >= 6 : side >= 18;
+        final showIcon = icon != null && side >= 18 && !paintArt;
         final showLabel = text != null && text.isNotEmpty && h >= 30 && w >= 40;
         return DecoratedBox(
           decoration: BoxDecoration(
@@ -81,38 +92,73 @@ class RestoflowFloorFixture extends StatelessWidget {
               width: selected ? 2 : 1,
             ),
           ),
-          child: showIcon || showLabel
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (showIcon)
-                        Icon(
-                          icon,
-                          size: (side * 0.42).clamp(10.0, 26.0),
-                          color: on,
-                        ),
-                      if (showLabel)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Text(
-                            text,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: on,
-                              fontSize: (side * 0.16).clamp(8.0, 11.0),
-                              fontWeight: FontWeight.w600,
-                            ),
+          child: paintArt || showIcon || showLabel
+              ? _FixtureBody(
+                  painter: paintArt
+                      ? RestoflowFixturePainter(
+                          kind: kind,
+                          fill: fill,
+                          ink: on,
+                          outline: scheme.outline,
+                          quarterTurns: quarterTurns,
+                          detail: restoflowFloorDetailFor(side),
+                        )
+                      : null,
+                  child: showIcon || showLabel
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showIcon)
+                                Icon(
+                                  icon,
+                                  size: (side * 0.42).clamp(10.0, 26.0),
+                                  color: on,
+                                ),
+                              if (showLabel)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                  ),
+                                  child: Text(
+                                    text,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: on,
+                                      fontSize: (side * 0.16).clamp(8.0, 11.0),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                    ],
-                  ),
+                        )
+                      : null,
                 )
               : const SizedBox.expand(),
         );
       },
     );
   }
+}
+
+/// TABLE-119A: layers the fixture painter under the (rare) icon/label chrome
+/// without changing the fixture's box or geometry.
+class _FixtureBody extends StatelessWidget {
+  const _FixtureBody({required this.painter, required this.child});
+
+  final RestoflowFixturePainter? painter;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      if (painter != null)
+        RepaintBoundary(child: CustomPaint(painter: painter)),
+      if (child != null) child!,
+    ],
+  );
 }

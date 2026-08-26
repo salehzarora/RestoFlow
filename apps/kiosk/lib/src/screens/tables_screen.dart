@@ -681,6 +681,7 @@ class _KioskZoneMap extends StatelessWidget {
                       child: RestoflowFloorFixture(
                         key: Key('kiosk-floor-element-${e.id}'),
                         kind: e.kind,
+                        quarterTurns: e.orientationQuarterTurns,
                         label: e.label,
                       ),
                     ),

@@ -19,6 +19,37 @@ import 'package:restoflow_domain/restoflow_domain.dart'
 /// white canvas and a classic table keeps its chair-glyph widget tree, so the
 /// existing goldens and geometry pins keep holding byte-for-byte.
 
+/// TABLE-119A — the deterministic rendering DETAIL tier, derived from the
+/// tile's rendered pixel width only (never from app identity): the same table
+/// at the same size looks the same on every surface. Compact keeps tiny tiles
+/// crisp and cheap (POS-like sizes get standard, kiosk/dashboard get rich).
+enum RestoflowFloorDetail { compact, standard, rich }
+
+/// The one shared size→detail rule (pinned by tests).
+RestoflowFloorDetail restoflowFloorDetailFor(double tileWidth) => tileWidth < 64
+    ? RestoflowFloorDetail.compact
+    : tileWidth < 130
+    ? RestoflowFloorDetail.standard
+    : RestoflowFloorDetail.rich;
+
+/// Chairs per (top, bottom, start, end) — the shared [top, bottom, top,
+/// bottom, start, end] fill pattern (a 2-top reads 1+1 across, a 4-top 2+2).
+/// Moved here from RestoflowFloorTable (TABLE-119A) so the painter, the
+/// widget and the tests share ONE distribution; the numeric seat count is
+/// always exact.
+(int, int, int, int) floorChairSides(int seats, int cap) {
+  final shown = seats < 0 ? 0 : (seats > cap ? cap : seats);
+  const pattern = [0, 1, 0, 1, 2, 3];
+  final out = [0, 0, 0, 0];
+  for (var i = 0; i < shown; i++) {
+    out[pattern[i % pattern.length]] += 1;
+  }
+  return (out[0], out[1], out[2], out[3]);
+}
+
+Color _darken(Color c, double t) => Color.lerp(c, const Color(0xFF000000), t)!;
+Color _lighten(Color c, double t) => Color.lerp(c, const Color(0xFFFFFFFF), t)!;
+
 /// The resolved paint colors of a [FloorPreset]: the canvas base, its pattern
 /// line, an ink that contrasts the floor (labels drawn directly on it), and a
 /// default table surface/ink/border that stays legible on that floor.
@@ -227,7 +258,17 @@ class RestoflowTableShapePainter extends CustomPainter {
     required this.inset,
     required this.scale,
     required this.surfaceRadius,
+    this.detail = RestoflowFloorDetail.standard,
   });
+
+  /// TABLE-119A: how much decoration to paint (shadows/gradients/extras).
+  /// NEVER changes geometry - surface/content rects and anchors are
+  /// detail-independent (pinned).
+  final RestoflowFloorDetail detail;
+
+  /// TABLE-119A: how many of a barrel table's configured seats the two
+  /// barrels themselves represent; the rest render as stools.
+  static const int kBarrelSeatCount = 2;
 
   final TableVisualPreset preset;
 
@@ -243,6 +284,92 @@ class RestoflowTableShapePainter extends CustomPainter {
   final double inset;
   final double scale;
   final double surfaceRadius;
+
+  /// TABLE-119A: how many SEAT GLYPHS (chairs/stools) this painter draws.
+  /// classic/round: one chair per capped seat; booth: the benches ARE the
+  /// seating (zero loose chairs); barrels: the two barrels seat
+  /// [kBarrelSeatCount], extra capped seats become stools. The exact numeric
+  /// seat count always stays visible in the label column.
+  int get seatGlyphCount => switch (preset) {
+    TableVisualPreset.classicRectTable => chairs,
+    TableVisualPreset.roundTable => chairs,
+    TableVisualPreset.boothTable => 0,
+    TableVisualPreset.tableWithBarrels =>
+      chairs > kBarrelSeatCount ? chairs - kBarrelSeatCount : 0,
+  };
+
+  /// TABLE-119A: the deterministic CENTRE of every seat glyph for [size]
+  /// (physical coordinates — never mirrored). Pinned by tests; geometry is
+  /// detail-independent.
+  List<Offset> chairAnchors(Size size) {
+    switch (preset) {
+      case TableVisualPreset.boothTable:
+        return const [];
+      case TableVisualPreset.classicRectTable:
+        final (top, bottom, start, end) = floorChairSides(chairs, 12);
+        final out = <Offset>[];
+        void side(int count, bool horizontal, bool leading) {
+          if (count <= 0) return;
+          final span = (horizontal ? size.width : size.height) - 2 * inset;
+          for (var i = 0; i < count; i++) {
+            final along = inset + (i + 1) * span / (count + 1);
+            out.add(
+              horizontal
+                  ? Offset(
+                      along,
+                      leading ? inset * 0.5 : size.height - inset * 0.5,
+                    )
+                  : Offset(
+                      leading ? inset * 0.5 : size.width - inset * 0.5,
+                      along,
+                    ),
+            );
+          }
+        }
+
+        side(top, true, true);
+        side(bottom, true, false);
+        side(start, false, true);
+        side(end, false, false);
+        return out;
+      case TableVisualPreset.roundTable:
+        if (chairs <= 0) return const [];
+        final surface = surfaceRect(size);
+        final c = surface.center;
+        final ring = surface.width / 2 + inset * 0.5;
+        return [
+          for (var i = 0; i < chairs; i++)
+            c +
+                Offset(
+                      math.cos(-math.pi / 2 + i * 2 * math.pi / chairs),
+                      math.sin(-math.pi / 2 + i * 2 * math.pi / chairs),
+                    ) *
+                    ring,
+        ];
+      case TableVisualPreset.tableWithBarrels:
+        final stools = seatGlyphCount;
+        if (stools <= 0) return const [];
+        final surface = surfaceRect(size);
+        final topCount = (stools + 1) ~/ 2;
+        final bottomCount = stools - topCount;
+        final out = <Offset>[];
+        void row(int count, bool top) {
+          for (var i = 0; i < count; i++) {
+            final x = surface.left + (i + 1) * surface.width / (count + 1);
+            out.add(
+              Offset(
+                x,
+                top ? surface.top - 2.6 * scale : surface.bottom + 2.6 * scale,
+              ),
+            );
+          }
+        }
+
+        row(topCount, true);
+        row(bottomCount, false);
+        return out;
+    }
+  }
 
   /// The surface rect (where the label column lives) for [size]. Shared with
   /// the widget so the text sits exactly on the painted surface.
@@ -302,41 +429,37 @@ class RestoflowTableShapePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
+    final surface = surfaceRect(size);
     final fillPaint = Paint()..color = fill;
     final borderPaint = Paint()
       ..color = border
       ..style = PaintingStyle.stroke
       ..strokeWidth = borderWidth;
-    final chairPaint = Paint()..color = chairColor.withValues(alpha: 0.55);
-    final surface = surfaceRect(size);
     switch (preset) {
       case TableVisualPreset.classicRectTable:
+        _paintChairs(canvas, size);
         final rr = RRect.fromRectAndRadius(
           surface,
           Radius.circular(surfaceRadius),
         );
-        canvas.drawRRect(rr, fillPaint);
+        _paintShadow(canvas, (c, p) => c.drawRRect(rr.shift(_shadowOffset), p));
+        canvas.drawRRect(rr, _surfacePaint(surface) ?? fillPaint);
         canvas.drawRRect(rr, borderPaint);
+        _paintEdgeHighlight(canvas, (c, p) {
+          c.drawRRect(rr.deflate(1.6 * scale), p);
+        });
       case TableVisualPreset.roundTable:
+        _paintChairs(canvas, size);
         final center = surface.center;
         final r = surface.width / 2;
-        // Chairs: small rounded pads spread evenly around the top.
-        final pad = 3.2 * scale;
-        final ring = r + inset * 0.5;
-        for (var i = 0; i < chairs; i++) {
-          final a = -math.pi / 2 + i * 2 * math.pi / chairs;
-          final c = center + Offset(math.cos(a), math.sin(a)) * ring;
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(
-              Rect.fromCenter(center: c, width: pad * 2, height: pad * 2),
-              Radius.circular(pad * 0.6),
-            ),
-            chairPaint,
-          );
-        }
-        canvas.drawCircle(center, r, fillPaint);
+        _paintShadow(
+          canvas,
+          (c, p) => c.drawCircle(center + _shadowOffset, r, p),
+        );
+        canvas.drawCircle(center, r, _roundSurfacePaint(surface) ?? fillPaint);
         canvas.drawCircle(center, r, borderPaint);
-        // A faint inner ring reads as a round top even at small scales.
+        // The inner ring reads as a round top even at small scales; at rich
+        // it doubles as a place-setting hint.
         canvas.drawCircle(
           center,
           r * 0.72,
@@ -347,57 +470,282 @@ class RestoflowTableShapePainter extends CustomPainter {
         );
       case TableVisualPreset.tableWithBarrels:
         final d = _barrelDiameter(size);
-        final barrelPaint = Paint()..color = chairColor.withValues(alpha: 0.35);
-        final hoopPaint = Paint()
-          ..color = border
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2;
         for (final cx in [d / 2 + 1, size.width - d / 2 - 1]) {
-          final c = Offset(cx, size.height / 2);
-          canvas.drawCircle(c, d / 2, barrelPaint);
-          canvas.drawCircle(c, d / 2, hoopPaint);
-          // Two hoops.
-          for (final k in [-0.42, 0.42]) {
-            final y = c.dy + d * k / 2;
-            final half = math.sqrt(
-              math.max(0, (d / 2) * (d / 2) - (y - c.dy) * (y - c.dy)),
-            );
+          _paintBarrel(canvas, Offset(cx, size.height / 2), d);
+        }
+        _paintStools(canvas, size);
+        final rr = RRect.fromRectAndRadius(
+          surface,
+          Radius.circular(surfaceRadius),
+        );
+        _paintShadow(canvas, (c, p) => c.drawRRect(rr.shift(_shadowOffset), p));
+        canvas.drawRRect(rr, _surfacePaint(surface) ?? fillPaint);
+        canvas.drawRRect(rr, borderPaint);
+        if (detail == RestoflowFloorDetail.rich) {
+          // Two plank grain strokes along the tabletop.
+          final grain = Paint()
+            ..color = _darken(fill, 0.06)
+            ..strokeWidth = 1;
+          for (final t in [0.38, 0.62]) {
+            final y = surface.top + surface.height * t;
             canvas.drawLine(
-              Offset(c.dx - half, y),
-              Offset(c.dx + half, y),
-              hoopPaint,
+              Offset(surface.left + 2 * scale, y),
+              Offset(surface.right - 2 * scale, y),
+              grain,
             );
+          }
+        }
+      case TableVisualPreset.boothTable:
+        final benchInset = inset * 0.5;
+        final benchH = inset * 0.85;
+        final backH = inset * 0.32;
+        for (final top in [true, false]) {
+          final benchTop = top
+              ? 1.0 + backH
+              : size.height - benchH - 1.0 - backH;
+          final backTop = top ? 1.0 : size.height - backH - 1.0;
+          final bench = RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              benchInset,
+              benchTop,
+              size.width - 2 * benchInset,
+              benchH,
+            ),
+            Radius.circular(3 * scale),
+          );
+          // The darker back edge on the OUTWARD side of each bench.
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                benchInset,
+                backTop,
+                size.width - 2 * benchInset,
+                backH,
+              ),
+              Radius.circular(1.5 * scale),
+            ),
+            Paint()..color = _darken(chairColor, 0.35).withValues(alpha: 0.75),
+          );
+          canvas.drawRRect(
+            bench,
+            Paint()..color = chairColor.withValues(alpha: 0.65),
+          );
+          if (detail == RestoflowFloorDetail.rich) {
+            // Upholstery tuft notches.
+            final tuft = Paint()
+              ..color = _darken(chairColor, 0.25).withValues(alpha: 0.6)
+              ..strokeWidth = 1;
+            for (final t in [0.3, 0.5, 0.7]) {
+              final x = bench.left + bench.width * t;
+              canvas.drawLine(
+                Offset(x, bench.top + 1.5 * scale),
+                Offset(x, bench.bottom - 1.5 * scale),
+                tuft,
+              );
+            }
           }
         }
         final rr = RRect.fromRectAndRadius(
           surface,
           Radius.circular(surfaceRadius),
         );
-        canvas.drawRRect(rr, fillPaint);
+        _paintShadow(canvas, (c, p) => c.drawRRect(rr.shift(_shadowOffset), p));
+        canvas.drawRRect(rr, _surfacePaint(surface) ?? fillPaint);
         canvas.drawRRect(rr, borderPaint);
-      case TableVisualPreset.boothTable:
-        final benchH = inset * 0.85;
-        final benchInset = inset * 0.5;
-        for (final top in [1.0, size.height - benchH - 1.0]) {
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(
-              Rect.fromLTWH(
-                benchInset,
-                top,
-                size.width - 2 * benchInset,
-                benchH,
-              ),
-              Radius.circular(3 * scale),
-            ),
-            chairPaint,
-          );
-        }
-        final rr = RRect.fromRectAndRadius(
-          surface,
-          Radius.circular(surfaceRadius),
+    }
+  }
+
+  Offset get _shadowOffset => Offset(1.0 * scale, 1.5 * scale);
+
+  /// Solid two-tone depth shadow — deliberately NO blur (PowerVR/Skia: blur
+  /// and saveLayer are the jank drivers; a crisp offset shade reads fine
+  /// top-down). Skipped entirely at compact.
+  void _paintShadow(Canvas canvas, void Function(Canvas, Paint) draw) {
+    if (detail == RestoflowFloorDetail.compact) return;
+    draw(
+      canvas,
+      Paint()..color = const Color(0xFF000000).withValues(alpha: 0.14),
+    );
+  }
+
+  /// Linear top-left light on rectangular tops (standard+); null = flat fill.
+  Paint? _surfacePaint(Rect surface) {
+    if (detail == RestoflowFloorDetail.compact) return null;
+    return Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [_lighten(fill, 0.09), fill, _darken(fill, 0.05)],
+      ).createShader(surface);
+  }
+
+  /// Radial light for the round top (standard+).
+  Paint? _roundSurfacePaint(Rect surface) {
+    if (detail == RestoflowFloorDetail.compact) return null;
+    return Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.3, -0.3),
+        radius: 1.1,
+        colors: [_lighten(fill, 0.11), fill, _darken(fill, 0.05)],
+      ).createShader(surface);
+  }
+
+  void _paintEdgeHighlight(Canvas canvas, void Function(Canvas, Paint) draw) {
+    if (detail != RestoflowFloorDetail.rich) return;
+    draw(
+      canvas,
+      Paint()
+        ..color = _lighten(fill, 0.35).withValues(alpha: 0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  /// One REAL chair: seat pad + outward backrest, rotated so the backrest
+  /// faces AWAY from the table ([outwardAngle] = direction the sitter's back
+  /// points; 0 = up). Physical coordinates — never mirrored.
+  void _paintChair(Canvas canvas, Offset center, double outwardAngle) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(outwardAngle);
+    final seatW = 7.4 * scale;
+    final seatH = 6.4 * scale;
+    final seat = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(0, 0.6 * scale),
+        width: seatW,
+        height: seatH,
+      ),
+      Radius.circular(1.8 * scale),
+    );
+    final back = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(0, -seatH / 2 - 0.4 * scale),
+        width: seatW * 1.08,
+        height: 2.2 * scale,
+      ),
+      Radius.circular(1.1 * scale),
+    );
+    canvas.drawRRect(back, Paint()..color = _darken(chairColor, 0.28));
+    canvas.drawRRect(seat, Paint()..color = chairColor.withValues(alpha: 0.85));
+    if (detail != RestoflowFloorDetail.compact) {
+      canvas.drawRRect(
+        seat,
+        Paint()
+          ..color = _darken(chairColor, 0.3).withValues(alpha: 0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
+    }
+    if (detail == RestoflowFloorDetail.rich) {
+      // Cushion crease.
+      canvas.drawLine(
+        Offset(-seatW * 0.28, 1.2 * scale),
+        Offset(seatW * 0.28, 1.2 * scale),
+        Paint()
+          ..color = _darken(chairColor, 0.2).withValues(alpha: 0.5)
+          ..strokeWidth = 0.8,
+      );
+    }
+    canvas.restore();
+  }
+
+  /// All chair glyphs for classic/round from the shared anchors.
+  void _paintChairs(Canvas canvas, Size size) {
+    final anchors = chairAnchors(size);
+    if (anchors.isEmpty) return;
+    if (preset == TableVisualPreset.roundTable) {
+      final c = surfaceRect(size).center;
+      for (final a in anchors) {
+        final dir = a - c;
+        _paintChair(canvas, a, math.atan2(dir.dy, dir.dx) + math.pi / 2);
+      }
+      return;
+    }
+    for (final a in anchors) {
+      final double angle;
+      if (a.dy <= inset) {
+        angle = 0; // top side, backrest up
+      } else if (a.dy >= size.height - inset) {
+        angle = math.pi; // bottom side
+      } else if (a.dx <= inset) {
+        angle = -math.pi / 2; // start side, backrest left
+      } else {
+        angle = math.pi / 2; // end side
+      }
+      _paintChair(canvas, a, angle);
+    }
+  }
+
+  /// One barrel: shadow, body, stave lines, hoops, top-rim hint.
+  void _paintBarrel(Canvas canvas, Offset c, double d) {
+    final r = d / 2;
+    _paintShadow(
+      canvas,
+      (cv, p) => cv.drawCircle(c + _shadowOffset * 0.7, r, p),
+    );
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()..color = _darken(chairColor, 0.12).withValues(alpha: 0.55),
+    );
+    final hoopPaint = Paint()
+      ..color = border
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    canvas.drawCircle(c, r, hoopPaint);
+    if (detail != RestoflowFloorDetail.compact) {
+      // Vertical stave seams (chords).
+      final stave = Paint()
+        ..color = _darken(chairColor, 0.35).withValues(alpha: 0.55)
+        ..strokeWidth = 1;
+      for (final k in [-0.45, 0.0, 0.45]) {
+        final x = c.dx + r * k;
+        final half = math.sqrt(math.max(0, r * r - (x - c.dx) * (x - c.dx)));
+        canvas.drawLine(Offset(x, c.dy - half), Offset(x, c.dy + half), stave);
+      }
+      // Two hoops.
+      for (final k in [-0.42, 0.42]) {
+        final y = c.dy + d * k / 2;
+        final half = math.sqrt(math.max(0, r * r - (y - c.dy) * (y - c.dy)));
+        canvas.drawLine(
+          Offset(c.dx - half, y),
+          Offset(c.dx + half, y),
+          hoopPaint,
         );
-        canvas.drawRRect(rr, fillPaint);
-        canvas.drawRRect(rr, borderPaint);
+      }
+    }
+    if (detail == RestoflowFloorDetail.rich) {
+      canvas.drawCircle(
+        c,
+        r * 0.55,
+        Paint()
+          ..color = _lighten(chairColor, 0.25).withValues(alpha: 0.5)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  /// Round bar stools for a barrel table's extra seats.
+  void _paintStools(Canvas canvas, Size size) {
+    final r = 3.2 * scale;
+    for (final a in chairAnchors(size)) {
+      canvas.drawCircle(
+        a,
+        r,
+        Paint()..color = chairColor.withValues(alpha: 0.85),
+      );
+      if (detail != RestoflowFloorDetail.compact) {
+        canvas.drawCircle(
+          a,
+          r,
+          Paint()
+            ..color = _darken(chairColor, 0.3).withValues(alpha: 0.7)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8,
+        );
+      }
     }
   }
 
@@ -411,5 +759,239 @@ class RestoflowTableShapePainter extends CustomPainter {
       old.chairColor != chairColor ||
       old.inset != inset ||
       old.scale != scale ||
-      old.surfaceRadius != surfaceRadius;
+      old.surfaceRadius != surfaceRadius ||
+      old.detail != detail;
+}
+
+/// TABLE-119A — paints one floor fixture's recognizable interior (the flat
+/// slab + border stays on the widget's DecoratedBox): a door leaf with its
+/// swing arc, a window frame with mullions and glare, wall joints, a cashier
+/// counter with register, a potted plant with leaves. Orientation comes from
+/// the AUTHORITATIVE `orientation_quarter_turns` on the wire (never inferred
+/// from aspect); painting rotates while the outer room rect stays untouched.
+/// Vector-only, palette-derived, no blur / saveLayer / images.
+class RestoflowFixturePainter extends CustomPainter {
+  const RestoflowFixturePainter({
+    required this.kind,
+    required this.fill,
+    required this.ink,
+    required this.outline,
+    this.quarterTurns = 0,
+    this.detail = RestoflowFloorDetail.standard,
+  });
+
+  /// `wall` / `door` / `window` / `cashier` / `plant`; an unknown kind
+  /// degrades to the wall look (forward-compatible, never a crash).
+  final String kind;
+  final Color fill;
+  final Color ink;
+  final Color outline;
+  final int quarterTurns;
+  final RestoflowFloorDetail detail;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    // Rotate the ARTWORK by the authoritative quarter turns; the room rect
+    // already carries the swapped footprint, so odd turns paint into a local
+    // frame with swapped axes.
+    final odd = quarterTurns.isOdd;
+    final local = odd ? Size(size.height, size.width) : size;
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.rotate(quarterTurns * math.pi / 2);
+    canvas.translate(-local.width / 2, -local.height / 2);
+    switch (kind) {
+      case 'door':
+        _paintDoor(canvas, local);
+      case 'window':
+        _paintWindow(canvas, local);
+      case 'cashier':
+        _paintCashier(canvas, local);
+      case 'plant':
+        _paintPlant(canvas, local);
+      default:
+        _paintWall(canvas, local);
+    }
+    canvas.restore();
+  }
+
+  void _paintWall(Canvas canvas, Size s) {
+    final joint = Paint()
+      ..color = ink.withValues(alpha: 0.28)
+      ..strokeWidth = 1;
+    final n = (s.width / 26).clamp(1, 8).floor();
+    for (var i = 1; i <= n; i++) {
+      final x = i * s.width / (n + 1);
+      canvas.drawLine(Offset(x, 1), Offset(x, s.height - 1), joint);
+    }
+    // Slightly darker long edge for depth.
+    canvas.drawLine(
+      Offset(0, s.height - 0.8),
+      Offset(s.width, s.height - 0.8),
+      Paint()
+        ..color = ink.withValues(alpha: 0.22)
+        ..strokeWidth = 1.2,
+    );
+  }
+
+  void _paintDoor(Canvas canvas, Size s) {
+    final leafW = math.min(s.width * 0.42, s.height * 2.4);
+    // Door LEAF along the frame from the hinge end.
+    final leaf = RRect.fromRectAndRadius(
+      Rect.fromLTWH(1, s.height * 0.15, leafW, s.height * 0.7),
+      const Radius.circular(1.5),
+    );
+    canvas.drawRRect(leaf, Paint()..color = ink.withValues(alpha: 0.85));
+    // Swing arc sweeping INTO the room from the hinge (bottom-left corner of
+    // the frame); CustomPaint does not clip, so the arc reads on the floor.
+    final sweep = math.min(s.width * 0.9, s.height * 6.0);
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(1, s.height), radius: sweep),
+      0,
+      math.pi / 2,
+      false,
+      Paint()
+        ..color = ink.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    if (detail == RestoflowFloorDetail.rich) {
+      canvas.drawCircle(
+        Offset(1 + leafW - 2.5, s.height * 0.5),
+        1.6,
+        Paint()..color = _lighten(ink, 0.4),
+      );
+    }
+  }
+
+  void _paintWindow(Canvas canvas, Size s) {
+    final frame = Paint()
+      ..color = ink.withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final r = Rect.fromLTWH(0.8, 0.8, s.width - 1.6, s.height - 1.6);
+    canvas.drawRect(r, frame);
+    // Mullions along the length.
+    final n = (s.width / 30).clamp(1, 6).floor();
+    for (var i = 1; i <= n; i++) {
+      final x = r.left + i * r.width / (n + 1);
+      canvas.drawLine(Offset(x, r.top), Offset(x, r.bottom), frame);
+    }
+    if (detail != RestoflowFloorDetail.compact) {
+      // Two diagonal glare strokes.
+      final glare = Paint()
+        ..color = _lighten(ink, 0.55).withValues(alpha: 0.5)
+        ..strokeWidth = 1;
+      for (final t in [0.18, 0.3]) {
+        canvas.drawLine(
+          Offset(r.left + r.width * t, r.bottom - 1),
+          Offset(r.left + r.width * (t + 0.08), r.top + 1),
+          glare,
+        );
+      }
+      // Sill on the room-facing edge.
+      canvas.drawLine(
+        Offset(r.left, r.bottom),
+        Offset(r.right, r.bottom),
+        Paint()
+          ..color = ink.withValues(alpha: 0.5)
+          ..strokeWidth = 2,
+      );
+    }
+  }
+
+  void _paintCashier(Canvas canvas, Size s) {
+    // Counter shade along the service edge.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(1, s.height * 0.62, s.width - 2, s.height * 0.34),
+        const Radius.circular(2),
+      ),
+      Paint()..color = ink.withValues(alpha: 0.18),
+    );
+    // Register block + screen.
+    final regW = math.min(s.width * 0.34, s.height * 0.8);
+    final reg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        s.width * 0.5 - regW / 2,
+        s.height * 0.14,
+        regW,
+        s.height * 0.42,
+      ),
+      const Radius.circular(2),
+    );
+    canvas.drawRRect(reg, Paint()..color = ink.withValues(alpha: 0.85));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          reg.left + regW * 0.18,
+          reg.top + 2,
+          regW * 0.64,
+          math.max(2.0, s.height * 0.14),
+        ),
+        const Radius.circular(1),
+      ),
+      Paint()..color = _lighten(ink, 0.55),
+    );
+    if (detail == RestoflowFloorDetail.rich) {
+      canvas.drawLine(
+        Offset(reg.left + 2, reg.bottom - 3),
+        Offset(reg.right - 2, reg.bottom - 3),
+        Paint()
+          ..color = _lighten(ink, 0.35)
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  void _paintPlant(Canvas canvas, Size s) {
+    final cx = s.width / 2;
+    final side = math.min(s.width, s.height);
+    // Pot: a small trapezoid at the centre-bottom third.
+    final potW = side * 0.34;
+    final potTop = s.height * 0.55;
+    final pot = Path()
+      ..moveTo(cx - potW / 2, potTop)
+      ..lineTo(cx + potW / 2, potTop)
+      ..lineTo(cx + potW * 0.36, s.height * 0.86)
+      ..lineTo(cx - potW * 0.36, s.height * 0.86)
+      ..close();
+    canvas.drawPath(pot, Paint()..color = _darken(ink, 0.25));
+    // Leaves: bezier fronds fanning up from the pot rim.
+    final leafInk = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.2, side * 0.045)
+      ..strokeCap = StrokeCap.round;
+    final leafSoft = Paint()
+      ..color = _lighten(ink, 0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.0, side * 0.035)
+      ..strokeCap = StrokeCap.round;
+    final origin = Offset(cx, potTop);
+    final reach = side * 0.34;
+    final count = detail == RestoflowFloorDetail.compact ? 3 : 6;
+    for (var i = 0; i < count; i++) {
+      final a = -math.pi / 2 + (i - (count - 1) / 2) * (math.pi / (count + 1));
+      final tip = origin + Offset(math.cos(a), math.sin(a)) * reach;
+      final ctrl =
+          origin + Offset(math.cos(a) * 0.4, math.sin(a) - 0.55) * reach;
+      canvas.drawPath(
+        Path()
+          ..moveTo(origin.dx, origin.dy)
+          ..quadraticBezierTo(ctrl.dx, ctrl.dy, tip.dx, tip.dy),
+        i.isEven ? leafInk : leafSoft,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(RestoflowFixturePainter old) =>
+      old.kind != kind ||
+      old.fill != fill ||
+      old.ink != ink ||
+      old.outline != outline ||
+      old.quarterTurns != quarterTurns ||
+      old.detail != detail;
 }

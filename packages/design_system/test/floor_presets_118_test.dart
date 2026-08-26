@@ -153,8 +153,8 @@ void main() {
   });
 
   group('RestoflowFloorTable visual preset', () {
-    testWidgets('the default classic preset draws NO shape painter (the '
-        'pre-118 chair glyph tree)', (tester) async {
+    testWidgets('the default classic preset paints through the SAME shared '
+        'painter (TABLE-119A realism; geometry unchanged)', (tester) async {
       await tester.pumpWidget(
         _app(
           SizedBox(
@@ -165,11 +165,15 @@ void main() {
           width: 120,
         ),
       );
+      final finder = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
+      );
+      expect(finder, findsOneWidget);
       expect(
-        find.byWidgetPredicate(
-          (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
-        ),
-        findsNothing,
+        (tester.widget<CustomPaint>(finder).painter!
+                as RestoflowTableShapePainter)
+            .preset,
+        TableVisualPreset.classicRectTable,
       );
       expect(find.text('T1'), findsOneWidget);
       expect(find.text('4'), findsOneWidget);

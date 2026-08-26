@@ -232,15 +232,17 @@ void main() {
   });
 
   group('TablesScreen control center', () {
-    testWidgets('the default floor renders NO preset painters (regression)', (
-      tester,
-    ) async {
+    testWidgets('the default floor paints NO floor-preset painter; tables '
+        'paint through the shared painter (119A realism)', (tester) async {
       await _pump(tester, InMemoryTablesStore());
+      // 119A: classic tables now render real chairs through the ONE shared
+      // painter — the pre-118 "no painter" promise is deliberately
+      // superseded; the floor itself stays plain by default.
       expect(
         find.byWidgetPredicate(
           (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
         ),
-        findsNothing,
+        findsWidgets,
       );
       expect(
         find.byWidgetPredicate(

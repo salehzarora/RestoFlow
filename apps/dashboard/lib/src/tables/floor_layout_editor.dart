@@ -563,6 +563,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
                             child: RestoflowFloorFixture(
                               key: Key('floor-element-${e.id}'),
                               kind: e.kind,
+                              quarterTurns: e.orientationQuarterTurns,
                               label: e.label,
                             ),
                           ),
@@ -832,6 +833,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
       child: RestoflowFloorFixture(
         key: Key('floor-element-${element.id}'),
         kind: element.kind,
+        quarterTurns: element.orientationQuarterTurns,
         label: element.label,
         selected: true,
       ),

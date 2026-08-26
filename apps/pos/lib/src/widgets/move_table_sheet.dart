@@ -501,6 +501,7 @@ class _MoveSectionZone extends StatelessWidget {
                           child: RestoflowFloorFixture(
                             key: Key('move-floor-element-${e.id}'),
                             kind: e.kind,
+                            quarterTurns: e.orientationQuarterTurns,
                             label: e.label,
                           ),
                         ),
