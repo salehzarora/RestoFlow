@@ -246,9 +246,9 @@ select ok((select not exists (select 1 from jsonb_array_elements(r -> 'tables') 
              where t ->> 'label' = 'T6') from _res where label = 'tables'),
   'C5: a sibling-branch table is never served');
 select ok((select not exists (select 1 from jsonb_array_elements(r -> 'tables') t
-             where t ? 'status' or t ? 'active_order_count' or t ? 'layout_x' or t ? 'group_id')
+             where t ? 'status' or t ? 'active_order_count' or t ? 'group_id')
             from _res where label = 'tables'),
-  'C6: no raw manual status / counts / geometry / groups reach the customer');
+  'C6: no raw manual status / counts / groups reach the customer (TABLE-VISUAL-LAYOUT-118 deliberately serves the placement so the kiosk renders the same room map)');
 
 -- ---- D. kiosk_submit_order: happy takeaway (29-40) -------------------------
 insert into _res values ('sub1',

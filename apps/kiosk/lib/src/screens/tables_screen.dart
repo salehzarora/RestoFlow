@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show
+        RestoflowFloorFixture,
+        RestoflowFloorPlacedTile,
+        RestoflowFloorPresetPalette,
+        RestoflowFloorSectionCanvas,
+        RestoflowFloorTable;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show floorElementRoomRect, floorTableRoomRect;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
@@ -8,8 +17,11 @@ import '../state/kiosk_flow_controller.dart';
 import '../state/kiosk_live_runtime.dart';
 import '../widgets/kiosk_chrome.dart';
 
-/// 03 · Table picker — zone-grouped 4-column grid, legend, fixed continue
-/// bar. Only AVAILABLE tables are tappable; occupied / reserved /
+/// 03 · Table picker — per-zone FLOOR MAP (TABLE-VISUAL-LAYOUT-118: the SAME
+/// saved room map the Dashboard configured and the POS renders — shared
+/// canvas contract, section floor preset, per-table shape, fixtures) with the
+/// zone-grouped 4-column grid kept for tables that have no saved placement;
+/// legend; fixed continue bar. Only AVAILABLE tables are tappable; occupied / reserved /
 /// out-of-service stay visible but dimmed with their status dot and label —
 /// the honest floor. Demo mode renders the fixture floor; real mode renders
 /// the live `kiosk_tables` read, refreshed on entry, on demand, and again
@@ -84,9 +96,19 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(
       kioskFlowProvider.select(
-        (s) => (rtl: s.rtl, selectedTable: s.selectedTable),
+        (s) => (
+          rtl: s.rtl,
+          selectedTable: s.selectedTable,
+          selectedTableId: s.selectedTableId,
+        ),
       ),
     );
+    // 118: id-aware selection (labels can repeat across sections); the label
+    // compare is only the fallback for a table without an id.
+    bool isSelected(KioskFixtureTable table) =>
+        table.id != null && state.selectedTableId != null
+        ? table.id == state.selectedTableId
+        : state.selectedTable == table.label;
     final controller = ref.read(kioskFlowProvider.notifier);
     final view = ref.watch(kioskTablesViewProvider);
     final zones = view.zones;
@@ -313,27 +335,41 @@ class _KioskTablesScreenState extends ConsumerState<KioskTablesScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    GridView.count(
-                      crossAxisCount: 4,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 20,
-                      crossAxisSpacing: 20,
-                      childAspectRatio: (976 - 3 * 20) / 4 / 196,
-                      children: [
-                        for (final table in zone.tables)
-                          _TableCard(
-                            table: table,
-                            selected: state.selectedTable == table.label,
-                            onTap: table.state == KioskTableState.available
-                                ? () => controller.toggleTable(
-                                    table.label,
-                                    id: table.id,
-                                  )
-                                : null,
-                          ),
-                      ],
-                    ),
+                    // 118: placed tables render on the SHARED room map;
+                    // unplaced ones keep the list card grid below it.
+                    if (zone.tables.any((t) => t.isPlaced)) ...[
+                      _KioskZoneMap(
+                        zone: zone,
+                        isSelected: isSelected,
+                        onTap: (table) =>
+                            controller.toggleTable(table.label, id: table.id),
+                      ),
+                      if (zone.tables.any((t) => !t.isPlaced))
+                        const SizedBox(height: 20),
+                    ],
+                    if (zone.tables.any((t) => !t.isPlaced))
+                      GridView.count(
+                        crossAxisCount: 4,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 20,
+                        crossAxisSpacing: 20,
+                        childAspectRatio: (976 - 3 * 20) / 4 / 196,
+                        children: [
+                          for (final table in zone.tables)
+                            if (!table.isPlaced)
+                              _TableCard(
+                                table: table,
+                                selected: isSelected(table),
+                                onTap: table.state == KioskTableState.available
+                                    ? () => controller.toggleTable(
+                                        table.label,
+                                        id: table.id,
+                                      )
+                                    : null,
+                              ),
+                        ],
+                      ),
                     const SizedBox(height: 40),
                   ],
                 ],
@@ -575,6 +611,241 @@ class _TableCard extends StatelessWidget {
                   ),
                   child: const Center(
                     child: Icon(Icons.check, size: 26, color: Colors.white),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// TABLE-VISUAL-LAYOUT-118: one zone's FLOOR MAP — the shared section canvas
+/// (the exact room-unit → pixel contract the Dashboard editor and the POS
+/// picker use, so every table sits at the same relative spot on all three
+/// surfaces), painted with the section's floor preset, its visual fixtures
+/// underneath, and one [_KioskFloorTile] per placed table. Wrapped in a
+/// RepaintBoundary so a selection change never repaints the floor pattern
+/// (PERF-110 posture).
+class _KioskZoneMap extends StatelessWidget {
+  const _KioskZoneMap({
+    required this.zone,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final KioskFixtureZone zone;
+  final bool Function(KioskFixtureTable table) isSelected;
+  final ValueChanged<KioskFixtureTable> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = RestoflowFloorPresetPalette.of(zone.floorPreset);
+    return RepaintBoundary(
+      key: Key('kiosk-floor-canvas-${zone.id}'),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: KioskColors.glass(.14), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .28),
+              blurRadius: 34,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          // The kiosk reads at arm's length: scale the tile typography up
+          // (the shared tile clamps at 1.4×, so labels never overflow).
+          child: MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.35)),
+            child: RestoflowFloorSectionCanvas(
+              floorPreset: zone.floorPreset,
+              // Fixtures under the tables; pure decoration, never tappable.
+              background: [
+                for (final e in zone.elements)
+                  RestoflowFloorPlacedTile(
+                    room: floorElementRoomRect(
+                      e.layoutX,
+                      e.layoutY,
+                      width: e.widthNorm,
+                      height: e.heightNorm,
+                      quarterTurns: e.orientationQuarterTurns,
+                    ),
+                    child: IgnorePointer(
+                      child: RestoflowFloorFixture(
+                        key: Key('kiosk-floor-element-${e.id}'),
+                        kind: e.kind,
+                        label: e.label,
+                      ),
+                    ),
+                  ),
+              ],
+              // Room-unit rects from the SHARED contract — identical relative
+              // geometry to the Dashboard editor / POS picker by construction.
+              placed: [
+                for (final table in zone.tables)
+                  if (table.isPlaced)
+                    RestoflowFloorPlacedTile(
+                      room: floorTableRoomRect(table.layoutX!, table.layoutY!),
+                      child: _KioskFloorTile(
+                        table: table,
+                        palette: palette,
+                        selected: isSelected(table),
+                        onTap: table.state == KioskTableState.available
+                            ? () => onTap(table)
+                            : null,
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One table on the kiosk map: the SHARED top-down tile (shape preset inside
+/// the unchanged footprint) dressed for the customer — surface/ink picked to
+/// contrast the section floor, the honest state on the border + footnote,
+/// dimmed when not selectable, and an unmistakable selected state (accent
+/// fill + glow + check badge). Only an AVAILABLE table gets a tap.
+class _KioskFloorTile extends StatelessWidget {
+  const _KioskFloorTile({
+    required this.table,
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final KioskFixtureTable table;
+  final RestoflowFloorPresetPalette palette;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final available = table.state == KioskTableState.available;
+    final stateColor = switch (table.state) {
+      KioskTableState.available => KioskColors.tableFree,
+      KioskTableState.occupied => KioskColors.tableOccupied,
+      KioskTableState.reserved => KioskColors.tableReserved,
+      KioskTableState.outOfService => KioskColors.tableOutOfService,
+    };
+    final statusLabel = switch (table.state) {
+      KioskTableState.occupied => l10n.kioskTableOccupied,
+      KioskTableState.reserved => l10n.kioskTableReserved,
+      KioskTableState.outOfService => '—',
+      KioskTableState.available => null,
+    };
+    final fill = selected
+        ? KioskColors.ring
+        : available
+        ? palette.tableSurface
+        : palette.tableSurface.withValues(alpha: .55);
+    final onFill = selected
+        ? KioskColors.onAction
+        : available
+        ? palette.tableOnSurface
+        : palette.tableOnSurface.withValues(alpha: .7);
+    final border = selected
+        ? KioskColors.ring
+        : available
+        ? palette.tableBorder
+        : stateColor.withValues(alpha: .85);
+    final key = table.id ?? table.label;
+    final semanticLabel = statusLabel == null
+        ? '${table.label}, ${l10n.kioskSeatsCount(table.seats)}'
+        : '${table.label}, $statusLabel';
+
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      selected: selected,
+      label: semanticLabel,
+      child: KioskPressable(
+        key: Key('kiosk-floor-tile-$key'),
+        onTap: onTap,
+        enabled: onTap != null,
+        pressedScale: .96,
+        child: Stack(
+          clipBehavior: Clip.none,
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: KioskColors.ring.withValues(alpha: .45),
+                          blurRadius: 28,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: RestoflowFloorTable(
+                label: table.label,
+                seats: table.seats,
+                preset: table.visualPreset,
+                fill: fill,
+                onFill: onFill,
+                border: border,
+                borderWidth: selected ? 3 : 2,
+                statusIcon: selected
+                    ? Icon(Icons.check_rounded, size: 15, color: onFill)
+                    : null,
+                footnote: statusLabel?.toUpperCase(),
+              ),
+            ),
+            // 118F: the customer-safe state dot the legend promises — on
+            // EVERY placed tile (green = available), swapped for the accent
+            // badge while selected. Decoration only: it never moves the tile.
+            if (!selected)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  key: Key('kiosk-floor-dot-$key'),
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: stateColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: palette.base, width: 1.5),
+                  ),
+                ),
+              ),
+            if (selected)
+              Positioned(
+                top: -12,
+                left: -12,
+                child: Container(
+                  key: Key('kiosk-floor-selected-$key'),
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    gradient: kioskAccentGradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: KioskColors.ring.withValues(alpha: .5),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.check, size: 20, color: Colors.white),
                   ),
                 ),
               ),

@@ -1,8 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'table_models.dart';
+
+/// TABLE-VISUAL-LAYOUT-118: the localized name of a table shape preset.
+String tableVisualPresetLabel(AppLocalizations l10n, TableVisualPreset p) =>
+    switch (p) {
+      TableVisualPreset.classicRectTable => l10n.tablesVisualPresetClassicRect,
+      TableVisualPreset.roundTable => l10n.tablesVisualPresetRound,
+      TableVisualPreset.tableWithBarrels => l10n.tablesVisualPresetBarrels,
+      TableVisualPreset.boothTable => l10n.tablesVisualPresetBooth,
+    };
+
+/// TABLE-VISUAL-LAYOUT-118: the localized name of a floor style preset.
+String floorPresetLabel(AppLocalizations l10n, FloorPreset p) => switch (p) {
+  FloorPreset.plainLight => l10n.tablesFloorPresetPlainLight,
+  FloorPreset.woodDark => l10n.tablesFloorPresetWoodDark,
+  FloorPreset.tileModern => l10n.tablesFloorPresetTileModern,
+  FloorPreset.stoneNeutral => l10n.tablesFloorPresetStoneNeutral,
+};
 
 /// The localized label + semantic tone + icon for a table status. Tones ride
 /// the shared TRUE semantic palette (success/warning/info/danger), so the

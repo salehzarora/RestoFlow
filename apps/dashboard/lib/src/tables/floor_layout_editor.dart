@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
+        FloorPreset,
         FloorRoomRect,
         floorClusterSeamRect,
         floorElementDefaultSize,
@@ -58,7 +59,13 @@ class FloorLayoutEditor extends StatefulWidget {
     required this.onCreateElement,
     required this.onSaveElement,
     required this.onDeleteElement,
+    required this.onSetFloorPreset,
   });
+
+  /// TABLE-VISUAL-LAYOUT-118: persists a section's floor style (chosen from
+  /// the section header picker in arrange mode).
+  final void Function(DashboardTableSection section, FloorPreset preset)
+  onSetFloorPreset;
 
   final TablesFloorSnapshot snapshot;
   final bool arrange;
@@ -288,6 +295,46 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
               ],
             ),
           if (widget.arrange) ...[
+            // 118: the per-section FLOOR STYLE picker (the control center of
+            // the shared floor look; the POS + kiosk render the same preset).
+            PopupMenuButton<FloorPreset>(
+              key: Key('section-floor-preset-${section.id}'),
+              tooltip: l10n.tablesFloorPreset,
+              initialValue: section.floorPreset,
+              icon: const Icon(
+                Icons.texture_outlined,
+                size: RestoflowIconSizes.sm,
+              ),
+              onSelected: (preset) => widget.onSetFloorPreset(section, preset),
+              itemBuilder: (context) => [
+                for (final preset in FloorPreset.values)
+                  PopupMenuItem<FloorPreset>(
+                    key: Key('floor-preset-${preset.wire}-${section.id}'),
+                    value: preset,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: RestoflowIconSizes.md,
+                          height: RestoflowIconSizes.md,
+                          decoration: BoxDecoration(
+                            color: RestoflowFloorPresetPalette.of(preset).base,
+                            borderRadius: BorderRadius.circular(
+                              RestoflowRadii.sm,
+                            ),
+                            border: Border.all(
+                              color: RestoflowFloorPresetPalette.of(
+                                preset,
+                              ).line,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Text(floorPresetLabel(l10n, preset)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
             IconButton(
               key: Key('section-up-${section.id}'),
               tooltip: l10n.tablesArrange,
@@ -503,6 +550,8 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
 
             return RestoflowFloorSectionCanvas(
               key: Key('floor-canvas-${section.id}'),
+              // 118: the section's saved floor style (shared painter).
+              floorPreset: section.floorPreset,
               // 027 z-order: fixtures under the seams, seams under the tables.
               background: [
                 for (final e in elements)
@@ -1005,6 +1054,8 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
         key: Key('floor-table-${table.id}'),
         label: table.label,
         seats: table.seats,
+        // 118: the saved shape, drawn inside the unchanged footprint.
+        preset: table.visualPreset,
         fill: style.container,
         onFill: style.onContainer,
         border: style.accent,

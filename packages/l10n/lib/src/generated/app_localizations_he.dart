@@ -3882,6 +3882,39 @@ class AppLocalizationsHe extends AppLocalizations {
   String get floorElementPlant => 'צמח';
 
   @override
+  String get tablesVisualPreset => 'צורת השולחן';
+
+  @override
+  String get tablesVisualPresetPreview => 'תצוגה מקדימה';
+
+  @override
+  String get tablesVisualPresetClassicRect => 'מלבן קלאסי';
+
+  @override
+  String get tablesVisualPresetRound => 'שולחן עגול';
+
+  @override
+  String get tablesVisualPresetBarrels => 'שולחן עם חביות';
+
+  @override
+  String get tablesVisualPresetBooth => 'תא ישיבה';
+
+  @override
+  String get tablesFloorPreset => 'סגנון הרצפה';
+
+  @override
+  String get tablesFloorPresetPlainLight => 'בהיר פשוט';
+
+  @override
+  String get tablesFloorPresetWoodDark => 'עץ כהה';
+
+  @override
+  String get tablesFloorPresetTileModern => 'אריחים מודרניים';
+
+  @override
+  String get tablesFloorPresetStoneNeutral => 'אבן ניטרלית';
+
+  @override
   String get floorElementRotate => 'סיבוב';
 
   @override

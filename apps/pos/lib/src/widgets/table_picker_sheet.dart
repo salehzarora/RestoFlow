@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
+        FloorPreset,
         floorClusterSeamRect,
         floorElementRoomRect,
         floorFractionOf,
@@ -290,7 +291,14 @@ Map<String, TableGroupCardData> buildTableGroupCards(List<DemoTable> tables) {
 /// LEGACY remainder (no section assigned). Pure and deterministic; a table
 /// can never be in both.
 ({
-  List<({String sectionId, String sectionName, List<DemoTable> tables})>
+  List<
+    ({
+      String sectionId,
+      String sectionName,
+      FloorPreset floorPreset,
+      List<DemoTable> tables,
+    })
+  >
   sections,
   List<DemoTable> legacy,
 })
@@ -299,6 +307,10 @@ splitTablesBySection(List<DemoTable> tables) {
   final bySection = <String, List<DemoTable>>{};
   final names = <String, String>{};
   final orders = <String, int>{};
+  // 118: the section's floor style rides on each of its rows (the wire
+  // ships no section catalog); the first non-default key wins, so a section
+  // whose rows all carry the default paints plain light.
+  final floors = <String, FloorPreset>{};
   for (final t in tables) {
     final sid = t.sectionId;
     if (sid == null) {
@@ -310,6 +322,9 @@ splitTablesBySection(List<DemoTable> tables) {
     if (name != null && name.isNotEmpty) names[sid] = name;
     final order = t.sectionDisplayOrder;
     if (order != null) orders[sid] = order;
+    if (t.sectionFloorPreset != FloorPreset.plainLight) {
+      floors[sid] ??= t.sectionFloorPreset;
+    }
   }
   final ids = bySection.keys.toList()
     ..sort((a, b) {
@@ -321,7 +336,12 @@ splitTablesBySection(List<DemoTable> tables) {
   return (
     sections: [
       for (final id in ids)
-        (sectionId: id, sectionName: names[id] ?? '', tables: bySection[id]!),
+        (
+          sectionId: id,
+          sectionName: names[id] ?? '',
+          floorPreset: floors[id] ?? FloorPreset.plainLight,
+          tables: bySection[id]!,
+        ),
     ],
     legacy: legacy,
   );
@@ -505,7 +525,12 @@ class _SectionZone extends StatelessWidget {
     this.onManage,
   });
 
-  final ({String sectionId, String sectionName, List<DemoTable> tables})
+  final ({
+    String sectionId,
+    String sectionName,
+    FloorPreset floorPreset,
+    List<DemoTable> tables,
+  })
   section;
 
   /// 027: this section's read-only visual fixtures.
@@ -601,6 +626,8 @@ class _SectionZone extends StatelessWidget {
                 }
                 return RestoflowFloorSectionCanvas(
                   key: Key('table-section-canvas-${section.sectionId}'),
+                  // 118: the section's saved floor style (shared painter).
+                  floorPreset: section.floorPreset,
                   // 027 z-order: fixtures under seams under tables; fixtures
                   // are IgnorePointer — pure decoration, never tappable.
                   background: [
@@ -731,6 +758,8 @@ class _SectionFloorTile extends StatelessWidget {
     final Widget floorTile = RestoflowFloorTable(
       label: table.label,
       seats: table.seats,
+      // 118: the saved shape, drawn inside the unchanged footprint.
+      preset: table.visualPreset,
       fill: fill,
       onFill: onFill,
       border: border,

@@ -41,6 +41,8 @@ class DemoTable {
     this.sectionDisplayOrder,
     this.layoutX,
     this.layoutY,
+    this.visualPreset = TableVisualPreset.classicRectTable,
+    this.sectionFloorPreset = FloorPreset.plainLight,
     String? memberEffectiveState,
     int? memberActiveOrderCount,
   }) : _memberEffectiveState = memberEffectiveState,
@@ -59,6 +61,15 @@ class DemoTable {
   final int? sectionDisplayOrder;
   final int? layoutX;
   final int? layoutY;
+
+  /// TABLE-VISUAL-LAYOUT-118: how this table is DRAWN (`visual_preset`) and
+  /// how its section's floor is painted (`section_floor_preset` — the owning
+  /// section's key rides on every row because `pos_tables` ships no section
+  /// catalog). Presentation plumbing only: absent/unknown keys decode to the
+  /// defaults, no business rule reads them, and neither changes the footprint
+  /// or the saved placement.
+  final TableVisualPreset visualPreset;
+  final FloorPreset sectionFloorPreset;
 
   /// RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy — how many live
   /// active-status orders currently sit on this table, as the SERVER counted
@@ -161,6 +172,8 @@ class DemoTable {
     sectionDisplayOrder: sectionDisplayOrder,
     layoutX: layoutX,
     layoutY: layoutY,
+    visualPreset: visualPreset,
+    sectionFloorPreset: sectionFloorPreset,
     memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
     memberActiveOrderCount:
         memberActiveOrderCount ?? this.memberActiveOrderCount,
@@ -541,6 +554,9 @@ class RealTablesRepository extends TablesRepository {
           // Defensive both-or-neither (the DB forbids halves; never trust one).
           layoutX: layoutX != null && layoutY != null ? layoutX : null,
           layoutY: layoutX != null && layoutY != null ? layoutY : null,
+          // 118: tolerant decode — absent/NULL/unknown => the defaults.
+          visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
+          sectionFloorPreset: FloorPreset.fromWire(row['section_floor_preset']),
         ),
       );
     }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_core/restoflow_core.dart' show Failure, Success;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show
         AdminPageHeader,
@@ -49,7 +51,14 @@ class _TablesScreenState extends State<TablesScreen> {
     });
   }
 
-  Future<void> _run(Future<AdminResult<void>> Function() op) async {
+  /// TABLE-118B: [reloadOnFailure] re-reads the authoritative list BEFORE
+  /// the error is shown — for a two-step save whose first step already
+  /// persisted (the table exists; only the preset write failed), so the new
+  /// row is never left hidden behind an error snackbar.
+  Future<void> _run(
+    Future<AdminResult<void>> Function() op, {
+    bool reloadOnFailure = false,
+  }) async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final result = await op();
@@ -59,9 +68,12 @@ class _TablesScreenState extends State<TablesScreen> {
         messenger.showSnackBar(SnackBar(content: Text(l10n.tablesSaved)));
         _reload();
       },
-      (failure) => messenger.showSnackBar(
-        SnackBar(content: Text(adminFailureMessage(l10n, failure))),
-      ),
+      (failure) {
+        if (reloadOnFailure) _reload();
+        messenger.showSnackBar(
+          SnackBar(content: Text(adminFailureMessage(l10n, failure))),
+        );
+      },
     );
   }
 
@@ -249,6 +261,10 @@ class _TablesScreenState extends State<TablesScreen> {
           onSaveElement: _saveElement,
           onDeleteElement: (element) =>
               _run(() => widget.repository.deleteFloorElement(element.id)),
+          // 118: the floor style picker persists through the dedicated setter.
+          onSetFloorPreset: (section, preset) => _run(
+            () => widget.repository.setSectionFloorPreset(section.id, preset),
+          ),
         ),
         const Divider(height: RestoflowSpacing.xl),
         // ------------------------------------------------------------ cards
@@ -291,17 +307,66 @@ class _TablesScreenState extends State<TablesScreen> {
             required seats,
             required area,
             required isActive,
-          }) => _run(
-            () => widget.repository.upsertTable(
-              id: table?.id,
-              label: label,
-              seats: seats,
-              area: area,
-              isActive: isActive,
-            ),
+            required visualPreset,
+          }) => _saveTable(
+            table: table,
+            label: label,
+            seats: seats,
+            area: area,
+            isActive: isActive,
+            visualPreset: visualPreset,
           ),
     ),
   );
+
+  /// TABLE-VISUAL-LAYOUT-118 / 118B: the dialog save = the legacy
+  /// full-replace upsert (label/seats/area/active) PLUS, only when the shape
+  /// changed, ONE call to the dedicated preset setter — the shape never rides
+  /// the upsert, so a stale client can never erase it. The setter targets the
+  /// AUTHORITATIVE id `upsert_table` returned (server-minted on create,
+  /// echoed on update): no snapshot diff, no label matching, so a table
+  /// another owner created at the same moment can never receive this preset.
+  /// A failed preset write reloads the list first (the table itself IS
+  /// saved) and then shows the honest error — never "Table saved".
+  Future<void> _saveTable({
+    required DashboardTable? table,
+    required String label,
+    required int? seats,
+    required String? area,
+    required bool isActive,
+    required TableVisualPreset visualPreset,
+  }) async {
+    final repository = widget.repository;
+    final upsert = await repository.upsertTable(
+      id: table?.id,
+      label: label,
+      seats: seats,
+      area: area,
+      isActive: isActive,
+    );
+    if (!mounted) return;
+    final targetId = upsert.fold((id) => id, (_) => null);
+    if (targetId == null) {
+      await _run(
+        () async => upsert.fold(
+          (_) => const Success(null),
+          (failure) => Failure(failure),
+        ),
+      );
+      return;
+    }
+    final changed = table == null
+        ? visualPreset != TableVisualPreset.defaultPreset
+        : visualPreset != table.visualPreset;
+    if (!changed) {
+      await _run(() async => const Success(null));
+      return;
+    }
+    await _run(
+      () => repository.setTableVisualPreset(targetId, visualPreset),
+      reloadOnFailure: true,
+    );
+  }
 
   Future<void> _confirmDelete(
     BuildContext context,
@@ -666,6 +731,7 @@ class _TableCard extends StatelessWidget {
                           ),
                         ),
                         IconButton(
+                          key: Key('table-edit-${table.id}'),
                           tooltip: l10n.tablesEdit,
                           onPressed: onEdit,
                           icon: const Icon(
@@ -707,6 +773,7 @@ class _TableDialog extends StatefulWidget {
     required int? seats,
     required String? area,
     required bool isActive,
+    required TableVisualPreset visualPreset,
   })
   onSave;
 
@@ -726,6 +793,11 @@ class _TableDialogState extends State<_TableDialog> {
     text: widget.table?.area ?? '',
   );
   late bool _active = widget.table?.isActive ?? true;
+
+  /// TABLE-VISUAL-LAYOUT-118: the chosen shape, previewed LIVE on a shared
+  /// floor tile before anything is saved.
+  late TableVisualPreset _preset =
+      widget.table?.visualPreset ?? TableVisualPreset.classicRectTable;
   bool _busy = false;
 
   @override
@@ -746,6 +818,7 @@ class _TableDialogState extends State<_TableDialog> {
       seats: seatsText.isEmpty ? null : int.parse(seatsText),
       area: areaText.isEmpty ? null : areaText,
       isActive: _active,
+      visualPreset: _preset,
     );
     if (mounted) Navigator.of(context).pop();
   }
@@ -753,11 +826,15 @@ class _TableDialogState extends State<_TableDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     InputDecoration deco(String label) => InputDecoration(
       labelText: label,
       border: const OutlineInputBorder(),
       isDense: true,
     );
+    final seatsPreview =
+        int.tryParse(_seats.text.trim()) ?? widget.table?.seats;
+    final previewStyle = RestoflowTone.success.styleOf(theme);
     return AlertDialog(
       title: Text(widget.table == null ? l10n.tablesAdd : l10n.tablesEdit),
       content: SizedBox(
@@ -773,6 +850,7 @@ class _TableDialogState extends State<_TableDialog> {
                 decoration: deco(l10n.tablesFieldLabel),
                 validator: (v) =>
                     (v ?? '').trim().isEmpty ? l10n.tablesErrLabel : null,
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: RestoflowSpacing.md),
               TextFormField(
@@ -787,11 +865,68 @@ class _TableDialogState extends State<_TableDialog> {
                       ? l10n.tablesErrSeats
                       : null;
                 },
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: RestoflowSpacing.md),
               TextFormField(
                 controller: _area,
                 decoration: deco(l10n.tablesFieldArea),
+              ),
+              const SizedBox(height: RestoflowSpacing.md),
+              // 118: the shape picker + a LIVE preview of the shared tile.
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<TableVisualPreset>(
+                      key: const Key('table-visual-preset-field'),
+                      isExpanded: true,
+                      initialValue: _preset,
+                      decoration: deco(l10n.tablesVisualPreset),
+                      items: [
+                        for (final preset in TableVisualPreset.values)
+                          DropdownMenuItem(
+                            value: preset,
+                            child: Text(
+                              tableVisualPresetLabel(l10n, preset),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (preset) {
+                        if (preset != null) setState(() => _preset = preset);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.md),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox.fromSize(
+                        key: const Key('table-visual-preset-preview'),
+                        size: kRestoflowFloorStripTileSize,
+                        child: RestoflowFloorTable(
+                          label: _label.text.trim().isEmpty
+                              ? (widget.table?.label ?? 'T')
+                              : _label.text.trim(),
+                          seats: seatsPreview,
+                          preset: _preset,
+                          fill: previewStyle.container,
+                          onFill: previewStyle.onContainer,
+                          border: previewStyle.accent,
+                        ),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Text(
+                        l10n.tablesVisualPresetPreview,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: RestoflowSpacing.sm),
               SwitchListTile(
@@ -810,6 +945,7 @@ class _TableDialogState extends State<_TableDialog> {
           child: Text(l10n.adminCancel),
         ),
         FilledButton(
+          key: const Key('table-dialog-save'),
           onPressed: _busy ? null : _submit,
           child: Text(l10n.adminSave),
         ),

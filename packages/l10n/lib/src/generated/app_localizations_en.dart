@@ -3934,6 +3934,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get floorElementPlant => 'Plant';
 
   @override
+  String get tablesVisualPreset => 'Table shape';
+
+  @override
+  String get tablesVisualPresetPreview => 'Preview';
+
+  @override
+  String get tablesVisualPresetClassicRect => 'Classic rectangle';
+
+  @override
+  String get tablesVisualPresetRound => 'Round table';
+
+  @override
+  String get tablesVisualPresetBarrels => 'Table with barrels';
+
+  @override
+  String get tablesVisualPresetBooth => 'Booth';
+
+  @override
+  String get tablesFloorPreset => 'Floor style';
+
+  @override
+  String get tablesFloorPresetPlainLight => 'Plain light';
+
+  @override
+  String get tablesFloorPresetWoodDark => 'Dark wood';
+
+  @override
+  String get tablesFloorPresetTileModern => 'Modern tile';
+
+  @override
+  String get tablesFloorPresetStoneNeutral => 'Neutral stone';
+
+  @override
   String get floorElementRotate => 'Rotate';
 
   @override

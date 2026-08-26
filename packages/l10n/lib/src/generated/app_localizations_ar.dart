@@ -3913,6 +3913,39 @@ class AppLocalizationsAr extends AppLocalizations {
   String get floorElementPlant => 'نبتة';
 
   @override
+  String get tablesVisualPreset => 'شكل الطاولة';
+
+  @override
+  String get tablesVisualPresetPreview => 'معاينة';
+
+  @override
+  String get tablesVisualPresetClassicRect => 'مستطيل كلاسيكي';
+
+  @override
+  String get tablesVisualPresetRound => 'طاولة مستديرة';
+
+  @override
+  String get tablesVisualPresetBarrels => 'طاولة مع براميل';
+
+  @override
+  String get tablesVisualPresetBooth => 'مقصورة';
+
+  @override
+  String get tablesFloorPreset => 'نمط الأرضية';
+
+  @override
+  String get tablesFloorPresetPlainLight => 'فاتح بسيط';
+
+  @override
+  String get tablesFloorPresetWoodDark => 'خشب داكن';
+
+  @override
+  String get tablesFloorPresetTileModern => 'بلاط عصري';
+
+  @override
+  String get tablesFloorPresetStoneNeutral => 'حجر محايد';
+
+  @override
   String get floorElementRotate => 'تدوير';
 
   @override

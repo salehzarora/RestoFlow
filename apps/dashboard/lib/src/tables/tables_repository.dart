@@ -13,6 +13,9 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
         AdminTransient,
         AdminValidation;
 
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
+
 import 'table_models.dart';
 
 /// The dashboard Tables repository seam (sprint `dining_tables` backend).
@@ -29,7 +32,12 @@ abstract class TablesAdminRepository {
   /// the section/placement are owned by [setTableSection]/[setTablePosition]
   /// (deliberately OUTSIDE this full-replace call so a stale client can never
   /// erase layout).
-  Future<AdminResult<void>> upsertTable({
+  ///
+  /// TABLE-118B: resolves to the AUTHORITATIVE table id — server-minted on a
+  /// create, echoed on an update — so a follow-up write (the visual preset)
+  /// targets exactly the row this call created, never a row discovered by
+  /// diffing snapshots or matching labels.
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -82,6 +90,21 @@ abstract class TablesAdminRepository {
 
   /// `public.delete_floor_element` — tombstones the fixture.
   Future<AdminResult<void>> deleteFloorElement(String id);
+
+  /// TABLE-VISUAL-LAYOUT-118 — `public.set_table_visual_preset`: the ONLY
+  /// writer of a table's shape key (deliberately outside the full-replace
+  /// [upsertTable], like the placement).
+  Future<AdminResult<void>> setTableVisualPreset(
+    String tableId,
+    TableVisualPreset preset,
+  );
+
+  /// TABLE-VISUAL-LAYOUT-118 — `public.set_table_section_floor_preset`: the
+  /// ONLY writer of a section's floor style key.
+  Future<AdminResult<void>> setSectionFloorPreset(
+    String sectionId,
+    FloorPreset preset,
+  );
 }
 
 /// A clearly-labelled in-memory demo store (demo mode only; the demo banner is
@@ -404,7 +427,29 @@ class InMemoryTablesStore implements TablesAdminRepository {
   }
 
   @override
-  Future<AdminResult<void>> upsertTable({
+  Future<AdminResult<void>> setTableVisualPreset(
+    String tableId,
+    TableVisualPreset preset,
+  ) async {
+    final index = _tables.indexWhere((t) => t.id == tableId);
+    if (index < 0) return const Failure(AdminTransient());
+    _tables[index] = _tables[index].copyWith(visualPreset: preset);
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setSectionFloorPreset(
+    String sectionId,
+    FloorPreset preset,
+  ) async {
+    final index = _sections.indexWhere((s) => s.id == sectionId);
+    if (index < 0) return const Failure(AdminTransient());
+    _sections[index] = _sections[index].copyWith(floorPreset: preset);
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -427,13 +472,19 @@ class InMemoryTablesStore implements TablesAdminRepository {
       status: index >= 0 ? _tables[index].status : DiningTableStatus.available,
       isActive: isActive,
       branchId: index >= 0 ? _tables[index].branchId : 'demo-branch',
+      // 118: the full-replace upsert never touches the preset (mirrors the
+      // backend, where the shape lives outside upsert_table).
+      visualPreset: index >= 0
+          ? _tables[index].visualPreset
+          : TableVisualPreset.classicRectTable,
     );
     if (index >= 0) {
       _tables[index] = table;
     } else {
       _tables.add(table);
     }
-    return const Success(null);
+    // 118B: the store-minted (or echoed) id is the authoritative target.
+    return Success(table.id);
   }
 
   @override
@@ -575,6 +626,8 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       displayOrder: order is int ? order : 0,
       isActive: row['is_active'] == true,
       branchId: (row['branch_id'] ?? '').toString(),
+      // 118: tolerant decode — absent/NULL/unknown => plain light.
+      floorPreset: FloorPreset.fromWire(row['floor_preset']),
     );
   }
 
@@ -621,11 +674,41 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       sectionDisplayOrder: sectionOrder is int ? sectionOrder : null,
       layoutX: hasXY ? rawX : null,
       layoutY: hasXY ? rawY : null,
+      // 118: tolerant decode — absent/NULL/unknown => classic.
+      visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
     );
   }
 
   @override
-  Future<AdminResult<void>> upsertTable({
+  Future<AdminResult<void>> setTableVisualPreset(
+    String tableId,
+    TableVisualPreset preset,
+  ) async => _invokeVoid('set_table_visual_preset', <String, dynamic>{
+    'p_client_request_id': _requestId('set-visual-preset', [
+      tableId,
+      preset.wire,
+    ]),
+    'p_organization_id': _scope.organizationId,
+    'p_table_id': tableId,
+    'p_visual_preset': preset.wire,
+  });
+
+  @override
+  Future<AdminResult<void>> setSectionFloorPreset(
+    String sectionId,
+    FloorPreset preset,
+  ) async => _invokeVoid('set_table_section_floor_preset', <String, dynamic>{
+    'p_client_request_id': _requestId('set-floor-preset', [
+      sectionId,
+      preset.wire,
+    ]),
+    'p_organization_id': _scope.organizationId,
+    'p_section_id': sectionId,
+    'p_floor_preset': preset.wire,
+  });
+
+  @override
+  Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
     int? seats,
@@ -664,7 +747,16 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       return const Failure(AdminTransient());
     }
     if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
-    return const Success(null);
+    // 118B: `app.upsert_table` returns the authoritative row id on BOTH the
+    // create and the update path (and preserves it on an idempotent replay).
+    // An update may fall back to the id we addressed; a create without an id
+    // fails CLOSED — the client never guesses which row it made.
+    final returned = raw['id'];
+    final authoritativeId = returned is String && returned.isNotEmpty
+        ? returned
+        : id;
+    if (authoritativeId == null) return const Failure(AdminTransient());
+    return Success(authoritativeId);
   }
 
   @override

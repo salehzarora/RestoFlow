@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show IconData;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
 
 /// KIOSK-001 Phase 1 fixture data + the shared kiosk MENU VIEW-MODEL types.
 ///
@@ -169,6 +171,9 @@ class KioskFixtureTable {
     required this.seats,
     required this.state,
     this.id,
+    this.layoutX,
+    this.layoutY,
+    this.visualPreset = TableVisualPreset.classicRectTable,
   });
   final String label;
   final int seats;
@@ -176,6 +181,43 @@ class KioskFixtureTable {
 
   /// LIVE only: the server table id the future submit phase will send.
   final String? id;
+
+  /// TABLE-VISUAL-LAYOUT-118: the SAME saved placement the Dashboard/POS
+  /// render (normalized 0..10000 room units, physical — never RTL-mirrored;
+  /// both-or-neither). Null = unplaced: the table keeps its list card.
+  final int? layoutX;
+  final int? layoutY;
+
+  /// TABLE-VISUAL-LAYOUT-118: how the table is drawn (presentation only;
+  /// unknown/absent keys decode to the classic default).
+  final TableVisualPreset visualPreset;
+
+  bool get isPlaced => layoutX != null && layoutY != null;
+}
+
+/// TABLE-VISUAL-LAYOUT-118: one VISUAL-ONLY floor fixture (wall/door/window/
+/// cashier/plant) of a section — decoration on the customer map, never a
+/// table (no state, never selectable).
+@immutable
+class KioskFloorElement {
+  const KioskFloorElement({
+    required this.id,
+    required this.kind,
+    required this.layoutX,
+    required this.layoutY,
+    required this.widthNorm,
+    required this.heightNorm,
+    this.orientationQuarterTurns = 0,
+    this.label,
+  });
+  final String id;
+  final String kind;
+  final int layoutX;
+  final int layoutY;
+  final int widthNorm;
+  final int heightNorm;
+  final int orientationQuarterTurns;
+  final String? label;
 }
 
 @immutable
@@ -184,6 +226,8 @@ class KioskFixtureZone {
     required this.id,
     required this.tables,
     this.displayName,
+    this.floorPreset = FloorPreset.plainLight,
+    this.elements = const [],
   });
 
   /// l10n key discriminator: 'hall' | 'patio' | 'bar' (fixtures), or an
@@ -194,6 +238,11 @@ class KioskFixtureZone {
   /// LIVE only: the tenant section name, shown verbatim; fixtures keep the
   /// l10n zone labels keyed by [id].
   final String? displayName;
+
+  /// TABLE-VISUAL-LAYOUT-118: the section's floor style + its visual
+  /// fixtures — the same map the Dashboard configured.
+  final FloorPreset floorPreset;
+  final List<KioskFloorElement> elements;
 }
 
 /// Brand block — the artifact's demo brand. Wordmark stays Latin in every
@@ -659,8 +708,20 @@ KioskFixtureItem kioskItemById(String id) {
 
 /// Fixture floor — the artifact's ZONES with `busyFloor` fused in. `busy`
 /// flips the B-marked tables to occupied (the board's "busy floor" preset).
+///
+/// TABLE-VISUAL-LAYOUT-118: every fixture table carries a saved placement
+/// (normalized 0..10000 room units, the SAME contract the Dashboard editor
+/// writes) plus a shape, and each zone a floor style + one fixture, so the
+/// demo floor renders the real room map exactly like a configured tenant.
 List<KioskFixtureZone> kioskFixtureZones({required bool busy}) {
-  KioskFixtureTable t(String l, int s, String st) => KioskFixtureTable(
+  KioskFixtureTable t(
+    String l,
+    int s,
+    String st,
+    int x,
+    int y, {
+    TableVisualPreset shape = TableVisualPreset.classicRectTable,
+  }) => KioskFixtureTable(
     // Deterministic fixture identity so demo selection state mirrors the
     // real id+label model (092) without changing any visual/test output.
     id: 'fixture-table-$l',
@@ -673,39 +734,69 @@ List<KioskFixtureZone> kioskFixtureZones({required bool busy}) {
       'B' => busy ? KioskTableState.occupied : KioskTableState.available,
       _ => KioskTableState.available,
     },
+    layoutX: x,
+    layoutY: y,
+    visualPreset: shape,
   );
   return [
     KioskFixtureZone(
       id: 'hall',
+      floorPreset: FloorPreset.woodDark,
+      elements: const [
+        KioskFloorElement(
+          id: 'fixture-wall-hall',
+          kind: 'wall',
+          layoutX: 100,
+          layoutY: 9700,
+          widthNorm: 9800,
+          heightNorm: 150,
+        ),
+      ],
       tables: [
-        t('T1', 4, 'B'),
-        t('T2', 2, 'occ'),
-        t('T3', 4, 'B'),
-        t('T4', 4, 'ok'),
-        t('T5', 6, 'occ'),
-        t('T6', 2, 'ok'),
-        t('T7', 4, 'ok'),
-        t('T8', 6, 'res'),
+        t('T1', 4, 'B', 300, 800),
+        t('T2', 2, 'occ', 3400, 800),
+        t('T3', 4, 'B', 6600, 800),
+        t('T4', 4, 'ok', 9700, 800),
+        t('T5', 6, 'occ', 300, 5600, shape: TableVisualPreset.boothTable),
+        t('T6', 2, 'ok', 3400, 5600),
+        t('T7', 4, 'ok', 6600, 5600),
+        t('T8', 6, 'res', 9700, 5600, shape: TableVisualPreset.roundTable),
       ],
     ),
     KioskFixtureZone(
       id: 'patio',
+      floorPreset: FloorPreset.stoneNeutral,
       tables: [
-        t('P1', 4, 'occ'),
-        t('P2', 4, 'ok'),
-        t('P3', 2, 'B'),
-        t('P4', 2, 'B'),
-        t('P5', 6, 'ok'),
-        t('P6', 4, 'oos'),
+        t('P1', 4, 'occ', 600, 800),
+        t('P2', 4, 'ok', 5000, 800),
+        t('P3', 2, 'B', 9400, 800),
+        t('P4', 2, 'B', 600, 5600),
+        t('P5', 6, 'ok', 5000, 5600, shape: TableVisualPreset.roundTable),
+        t(
+          'P6',
+          4,
+          'oos',
+          9400,
+          5600,
+          shape: TableVisualPreset.tableWithBarrels,
+        ),
       ],
     ),
     KioskFixtureZone(
       id: 'bar',
+      floorPreset: FloorPreset.tileModern,
       tables: [
-        t('B1', 1, 'res'),
-        t('B2', 1, 'occ'),
-        t('B3', 2, 'B'),
-        t('B4', 2, 'ok'),
+        t('B1', 1, 'res', 300, 3200, shape: TableVisualPreset.tableWithBarrels),
+        t(
+          'B2',
+          1,
+          'occ',
+          3400,
+          3200,
+          shape: TableVisualPreset.tableWithBarrels,
+        ),
+        t('B3', 2, 'B', 6600, 3200, shape: TableVisualPreset.tableWithBarrels),
+        t('B4', 2, 'ok', 9700, 3200, shape: TableVisualPreset.tableWithBarrels),
       ],
     ),
   ];

@@ -312,11 +312,14 @@ select is(
 -- keys: effective_state (manual status fused with derived occupancy) + group_id
 -- (the active link group, null when ungrouped). TABLE-FLOOR-LAYOUT-021 added five
 -- more: section_id/section_name/section_display_order + layout_x/layout_y
--- (nullable; legacy rows carry nulls). Thirteen keys now.
+-- (nullable; legacy rows carry nulls). TABLE-VISUAL-LAYOUT-118 added two
+-- presentation keys: visual_preset + section_floor_preset (nullable; NULL =
+-- the default look). Fifteen keys now (the exact key SET is pinned by
+-- table_floor_layout_021_test / table_visual_presets_118_test).
 select is(
   (select count(*) from (select jsonb_object_keys(
      app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0) as k) s)::int,
-  13, 'a pos_tables row carries the thirteen keys (eight prior + the five 021 layout keys)');
+  15, 'a pos_tables row carries the fifteen keys (eight prior + five 021 layout keys + two 118 preset keys)');
 select ok(
   (select (r ? 'effective_state') and (r ? 'group_id')
    from (select app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0 as r) s),

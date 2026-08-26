@@ -9,6 +9,13 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  # TABLE-VISUAL-LAYOUT-118: the SHARED floor/table preset vocabulary
+  # (`TableVisualPreset` / `FloorPreset`) lives in the pure-Dart domain next
+  # to the floor geometry contract; the shared floor widgets take it directly
+  # so no surface can invent its own preset enum. domain has no dependencies
+  # of its own (no cycle).
+  restoflow_domain:
+    path: ../domain
 dev_dependencies:
   flutter_test:
     sdk: flutter

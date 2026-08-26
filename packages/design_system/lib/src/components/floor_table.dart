@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualPreset;
+
+import 'floor_presets.dart';
 
 import '../tokens.dart';
 
@@ -29,7 +33,14 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
     this.background = const [],
     this.aspectRatio = kRestoflowFloorSectionAspect,
     this.overlay,
+    this.floorPreset = FloorPreset.plainLight,
   });
+
+  /// TABLE-VISUAL-LAYOUT-118: the section's floor style. The default paints
+  /// the pre-118 white canvas exactly; any other preset paints ONE pattern
+  /// painter (inside its own RepaintBoundary) UNDER [background] and [placed]
+  /// — never a different geometry.
+  final FloorPreset floorPreset;
 
   /// The placed tiles (tables): room-unit rects + the tile widget. Rendered
   /// ABOVE [background].
@@ -58,11 +69,13 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
 
   Widget _canvasBody(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = RestoflowFloorPresetPalette.of(floorPreset);
     return AspectRatio(
       aspectRatio: aspectRatio,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          // 118: the preset base (plain light == the pre-118 Colors.white).
+          color: palette.base,
           borderRadius: BorderRadius.circular(RestoflowRadii.lg),
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
@@ -88,6 +101,16 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
               return Stack(
                 clipBehavior: Clip.hardEdge,
                 children: [
+                  // 118: the floor pattern, isolated so table-state repaints
+                  // never re-run it (PERF-110 posture).
+                  if (floorPreset != FloorPreset.plainLight)
+                    Positioned.fill(
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: RestoflowFloorPresetPainter(floorPreset),
+                        ),
+                      ),
+                    ),
                   for (final tile in background) positioned(tile),
                   for (final tile in placed) positioned(tile),
                   if (overlay != null) overlay!(constraints),
@@ -189,7 +212,14 @@ class RestoflowFloorTable extends StatelessWidget {
     this.statusIcon,
     this.footnote,
     this.chairCap = 12,
+    this.preset = TableVisualPreset.classicRectTable,
   });
+
+  /// TABLE-VISUAL-LAYOUT-118: how the table is DRAWN inside its (unchanged)
+  /// footprint. The classic default keeps the pre-118 widget tree exactly;
+  /// the other presets paint their shape through [RestoflowTableShapePainter]
+  /// and layer the same label column above it.
+  final TableVisualPreset preset;
 
   final String label;
   final int? seats;
@@ -232,6 +262,62 @@ class RestoflowFloorTable extends StatelessWidget {
             ? border.withValues(alpha: 0.9)
             : border;
 
+        final isRound = preset == TableVisualPreset.roundTable;
+        final labelColumn = _labelColumn(theme, s, fitted: isRound);
+
+        if (preset != TableVisualPreset.classicRectTable) {
+          // 118: a painted shape inside the SAME footprint; the label column
+          // sits on the painter's surface rect.
+          final painter = RestoflowTableShapePainter(
+            preset: preset,
+            chairs: chairs.$1 + chairs.$2 + chairs.$3 + chairs.$4,
+            fill: fill,
+            border: border,
+            borderWidth: borderWidth,
+            chairColor: chairColor,
+            inset: chairInset,
+            scale: s,
+            surfaceRadius: RestoflowRadii.md,
+          );
+          // 118F: the label column lives in the painter's CONTENT rect (the
+          // surface for rectangular shapes; a rect inscribed in the circle
+          // for a round table). A round table additionally scales its rows
+          // DOWN — never truncates — when a word is wider than the chord,
+          // so "RESERVED" / "OCCUPIED" / "2 open orders" stay whole and
+          // inside the rim on every tile size.
+          final content = painter.contentRect(size);
+          return SizedBox(
+            width: size.width,
+            height: size.height,
+            child: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.4,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: CustomPaint(painter: painter)),
+                  Positioned(
+                    left: content.left,
+                    top: content.top,
+                    width: content.width,
+                    height: content.height,
+                    child: isRound
+                        ? FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: SizedBox(
+                              width: content.width,
+                              child: labelColumn,
+                            ),
+                          )
+                        : Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4 * s),
+                            child: labelColumn,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return SizedBox(
           width: size.width,
           height: size.height,
@@ -257,67 +343,7 @@ class RestoflowFloorTable extends StatelessWidget {
                       ),
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4 * s),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.labelLarge?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 13.5 * s,
-                                      color: onFill,
-                                    ),
-                                  ),
-                                ),
-                                if (statusIcon != null) ...[
-                                  const SizedBox(width: 2),
-                                  statusIcon!,
-                                ],
-                              ],
-                            ),
-                            if (seats != null)
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.event_seat,
-                                    size: 11 * s,
-                                    color: onFill.withValues(alpha: 0.8),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '$seats',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      fontSize: 10.5 * s,
-                                      fontWeight: FontWeight.w700,
-                                      color: onFill.withValues(alpha: 0.9),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            if (footnote != null)
-                              Text(
-                                footnote!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: 9.5 * s,
-                                  fontWeight: FontWeight.w700,
-                                  color: onFill.withValues(alpha: 0.85),
-                                ),
-                              ),
-                          ],
-                        ),
+                        child: labelColumn,
                       ),
                     ),
                   ),
@@ -367,6 +393,101 @@ class RestoflowFloorTable extends StatelessWidget {
       },
     );
   }
+
+  /// The label / seats / footnote column shared by every preset.
+  ///
+  /// TABLE-118F: with [fitted] (round tables) each row is wrapped in a
+  /// scale-down [FittedBox] and the label loses its ellipsis, so a word that
+  /// is wider than the inscribed content rect shrinks to fit instead of being
+  /// cut — the whole status word always stays inside the round surface.
+  Widget _labelColumn(
+    ThemeData theme,
+    double s, {
+    bool fitted = false,
+  }) => Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    mainAxisSize: fitted ? MainAxisSize.min : MainAxisSize.max,
+    children: [
+      _fit(
+        fitted,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (fitted)
+              Text(
+                label,
+                maxLines: 1,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5 * s,
+                  color: onFill,
+                ),
+              )
+            else
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5 * s,
+                    color: onFill,
+                  ),
+                ),
+              ),
+            if (statusIcon != null) ...[const SizedBox(width: 2), statusIcon!],
+          ],
+        ),
+      ),
+      if (seats != null)
+        _fit(
+          fitted,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.event_seat,
+                size: 11 * s,
+                color: onFill.withValues(alpha: 0.8),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '$seats',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontSize: 10.5 * s,
+                  fontWeight: FontWeight.w700,
+                  color: onFill.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      if (footnote != null)
+        _fit(
+          fitted,
+          Text(
+            footnote!,
+            maxLines: 1,
+            overflow: fitted ? TextOverflow.visible : TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 9.5 * s,
+              fontWeight: FontWeight.w700,
+              color: onFill.withValues(alpha: 0.85),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  /// TABLE-118F: scale-down wrapper for the round tile's rows (identity for
+  /// every other preset, so their widget tree is untouched).
+  static Widget _fit(bool fitted, Widget child) =>
+      fitted ? FittedBox(fit: BoxFit.scaleDown, child: child) : child;
 
   /// Chairs per (top, bottom, start, end) — the [top, bottom, top, bottom,
   /// start, end] fill pattern (a 2-top reads 1+1 across, a 4-top 2+2).
