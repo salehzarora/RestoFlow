@@ -1026,6 +1026,7 @@ class RestoflowFixturePainter extends CustomPainter {
     required this.outline,
     this.quarterTurns = 0,
     this.detail = RestoflowFloorDetail.standard,
+    this.style,
   });
 
   /// `wall` / `door` / `window` / `cashier` / `plant`; an unknown kind
@@ -1036,6 +1037,11 @@ class RestoflowFixturePainter extends CustomPainter {
   final Color outline;
   final int quarterTurns;
   final RestoflowFloorDetail detail;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted per-kind artwork variant
+  /// (`null` / unknown = the kind's default artwork). 120A carries the seam;
+  /// the variant branches land in 120B.
+  final String? style;
 
   /// TABLE-119B: below this LOCAL thickness (the door strip's short side,
   /// after the quarter-turn frame swap) the door paints its dedicated THIN
@@ -1459,5 +1465,6 @@ class RestoflowFixturePainter extends CustomPainter {
       old.ink != ink ||
       old.outline != outline ||
       old.quarterTurns != quarterTurns ||
-      old.detail != detail;
+      old.detail != detail ||
+      old.style != style;
 }

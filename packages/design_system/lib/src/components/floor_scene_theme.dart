@@ -1,26 +1,23 @@
 import 'package:flutter/widgets.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show FloorPreset, TableVisualMaterial, TableVisualPreset;
 
-/// TABLE-119D — the shared floor-SCENE material spec.
+/// TABLE-119D / TABLE-VISUAL-CONFIGURATION-120 — the shared floor-SCENE
+/// material spec.
 ///
-/// Client-only styling (nothing persisted, nothing on the wire): a small set
-/// of restaurant-safe material families, each resolving to a deterministic
-/// paint palette, plus the one default mapping `preset + floor -> material`.
+/// The VOCABULARY is domain-owned since 120 ([TableVisualMaterial] — the
+/// persisted `tables.visual_material` wire); this file resolves each value
+/// to a deterministic paint palette, plus the one default mapping
+/// `preset + floor -> material` used when nothing is persisted (Auto/NULL).
 /// The section canvas exposes its floor preset through
 /// [RestoflowFloorSceneScope], so every table resolves the same material on
 /// every surface with ZERO app plumbing — and a caller may still override
-/// per-tile via `RestoflowFloorTable.material` (the seam a future persisted
-/// per-table choice would plug into).
+/// per-tile via `RestoflowFloorTable.material` (the seam the persisted
+/// per-table choice plugs into).
 
-/// The table-surface material families. Broad, not restaurant-specific.
-enum RestoflowFloorMaterial {
-  wood,
-  darkWood,
-  lightWood,
-  plastic,
-  neutralModern,
-}
+/// The table-surface material families — the domain wire vocabulary, aliased
+/// so the painting layer keeps its established name.
+typedef RestoflowFloorMaterial = TableVisualMaterial;
 
 /// The resolved paint colors of one [RestoflowFloorMaterial]. All values are
 /// compile-time constants — the painter stays a pure function of its fields.
@@ -89,6 +86,18 @@ class RestoflowMaterialPalette {
     labelPlate: Color(0xE8FFFFFF),
   );
 
+  /// 120: weathered heavy-grain rustic oak.
+  static const _rusticWood = RestoflowMaterialPalette(
+    top: Color(0xFF9C7B55),
+    topLight: Color(0xFFB59572),
+    topDark: Color(0xFF7E5F3C),
+    grain: Color(0xFF5F452A),
+    edge: Color(0xFF4E3822),
+    chairSeat: Color(0xFF77573B),
+    chairFrame: Color(0xFF4C3620),
+    labelPlate: Color(0xF0FBF3E6),
+  );
+
   static const _plastic = RestoflowMaterialPalette(
     top: Color(0xFFF2F5F8),
     topLight: Color(0xFFFFFFFF),
@@ -115,6 +124,7 @@ class RestoflowMaterialPalette {
     RestoflowFloorMaterial.wood => _wood,
     RestoflowFloorMaterial.darkWood => _darkWood,
     RestoflowFloorMaterial.lightWood => _lightWood,
+    RestoflowFloorMaterial.rusticWood => _rusticWood,
     RestoflowFloorMaterial.plastic => _plastic,
     RestoflowFloorMaterial.neutralModern => _neutralModern,
   };

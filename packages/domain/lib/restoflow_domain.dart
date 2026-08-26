@@ -89,4 +89,5 @@ export 'src/table/table_assignment_service.dart';
 export 'src/table/table_group_aggregation.dart';
 export 'src/table/table_exceptions.dart';
 export 'src/table/table_policy.dart';
+export 'src/table/table_visual_material.dart';
 export 'src/table/table_visual_preset.dart';

@@ -14,7 +14,11 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
         AdminValidation;
 
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show
+        FloorPreset,
+        TableVisualMaterial,
+        TableVisualPreset,
+        isFloorElementStyleAllowed;
 
 import 'table_models.dart';
 
@@ -104,6 +108,20 @@ abstract class TablesAdminRepository {
   Future<AdminResult<void>> setSectionFloorPreset(
     String sectionId,
     FloorPreset preset,
+  );
+
+  /// TABLE-VISUAL-CONFIGURATION-120 — `public.set_table_visual_material`: the
+  /// ONLY writer of a table's material key (null = clear back to Auto).
+  Future<AdminResult<void>> setTableVisualMaterial(
+    String tableId,
+    TableVisualMaterial? material,
+  );
+
+  /// TABLE-VISUAL-CONFIGURATION-120 — `public.set_floor_element_style`: the
+  /// ONLY writer of a fixture's artwork variant (null = the default look).
+  Future<AdminResult<void>> setFloorElementStyle(
+    String elementId,
+    String? style,
   );
 }
 
@@ -449,6 +467,37 @@ class InMemoryTablesStore implements TablesAdminRepository {
   }
 
   @override
+  Future<AdminResult<void>> setTableVisualMaterial(
+    String tableId,
+    TableVisualMaterial? material,
+  ) async {
+    final index = _tables.indexWhere((t) => t.id == tableId);
+    if (index < 0) return const Failure(AdminTransient());
+    _tables[index] = _tables[index].copyWith(
+      visualMaterial: material,
+      clearVisualMaterial: material == null,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setFloorElementStyle(
+    String elementId,
+    String? style,
+  ) async {
+    final index = _elements.indexWhere((e) => e.id == elementId);
+    if (index < 0) return const Failure(AdminTransient());
+    if (!isFloorElementStyleAllowed(_elements[index].kind, style)) {
+      return const Failure(AdminConflict('invalid_style'));
+    }
+    _elements[index] = _elements[index].copyWith(
+      visualStyle: style,
+      clearVisualStyle: style == null,
+    );
+    return const Success(null);
+  }
+
+  @override
   Future<AdminResult<String>> upsertTable({
     String? id,
     required String label,
@@ -612,6 +661,13 @@ class SupabaseTablesRepository implements TablesAdminRepository {
           ? orient
           : 0,
       label: label is String && label.isNotEmpty ? label : null,
+      // 120: tolerant + registry-sanitized (an unknown/cross-kind key from a
+      // newer server renders the default artwork, never breaks a load).
+      visualStyle:
+          row['visual_style'] is String &&
+              isFloorElementStyleAllowed(kind, row['visual_style'] as String)
+          ? row['visual_style'] as String
+          : null,
     );
   }
 
@@ -676,6 +732,8 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       layoutY: hasXY ? rawY : null,
       // 118: tolerant decode — absent/NULL/unknown => classic.
       visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
+      // 120: strict decode — unknown/absent = null = Auto.
+      visualMaterial: TableVisualMaterial.tryParse(row['visual_material']),
     );
   }
 
@@ -691,6 +749,34 @@ class SupabaseTablesRepository implements TablesAdminRepository {
     'p_organization_id': _scope.organizationId,
     'p_table_id': tableId,
     'p_visual_preset': preset.wire,
+  });
+
+  @override
+  Future<AdminResult<void>> setTableVisualMaterial(
+    String tableId,
+    TableVisualMaterial? material,
+  ) async => _invokeVoid('set_table_visual_material', <String, dynamic>{
+    'p_client_request_id': _requestId('set-visual-material', [
+      tableId,
+      material?.wire ?? '',
+    ]),
+    'p_organization_id': _scope.organizationId,
+    'p_table_id': tableId,
+    'p_visual_material': material?.wire,
+  });
+
+  @override
+  Future<AdminResult<void>> setFloorElementStyle(
+    String elementId,
+    String? style,
+  ) async => _invokeVoid('set_floor_element_style', <String, dynamic>{
+    'p_client_request_id': _requestId('set-element-style', [
+      elementId,
+      style ?? '',
+    ]),
+    'p_organization_id': _scope.organizationId,
+    'p_element_id': elementId,
+    'p_visual_style': style,
   });
 
   @override

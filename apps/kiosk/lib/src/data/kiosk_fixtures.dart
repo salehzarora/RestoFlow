@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show FloorPreset, TableVisualMaterial, TableVisualPreset;
 
 /// KIOSK-001 Phase 1 fixture data + the shared kiosk MENU VIEW-MODEL types.
 ///
@@ -174,6 +174,7 @@ class KioskFixtureTable {
     this.layoutX,
     this.layoutY,
     this.visualPreset = TableVisualPreset.classicRectTable,
+    this.visualMaterial,
   });
   final String label;
   final int seats;
@@ -192,6 +193,10 @@ class KioskFixtureTable {
   /// unknown/absent keys decode to the classic default).
   final TableVisualPreset visualPreset;
 
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted surface material
+  /// (`visual_material`; null = Auto). Presentation only, customer-safe.
+  final TableVisualMaterial? visualMaterial;
+
   bool get isPlaced => layoutX != null && layoutY != null;
 }
 
@@ -209,6 +214,7 @@ class KioskFloorElement {
     required this.heightNorm,
     this.orientationQuarterTurns = 0,
     this.label,
+    this.visualStyle,
   });
   final String id;
   final String kind;
@@ -218,6 +224,10 @@ class KioskFloorElement {
   final int heightNorm;
   final int orientationQuarterTurns;
   final String? label;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted artwork variant
+  /// (`visual_style`; null = the kind's default look).
+  final String? visualStyle;
 }
 
 @immutable

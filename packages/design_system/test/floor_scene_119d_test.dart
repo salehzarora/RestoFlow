@@ -14,11 +14,13 @@ import 'package:restoflow_domain/restoflow_domain.dart'
 /// byte-identical to 119A/119B.
 void main() {
   group('material spec', () {
-    test('the material enum carries the five restaurant-safe families', () {
+    test('the material enum carries the six restaurant-safe families '
+        '(the domain wire vocabulary since 120)', () {
       expect(RestoflowFloorMaterial.values, [
         RestoflowFloorMaterial.wood,
         RestoflowFloorMaterial.darkWood,
         RestoflowFloorMaterial.lightWood,
+        RestoflowFloorMaterial.rusticWood,
         RestoflowFloorMaterial.plastic,
         RestoflowFloorMaterial.neutralModern,
       ]);

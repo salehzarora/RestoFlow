@@ -2,7 +2,11 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show
+        FloorPreset,
+        TableVisualMaterial,
+        TableVisualPreset,
+        isFloorElementStyleAllowed;
 
 import 'kiosk_fixtures.dart';
 import 'kiosk_menu_data.dart';
@@ -311,6 +315,7 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
         layoutX: placed ? rawX : null,
         layoutY: placed ? rawY : null,
         visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
+        visualMaterial: TableVisualMaterial.tryParse(row['visual_material']),
       ),
     );
   }
@@ -350,6 +355,15 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
               ? orient
               : 0,
           label: _optionalText(row['label']),
+          // 120: tolerant + registry-sanitized.
+          visualStyle:
+              row['visual_style'] is String &&
+                  isFloorElementStyleAllowed(
+                    kind,
+                    row['visual_style'] as String,
+                  )
+              ? row['visual_style'] as String
+              : null,
         ),
       );
     }

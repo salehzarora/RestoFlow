@@ -20,7 +20,14 @@ class RestoflowFloorFixture extends StatelessWidget {
     this.label,
     this.selected = false,
     this.quarterTurns = 0,
+    this.style,
   });
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted artwork variant
+  /// (`table_floor_elements.visual_style`, validated per kind by the server).
+  /// `null` = the kind's default artwork. 120A plumbs the seam; the variant
+  /// ARTWORK lands in 120B — until then every style paints the default look.
+  final String? style;
 
   /// One of `wall` / `door` / `window` / `cashier` / `plant` (an unknown kind
   /// degrades to the wall look — never a crash on a newer server).
@@ -145,6 +152,7 @@ class RestoflowFloorFixture extends StatelessWidget {
                           ink: on,
                           outline: scheme.outline,
                           quarterTurns: quarterTurns,
+                          style: style,
                           // 119D: fixture richness scales with the LONG side
                           // — a wide counter earns its keypad/terminal even
                           // though it is short.

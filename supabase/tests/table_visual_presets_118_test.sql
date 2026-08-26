@@ -218,8 +218,8 @@ select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from lt),
   array['active_order_count','area','branch_id','effective_state','group_id','id','is_active',
         'label','layout_x','layout_y','seats','section_display_order','section_id','section_name',
-        'status','visual_preset'],
-  'list_tables rows pin EXACTLY the 027 fifteen keys + visual_preset');
+        'status','visual_material','visual_preset'],
+  'list_tables rows pin EXACTLY the 027 fifteen keys + visual_preset (+ the 120 visual_material)');
 select is((select t->>'visual_preset' from lt, jsonb_array_elements(res->'tables') t where t->>'label' = 'Alpha'),
           'booth_table', 'list_tables serves the stored table preset');
 select ok((select t->>'visual_preset' is null from lt, jsonb_array_elements(res->'tables') t where t->>'label' = 'Beta'),
@@ -243,8 +243,8 @@ select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
-        'status','visual_preset'],
-  'pos_tables rows pin EXACTLY the 021 thirteen keys + visual_preset + section_floor_preset');
+        'status','visual_material','visual_preset'],
+  'pos_tables rows pin EXACTLY the 021 thirteen keys + visual_preset + section_floor_preset (+ the 120 visual_material)');
 select is(
   (select (t->>'visual_preset', t->>'section_floor_preset') = ('booth_table', 'wood_dark')
      from pos_read, jsonb_array_elements(res->'tables') t where t->>'label' = 'Alpha'),
@@ -263,8 +263,8 @@ select is((select (res->>'ok')::boolean from kt), true, 'kiosk_tables succeeds o
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from kt),
   array['area','effective_state','id','label','layout_x','layout_y','seats','section_display_order',
-        'section_floor_preset','section_id','section_name','visual_preset'],
-  'kiosk_tables rows pin EXACTLY the Phase-2 eight keys + layout_x/layout_y/visual_preset/section_floor_preset');
+        'section_floor_preset','section_id','section_name','visual_material','visual_preset'],
+  'kiosk_tables rows pin EXACTLY the Phase-2 eight keys + layout_x/layout_y/visual_preset/section_floor_preset (+ the 120 visual_material)');
 select is(
   (select (t->>'layout_x', t->>'layout_y', t->>'visual_preset', t->>'section_floor_preset')
         = ('2500', '7500', 'booth_table', 'wood_dark')
@@ -282,8 +282,8 @@ select is((select jsonb_array_length(res->'floor_elements') from kt), 1,
 select is(
   (select array(select jsonb_object_keys(res->'floor_elements'->0) order by 1) from kt),
   array['height_norm','id','kind','label','layout_x','layout_y','orientation_quarter_turns',
-        'section_id','width_norm'],
-  'the kiosk fixture rows carry the SAME nine keys as pos_tables');
+        'section_id','visual_style','width_norm'],
+  'the kiosk fixture rows carry the SAME ten keys as pos_tables (incl. the 120 visual_style)');
 select ok((select not exists (select 1 from jsonb_array_elements(res->'tables') t where t->>'label' = 'Bravo') from kt),
   'a foreign-org table is never served to the kiosk');
 

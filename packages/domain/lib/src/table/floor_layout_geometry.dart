@@ -180,6 +180,30 @@ bool floorElementResizable(String kind) => kind == 'wall' || kind == 'window';
 /// Whether a fixture kind may carry a label (owner decision 4).
 bool floorElementLabelable(String kind) => kind == 'cashier' || kind == 'door';
 
+/// TABLE-VISUAL-CONFIGURATION-120 — fixture row key carrying the persisted
+/// artwork variant on every wire.
+const String kFloorElementStyleWireKey = 'visual_style';
+
+/// TABLE-VISUAL-CONFIGURATION-120 — the per-kind artwork-variant vocabulary,
+/// mirrored EXACTLY by the server setter (`app.set_floor_element_style`).
+/// NULL/absent = the kind's default artwork (the first-shipped 119D look).
+const Map<String, List<String>> kFloorElementStyleRegistry = {
+  'cashier': ['modern', 'wood', 'dark'],
+  'plant': ['leafy', 'palm', 'compact_pot'],
+  'door': ['wood', 'glass', 'modern'],
+  'window': ['modern_glass', 'framed', 'dark_frame'],
+  'wall': ['plain', 'brick', 'wood_partition'],
+};
+
+/// The variants an owner may pick for [kind] (empty for unknown kinds).
+List<String> floorElementStylesFor(String kind) =>
+    kFloorElementStyleRegistry[kind] ?? const [];
+
+/// Whether [style] is a valid persisted variant for [kind]. `null` is always
+/// allowed (the default artwork).
+bool isFloorElementStyleAllowed(String kind, String? style) =>
+    style == null || floorElementStylesFor(kind).contains(style);
+
 /// The EFFECTIVE room-unit footprint after [quarterTurns] clockwise quarter
 /// rotations (odd turns swap the axes; width/height stay stored unrotated).
 ({double w, double h}) floorElementEffectiveSize(

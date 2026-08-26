@@ -296,14 +296,14 @@ select is(
 select is(
   (select array(select jsonb_object_keys(res->'floor_elements'->0) order by 1) from pos_read),
   array['height_norm','id','kind','label','layout_x','layout_y','orientation_quarter_turns',
-        'section_id','width_norm'],
-  'floor_elements rows pin EXACTLY the nine fixture keys');
+        'section_id','visual_style','width_norm'],
+  'floor_elements rows pin EXACTLY the nine fixture keys (+ the 120 visual_style)');
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
-        'status','visual_preset'],
-  'the per-TABLE row shape is the 021 thirteen keys + the two TABLE-VISUAL-LAYOUT-118 presentation keys');
+        'status','visual_material','visual_preset'],
+  'the per-TABLE row shape is the 021 thirteen keys + the 118/120 presentation keys');
 select is(
   (select (res->'floor_elements'->0->>'kind', res->'floor_elements'->0->>'layout_x',
            res->'floor_elements'->0->>'width_norm') = ('wall', '100', '5000') from pos_read),

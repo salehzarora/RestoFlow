@@ -42,6 +42,7 @@ class DemoTable {
     this.layoutX,
     this.layoutY,
     this.visualPreset = TableVisualPreset.classicRectTable,
+    this.visualMaterial,
     this.sectionFloorPreset = FloorPreset.plainLight,
     String? memberEffectiveState,
     int? memberActiveOrderCount,
@@ -70,6 +71,10 @@ class DemoTable {
   /// or the saved placement.
   final TableVisualPreset visualPreset;
   final FloorPreset sectionFloorPreset;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted surface material
+  /// (`visual_material`; null = Auto — the deterministic 119D mapping).
+  final TableVisualMaterial? visualMaterial;
 
   /// RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy — how many live
   /// active-status orders currently sit on this table, as the SERVER counted
@@ -276,6 +281,7 @@ class PosFloorElement {
     required this.heightNorm,
     this.orientationQuarterTurns = 0,
     this.label,
+    this.visualStyle,
   });
 
   final String id;
@@ -287,6 +293,10 @@ class PosFloorElement {
   final int heightNorm;
   final int orientationQuarterTurns;
   final String? label;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted artwork variant
+  /// (`visual_style`; null = the kind's default look).
+  final String? visualStyle;
 }
 
 /// 027: one tables read — the rows plus the fixture catalog that rides the
@@ -556,6 +566,7 @@ class RealTablesRepository extends TablesRepository {
           layoutY: layoutX != null && layoutY != null ? layoutY : null,
           // 118: tolerant decode — absent/NULL/unknown => the defaults.
           visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
+          visualMaterial: TableVisualMaterial.tryParse(row['visual_material']),
           sectionFloorPreset: FloorPreset.fromWire(row['section_floor_preset']),
         ),
       );
@@ -606,6 +617,15 @@ class RealTablesRepository extends TablesRepository {
               ? orient
               : 0,
           label: label is String && label.isNotEmpty ? label : null,
+          // 120: tolerant + registry-sanitized.
+          visualStyle:
+              row['visual_style'] is String &&
+                  isFloorElementStyleAllowed(
+                    kind,
+                    row['visual_style'] as String,
+                  )
+              ? row['visual_style'] as String
+              : null,
         ),
       );
     }

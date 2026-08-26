@@ -9,6 +9,7 @@ library;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPreset,
+        TableVisualMaterial,
         TableVisualPreset,
         aggregateTableGroup,
         TableGroupAggregate,
@@ -89,6 +90,7 @@ class DashboardFloorElement {
     required this.heightNorm,
     this.orientationQuarterTurns = 0,
     this.label,
+    this.visualStyle,
   });
 
   final String id;
@@ -111,6 +113,11 @@ class DashboardFloorElement {
   /// Caption (cashier/door only by contract).
   final String? label;
 
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted artwork variant
+  /// (`table_floor_elements.visual_style`; null = the kind's default look).
+  /// Written only through the dedicated setter.
+  final String? visualStyle;
+
   DashboardFloorElement copyWith({
     int? layoutX,
     int? layoutY,
@@ -119,6 +126,8 @@ class DashboardFloorElement {
     int? orientationQuarterTurns,
     String? label,
     bool clearLabel = false,
+    String? visualStyle,
+    bool clearVisualStyle = false,
   }) => DashboardFloorElement(
     id: id,
     sectionId: sectionId,
@@ -130,6 +139,7 @@ class DashboardFloorElement {
     orientationQuarterTurns:
         orientationQuarterTurns ?? this.orientationQuarterTurns,
     label: clearLabel ? null : (label ?? this.label),
+    visualStyle: clearVisualStyle ? null : (visualStyle ?? this.visualStyle),
   );
 }
 
@@ -169,6 +179,7 @@ class DashboardTable {
     this.layoutX,
     this.layoutY,
     this.visualPreset = TableVisualPreset.classicRectTable,
+    this.visualMaterial,
   });
 
   final String id;
@@ -178,6 +189,11 @@ class DashboardTable {
   /// changes the footprint or the saved placement; written only through the
   /// dedicated setter, so the full-replace upsert can never erase it.
   final TableVisualPreset visualPreset;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted surface material
+  /// (`tables.visual_material`; null = Auto — the deterministic 119D
+  /// preset+floor mapping). Written only through the dedicated setter.
+  final TableVisualMaterial? visualMaterial;
 
   /// The table's name or number as printed on tickets (e.g. "T1", "Window 2").
   final String label;
@@ -249,11 +265,16 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset,
+    visualMaterial: visualMaterial,
   );
 
   /// TABLE-VISUAL-LAYOUT-118: a copy with a different visual preset (the
   /// in-memory demo store + the dialog's optimistic apply).
-  DashboardTable copyWith({TableVisualPreset? visualPreset}) => DashboardTable(
+  DashboardTable copyWith({
+    TableVisualPreset? visualPreset,
+    TableVisualMaterial? visualMaterial,
+    bool clearVisualMaterial = false,
+  }) => DashboardTable(
     id: id,
     label: label,
     status: status,
@@ -270,6 +291,9 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset ?? this.visualPreset,
+    visualMaterial: clearVisualMaterial
+        ? null
+        : (visualMaterial ?? this.visualMaterial),
   );
 
   /// TABLE-FLOOR-LAYOUT-021: a copy with a different section/placement (the
@@ -297,6 +321,7 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset,
+    visualMaterial: visualMaterial,
   );
 }
 
