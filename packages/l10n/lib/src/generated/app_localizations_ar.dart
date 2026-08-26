@@ -3946,6 +3946,72 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'حجر محايد';
 
   @override
+  String get tablesVisualMaterial => 'الخامة / التشطيب';
+
+  @override
+  String get tablesVisualAuto => 'تلقائي';
+
+  @override
+  String get tablesVisualMaterialWood => 'خشب';
+
+  @override
+  String get tablesVisualMaterialDarkWood => 'خشب داكن';
+
+  @override
+  String get tablesVisualMaterialLightWood => 'خشب فاتح';
+
+  @override
+  String get tablesVisualMaterialRusticWood => 'خشب ريفي';
+
+  @override
+  String get tablesVisualMaterialPlastic => 'بلاستيك / عملي';
+
+  @override
+  String get tablesVisualMaterialNeutralModern => 'حيادي عصري';
+
+  @override
+  String get floorElementStyle => 'النمط';
+
+  @override
+  String get floorElementStyleModern => 'عصري';
+
+  @override
+  String get floorElementStyleWood => 'خشب';
+
+  @override
+  String get floorElementStyleDark => 'داكن';
+
+  @override
+  String get floorElementStyleLeafy => 'مورَّق';
+
+  @override
+  String get floorElementStylePalm => 'نخلة';
+
+  @override
+  String get floorElementStyleCompactPot => 'أصيص صغير';
+
+  @override
+  String get floorElementStyleGlass => 'زجاج';
+
+  @override
+  String get floorElementStyleModernGlass => 'زجاج عصري';
+
+  @override
+  String get floorElementStyleFramed => 'بإطار';
+
+  @override
+  String get floorElementStyleDarkFrame => 'إطار داكن';
+
+  @override
+  String get floorElementStylePlain => 'سادة';
+
+  @override
+  String get floorElementStyleBrick => 'طوب';
+
+  @override
+  String get floorElementStyleWoodPartition => 'فاصل خشبي';
+
+  @override
   String get floorElementRotate => 'تدوير';
 
   @override

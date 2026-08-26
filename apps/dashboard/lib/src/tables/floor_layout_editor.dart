@@ -10,6 +10,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
         floorElementDefaultSize,
         floorElementLabelable,
         floorElementResizable,
+        floorElementStylesFor,
         floorElementRoomRect,
         floorFractionOf,
         floorPlacementsOverlap,
@@ -59,6 +60,7 @@ class FloorLayoutEditor extends StatefulWidget {
     required this.onCreateElement,
     required this.onSaveElement,
     required this.onDeleteElement,
+    required this.onSetElementStyle,
     required this.onSetFloorPreset,
   });
 
@@ -82,6 +84,12 @@ class FloorLayoutEditor extends StatefulWidget {
 
   /// 027: deletes a fixture (element-arrange menu action).
   final void Function(DashboardFloorElement element) onDeleteElement;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: persist a fixture's artwork style
+  /// through the DEDICATED setter (null = Auto). The editor never rides the
+  /// style on the full-replace upsert.
+  final Future<void> Function(DashboardFloorElement element, String? style)
+  onSetElementStyle;
 
   /// Receives the COMPLETE live section id list in the new order.
   final void Function(List<String> ids) onReorderSections;
@@ -892,6 +900,16 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
                   _labelElementDialog(element);
                 },
               ),
+            if (floorElementStylesFor(element.kind).isNotEmpty)
+              ListTile(
+                key: const Key('floor-element-style'),
+                leading: const Icon(Icons.palette_outlined),
+                title: Text(l10n.floorElementStyle),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _styleElementDialog(element);
+                },
+              ),
             ListTile(
               key: const Key('floor-element-delete'),
               leading: Icon(
@@ -1005,6 +1023,99 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
         heightNorm: clampSpan(heightController.text, current.heightNorm),
       ),
     );
+  }
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: the per-kind style picker — Auto plus
+  /// ONLY the kind's registered variants, each previewed with the REAL shared
+  /// fixture renderer. Picking the current value is a no-op; otherwise the
+  /// dedicated setter persists it (honest failure handled by the screen).
+  Future<void> _styleElementDialog(DashboardFloorElement element) async {
+    final l10n = AppLocalizations.of(context);
+    final current = element.visualStyle;
+    final picked = await showDialog<({String? style})>(
+      context: context,
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        Widget option(String? style) {
+          final selected = current == style;
+          // A11y: selection must not be color-only.
+          return Semantics(
+            button: true,
+            selected: selected,
+            label: floorElementStyleLabel(l10n, style),
+            child: InkWell(
+              key: Key('floor-element-style-${style ?? 'auto'}'),
+              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+              onTap: () => Navigator.of(dialogContext).pop((style: style)),
+              child: Container(
+                padding: const EdgeInsets.all(RestoflowSpacing.xs),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                  border: Border.all(
+                    color: selected
+                        ? scheme.primary
+                        : scheme.outline.withValues(alpha: 0.4),
+                    width: selected ? 2 : 1,
+                  ),
+                  color: selected
+                      ? scheme.primaryContainer.withValues(alpha: 0.25)
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IgnorePointer(
+                      child: SizedBox(
+                        width: 84,
+                        height: 44,
+                        child: RestoflowFloorFixture(
+                          kind: element.kind,
+                          style: style,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      floorElementStyleLabel(l10n, style),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(dialogContext).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return AlertDialog(
+          title: Text(l10n.floorElementStyle),
+          content: SizedBox(
+            width: RestoflowPanelWidths.dialog,
+            child: Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.sm,
+              children: [
+                option(null),
+                for (final style in floorElementStylesFor(element.kind))
+                  option(style),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                MaterialLocalizations.of(dialogContext).cancelButtonLabel,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    if (picked.style == current) return; // unchanged = no write
+    await widget.onSetElementStyle(element, picked.style);
   }
 
   Future<void> _labelElementDialog(DashboardFloorElement element) async {

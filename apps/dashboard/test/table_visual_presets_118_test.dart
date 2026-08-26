@@ -297,8 +297,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Round table').last);
       await tester.pumpAndSettle();
-      // Live preview BEFORE saving.
-      expect(_shapePainter(TableVisualPreset.roundTable), findsOneWidget);
+      // Live preview BEFORE saving. 120C: the material swatch row previews
+      // the SAME chosen shape too, so several round painters are correct
+      // now — the pre-120C "exactly one" is deliberately superseded.
+      expect(_shapePainter(TableVisualPreset.roundTable), findsWidgets);
       await tester.tap(find.byKey(const Key('table-dialog-save')));
       await tester.pumpAndSettle();
       final saved = (await store.load()).fold(

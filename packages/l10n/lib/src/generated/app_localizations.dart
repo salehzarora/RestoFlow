@@ -7246,6 +7246,138 @@ abstract class AppLocalizations {
   /// **'Neutral stone'**
   String get tablesFloorPresetStoneNeutral;
 
+  /// TABLE-VISUAL-CONFIGURATION-120C: label of the per-table material swatch row (Dashboard table dialog).
+  ///
+  /// In en, this message translates to:
+  /// **'Material / finish'**
+  String get tablesVisualMaterial;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: the Auto/default choice (no persisted material/style; the floor decides).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get tablesVisualAuto;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material wood.
+  ///
+  /// In en, this message translates to:
+  /// **'Wood'**
+  String get tablesVisualMaterialWood;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material dark_wood.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark wood'**
+  String get tablesVisualMaterialDarkWood;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material light_wood.
+  ///
+  /// In en, this message translates to:
+  /// **'Light wood'**
+  String get tablesVisualMaterialLightWood;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material rustic_wood.
+  ///
+  /// In en, this message translates to:
+  /// **'Rustic wood'**
+  String get tablesVisualMaterialRusticWood;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material plastic.
+  ///
+  /// In en, this message translates to:
+  /// **'Plastic / casual'**
+  String get tablesVisualMaterialPlastic;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: table material neutral_modern.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral modern'**
+  String get tablesVisualMaterialNeutralModern;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: element menu action opening the per-kind artwork style picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Style'**
+  String get floorElementStyle;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: cashier/door style modern.
+  ///
+  /// In en, this message translates to:
+  /// **'Modern'**
+  String get floorElementStyleModern;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: cashier/door style wood.
+  ///
+  /// In en, this message translates to:
+  /// **'Wood'**
+  String get floorElementStyleWood;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: cashier style dark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get floorElementStyleDark;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: plant style leafy.
+  ///
+  /// In en, this message translates to:
+  /// **'Leafy'**
+  String get floorElementStyleLeafy;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: plant style palm.
+  ///
+  /// In en, this message translates to:
+  /// **'Palm'**
+  String get floorElementStylePalm;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: plant style compact_pot.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact pot'**
+  String get floorElementStyleCompactPot;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: door style glass.
+  ///
+  /// In en, this message translates to:
+  /// **'Glass'**
+  String get floorElementStyleGlass;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: window style modern_glass.
+  ///
+  /// In en, this message translates to:
+  /// **'Modern glass'**
+  String get floorElementStyleModernGlass;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: window style framed.
+  ///
+  /// In en, this message translates to:
+  /// **'Framed'**
+  String get floorElementStyleFramed;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: window style dark_frame.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark frame'**
+  String get floorElementStyleDarkFrame;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: wall style plain.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain'**
+  String get floorElementStylePlain;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: wall style brick.
+  ///
+  /// In en, this message translates to:
+  /// **'Brick'**
+  String get floorElementStyleBrick;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: wall style wood_partition.
+  ///
+  /// In en, this message translates to:
+  /// **'Wood partition'**
+  String get floorElementStyleWoodPartition;
+
   /// Element menu action: rotate a quarter turn.
   ///
   /// In en, this message translates to:
