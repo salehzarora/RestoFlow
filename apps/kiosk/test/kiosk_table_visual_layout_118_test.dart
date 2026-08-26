@@ -8,7 +8,11 @@ import 'package:restoflow_design_system/restoflow_design_system.dart'
         RestoflowFloorSectionCanvas,
         RestoflowTableShapePainter;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset, floorTableRoomRect;
+    show
+        FloorPreset,
+        TableVisualMaterial,
+        TableVisualPreset,
+        floorTableRoomRect;
 import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_live_data.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
@@ -30,6 +34,7 @@ Map<String, Object?> _row(
   int? y,
   String? preset,
   String? floor,
+  String? material,
   String section = 's1',
   String sectionName = 'Main Hall',
   int order = 0,
@@ -44,6 +49,7 @@ Map<String, Object?> _row(
   'layout_x': ?x,
   'layout_y': ?y,
   'visual_preset': ?preset,
+  'visual_material': ?material,
   'section_floor_preset': ?floor,
 };
 
@@ -59,6 +65,7 @@ Map<String, Object?> _envelope() => {
       y: 6000,
       preset: 'round_table',
       floor: 'wood_dark',
+      material: 'plastic',
     ),
     // No placement: stays in the list strip below the map.
     _row('t9', 'T9', floor: 'wood_dark'),
@@ -84,6 +91,7 @@ Map<String, Object?> _envelope() => {
       'height_norm': 150,
       'orientation_quarter_turns': 1,
       'label': null,
+      'visual_style': 'brick',
     },
   ],
 };
@@ -288,7 +296,17 @@ void main() {
                     .painter!
                 as RestoflowTableShapePainter)
             .material,
-        isNotNull,
+        TableVisualMaterial.plastic,
+        reason: '120B: the persisted material reaches the kiosk painter',
+      );
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('kiosk-floor-element-e1')),
+            )
+            .style,
+        'brick',
+        reason: '120B: the persisted style reaches the kiosk fixture',
       );
       expect(find.byKey(const Key('kiosk-floor-element-e1')), findsOneWidget);
       // 119A: the AUTHORITATIVE orientation reaches the fixture widget.

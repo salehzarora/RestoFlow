@@ -5,9 +5,12 @@ import 'package:restoflow_dashboard/src/tables/tables_repository.dart';
 import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
-    show RestoflowFloorPresetPainter, RestoflowTableShapePainter;
+    show
+        RestoflowFloorMaterial,
+        RestoflowFloorPresetPainter,
+        RestoflowTableShapePainter;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show FloorPreset, TableVisualMaterial, TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminScope;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -234,7 +237,18 @@ void main() {
   group('TablesScreen control center', () {
     testWidgets('the default floor paints NO floor-preset painter; tables '
         'paint through the shared painter (119A realism)', (tester) async {
-      await _pump(tester, InMemoryTablesStore());
+      final store = InMemoryTablesStore();
+      // 120B: give one demo table an explicit persisted material and prove
+      // it reaches the shared painter (Auto keeps covering the rest).
+      final demoId = ((await store.load()).fold(
+        (s) => s,
+        (f) => throw StateError('load'),
+      )).tables.first.id;
+      await store.setTableVisualMaterial(
+        demoId,
+        TableVisualMaterial.rusticWood,
+      );
+      await _pump(tester, store);
       // 119A: classic tables now render real chairs through the ONE shared
       // painter — the pre-118 "no painter" promise is deliberately
       // superseded; the floor itself stays plain by default.
@@ -246,16 +260,18 @@ void main() {
       );
       // 119D: the Dashboard previews the shared MATERIAL scene too — every
       // mounted table painter carries a resolved material.
+      final materials = <RestoflowFloorMaterial>{};
       for (final paint in tester.widgetList<CustomPaint>(
         find.byWidgetPredicate(
           (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
         ),
       )) {
-        expect(
-          (paint.painter! as RestoflowTableShapePainter).material,
-          isNotNull,
-        );
+        final m = (paint.painter! as RestoflowTableShapePainter).material;
+        expect(m, isNotNull);
+        materials.add(m!);
       }
+      // 120B: the explicit persisted material is among the rendered ones.
+      expect(materials, contains(TableVisualMaterial.rusticWood));
       expect(
         find.byWidgetPredicate(
           (w) => w is CustomPaint && w.painter is RestoflowFloorPresetPainter,

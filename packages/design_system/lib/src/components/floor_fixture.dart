@@ -96,8 +96,15 @@ class RestoflowFloorFixture extends StatelessWidget {
         // LONG side too — otherwise the glass never paints and the strip
         // falls back to a wall-look box.
         final long = w > h ? w : h;
+        // 120B: a STYLED wall must reach its artwork even as a thin strip
+        // (the standard 3000x150 wall is only ~4.6px thick on the POS), so
+        // it gates on the LONG side like doors/windows. The default wall
+        // keeps the exact 119D gate — its look is unchanged everywhere.
+        final styledWall =
+            kind == 'wall' &&
+            RestoflowFixturePainter.resolveStyle(kind, style) != 'default';
         final paintArt = switch (kind) {
-          'wall' => side >= 6,
+          'wall' => side >= 6 || (styledWall && long >= 18),
           'door' || 'window' => long >= 18,
           _ => side >= 18,
         };

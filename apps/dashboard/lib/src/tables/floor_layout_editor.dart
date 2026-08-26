@@ -565,6 +565,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
                               kind: e.kind,
                               quarterTurns: e.orientationQuarterTurns,
                               label: e.label,
+                              style: e.visualStyle,
                             ),
                           ),
                   ),
@@ -835,6 +836,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
         kind: element.kind,
         quarterTurns: element.orientationQuarterTurns,
         label: element.label,
+        style: element.visualStyle,
         selected: true,
       ),
     );
@@ -1058,6 +1060,7 @@ class _FloorLayoutEditorState extends State<FloorLayoutEditor> {
         seats: table.seats,
         // 118: the saved shape, drawn inside the unchanged footprint.
         preset: table.visualPreset,
+        material: table.visualMaterial,
         fill: style.container,
         onFill: style.onContainer,
         border: style.accent,

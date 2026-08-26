@@ -912,6 +912,7 @@ class _TableDialogState extends State<_TableDialog> {
                               : _label.text.trim(),
                           seats: seatsPreview,
                           preset: _preset,
+                          material: widget.table?.visualMaterial,
                           fill: previewStyle.container,
                           onFill: previewStyle.onContainer,
                           border: previewStyle.accent,

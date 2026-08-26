@@ -503,6 +503,7 @@ class _MoveSectionZone extends StatelessWidget {
                             kind: e.kind,
                             quarterTurns: e.orientationQuarterTurns,
                             label: e.label,
+                            style: e.visualStyle,
                           ),
                         ),
                       ),
@@ -591,6 +592,7 @@ class _MoveFloorTile extends StatelessWidget {
               seats: table.seats,
               // 118: the saved shape, drawn inside the unchanged footprint.
               preset: table.visualPreset,
+              material: table.visualMaterial,
               fill: selected
                   ? scheme.primaryContainer
                   : isCurrent

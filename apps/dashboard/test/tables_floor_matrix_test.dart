@@ -58,6 +58,8 @@ const _wallX1 = DashboardFloorElement(
   layoutY: 30,
   widthNorm: 3000,
   heightNorm: 150,
+  // 120B: the persisted style must reach the shared fixture widget.
+  visualStyle: 'brick',
 );
 
 class _MatrixRepo extends InMemoryTablesStore {
@@ -368,6 +370,15 @@ void main() {
             )
             .quarterTurns,
         _wallX1.orientationQuarterTurns,
+      );
+      // 120B: the persisted style reaches the shared fixture widget.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('floor-element-x1')),
+            )
+            .style,
+        'brick',
       );
       expect(find.byKey(const Key('floor-element-drag-x1')), findsNothing);
       expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);

@@ -9,7 +9,12 @@ import 'package:restoflow_design_system/restoflow_design_system.dart'
         RestoflowFloorPresetPainter,
         RestoflowTableShapePainter;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show DiningTable, FloorPreset, OrderType, TableVisualPreset;
+    show
+        DiningTable,
+        FloorPreset,
+        OrderType,
+        TableVisualMaterial,
+        TableVisualPreset;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_tables.dart';
@@ -40,6 +45,7 @@ DemoTable _t(
   int? x,
   int? y,
   TableVisualPreset preset = TableVisualPreset.classicRectTable,
+  TableVisualMaterial? material,
   FloorPreset floor = FloorPreset.plainLight,
 }) => DemoTable(
   table: DiningTable(
@@ -59,6 +65,7 @@ DemoTable _t(
   layoutX: x,
   layoutY: y,
   visualPreset: preset,
+  visualMaterial: material,
   sectionFloorPreset: floor,
 );
 
@@ -80,6 +87,7 @@ class _FakeTablesRepo extends TablesRepository {
         widthNorm: 2400,
         heightNorm: 150,
         orientationQuarterTurns: 3,
+        visualStyle: 'dark_frame',
       ),
     ],
   );
@@ -171,6 +179,7 @@ List<DemoTable> _floor() => [
     x: 6000,
     y: 6000,
     preset: TableVisualPreset.boothTable,
+    material: TableVisualMaterial.rusticWood,
     floor: FloorPreset.woodDark,
   ),
   _t(
@@ -317,6 +326,27 @@ void main() {
                   .painter!
               as RestoflowTableShapePainter;
       expect(a1Painter.material, RestoflowFloorMaterial.wood);
+      // 120B: an EXPLICIT persisted material overrides Auto on the POS...
+      final a2Painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: find.byKey(const Key('table-floor-tile-a2')),
+                      matching: _shapePainter(TableVisualPreset.boothTable),
+                    ),
+                  )
+                  .painter!
+              as RestoflowTableShapePainter;
+      expect(a2Painter.material, TableVisualMaterial.rusticWood);
+      // ...and the persisted fixture style reaches the shared fixture.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('pos-floor-element-w1')),
+            )
+            .style,
+        'dark_frame',
+      );
       // Occupied stays non-assignable regardless of its shape.
       await tester.tap(find.byKey(const Key('table-floor-tile-a2')));
       await tester.pumpAndSettle();

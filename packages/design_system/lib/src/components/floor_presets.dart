@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show FloorPreset, TableVisualPreset, floorElementStylesFor;
 
 import 'floor_scene_theme.dart';
 
@@ -694,10 +694,49 @@ class RestoflowTableShapePainter extends CustomPainter {
           .toColor();
       draw(canvas, Paint()..color = accent.withValues(alpha: accentAlpha));
     }
+    if (material == RestoflowFloorMaterial.plastic &&
+        detail != RestoflowFloorDetail.compact) {
+      // 120B: one molded gloss sweep so plastic reads glossy, never wooden.
+      canvas.drawArc(
+        Rect.fromLTWH(
+          surface.left + surface.width * 0.10,
+          surface.top + surface.height * 0.08,
+          surface.width * 0.55,
+          surface.height * 0.5,
+        ),
+        math.pi * 1.05,
+        math.pi * 0.45,
+        false,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 * scale
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
-  /// TABLE-119D: material grain over the top — plank strokes on rectangular
-  /// tops, growth rings on round ones. Skipped at compact and for grainless
+  /// TABLE-120B: the shared grain-strength rule, pinned by tests — RUSTIC
+  /// wood reads visibly more weathered than every other family.
+  static double grainAlpha(RestoflowFloorMaterial m) =>
+      m == RestoflowFloorMaterial.rusticWood ? 0.62 : 0.42;
+
+  /// TABLE-120B: plank strokes per rectangular top (pinned by tests): compact
+  /// is always clean (0), rustic carries the plank character (5 at rich),
+  /// everything else keeps the 119D 2/3.
+  static int grainLineCount(
+    RestoflowFloorMaterial m,
+    RestoflowFloorDetail detail,
+  ) {
+    if (detail == RestoflowFloorDetail.compact) return 0;
+    final rich = detail == RestoflowFloorDetail.rich;
+    if (m == RestoflowFloorMaterial.rusticWood) return rich ? 5 : 3;
+    return rich ? 3 : 2;
+  }
+
+  /// TABLE-119D/120B: material grain over the top — plank strokes on
+  /// rectangular tops (rustic adds deterministic drift + knot dashes),
+  /// growth rings on round ones. Skipped at compact and for grainless
   /// materials (plastic).
   void _paintGrain(Canvas canvas, Rect surface, {required bool round}) {
     final pal = _pal;
@@ -706,32 +745,52 @@ class RestoflowTableShapePainter extends CustomPainter {
         pal.grain.a == 0) {
       return;
     }
+    final rustic = material == RestoflowFloorMaterial.rusticWood;
     final g = Paint()
-      ..color = pal.grain.withValues(alpha: 0.42)
-      ..strokeWidth = 1;
+      ..color = pal.grain.withValues(alpha: grainAlpha(material!))
+      ..strokeWidth = rustic ? 1.2 : 1;
     if (round) {
       final c = surface.center;
       final r = surface.width / 2;
       final ring = Paint()
-        ..color = pal.grain.withValues(alpha: 0.32)
+        ..color = pal.grain.withValues(alpha: grainAlpha(material!) - 0.10)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
+        ..strokeWidth = rustic ? 1.2 : 1;
       for (final k
           in detail == RestoflowFloorDetail.rich
-              ? const [0.30, 0.50, 0.66]
+              ? (rustic
+                    ? const [0.26, 0.42, 0.56, 0.68]
+                    : const [0.30, 0.50, 0.66])
               : const [0.36, 0.60]) {
         canvas.drawCircle(c, r * k, ring);
       }
       return;
     }
-    final n = detail == RestoflowFloorDetail.rich ? 3 : 2;
+    final n = grainLineCount(material!, detail);
     for (var i = 1; i <= n; i++) {
-      final y = surface.top + surface.height * i / (n + 1);
+      // Rustic planks drift a little (deterministic, index-driven — never
+      // random at paint time).
+      final drift = rustic ? ((i.isEven ? 1 : -1) * 0.9 * scale) : 0.0;
+      final y = surface.top + surface.height * i / (n + 1) + drift;
       canvas.drawLine(
         Offset(surface.left + 3 * scale, y),
         Offset(surface.right - 3 * scale, y),
         g,
       );
+    }
+    if (rustic && detail == RestoflowFloorDetail.rich) {
+      // Two short knot dashes for the weathered character (bounded).
+      final knot = Paint()
+        ..color = pal.grain.withValues(alpha: 0.55)
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round;
+      for (final (tx, ty) in const [(0.24, 0.36), (0.68, 0.62)]) {
+        final p = Offset(
+          surface.left + surface.width * tx,
+          surface.top + surface.height * ty,
+        );
+        canvas.drawLine(p, p + Offset(3.5 * scale, 0), knot);
+      }
     }
   }
 
@@ -1039,9 +1098,19 @@ class RestoflowFixturePainter extends CustomPainter {
   final RestoflowFloorDetail detail;
 
   /// TABLE-VISUAL-CONFIGURATION-120: the persisted per-kind artwork variant
-  /// (`null` / unknown = the kind's default artwork). 120A carries the seam;
-  /// the variant branches land in 120B.
+  /// (`null` / unknown = the kind's default artwork).
   final String? style;
+
+  /// TABLE-120B: the ONE deterministic style resolution (pinned by tests):
+  /// a style registered for [kind] resolves to itself; NULL, unknown and
+  /// cross-kind values resolve to `'default'` — the renderer stays robust
+  /// even against data the server-side registry would never persist.
+  static String resolveStyle(String kind, String? style) =>
+      style != null && floorElementStylesFor(kind).contains(style)
+      ? style
+      : 'default';
+
+  String get _resolved => resolveStyle(kind, style);
 
   /// TABLE-119B: below this LOCAL thickness (the door strip's short side,
   /// after the quarter-turn frame swap) the door paints its dedicated THIN
@@ -1091,6 +1160,17 @@ class RestoflowFixturePainter extends CustomPainter {
   }
 
   void _paintWall(Canvas canvas, Size s) {
+    // 120B: three partition looks. `plain` (and default/unknown kinds) keeps
+    // the muted 119D slab + joints; `brick` overlays a bounded staggered
+    // brick pattern; `wood_partition` overlays warm timber planks.
+    switch (_resolved) {
+      case 'brick':
+        _paintBrickWall(canvas, s);
+        return;
+      case 'wood_partition':
+        _paintWoodPartitionWall(canvas, s);
+        return;
+    }
     final joint = Paint()
       ..color = ink.withValues(alpha: 0.28)
       ..strokeWidth = 1;
@@ -1109,14 +1189,107 @@ class RestoflowFixturePainter extends CustomPainter {
     );
   }
 
+  /// 120B `wall/brick`: a warm masonry tint + bounded staggered joints (two
+  /// courses when the strip is tall enough; compact simplifies to one).
+  RRect _wallSlabRRect(Size s) {
+    // Mirrors the widget's slab radius rule (side < 24 -> side/4, else 8) so
+    // the tint overlays hug the rounded slab instead of squaring it off.
+    final side = math.min(s.width, s.height);
+    return RRect.fromRectAndRadius(
+      Offset.zero & s,
+      Radius.circular(side < 24 ? side / 4 : 8.0),
+    );
+  }
+
+  void _paintBrickWall(Canvas canvas, Size s) {
+    const mortar = Color(0xFF6B4438);
+    canvas.drawRRect(
+      _wallSlabRRect(s),
+      Paint()..color = const Color(0xFFA96A52).withValues(alpha: 0.55),
+    );
+    final joint = Paint()
+      ..color = mortar.withValues(alpha: 0.7)
+      ..strokeWidth = 1;
+    final twoCourses = s.height >= 6 && detail != RestoflowFloorDetail.compact;
+    final rows = twoCourses ? 2 : 1;
+    final n = (s.width / 14).clamp(2, 12).floor();
+    if (twoCourses) {
+      canvas.drawLine(
+        Offset(0, s.height / 2),
+        Offset(s.width, s.height / 2),
+        joint,
+      );
+    }
+    for (var row = 0; row < rows; row++) {
+      final top = row * s.height / rows;
+      final bottom = (row + 1) * s.height / rows;
+      final offset = row.isOdd ? s.width / n / 2 : 0.0;
+      for (var i = 0; i <= n; i++) {
+        final x = offset + i * s.width / n;
+        if (x <= 0 || x >= s.width) continue;
+        canvas.drawLine(Offset(x, top + 0.5), Offset(x, bottom - 0.5), joint);
+      }
+    }
+  }
+
+  /// 120B `wall/wood_partition`: a warm timber tint + vertical plank strokes
+  /// (bounded; low overdraw).
+  void _paintWoodPartitionWall(Canvas canvas, Size s) {
+    canvas.drawRRect(
+      _wallSlabRRect(s),
+      Paint()..color = const Color(0xFF8F6B44).withValues(alpha: 0.55),
+    );
+    final plank = Paint()
+      ..color = const Color(0xFF4C3620).withValues(alpha: 0.65)
+      ..strokeWidth = 1;
+    final n = (s.width / 10).clamp(2, 14).floor();
+    for (var i = 1; i < n; i++) {
+      final x = i * s.width / n;
+      canvas.drawLine(Offset(x, 0.5), Offset(x, s.height - 0.5), plank);
+    }
+    if (detail != RestoflowFloorDetail.compact) {
+      canvas.drawLine(
+        Offset(0, 0.8),
+        Offset(s.width, 0.8),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.30)
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  /// 120B: the three door schemes behind the shared composition — `wood`
+  /// (timber slab + dark leaf), `glass` (pale glazing + glass leaf), `modern`
+  /// (neutral slab + slate leaf). Default keeps the theme-derived 119D look.
+  (Color, Color, Color) get _doorScheme => switch (_resolved) {
+    'wood' => (
+      const Color(0xFFB08356),
+      const Color(0xFF5D3B22),
+      const Color(0xFF8A6844),
+    ),
+    'glass' => (
+      const Color(0xFFDCE9F3),
+      const Color(0xFF9CC4DE),
+      const Color(0xFF6E92AC),
+    ),
+    'modern' => (
+      const Color(0xFFD8DCE1),
+      const Color(0xFF4A5560),
+      const Color(0xFF7C8894),
+    ),
+    _ => (fill, ink.withValues(alpha: 0.85), ink),
+  };
+
   void _paintDoor(Canvas canvas, Size s) {
+    final (base, leafColor, edge) = _doorScheme;
+    final styled = _resolved != 'default';
     // 119D: the painter owns the frame slab (the widget's box is transparent).
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Offset.zero & s,
         Radius.circular(math.min(2.5, s.shortestSide * 0.2)),
       ),
-      Paint()..color = fill,
+      Paint()..color = base,
     );
     if (_isThinLocal(s)) {
       _paintThinDoor(canvas, s);
@@ -1128,9 +1301,20 @@ class RestoflowFixturePainter extends CustomPainter {
       Rect.fromLTWH(1, s.height * 0.15, leafW, s.height * 0.7),
       const Radius.circular(1.5),
     );
-    canvas.drawRRect(leaf, Paint()..color = ink.withValues(alpha: 0.85));
+    canvas.drawRRect(leaf, Paint()..color = leafColor);
+    if (_resolved == 'glass') {
+      // Glazing highlight so the leaf reads as GLASS, not paint.
+      canvas.drawRRect(
+        leaf.deflate(1.2),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
     if (detail != RestoflowFloorDetail.compact) {
-      // Panel inset on the leaf.
+      // Panel inset on the leaf (styled doors take the scheme's edge tone;
+      // the default keeps the exact 119D theme-derived stroke).
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
@@ -1142,7 +1326,9 @@ class RestoflowFixturePainter extends CustomPainter {
           const Radius.circular(1),
         ),
         Paint()
-          ..color = _lighten(ink, 0.25).withValues(alpha: 0.6)
+          ..color = styled
+              ? edge.withValues(alpha: 0.8)
+              : _lighten(ink, 0.25).withValues(alpha: 0.6)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
@@ -1156,7 +1342,9 @@ class RestoflowFixturePainter extends CustomPainter {
       math.pi / 2,
       false,
       Paint()
-        ..color = ink.withValues(alpha: 0.35)
+        ..color = styled
+            ? edge.withValues(alpha: 0.5)
+            : ink.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
@@ -1164,7 +1352,7 @@ class RestoflowFixturePainter extends CustomPainter {
       canvas.drawCircle(
         Offset(1 + leafW - 2.5, s.height * 0.5),
         1.6,
-        Paint()..color = _lighten(ink, 0.4),
+        Paint()..color = styled ? _lighten(edge, 0.35) : _lighten(ink, 0.4),
       );
     }
   }
@@ -1181,14 +1369,38 @@ class RestoflowFixturePainter extends CustomPainter {
   void _paintThinDoor(Canvas canvas, Size s) {
     final t = s.height;
     // (The strip base slab is painted by [_paintDoor] before delegating.)
+    // 120B: jamb/opening/leaf tones follow the door style so a thin glass
+    // door still reads as GLASS — same shapes, same geometry, every style.
+    final (jambC, openingC, leafC) = switch (_resolved) {
+      'wood' => (
+        const Color(0xFF4A2F17),
+        const Color(0xFFE6CDAB),
+        const Color(0xFF5D3B22),
+      ),
+      'glass' => (
+        const Color(0xFF5F8CAD),
+        const Color(0xFFD9EDF9),
+        const Color(0xFF7FB3D4),
+      ),
+      'modern' => (
+        const Color(0xFF3E4954),
+        const Color(0xFFE7EBEF),
+        const Color(0xFF4A5560),
+      ),
+      _ => (
+        ink.withValues(alpha: 0.9),
+        _lighten(fill, 0.35).withValues(alpha: 0.9),
+        ink.withValues(alpha: 0.9),
+      ),
+    };
     final jambW = (t * 1.2).clamp(2.0, 6.0);
-    final jamb = Paint()..color = ink.withValues(alpha: 0.9);
+    final jamb = Paint()..color = jambC;
     canvas.drawRect(Rect.fromLTWH(0, 0, jambW, t), jamb);
     canvas.drawRect(Rect.fromLTWH(s.width - jambW, 0, jambW, t), jamb);
     // The opening span (kept light so it reads as a gap in the wall line).
     canvas.drawRect(
       Rect.fromLTWH(jambW, t * 0.3, s.width - 2 * jambW, t * 0.4),
-      Paint()..color = _lighten(fill, 0.35).withValues(alpha: 0.9),
+      Paint()..color = openingC,
     );
     // Open leaf from the hinge jamb, swung ~55 degrees into the room.
     final hinge = Offset(jambW, t);
@@ -1199,7 +1411,7 @@ class RestoflowFixturePainter extends CustomPainter {
       hinge,
       tip,
       Paint()
-        ..color = ink.withValues(alpha: 0.9)
+        ..color = leafC
         ..strokeWidth = math.max(1.6, t * 0.28)
         ..strokeCap = StrokeCap.round,
     );
@@ -1210,7 +1422,7 @@ class RestoflowFixturePainter extends CustomPainter {
       angle,
       false,
       Paint()
-        ..color = ink.withValues(alpha: 0.4)
+        ..color = leafC.withValues(alpha: _resolved == 'default' ? 0.40 : 0.45)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
@@ -1220,15 +1432,45 @@ class RestoflowFixturePainter extends CustomPainter {
   /// inside an aluminium frame with mullions, diagonal glare and a sill. The
   /// widget's tinted box behind it is transparent now.
   void _paintWindow(Canvas canvas, Size s) {
-    const glassTop = Color(0xFFD8EAF4);
-    const glassBottom = Color(0xFFA5C8DD);
-    const frameTone = Color(0xFF5C6B75);
+    // 120B: three glazing schemes behind the shared composition —
+    // modern_glass (minimal thin frame, no mullions), framed (warm thick
+    // frame + denser mullions), dark_frame (near-black frame, clear glass).
+    // Default keeps the exact 119D look.
+    final resolved = _resolved;
+    final (glassTop, glassBottom, frameTone) = switch (resolved) {
+      'dark_frame' => (
+        const Color(0xFFEAF4FA),
+        const Color(0xFFC4DCEA),
+        const Color(0xFF23282D),
+      ),
+      'framed' => (
+        const Color(0xFFD8EAF4),
+        const Color(0xFFA5C8DD),
+        const Color(0xFF8A6844),
+      ),
+      'modern_glass' => (
+        const Color(0xFFE2F0F8),
+        const Color(0xFFB9D6E7),
+        const Color(0xFF9AA6AF),
+      ),
+      _ => (
+        const Color(0xFFD8EAF4),
+        const Color(0xFFA5C8DD),
+        const Color(0xFF5C6B75),
+      ),
+    };
+    final frameScale = switch (resolved) {
+      'modern_glass' => 0.06,
+      'framed' => 0.14,
+      'dark_frame' => 0.15,
+      _ => 0.10,
+    };
     final body = Offset.zero & s;
     final radius = Radius.circular(math.min(2.5, s.shortestSide * 0.2));
     canvas.drawRRect(
       RRect.fromRectAndRadius(body, radius),
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [glassTop, glassBottom],
@@ -1237,17 +1479,26 @@ class RestoflowFixturePainter extends CustomPainter {
     final frame = Paint()
       ..color = frameTone
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.2, s.shortestSide * 0.10);
+      // The DEFAULT path keeps the exact 119D floor (1.2); only the minimal
+      // modern_glass frame may go hairline.
+      ..strokeWidth = math.max(
+        resolved == 'modern_glass' ? 1.0 : 1.2,
+        s.shortestSide * frameScale,
+      );
     final r = Rect.fromLTWH(0.8, 0.8, s.width - 1.6, s.height - 1.6);
     canvas.drawRRect(RRect.fromRectAndRadius(r, radius), frame);
-    // Mullions along the length.
-    final mullion = Paint()
-      ..color = frameTone
-      ..strokeWidth = math.max(1.0, s.shortestSide * 0.07);
-    final n = (s.width / 30).clamp(1, 6).floor();
-    for (var i = 1; i <= n; i++) {
-      final x = r.left + i * r.width / (n + 1);
-      canvas.drawLine(Offset(x, r.top), Offset(x, r.bottom), mullion);
+    // Mullions along the length (modern_glass keeps NONE; framed adds one).
+    if (resolved != 'modern_glass') {
+      final mullion = Paint()
+        ..color = frameTone
+        ..strokeWidth = math.max(1.0, s.shortestSide * 0.07);
+      final n =
+          ((s.width / 30).clamp(1, 6).floor() + (resolved == 'framed' ? 1 : 0))
+              .clamp(1, 7);
+      for (var i = 1; i <= n; i++) {
+        final x = r.left + i * r.width / (n + 1);
+        canvas.drawLine(Offset(x, r.top), Offset(x, r.bottom), mullion);
+      }
     }
     if (detail != RestoflowFloorDetail.compact) {
       // Two diagonal glare strokes.
@@ -1278,20 +1529,52 @@ class RestoflowFixturePainter extends CustomPainter {
   /// it is transparent; the artwork IS the identity (a tiny caption may sit
   /// on the service edge).
   void _paintCashier(Canvas canvas, Size s) {
-    const counterLight = Color(0xFF9A7450);
-    const counterTop = Color(0xFF7E5B3B);
-    const counterDark = Color(0xFF63452A);
-    const counterFront = Color(0xFF4A3119);
-    const registerBody = Color(0xFF2E3439);
-    const screenGlow = Color(0xFF9FD8C8);
-    const key = Color(0xFF8B949B);
+    // 120B: three counter schemes behind the ONE shared composition —
+    // modern (light neutral), wood (the 119D walnut default), dark
+    // (high-contrast espresso/steel).
+    final (
+      counterLight,
+      counterTop,
+      counterDark,
+      counterFront,
+    ) = switch (_resolved) {
+      'modern' => (
+        const Color(0xFFEFF2F5),
+        const Color(0xFFDCE1E7),
+        const Color(0xFFBFC7D0),
+        const Color(0xFF87929E),
+      ),
+      'dark' => (
+        const Color(0xFF4C545C),
+        const Color(0xFF394046),
+        const Color(0xFF282D33),
+        const Color(0xFF15181C),
+      ),
+      _ => (
+        const Color(0xFF9A7450),
+        const Color(0xFF7E5B3B),
+        const Color(0xFF63452A),
+        const Color(0xFF4A3119),
+      ),
+    };
+    final registerBody = switch (_resolved) {
+      'modern' => const Color(0xFF47525E),
+      'dark' => const Color(0xFF14171A),
+      _ => const Color(0xFF2E3439),
+    };
+    final screenGlow = _resolved == 'dark'
+        ? const Color(0xFFB2EEDC)
+        : const Color(0xFF9FD8C8);
+    final key = _resolved == 'dark'
+        ? const Color(0xFFAAB4BC)
+        : const Color(0xFF8B949B);
     final radius = Radius.circular(math.min(6.0, s.shortestSide * 0.16));
     final body = Offset.zero & s;
     // Counter slab with a wood-tone gradient.
     canvas.drawRRect(
       RRect.fromRectAndRadius(body, radius),
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [counterLight, counterTop, counterDark],
@@ -1400,6 +1683,17 @@ class RestoflowFixturePainter extends CustomPainter {
   /// pot with rim and soil, a rosette of leaf blades in layered greens and a
   /// light catch. No box, no icon: the silhouette is the identity.
   void _paintPlant(Canvas canvas, Size s) {
+    // 120B: three plant silhouettes — leafy (the 119D rosette default),
+    // palm (long directional fronds) and compact_pot (dense small canopy on
+    // a clearly visible pot).
+    switch (_resolved) {
+      case 'palm':
+        _paintPalmPlant(canvas, s);
+        return;
+      case 'compact_pot':
+        _paintCompactPotPlant(canvas, s);
+        return;
+    }
     const potClay = Color(0xFFB06A4A);
     const potRim = Color(0xFF8A4E33);
     const soil = Color(0xFF4A3226);
@@ -1456,6 +1750,103 @@ class RestoflowFixturePainter extends CustomPainter {
         Paint()..color = Colors.white.withValues(alpha: 0.55),
       );
     }
+  }
+
+  /// 120B `plant/palm`: a small clearly-visible pot with LONG directional
+  /// fronds arcing outward — reads as a palm even at map sizes.
+  void _paintPalmPlant(Canvas canvas, Size s) {
+    const potClay = Color(0xFFB06A4A);
+    const potRim = Color(0xFF8A4E33);
+    const frondDark = Color(0xFF2F6B44);
+    const frondLight = Color(0xFF56A06A);
+    final c = Offset(s.width / 2, s.height / 2);
+    final side = math.min(s.width, s.height);
+    final potR = side * 0.24;
+    if (detail != RestoflowFloorDetail.compact) {
+      canvas.drawCircle(
+        c + Offset(1.2, 1.8),
+        potR,
+        Paint()..color = const Color(0xFF000000).withValues(alpha: 0.14),
+      );
+    }
+    // Fronds FIRST (they sweep over the floor), pot on top of their roots.
+    final fronds = detail == RestoflowFloorDetail.compact ? 5 : 7;
+    final reach = side * 0.46;
+    for (var i = 0; i < fronds; i++) {
+      final a = i * 2 * math.pi / fronds + 0.35;
+      final dir = Offset(math.cos(a), math.sin(a));
+      final normal = Offset(-dir.dy, dir.dx);
+      final tip = c + dir * reach;
+      final ctrl = c + dir * (reach * 0.45) + normal * (side * 0.10);
+      canvas.drawPath(
+        Path()
+          ..moveTo(c.dx, c.dy)
+          ..quadraticBezierTo(ctrl.dx, ctrl.dy, tip.dx, tip.dy),
+        Paint()
+          ..color = i.isEven ? frondDark : frondLight
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.6, side * 0.055)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    canvas.drawCircle(c, potR, Paint()..color = potClay);
+    canvas.drawCircle(
+      c,
+      potR,
+      Paint()
+        ..color = potRim
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.2, potR * 0.18),
+    );
+    canvas.drawCircle(c, potR * 0.45, Paint()..color = frondDark);
+  }
+
+  /// 120B `plant/compact_pot`: a LARGE pot with a small dense canopy — the
+  /// pot itself is the identity.
+  void _paintCompactPotPlant(Canvas canvas, Size s) {
+    const potClay = Color(0xFFB06A4A);
+    const potRim = Color(0xFF8A4E33);
+    const soil = Color(0xFF4A3226);
+    const leafDark = Color(0xFF39724A);
+    const leafLight = Color(0xFF6AAE79);
+    final c = Offset(s.width / 2, s.height / 2);
+    final side = math.min(s.width, s.height);
+    final potR = side * 0.44;
+    if (detail != RestoflowFloorDetail.compact) {
+      canvas.drawCircle(
+        c + Offset(1.2, 1.8),
+        potR,
+        Paint()..color = const Color(0xFF000000).withValues(alpha: 0.14),
+      );
+    }
+    canvas.drawCircle(c, potR, Paint()..color = potClay);
+    canvas.drawCircle(
+      c,
+      potR,
+      Paint()
+        ..color = potRim
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.4, potR * 0.20),
+    );
+    canvas.drawCircle(c, potR * 0.68, Paint()..color = soil);
+    // Dense small canopy: a tight ring of blades + a filled crown.
+    final blades = detail == RestoflowFloorDetail.compact ? 6 : 10;
+    for (var i = 0; i < blades; i++) {
+      final a = i * 2 * math.pi / blades;
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.rotate(a);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(0, -potR * 0.28),
+          width: potR * 0.26,
+          height: potR * 0.52,
+        ),
+        Paint()..color = (i.isEven ? leafDark : leafLight),
+      );
+      canvas.restore();
+    }
+    canvas.drawCircle(c, potR * 0.22, Paint()..color = leafDark);
   }
 
   @override
