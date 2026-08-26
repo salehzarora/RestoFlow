@@ -244,6 +244,18 @@ void main() {
         ),
         findsWidgets,
       );
+      // 119D: the Dashboard previews the shared MATERIAL scene too — every
+      // mounted table painter carries a resolved material.
+      for (final paint in tester.widgetList<CustomPaint>(
+        find.byWidgetPredicate(
+          (w) => w is CustomPaint && w.painter is RestoflowTableShapePainter,
+        ),
+      )) {
+        expect(
+          (paint.painter! as RestoflowTableShapePainter).material,
+          isNotNull,
+        );
+      }
       expect(
         find.byWidgetPredicate(
           (w) => w is CustomPaint && w.painter is RestoflowFloorPresetPainter,

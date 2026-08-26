@@ -5,6 +5,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
     show
         RestoflowFloorFixture,
+        RestoflowFloorMaterial,
         RestoflowFloorPresetPainter,
         RestoflowTableShapePainter;
 import 'package:restoflow_domain/restoflow_domain.dart'
@@ -303,6 +304,19 @@ void main() {
             .quarterTurns,
         3,
       );
+      // 119D: the POS renders the shared MATERIAL scene — the wood-dark
+      // section resolves warm wood for its tables with zero app plumbing.
+      final a1Painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: find.byKey(const Key('table-floor-tile-a1')),
+                      matching: _shapePainter(TableVisualPreset.roundTable),
+                    ),
+                  )
+                  .painter!
+              as RestoflowTableShapePainter;
+      expect(a1Painter.material, RestoflowFloorMaterial.wood);
       // Occupied stays non-assignable regardless of its shape.
       await tester.tap(find.byKey(const Key('table-floor-tile-a2')));
       await tester.pumpAndSettle();

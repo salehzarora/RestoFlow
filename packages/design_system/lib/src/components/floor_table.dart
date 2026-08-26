@@ -3,6 +3,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
     show FloorPreset, TableVisualPreset;
 
 import 'floor_presets.dart';
+import 'floor_scene_theme.dart';
 
 import '../tokens.dart';
 
@@ -98,23 +99,26 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
                 );
               }
 
-              return Stack(
-                clipBehavior: Clip.hardEdge,
-                children: [
-                  // 118: the floor pattern, isolated so table-state repaints
-                  // never re-run it (PERF-110 posture).
-                  if (floorPreset != FloorPreset.plainLight)
-                    Positioned.fill(
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          painter: RestoflowFloorPresetPainter(floorPreset),
+              return RestoflowFloorSceneScope(
+                floorPreset: floorPreset,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    // 118: the floor pattern, isolated so table-state repaints
+                    // never re-run it (PERF-110 posture).
+                    if (floorPreset != FloorPreset.plainLight)
+                      Positioned.fill(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            painter: RestoflowFloorPresetPainter(floorPreset),
+                          ),
                         ),
                       ),
-                    ),
-                  for (final tile in background) positioned(tile),
-                  for (final tile in placed) positioned(tile),
-                  if (overlay != null) overlay!(constraints),
-                ],
+                    for (final tile in background) positioned(tile),
+                    for (final tile in placed) positioned(tile),
+                    if (overlay != null) overlay!(constraints),
+                  ],
+                ),
               );
             },
           ),
@@ -213,7 +217,15 @@ class RestoflowFloorTable extends StatelessWidget {
     this.footnote,
     this.chairCap = 12,
     this.preset = TableVisualPreset.classicRectTable,
+    this.material,
   });
+
+  /// TABLE-119D: the table-surface material. `null` (the default) resolves
+  /// the deterministic shared mapping from [preset] and the enclosing
+  /// canvas's floor preset (via [RestoflowFloorSceneScope]) — identical on
+  /// every surface with zero app plumbing. Set it to override per tile (the
+  /// seam a future persisted per-table style would use).
+  final RestoflowFloorMaterial? material;
 
   /// TABLE-VISUAL-LAYOUT-118: how the table is DRAWN inside its (unchanged)
   /// footprint. The classic default keeps the pre-118 widget tree exactly;
@@ -263,6 +275,14 @@ class RestoflowFloorTable extends StatelessWidget {
 
         final isRound = preset == TableVisualPreset.roundTable;
         final labelColumn = _labelColumn(theme, s, fitted: isRound);
+        // 119D: the material resolves from the enclosing canvas's floor
+        // preset unless the caller overrides it.
+        final resolvedMaterial =
+            material ??
+            restoflowDefaultFloorMaterial(
+              preset,
+              RestoflowFloorSceneScope.of(context),
+            );
 
         // TABLE-119A: EVERY preset paints through the one shared painter
         // (classic included — real chairs, shaded tops). The painter is
@@ -284,6 +304,7 @@ class RestoflowFloorTable extends StatelessWidget {
           scale: s,
           surfaceRadius: RestoflowRadii.md,
           detail: restoflowFloorDetailFor(size.width),
+          material: resolvedMaterial,
         );
         final content = painter.contentRect(size);
         return SizedBox(
@@ -296,23 +317,53 @@ class RestoflowFloorTable extends StatelessWidget {
                 Positioned.fill(
                   child: RepaintBoundary(child: CustomPaint(painter: painter)),
                 ),
+                // TABLE-119D: the label column sits on a translucent PLATE so
+                // it stays readable on real material tops. The plate hugs the
+                // text (Center + min column), lives inside the same content
+                // rect, and adapts its tone to the caller's onFill so status
+                // icons keep their contrast (dark plate under light ink,
+                // light plate under dark ink). Round tiles keep their 118F
+                // scale-down behaviour via the outer FittedBox.
                 Positioned(
                   left: content.left,
                   top: content.top,
                   width: content.width,
                   height: content.height,
-                  child: isRound
-                      ? FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: SizedBox(
-                            width: content.width,
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: content.width.clamp(1.0, double.infinity),
+                        ),
+                        child: DecoratedBox(
+                          key: const ValueKey('restoflow-floor-label-plate'),
+                          decoration: BoxDecoration(
+                            // A dark onFill sits on the material's own light
+                            // plate; a light onFill (selected) flips to the
+                            // shared dark plate so icons keep contrast.
+                            color: onFill.computeLuminance() > 0.5
+                                ? Colors.black.withValues(alpha: 0.38)
+                                : RestoflowMaterialPalette.of(
+                                    resolvedMaterial,
+                                  ).labelPlate,
+                            borderRadius: BorderRadius.circular(6 * s),
+                          ),
+                          child: Padding(
+                            // 118F interaction: the ROUND content rect is
+                            // already inscribed, so its plate keeps padding
+                            // minimal — the text keeps (almost) the full
+                            // pre-119D width budget.
+                            padding: EdgeInsets.symmetric(
+                              horizontal: (isRound ? 2 : 5) * s,
+                              vertical: 2.5 * s,
+                            ),
                             child: labelColumn,
                           ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4 * s),
-                          child: labelColumn,
                         ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -334,7 +385,8 @@ class RestoflowFloorTable extends StatelessWidget {
     bool fitted = false,
   }) => Column(
     mainAxisAlignment: MainAxisAlignment.center,
-    mainAxisSize: fitted ? MainAxisSize.min : MainAxisSize.max,
+    // 119D: always min — the plate hugs the text on every preset.
+    mainAxisSize: MainAxisSize.min,
     children: [
       _fit(
         fitted,

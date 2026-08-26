@@ -271,6 +271,25 @@ void main() {
         ),
         findsOneWidget,
       );
+      // 119D: the kiosk renders the shared MATERIAL scene — every table
+      // painter carries a resolved material (never the flat legacy null).
+      expect(
+        (tester
+                    .widget<CustomPaint>(
+                      find
+                          .descendant(
+                            of: find.byKey(const Key('kiosk-floor-tile-t3')),
+                            matching: _shapePainter(
+                              TableVisualPreset.roundTable,
+                            ),
+                          )
+                          .first,
+                    )
+                    .painter!
+                as RestoflowTableShapePainter)
+            .material,
+        isNotNull,
+      );
       expect(find.byKey(const Key('kiosk-floor-element-e1')), findsOneWidget);
       // 119A: the AUTHORITATIVE orientation reaches the fixture widget.
       expect(
