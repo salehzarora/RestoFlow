@@ -789,14 +789,34 @@ class RestoflowFixturePainter extends CustomPainter {
   final int quarterTurns;
   final RestoflowFloorDetail detail;
 
+  /// TABLE-119B: below this LOCAL thickness (the door strip's short side,
+  /// after the quarter-turn frame swap) the door paints its dedicated THIN
+  /// artwork — jambs + leaf + swing cue — instead of the full-height leaf.
+  static const double kThinDoorThickness = 18.0;
+
+  /// The LOCAL painting frame for [size] at [quarterTurns]: odd turns swap
+  /// the axes. Shared by [paint] and [rendersThinDoor] so the public split
+  /// can never diverge from what the painter actually does.
+  static Size _localSize(Size size, int quarterTurns) =>
+      quarterTurns.isOdd ? Size(size.height, size.width) : size;
+
+  /// The thin-vs-full door split in the LOCAL frame — the exact predicate
+  /// `_paintDoor` branches on.
+  static bool _isThinLocal(Size local) => local.height < kThinDoorThickness;
+
+  /// Deterministic thin-vs-full door split for [size] at [quarterTurns]
+  /// (pinned by tests; pure geometry, no app identity). Delegates to the
+  /// same helpers the paint path uses.
+  static bool rendersThinDoor(Size size, int quarterTurns) =>
+      _isThinLocal(_localSize(size, quarterTurns));
+
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     // Rotate the ARTWORK by the authoritative quarter turns; the room rect
     // already carries the swapped footprint, so odd turns paint into a local
     // frame with swapped axes.
-    final odd = quarterTurns.isOdd;
-    final local = odd ? Size(size.height, size.width) : size;
+    final local = _localSize(size, quarterTurns);
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(quarterTurns * math.pi / 2);
@@ -836,6 +856,10 @@ class RestoflowFixturePainter extends CustomPainter {
   }
 
   void _paintDoor(Canvas canvas, Size s) {
+    if (_isThinLocal(s)) {
+      _paintThinDoor(canvas, s);
+      return;
+    }
     final leafW = math.min(s.width * 0.42, s.height * 2.4);
     // Door LEAF along the frame from the hinge end.
     final leaf = RRect.fromRectAndRadius(
@@ -863,6 +887,52 @@ class RestoflowFixturePainter extends CustomPainter {
         Paint()..color = _lighten(ink, 0.4),
       );
     }
+  }
+
+  /// TABLE-119B: the THIN door (a few px thick): two frame jambs at the
+  /// strip's ends, the opening span between them, an open LEAF swinging into
+  /// the room (+y in the local frame; quarter turns rotate it with the whole
+  /// artwork) and its swing arc. CustomPaint does not clip, so the leaf/arc
+  /// read on the floor beside the strip — the outer fixture rect and room
+  /// geometry are untouched. Because the swing follows local +y, the
+  /// AUTHORITATIVE quarter turns also choose the swing side (0=down, 1=left,
+  /// 2=up, 3=right); a swing pointing off the room simply clips at the floor
+  /// edge, leaving jambs + opening. Shape-only: no text/images, ~6 draw ops.
+  void _paintThinDoor(Canvas canvas, Size s) {
+    final t = s.height;
+    final jambW = (t * 1.2).clamp(2.0, 6.0);
+    final jamb = Paint()..color = ink.withValues(alpha: 0.9);
+    canvas.drawRect(Rect.fromLTWH(0, 0, jambW, t), jamb);
+    canvas.drawRect(Rect.fromLTWH(s.width - jambW, 0, jambW, t), jamb);
+    // The opening span (kept light so it reads as a gap in the wall line).
+    canvas.drawRect(
+      Rect.fromLTWH(jambW, t * 0.3, s.width - 2 * jambW, t * 0.4),
+      Paint()..color = _lighten(fill, 0.35).withValues(alpha: 0.9),
+    );
+    // Open leaf from the hinge jamb, swung ~55 degrees into the room.
+    final hinge = Offset(jambW, t);
+    final leafLen = (s.width - 2 * jambW).clamp(6.0, 30.0).toDouble();
+    const angle = 55 * math.pi / 180;
+    final tip = hinge + Offset(math.cos(angle), math.sin(angle)) * leafLen;
+    canvas.drawLine(
+      hinge,
+      tip,
+      Paint()
+        ..color = ink.withValues(alpha: 0.9)
+        ..strokeWidth = math.max(1.6, t * 0.28)
+        ..strokeCap = StrokeCap.round,
+    );
+    // Swing arc from the closed position round to the leaf tip.
+    canvas.drawArc(
+      Rect.fromCircle(center: hinge, radius: leafLen),
+      0,
+      angle,
+      false,
+      Paint()
+        ..color = ink.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
   }
 
   void _paintWindow(Canvas canvas, Size s) {

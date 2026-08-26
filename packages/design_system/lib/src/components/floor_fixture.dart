@@ -78,7 +78,18 @@ class RestoflowFloorFixture extends StatelessWidget {
         // TABLE-119A: recognizable vector artwork replaces the flat icon box
         // whenever there is room (walls need only a sliver for their joints);
         // tiny fixtures keep the lightweight flat fallback.
-        final paintArt = kind == 'wall' ? side >= 6 : side >= 18;
+        // 119B: a door's artwork gates on its LONG side — the standard
+        // 900x150-unit door strip is only ~5-8px thick on POS/kiosk, yet must
+        // still read as a door (thin leaf + swing cue), never a flat strip.
+        // The threshold must clear BOTH orientations on the pinned minimum
+        // canvas (480px wide, y-scale is 1/1.9 of x): a ROTATED door there is
+        // only ~22.7px long, so the gate sits at 18, never 24.
+        final long = w > h ? w : h;
+        final paintArt = switch (kind) {
+          'wall' => side >= 6,
+          'door' => long >= 18,
+          _ => side >= 18,
+        };
         final showIcon = icon != null && side >= 18 && !paintArt;
         final showLabel = text != null && text.isNotEmpty && h >= 30 && w >= 40;
         return DecoratedBox(
