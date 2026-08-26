@@ -280,6 +280,22 @@ class RestoflowTableShapePainter extends CustomPainter {
     }
   }
 
+  /// TABLE-118F: where the label column may live. For the rectangular
+  /// presets this is the painted surface itself; for a ROUND table it is a
+  /// rectangle INSCRIBED in the circle (width 0.66·d, height 0.70·d — its
+  /// corners sit 0.481·d from the centre, inside the 0.5·d rim), so a long
+  /// status footnote can never cross the visible round edge. The painted
+  /// circle ([surfaceRect]) and the tile footprint are unchanged.
+  Rect contentRect(Size size) {
+    final surface = surfaceRect(size);
+    if (preset != TableVisualPreset.roundTable) return surface;
+    return Rect.fromCenter(
+      center: surface.center,
+      width: surface.width * 0.66,
+      height: surface.height * 0.70,
+    );
+  }
+
   double _barrelDiameter(Size size) =>
       math.min(size.height - inset * 0.8, size.width * 0.27);
 

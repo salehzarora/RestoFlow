@@ -806,11 +806,15 @@ class _KioskFloorTile extends StatelessWidget {
                 footnote: statusLabel?.toUpperCase(),
               ),
             ),
-            if (!selected && !available)
+            // 118F: the customer-safe state dot the legend promises — on
+            // EVERY placed tile (green = available), swapped for the accent
+            // badge while selected. Decoration only: it never moves the tile.
+            if (!selected)
               Positioned(
                 top: 2,
                 right: 2,
                 child: Container(
+                  key: Key('kiosk-floor-dot-$key'),
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
