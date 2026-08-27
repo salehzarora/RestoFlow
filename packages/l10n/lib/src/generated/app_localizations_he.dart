@@ -7085,4 +7085,87 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get kioskTableNoLongerAvailable =>
       'השולחן נתפס הרגע — נא לבחור שולחן אחר.';
+
+  @override
+  String get posQuickNotesLabel => 'הערות מהירות';
+
+  @override
+  String posQuickNoteShowMore(int count) {
+    return 'עוד ($count)';
+  }
+
+  @override
+  String posQuickNoteTooLong(int max) {
+    return 'זה יחרוג מ-$max תווים. קצרו קודם את ההערה.';
+  }
+
+  @override
+  String get dashboardQuickNotesTitle => 'הערות מהירות';
+
+  @override
+  String get dashboardQuickNotesDescription =>
+      'משפטים שהקופאים מוסיפים בלחיצה אחת להערת פריט. חלים על כל עמדות הקופה במסעדה הזו.';
+
+  @override
+  String get dashboardQuickNotesEmpty =>
+      'אין עדיין הערות מהירות. הוסיפו את המשפטים הנפוצים במטבח.';
+
+  @override
+  String dashboardQuickNotesGuidance(int max) {
+    return 'יותר מ-$max מקשה על הסריקה במהלך השירות.';
+  }
+
+  @override
+  String get dashboardQuickNoteAdd => 'הוספת הערה';
+
+  @override
+  String get dashboardQuickNoteEdit => 'עריכת הערה';
+
+  @override
+  String get dashboardQuickNoteDelete => 'מחיקת הערה';
+
+  @override
+  String dashboardQuickNoteDeleteBody(String label) {
+    return 'למחוק את “$label”? הערות שכבר נרשמו על הזמנות נשמרות.';
+  }
+
+  @override
+  String get dashboardQuickNoteEnable => 'הפעלה';
+
+  @override
+  String get dashboardQuickNoteDisable => 'כיבוי';
+
+  @override
+  String get dashboardQuickNoteDisabled => 'מכובה';
+
+  @override
+  String get dashboardQuickNoteText => 'נוסח ההערה';
+
+  @override
+  String get dashboardQuickNoteHint => 'לדוגמה: בלי בצל';
+
+  @override
+  String get dashboardQuickNoteSaved => 'ההערה נשמרה.';
+
+  @override
+  String get dashboardQuickNoteDuplicate => 'ההערה הזו כבר קיימת במסעדה.';
+
+  @override
+  String get dashboardQuickNoteDenied => 'אין לך הרשאה לשנות הערות מהירות.';
+
+  @override
+  String dashboardQuickNoteInvalid(int max) {
+    return 'הזינו נוסח של עד $max תווים.';
+  }
+
+  @override
+  String get dashboardQuickNoteSaveFailed =>
+      'לא ניתן היה לשמור את ההערה. שום דבר לא השתנה.';
+
+  @override
+  String get dashboardQuickNoteLoadFailed => 'לא ניתן היה לטעון הערות מהירות.';
+
+  @override
+  String get dashboardQuickNoteReorderFailed =>
+      'לא ניתן היה לשמור את הסדר החדש.';
 }

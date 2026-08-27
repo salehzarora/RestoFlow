@@ -1397,6 +1397,11 @@ void _editLine(
     groups: groups,
     currencyCode: currency,
     category: category,
+    // POS-QUICK-NOTES-124: the same chips as the add flow. This is the ONLY
+    // note-entry surface for a group-less item (its card adds directly), so
+    // the Edit path deliberately carries them too — no second entry point was
+    // invented for this phase.
+    quickNotes: menu?.quickNotePresets ?? const <PosQuickNotePreset>[],
     initialSelections: line.modifiers,
     initialNote: line.note,
     isEdit: true,

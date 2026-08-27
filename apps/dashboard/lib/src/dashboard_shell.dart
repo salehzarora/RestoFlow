@@ -30,6 +30,7 @@ import 'state/dashboard_providers.dart';
 import 'state/setup_device_providers.dart';
 import 'analytics/dashboard_destination.dart';
 import 'widgets/language_selector.dart';
+import 'quick_notes/quick_notes_repository.dart';
 import 'tables/tables_repository.dart';
 import 'tables/tables_screen.dart';
 
@@ -304,6 +305,25 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
+  /// POS-QUICK-NOTES-124: the restaurant-wide quick-note seam, built once.
+  /// Needs only a restaurant (v1 has no branch dimension), so a device scoped
+  /// to a restaurant without a branch still manages quick notes.
+  late final QuickNotesRepository? _quickNotesRepo = _buildQuickNotesRepo();
+
+  QuickNotesRepository? _buildQuickNotesRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    if (transport == null || membership == null || restaurantId == null) {
+      return null;
+    }
+    return SupabaseQuickNotesRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+    );
+  }
+
   /// RF-116: the settings read/write seam for the owner-only editable
   /// branch/restaurant fields, built once. Null unless there is an authenticated
   /// transport AND a concrete restaurant+branch in scope -> the editable section
@@ -560,6 +580,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   currencyChangeGuard: _currencyGuard,
                   brandingRepository: _brandingRepo,
                   brandingStorage: widget.brandingLogoStorage,
+                  quickNotesRepository: _quickNotesRepo,
                 ),
       },
     );

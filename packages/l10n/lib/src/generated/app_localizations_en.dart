@@ -7188,4 +7188,88 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kioskTableNoLongerAvailable =>
       'That table was just taken — please pick another.';
+
+  @override
+  String get posQuickNotesLabel => 'Quick notes';
+
+  @override
+  String posQuickNoteShowMore(int count) {
+    return 'More ($count)';
+  }
+
+  @override
+  String posQuickNoteTooLong(int max) {
+    return 'That would pass $max characters. Shorten the note first.';
+  }
+
+  @override
+  String get dashboardQuickNotesTitle => 'Quick notes';
+
+  @override
+  String get dashboardQuickNotesDescription =>
+      'One-tap phrases your cashiers can add to an item note. They apply to every POS in this restaurant.';
+
+  @override
+  String get dashboardQuickNotesEmpty =>
+      'No quick notes yet. Add the phrases your kitchen hears most.';
+
+  @override
+  String dashboardQuickNotesGuidance(int max) {
+    return 'More than $max makes the POS chips harder to scan mid-service.';
+  }
+
+  @override
+  String get dashboardQuickNoteAdd => 'Add note';
+
+  @override
+  String get dashboardQuickNoteEdit => 'Edit note';
+
+  @override
+  String get dashboardQuickNoteDelete => 'Delete note';
+
+  @override
+  String dashboardQuickNoteDeleteBody(String label) {
+    return 'Delete “$label”? Notes already written on orders keep their text.';
+  }
+
+  @override
+  String get dashboardQuickNoteEnable => 'Enable';
+
+  @override
+  String get dashboardQuickNoteDisable => 'Disable';
+
+  @override
+  String get dashboardQuickNoteDisabled => 'Disabled';
+
+  @override
+  String get dashboardQuickNoteText => 'Note text';
+
+  @override
+  String get dashboardQuickNoteHint => 'Example: no onions';
+
+  @override
+  String get dashboardQuickNoteSaved => 'Quick note saved.';
+
+  @override
+  String get dashboardQuickNoteDuplicate =>
+      'That note already exists in this restaurant.';
+
+  @override
+  String get dashboardQuickNoteDenied =>
+      'You don\'t have permission to change quick notes.';
+
+  @override
+  String dashboardQuickNoteInvalid(int max) {
+    return 'Enter note text of $max characters or fewer.';
+  }
+
+  @override
+  String get dashboardQuickNoteSaveFailed =>
+      'Couldn\'t save the quick note. Nothing changed.';
+
+  @override
+  String get dashboardQuickNoteLoadFailed => 'Couldn\'t load quick notes.';
+
+  @override
+  String get dashboardQuickNoteReorderFailed => 'Couldn\'t save the new order.';
 }

@@ -4583,5 +4583,66 @@
   "kioskTotalUpdated": "The total was updated",
   "kioskTotalUpdatedBody": "Please review the new total and confirm again.",
   "kioskOrderingUnavailable": "Ordering is unavailable on this kiosk right now — please order at the counter.",
-  "kioskTableNoLongerAvailable": "That table was just taken — please pick another."
+  "kioskTableNoLongerAvailable": "That table was just taken — please pick another.",
+  "posQuickNotesLabel": "Quick notes",
+  "@posQuickNotesLabel": {"description": "POS-QUICK-NOTES-124: heading of the one-tap preset chips above the per-item note field on the POS modifier sheet."},
+  "posQuickNoteShowMore": "More ({count})",
+  "@posQuickNoteShowMore": {
+    "description": "POS-QUICK-NOTES-124: reveals the quick-note presets beyond the first eight. {count} is how many are still hidden.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "posQuickNoteTooLong": "That would pass {max} characters. Shorten the note first.",
+  "@posQuickNoteTooLong": {
+    "description": "POS-QUICK-NOTES-124: the chip tap was refused because the composed note would exceed the note field's character limit. Nothing was written and nothing was truncated.",
+    "placeholders": {"max": {"type": "int"}}
+  },
+  "dashboardQuickNotesTitle": "Quick notes",
+  "@dashboardQuickNotesTitle": {"description": "POS-QUICK-NOTES-124: title of the Settings section where reusable POS note phrases are managed."},
+  "dashboardQuickNotesDescription": "One-tap phrases your cashiers can add to an item note. They apply to every POS in this restaurant.",
+  "@dashboardQuickNotesDescription": {"description": "POS-QUICK-NOTES-124: what quick notes are and that they are restaurant-wide (v1 has no branch override)."},
+  "dashboardQuickNotesEmpty": "No quick notes yet. Add the phrases your kitchen hears most.",
+  "@dashboardQuickNotesEmpty": {"description": "POS-QUICK-NOTES-124: empty state of the quick-notes list."},
+  "dashboardQuickNotesGuidance": "More than {max} makes the POS chips harder to scan mid-service.",
+  "@dashboardQuickNotesGuidance": {
+    "description": "POS-QUICK-NOTES-124: SOFT guidance only - nothing is blocked at this count.",
+    "placeholders": {"max": {"type": "int"}}
+  },
+  "dashboardQuickNoteAdd": "Add note",
+  "@dashboardQuickNoteAdd": {"description": "POS-QUICK-NOTES-124: opens the form that creates a quick note."},
+  "dashboardQuickNoteEdit": "Edit note",
+  "@dashboardQuickNoteEdit": {"description": "POS-QUICK-NOTES-124: opens the form that renames a quick note."},
+  "dashboardQuickNoteDelete": "Delete note",
+  "@dashboardQuickNoteDelete": {"description": "POS-QUICK-NOTES-124: removes a quick note (soft delete)."},
+  "dashboardQuickNoteDeleteBody": "Delete “{label}”? Notes already written on orders keep their text.",
+  "@dashboardQuickNoteDeleteBody": {
+    "description": "POS-QUICK-NOTES-124: delete confirmation. Deleting a preset cannot affect any order - the text was copied at tap time.",
+    "placeholders": {"label": {"type": "String"}}
+  },
+  "dashboardQuickNoteEnable": "Enable",
+  "@dashboardQuickNoteEnable": {"description": "POS-QUICK-NOTES-124: puts a switched-off quick note back on the POS."},
+  "dashboardQuickNoteDisable": "Disable",
+  "@dashboardQuickNoteDisable": {"description": "POS-QUICK-NOTES-124: keeps the quick note but stops offering it on the POS."},
+  "dashboardQuickNoteDisabled": "Disabled",
+  "@dashboardQuickNoteDisabled": {"description": "POS-QUICK-NOTES-124: badge on a quick note the owner switched off."},
+  "dashboardQuickNoteText": "Note text",
+  "@dashboardQuickNoteText": {"description": "POS-QUICK-NOTES-124: label of the quick-note text field."},
+  "dashboardQuickNoteHint": "Example: no onions",
+  "@dashboardQuickNoteHint": {"description": "POS-QUICK-NOTES-124: placeholder of the quick-note text field."},
+  "dashboardQuickNoteSaved": "Quick note saved.",
+  "@dashboardQuickNoteSaved": {"description": "POS-QUICK-NOTES-124: the write succeeded on the server."},
+  "dashboardQuickNoteDuplicate": "That note already exists in this restaurant.",
+  "@dashboardQuickNoteDuplicate": {"description": "POS-QUICK-NOTES-124: the server refused a live duplicate label."},
+  "dashboardQuickNoteDenied": "You don't have permission to change quick notes.",
+  "@dashboardQuickNoteDenied": {"description": "POS-QUICK-NOTES-124: quick notes are manager+ configuration."},
+  "dashboardQuickNoteInvalid": "Enter note text of {max} characters or fewer.",
+  "@dashboardQuickNoteInvalid": {
+    "description": "POS-QUICK-NOTES-124: the label was blank or longer than the strict limit. It is never truncated to fit.",
+    "placeholders": {"max": {"type": "int"}}
+  },
+  "dashboardQuickNoteSaveFailed": "Couldn't save the quick note. Nothing changed.",
+  "@dashboardQuickNoteSaveFailed": {"description": "POS-QUICK-NOTES-124: the write did not complete; the list is reloaded from the server."},
+  "dashboardQuickNoteLoadFailed": "Couldn't load quick notes.",
+  "@dashboardQuickNoteLoadFailed": {"description": "POS-QUICK-NOTES-124: the read failed; no list is invented."},
+  "dashboardQuickNoteReorderFailed": "Couldn't save the new order.",
+  "@dashboardQuickNoteReorderFailed": {"description": "POS-QUICK-NOTES-124: the reorder was refused; the server's order is restored."}
 }

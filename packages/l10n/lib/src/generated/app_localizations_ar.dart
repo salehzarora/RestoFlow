@@ -7133,4 +7133,88 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get kioskTableNoLongerAvailable =>
       'تم حجز هذه الطاولة للتو — يرجى اختيار طاولة أخرى.';
+
+  @override
+  String get posQuickNotesLabel => 'ملاحظات سريعة';
+
+  @override
+  String posQuickNoteShowMore(int count) {
+    return 'المزيد ($count)';
+  }
+
+  @override
+  String posQuickNoteTooLong(int max) {
+    return 'سيتجاوز ذلك $max حرفًا. اختصر الملاحظة أولاً.';
+  }
+
+  @override
+  String get dashboardQuickNotesTitle => 'ملاحظات سريعة';
+
+  @override
+  String get dashboardQuickNotesDescription =>
+      'عبارات تُضاف بلمسة واحدة إلى ملاحظة الصنف. تنطبق على جميع أجهزة نقاط البيع في هذا المطعم.';
+
+  @override
+  String get dashboardQuickNotesEmpty =>
+      'لا توجد ملاحظات سريعة بعد. أضف العبارات الأكثر تكرارًا.';
+
+  @override
+  String dashboardQuickNotesGuidance(int max) {
+    return 'أكثر من $max يجعل الملاحظات أصعب في القراءة أثناء الخدمة.';
+  }
+
+  @override
+  String get dashboardQuickNoteAdd => 'إضافة ملاحظة';
+
+  @override
+  String get dashboardQuickNoteEdit => 'تعديل الملاحظة';
+
+  @override
+  String get dashboardQuickNoteDelete => 'حذف الملاحظة';
+
+  @override
+  String dashboardQuickNoteDeleteBody(String label) {
+    return 'حذف «$label»؟ الملاحظات المكتوبة على الطلبات تبقى كما هي.';
+  }
+
+  @override
+  String get dashboardQuickNoteEnable => 'تفعيل';
+
+  @override
+  String get dashboardQuickNoteDisable => 'تعطيل';
+
+  @override
+  String get dashboardQuickNoteDisabled => 'معطّلة';
+
+  @override
+  String get dashboardQuickNoteText => 'نص الملاحظة';
+
+  @override
+  String get dashboardQuickNoteHint => 'مثال: بدون بصل';
+
+  @override
+  String get dashboardQuickNoteSaved => 'تم حفظ الملاحظة السريعة.';
+
+  @override
+  String get dashboardQuickNoteDuplicate =>
+      'هذه الملاحظة موجودة بالفعل في هذا المطعم.';
+
+  @override
+  String get dashboardQuickNoteDenied =>
+      'ليس لديك صلاحية لتغيير الملاحظات السريعة.';
+
+  @override
+  String dashboardQuickNoteInvalid(int max) {
+    return 'أدخل نصًا لا يتجاوز $max حرفًا.';
+  }
+
+  @override
+  String get dashboardQuickNoteSaveFailed =>
+      'تعذّر حفظ الملاحظة. لم يتغير شيء.';
+
+  @override
+  String get dashboardQuickNoteLoadFailed => 'تعذّر تحميل الملاحظات السريعة.';
+
+  @override
+  String get dashboardQuickNoteReorderFailed => 'تعذّر حفظ الترتيب الجديد.';
 }
