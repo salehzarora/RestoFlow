@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualMaterial, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualMaterial,
+        TableVisualPreset;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'table_models.dart';
@@ -36,6 +40,20 @@ String tableVisualMaterialLabel(
   TableVisualMaterial.rusticWood => l10n.tablesVisualMaterialRusticWood,
   TableVisualMaterial.plastic => l10n.tablesVisualMaterialPlastic,
   TableVisualMaterial.neutralModern => l10n.tablesVisualMaterialNeutralModern,
+};
+
+/// TABLE-ROOM-FRAME-121: the localized name of a section room size/shape
+/// (`null` = Standard — the legacy room).
+String roomFramePresetLabel(
+  AppLocalizations l10n,
+  TableSectionRoomFramePreset? p,
+) => switch (p) {
+  null => l10n.tablesRoomFrameStandard,
+  TableSectionRoomFramePreset.compact => l10n.tablesRoomFrameCompact,
+  TableSectionRoomFramePreset.square => l10n.tablesRoomFrameSquare,
+  TableSectionRoomFramePreset.wide => l10n.tablesRoomFrameWide,
+  TableSectionRoomFramePreset.portrait => l10n.tablesRoomFramePortrait,
+  TableSectionRoomFramePreset.longNarrow => l10n.tablesRoomFrameLongNarrow,
 };
 
 /// TABLE-VISUAL-CONFIGURATION-120C: the localized name of a fixture artwork

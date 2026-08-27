@@ -226,8 +226,8 @@ select ok((select t->>'visual_preset' is null from lt, jsonb_array_elements(res-
           'a legacy row serves a NULL preset (client default)');
 select is(
   (select array(select jsonb_object_keys(res->'sections'->0) order by 1) from lt),
-  array['branch_id','display_order','floor_preset','id','is_active','name'],
-  'list_tables sections pin EXACTLY the 021 five keys + floor_preset');
+  array['branch_id','display_order','floor_preset','id','is_active','name','room_frame_preset'],
+  'list_tables sections pin EXACTLY the 021 five keys + floor_preset (+ the 121 room_frame_preset)');
 select ok(
   (select (select s->>'floor_preset' from jsonb_array_elements(res->'sections') s where s->>'name' = 'Main Hall') = 'wood_dark'
       and (select s->>'floor_preset' is null from jsonb_array_elements(res->'sections') s where s->>'name' = 'Terrace')
@@ -243,7 +243,7 @@ select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
-        'status','visual_material','visual_preset'],
+        'section_room_frame_preset','status','visual_material','visual_preset'],
   'pos_tables rows pin EXACTLY the 021 thirteen keys + visual_preset + section_floor_preset (+ the 120 visual_material)');
 select is(
   (select (t->>'visual_preset', t->>'section_floor_preset') = ('booth_table', 'wood_dark')
@@ -263,7 +263,8 @@ select is((select (res->>'ok')::boolean from kt), true, 'kiosk_tables succeeds o
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from kt),
   array['area','effective_state','id','label','layout_x','layout_y','seats','section_display_order',
-        'section_floor_preset','section_id','section_name','visual_material','visual_preset'],
+        'section_floor_preset','section_id','section_name','section_room_frame_preset',
+        'visual_material','visual_preset'],
   'kiosk_tables rows pin EXACTLY the Phase-2 eight keys + layout_x/layout_y/visual_preset/section_floor_preset (+ the 120 visual_material)');
 select is(
   (select (t->>'layout_x', t->>'layout_y', t->>'visual_preset', t->>'section_floor_preset')

@@ -3967,6 +3967,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'Neutral stone';
 
   @override
+  String get tablesRoomFrame => 'Room size / shape';
+
+  @override
+  String get tablesRoomFrameStandard => 'Standard';
+
+  @override
+  String get tablesRoomFrameCompact => 'Compact';
+
+  @override
+  String get tablesRoomFrameSquare => 'Square';
+
+  @override
+  String get tablesRoomFrameWide => 'Wide hall';
+
+  @override
+  String get tablesRoomFramePortrait => 'Tall room';
+
+  @override
+  String get tablesRoomFrameLongNarrow => 'Long corridor';
+
+  @override
   String get tablesVisualMaterial => 'Material / finish';
 
   @override

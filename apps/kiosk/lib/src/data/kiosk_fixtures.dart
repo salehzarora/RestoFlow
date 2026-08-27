@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualMaterial, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualMaterial,
+        TableVisualPreset;
 
 /// KIOSK-001 Phase 1 fixture data + the shared kiosk MENU VIEW-MODEL types.
 ///
@@ -237,6 +241,7 @@ class KioskFixtureZone {
     required this.tables,
     this.displayName,
     this.floorPreset = FloorPreset.plainLight,
+    this.roomFramePreset,
     this.elements = const [],
   });
 
@@ -253,6 +258,10 @@ class KioskFixtureZone {
   /// fixtures — the same map the Dashboard configured.
   final FloorPreset floorPreset;
   final List<KioskFloorElement> elements;
+
+  /// TABLE-ROOM-FRAME-121: the section's room size/shape (NULL = Standard =
+  /// the legacy room) — the same frame every other surface projects with.
+  final TableSectionRoomFramePreset? roomFramePreset;
 }
 
 /// Brand block — the artifact's demo brand. Wordmark stays Latin in every

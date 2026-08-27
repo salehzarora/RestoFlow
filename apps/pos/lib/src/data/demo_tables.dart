@@ -44,6 +44,7 @@ class DemoTable {
     this.visualPreset = TableVisualPreset.classicRectTable,
     this.visualMaterial,
     this.sectionFloorPreset = FloorPreset.plainLight,
+    this.sectionRoomFramePreset,
     String? memberEffectiveState,
     int? memberActiveOrderCount,
   }) : _memberEffectiveState = memberEffectiveState,
@@ -71,6 +72,11 @@ class DemoTable {
   /// or the saved placement.
   final TableVisualPreset visualPreset;
   final FloorPreset sectionFloorPreset;
+
+  /// TABLE-ROOM-FRAME-121: the owning section's room size/shape
+  /// (`section_room_frame_preset` riding on every row, like the floor
+  /// preset). NULL = Standard = the legacy room. Presentation only.
+  final TableSectionRoomFramePreset? sectionRoomFramePreset;
 
   /// TABLE-VISUAL-CONFIGURATION-120: the persisted surface material
   /// (`visual_material`; null = Auto — the deterministic 119D mapping).
@@ -178,7 +184,9 @@ class DemoTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset,
+    visualMaterial: visualMaterial,
     sectionFloorPreset: sectionFloorPreset,
+    sectionRoomFramePreset: sectionRoomFramePreset,
     memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
     memberActiveOrderCount:
         memberActiveOrderCount ?? this.memberActiveOrderCount,
@@ -568,6 +576,10 @@ class RealTablesRepository extends TablesRepository {
           visualPreset: TableVisualPreset.fromWire(row['visual_preset']),
           visualMaterial: TableVisualMaterial.tryParse(row['visual_material']),
           sectionFloorPreset: FloorPreset.fromWire(row['section_floor_preset']),
+          // 121: tolerant decode — absent/NULL/unknown => Standard (null).
+          sectionRoomFramePreset: TableSectionRoomFramePreset.tryParse(
+            row['section_room_frame_preset']?.toString(),
+          ),
         ),
       );
     }

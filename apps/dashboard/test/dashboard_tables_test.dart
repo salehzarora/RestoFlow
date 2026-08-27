@@ -8,7 +8,11 @@ import 'package:restoflow_dashboard/src/tables/tables_repository.dart';
 import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualMaterial, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualMaterial,
+        TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show
         AdminPermissionDenied,
@@ -117,6 +121,12 @@ class _EmptyTablesRepo implements TablesAdminRepository {
   Future<AdminResult<void>> setFloorElementStyle(
     String elementId,
     String? style,
+  ) async => const Success(null);
+
+  @override
+  Future<AdminResult<void>> setSectionRoomFramePreset(
+    String sectionId,
+    TableSectionRoomFramePreset? preset,
   ) async => const Success(null);
 }
 

@@ -9,6 +9,7 @@ library;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPreset,
+        TableSectionRoomFramePreset,
         TableVisualMaterial,
         TableVisualPreset,
         aggregateTableGroup,
@@ -48,6 +49,7 @@ class DashboardTableSection {
     required this.isActive,
     required this.branchId,
     this.floorPreset = FloorPreset.plainLight,
+    this.roomFramePreset,
   });
 
   final String id;
@@ -61,11 +63,18 @@ class DashboardTableSection {
   /// light). Written only through the dedicated setter.
   final FloorPreset floorPreset;
 
+  /// TABLE-ROOM-FRAME-121: the section's room size/shape
+  /// (`table_sections.room_frame_preset`, NULL = Standard = the legacy
+  /// room). Written only through the dedicated setter.
+  final TableSectionRoomFramePreset? roomFramePreset;
+
   DashboardTableSection copyWith({
     String? name,
     int? displayOrder,
     bool? isActive,
     FloorPreset? floorPreset,
+    TableSectionRoomFramePreset? roomFramePreset,
+    bool clearRoomFramePreset = false,
   }) => DashboardTableSection(
     id: id,
     name: name ?? this.name,
@@ -73,6 +82,9 @@ class DashboardTableSection {
     isActive: isActive ?? this.isActive,
     branchId: branchId,
     floorPreset: floorPreset ?? this.floorPreset,
+    roomFramePreset: clearRoomFramePreset
+        ? null
+        : (roomFramePreset ?? this.roomFramePreset),
   );
 }
 
@@ -269,15 +281,17 @@ class DashboardTable {
   );
 
   /// TABLE-VISUAL-LAYOUT-118: a copy with a different visual preset (the
-  /// in-memory demo store + the dialog's optimistic apply).
+  /// in-memory demo store + the dialog's optimistic apply). 121 review: also
+  /// the status, so the demo store's setStatus preserves every other field.
   DashboardTable copyWith({
+    DiningTableStatus? status,
     TableVisualPreset? visualPreset,
     TableVisualMaterial? visualMaterial,
     bool clearVisualMaterial = false,
   }) => DashboardTable(
     id: id,
     label: label,
-    status: status,
+    status: status ?? this.status,
     isActive: isActive,
     branchId: branchId,
     seats: seats,

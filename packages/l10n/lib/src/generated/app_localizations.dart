@@ -7246,6 +7246,48 @@ abstract class AppLocalizations {
   /// **'Neutral stone'**
   String get tablesFloorPresetStoneNeutral;
 
+  /// TABLE-ROOM-FRAME-121: label/tooltip of the per-section room frame picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Room size / shape'**
+  String get tablesRoomFrame;
+
+  /// TABLE-ROOM-FRAME-121: the default room frame (NULL — the legacy room).
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get tablesRoomFrameStandard;
+
+  /// TABLE-ROOM-FRAME-121: room frame compact.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get tablesRoomFrameCompact;
+
+  /// TABLE-ROOM-FRAME-121: room frame square.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get tablesRoomFrameSquare;
+
+  /// TABLE-ROOM-FRAME-121: room frame wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide hall'**
+  String get tablesRoomFrameWide;
+
+  /// TABLE-ROOM-FRAME-121: room frame portrait.
+  ///
+  /// In en, this message translates to:
+  /// **'Tall room'**
+  String get tablesRoomFramePortrait;
+
+  /// TABLE-ROOM-FRAME-121: room frame long_narrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Long corridor'**
+  String get tablesRoomFrameLongNarrow;
+
   /// TABLE-VISUAL-CONFIGURATION-120C: label of the per-table material swatch row (Dashboard table dialog).
   ///
   /// In en, this message translates to:

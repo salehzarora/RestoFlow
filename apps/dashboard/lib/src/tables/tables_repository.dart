@@ -16,6 +16,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPreset,
+        TableSectionRoomFramePreset,
         TableVisualMaterial,
         TableVisualPreset,
         isFloorElementStyleAllowed;
@@ -122,6 +123,13 @@ abstract class TablesAdminRepository {
   Future<AdminResult<void>> setFloorElementStyle(
     String elementId,
     String? style,
+  );
+
+  /// TABLE-ROOM-FRAME-121 — `public.set_table_section_room_frame_preset`:
+  /// the ONLY writer of a section's room size/shape key (null = Standard).
+  Future<AdminResult<void>> setSectionRoomFramePreset(
+    String sectionId,
+    TableSectionRoomFramePreset? preset,
   );
 }
 
@@ -323,12 +331,11 @@ class InMemoryTablesStore implements TablesAdminRepository {
     if (duplicate) return const Failure(AdminConflict('duplicate_name'));
     final index = _sections.indexWhere((s) => s.id == id);
     if (index >= 0) {
-      _sections[index] = DashboardTableSection(
-        id: _sections[index].id,
+      // 121 review: copyWith, so the presentation keys (floor preset, room
+      // frame) survive a rename/toggle exactly like they do on the backend.
+      _sections[index] = _sections[index].copyWith(
         name: trimmed,
-        displayOrder: _sections[index].displayOrder,
         isActive: isActive,
-        branchId: _sections[index].branchId,
       );
       // Keep the denormalized section name on assigned tables honest.
       for (var i = 0; i < _tables.length; i++) {
@@ -433,13 +440,8 @@ class InMemoryTablesStore implements TablesAdminRepository {
     for (var i = 0; i < ids.length; i++) {
       final index = _sections.indexWhere((s) => s.id == ids[i]);
       if (index < 0) return const Failure(AdminTransient());
-      _sections[index] = DashboardTableSection(
-        id: _sections[index].id,
-        name: _sections[index].name,
-        displayOrder: i,
-        isActive: _sections[index].isActive,
-        branchId: _sections[index].branchId,
-      );
+      // 121 review: copyWith preserves the presentation keys on reorder.
+      _sections[index] = _sections[index].copyWith(displayOrder: i);
     }
     return const Success(null);
   }
@@ -463,6 +465,20 @@ class InMemoryTablesStore implements TablesAdminRepository {
     final index = _sections.indexWhere((s) => s.id == sectionId);
     if (index < 0) return const Failure(AdminTransient());
     _sections[index] = _sections[index].copyWith(floorPreset: preset);
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setSectionRoomFramePreset(
+    String sectionId,
+    TableSectionRoomFramePreset? preset,
+  ) async {
+    final index = _sections.indexWhere((s) => s.id == sectionId);
+    if (index < 0) return const Failure(AdminTransient());
+    _sections[index] = _sections[index].copyWith(
+      roomFramePreset: preset,
+      clearRoomFramePreset: preset == null,
+    );
     return const Success(null);
   }
 
@@ -512,20 +528,30 @@ class InMemoryTablesStore implements TablesAdminRepository {
     }
     final index = _tables.indexWhere((t) => t.id == id);
     final trimmedArea = area?.trim();
+    final existing = index >= 0 ? _tables[index] : null;
     final table = DashboardTable(
       id: id ?? 'demo-table-new-${++_seq}',
       label: name,
       seats: seats,
       area: (trimmedArea?.isEmpty ?? true) ? null : trimmedArea,
       // Upsert never touches the operational status (setStatus owns it).
-      status: index >= 0 ? _tables[index].status : DiningTableStatus.available,
+      status: existing?.status ?? DiningTableStatus.available,
       isActive: isActive,
-      branchId: index >= 0 ? _tables[index].branchId : 'demo-branch',
-      // 118: the full-replace upsert never touches the preset (mirrors the
-      // backend, where the shape lives outside upsert_table).
-      visualPreset: index >= 0
-          ? _tables[index].visualPreset
-          : TableVisualPreset.classicRectTable,
+      branchId: existing?.branchId ?? 'demo-branch',
+      // 121 review: everything upsert_table does NOT own survives the
+      // update — occupancy/group display truth, section + placement, and
+      // both 118/120 visual keys (they live behind their dedicated setters).
+      activeOrderCount: existing?.activeOrderCount ?? 0,
+      effectiveState: existing?.effectiveState,
+      groupId: existing?.groupId,
+      sectionId: existing?.sectionId,
+      sectionName: existing?.sectionName,
+      sectionDisplayOrder: existing?.sectionDisplayOrder,
+      layoutX: existing?.layoutX,
+      layoutY: existing?.layoutY,
+      visualPreset:
+          existing?.visualPreset ?? TableVisualPreset.classicRectTable,
+      visualMaterial: existing?.visualMaterial,
     );
     if (index >= 0) {
       _tables[index] = table;
@@ -543,16 +569,9 @@ class InMemoryTablesStore implements TablesAdminRepository {
   ) async {
     final index = _tables.indexWhere((t) => t.id == id);
     if (index < 0) return const Failure(AdminTransient());
-    final t = _tables[index];
-    _tables[index] = DashboardTable(
-      id: t.id,
-      label: t.label,
-      seats: t.seats,
-      area: t.area,
-      status: status,
-      isActive: t.isActive,
-      branchId: t.branchId,
-    );
+    // 121 review: copyWith — the status flip must not detach the section/
+    // placement or reset the visual keys (mirrors set_table_status).
+    _tables[index] = _tables[index].copyWith(status: status);
     return const Success(null);
   }
 
@@ -684,6 +703,10 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       branchId: (row['branch_id'] ?? '').toString(),
       // 118: tolerant decode — absent/NULL/unknown => plain light.
       floorPreset: FloorPreset.fromWire(row['floor_preset']),
+      // 121: tolerant decode — absent/NULL/unknown => Standard (null).
+      roomFramePreset: TableSectionRoomFramePreset.tryParse(
+        row['room_frame_preset']?.toString(),
+      ),
     );
   }
 
@@ -792,6 +815,21 @@ class SupabaseTablesRepository implements TablesAdminRepository {
     'p_section_id': sectionId,
     'p_floor_preset': preset.wire,
   });
+
+  @override
+  Future<AdminResult<void>> setSectionRoomFramePreset(
+    String sectionId,
+    TableSectionRoomFramePreset? preset,
+  ) async =>
+      _invokeVoid('set_table_section_room_frame_preset', <String, dynamic>{
+        'p_client_request_id': _requestId('set-room-frame', [
+          sectionId,
+          preset?.wire ?? '',
+        ]),
+        'p_organization_id': _scope.organizationId,
+        'p_section_id': sectionId,
+        'p_room_frame_preset': preset?.wire,
+      });
 
   @override
   Future<AdminResult<String>> upsertTable({

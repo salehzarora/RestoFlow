@@ -220,33 +220,41 @@ class _TablesScreenState extends State<TablesScreen> {
       ),
       children: [
         // ------------------------------------------------------------ floor
-        Row(
+        // 121 review: a Wrap, not a Row — at phone widths the two action
+        // buttons drop under the title instead of overflowing the screen.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: RestoflowSpacing.xs,
           children: [
-            Expanded(
-              child: Text(
-                l10n.tablesSectionsTitle,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+            Text(
+              l10n.tablesSectionsTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                OutlinedButton.icon(
+                  key: const Key('tables-add-section'),
+                  onPressed: () => _showSectionDialog(context),
+                  icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+                  label: Text(l10n.tablesSectionAdd),
                 ),
-              ),
-            ),
-            OutlinedButton.icon(
-              key: const Key('tables-add-section'),
-              onPressed: () => _showSectionDialog(context),
-              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
-              label: Text(l10n.tablesSectionAdd),
-            ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            FilledButton.tonalIcon(
-              key: const Key('tables-arrange-toggle'),
-              onPressed: () => setState(() => _arrange = !_arrange),
-              icon: Icon(
-                _arrange ? Icons.done : Icons.open_with,
-                size: RestoflowIconSizes.sm,
-              ),
-              label: Text(
-                _arrange ? l10n.tablesArrangeDone : l10n.tablesArrange,
-              ),
+                FilledButton.tonalIcon(
+                  key: const Key('tables-arrange-toggle'),
+                  onPressed: () => setState(() => _arrange = !_arrange),
+                  icon: Icon(
+                    _arrange ? Icons.done : Icons.open_with,
+                    size: RestoflowIconSizes.sm,
+                  ),
+                  label: Text(
+                    _arrange ? l10n.tablesArrangeDone : l10n.tablesArrange,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -276,6 +284,12 @@ class _TablesScreenState extends State<TablesScreen> {
           // 118: the floor style picker persists through the dedicated setter.
           onSetFloorPreset: (section, preset) => _run(
             () => widget.repository.setSectionFloorPreset(section.id, preset),
+          ),
+          // 121: the room size/shape picker persists through the dedicated
+          // setter (null = Standard clears).
+          onSetRoomFrame: (section, preset) => _run(
+            () =>
+                widget.repository.setSectionRoomFramePreset(section.id, preset),
           ),
         ),
         const Divider(height: RestoflowSpacing.xl),

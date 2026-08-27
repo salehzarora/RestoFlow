@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPreset,
+        TableSectionRoomFramePreset,
         TableVisualMaterial,
         TableVisualPreset,
         isFloorElementStyleAllowed;
@@ -281,8 +282,10 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
   final sectionNames = <String, String?>{};
   final sectionOrder = <String, int>{};
   // TABLE-VISUAL-LAYOUT-118: the section floor rides on each row (no section
-  // catalog on this wire); the first non-default key wins.
+  // catalog on this wire); the first non-default key wins. 121: the room
+  // frame rides the same way.
   final sectionFloor = <String, FloorPreset>{};
+  final sectionFrame = <String, TableSectionRoomFramePreset>{};
   for (final row in rows) {
     if (row is! Map) continue;
     final id = _optionalText(row['id']);
@@ -295,6 +298,11 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
     if (order is int) sectionOrder[sectionId] = order;
     final floor = FloorPreset.fromWire(row['section_floor_preset']);
     if (floor != FloorPreset.plainLight) sectionFloor[sectionId] ??= floor;
+    // 121: tolerant decode — absent/NULL/unknown => Standard (null).
+    final frame = TableSectionRoomFramePreset.tryParse(
+      row['section_room_frame_preset']?.toString(),
+    );
+    if (frame != null) sectionFrame[sectionId] ??= frame;
     // 118: the saved placement — both-or-neither (never trust one axis) and
     // inside the room; anything else renders as unplaced (list card).
     final rawX = row['layout_x'];
@@ -382,6 +390,7 @@ List<KioskFixtureZone>? mapKioskTablesEnvelope(Map<dynamic, dynamic> raw) {
         displayName: sectionNames[sid],
         tables: tablesBySection[sid]!,
         floorPreset: sectionFloor[sid] ?? FloorPreset.plainLight,
+        roomFramePreset: sectionFrame[sid],
         elements: elementsBySection[sid] ?? const [],
       ),
   ];

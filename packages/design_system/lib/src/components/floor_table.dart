@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualPreset,
+        floorRoomAspect,
+        kFloorStandardAspect;
 
 import 'floor_presets.dart';
 import 'floor_scene_theme.dart';
@@ -35,7 +40,15 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
     this.aspectRatio = kRestoflowFloorSectionAspect,
     this.overlay,
     this.floorPreset = FloorPreset.plainLight,
+    this.roomFrame,
   });
+
+  /// TABLE-ROOM-FRAME-121: the section's optional ROOM FRAME preset. When
+  /// set, the canvas resolves its width:height from the frame (the SHARED
+  /// projection — callers compute room rects through the same frame, so the
+  /// furniture's on-screen physical aspect never changes); NULL keeps
+  /// [aspectRatio] (default: the legacy tokenized ratio) byte-for-byte.
+  final TableSectionRoomFramePreset? roomFrame;
 
   /// TABLE-VISUAL-LAYOUT-118: the section's floor style. The default paints
   /// the pre-118 white canvas exactly; any other preset paints ONE pattern
@@ -72,7 +85,8 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
     final theme = Theme.of(context);
     final palette = RestoflowFloorPresetPalette.of(floorPreset);
     return AspectRatio(
-      aspectRatio: aspectRatio,
+      // 121: a room frame overrides the caller ratio; NULL = legacy exactly.
+      aspectRatio: roomFrame == null ? aspectRatio : floorRoomAspect(roomFrame),
       child: DecoratedBox(
         decoration: BoxDecoration(
           // 118: the preset base (plain light == the pre-118 Colors.white).
@@ -152,8 +166,9 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
 
 /// The tokenized section canvas ratio (width : height).
 /// 027: 1.6 → 1.9 (≈16% shorter maps at the same width; one shared token —
-/// never a per-surface ratio).
-const double kRestoflowFloorSectionAspect = 1.9;
+/// never a per-surface ratio). 121: this IS the domain's Standard room-frame
+/// aspect — the two constants must never diverge.
+const double kRestoflowFloorSectionAspect = kFloorStandardAspect;
 
 /// 027: the minimum canvas width at which floor tiles stay readable; below
 /// it the canvas scrolls horizontally instead of shrinking geometry.

@@ -3946,6 +3946,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'حجر محايد';
 
   @override
+  String get tablesRoomFrame => 'حجم / شكل القاعة';
+
+  @override
+  String get tablesRoomFrameStandard => 'قياسي';
+
+  @override
+  String get tablesRoomFrameCompact => 'مضغوط';
+
+  @override
+  String get tablesRoomFrameSquare => 'مربع';
+
+  @override
+  String get tablesRoomFrameWide => 'قاعة عريضة';
+
+  @override
+  String get tablesRoomFramePortrait => 'قاعة طويلة';
+
+  @override
+  String get tablesRoomFrameLongNarrow => 'ممر ضيق';
+
+  @override
   String get tablesVisualMaterial => 'الخامة / التشطيب';
 
   @override

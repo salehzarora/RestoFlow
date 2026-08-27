@@ -292,7 +292,7 @@ select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
-        'status','visual_material','visual_preset'],
+        'section_room_frame_preset','status','visual_material','visual_preset'],
   'pos_tables rows pin EXACTLY the eight existing + five new keys (+ the 118/120 presentation keys)');
 select is(
   (select res->'tables'->0->>'label' from pos_read), 'Alpha',

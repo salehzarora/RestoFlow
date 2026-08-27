@@ -3915,6 +3915,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'אבן ניטרלית';
 
   @override
+  String get tablesRoomFrame => 'גודל / צורת האולם';
+
+  @override
+  String get tablesRoomFrameStandard => 'רגיל';
+
+  @override
+  String get tablesRoomFrameCompact => 'קומפקטי';
+
+  @override
+  String get tablesRoomFrameSquare => 'מרובע';
+
+  @override
+  String get tablesRoomFrameWide => 'אולם רחב';
+
+  @override
+  String get tablesRoomFramePortrait => 'חדר גבוה';
+
+  @override
+  String get tablesRoomFrameLongNarrow => 'מסדרון ארוך';
+
+  @override
   String get tablesVisualMaterial => 'חומר / גימור';
 
   @override

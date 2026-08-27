@@ -342,7 +342,7 @@ select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
   array['active_order_count','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
-        'status','visual_material','visual_preset'],
+        'section_room_frame_preset','status','visual_material','visual_preset'],
   'pos_tables rows pin EXACTLY the 118 fifteen keys + visual_material');
 select is(
   (select e->>'visual_style' from pos_read, jsonb_array_elements(res->'floor_elements') e
@@ -353,7 +353,8 @@ create temp table kt as select public.kiosk_tables(
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from kt),
   array['area','effective_state','id','label','layout_x','layout_y','seats','section_display_order',
-        'section_floor_preset','section_id','section_name','visual_material','visual_preset'],
+        'section_floor_preset','section_id','section_name','section_room_frame_preset',
+        'visual_material','visual_preset'],
   'kiosk_tables rows pin EXACTLY the 118 twelve keys + visual_material');
 select is(
   (select array(select jsonb_object_keys(res->'floor_elements'->0) order by 1) from kt),
