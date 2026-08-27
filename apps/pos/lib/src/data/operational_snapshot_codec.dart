@@ -26,6 +26,7 @@ import '../state/pos_menu_provider.dart'
         PosMenuData,
         PosModifierGroup,
         PosModifierOption,
+        PosQuickNotePreset,
         resolvePosCategoryStyle;
 import 'demo_menu.dart' show DemoCategory, DemoMenuItem;
 
@@ -42,6 +43,11 @@ import 'demo_menu.dart' show DemoCategory, DemoMenuItem;
 /// with the key absent, and an older build reading a newer snapshot ignores it.
 /// Bumping the version would discard every cached menu, stranding any till that
 /// happened to be offline during the upgrade.
+///
+/// POS-QUICK-NOTES-124 adds `quick_note_presets` on exactly the same terms, and
+/// for the same reason: a till that reboots offline should still offer the
+/// chips it had, and a till that has never seen them should simply show none.
+/// The key is optional in BOTH directions, so `schemaVersion` again stays at 1.
 Map<String, Object?> encodePosMenuData(PosMenuData menu) => <String, Object?>{
   'currency_code': menu.currencyCode,
   'categories': <Object?>[
@@ -56,6 +62,17 @@ Map<String, Object?> encodePosMenuData(PosMenuData menu) => <String, Object?>{
   'modifier_groups': <Object?>[
     for (final group in menu.modifierGroups) _encodeGroup(group),
   ],
+  // Written only when there is something to write, so a snapshot from a
+  // restaurant with no presets is byte-identical to a pre-124 one.
+  if (menu.quickNotePresets.isNotEmpty)
+    'quick_note_presets': <Object?>[
+      for (final preset in menu.quickNotePresets)
+        <String, Object?>{
+          'id': preset.id,
+          'label': preset.label,
+          'display_order': preset.displayOrder,
+        },
+    ],
 };
 
 /// Decodes a stored menu payload, throwing [FormatException] when ANY record
@@ -108,11 +125,39 @@ PosMenuData decodePosMenuData(Map<String, Object?> json) {
     groups.add(_decodeGroup(raw.cast<String, Object?>()));
   }
 
+  // POS-QUICK-NOTES-124 — the one TOLERANT record in this otherwise strict
+  // codec, and deliberately so. Everything above is a pricing input, where a
+  // half-read menu means a silent under-charge; a quick note carries no money
+  // at all, so an unreadable one costs a chip and a missing key costs nothing.
+  // Failing the whole cached menu over it would strand an offline till for a
+  // reason that cannot affect a single figure.
+  final quickNotes = <PosQuickNotePreset>[];
+  final rawQuickNotes = json['quick_note_presets'];
+  if (rawQuickNotes is List) {
+    for (final raw in rawQuickNotes) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      final label = raw['label'];
+      if (id is! String || id.isEmpty || label is! String || label.isEmpty) {
+        continue;
+      }
+      final order = raw['display_order'];
+      quickNotes.add(
+        PosQuickNotePreset(
+          id: id,
+          label: label,
+          displayOrder: order is int ? order : quickNotes.length,
+        ),
+      );
+    }
+  }
+
   return PosMenuData(
     categories: categories,
     items: items,
     currencyCode: currency,
     modifierGroups: groups,
+    quickNotePresets: quickNotes,
   );
 }
 

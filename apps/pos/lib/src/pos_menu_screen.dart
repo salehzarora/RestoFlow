@@ -932,6 +932,11 @@ class _MenuGrid extends ConsumerWidget {
                                     groups: groups,
                                     currencyCode: menu.currencyCode,
                                     category: menu.categoryOf(item.categoryId),
+                                    // POS-QUICK-NOTES-124: the ACTIVE menu's
+                                    // presets. Empty on a backend without the
+                                    // feature — the sheet then renders exactly
+                                    // as it did before.
+                                    quickNotes: menu.quickNotePresets,
                                     onConfirm: (selections, note, quantity) {
                                       if (controller.addItemWithModifiers(
                                             item,

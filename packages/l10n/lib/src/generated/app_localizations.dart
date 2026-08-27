@@ -12975,6 +12975,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That table was just taken — please pick another.'**
   String get kioskTableNoLongerAvailable;
+
+  /// POS-QUICK-NOTES-124: heading of the one-tap preset chips above the per-item note field on the POS modifier sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick notes'**
+  String get posQuickNotesLabel;
+
+  /// POS-QUICK-NOTES-124: reveals the quick-note presets beyond the first eight. {count} is how many are still hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'More ({count})'**
+  String posQuickNoteShowMore(int count);
+
+  /// POS-QUICK-NOTES-124: the chip tap was refused because the composed note would exceed the note field's character limit. Nothing was written and nothing was truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'That would pass {max} characters. Shorten the note first.'**
+  String posQuickNoteTooLong(int max);
+
+  /// POS-QUICK-NOTES-124: title of the Settings section where reusable POS note phrases are managed.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick notes'**
+  String get dashboardQuickNotesTitle;
+
+  /// POS-QUICK-NOTES-124: what quick notes are and that they are restaurant-wide (v1 has no branch override).
+  ///
+  /// In en, this message translates to:
+  /// **'One-tap phrases your cashiers can add to an item note. They apply to every POS in this restaurant.'**
+  String get dashboardQuickNotesDescription;
+
+  /// POS-QUICK-NOTES-124: empty state of the quick-notes list.
+  ///
+  /// In en, this message translates to:
+  /// **'No quick notes yet. Add the phrases your kitchen hears most.'**
+  String get dashboardQuickNotesEmpty;
+
+  /// POS-QUICK-NOTES-124: SOFT guidance only - nothing is blocked at this count.
+  ///
+  /// In en, this message translates to:
+  /// **'More than {max} makes the POS chips harder to scan mid-service.'**
+  String dashboardQuickNotesGuidance(int max);
+
+  /// POS-QUICK-NOTES-124: opens the form that creates a quick note.
+  ///
+  /// In en, this message translates to:
+  /// **'Add note'**
+  String get dashboardQuickNoteAdd;
+
+  /// POS-QUICK-NOTES-124: opens the form that renames a quick note.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit note'**
+  String get dashboardQuickNoteEdit;
+
+  /// POS-QUICK-NOTES-124: removes a quick note (soft delete).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete note'**
+  String get dashboardQuickNoteDelete;
+
+  /// POS-QUICK-NOTES-124: delete confirmation. Deleting a preset cannot affect any order - the text was copied at tap time.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{label}”? Notes already written on orders keep their text.'**
+  String dashboardQuickNoteDeleteBody(String label);
+
+  /// POS-QUICK-NOTES-124: puts a switched-off quick note back on the POS.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get dashboardQuickNoteEnable;
+
+  /// POS-QUICK-NOTES-124: keeps the quick note but stops offering it on the POS.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get dashboardQuickNoteDisable;
+
+  /// POS-QUICK-NOTES-124: badge on a quick note the owner switched off.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get dashboardQuickNoteDisabled;
+
+  /// POS-QUICK-NOTES-124: label of the quick-note text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Note text'**
+  String get dashboardQuickNoteText;
+
+  /// POS-QUICK-NOTES-124: placeholder of the quick-note text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Example: no onions'**
+  String get dashboardQuickNoteHint;
+
+  /// POS-QUICK-NOTES-124: the write succeeded on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick note saved.'**
+  String get dashboardQuickNoteSaved;
+
+  /// POS-QUICK-NOTES-124: the server refused a live duplicate label.
+  ///
+  /// In en, this message translates to:
+  /// **'That note already exists in this restaurant.'**
+  String get dashboardQuickNoteDuplicate;
+
+  /// POS-QUICK-NOTES-124: quick notes are manager+ configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to change quick notes.'**
+  String get dashboardQuickNoteDenied;
+
+  /// POS-QUICK-NOTES-124: the label was blank or longer than the strict limit. It is never truncated to fit.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter note text of {max} characters or fewer.'**
+  String dashboardQuickNoteInvalid(int max);
+
+  /// POS-QUICK-NOTES-124: the write did not complete; the list is reloaded from the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the quick note. Nothing changed.'**
+  String get dashboardQuickNoteSaveFailed;
+
+  /// POS-QUICK-NOTES-124: the read failed; no list is invented.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load quick notes.'**
+  String get dashboardQuickNoteLoadFailed;
+
+  /// POS-QUICK-NOTES-124: the reorder was refused; the server's order is restored.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the new order.'**
+  String get dashboardQuickNoteReorderFailed;
 }
 
 class _AppLocalizationsDelegate

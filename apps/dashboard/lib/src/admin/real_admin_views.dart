@@ -10,6 +10,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../branding/restaurant_logo_repository.dart';
 import '../branding/restaurant_logo_section.dart';
 import '../branding/restaurant_logo_storage.dart';
+import '../quick_notes/quick_notes_repository.dart';
+import '../quick_notes/quick_notes_section.dart';
 import 'branch_kitchen_workflow_repository.dart';
 import 'branch_shift_close_policy_repository.dart';
 import 'currency_change_guard.dart';
@@ -66,6 +68,7 @@ class RealSettingsView extends StatefulWidget {
     this.brandingRepository,
     this.brandingStorage,
     this.kitchenWorkflowRepository,
+    this.quickNotesRepository,
     super.key,
   });
 
@@ -99,6 +102,12 @@ class RealSettingsView extends StatefulWidget {
   /// currency change. Null is treated exactly like a failed check — the change
   /// is refused, never silently allowed.
   final CurrencyChangeGuard? currencyChangeGuard;
+
+  /// POS-QUICK-NOTES-124: the restaurant-wide quick-note seam. Null when there
+  /// is no authenticated transport or no concrete RESTAURANT in scope — the
+  /// section is then omitted entirely rather than rendered as a control that
+  /// cannot reach a server. (No branch is required: v1 is restaurant-wide.)
+  final QuickNotesRepository? quickNotesRepository;
 
   @override
   State<RealSettingsView> createState() => _RealSettingsViewState();
@@ -699,6 +708,12 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             icon: Icons.point_of_sale_outlined,
             child: _shiftClosePolicy(context, l10n),
           ),
+        ],
+        // POS-QUICK-NOTES-124: restaurant-wide POS input shortcuts. It brings
+        // its own AdminSectionCard because it owns its load/error/empty states.
+        if (widget.quickNotesRepository != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          QuickNotesSection(repository: widget.quickNotesRepository!),
         ],
       ],
     );

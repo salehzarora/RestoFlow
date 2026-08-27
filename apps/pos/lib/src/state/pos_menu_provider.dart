@@ -27,6 +27,7 @@ class PosMenuData {
     required this.items,
     required this.currencyCode,
     this.modifierGroups = const <PosModifierGroup>[],
+    this.quickNotePresets = const <PosQuickNotePreset>[],
   });
 
   final List<DemoCategory> categories;
@@ -37,6 +38,16 @@ class PosMenuData {
   /// toppings, doneness, extras. Price deltas are integer minor units (D-007;
   /// SIGNED — a delta may be free or paid).
   final List<PosModifierGroup> modifierGroups;
+
+  /// POS-QUICK-NOTES-124 — the restaurant's reusable note phrases, in the
+  /// owner's order. Defaulted to empty so a server that has not taken the
+  /// migration, a demo menu, or an older cached snapshot all mean exactly one
+  /// thing: no chips, and the note field behaves precisely as it did before.
+  ///
+  /// These carry NO money and no order identity: they are text the cashier
+  /// could have typed. Nothing downstream — cart line, outbox payload, kitchen
+  /// ticket, receipt — ever learns a preset was involved.
+  final List<PosQuickNotePreset> quickNotePresets;
 
   DemoCategory? categoryOf(String categoryId) {
     for (final category in categories) {
@@ -162,8 +173,36 @@ class PosMenuData {
       items: items,
       currencyCode: menu.currencyCode,
       modifierGroups: groups,
+      quickNotePresets: menu.quickNotePresets,
     );
   }
+}
+
+/// POS-QUICK-NOTES-124 — one reusable note phrase an owner/manager defined in
+/// the Dashboard, offered to the cashier as a one-tap chip above the existing
+/// item-note field.
+///
+/// Deliberately tiny. [id] exists only so the chip list has stable widget keys
+/// and a stable identity for tests; it is NEVER written into the note, sent
+/// with an order, or stored on a cart line. Tapping a chip produces plain text
+/// and nothing else (see `buildQuickNoteInsertion`).
+class PosQuickNotePreset {
+  const PosQuickNotePreset({
+    required this.id,
+    required this.label,
+    required this.displayOrder,
+  });
+
+  final String id;
+
+  /// The exact phrase pasted into the note. Tenant-entered ar/he/en free text
+  /// (D-014) — never translated, never reformatted.
+  final String label;
+
+  /// The owner's chip order. The list is already sorted; this is kept so a
+  /// snapshot round-trip is faithful and so a re-sort is possible without a
+  /// second read.
+  final int displayOrder;
 }
 
 /// One selectable option inside a [PosModifierGroup]. [priceDeltaMinor] is a
@@ -371,6 +410,39 @@ const List<(IconData, Color)> kPosCategoryPalette = [
 /// or a bad row might carry) is NOT content, and neither is whitespace. Both
 /// become null, which the UI renders as "no description" rather than failing the
 /// item: one bad optional field must never drop a sellable product off the menu.
+/// POS-QUICK-NOTES-124 — demo-mode quick notes, so the chips (and the "more"
+/// affordance past eight) are exercisable without a backend, exactly like every
+/// other POS surface's demo data. Ten entries on purpose: the ninth and tenth
+/// are what prove the overflow behaviour.
+const List<PosQuickNotePreset> kDemoQuickNotePresets = <PosQuickNotePreset>[
+  PosQuickNotePreset(id: 'qn-no-onions', label: 'No onions', displayOrder: 0),
+  PosQuickNotePreset(id: 'qn-no-salt', label: 'No salt', displayOrder: 1),
+  PosQuickNotePreset(
+    id: 'qn-extra-crispy',
+    label: 'Extra crispy',
+    displayOrder: 2,
+  ),
+  PosQuickNotePreset(id: 'qn-well-done', label: 'Well done', displayOrder: 3),
+  PosQuickNotePreset(id: 'qn-spicy', label: 'Extra spicy', displayOrder: 4),
+  PosQuickNotePreset(id: 'qn-no-spicy', label: 'Not spicy', displayOrder: 5),
+  PosQuickNotePreset(
+    id: 'qn-sauce-side',
+    label: 'Sauce on the side',
+    displayOrder: 6,
+  ),
+  PosQuickNotePreset(id: 'qn-no-ice', label: 'No ice', displayOrder: 7),
+  PosQuickNotePreset(
+    id: 'qn-takeaway-box',
+    label: 'Takeaway box',
+    displayOrder: 8,
+  ),
+  PosQuickNotePreset(
+    id: 'qn-allergy',
+    label: 'Allergy — check with kitchen',
+    displayOrder: 9,
+  ),
+];
+
 String? _optionalText(Object? raw) {
   if (raw is! String) return null;
   final trimmed = raw.trim();
@@ -401,6 +473,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         items: items,
         currencyCode: kDemoCurrencyCode,
         modifierGroups: kDemoModifierGroups,
+        quickNotePresets: kDemoQuickNotePresets,
       ),
     );
   }
@@ -930,6 +1003,35 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     (i) => [i.categoryDisplayOrder, i.itemDisplayOrder],
   );
 
+  // POS-QUICK-NOTES-124 — the additive quick-note presets.
+  //
+  // TOLERANT ON PURPOSE, and the opposite of the money rules above. A preset is
+  // an input shortcut with no price attached, so a malformed row costs the
+  // cashier one chip, never a mis-priced sale: a bad record is skipped and a
+  // missing key means "no chips". Failing the whole menu over a typo in a note
+  // phrase would take the till offline for something that cannot lose money.
+  //
+  // Server order is authoritative (display_order, then label) and is preserved
+  // as sent; nothing is re-sorted here.
+  final quickNotes = <PosQuickNotePreset>[];
+  // `is List`, not `as List?`: a scalar under this key is a server that is not
+  // speaking our contract, and a ClassCastException there would take down the
+  // whole menu load for a field that cannot affect a single price.
+  final rawQuickNotes = raw['quick_note_presets'];
+  for (final row in rawQuickNotes is List ? rawQuickNotes : const []) {
+    if (row is! Map) continue;
+    final id = _optionalText(row['id']);
+    final label = _optionalText(row['label']);
+    if (id == null || label == null) continue;
+    quickNotes.add(
+      PosQuickNotePreset(
+        id: id,
+        label: label,
+        displayOrder: menuPrintOrderInt(row['display_order']),
+      ),
+    );
+  }
+
   final currency = (raw['currency_code'] ?? '').toString();
   // 017 (Codex HIGH #2): every classifier link the server sent is proven
   // against the SAME item's own options before any consumer sees it.
@@ -939,6 +1041,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       items: orderedItems,
       currencyCode: currency.length == 3 ? currency : kDemoCurrencyCode,
       modifierGroups: groups,
+      quickNotePresets: quickNotes,
     ),
   );
   // [POS-OFFLINE-OPERATIONS-002] A real fetch SUCCEEDED: record the online
