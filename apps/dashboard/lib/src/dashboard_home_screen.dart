@@ -111,9 +111,13 @@ class DashboardHomeScreen extends ConsumerWidget {
     final seriesKey = ref.watch(currentOwnerSalesSeriesKeyProvider);
     // OPS-043 Phase 5A: resolved ONCE here, so the sales chart is labelled from
     // the same authority as everything else on the page.
-    final guard =
-        ref.watch(dashboardCurrencyGuardProvider).valueOrNull ??
-        const ReportCurrencyGuard.unknown();
+    // REPORT-123: `unknown` is a VERDICT ("we checked and could not tell"),
+    // not a synonym for "still checking". Collapsing the two made the Overview
+    // flash the permanent money-hidden state on every load, which is how a
+    // transient breakdown failure came to look like a settled fact.
+    final guardAsync = ref.watch(dashboardCurrencyGuardProvider);
+    final guard = guardAsync.valueOrNull ?? const ReportCurrencyGuard.unknown();
+    final guardPending = guardAsync.isLoading && !guardAsync.hasValue;
 
     final panel = setupPanel;
     final nav = onNavigate;
@@ -140,6 +144,7 @@ class DashboardHomeScreen extends ConsumerWidget {
                 // window. `unknown` while it is still loading, so money can
                 // never flash on screen before it is known to be addable.
                 currencyGuard: guard,
+                currencyGuardPending: guardPending,
                 window: window,
                 isDemo: isDemo,
                 deviceSummary: deviceSummary,
@@ -858,6 +863,7 @@ class _ReportContent extends StatelessWidget {
   const _ReportContent({
     required this.report,
     required this.currencyGuard,
+    this.currencyGuardPending = false,
     required this.window,
     required this.isDemo,
     this.deviceSummary,
@@ -872,6 +878,11 @@ class _ReportContent extends StatelessWidget {
   /// A plain value, not a provider read, so this widget stays Riverpod-free
   /// (the same rule [window] and [salesSeriesKey] follow).
   final ReportCurrencyGuard currencyGuard;
+
+  /// REPORT-123: the currency check is still in flight. Money stays hidden
+  /// (the rule never relaxes), but the page says "checking" rather than
+  /// asserting the permanent unknown verdict.
+  final bool currencyGuardPending;
 
   /// F2.1 — the COMMITTED analytics window, passed as a plain value so this
   /// widget stays Riverpod-free (the same rule [salesSeriesKey] follows).
@@ -1013,7 +1024,10 @@ class _ReportContent extends StatelessWidget {
         children: [
           banner,
           const SizedBox(height: RestoflowSpacing.xl),
-          _CurrencySafetySection(guard: currencyGuard, report: report),
+          if (currencyGuardPending)
+            _CurrencyCheckPending(report: report)
+          else
+            _CurrencySafetySection(guard: currencyGuard, report: report),
         ],
       );
     }
@@ -2357,6 +2371,51 @@ class _RecentShiftTile extends StatelessWidget {
 /// RF-REPORT-004 — the honest "this range isn't available yet" panel shown in
 /// live mode when owner_report_range isn't deployed and the range isn't today
 /// (the range chips stay visible above so the owner can switch back).
+/// REPORT-123 — the currency check is still running.
+///
+/// Distinct from [_CurrencySafetySection] on purpose: this state is temporary
+/// and says so, while the unknown state is a verdict. Money is withheld in both
+/// (the D3 rule does not relax while we wait), but only one of them tells the
+/// owner that nothing is wrong yet. The counts that already arrived stay up.
+class _CurrencyCheckPending extends StatelessWidget {
+  const _CurrencyCheckPending({required this.report});
+
+  final DashboardReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      key: const Key('reports-currency-pending'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          key: const Key('reports-currency-pending-banner'),
+          title: l10n.dashboardCurrencyCheckPendingTitle,
+          body: l10n.dashboardCurrencyCheckPending,
+          icon: Icons.hourglass_empty,
+          tone: RestoflowTone.info,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        // The money-shaped area the check will fill, as a skeleton rather than
+        // a claim.
+        const RestoflowSkeleton(height: 96),
+        const SizedBox(height: RestoflowSpacing.md),
+        const RestoflowSkeleton(height: 96),
+        const SizedBox(height: RestoflowSpacing.lg),
+        RestoflowMetricCard(
+          key: const Key('currency-pending-order-count'),
+          style: RestoflowMetricCardStyle.kpi,
+          tone: RestoflowTone.info,
+          label: l10n.dashboardOrders,
+          value: report.orderCount.toString(),
+          icon: Icons.receipt_long_outlined,
+        ),
+      ],
+    );
+  }
+}
+
 /// OPS-043 Phase 2B (D3) — what the Overview shows INSTEAD of merged money.
 ///
 /// Two states share this widget because they share the rule: a figure that
@@ -2375,10 +2434,31 @@ class _CurrencySafetySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (guard.mode == ReportMoneyMode.unknown) {
-      return RestoflowStateView(
+      // REPORT-123: money stays hidden, but an order count is a valid integer
+      // however many currencies the orders were taken in — and it comes from
+      // the report envelope, which SUCCEEDED. Blanking the whole page told the
+      // owner nothing and made a recoverable failure look terminal.
+      return Column(
         key: const Key('reports-currency-unavailable'),
-        icon: Icons.currency_exchange_outlined,
-        message: l10n.dashboardCurrencyCheckUnavailable,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RestoflowNoticeBanner(
+            key: const Key('reports-currency-unknown-banner'),
+            title: l10n.dashboardCurrencyCheckUnavailableTitle,
+            body: l10n.dashboardCurrencyCheckUnavailable,
+            icon: Icons.currency_exchange_outlined,
+            tone: RestoflowTone.warning,
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+          RestoflowMetricCard(
+            key: const Key('currency-safety-order-count'),
+            style: RestoflowMetricCardStyle.kpi,
+            tone: RestoflowTone.info,
+            label: l10n.dashboardOrders,
+            value: report.orderCount.toString(),
+            icon: Icons.receipt_long_outlined,
+          ),
+        ],
       );
     }
     return Column(

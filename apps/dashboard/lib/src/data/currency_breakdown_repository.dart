@@ -41,17 +41,51 @@ class CurrencyTotals {
   final int cashMinor;
 }
 
+/// WHY the breakdown could not be established.
+///
+/// REPORT-123: these were once one undifferentiated `catch (_)`, which made a
+/// server-side ACL failure indistinguishable from "this database has not taken
+/// the migration". Production spent the outage reporting the second while
+/// suffering the first. The distinction is not cosmetic — a `denied` or
+/// `transport` failure is transient and worth retrying on the owner's next
+/// refresh, whereas `notDeployed` genuinely describes the deployment.
+enum CurrencyBreakdownFailure {
+  /// No failure: the breakdown was obtained.
+  none,
+
+  /// PostgREST could not find the function (PGRST202), or its schema cache is
+  /// stale. Recoverable: a later call may well succeed.
+  notDeployed,
+
+  /// The function exists and refused this caller (SQLSTATE 42501) — either a
+  /// genuine authorization refusal or, as in REPORT-123, a missing EXECUTE
+  /// grant on the inner implementation.
+  denied,
+
+  /// Network/transport trouble, or a reply this build could not parse.
+  transport,
+}
+
 /// The answer for one window.
 class CurrencyBreakdown {
-  const CurrencyBreakdown({required this.totals, required this.available});
+  const CurrencyBreakdown({
+    required this.totals,
+    required this.available,
+    this.failure = CurrencyBreakdownFailure.none,
+  });
 
-  /// The breakdown could not be obtained (RPC not deployed, denied, transport
-  /// failure). The caller then renders exactly as it did before Phase 2 — it
-  /// must NOT infer "single currency" from this.
-  const CurrencyBreakdown.unavailable() : totals = const [], available = false;
+  /// The breakdown could not be obtained. The caller then renders exactly as it
+  /// did before Phase 2 — it must NOT infer "single currency" from this.
+  const CurrencyBreakdown.unavailable([
+    this.failure = CurrencyBreakdownFailure.transport,
+  ]) : totals = const [],
+       available = false;
 
   final List<CurrencyTotals> totals;
   final bool available;
+
+  /// Why it is unavailable; [CurrencyBreakdownFailure.none] when it is not.
+  final CurrencyBreakdownFailure failure;
 
   /// True when this window definitively contains more than one currency, so a
   /// single merged monetary total would be a lie.
@@ -60,6 +94,32 @@ class CurrencyBreakdown {
   /// The one currency in play, when there is exactly one.
   String? get singleCurrency =>
       available && totals.length == 1 ? totals.first.currencyCode : null;
+}
+
+/// Maps a thrown transport/database error onto [CurrencyBreakdownFailure].
+///
+/// Kept at library level, and deliberately string-based: the transport seam is
+/// intentionally neutral, so the concrete Postgrest exception type is not
+/// visible here. Matching on the codes it carries is what the rest of this
+/// repository already does, and it is what lets a stale schema-cache 404 be
+/// told apart from a permission refusal.
+CurrencyBreakdownFailure classifyBreakdownFailure(Object error) {
+  final text = error.toString().toUpperCase();
+  // PGRST202 = "could not find the function"; PGRST204/205 accompany a stale
+  // schema cache. All three describe the deployment, not the caller.
+  if (text.contains('PGRST202') ||
+      text.contains('PGRST204') ||
+      text.contains('PGRST205') ||
+      text.contains('COULD NOT FIND THE FUNCTION')) {
+    return CurrencyBreakdownFailure.notDeployed;
+  }
+  // 42501 is PostgreSQL's insufficient_privilege — REPORT-123's signature.
+  if (text.contains('42501') ||
+      text.contains('PERMISSION DENIED') ||
+      text.contains('PERMISSION_DENIED')) {
+    return CurrencyBreakdownFailure.denied;
+  }
+  return CurrencyBreakdownFailure.transport;
 }
 
 /// Reads the per-currency breakdown for an explicit window.
@@ -98,16 +158,24 @@ class SupabaseCurrencyBreakdownRepository
             'p_start': start,
             'p_end': end,
           });
-    } catch (_) {
-      // Includes PGRST202 "function not found" on a database that has not taken
-      // the migration yet. Unavailable, never "one currency".
-      return const CurrencyBreakdown.unavailable();
+    } catch (e) {
+      // REPORT-123: classify. Never "one currency", but WHY it is unavailable
+      // decides whether a later refresh is worth anything.
+      return CurrencyBreakdown.unavailable(classifyBreakdownFailure(e));
     }
     if (raw is! Map || raw['ok'] != true) {
-      return const CurrencyBreakdown.unavailable();
+      // A DEPLOYED function that refused this caller. `ok:false` is the
+      // envelope form of a refusal; the raised form is handled above.
+      return const CurrencyBreakdown.unavailable(
+        CurrencyBreakdownFailure.denied,
+      );
     }
     final list = raw['by_currency'];
-    if (list is! List) return const CurrencyBreakdown.unavailable();
+    if (list is! List) {
+      return const CurrencyBreakdown.unavailable(
+        CurrencyBreakdownFailure.transport,
+      );
+    }
     final totals = <CurrencyTotals>[];
     for (final entry in list) {
       if (entry is! Map) continue;

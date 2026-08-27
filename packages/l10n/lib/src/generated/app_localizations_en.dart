@@ -6242,6 +6242,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardSettingsCurrencySearchHint => 'Search by code (e.g. USD)';
 
   @override
+  String get dashboardCurrencyCheckUnavailableTitle =>
+      'Monetary totals could not be verified';
+
+  @override
+  String get dashboardCurrencyCheckPendingTitle =>
+      'Checking this range’s currency';
+
+  @override
+  String get dashboardCurrencyCheckPending =>
+      'Monetary totals appear once the currency of this range is confirmed.';
+
+  @override
   String get dashboardCurrencyMixedTitle =>
       'More than one currency in this range';
 
