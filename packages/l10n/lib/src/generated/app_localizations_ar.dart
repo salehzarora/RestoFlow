@@ -6194,6 +6194,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardSettingsCurrencySearchHint => 'ابحث بالرمز (مثل USD)';
 
   @override
+  String get dashboardCurrencyCheckUnavailableTitle =>
+      'تعذّر التحقق من الإجماليات المالية';
+
+  @override
+  String get dashboardCurrencyCheckPendingTitle =>
+      'جارٍ التحقق من عملة هذه الفترة';
+
+  @override
+  String get dashboardCurrencyCheckPending =>
+      'ستظهر الإجماليات المالية بمجرد تأكيد عملة هذه الفترة.';
+
+  @override
   String get dashboardCurrencyMixedTitle => 'أكثر من عملة في هذه الفترة';
 
   @override

@@ -11278,6 +11278,24 @@ abstract class AppLocalizations {
   /// **'Search by code (e.g. USD)'**
   String get dashboardSettingsCurrencySearchHint;
 
+  /// Title of the warning shown when the currency check failed and money is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Monetary totals could not be verified'**
+  String get dashboardCurrencyCheckUnavailableTitle;
+
+  /// Title shown while the per-currency breakdown is still loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking this range’s currency'**
+  String get dashboardCurrencyCheckPendingTitle;
+
+  /// Body shown while the per-currency breakdown is still loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Monetary totals appear once the currency of this range is confirmed.'**
+  String get dashboardCurrencyCheckPending;
+
   /// OPS-043 D3: the selected range holds orders in several currencies, so totals are shown per currency.
   ///
   /// In en, this message translates to:

@@ -6154,6 +6154,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardSettingsCurrencySearchHint => 'חיפוש לפי קוד (למשל USD)';
 
   @override
+  String get dashboardCurrencyCheckUnavailableTitle =>
+      'לא ניתן היה לאמת את הסכומים הכספיים';
+
+  @override
+  String get dashboardCurrencyCheckPendingTitle =>
+      'בודקים את המטבע של הטווח הזה';
+
+  @override
+  String get dashboardCurrencyCheckPending =>
+      'הסכומים הכספיים יופיעו לאחר אישור המטבע של הטווח.';
+
+  @override
   String get dashboardCurrencyMixedTitle => 'יותר ממטבע אחד בטווח הזה';
 
   @override

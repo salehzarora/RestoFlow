@@ -166,6 +166,13 @@ select ok(
   'active board: pre-existing envelope keys survive');
 
 -- ===== 3. THE PER-CURRENCY BREAKDOWN ========================================
+-- REPORT-123: from here the suite executes AS THE AUTHENTICATED ROLE, not as
+-- superuser. The public wrapper is SECURITY INVOKER, so only a real-role call
+-- exercises the EXECUTE grant on the inner app.* implementation -- the grant
+-- whose absence produced 42501 in production while this suite stayed green.
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-000004300f01';
+
 select is(
   (select (r->>'ok')::boolean from public.owner_report_currency_breakdown(
      '00000000-0000-0000-0000-0000043a0000','00000000-0000-0000-0000-0000043a1000',null, current_date, current_date) r),
@@ -234,5 +241,6 @@ select throws_ok(
   $$ select public.owner_report_currency_breakdown('00000000-0000-0000-0000-0000043a0000','00000000-0000-0000-0000-0000043a1000',null, current_date, current_date) $$,
   '42501', null, 'breakdown: a cross-org caller is refused (RISK R-003)');
 
+reset role;
 select finish();
 rollback;
