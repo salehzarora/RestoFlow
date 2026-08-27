@@ -26,7 +26,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(107);
+select plan(111);
 
 -- ===== fixtures ==============================================================
 -- Org A: two restaurants (A1 under test, A2 proves restaurant isolation) and
@@ -561,12 +561,23 @@ select is(
            'reorder_quick_note_presets', 'list_quick_note_presets')
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   4, 'G2. authenticated may execute all four public wrappers');
+-- REPORT-123, second lesson. The FIRST version of this assertion demanded that
+-- anon hold no EXECUTE anywhere in the family. It passed locally and is FALSE
+-- on hosted: Supabase's ALTER DEFAULT PRIVILEGES on schema `public` grants anon
+-- EXECUTE on every function created there, exactly as it has for
+-- public.upsert_table_section, public.list_tables and the rest of the repo. A
+-- test that green-lights locally while being false in production is the very
+-- defect this suite exists to prevent, so it now asserts the boundary that
+-- genuinely holds — and G3b pins WHY the wrapper grant is inert.
 select is(
-  (select coalesce(string_agg(n.nspname || '.' || p.proname, ', ' order by p.proname), '')
+  (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname in ('app', 'public') and p.proname like '%quick\_note%'
+    where n.nspname = 'app' and p.proname like '%quick\_note%'
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  '', 'G3. anon may execute NOTHING in the quick-note family, at either layer');
+  '', 'G3. anon may execute NO app.* quick-note implementation (the real boundary)');
+select ok(
+  not has_schema_privilege('anon', 'app', 'USAGE'),
+  'G3b. anon holds no USAGE on schema app — every INVOKER wrapper is a dead end for it');
 select is(
   (select coalesce(string_agg(n.nspname || '.' || p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -623,11 +634,56 @@ select is(
      from unnest(array['INSERT', 'UPDATE', 'DELETE']) pr
     where has_table_privilege('authenticated', 'public.quick_note_presets', pr)),
   '', 'G10. authenticated holds NO row-write privilege — every write is an RPC (D-011)');
+-- Behavioural, not grant-shaped: on hosted anon HOLDS these grants (as it does
+-- on orders and payments) and is stopped by RLS; locally it lacks them and is
+-- stopped by the grant. Either way nothing is read and nothing is written, and
+-- THAT is the tenant-isolation property (R-003). Each attempt is swallowed so
+-- the assertion is identical in both environments.
+-- The READ probe is guarded too: on a clean local DB anon lacks the SELECT
+-- grant and the statement RAISES, while on hosted it is allowed and RLS yields
+-- nothing. Both are the same security outcome — anon obtained no rows — so both
+-- record 0 and the assertion below is identical in either environment.
+create temp table g_anon_visible (n integer);
+grant all on g_anon_visible to anon;
+set local role anon;
+do $anon$
+begin
+  begin
+    insert into g_anon_visible select count(*)::int from public.quick_note_presets;
+  exception when others then
+    insert into g_anon_visible values (0);
+  end;
+  begin
+    insert into public.quick_note_presets (organization_id, restaurant_id, label)
+    values ('7a000000-0000-0000-0000-0000000000a0',
+            '7a000000-0000-0000-0000-0000000000a1', 'anon row');
+  exception when others then null;
+  end;
+  begin
+    update public.quick_note_presets set label = 'anon hacked'
+     where id = '7a000000-0000-0000-0000-0000000000f1';
+  exception when others then null;
+  end;
+  begin
+    delete from public.quick_note_presets
+     where id = '7a000000-0000-0000-0000-0000000000f1';
+  exception when others then null;
+  end;
+end
+$anon$;
+reset role;
+select is((select n from g_anon_visible), 0,
+  'G11. anon sees ZERO rows although live presets exist (RLS, not an empty table)');
 select is(
-  (select coalesce(string_agg(pr, ', ' order by pr), '')
-     from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']) pr
-    where has_table_privilege('anon', 'public.quick_note_presets', pr)),
-  '', 'G11. anon cannot even READ the table');
+  (select count(*)::int from quick_note_presets where label = 'anon row'), 0,
+  'G11b. an anon INSERT wrote nothing');
+select is(
+  (select label from quick_note_presets where id = '7a000000-0000-0000-0000-0000000000f1'),
+  'No onions', 'G11c. an anon UPDATE changed nothing');
+select ok(
+  (select deleted_at is null from quick_note_presets
+    where id = '7a000000-0000-0000-0000-0000000000f1'),
+  'G11d. an anon DELETE removed nothing');
 
 set local role authenticated;
 set local app.current_app_user_id = '7a000000-0000-0000-0000-00000000ee01';
