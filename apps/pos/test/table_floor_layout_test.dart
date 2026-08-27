@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
-    show RestoflowFloorClusterSeam, kRestoflowFloorSectionAspect;
+    show
+        RestoflowFloorClusterSeam,
+        RestoflowFloorFixture,
+        RestoflowTableShapePainter,
+        kRestoflowFloorSectionAspect;
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show DiningTable, OrderType, floorElementRoomRect, floorTableRoomRect;
+    show
+        DiningTable,
+        OrderType,
+        TableVisualMaterial,
+        floorElementRoomRect,
+        floorTableRoomRect;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_tables.dart';
@@ -38,6 +47,7 @@ DemoTable _t(
   int? sectionOrder,
   int? x,
   int? y,
+  TableVisualMaterial? material,
 }) => DemoTable(
   table: DiningTable(
     tableId: id,
@@ -58,6 +68,7 @@ DemoTable _t(
   sectionDisplayOrder: sectionOrder,
   layoutX: x,
   layoutY: y,
+  visualMaterial: material,
 );
 
 class _FakeTablesRepo extends TablesRepository {
@@ -143,6 +154,7 @@ List<DemoTable> _sectionedFloor() => [
     sectionOrder: 0,
     x: 1000,
     y: 1000,
+    material: TableVisualMaterial.rusticWood,
   ),
   _t('a2', 'Beta', sectionId: 's1', sectionName: 'Main Hall', sectionOrder: 0),
   _t(
@@ -456,6 +468,8 @@ void main() {
       layoutY: 30,
       widthNorm: 3000,
       heightNorm: 150,
+      // 120C LOW follow-up: the persisted style must reach the move sheet.
+      visualStyle: 'wood_partition',
     );
     const cashier = PosFloorElement(
       id: 'fe2',
@@ -578,6 +592,31 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('move-floor-element-fe1')), findsOneWidget);
+      // 120C LOW follow-up: the persisted visual values reach the SHARED
+      // renderers through the move sheet too.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('move-floor-element-fe1')),
+            )
+            .style,
+        'wood_partition',
+      );
+      final movePainter =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: find.byKey(const Key('move-table-tile-a1')),
+                      matching: find.byWidgetPredicate(
+                        (w) =>
+                            w is CustomPaint &&
+                            w.painter is RestoflowTableShapePainter,
+                      ),
+                    ),
+                  )
+                  .painter!
+              as RestoflowTableShapePainter;
+      expect(movePainter.material, TableVisualMaterial.rusticWood);
     });
   });
 

@@ -26,6 +26,8 @@
 /// unit-testable and byte-identical across apps.
 library;
 
+import 'table_section_room_frame.dart';
+
 /// The inclusive upper bound of a normalized layout coordinate.
 const int kFloorLayoutMax = 10000;
 
@@ -76,27 +78,48 @@ FloorPoint floorPointFromFractions(double fractionX, double fractionY) => (
 const int kFloorUsableW = kFloorLayoutMax - kFloorTableW;
 const int kFloorUsableH = kFloorLayoutMax - kFloorTableH;
 
+/// TABLE-121: the table footprint's stored-unit WIDTH for [frame] (NULL =
+/// the exact legacy [kFloorTableW]). Height is [kFloorTableH] in every frame.
+int floorTableFootprintW(TableSectionRoomFramePreset? frame) =>
+    frame?.tableFootprintXUnits ?? kFloorTableW;
+
+/// TABLE-121: the usable horizontal span for [frame].
+int floorUsableW(TableSectionRoomFramePreset? frame) =>
+    kFloorLayoutMax - floorTableFootprintW(frame);
+
 /// The room-unit LEFT edge of a table anchored at stored coordinate [x].
-double floorRoomLeft(int x) =>
-    clampFloorCoordinate(x) / kFloorLayoutMax * kFloorUsableW;
+/// TABLE-121: the stored coordinate is a FRACTION of the frame's usable
+/// span, so changing the frame reprojects — it never rewrites the data.
+double floorRoomLeft(int x, {TableSectionRoomFramePreset? frame}) =>
+    clampFloorCoordinate(x) / kFloorLayoutMax * floorUsableW(frame);
 
 /// The room-unit TOP edge of a table anchored at stored coordinate [y].
-double floorRoomTop(int y) =>
+double floorRoomTop(int y, {TableSectionRoomFramePreset? frame}) =>
     clampFloorCoordinate(y) / kFloorLayoutMax * kFloorUsableH;
 
 /// The full room-unit rect of a table at stored ([x], [y]).
-FloorRoomRect floorTableRoomRect(int x, int y) => (
-  left: floorRoomLeft(x),
-  top: floorRoomTop(y),
-  width: kFloorTableW.toDouble(),
+FloorRoomRect floorTableRoomRect(
+  int x,
+  int y, {
+  TableSectionRoomFramePreset? frame,
+}) => (
+  left: floorRoomLeft(x, frame: frame),
+  top: floorRoomTop(y, frame: frame),
+  width: floorTableFootprintW(frame).toDouble(),
   height: kFloorTableH.toDouble(),
 );
 
 /// Inverse of [floorRoomLeft]/[floorRoomTop]: the stored coordinates whose
 /// anchor lands at the given room-unit top-left (clamped — a drag can push
 /// past the walls).
-FloorPoint floorStoredFromRoomTopLeft(double leftRoom, double topRoom) => (
-  x: clampFloorCoordinate((leftRoom / kFloorUsableW * kFloorLayoutMax).round()),
+FloorPoint floorStoredFromRoomTopLeft(
+  double leftRoom,
+  double topRoom, {
+  TableSectionRoomFramePreset? frame,
+}) => (
+  x: clampFloorCoordinate(
+    (leftRoom / floorUsableW(frame) * kFloorLayoutMax).round(),
+  ),
   y: clampFloorCoordinate((topRoom / kFloorUsableH * kFloorLayoutMax).round()),
 );
 
@@ -130,8 +153,19 @@ FloorPoint floorStoredFromRoomTopLeft(double leftRoom, double topRoom) => (
 /// is full. Row-major walk => stable results. 027: the grid pitch (2500 in x,
 /// 3333 in y stored units → 2125×2533 room units) clears the 1500×2400
 /// footprint on every surface, so default placements can never overlap.
-FloorPoint initialFloorPlacement(List<FloorPoint> occupied) {
-  const columns = 4;
+FloorPoint initialFloorPlacement(
+  List<FloorPoint> occupied, {
+  TableSectionRoomFramePreset? frame,
+}) {
+  // TABLE-121: wide-footprint frames fit fewer columns — the column pitch in
+  // ROOM units is usable/columns, which must clear the footprint width. The
+  // legacy 4x3 grid stays byte-identical for NULL.
+  final columns = frame == null
+      ? 4
+      : (floorUsableW(frame) / floorTableFootprintW(frame))
+            .floor()
+            .clamp(1, 4)
+            .toInt();
   const rows = 3;
   for (var row = 0; row < rows; row++) {
     for (var column = 0; column < columns; column++) {
@@ -140,7 +174,7 @@ FloorPoint initialFloorPlacement(List<FloorPoint> occupied) {
         y: ((row + 0.5) / rows * kFloorLayoutMax).round(),
       );
       final clear = occupied.every(
-        (p) => !floorPlacementsOverlap(candidate, p),
+        (p) => !floorPlacementsOverlap(candidate, p, frame: frame),
       );
       if (clear) return candidate;
     }
@@ -179,6 +213,30 @@ bool floorElementResizable(String kind) => kind == 'wall' || kind == 'window';
 
 /// Whether a fixture kind may carry a label (owner decision 4).
 bool floorElementLabelable(String kind) => kind == 'cashier' || kind == 'door';
+
+/// TABLE-VISUAL-CONFIGURATION-120 — fixture row key carrying the persisted
+/// artwork variant on every wire.
+const String kFloorElementStyleWireKey = 'visual_style';
+
+/// TABLE-VISUAL-CONFIGURATION-120 — the per-kind artwork-variant vocabulary,
+/// mirrored EXACTLY by the server setter (`app.set_floor_element_style`).
+/// NULL/absent = the kind's default artwork (the first-shipped 119D look).
+const Map<String, List<String>> kFloorElementStyleRegistry = {
+  'cashier': ['modern', 'wood', 'dark'],
+  'plant': ['leafy', 'palm', 'compact_pot'],
+  'door': ['wood', 'glass', 'modern'],
+  'window': ['modern_glass', 'framed', 'dark_frame'],
+  'wall': ['plain', 'brick', 'wood_partition'],
+};
+
+/// The variants an owner may pick for [kind] (empty for unknown kinds).
+List<String> floorElementStylesFor(String kind) =>
+    kFloorElementStyleRegistry[kind] ?? const [];
+
+/// Whether [style] is a valid persisted variant for [kind]. `null` is always
+/// allowed (the default artwork).
+bool isFloorElementStyleAllowed(String kind, String? style) =>
+    style == null || floorElementStylesFor(kind).contains(style);
 
 /// The EFFECTIVE room-unit footprint after [quarterTurns] clockwise quarter
 /// rotations (odd turns swap the axes; width/height stay stored unrotated).
@@ -258,8 +316,14 @@ bool floorRectsIntersect(FloorRoomRect a, FloorRoomRect b) =>
 /// surface at every viewport width. Used for the Dashboard's informational
 /// arrange-mode warning AND the initial-placement grid; saved positions are
 /// never auto-moved.
-bool floorPlacementsOverlap(FloorPoint a, FloorPoint b) {
-  final dLeft = (floorRoomLeft(a.x) - floorRoomLeft(b.x)).abs();
+bool floorPlacementsOverlap(
+  FloorPoint a,
+  FloorPoint b, {
+  TableSectionRoomFramePreset? frame,
+}) {
+  final dLeft =
+      (floorRoomLeft(a.x, frame: frame) - floorRoomLeft(b.x, frame: frame))
+          .abs();
   final dTop = (floorRoomTop(a.y) - floorRoomTop(b.y)).abs();
-  return dLeft < kFloorTableW && dTop < kFloorTableH;
+  return dLeft < floorTableFootprintW(frame) && dTop < kFloorTableH;
 }

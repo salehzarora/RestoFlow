@@ -3915,6 +3915,93 @@ class AppLocalizationsHe extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'אבן ניטרלית';
 
   @override
+  String get tablesRoomFrame => 'גודל / צורת האולם';
+
+  @override
+  String get tablesRoomFrameStandard => 'רגיל';
+
+  @override
+  String get tablesRoomFrameCompact => 'קומפקטי';
+
+  @override
+  String get tablesRoomFrameSquare => 'מרובע';
+
+  @override
+  String get tablesRoomFrameWide => 'אולם רחב';
+
+  @override
+  String get tablesRoomFramePortrait => 'חדר גבוה';
+
+  @override
+  String get tablesRoomFrameLongNarrow => 'מסדרון ארוך';
+
+  @override
+  String get tablesVisualMaterial => 'חומר / גימור';
+
+  @override
+  String get tablesVisualAuto => 'אוטומטי';
+
+  @override
+  String get tablesVisualMaterialWood => 'עץ';
+
+  @override
+  String get tablesVisualMaterialDarkWood => 'עץ כהה';
+
+  @override
+  String get tablesVisualMaterialLightWood => 'עץ בהיר';
+
+  @override
+  String get tablesVisualMaterialRusticWood => 'עץ כפרי';
+
+  @override
+  String get tablesVisualMaterialPlastic => 'פלסטיק / יומיומי';
+
+  @override
+  String get tablesVisualMaterialNeutralModern => 'מודרני ניטרלי';
+
+  @override
+  String get floorElementStyle => 'סגנון';
+
+  @override
+  String get floorElementStyleModern => 'מודרני';
+
+  @override
+  String get floorElementStyleWood => 'עץ';
+
+  @override
+  String get floorElementStyleDark => 'כהה';
+
+  @override
+  String get floorElementStyleLeafy => 'עלים';
+
+  @override
+  String get floorElementStylePalm => 'דקל';
+
+  @override
+  String get floorElementStyleCompactPot => 'עציץ קומפקטי';
+
+  @override
+  String get floorElementStyleGlass => 'זכוכית';
+
+  @override
+  String get floorElementStyleModernGlass => 'זכוכית מודרנית';
+
+  @override
+  String get floorElementStyleFramed => 'עם מסגרת';
+
+  @override
+  String get floorElementStyleDarkFrame => 'מסגרת כהה';
+
+  @override
+  String get floorElementStylePlain => 'חלק';
+
+  @override
+  String get floorElementStyleBrick => 'לבנים';
+
+  @override
+  String get floorElementStyleWoodPartition => 'מחיצת עץ';
+
+  @override
   String get floorElementRotate => 'סיבוב';
 
   @override

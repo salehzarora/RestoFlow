@@ -3967,6 +3967,93 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tablesFloorPresetStoneNeutral => 'Neutral stone';
 
   @override
+  String get tablesRoomFrame => 'Room size / shape';
+
+  @override
+  String get tablesRoomFrameStandard => 'Standard';
+
+  @override
+  String get tablesRoomFrameCompact => 'Compact';
+
+  @override
+  String get tablesRoomFrameSquare => 'Square';
+
+  @override
+  String get tablesRoomFrameWide => 'Wide hall';
+
+  @override
+  String get tablesRoomFramePortrait => 'Tall room';
+
+  @override
+  String get tablesRoomFrameLongNarrow => 'Long corridor';
+
+  @override
+  String get tablesVisualMaterial => 'Material / finish';
+
+  @override
+  String get tablesVisualAuto => 'Auto';
+
+  @override
+  String get tablesVisualMaterialWood => 'Wood';
+
+  @override
+  String get tablesVisualMaterialDarkWood => 'Dark wood';
+
+  @override
+  String get tablesVisualMaterialLightWood => 'Light wood';
+
+  @override
+  String get tablesVisualMaterialRusticWood => 'Rustic wood';
+
+  @override
+  String get tablesVisualMaterialPlastic => 'Plastic / casual';
+
+  @override
+  String get tablesVisualMaterialNeutralModern => 'Neutral modern';
+
+  @override
+  String get floorElementStyle => 'Style';
+
+  @override
+  String get floorElementStyleModern => 'Modern';
+
+  @override
+  String get floorElementStyleWood => 'Wood';
+
+  @override
+  String get floorElementStyleDark => 'Dark';
+
+  @override
+  String get floorElementStyleLeafy => 'Leafy';
+
+  @override
+  String get floorElementStylePalm => 'Palm';
+
+  @override
+  String get floorElementStyleCompactPot => 'Compact pot';
+
+  @override
+  String get floorElementStyleGlass => 'Glass';
+
+  @override
+  String get floorElementStyleModernGlass => 'Modern glass';
+
+  @override
+  String get floorElementStyleFramed => 'Framed';
+
+  @override
+  String get floorElementStyleDarkFrame => 'Dark frame';
+
+  @override
+  String get floorElementStylePlain => 'Plain';
+
+  @override
+  String get floorElementStyleBrick => 'Brick';
+
+  @override
+  String get floorElementStyleWoodPartition => 'Wood partition';
+
+  @override
   String get floorElementRotate => 'Rotate';
 
   @override

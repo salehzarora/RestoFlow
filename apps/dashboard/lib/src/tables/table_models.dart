@@ -9,6 +9,8 @@ library;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualMaterial,
         TableVisualPreset,
         aggregateTableGroup,
         TableGroupAggregate,
@@ -47,6 +49,7 @@ class DashboardTableSection {
     required this.isActive,
     required this.branchId,
     this.floorPreset = FloorPreset.plainLight,
+    this.roomFramePreset,
   });
 
   final String id;
@@ -60,11 +63,18 @@ class DashboardTableSection {
   /// light). Written only through the dedicated setter.
   final FloorPreset floorPreset;
 
+  /// TABLE-ROOM-FRAME-121: the section's room size/shape
+  /// (`table_sections.room_frame_preset`, NULL = Standard = the legacy
+  /// room). Written only through the dedicated setter.
+  final TableSectionRoomFramePreset? roomFramePreset;
+
   DashboardTableSection copyWith({
     String? name,
     int? displayOrder,
     bool? isActive,
     FloorPreset? floorPreset,
+    TableSectionRoomFramePreset? roomFramePreset,
+    bool clearRoomFramePreset = false,
   }) => DashboardTableSection(
     id: id,
     name: name ?? this.name,
@@ -72,6 +82,9 @@ class DashboardTableSection {
     isActive: isActive ?? this.isActive,
     branchId: branchId,
     floorPreset: floorPreset ?? this.floorPreset,
+    roomFramePreset: clearRoomFramePreset
+        ? null
+        : (roomFramePreset ?? this.roomFramePreset),
   );
 }
 
@@ -89,6 +102,7 @@ class DashboardFloorElement {
     required this.heightNorm,
     this.orientationQuarterTurns = 0,
     this.label,
+    this.visualStyle,
   });
 
   final String id;
@@ -111,6 +125,11 @@ class DashboardFloorElement {
   /// Caption (cashier/door only by contract).
   final String? label;
 
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted artwork variant
+  /// (`table_floor_elements.visual_style`; null = the kind's default look).
+  /// Written only through the dedicated setter.
+  final String? visualStyle;
+
   DashboardFloorElement copyWith({
     int? layoutX,
     int? layoutY,
@@ -119,6 +138,8 @@ class DashboardFloorElement {
     int? orientationQuarterTurns,
     String? label,
     bool clearLabel = false,
+    String? visualStyle,
+    bool clearVisualStyle = false,
   }) => DashboardFloorElement(
     id: id,
     sectionId: sectionId,
@@ -130,6 +151,7 @@ class DashboardFloorElement {
     orientationQuarterTurns:
         orientationQuarterTurns ?? this.orientationQuarterTurns,
     label: clearLabel ? null : (label ?? this.label),
+    visualStyle: clearVisualStyle ? null : (visualStyle ?? this.visualStyle),
   );
 }
 
@@ -169,6 +191,7 @@ class DashboardTable {
     this.layoutX,
     this.layoutY,
     this.visualPreset = TableVisualPreset.classicRectTable,
+    this.visualMaterial,
   });
 
   final String id;
@@ -178,6 +201,11 @@ class DashboardTable {
   /// changes the footprint or the saved placement; written only through the
   /// dedicated setter, so the full-replace upsert can never erase it.
   final TableVisualPreset visualPreset;
+
+  /// TABLE-VISUAL-CONFIGURATION-120: the persisted surface material
+  /// (`tables.visual_material`; null = Auto — the deterministic 119D
+  /// preset+floor mapping). Written only through the dedicated setter.
+  final TableVisualMaterial? visualMaterial;
 
   /// The table's name or number as printed on tickets (e.g. "T1", "Window 2").
   final String label;
@@ -249,14 +277,21 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset,
+    visualMaterial: visualMaterial,
   );
 
   /// TABLE-VISUAL-LAYOUT-118: a copy with a different visual preset (the
-  /// in-memory demo store + the dialog's optimistic apply).
-  DashboardTable copyWith({TableVisualPreset? visualPreset}) => DashboardTable(
+  /// in-memory demo store + the dialog's optimistic apply). 121 review: also
+  /// the status, so the demo store's setStatus preserves every other field.
+  DashboardTable copyWith({
+    DiningTableStatus? status,
+    TableVisualPreset? visualPreset,
+    TableVisualMaterial? visualMaterial,
+    bool clearVisualMaterial = false,
+  }) => DashboardTable(
     id: id,
     label: label,
-    status: status,
+    status: status ?? this.status,
     isActive: isActive,
     branchId: branchId,
     seats: seats,
@@ -270,6 +305,9 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset ?? this.visualPreset,
+    visualMaterial: clearVisualMaterial
+        ? null
+        : (visualMaterial ?? this.visualMaterial),
   );
 
   /// TABLE-FLOOR-LAYOUT-021: a copy with a different section/placement (the
@@ -297,6 +335,7 @@ class DashboardTable {
     layoutX: layoutX,
     layoutY: layoutY,
     visualPreset: visualPreset,
+    visualMaterial: visualMaterial,
   );
 }
 

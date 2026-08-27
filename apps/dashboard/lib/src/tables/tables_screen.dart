@@ -1,7 +1,9 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:restoflow_core/restoflow_core.dart' show Failure, Success;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
-import 'package:restoflow_domain/restoflow_domain.dart' show TableVisualPreset;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show FloorPreset, TableVisualMaterial, TableVisualPreset;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show
         AdminPageHeader,
@@ -55,24 +57,28 @@ class _TablesScreenState extends State<TablesScreen> {
   /// the error is shown — for a two-step save whose first step already
   /// persisted (the table exists; only the preset write failed), so the new
   /// row is never left hidden behind an error snackbar.
-  Future<void> _run(
+  /// Returns true on success (120C: the dialog save chain stops after an
+  /// honest failure instead of piling a second write on top of it).
+  Future<bool> _run(
     Future<AdminResult<void>> Function() op, {
     bool reloadOnFailure = false,
   }) async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final result = await op();
-    if (!mounted) return;
-    result.fold(
+    if (!mounted) return false;
+    return result.fold(
       (_) {
         messenger.showSnackBar(SnackBar(content: Text(l10n.tablesSaved)));
         _reload();
+        return true;
       },
       (failure) {
         if (reloadOnFailure) _reload();
         messenger.showSnackBar(
           SnackBar(content: Text(adminFailureMessage(l10n, failure))),
         );
+        return false;
       },
     );
   }
@@ -214,33 +220,41 @@ class _TablesScreenState extends State<TablesScreen> {
       ),
       children: [
         // ------------------------------------------------------------ floor
-        Row(
+        // 121 review: a Wrap, not a Row — at phone widths the two action
+        // buttons drop under the title instead of overflowing the screen.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: RestoflowSpacing.xs,
           children: [
-            Expanded(
-              child: Text(
-                l10n.tablesSectionsTitle,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+            Text(
+              l10n.tablesSectionsTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                OutlinedButton.icon(
+                  key: const Key('tables-add-section'),
+                  onPressed: () => _showSectionDialog(context),
+                  icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+                  label: Text(l10n.tablesSectionAdd),
                 ),
-              ),
-            ),
-            OutlinedButton.icon(
-              key: const Key('tables-add-section'),
-              onPressed: () => _showSectionDialog(context),
-              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
-              label: Text(l10n.tablesSectionAdd),
-            ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            FilledButton.tonalIcon(
-              key: const Key('tables-arrange-toggle'),
-              onPressed: () => setState(() => _arrange = !_arrange),
-              icon: Icon(
-                _arrange ? Icons.done : Icons.open_with,
-                size: RestoflowIconSizes.sm,
-              ),
-              label: Text(
-                _arrange ? l10n.tablesArrangeDone : l10n.tablesArrange,
-              ),
+                FilledButton.tonalIcon(
+                  key: const Key('tables-arrange-toggle'),
+                  onPressed: () => setState(() => _arrange = !_arrange),
+                  icon: Icon(
+                    _arrange ? Icons.done : Icons.open_with,
+                    size: RestoflowIconSizes.sm,
+                  ),
+                  label: Text(
+                    _arrange ? l10n.tablesArrangeDone : l10n.tablesArrange,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -261,9 +275,21 @@ class _TablesScreenState extends State<TablesScreen> {
           onSaveElement: _saveElement,
           onDeleteElement: (element) =>
               _run(() => widget.repository.deleteFloorElement(element.id)),
+          // 120C: the fixture style persists through the dedicated setter
+          // (null = Auto); failure reloads honestly.
+          onSetElementStyle: (element, style) => _run(
+            () => widget.repository.setFloorElementStyle(element.id, style),
+            reloadOnFailure: true,
+          ),
           // 118: the floor style picker persists through the dedicated setter.
           onSetFloorPreset: (section, preset) => _run(
             () => widget.repository.setSectionFloorPreset(section.id, preset),
+          ),
+          // 121: the room size/shape picker persists through the dedicated
+          // setter (null = Standard clears).
+          onSetRoomFrame: (section, preset) => _run(
+            () =>
+                widget.repository.setSectionRoomFramePreset(section.id, preset),
           ),
         ),
         const Divider(height: RestoflowSpacing.xl),
@@ -294,6 +320,21 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
+  /// 120C: the owning section's floor preset (for the honest Auto material
+  /// preview in the dialog — the same 119D mapping the floor renders).
+  FloorPreset _sectionFloorFor(DashboardTable? table) {
+    final snapshot = _lastResult?.fold<TablesFloorSnapshot?>(
+      (s) => s,
+      (_) => null,
+    );
+    final sectionId = table?.sectionId;
+    if (snapshot == null || sectionId == null) return FloorPreset.plainLight;
+    for (final s in snapshot.sections) {
+      if (s.id == sectionId) return s.floorPreset;
+    }
+    return FloorPreset.plainLight;
+  }
+
   Future<void> _showTableDialog(
     BuildContext context, {
     DashboardTable? table,
@@ -301,6 +342,7 @@ class _TablesScreenState extends State<TablesScreen> {
     context: context,
     builder: (_) => _TableDialog(
       table: table,
+      sectionFloor: _sectionFloorFor(table),
       onSave:
           ({
             required label,
@@ -308,6 +350,7 @@ class _TablesScreenState extends State<TablesScreen> {
             required area,
             required isActive,
             required visualPreset,
+            required visualMaterial,
           }) => _saveTable(
             table: table,
             label: label,
@@ -315,6 +358,7 @@ class _TablesScreenState extends State<TablesScreen> {
             area: area,
             isActive: isActive,
             visualPreset: visualPreset,
+            visualMaterial: visualMaterial,
           ),
     ),
   );
@@ -335,6 +379,7 @@ class _TablesScreenState extends State<TablesScreen> {
     required String? area,
     required bool isActive,
     required TableVisualPreset visualPreset,
+    required TableVisualMaterial? visualMaterial,
   }) async {
     final repository = widget.repository;
     final upsert = await repository.upsertTable(
@@ -355,17 +400,54 @@ class _TablesScreenState extends State<TablesScreen> {
       );
       return;
     }
-    final changed = table == null
+    // 120C: shape and material each ride their own DEDICATED setter, only
+    // when changed — but the OWNER sees ONE outcome per save: the writes run
+    // silently, any failure reloads + reports honestly and stops the chain
+    // (never a success snackbar followed by an error), and a single
+    // confirmation fires only after everything landed.
+    final presetChanged = table == null
         ? visualPreset != TableVisualPreset.defaultPreset
         : visualPreset != table.visualPreset;
-    if (!changed) {
-      await _run(() async => const Success(null));
+    final materialChanged = table == null
+        ? visualMaterial != null
+        : visualMaterial != table.visualMaterial;
+    if (presetChanged &&
+        !await _writeSilently(
+          () => repository.setTableVisualPreset(targetId, visualPreset),
+        )) {
       return;
     }
-    await _run(
-      () => repository.setTableVisualPreset(targetId, visualPreset),
-      reloadOnFailure: true,
+    if (!mounted) return;
+    if (materialChanged &&
+        !await _writeSilently(
+          () => repository.setTableVisualMaterial(targetId, visualMaterial),
+        )) {
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context).tablesSaved)),
     );
+    _reload();
+  }
+
+  /// 120C: one visual write inside the dialog-save chain — reports ONLY
+  /// failures (reload + honest error) and returns whether to continue; the
+  /// single success confirmation belongs to the caller.
+  Future<bool> _writeSilently(Future<AdminResult<void>> Function() op) async {
+    final result = await op();
+    if (!mounted) return false;
+    return result.fold((_) => true, (failure) {
+      _reload();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            adminFailureMessage(AppLocalizations.of(context), failure),
+          ),
+        ),
+      );
+      return false;
+    });
   }
 
   Future<void> _confirmDelete(
@@ -765,15 +847,25 @@ class _TableCard extends StatelessWidget {
 // Add / edit dialog.
 // ---------------------------------------------------------------------------
 class _TableDialog extends StatefulWidget {
-  const _TableDialog({required this.onSave, this.table});
+  const _TableDialog({
+    required this.onSave,
+    this.table,
+    this.sectionFloor = FloorPreset.plainLight,
+  });
 
   final DashboardTable? table;
+
+  /// 120C: the owning section's floor preset — the Auto material preview
+  /// resolves the SAME 119D mapping the real floor renders.
+  final FloorPreset sectionFloor;
+
   final Future<void> Function({
     required String label,
     required int? seats,
     required String? area,
     required bool isActive,
     required TableVisualPreset visualPreset,
+    required TableVisualMaterial? visualMaterial,
   })
   onSave;
 
@@ -798,6 +890,11 @@ class _TableDialogState extends State<_TableDialog> {
   /// floor tile before anything is saved.
   late TableVisualPreset _preset =
       widget.table?.visualPreset ?? TableVisualPreset.classicRectTable;
+
+  /// TABLE-VISUAL-CONFIGURATION-120C: the chosen material (null = Auto),
+  /// previewed LIVE before anything is saved.
+  late TableVisualMaterial? _material = widget.table?.visualMaterial;
+  final ScrollController _materialScroll = ScrollController();
   bool _busy = false;
 
   @override
@@ -805,6 +902,7 @@ class _TableDialogState extends State<_TableDialog> {
     _label.dispose();
     _seats.dispose();
     _area.dispose();
+    _materialScroll.dispose();
     super.dispose();
   }
 
@@ -819,6 +917,7 @@ class _TableDialogState extends State<_TableDialog> {
       area: areaText.isEmpty ? null : areaText,
       isActive: _active,
       visualPreset: _preset,
+      visualMaterial: _material,
     );
     if (mounted) Navigator.of(context).pop();
   }
@@ -834,8 +933,10 @@ class _TableDialogState extends State<_TableDialog> {
     );
     final seatsPreview =
         int.tryParse(_seats.text.trim()) ?? widget.table?.seats;
-    final previewStyle = RestoflowTone.success.styleOf(theme);
     return AlertDialog(
+      // 120C: scrollable — the material row must never RenderFlex-overflow
+      // on short viewports / soft keyboards / raised text scale.
+      scrollable: true,
       title: Text(widget.table == null ? l10n.tablesAdd : l10n.tablesEdit),
       content: SizedBox(
         width: RestoflowPanelWidths.dialog,
@@ -912,9 +1013,19 @@ class _TableDialogState extends State<_TableDialog> {
                               : _label.text.trim(),
                           seats: seatsPreview,
                           preset: _preset,
-                          fill: previewStyle.container,
-                          onFill: previewStyle.onContainer,
-                          border: previewStyle.accent,
+                          // 120C: the EDITED choice drives the preview; Auto
+                          // resolves the section-floor mapping honestly.
+                          material:
+                              _material ??
+                              restoflowDefaultFloorMaterial(
+                                _preset,
+                                widget.sectionFloor,
+                              ),
+                          // 120C: NEUTRAL preview tones — the dialog shows
+                          // the MATERIAL, not an operational status tint.
+                          fill: theme.colorScheme.surface,
+                          onFill: theme.colorScheme.onSurface,
+                          border: theme.colorScheme.outlineVariant,
                         ),
                       ),
                       const SizedBox(height: RestoflowSpacing.xs),
@@ -927,6 +1038,66 @@ class _TableDialogState extends State<_TableDialog> {
                     ],
                   ),
                 ],
+              ),
+              const SizedBox(height: RestoflowSpacing.md),
+              // 120C: the material swatch row — tappable mini previews of
+              // the SHARED renderer (Auto first; never raw wire keys).
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  l10n.tablesVisualMaterial,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+              SizedBox(
+                key: const Key('table-visual-material-row'),
+                height: 116,
+                child: ScrollConfiguration(
+                  // The web dashboard is mouse-driven: enable drag-scrolling
+                  // with any pointer and keep a visible scrollbar.
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: PointerDeviceKind.values.toSet(),
+                    scrollbars: false,
+                  ),
+                  child: Scrollbar(
+                    controller: _materialScroll,
+                    thumbVisibility: true,
+                    child: ListView(
+                      controller: _materialScroll,
+                      padding: const EdgeInsetsDirectional.only(bottom: 10),
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        for (final choice in <TableVisualMaterial?>[
+                          null,
+                          ...TableVisualMaterial.values,
+                        ])
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(
+                              end: RestoflowSpacing.sm,
+                            ),
+                            child: _MaterialCard(
+                              key: Key(
+                                'table-visual-material-${choice?.wire ?? 'auto'}',
+                              ),
+                              label: tableVisualMaterialLabel(l10n, choice),
+                              selected: _material == choice,
+                              preset: _preset,
+                              material:
+                                  choice ??
+                                  restoflowDefaultFloorMaterial(
+                                    _preset,
+                                    widget.sectionFloor,
+                                  ),
+                              onTap: () => setState(() => _material = choice),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: RestoflowSpacing.sm),
               SwitchListTile(
@@ -950,6 +1121,84 @@ class _TableDialogState extends State<_TableDialog> {
           child: Text(l10n.adminSave),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TABLE-VISUAL-CONFIGURATION-120C: one tappable material swatch card — a mini
+// SHARED-renderer preview + localized name + clear selected ring.
+// ---------------------------------------------------------------------------
+class _MaterialCard extends StatelessWidget {
+  const _MaterialCard({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.preset,
+    required this.material,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final TableVisualPreset preset;
+  final TableVisualMaterial material;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+        child: Container(
+          width: 92,
+          padding: const EdgeInsets.all(RestoflowSpacing.xs),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+            border: Border.all(
+              color: selected
+                  ? scheme.primary
+                  : scheme.outline.withValues(alpha: 0.4),
+              width: selected ? 2 : 1,
+            ),
+            color: selected
+                ? scheme.primaryContainer.withValues(alpha: 0.25)
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IgnorePointer(
+                child: SizedBox(
+                  width: 72,
+                  height: 56,
+                  child: RestoflowFloorTable(
+                    label: '',
+                    preset: preset,
+                    material: material,
+                    fill: scheme.surface,
+                    onFill: scheme.onSurface,
+                    border: scheme.outlineVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

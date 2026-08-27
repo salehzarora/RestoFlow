@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualMaterial,
+        TableVisualPreset;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'table_models.dart';
@@ -22,6 +26,57 @@ String floorPresetLabel(AppLocalizations l10n, FloorPreset p) => switch (p) {
   FloorPreset.tileModern => l10n.tablesFloorPresetTileModern,
   FloorPreset.stoneNeutral => l10n.tablesFloorPresetStoneNeutral,
 };
+
+/// TABLE-VISUAL-CONFIGURATION-120C: the localized name of a table material
+/// (`null` = Auto — the floor decides).
+String tableVisualMaterialLabel(
+  AppLocalizations l10n,
+  TableVisualMaterial? m,
+) => switch (m) {
+  null => l10n.tablesVisualAuto,
+  TableVisualMaterial.wood => l10n.tablesVisualMaterialWood,
+  TableVisualMaterial.darkWood => l10n.tablesVisualMaterialDarkWood,
+  TableVisualMaterial.lightWood => l10n.tablesVisualMaterialLightWood,
+  TableVisualMaterial.rusticWood => l10n.tablesVisualMaterialRusticWood,
+  TableVisualMaterial.plastic => l10n.tablesVisualMaterialPlastic,
+  TableVisualMaterial.neutralModern => l10n.tablesVisualMaterialNeutralModern,
+};
+
+/// TABLE-ROOM-FRAME-121: the localized name of a section room size/shape
+/// (`null` = Standard — the legacy room).
+String roomFramePresetLabel(
+  AppLocalizations l10n,
+  TableSectionRoomFramePreset? p,
+) => switch (p) {
+  null => l10n.tablesRoomFrameStandard,
+  TableSectionRoomFramePreset.compact => l10n.tablesRoomFrameCompact,
+  TableSectionRoomFramePreset.square => l10n.tablesRoomFrameSquare,
+  TableSectionRoomFramePreset.wide => l10n.tablesRoomFrameWide,
+  TableSectionRoomFramePreset.portrait => l10n.tablesRoomFramePortrait,
+  TableSectionRoomFramePreset.longNarrow => l10n.tablesRoomFrameLongNarrow,
+};
+
+/// TABLE-VISUAL-CONFIGURATION-120C: the localized name of a fixture artwork
+/// style wire key (`null` = Auto). Unknown keys fall back to Auto — the
+/// picker only ever offers registry keys, so this is belt-and-braces.
+String floorElementStyleLabel(AppLocalizations l10n, String? style) =>
+    switch (style) {
+      null => l10n.tablesVisualAuto,
+      'modern' => l10n.floorElementStyleModern,
+      'wood' => l10n.floorElementStyleWood,
+      'dark' => l10n.floorElementStyleDark,
+      'leafy' => l10n.floorElementStyleLeafy,
+      'palm' => l10n.floorElementStylePalm,
+      'compact_pot' => l10n.floorElementStyleCompactPot,
+      'glass' => l10n.floorElementStyleGlass,
+      'modern_glass' => l10n.floorElementStyleModernGlass,
+      'framed' => l10n.floorElementStyleFramed,
+      'dark_frame' => l10n.floorElementStyleDarkFrame,
+      'plain' => l10n.floorElementStylePlain,
+      'brick' => l10n.floorElementStyleBrick,
+      'wood_partition' => l10n.floorElementStyleWoodPartition,
+      _ => l10n.tablesVisualAuto,
+    };
 
 /// The localized label + semantic tone + icon for a table status. Tones ride
 /// the shared TRUE semantic palette (success/warning/info/danger), so the

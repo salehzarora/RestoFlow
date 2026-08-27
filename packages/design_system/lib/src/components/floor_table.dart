@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show FloorPreset, TableVisualPreset;
+    show
+        FloorPreset,
+        TableSectionRoomFramePreset,
+        TableVisualPreset,
+        floorRoomAspect,
+        kFloorStandardAspect;
 
 import 'floor_presets.dart';
+import 'floor_scene_theme.dart';
 
 import '../tokens.dart';
 
@@ -34,7 +40,15 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
     this.aspectRatio = kRestoflowFloorSectionAspect,
     this.overlay,
     this.floorPreset = FloorPreset.plainLight,
+    this.roomFrame,
   });
+
+  /// TABLE-ROOM-FRAME-121: the section's optional ROOM FRAME preset. When
+  /// set, the canvas resolves its width:height from the frame (the SHARED
+  /// projection — callers compute room rects through the same frame, so the
+  /// furniture's on-screen physical aspect never changes); NULL keeps
+  /// [aspectRatio] (default: the legacy tokenized ratio) byte-for-byte.
+  final TableSectionRoomFramePreset? roomFrame;
 
   /// TABLE-VISUAL-LAYOUT-118: the section's floor style. The default paints
   /// the pre-118 white canvas exactly; any other preset paints ONE pattern
@@ -71,7 +85,8 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
     final theme = Theme.of(context);
     final palette = RestoflowFloorPresetPalette.of(floorPreset);
     return AspectRatio(
-      aspectRatio: aspectRatio,
+      // 121: a room frame overrides the caller ratio; NULL = legacy exactly.
+      aspectRatio: roomFrame == null ? aspectRatio : floorRoomAspect(roomFrame),
       child: DecoratedBox(
         decoration: BoxDecoration(
           // 118: the preset base (plain light == the pre-118 Colors.white).
@@ -98,23 +113,26 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
                 );
               }
 
-              return Stack(
-                clipBehavior: Clip.hardEdge,
-                children: [
-                  // 118: the floor pattern, isolated so table-state repaints
-                  // never re-run it (PERF-110 posture).
-                  if (floorPreset != FloorPreset.plainLight)
-                    Positioned.fill(
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          painter: RestoflowFloorPresetPainter(floorPreset),
+              return RestoflowFloorSceneScope(
+                floorPreset: floorPreset,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    // 118: the floor pattern, isolated so table-state repaints
+                    // never re-run it (PERF-110 posture).
+                    if (floorPreset != FloorPreset.plainLight)
+                      Positioned.fill(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            painter: RestoflowFloorPresetPainter(floorPreset),
+                          ),
                         ),
                       ),
-                    ),
-                  for (final tile in background) positioned(tile),
-                  for (final tile in placed) positioned(tile),
-                  if (overlay != null) overlay!(constraints),
-                ],
+                    for (final tile in background) positioned(tile),
+                    for (final tile in placed) positioned(tile),
+                    if (overlay != null) overlay!(constraints),
+                  ],
+                ),
               );
             },
           ),
@@ -148,8 +166,9 @@ class RestoflowFloorSectionCanvas extends StatelessWidget {
 
 /// The tokenized section canvas ratio (width : height).
 /// 027: 1.6 → 1.9 (≈16% shorter maps at the same width; one shared token —
-/// never a per-surface ratio).
-const double kRestoflowFloorSectionAspect = 1.9;
+/// never a per-surface ratio). 121: this IS the domain's Standard room-frame
+/// aspect — the two constants must never diverge.
+const double kRestoflowFloorSectionAspect = kFloorStandardAspect;
 
 /// 027: the minimum canvas width at which floor tiles stay readable; below
 /// it the canvas scrolls horizontally instead of shrinking geometry.
@@ -213,7 +232,15 @@ class RestoflowFloorTable extends StatelessWidget {
     this.footnote,
     this.chairCap = 12,
     this.preset = TableVisualPreset.classicRectTable,
+    this.material,
   });
+
+  /// TABLE-119D: the table-surface material. `null` (the default) resolves
+  /// the deterministic shared mapping from [preset] and the enclosing
+  /// canvas's floor preset (via [RestoflowFloorSceneScope]) — identical on
+  /// every surface with zero app plumbing. Set it to override per tile (the
+  /// seam a future persisted per-table style would use).
+  final RestoflowFloorMaterial? material;
 
   /// TABLE-VISUAL-LAYOUT-118: how the table is DRAWN inside its (unchanged)
   /// footprint. The classic default keeps the pre-118 widget tree exactly;
@@ -256,7 +283,6 @@ class RestoflowFloorTable extends StatelessWidget {
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final s = scaleFor(size.width);
-        final chairs = _chairSides(seats ?? 0, chairCap);
         final chairInset = 9.0 * s;
         final chairColor = border.a < 0.9
             ? border.withValues(alpha: 0.9)
@@ -264,127 +290,95 @@ class RestoflowFloorTable extends StatelessWidget {
 
         final isRound = preset == TableVisualPreset.roundTable;
         final labelColumn = _labelColumn(theme, s, fitted: isRound);
+        // 119D: the material resolves from the enclosing canvas's floor
+        // preset unless the caller overrides it.
+        final resolvedMaterial =
+            material ??
+            restoflowDefaultFloorMaterial(
+              preset,
+              RestoflowFloorSceneScope.of(context),
+            );
 
-        if (preset != TableVisualPreset.classicRectTable) {
-          // 118: a painted shape inside the SAME footprint; the label column
-          // sits on the painter's surface rect.
-          final painter = RestoflowTableShapePainter(
-            preset: preset,
-            chairs: chairs.$1 + chairs.$2 + chairs.$3 + chairs.$4,
-            fill: fill,
-            border: border,
-            borderWidth: borderWidth,
-            chairColor: chairColor,
-            inset: chairInset,
-            scale: s,
-            surfaceRadius: RestoflowRadii.md,
-          );
-          // 118F: the label column lives in the painter's CONTENT rect (the
-          // surface for rectangular shapes; a rect inscribed in the circle
-          // for a round table). A round table additionally scales its rows
-          // DOWN — never truncates — when a word is wider than the chord,
-          // so "RESERVED" / "OCCUPIED" / "2 open orders" stay whole and
-          // inside the rim on every tile size.
-          final content = painter.contentRect(size);
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: MediaQuery.withClampedTextScaling(
-              maxScaleFactor: 1.4,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: CustomPaint(painter: painter)),
-                  Positioned(
-                    left: content.left,
-                    top: content.top,
-                    width: content.width,
-                    height: content.height,
-                    child: isRound
-                        ? FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: SizedBox(
-                              width: content.width,
-                              child: labelColumn,
-                            ),
-                          )
-                        : Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4 * s),
-                            child: labelColumn,
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
+        // TABLE-119A: EVERY preset paints through the one shared painter
+        // (classic included — real chairs, shaded tops). The painter is
+        // isolated in its own RepaintBoundary so one tile's state change
+        // never repaints its siblings, and the deterministic size-driven
+        // detail tier keeps small tiles crisp and cheap. Geometry is
+        // untouched: same footprint, same surface/content rects, same
+        // label column, same hit target.
+        final painter = RestoflowTableShapePainter(
+          preset: preset,
+          chairs: (seats ?? 0) < 0
+              ? 0
+              : ((seats ?? 0) > chairCap ? chairCap : (seats ?? 0)),
+          fill: fill,
+          border: border,
+          borderWidth: borderWidth,
+          chairColor: chairColor,
+          inset: chairInset,
+          scale: s,
+          surfaceRadius: RestoflowRadii.md,
+          detail: restoflowFloorDetailFor(size.width),
+          material: resolvedMaterial,
+        );
+        final content = painter.contentRect(size);
         return SizedBox(
           width: size.width,
           height: size.height,
-          // The tile has a FIXED footprint (it sits on a spatial canvas), so
-          // the text inside clamps its scaling like other fixed-geometry
-          // glyphs do — at 2× accessibility scale the label/seats stay
-          // readable without overflowing the footprint. The status word is
-          // also carried by the caller's Semantics label, which scales
-          // normally.
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1.4,
             child: Stack(
               children: [
-                // The table SURFACE, inset so the chairs sit around it.
                 Positioned.fill(
-                  child: Padding(
-                    padding: EdgeInsets.all(chairInset),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: fill,
-                        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-                        border: Border.all(color: border, width: borderWidth),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4 * s),
-                        child: labelColumn,
+                  child: RepaintBoundary(child: CustomPaint(painter: painter)),
+                ),
+                // TABLE-119D: the label column sits on a translucent PLATE so
+                // it stays readable on real material tops. The plate hugs the
+                // text (Center + min column), lives inside the same content
+                // rect, and adapts its tone to the caller's onFill so status
+                // icons keep their contrast (dark plate under light ink,
+                // light plate under dark ink). Round tiles keep their 118F
+                // scale-down behaviour via the outer FittedBox.
+                Positioned(
+                  left: content.left,
+                  top: content.top,
+                  width: content.width,
+                  height: content.height,
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: content.width.clamp(1.0, double.infinity),
+                        ),
+                        child: DecoratedBox(
+                          key: const ValueKey('restoflow-floor-label-plate'),
+                          decoration: BoxDecoration(
+                            // A dark onFill sits on the material's own light
+                            // plate; a light onFill (selected) flips to the
+                            // shared dark plate so icons keep contrast.
+                            color: onFill.computeLuminance() > 0.5
+                                ? Colors.black.withValues(alpha: 0.38)
+                                : RestoflowMaterialPalette.of(
+                                    resolvedMaterial,
+                                  ).labelPlate,
+                            borderRadius: BorderRadius.circular(6 * s),
+                          ),
+                          child: Padding(
+                            // 118F interaction: the ROUND content rect is
+                            // already inscribed, so its plate keeps padding
+                            // minimal — the text keeps (almost) the full
+                            // pre-119D width budget.
+                            padding: EdgeInsets.symmetric(
+                              horizontal: (isRound ? 2 : 5) * s,
+                              vertical: 2.5 * s,
+                            ),
+                            child: labelColumn,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // Chairs, deterministically spread per side. Physical
-                // coordinates (left/top): the layout never mirrors for RTL.
-                ..._chairRow(
-                  count: chairs.$1,
-                  horizontal: true,
-                  leading: true,
-                  size: size,
-                  inset: chairInset,
-                  scale: s,
-                  color: chairColor,
-                ),
-                ..._chairRow(
-                  count: chairs.$2,
-                  horizontal: true,
-                  leading: false,
-                  size: size,
-                  inset: chairInset,
-                  scale: s,
-                  color: chairColor,
-                ),
-                ..._chairRow(
-                  count: chairs.$3,
-                  horizontal: false,
-                  leading: true,
-                  size: size,
-                  inset: chairInset,
-                  scale: s,
-                  color: chairColor,
-                ),
-                ..._chairRow(
-                  count: chairs.$4,
-                  horizontal: false,
-                  leading: false,
-                  size: size,
-                  inset: chairInset,
-                  scale: s,
-                  color: chairColor,
                 ),
               ],
             ),
@@ -406,7 +400,8 @@ class RestoflowFloorTable extends StatelessWidget {
     bool fitted = false,
   }) => Column(
     mainAxisAlignment: MainAxisAlignment.center,
-    mainAxisSize: fitted ? MainAxisSize.min : MainAxisSize.max,
+    // 119D: always min — the plate hugs the text on every preset.
+    mainAxisSize: MainAxisSize.min,
     children: [
       _fit(
         fitted,
@@ -488,51 +483,4 @@ class RestoflowFloorTable extends StatelessWidget {
   /// every other preset, so their widget tree is untouched).
   static Widget _fit(bool fitted, Widget child) =>
       fitted ? FittedBox(fit: BoxFit.scaleDown, child: child) : child;
-
-  /// Chairs per (top, bottom, start, end) — the [top, bottom, top, bottom,
-  /// start, end] fill pattern (a 2-top reads 1+1 across, a 4-top 2+2).
-  static (int, int, int, int) _chairSides(int seats, int cap) {
-    final shown = seats < 0 ? 0 : (seats > cap ? cap : seats);
-    const pattern = [0, 1, 0, 1, 2, 3];
-    final out = [0, 0, 0, 0];
-    for (var i = 0; i < shown; i++) {
-      out[pattern[i % pattern.length]] += 1;
-    }
-    return (out[0], out[1], out[2], out[3]);
-  }
-
-  /// One side's chair glyphs, evenly spread along the edge. Physical
-  /// coordinates (left/top): the chair layout never mirrors for RTL.
-  List<Widget> _chairRow({
-    required int count,
-    required bool horizontal,
-    required bool leading,
-    required Size size,
-    required double inset,
-    required double scale,
-    required Color color,
-  }) {
-    if (count <= 0) return const [];
-    final chair = 6.0 * scale;
-    final span = (horizontal ? size.width : size.height) - 2 * inset;
-    return [
-      for (var i = 0; i < count; i++)
-        Positioned(
-          left: horizontal
-              ? inset + (i + 1) * span / (count + 1) - chair / 2
-              : (leading ? 1.0 : size.width - inset + 2 * scale),
-          top: horizontal
-              ? (leading ? 1.0 : size.height - inset + 2 * scale)
-              : inset + (i + 1) * span / (count + 1) - chair / 2,
-          child: Container(
-            width: horizontal ? chair : inset - 3 * scale,
-            height: horizontal ? inset - 3 * scale : chair,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-    ];
-  }
 }

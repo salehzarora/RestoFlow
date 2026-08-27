@@ -7,6 +7,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
     show
         FloorPoint,
         FloorPreset,
+        TableSectionRoomFramePreset,
         floorClusterSeamRect,
         floorElementRoomRect,
         floorFractionOf,
@@ -396,6 +397,7 @@ class _MoveSectionZone extends StatelessWidget {
     String sectionId,
     String sectionName,
     FloorPreset floorPreset,
+    TableSectionRoomFramePreset? roomFramePreset,
     List<DemoTable> tables,
   })
   section;
@@ -473,11 +475,14 @@ class _MoveSectionZone extends StatelessWidget {
                   final packed = packLinkedCluster([
                     for (final t in members)
                       (id: t.tableId, x: t.layoutX!, y: t.layoutY!),
-                  ]);
+                  ], frame: section.roomFramePreset);
                   derived.addAll(packed);
                   seams.add(
                     RestoflowFloorPlacedTile(
-                      room: floorClusterSeamRect(packed.values),
+                      room: floorClusterSeamRect(
+                        packed.values,
+                        frame: section.roomFramePreset,
+                      ),
                       child: const RestoflowFloorClusterSeam(),
                     ),
                   );
@@ -486,6 +491,8 @@ class _MoveSectionZone extends StatelessWidget {
                   key: Key('move-table-section-canvas-${section.sectionId}'),
                   // 118: the section's saved floor style (shared painter).
                   floorPreset: section.floorPreset,
+                  // 121: the section's room size/shape (shared projection).
+                  roomFrame: section.roomFramePreset,
                   // 027 z-order: fixtures under seams under tables; read-only.
                   background: [
                     for (final e in elements)
@@ -501,7 +508,9 @@ class _MoveSectionZone extends StatelessWidget {
                           child: RestoflowFloorFixture(
                             key: Key('move-floor-element-${e.id}'),
                             kind: e.kind,
+                            quarterTurns: e.orientationQuarterTurns,
                             label: e.label,
+                            style: e.visualStyle,
                           ),
                         ),
                       ),
@@ -514,8 +523,13 @@ class _MoveSectionZone extends StatelessWidget {
                             ? floorTableRoomRect(
                                 derived[t.tableId]!.x,
                                 derived[t.tableId]!.y,
+                                frame: section.roomFramePreset,
                               )
-                            : floorTableRoomRect(t.layoutX!, t.layoutY!),
+                            : floorTableRoomRect(
+                                t.layoutX!,
+                                t.layoutY!,
+                                frame: section.roomFramePreset,
+                              ),
                         child: tile(t),
                       ),
                   ],
@@ -590,6 +604,7 @@ class _MoveFloorTile extends StatelessWidget {
               seats: table.seats,
               // 118: the saved shape, drawn inside the unchanged footprint.
               preset: table.visualPreset,
+              material: table.visualMaterial,
               fill: selected
                   ? scheme.primaryContainer
                   : isCurrent

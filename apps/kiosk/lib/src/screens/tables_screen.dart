@@ -666,6 +666,8 @@ class _KioskZoneMap extends StatelessWidget {
             ).copyWith(textScaler: const TextScaler.linear(1.35)),
             child: RestoflowFloorSectionCanvas(
               floorPreset: zone.floorPreset,
+              // 121: the section's room size/shape (shared projection).
+              roomFrame: zone.roomFramePreset,
               // Fixtures under the tables; pure decoration, never tappable.
               background: [
                 for (final e in zone.elements)
@@ -681,7 +683,9 @@ class _KioskZoneMap extends StatelessWidget {
                       child: RestoflowFloorFixture(
                         key: Key('kiosk-floor-element-${e.id}'),
                         kind: e.kind,
+                        quarterTurns: e.orientationQuarterTurns,
                         label: e.label,
+                        style: e.visualStyle,
                       ),
                     ),
                   ),
@@ -692,7 +696,11 @@ class _KioskZoneMap extends StatelessWidget {
                 for (final table in zone.tables)
                   if (table.isPlaced)
                     RestoflowFloorPlacedTile(
-                      room: floorTableRoomRect(table.layoutX!, table.layoutY!),
+                      room: floorTableRoomRect(
+                        table.layoutX!,
+                        table.layoutY!,
+                        frame: zone.roomFramePreset,
+                      ),
                       child: _KioskFloorTile(
                         table: table,
                         palette: palette,
@@ -796,6 +804,7 @@ class _KioskFloorTile extends StatelessWidget {
                 label: table.label,
                 seats: table.seats,
                 preset: table.visualPreset,
+                material: table.visualMaterial,
                 fill: fill,
                 onFill: onFill,
                 border: border,

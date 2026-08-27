@@ -4,7 +4,10 @@ import 'package:restoflow_dashboard/src/tables/table_models.dart';
 import 'package:restoflow_dashboard/src/tables/tables_repository.dart';
 import 'package:restoflow_dashboard/src/tables/tables_screen.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart'
-    show RestoflowFloorClusterSeam, kRestoflowFloorSectionAspect;
+    show
+        RestoflowFloorClusterSeam,
+        RestoflowFloorFixture,
+        kRestoflowFloorSectionAspect;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show floorElementRoomRect, floorTableRoomRect;
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
@@ -55,6 +58,8 @@ const _wallX1 = DashboardFloorElement(
   layoutY: 30,
   widthNorm: 3000,
   heightNorm: 150,
+  // 120B: the persisted style must reach the shared fixture widget.
+  visualStyle: 'brick',
 );
 
 class _MatrixRepo extends InMemoryTablesStore {
@@ -357,6 +362,24 @@ void main() {
       // Tables submode (the default): the wall renders but is NOT drag-armed;
       // tables keep their drag handles.
       expect(find.byKey(const Key('floor-element-x1')), findsOneWidget);
+      // 119A: the AUTHORITATIVE orientation reaches the fixture widget.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('floor-element-x1')),
+            )
+            .quarterTurns,
+        _wallX1.orientationQuarterTurns,
+      );
+      // 120B: the persisted style reaches the shared fixture widget.
+      expect(
+        tester
+            .widget<RestoflowFloorFixture>(
+              find.byKey(const Key('floor-element-x1')),
+            )
+            .style,
+        'brick',
+      );
       expect(find.byKey(const Key('floor-element-drag-x1')), findsNothing);
       expect(find.byKey(const Key('floor-drag-t1')), findsOneWidget);
       // The fixture sits at the SHARED room-unit contract rect (<=0.5px).

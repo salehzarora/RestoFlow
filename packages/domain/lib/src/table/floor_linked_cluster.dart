@@ -12,6 +12,7 @@
 library;
 
 import 'floor_layout_geometry.dart';
+import 'table_section_room_frame.dart';
 
 /// One placed member of a link group inside ONE section.
 typedef FloorClusterMember = ({String id, int x, int y});
@@ -32,7 +33,15 @@ const int kFloorClusterSeam = 120;
 ///    stays inside the room — no member ever overlaps another by
 ///    construction;
 ///  * a group with fewer than two placed members derives nothing (identity).
-Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
+///
+/// TABLE-ROOM-FRAME-121: the pack projects through the SAME [frame] the
+/// surfaces render with (footprint, usable span, inverse) so the derived
+/// stored coordinates round-trip to the exact seam gap in every room —
+/// NULL keeps the legacy pack byte-for-byte.
+Map<String, FloorPoint> packLinkedCluster(
+  List<FloorClusterMember> members, {
+  TableSectionRoomFramePreset? frame,
+}) {
   if (members.length < 2) {
     return {for (final m in members) m.id: (x: m.x, y: m.y)};
   }
@@ -48,10 +57,15 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
     if (better) anchor = m;
   }
 
-  const stepX = kFloorTableW + kFloorClusterSeam;
+  final fx = floorTableFootprintW(frame);
+  final stepX = fx + kFloorClusterSeam;
   const stepY = kFloorTableH + kFloorClusterSeam;
-  // How many columns fit across the whole room (6 with the v1 constants).
-  const maxCols = (kFloorLayoutMax + kFloorClusterSeam) ~/ stepX;
+  // How many columns fit across the whole room (6 with the v1 Standard
+  // constants; fewer in narrower frames — never below one).
+  final maxCols = ((kFloorLayoutMax + kFloorClusterSeam) ~/ stepX).clamp(
+    1,
+    members.length,
+  );
   final cols = members.length < maxCols ? members.length : maxCols;
 
   // Slot order: the anchor first, then the remaining members in the caller's
@@ -62,7 +76,7 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
       if (m.id != anchor.id) m,
   ];
 
-  final anchorLeft = floorRoomLeft(anchor.x);
+  final anchorLeft = floorRoomLeft(anchor.x, frame: frame);
   final anchorTop = floorRoomTop(anchor.y);
   final lefts = <String, double>{};
   final tops = <String, double>{};
@@ -75,7 +89,7 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
     final top = anchorTop + row * stepY;
     lefts[ordered[k].id] = left;
     tops[ordered[k].id] = top;
-    if (left + kFloorTableW > maxRight) maxRight = left + kFloorTableW;
+    if (left + fx > maxRight) maxRight = left + fx;
     if (top + kFloorTableH > maxBottom) maxBottom = top + kFloorTableH;
   }
 
@@ -94,6 +108,7 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
       m.id: floorStoredFromRoomTopLeft(
         lefts[m.id]! - shiftX,
         tops[m.id]! - shiftY,
+        frame: frame,
       ),
   };
 }
@@ -103,15 +118,17 @@ Map<String, FloorPoint> packLinkedCluster(List<FloorClusterMember> members) {
 FloorRoomRect floorClusterSeamRect(
   Iterable<FloorPoint> derived, {
   double pad = 70,
+  TableSectionRoomFramePreset? frame,
 }) {
+  final fx = floorTableFootprintW(frame);
   var minL = double.infinity, minT = double.infinity;
   var maxR = 0.0, maxB = 0.0;
   for (final p in derived) {
-    final l = floorRoomLeft(p.x);
+    final l = floorRoomLeft(p.x, frame: frame);
     final t = floorRoomTop(p.y);
     if (l < minL) minL = l;
     if (t < minT) minT = t;
-    if (l + kFloorTableW > maxR) maxR = l + kFloorTableW;
+    if (l + fx > maxR) maxR = l + fx;
     if (t + kFloorTableH > maxB) maxB = t + kFloorTableH;
   }
   final left = (minL - pad).clamp(0.0, kFloorLayoutMax.toDouble());
