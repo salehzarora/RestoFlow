@@ -7217,4 +7217,200 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardQuickNoteReorderFailed => 'تعذّر حفظ الترتيب الجديد.';
+
+  @override
+  String get adminNavOverview => 'نظرة عامة';
+
+  @override
+  String get adminNavSubscribers => 'المشتركون';
+
+  @override
+  String get adminNavRestaurants => 'المطاعم';
+
+  @override
+  String get adminNavAuditLog => 'سجل التدقيق';
+
+  @override
+  String get adminConsoleReadOnly => 'لوحة المنصة للقراءة فقط';
+
+  @override
+  String get adminConsoleSections => 'أقسام اللوحة';
+
+  @override
+  String get adminBackToSubscribers => 'العودة إلى المشتركين';
+
+  @override
+  String get adminKpiSubscribers => 'المشتركون';
+
+  @override
+  String get adminKpiSuspendedOrganizations => 'مؤسسات موقوفة';
+
+  @override
+  String get adminKpiActiveMemberships => 'العضويات النشطة';
+
+  @override
+  String get adminSubscriptionsHeading => 'الاشتراكات';
+
+  @override
+  String get adminSubStatusTrialing => 'تجريبي';
+
+  @override
+  String get adminSubStatusActive => 'نشط';
+
+  @override
+  String get adminSubStatusPastDue => 'متأخر السداد';
+
+  @override
+  String get adminSubStatusCanceled => 'ملغى';
+
+  @override
+  String get adminOrgStatusActive => 'نشطة';
+
+  @override
+  String get adminOrgStatusSuspended => 'موقوفة';
+
+  @override
+  String get adminNoSubscription => 'بلا اشتراك';
+
+  @override
+  String get adminNoSubscriptionConfigured => 'لم يتم إعداد اشتراك';
+
+  @override
+  String get adminNoSubscriptionsConfiguredTitle => 'لا توجد اشتراكات بعد';
+
+  @override
+  String get adminNoSubscriptionsConfiguredBody =>
+      'لم تُسنَد أي خطة إلى أي مؤسسة بعد، لذلك جميع أعداد الاشتراكات صفر.';
+
+  @override
+  String get adminPeriodStart => 'بداية الفترة';
+
+  @override
+  String get adminPeriodEnd => 'نهاية الفترة';
+
+  @override
+  String get adminDefaultCurrency => 'العملة الافتراضية';
+
+  @override
+  String get adminEffectiveCurrency => 'العملة';
+
+  @override
+  String get adminCurrencyOverride => 'تجاوز العملة';
+
+  @override
+  String get adminPlanLabel => 'الخطة';
+
+  @override
+  String get adminMembersLabel => 'الأعضاء';
+
+  @override
+  String get adminSearchLabel => 'بحث';
+
+  @override
+  String get adminFilterLabel => 'تصفية';
+
+  @override
+  String get adminSortLabel => 'ترتيب';
+
+  @override
+  String get adminFilterAll => 'الكل';
+
+  @override
+  String get adminFilterOrganizationStatus => 'حالة المؤسسة';
+
+  @override
+  String get adminFilterSubscriptionStatus => 'حالة الاشتراك';
+
+  @override
+  String get adminClearFilters => 'مسح عوامل التصفية';
+
+  @override
+  String get adminPrevious => 'السابق';
+
+  @override
+  String get adminNext => 'التالي';
+
+  @override
+  String get adminLoadMore => 'تحميل المزيد';
+
+  @override
+  String get adminNoSubscribers => 'لا يوجد مشتركون مطابقون لعوامل التصفية';
+
+  @override
+  String get adminNoRestaurants => 'لا توجد مطاعم مطابقة لعوامل التصفية';
+
+  @override
+  String get adminNoAuditEvents => 'لا توجد أحداث تدقيق';
+
+  @override
+  String get adminSortNameAsc => 'الاسم (أ-ي)';
+
+  @override
+  String get adminSortNameDesc => 'الاسم (ي-أ)';
+
+  @override
+  String get adminSortOldestFirst => 'الأقدم أولاً';
+
+  @override
+  String get adminSortNewestFirst => 'الأحدث أولاً';
+
+  @override
+  String get adminSortPeriodEndAsc => 'نهاية الفترة (الأقرب)';
+
+  @override
+  String get adminSortPeriodEndDesc => 'نهاية الفترة (الأبعد)';
+
+  @override
+  String get adminSortOrganizationAsc => 'المؤسسة (أ-ي)';
+
+  @override
+  String get adminSortOrganizationDesc => 'المؤسسة (ي-أ)';
+
+  @override
+  String get adminSubscriberDetailTitle => 'المشترك';
+
+  @override
+  String get adminOrganizationHeading => 'المؤسسة';
+
+  @override
+  String get adminCountsHeading => 'الأعداد';
+
+  @override
+  String get adminSubscriptionHeading => 'الاشتراك';
+
+  @override
+  String get adminRecentPlatformActivity => 'نشاط المنصة الأخير';
+
+  @override
+  String get adminNoActivityForSubscriber =>
+      'لا يوجد نشاط منصة مسجَّل لهذا المشترك';
+
+  @override
+  String get adminAuditActionLabel => 'الإجراء';
+
+  @override
+  String get adminAuditReasonLabel => 'السبب';
+
+  @override
+  String get adminAuditActorLabel => 'المنفِّذ';
+
+  @override
+  String get adminAuditTargetLabel => 'الهدف';
+
+  @override
+  String get adminAuditPlatformWide => 'على مستوى المنصة';
+
+  @override
+  String get adminAuditFrom => 'من';
+
+  @override
+  String get adminAuditTo => 'إلى';
+
+  @override
+  String get adminBranchesLabel => 'الفروع';
+
+  @override
+  String adminShowingRange(int first, int last, int total) {
+    return 'عرض $first-$last من $total';
+  }
 }

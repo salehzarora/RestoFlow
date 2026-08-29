@@ -1,552 +1,409 @@
+/// The PLATFORM CONSOLE shell (ADMIN-125C.2, replacing the RF-120/128/134
+/// single-page overview).
+///
+/// Four top-level destinations — Overview, Subscribers, Restaurants, Audit log —
+/// plus a Subscriber detail that is opened FROM Subscribers rather than being a
+/// destination of its own (it always belongs to a specific tenant, so it has no
+/// meaning as a standalone tab, and Back returns to the list that opened it).
+///
+/// Navigation is lightweight local state, NOT a router. The Admin app is a
+/// single gated surface with four sibling views and no deep links, so adding
+/// GoRouter here would buy URL routing nobody uses and hand the auth gate a
+/// second way to be bypassed.
+///
+/// THE AUTH GATE STAYS OUTSIDE THIS WIDGET. `AdminAuthFlow` decides whether the
+/// console is reachable at all (session -> `get_my_context` -> platform admin +
+/// aal2); this shell is only ever built once that has passed, and every read it
+/// performs is independently re-authorized server-side by
+/// `app.platform_admin_guard`. Nothing here can widen access.
+///
+/// READ-ONLY (DECISION D-026): the shell's only actions are refresh, language,
+/// and sign out. There is no control anywhere in the console that writes.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import 'data/platform_admin_repository.dart';
-import 'data/platform_overview.dart';
+import 'console/audit_log_page.dart';
+import 'console/overview_page.dart';
+import 'console/restaurants_page.dart';
+import 'console/subscriber_detail_page.dart';
+import 'console/subscribers_page.dart';
 import 'state/platform_admin_providers.dart';
-import 'widgets/platform_widgets.dart';
 import 'widgets/language_selector.dart';
 
-/// The RF-120 / RF-128 / RF-134 platform-admin overview: a data-source notice
-/// banner, the platform "as of" context, platform KPI cards, an organizations
-/// summary, a branch-health list and a recent-activity feed.
-///
-/// The overview is loaded through the [platformOverviewProvider] seam, so the
-/// screen has honest loading / error / empty states and a refresh. This is the
-/// PLATFORM admin surface (org/branch SUMMARIES only — no tenant financial
-/// detail); read-only (D-026). Counts are plain integers; chrome is localized
-/// and RTL/LTR-correct.
-///
-/// UX HONESTY (RF-134): the mode is read from [runtimeConfigProvider] — the same
-/// switch that selects the demo vs real repository.
-///   * DEMO mode shows the demo-data banner + "Demo data" pill + the full KPI
-///     set computed from the demo dataset.
-///   * REAL mode shows a "live but limited" notice + "Live · limited" pill, and
-///     HIDES the KPIs the RF-091/RF-125 read panel does not provide (active
-///     branches, devices, open alerts, orders today) and the per-branch health
-///     section, so no `0`/placeholder is ever presented as a real figure. It
-///     never claims full live platform-admin capability while the aal2/grant
-///     management UX is missing. Real-mode failures render categorized safe
-///     states (not configured / access denied / generic) — see [_ErrorState].
-class PlatformAdminScreen extends ConsumerWidget {
+/// The console's top-level destinations.
+enum ConsoleSection { overview, subscribers, restaurants, audit }
+
+/// The platform console shell.
+class PlatformAdminScreen extends ConsumerStatefulWidget {
   const PlatformAdminScreen({this.onSignOut, this.operatorEmail, super.key});
 
-  /// RF-119-b: when provided (real mode), an app-bar Sign-out action clears the
+  /// RF-119-b: when provided (real mode), a Sign-out action clears the
   /// platform-operator session. Null in demo mode (no session to sign out of).
   final VoidCallback? onSignOut;
 
-  /// DESIGN-002: the signed-in operator email (from `get_my_context`), shown in
-  /// the overview header so the operator can confirm which account is active.
-  /// NON-secret; null in demo mode (no session).
+  /// DESIGN-002: the signed-in operator email (from `get_my_context`), shown so
+  /// the operator can confirm which account is active. NON-secret; null in demo.
   final String? operatorEmail;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlatformAdminScreen> createState() =>
+      _PlatformAdminScreenState();
+}
+
+class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
+  ConsoleSection _section = ConsoleSection.overview;
+
+  /// Non-null while a Subscriber detail is open (always under
+  /// [ConsoleSection.subscribers]).
+  String? _openSubscriberId;
+
+  void _select(ConsoleSection section) {
+    setState(() {
+      _section = section;
+      // Leaving Subscribers closes any open detail, so returning to the tab
+      // later lands on the list rather than a tenant the operator has moved on
+      // from.
+      _openSubscriberId = null;
+    });
+  }
+
+  void _openSubscriber(String organizationId) =>
+      setState(() => _openSubscriberId = organizationId);
+
+  void _closeSubscriber() => setState(() => _openSubscriberId = null);
+
+  /// Refreshes the CURRENT page only. A blanket invalidate-everything would make
+  /// one tap re-read all five endpoints and write five audit rows for a refresh
+  /// the operator asked of one screen.
+  void _refresh() {
+    switch (_section) {
+      case ConsoleSection.overview:
+        ref.invalidate(consoleOverviewProvider);
+      case ConsoleSection.subscribers:
+        final open = _openSubscriberId;
+        if (open != null) {
+          ref.invalidate(subscriberDetailProvider(open));
+        } else {
+          ref.invalidate(
+            subscriberPageProvider(ref.read(subscriberQueryProvider)),
+          );
+        }
+      case ConsoleSection.restaurants:
+        ref.invalidate(
+          restaurantPageProvider(ref.read(restaurantQueryProvider)),
+        );
+      case ConsoleSection.audit:
+        ref.read(auditFeedProvider.notifier).refresh();
+    }
+  }
+
+  /// The page for the current section. Subscriber detail is nested UNDER
+  /// Subscribers rather than being its own destination: it always belongs to a
+  /// tenant the operator picked from that list.
+  Widget _buildBody() {
+    switch (_section) {
+      case ConsoleSection.overview:
+        return const ConsoleOverviewPage();
+      case ConsoleSection.subscribers:
+        final open = _openSubscriberId;
+        if (open != null && open.isNotEmpty) {
+          return ConsoleSubscriberDetailPage(
+            // Keyed by tenant, so opening a second subscriber builds a fresh
+            // page instead of reusing the first one's state.
+            key: ValueKey('subscriber-detail-$open'),
+            organizationId: open,
+            onBack: _closeSubscriber,
+          );
+        }
+        return ConsoleSubscribersPage(onOpenSubscriber: _openSubscriber);
+      case ConsoleSection.restaurants:
+        return const ConsoleRestaurantsPage();
+      case ConsoleSection.audit:
+        return const ConsoleAuditLogPage();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-    final overviewAsync = ref.watch(platformOverviewProvider);
+    final destinations = _destinations(l10n);
 
-    void refresh() => ref.invalidate(platformOverviewProvider);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.admin_panel_settings_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            // The title yields before the bar does. An AppBar gives its title a
-            // BOUNDED width (whatever the actions leave), but a Row lays a
-            // non-flex child out with an unbounded main axis — so this Text
-            // measured its full width and the Row ran past the bar: 22px at
-            // 390 in Arabic, 51px at 390 / 2x. The console's own name was the
-            // thing being clipped.
-            Flexible(
-              child: Text(
-                l10n.adminAppTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // Sprint (I): the language switcher is visible on the admin surface.
-          const LanguageSelector(),
-          IconButton(
-            key: const Key('platform-refresh-button'),
-            onPressed: refresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: l10n.adminRefresh,
-          ),
-          if (onSignOut case final signOut?)
-            IconButton(
-              key: const Key('platform-signout-button'),
-              onPressed: signOut,
-              icon: const Icon(Icons.logout),
-              tooltip: l10n.authSignOut,
-            ),
-        ],
-      ),
-      body: overviewAsync.when(
-        data: (overview) => _OverviewContent(
-          overview: overview,
-          isDemo: isDemo,
-          operatorEmail: operatorEmail,
-        ),
-        loading: () => const _LoadingState(),
-        error: (error, _) => _ErrorState(error: error, onRetry: refresh),
-      ),
-    );
-  }
-}
-
-/// The loaded overview: a scrollable, responsive layout of all sections.
-class _OverviewContent extends StatelessWidget {
-  const _OverviewContent({
-    required this.overview,
-    required this.isDemo,
-    this.operatorEmail,
-  });
-
-  final PlatformOverview overview;
-
-  /// The signed-in operator email (real mode), or null (demo).
-  final String? operatorEmail;
-
-  /// Whether the data is demo (computed locally) or real (the limited RF-091
-  /// read panel). Drives the banner, the header pill, and which KPIs / sections
-  /// are shown — see [PlatformAdminScreen] (RF-134).
-  final bool isDemo;
-
-  static const double _twoColBreakpoint = RestoflowBreakpoints.wide;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
-    final banner = isDemo
-        ? RestoflowNoticeBanner(
-            key: const Key('platform-demo-banner'),
-            body: l10n.adminDemoDataNotice,
-          )
-        : RestoflowNoticeBanner(
-            key: const Key('platform-realmode-banner'),
-            body: l10n.adminRealModeNotice,
-            tone: RestoflowTone.warning,
-          );
-    final header = _OverviewHeader(
-      overview: overview,
-      isDemo: isDemo,
-      operatorEmail: operatorEmail,
-    );
-
-    if (overview.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(RestoflowSpacing.lg),
-        children: [
-          banner,
-          const SizedBox(height: RestoflowSpacing.lg),
-          header,
-          const SizedBox(height: RestoflowSpacing.xl),
-          const _EmptyState(),
-        ],
-      );
-    }
-
-    final activeOrgCaption =
-        '${l10n.adminActiveLabel}: ${overview.activeOrganizationCount}';
-    // Organizations, restaurants and branches are provided in BOTH modes (the
-    // RF-091 read panel returns org status + restaurant/branch counts). The
-    // remaining KPIs (active branches, devices, open alerts, orders today) are
-    // NOT provided by that panel, so they are shown ONLY in demo mode — never as
-    // a fabricated `0` in real mode (RF-134).
-    final kpis = <Widget>[
-      RestoflowMetricCard(
-        key: const Key('kpi-organizations'),
-        label: l10n.adminKpiOrganizations,
-        value: overview.organizationCount.toString(),
-        caption: activeOrgCaption,
-        icon: Icons.domain_outlined,
-      ),
-      RestoflowMetricCard(
-        key: const Key('kpi-restaurants'),
-        label: l10n.adminKpiRestaurants,
-        value: overview.restaurantCount.toString(),
-        icon: Icons.restaurant_outlined,
-      ),
-      RestoflowMetricCard(
-        key: const Key('kpi-branches'),
-        label: l10n.adminKpiBranches,
-        value: overview.branchCount.toString(),
-        icon: Icons.store_mall_directory_outlined,
-      ),
-      if (isDemo) ...[
-        RestoflowMetricCard(
-          key: const Key('kpi-active-branches'),
-          label: l10n.adminKpiActiveBranches,
-          value: overview.activeBranchCount.toString(),
-          icon: Icons.check_circle_outline,
-        ),
-        RestoflowMetricCard(
-          key: const Key('kpi-devices'),
-          label: l10n.adminKpiDevices,
-          value: overview.deviceCount.toString(),
-          icon: Icons.devices_outlined,
-        ),
-        RestoflowMetricCard(
-          key: const Key('kpi-alerts'),
-          label: l10n.adminKpiAlerts,
-          value: overview.warningCount.toString(),
-          icon: Icons.warning_amber_outlined,
-        ),
-        RestoflowMetricCard(
-          key: const Key('kpi-orders-today'),
-          label: l10n.adminKpiOrdersToday,
-          value: overview.todayOrderCount.toString(),
-          icon: Icons.receipt_long_outlined,
-        ),
-      ],
-    ];
-
-    final organizations = RestoflowSectionCard(
-      key: const Key('organizations-card'),
-      title: l10n.adminOrganizationsHeading,
-      children: [
-        for (final org in overview.organizations)
-          PlatformSectionRow(
-            label: org.organizationName,
-            secondary:
-                '${org.restaurantCount} ${l10n.adminKpiRestaurants} · '
-                '${org.branchCount} ${l10n.adminKpiBranches} · '
-                '${l10n.adminCreatedLabel} ${org.createdAtLabel}',
-            trailingValue: org.plan,
-            // Tone only — the label stays the raw wire status string.
-            trailing: RestoflowStatusPill(
-              label: org.status,
-              tone: org.status == 'active'
-                  ? RestoflowTone.success
-                  : RestoflowTone.danger,
-            ),
-          ),
-      ],
-    );
-
-    final branchHealth = RestoflowSectionCard(
-      key: const Key('branch-health-card'),
-      title: l10n.adminBranchHealthHeading,
-      children: [
-        for (final branch in overview.branchHealth)
-          PlatformSectionRow(
-            label: branch.branchName,
-            secondary:
-                '${branch.organizationName} · '
-                '${branch.deviceCount} ${l10n.adminKpiDevices} · '
-                '${l10n.adminLastActivityLabel} ${branch.lastActivityLabel} · '
-                '${branch.todayOrderCount} ${l10n.adminOrdersTodayShort}',
-            trailingValue: branch.status,
-            trailing: branch.hasWarning
-                ? RestoflowStatusPill(
-                    label: l10n.adminWarningChip,
-                    tone: RestoflowTone.danger,
-                  )
-                : null,
-          ),
-      ],
-    );
-
-    final activity = RestoflowSectionCard(
-      key: const Key('recent-activity-card'),
-      title: l10n.adminRecentActivityHeading,
-      children: [
-        for (final event in overview.activity)
-          PlatformActivityTile(event: event),
-      ],
-    );
-
-    // Branch health is per-branch data the RF-091 read panel does not provide,
-    // so it is shown only in demo mode. Activity is shown whenever there are
-    // events (the real audit feed may be empty). Organizations are shown when
-    // present (RF-134).
-    final hasOrgs = overview.organizations.isNotEmpty;
-    final secondarySections = <Widget>[
-      if (isDemo) branchHealth,
-      if (overview.activity.isNotEmpty) activity,
-    ];
+    final body = _buildBody();
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final twoColumn =
-            constraints.maxWidth >= _twoColBreakpoint &&
-            hasOrgs &&
-            secondarySections.isNotEmpty;
-        final sections = twoColumn
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: organizations),
-                  const SizedBox(width: RestoflowSpacing.lg),
-                  Expanded(
-                    child: Column(children: _withColumnGaps(secondarySections)),
-                  ),
-                ],
-              )
-            : Column(
-                children: _withColumnGaps([
-                  if (hasOrgs) organizations,
-                  ...secondarySections,
-                ]),
-              );
+        final width = constraints.maxWidth;
+        final useRail = width >= _kRailBreakpoint;
+        final extended = width >= _kExtendedRailBreakpoint;
 
-        return ListView(
-          padding: const EdgeInsets.all(RestoflowSpacing.lg),
-          children: [
-            banner,
-            const SizedBox(height: RestoflowSpacing.lg),
-            header,
-            const SizedBox(height: RestoflowSpacing.lg),
-            _KpiGrid(cards: kpis),
-            const SizedBox(height: RestoflowSpacing.lg),
-            sections,
-          ],
+        return Scaffold(
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.admin_panel_settings_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+                // Flexible, because an AppBar gives its title a BOUNDED width
+                // while a Row lays a non-flex child out unbounded — that is how
+                // the console's own name used to be the thing clipped at 390.
+                Flexible(
+                  child: Text(
+                    l10n.adminAppTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              const LanguageSelector(),
+              IconButton(
+                key: const Key('platform-refresh-button'),
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+                tooltip: l10n.adminRefresh,
+              ),
+              if (widget.onSignOut case final signOut?)
+                IconButton(
+                  key: const Key('platform-signout-button'),
+                  onPressed: signOut,
+                  icon: const Icon(Icons.logout),
+                  tooltip: l10n.authSignOut,
+                ),
+            ],
+          ),
+          // Below the rail breakpoint the destinations move into a drawer, so a
+          // phone spends its width on the data rather than on navigation.
+          drawer: useRail
+              ? null
+              : Drawer(
+                  key: const Key('console-drawer'),
+                  child: SafeArea(
+                    child: ListView(
+                      children: [
+                        _DrawerHeader(
+                          isDemo: isDemo,
+                          operatorEmail: widget.operatorEmail,
+                        ),
+                        for (var i = 0; i < destinations.length; i++)
+                          ListTile(
+                            key: Key(
+                              'console-drawer-${destinations[i].id.name}',
+                            ),
+                            leading: Icon(destinations[i].icon),
+                            title: Text(destinations[i].label),
+                            selected: destinations[i].id == _section,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _select(destinations[i].id);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+          body: SafeArea(
+            child: Row(
+              children: [
+                if (useRail)
+                  NavigationRail(
+                    key: const Key('console-rail'),
+                    extended: extended,
+                    selectedIndex: destinations.indexWhere(
+                      (d) => d.id == _section,
+                    ),
+                    onDestinationSelected: (index) =>
+                        _select(destinations[index].id),
+                    labelType: extended
+                        ? NavigationRailLabelType.none
+                        : NavigationRailLabelType.all,
+                    leading: extended
+                        ? null
+                        : const Padding(
+                            padding: EdgeInsets.only(top: RestoflowSpacing.sm),
+                          ),
+                    destinations: [
+                      for (final destination in destinations)
+                        NavigationRailDestination(
+                          icon: Icon(destination.icon),
+                          selectedIcon: Icon(destination.selectedIcon),
+                          label: Text(destination.label),
+                        ),
+                    ],
+                  ),
+                if (useRail) const VerticalDivider(width: 1),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ModeStrip(
+                        isDemo: isDemo,
+                        operatorEmail: widget.operatorEmail,
+                      ),
+                      Expanded(child: body),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
+
+  List<_Destination> _destinations(AppLocalizations l10n) => [
+    _Destination(
+      ConsoleSection.overview,
+      l10n.adminNavOverview,
+      Icons.insights_outlined,
+      Icons.insights,
+    ),
+    _Destination(
+      ConsoleSection.subscribers,
+      l10n.adminNavSubscribers,
+      Icons.domain_outlined,
+      Icons.domain,
+    ),
+    _Destination(
+      ConsoleSection.restaurants,
+      l10n.adminNavRestaurants,
+      Icons.restaurant_outlined,
+      Icons.restaurant,
+    ),
+    _Destination(
+      ConsoleSection.audit,
+      l10n.adminNavAuditLog,
+      Icons.receipt_long_outlined,
+      Icons.receipt_long,
+    ),
+  ];
 }
 
-/// The overview title + the platform "as of" context (day + a data-source pill:
-/// "Demo data" in demo mode, "Live · limited" in real mode).
-class _OverviewHeader extends StatelessWidget {
-  const _OverviewHeader({
-    required this.overview,
-    required this.isDemo,
-    this.operatorEmail,
-  });
+class _Destination {
+  const _Destination(this.id, this.label, this.icon, this.selectedIcon);
 
-  final PlatformOverview overview;
+  final ConsoleSection id;
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+}
+
+/// The persistent Demo/Live strip: which data the console is showing, which
+/// operator is signed in, and that the console writes nothing.
+///
+/// It sits ABOVE the page content and OUTSIDE it, so no page can be read without
+/// its provenance in view — a demo figure must never be mistaken for a live one.
+class _ModeStrip extends StatelessWidget {
+  const _ModeStrip({required this.isDemo, this.operatorEmail});
+
   final bool isDemo;
-
-  /// The signed-in operator email (real mode), or null (demo).
   final String? operatorEmail;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final asOf = '${l10n.adminOverviewAsOf} ${overview.generatedDateLabel}';
     final email = operatorEmail;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.adminOverviewTitle,
-          key: const Key('platform-overview-title'),
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+    return Container(
+      key: isDemo
+          ? const Key('platform-demo-banner')
+          : const Key('platform-realmode-banner'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.lg,
+        vertical: RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
-        const SizedBox(height: RestoflowSpacing.xs),
-        Wrap(
-          spacing: RestoflowSpacing.sm,
-          runSpacing: RestoflowSpacing.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
+      ),
+      child: Wrap(
+        spacing: RestoflowSpacing.sm,
+        runSpacing: RestoflowSpacing.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          RestoflowStatusPill(
+            key: const Key('platform-data-source-pill'),
+            label: isDemo ? l10n.adminDemoDataTag : l10n.adminLiveLimitedTag,
+            tone: isDemo ? RestoflowTone.warning : RestoflowTone.success,
+          ),
+          RestoflowStatusPill(
+            key: const Key('platform-readonly-pill'),
+            label: l10n.adminConsoleReadOnly,
+            icon: Icons.lock_outline,
+          ),
+          if (email != null && email.isNotEmpty)
             Text(
-              asOf,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              l10n.adminSignedInAs(email),
+              key: const Key('platform-signed-in-as'),
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            RestoflowStatusPill(
-              key: const Key('platform-data-source-pill'),
-              label: isDemo ? l10n.adminDemoDataTag : l10n.adminLiveLimitedTag,
-            ),
-          ],
-        ),
-        // DESIGN-002: confirm which operator account is signed in (real mode).
-        if (email != null && email.isNotEmpty) ...[
-          const SizedBox(height: RestoflowSpacing.xxs),
-          Text(
-            l10n.adminSignedInAs(email),
-            key: const Key('platform-signed-in-as'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
         ],
-      ],
+      ),
     );
   }
 }
 
-/// Lays the KPI metric cards out in a responsive grid (4 / 2 / 1 columns).
-class _KpiGrid extends StatelessWidget {
-  const _KpiGrid({required this.cards});
+/// The drawer's identity block on compact widths (the rail has no room for it).
+class _DrawerHeader extends StatelessWidget {
+  const _DrawerHeader({required this.isDemo, this.operatorEmail});
 
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= RestoflowBreakpoints.wide
-            ? 4
-            : (constraints.maxWidth >= RestoflowBreakpoints.compact ? 2 : 1);
-        const gap = RestoflowSpacing.md;
-        final gutters = gap * (columns - 1);
-        final cardWidth = (constraints.maxWidth - gutters) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final card in cards) SizedBox(width: cardWidth, child: card),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// The loading state while the overview is fetched through the repository.
-/// Exactly ONE CircularProgressIndicator (loading-state test contract).
-class _LoadingState extends StatelessWidget {
-  const _LoadingState();
+  final bool isDemo;
+  final String? operatorEmail;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return RestoflowStateView(
-      key: const Key('platform-loading'),
-      showSpinner: true,
-      message: l10n.adminLoading,
-    );
-  }
-}
-
-/// The failure state when the overview can't load. It dispatches on the
-/// [PlatformAdminException.kind] to render an honest, specific safe state
-/// (RF-134):
-///   * [PlatformAdminErrorKind.notConfigured] — real mode is selected but the
-///     Supabase connection is missing/invalid; no retry (config is needed).
-///   * [PlatformAdminErrorKind.accessDenied] — the backend refused the read
-///     (missing platform-admin grant / aal2 MFA step-up, D-026); no retry (the
-///     step-up/grant UX is not in this build).
-///   * [PlatformAdminErrorKind.unexpected] (and any non-categorized error) — the
-///     generic, retryable error with a retry action.
-/// The developer-facing exception message is never shown to the user.
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.error, required this.onRetry});
-
-  final Object error;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final kind = error is PlatformAdminException
-        ? (error as PlatformAdminException).kind
-        : PlatformAdminErrorKind.unexpected;
-
-    switch (kind) {
-      case PlatformAdminErrorKind.notConfigured:
-        return _SafeState(
-          stateKey: const Key('platform-not-configured'),
-          icon: Icons.cloud_off_outlined,
-          tone: RestoflowTone.neutral,
-          title: l10n.adminNotConfiguredTitle,
-          body: l10n.adminNotConfiguredBody,
-        );
-      case PlatformAdminErrorKind.accessDenied:
-        return _SafeState(
-          stateKey: const Key('platform-access-denied'),
-          icon: Icons.lock_outline,
-          tone: RestoflowTone.danger,
-          title: l10n.adminAccessDeniedTitle,
-          body: l10n.adminAccessDeniedBody,
-        );
-      case PlatformAdminErrorKind.unexpected:
-        return _SafeState(
-          stateKey: const Key('platform-error'),
-          icon: Icons.error_outline,
-          tone: RestoflowTone.danger,
-          title: l10n.adminError,
-          action: FilledButton.icon(
-            key: const Key('platform-retry-button'),
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: Text(l10n.adminRetry),
+    final theme = Theme.of(context);
+    final email = operatorEmail;
+    return Padding(
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.adminConsoleSections,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        );
-    }
-  }
-}
-
-/// A tone-aware safe state shared by the failure states (RF-134), rendered
-/// through the shared [RestoflowStateView] so failures look like failures.
-/// [stateKey] keys the state view so each state is individually findable in
-/// tests.
-class _SafeState extends StatelessWidget {
-  const _SafeState({
-    required this.stateKey,
-    required this.icon,
-    required this.title,
-    this.tone,
-    this.body,
-    this.action,
-  });
-
-  final Key stateKey;
-  final IconData icon;
-  final String title;
-  final RestoflowTone? tone;
-  final String? body;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final actionWidget = action;
-    return RestoflowStateView(
-      key: stateKey,
-      icon: icon,
-      tone: tone,
-      title: title,
-      message: body,
-      actions: [if (actionWidget != null) actionWidget],
+          const SizedBox(height: RestoflowSpacing.xs),
+          RestoflowStatusPill(
+            label: isDemo ? l10n.adminDemoDataTag : l10n.adminLiveLimitedTag,
+            tone: isDemo ? RestoflowTone.warning : RestoflowTone.success,
+          ),
+          if (email != null && email.isNotEmpty) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              l10n.adminSignedInAs(email),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-/// The empty state when there is no platform data.
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+/// At/above this width the destinations live in a persistent rail; below it they
+/// move into a drawer.
+const double _kRailBreakpoint = RestoflowBreakpoints.wide;
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return RestoflowStateView(
-      key: const Key('platform-empty'),
-      icon: Icons.inbox_outlined,
-      title: l10n.adminEmpty,
-    );
-  }
-}
-
-/// Interleaves a vertical gap between [widgets] for stacking section cards in a
-/// [Column], so a conditionally-empty section list lays out without dangling
-/// gaps (RF-134).
-List<Widget> _withColumnGaps(List<Widget> widgets) {
-  final out = <Widget>[];
-  for (var i = 0; i < widgets.length; i++) {
-    if (i > 0) out.add(const SizedBox(height: RestoflowSpacing.lg));
-    out.add(widgets[i]);
-  }
-  return out;
-}
+/// At/above this width the rail shows its labels beside the icons.
+const double _kExtendedRailBreakpoint = 1200;

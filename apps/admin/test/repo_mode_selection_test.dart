@@ -32,9 +32,9 @@ void main() {
 
         // The demo overview is computed locally (no backend): a non-empty
         // platform with at least one organization.
-        final overview = await repo.loadOverview();
+        final overview = await repo.loadConsoleOverview();
         expect(overview.isEmpty, isFalse);
-        expect(overview.organizationCount, greaterThan(0));
+        expect(overview.organizationsTotal, greaterThan(0));
       },
     );
 
@@ -55,7 +55,7 @@ void main() {
       // No Supabase config (RuntimeConfig.test supplies none) -> the real repo
       // has no transport and fails closed; it contacts no backend.
       await expectLater(
-        repo.loadOverview(),
+        repo.loadConsoleOverview(),
         throwsA(isA<PlatformAdminException>()),
       );
     });

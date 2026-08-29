@@ -13113,6 +13113,390 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save the new order.'**
   String get dashboardQuickNoteReorderFailed;
+
+  /// ADMIN-125C.2: platform console navigation destination - Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get adminNavOverview;
+
+  /// ADMIN-125C.2: platform console navigation destination - Subscribers (organizations).
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribers'**
+  String get adminNavSubscribers;
+
+  /// ADMIN-125C.2: platform console navigation destination - Restaurants.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurants'**
+  String get adminNavRestaurants;
+
+  /// ADMIN-125C.2: platform console navigation destination - Audit log.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit log'**
+  String get adminNavAuditLog;
+
+  /// ADMIN-125C.2: states plainly that the console performs no writes (D-026).
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only platform console'**
+  String get adminConsoleReadOnly;
+
+  /// ADMIN-125C.2: accessible label/tooltip for the console navigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Console sections'**
+  String get adminConsoleSections;
+
+  /// ADMIN-125C.2: leaves a subscriber detail and returns to the Subscribers list.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to subscribers'**
+  String get adminBackToSubscribers;
+
+  /// ADMIN-125C.2: Overview metric - total subscriber organizations.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribers'**
+  String get adminKpiSubscribers;
+
+  /// ADMIN-125C.2: Overview metric - suspended organizations. Replaces the pre-125C.2 "Open alerts" label, which named the same number as an alerting system that does not exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended organizations'**
+  String get adminKpiSuspendedOrganizations;
+
+  /// ADMIN-125C.2: Overview metric - active memberships across the platform.
+  ///
+  /// In en, this message translates to:
+  /// **'Active memberships'**
+  String get adminKpiActiveMemberships;
+
+  /// ADMIN-125C.2: Overview section heading grouping the four subscription-state counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscriptions'**
+  String get adminSubscriptionsHeading;
+
+  /// ADMIN-125C.2: subscription status `trialing`.
+  ///
+  /// In en, this message translates to:
+  /// **'Trialing'**
+  String get adminSubStatusTrialing;
+
+  /// ADMIN-125C.2: subscription status `active`.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminSubStatusActive;
+
+  /// ADMIN-125C.2: subscription status `past_due`.
+  ///
+  /// In en, this message translates to:
+  /// **'Past due'**
+  String get adminSubStatusPastDue;
+
+  /// ADMIN-125C.2: subscription status `canceled`.
+  ///
+  /// In en, this message translates to:
+  /// **'Canceled'**
+  String get adminSubStatusCanceled;
+
+  /// ADMIN-125C.2: organization/restaurant status `active`.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminOrgStatusActive;
+
+  /// ADMIN-125C.2: organization/restaurant status `suspended`.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get adminOrgStatusSuspended;
+
+  /// ADMIN-125C.2: shown in a subscriber row that has no organization_subscriptions row.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscription'**
+  String get adminNoSubscription;
+
+  /// ADMIN-125C.2: the subscriber detail subscription section when the tenant has none.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscription configured'**
+  String get adminNoSubscriptionConfigured;
+
+  /// ADMIN-125C.2: honest Overview notice when every subscription count is zero.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscriptions configured yet'**
+  String get adminNoSubscriptionsConfiguredTitle;
+
+  /// ADMIN-125C.2: explains the four zeros so they do not read as a billing failure.
+  ///
+  /// In en, this message translates to:
+  /// **'No organization has been assigned a plan yet, so every subscription count is zero.'**
+  String get adminNoSubscriptionsConfiguredBody;
+
+  /// ADMIN-125C.2: subscription current_period_start.
+  ///
+  /// In en, this message translates to:
+  /// **'Period start'**
+  String get adminPeriodStart;
+
+  /// ADMIN-125C.2: subscription current_period_end.
+  ///
+  /// In en, this message translates to:
+  /// **'Period end'**
+  String get adminPeriodEnd;
+
+  /// ADMIN-125C.2: an organization default_currency.
+  ///
+  /// In en, this message translates to:
+  /// **'Default currency'**
+  String get adminDefaultCurrency;
+
+  /// ADMIN-125C.2: a restaurant effective currency (override, else the organization default).
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get adminEffectiveCurrency;
+
+  /// ADMIN-125C.2: marks a restaurant that overrides its organization currency.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency override'**
+  String get adminCurrencyOverride;
+
+  /// ADMIN-125C.2: the subscription plan column/field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get adminPlanLabel;
+
+  /// ADMIN-125C.2: active membership count on a subscriber row (no member identities shown).
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get adminMembersLabel;
+
+  /// ADMIN-125C.2: the server-side search box.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get adminSearchLabel;
+
+  /// ADMIN-125C.2: generic filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get adminFilterLabel;
+
+  /// ADMIN-125C.2: the sort selector label.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get adminSortLabel;
+
+  /// ADMIN-125C.2: the "no filter" option in a filter selector.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminFilterAll;
+
+  /// ADMIN-125C.2: filters rows by organization status.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization status'**
+  String get adminFilterOrganizationStatus;
+
+  /// ADMIN-125C.2: filters subscribers by subscription status.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription status'**
+  String get adminFilterSubscriptionStatus;
+
+  /// ADMIN-125C.2: resets search, filters and sort to the defaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get adminClearFilters;
+
+  /// ADMIN-125C.2: previous page of a server-paged list.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get adminPrevious;
+
+  /// ADMIN-125C.2: next page of a server-paged list.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get adminNext;
+
+  /// ADMIN-125C.2: appends the next KEYSET page of the audit log.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get adminLoadMore;
+
+  /// ADMIN-125C.2: empty state for the Subscribers list.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscribers match these filters'**
+  String get adminNoSubscribers;
+
+  /// ADMIN-125C.2: empty state for the Restaurants list.
+  ///
+  /// In en, this message translates to:
+  /// **'No restaurants match these filters'**
+  String get adminNoRestaurants;
+
+  /// ADMIN-125C.2: empty state for the Audit log.
+  ///
+  /// In en, this message translates to:
+  /// **'No audit events'**
+  String get adminNoAuditEvents;
+
+  /// ADMIN-125C.2: sort option name_asc.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (A-Z)'**
+  String get adminSortNameAsc;
+
+  /// ADMIN-125C.2: sort option name_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (Z-A)'**
+  String get adminSortNameDesc;
+
+  /// ADMIN-125C.2: sort option created_asc.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get adminSortOldestFirst;
+
+  /// ADMIN-125C.2: sort option created_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get adminSortNewestFirst;
+
+  /// ADMIN-125C.2: sort option period_end_asc; tenants with no subscription sort last.
+  ///
+  /// In en, this message translates to:
+  /// **'Period end (earliest)'**
+  String get adminSortPeriodEndAsc;
+
+  /// ADMIN-125C.2: sort option period_end_desc; tenants with no subscription sort last.
+  ///
+  /// In en, this message translates to:
+  /// **'Period end (latest)'**
+  String get adminSortPeriodEndDesc;
+
+  /// ADMIN-125C.2: sort option organization_asc.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization (A-Z)'**
+  String get adminSortOrganizationAsc;
+
+  /// ADMIN-125C.2: sort option organization_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization (Z-A)'**
+  String get adminSortOrganizationDesc;
+
+  /// ADMIN-125C.2: the subscriber detail page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscriber'**
+  String get adminSubscriberDetailTitle;
+
+  /// ADMIN-125C.2: the organization summary section, and the organization column.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get adminOrganizationHeading;
+
+  /// ADMIN-125C.2: the subscriber detail counts section.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts'**
+  String get adminCountsHeading;
+
+  /// ADMIN-125C.2: the subscriber detail subscription section.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription'**
+  String get adminSubscriptionHeading;
+
+  /// ADMIN-125C.2: audit rows scoped to the open subscriber.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent platform activity'**
+  String get adminRecentPlatformActivity;
+
+  /// ADMIN-125C.2: empty state for the scoped activity section.
+  ///
+  /// In en, this message translates to:
+  /// **'No platform activity recorded for this subscriber'**
+  String get adminNoActivityForSubscriber;
+
+  /// ADMIN-125C.2: the raw audit action key column (deliberately untranslated values).
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get adminAuditActionLabel;
+
+  /// ADMIN-125C.2: the audited reason column.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get adminAuditReasonLabel;
+
+  /// ADMIN-125C.2: the acting operator, shown as a shortened id (no PII resolution).
+  ///
+  /// In en, this message translates to:
+  /// **'Actor'**
+  String get adminAuditActorLabel;
+
+  /// ADMIN-125C.2: the targeted organization, shown as a shortened id.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get adminAuditTargetLabel;
+
+  /// ADMIN-125C.2: an audit row that targets no single tenant.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform-wide'**
+  String get adminAuditPlatformWide;
+
+  /// ADMIN-125C.2: inclusive start of the audit date range.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get adminAuditFrom;
+
+  /// ADMIN-125C.2: inclusive end of the audit date range.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get adminAuditTo;
+
+  /// ADMIN-125C.2: branch count on a row.
+  ///
+  /// In en, this message translates to:
+  /// **'Branches'**
+  String get adminBranchesLabel;
+
+  /// ADMIN-125C.2: the server-paged range indicator; total is the FILTERED total.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing {first}-{last} of {total}'**
+  String adminShowingRange(int first, int last, int total);
 }
 
 class _AppLocalizationsDelegate

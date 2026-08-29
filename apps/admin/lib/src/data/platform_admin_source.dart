@@ -1,225 +1,386 @@
-/// The STRUCTURED demo platform dataset the admin overview is CALCULATED from
-/// (RF-120).
+/// The STRUCTURED demo platform dataset the console pages are CALCULATED from
+/// (RF-120, reshaped for the ADMIN-125C.2 console).
 ///
-/// This is deliberately NOT a pre-baked set of KPI cards: it is a realistic set
-/// of organizations, their restaurants/branches, branch device counts and
-/// activity, and a platform activity feed. Every platform KPI and list is
-/// DERIVED from it by `computePlatformOverview` — nothing is a random or
-/// hardcoded card. There is no Supabase, no RPC, no backend: the real RF-091
-/// platform-admin RPCs (`platform_admin_organization_overview` /
-/// `get_organization` / `recent_audit`) exist server-side but are not wired here
-/// (real platform admin data wiring is deferred). The demo shapes intentionally
-/// mirror those RPC returns (org status + restaurant/branch counts, audit
-/// events) so a future Supabase-backed repository can fill the same models.
-/// Counts are plain integers (no money); timestamps are plain data strings
-/// (zero-padded, so the overview is deterministic and testable).
+/// This is deliberately NOT a set of pre-baked cards. It is a realistic set of
+/// organizations (tenants), their subscriptions, their restaurants and branch
+/// counts, and a platform audit feed. Every console figure — the Overview
+/// counts, the Subscribers page, a Subscriber detail, the Restaurants page and
+/// the Audit log — is DERIVED from this dataset by `demo_console_calculator`.
+/// Nothing is a hardcoded KPI.
+///
+/// The shapes mirror the ADMIN-125C.1 read contract exactly (org status +
+/// default currency, restaurant/branch/membership counts, plan + subscription
+/// status + period, `currency_override`, and safe-projection audit rows) so the
+/// demo and real repositories return the SAME models and the pages cannot drift
+/// apart. There is no Supabase, no RPC and no backend here.
+///
+/// The demo tenants deliberately cover every state the console must render:
+/// an active tenant on an active plan, a trialing tenant, a past-due tenant, a
+/// canceled tenant, a SUSPENDED tenant, a tenant with NO subscription at all,
+/// a suspended restaurant, and a restaurant whose currency OVERRIDES its
+/// organization's. Counts are plain integers; there is no money anywhere.
 library;
 
-/// One branch under an organization, with its device count and activity. Status
-/// is a plain data string (e.g. `active` / `inactive`).
-class PlatformBranch {
-  const PlatformBranch({
+/// One restaurant under a demo organization.
+class PlatformRestaurant {
+  const PlatformRestaurant({
+    required this.id,
     required this.name,
-    required this.restaurantName,
     required this.status,
-    required this.deviceCount,
-    required this.lastActivityLabel,
-    required this.todayOrderCount,
+    required this.branchCount,
+    required this.createdAtLabel,
+    this.currencyOverride,
   });
+
+  final String id;
 
   /// Display name (data, not localized chrome).
   final String name;
-  final String restaurantName;
 
-  /// Branch status as a plain data string (e.g. `active`).
+  /// Raw wire status (`active` / `suspended`).
   final String status;
-  final int deviceCount;
+  final int branchCount;
+  final String createdAtLabel;
 
-  /// Last activity as a plain data string (e.g. `2026-06-28 14:02`).
-  final String lastActivityLabel;
-  final int todayOrderCount;
-
-  bool get isActive => status == 'active';
+  /// Set only when this restaurant overrides its organization's currency.
+  final String? currencyOverride;
 }
 
-/// One organization (tenant root) with its restaurant count and branches.
+/// A demo tenant's subscription, when it has one.
+class PlatformSubscription {
+  const PlatformSubscription({
+    required this.planCode,
+    required this.planDisplayName,
+    required this.status,
+    this.currentPeriodStartLabel,
+    this.currentPeriodEndLabel,
+  });
+
+  final String planCode;
+  final String planDisplayName;
+
+  /// `trialing` / `active` / `past_due` / `canceled`.
+  final String status;
+  final String? currentPeriodStartLabel;
+  final String? currentPeriodEndLabel;
+}
+
+/// One organization (the tenant root, and the owner-facing "subscriber").
 class PlatformOrganization {
   const PlatformOrganization({
+    required this.id,
     required this.name,
     required this.status,
-    required this.plan,
+    required this.defaultCurrency,
     required this.createdAtLabel,
-    required this.restaurantCount,
-    required this.branches,
+    required this.activeMembershipCount,
+    required this.restaurants,
+    this.subscription,
   });
+
+  final String id;
 
   /// Display name (data, not localized chrome).
   final String name;
 
-  /// Organization status as a plain data string (e.g. `active` / `suspended`).
+  /// Raw wire status (`active` / `suspended`).
   final String status;
-
-  /// Plan/tier as a plain data string (e.g. `pro` / `standard` / `trial`).
-  final String plan;
-
-  /// Created date as a plain data string (e.g. `2026-03-12`).
+  final String defaultCurrency;
   final String createdAtLabel;
-  final int restaurantCount;
-  final List<PlatformBranch> branches;
+  final int activeMembershipCount;
+  final List<PlatformRestaurant> restaurants;
+
+  /// Null for a tenant with no `organization_subscriptions` row — the state
+  /// EVERY production tenant is in today.
+  final PlatformSubscription? subscription;
 
   bool get isActive => status == 'active';
+  int get branchCount =>
+      restaurants.fold<int>(0, (sum, r) => sum + r.branchCount);
 }
 
-/// One platform activity event (e.g. organization created, device paired, sync
-/// warning). Action + summary are plain data strings; the timestamp is a plain
-/// zero-padded data string so events sort lexicographically.
-class PlatformActivity {
-  const PlatformActivity({
-    required this.timestampLabel,
+/// One platform-admin audit row in the same SAFE projection the server returns
+/// (no `details` jsonb, actor and target by id only).
+class PlatformAuditSeed {
+  const PlatformAuditSeed({
+    required this.id,
+    required this.actorAppUserId,
     required this.action,
-    required this.summary,
+    required this.reason,
+    required this.occurredAtRaw,
+    this.targetOrganizationId,
   });
 
-  /// Plain `YYYY-MM-DD HH:mm` data string.
-  final String timestampLabel;
+  final String id;
+  final String actorAppUserId;
 
-  /// Canonical action as a plain data string (e.g. `sync_warning`).
+  /// Raw wire action key, deliberately untranslated.
   final String action;
+  final String reason;
 
-  /// A readable one-line description (data, e.g. `Pizza Plaza · device offline`).
-  final String summary;
+  /// Raw ISO-8601 timestamp (zero-padded, so events sort lexicographically and
+  /// the demo keyset cursor behaves exactly like the server's).
+  final String occurredAtRaw;
+  final String? targetOrganizationId;
 }
 
-/// The full structured platform dataset an overview is computed from.
+/// The full structured demo platform dataset.
 class PlatformDataset {
   const PlatformDataset({
-    required this.generatedDateLabel,
+    required this.serverDateLabel,
     required this.organizations,
-    required this.activity,
+    required this.auditEvents,
   });
 
-  /// The platform "as of" day as a plain data string (e.g. `2026-06-28`).
-  final String generatedDateLabel;
+  /// The platform "as of" day as a plain data string.
+  final String serverDateLabel;
   final List<PlatformOrganization> organizations;
-  final List<PlatformActivity> activity;
+  final List<PlatformAuditSeed> auditEvents;
 }
 
-/// The standard demo platform dataset: three organizations (two active, one
-/// suspended), four restaurants, six branches, ten devices, and a recent
-/// activity feed. Hand-tuned to clean, hand-verifiable counts (see the
-/// platform-overview-calculator tests). No money — counts only.
-PlatformDataset demoPlatformDataset() => const PlatformDataset(
-  generatedDateLabel: '2026-06-28',
-  organizations: [
+/// The demo platform operator's app-user id (a fixed, obviously-fake demo UUID).
+const String kDemoOperatorId = 'd0000000-0000-4000-8000-000000000001';
+
+/// The standard demo platform dataset: five organizations (four active, one
+/// suspended), six restaurants, eight branches, twenty-three active memberships,
+/// and one subscription in EACH of the four states plus one tenant with none.
+/// Hand-tuned to clean, hand-verifiable counts (see the calculator tests).
+PlatformDataset demoPlatformDataset() => PlatformDataset(
+  serverDateLabel: '2026-06-28',
+  organizations: const [
     PlatformOrganization(
+      id: 'd0000000-0000-4000-8000-0000000000a1',
       name: 'Bistro Group',
       status: 'active',
-      plan: 'pro',
+      defaultCurrency: 'USD',
       createdAtLabel: '2026-03-12',
-      restaurantCount: 2, // Bistro Downtown, Bistro Seaside
-      branches: [
-        PlatformBranch(
-          name: 'Downtown Main',
-          restaurantName: 'Bistro Downtown',
+      activeMembershipCount: 9,
+      subscription: PlatformSubscription(
+        planCode: 'basic',
+        planDisplayName: 'Basic',
+        status: 'active',
+        currentPeriodStartLabel: '2026-06-01',
+        currentPeriodEndLabel: '2026-07-01',
+      ),
+      restaurants: [
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b1',
+          name: 'Bistro Downtown',
           status: 'active',
-          deviceCount: 3,
-          lastActivityLabel: '2026-06-28 14:02',
-          todayOrderCount: 87,
+          branchCount: 2,
+          createdAtLabel: '2026-03-12',
         ),
-        PlatformBranch(
-          name: 'Downtown Express',
-          restaurantName: 'Bistro Downtown',
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b2',
+          name: 'Bistro Seaside',
           status: 'active',
-          deviceCount: 2,
-          lastActivityLabel: '2026-06-28 13:50',
-          todayOrderCount: 41,
-        ),
-        PlatformBranch(
-          name: 'Seaside',
-          restaurantName: 'Bistro Seaside',
-          status: 'active',
-          deviceCount: 2,
-          lastActivityLabel: '2026-06-28 13:40',
-          todayOrderCount: 33,
+          branchCount: 1,
+          createdAtLabel: '2026-04-18',
         ),
       ],
     ),
     PlatformOrganization(
+      id: 'd0000000-0000-4000-8000-0000000000a2',
       name: 'Cafe Noor',
       status: 'active',
-      plan: 'standard',
+      defaultCurrency: 'ILS',
       createdAtLabel: '2026-04-02',
-      restaurantCount: 1, // Cafe Noor Central
-      branches: [
-        PlatformBranch(
-          name: 'Noor Central',
-          restaurantName: 'Cafe Noor Central',
+      activeMembershipCount: 5,
+      subscription: PlatformSubscription(
+        planCode: 'free',
+        planDisplayName: 'Free',
+        status: 'trialing',
+        currentPeriodStartLabel: '2026-06-15',
+        currentPeriodEndLabel: '2026-07-15',
+      ),
+      restaurants: [
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b3',
+          name: 'Cafe Noor Central',
           status: 'active',
-          deviceCount: 2,
-          lastActivityLabel: '2026-06-28 12:15',
-          todayOrderCount: 54,
-        ),
-        PlatformBranch(
-          name: 'Noor Airport',
-          restaurantName: 'Cafe Noor Central',
-          status: 'inactive',
-          deviceCount: 0,
-          lastActivityLabel: '2026-06-20 09:30',
-          todayOrderCount: 0,
+          branchCount: 2,
+          createdAtLabel: '2026-04-02',
         ),
       ],
     ),
     PlatformOrganization(
+      id: 'd0000000-0000-4000-8000-0000000000a3',
+      name: 'Olive Tree',
+      status: 'active',
+      defaultCurrency: 'USD',
+      createdAtLabel: '2026-02-10',
+      activeMembershipCount: 2,
+      subscription: PlatformSubscription(
+        planCode: 'basic',
+        planDisplayName: 'Basic',
+        status: 'canceled',
+        currentPeriodStartLabel: '2026-04-10',
+        currentPeriodEndLabel: '2026-05-10',
+      ),
+      restaurants: [
+        // A restaurant that OVERRIDES its organization's currency, and is
+        // itself suspended while its organization is not.
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b4',
+          name: 'Olive Tree Bistro',
+          status: 'suspended',
+          branchCount: 1,
+          createdAtLabel: '2026-02-10',
+          currencyOverride: 'EUR',
+        ),
+      ],
+    ),
+    PlatformOrganization(
+      id: 'd0000000-0000-4000-8000-0000000000a4',
+      name: 'Sahara Grill',
+      status: 'active',
+      defaultCurrency: 'ILS',
+      createdAtLabel: '2026-05-02',
+      activeMembershipCount: 4,
+      subscription: PlatformSubscription(
+        planCode: 'basic',
+        planDisplayName: 'Basic',
+        status: 'past_due',
+        currentPeriodStartLabel: '2026-05-02',
+        currentPeriodEndLabel: '2026-06-02',
+      ),
+      restaurants: [
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b5',
+          name: 'Sahara Grill Central',
+          status: 'active',
+          branchCount: 1,
+          createdAtLabel: '2026-05-02',
+        ),
+      ],
+    ),
+    // A SUSPENDED tenant with NO subscription at all — the two states the
+    // console must render honestly rather than hide.
+    PlatformOrganization(
+      id: 'd0000000-0000-4000-8000-0000000000a5',
       name: 'Pizza Plaza',
       status: 'suspended',
-      plan: 'trial',
+      defaultCurrency: 'EUR',
       createdAtLabel: '2026-05-20',
-      restaurantCount: 1, // Pizza Plaza HQ
-      branches: [
-        PlatformBranch(
-          name: 'Plaza HQ',
-          restaurantName: 'Pizza Plaza HQ',
+      activeMembershipCount: 3,
+      restaurants: [
+        PlatformRestaurant(
+          id: 'd0000000-0000-4000-8000-0000000000b6',
+          name: 'Pizza Plaza HQ',
           status: 'active',
-          deviceCount: 1,
-          lastActivityLabel: '2026-06-25 18:00',
-          todayOrderCount: 0,
+          branchCount: 1,
+          createdAtLabel: '2026-05-20',
         ),
       ],
     ),
   ],
-  activity: [
-    PlatformActivity(
-      timestampLabel: '2026-06-28 14:05',
-      action: 'sync_warning',
-      summary: 'Pizza Plaza · Plaza HQ device offline',
-    ),
-    PlatformActivity(
-      timestampLabel: '2026-06-28 13:20',
-      action: 'report_generated',
-      summary: 'Bistro Group · daily sales report',
-    ),
-    PlatformActivity(
-      timestampLabel: '2026-06-28 10:12',
-      action: 'device_paired',
-      summary: 'Bistro Group · Downtown Main',
-    ),
-    PlatformActivity(
-      timestampLabel: '2026-06-27 16:40',
-      action: 'branch_opened',
-      summary: 'Cafe Noor · Noor Central',
-    ),
-    PlatformActivity(
-      timestampLabel: '2026-05-20 11:30',
-      action: 'organization_created',
-      summary: 'Pizza Plaza',
-    ),
-  ],
+  auditEvents: demoAuditFeed(),
 );
 
-/// An EMPTY platform (no organizations, no activity), used to render and test
-/// the empty state.
+/// The demo audit feed: a deterministic 30-row platform-read history built by
+/// replaying a fixed set of console reads across three days. Thirty rows is
+/// past one console page, so the demo exercises the SAME keyset "load more"
+/// path the real audit log uses instead of a single short list that would hide
+/// pagination bugs.
+List<PlatformAuditSeed> demoAuditFeed() {
+  const days = ['2026-06-28', '2026-06-27', '2026-06-26'];
+  const reads = <(String action, String reason, String? target)>[
+    (
+      'platform.console.overview',
+      'RestoFlow admin: platform overview (read-only)',
+      null,
+    ),
+    (
+      'platform.subscribers.list',
+      'RestoFlow admin: subscriber list (read-only)',
+      null,
+    ),
+    (
+      'platform.subscriber.detail',
+      'RestoFlow admin: subscriber detail (read-only)',
+      'd0000000-0000-4000-8000-0000000000a1',
+    ),
+    (
+      'platform.subscriber.detail',
+      'RestoFlow admin: subscriber detail (read-only)',
+      'd0000000-0000-4000-8000-0000000000a5',
+    ),
+    (
+      'platform.restaurants.list',
+      'RestoFlow admin: restaurant list (read-only)',
+      null,
+    ),
+    ('platform.audit.search', 'RestoFlow admin: audit log (read-only)', null),
+    (
+      'platform.organizations.overview',
+      'RestoFlow admin app: platform overview (read-only)',
+      null,
+    ),
+    (
+      'platform.organization.detail',
+      'RestoFlow admin: subscriber detail (read-only)',
+      'd0000000-0000-4000-8000-0000000000a2',
+    ),
+    (
+      'platform.audit.read',
+      'RestoFlow admin app: platform overview (read-only)',
+      null,
+    ),
+    (
+      'platform.subscribers.list',
+      'RestoFlow admin: subscriber list (read-only)',
+      null,
+    ),
+  ];
+
+  final out = <PlatformAuditSeed>[];
+  for (var d = 0; d < days.length; d++) {
+    for (var i = 0; i < reads.length; i++) {
+      final read = reads[i];
+      // Descending minutes within the day, so the feed is already newest-first
+      // and every timestamp is distinct (a keyset cursor needs a total order).
+      final minute = (reads.length - i).toString().padLeft(2, '0');
+      out.add(
+        PlatformAuditSeed(
+          id:
+              'd0000000-0000-4000-8000-00000000'
+              "${d.toString().padLeft(2, '0')}${i.toString().padLeft(2, '0')}",
+          actorAppUserId: kDemoOperatorId,
+          action: read.$1,
+          reason: read.$2,
+          occurredAtRaw: '${days[d]}T09:$minute:00Z',
+          targetOrganizationId: read.$3,
+        ),
+      );
+    }
+  }
+  return out;
+}
+
+/// An EMPTY platform (no organizations, no audit history), used to render and
+/// test the empty states.
 PlatformDataset emptyPlatformDataset() => const PlatformDataset(
-  generatedDateLabel: '2026-06-28',
+  serverDateLabel: '2026-06-28',
   organizations: [],
-  activity: [],
+  auditEvents: [],
+);
+
+/// A platform whose tenants exist but where NO subscription has been assigned —
+/// the shape production is actually in today. Used to render and test the
+/// honest "no subscriptions configured yet" notice.
+PlatformDataset unsubscribedPlatformDataset() => PlatformDataset(
+  serverDateLabel: '2026-06-28',
+  organizations: [
+    for (final org in demoPlatformDataset().organizations)
+      PlatformOrganization(
+        id: org.id,
+        name: org.name,
+        status: org.status,
+        defaultCurrency: org.defaultCurrency,
+        createdAtLabel: org.createdAtLabel,
+        activeMembershipCount: org.activeMembershipCount,
+        restaurants: org.restaurants,
+      ),
+  ],
+  auditEvents: demoAuditFeed(),
 );

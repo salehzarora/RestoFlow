@@ -7272,4 +7272,201 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardQuickNoteReorderFailed => 'Couldn\'t save the new order.';
+
+  @override
+  String get adminNavOverview => 'Overview';
+
+  @override
+  String get adminNavSubscribers => 'Subscribers';
+
+  @override
+  String get adminNavRestaurants => 'Restaurants';
+
+  @override
+  String get adminNavAuditLog => 'Audit log';
+
+  @override
+  String get adminConsoleReadOnly => 'Read-only platform console';
+
+  @override
+  String get adminConsoleSections => 'Console sections';
+
+  @override
+  String get adminBackToSubscribers => 'Back to subscribers';
+
+  @override
+  String get adminKpiSubscribers => 'Subscribers';
+
+  @override
+  String get adminKpiSuspendedOrganizations => 'Suspended organizations';
+
+  @override
+  String get adminKpiActiveMemberships => 'Active memberships';
+
+  @override
+  String get adminSubscriptionsHeading => 'Subscriptions';
+
+  @override
+  String get adminSubStatusTrialing => 'Trialing';
+
+  @override
+  String get adminSubStatusActive => 'Active';
+
+  @override
+  String get adminSubStatusPastDue => 'Past due';
+
+  @override
+  String get adminSubStatusCanceled => 'Canceled';
+
+  @override
+  String get adminOrgStatusActive => 'Active';
+
+  @override
+  String get adminOrgStatusSuspended => 'Suspended';
+
+  @override
+  String get adminNoSubscription => 'No subscription';
+
+  @override
+  String get adminNoSubscriptionConfigured => 'No subscription configured';
+
+  @override
+  String get adminNoSubscriptionsConfiguredTitle =>
+      'No subscriptions configured yet';
+
+  @override
+  String get adminNoSubscriptionsConfiguredBody =>
+      'No organization has been assigned a plan yet, so every subscription count is zero.';
+
+  @override
+  String get adminPeriodStart => 'Period start';
+
+  @override
+  String get adminPeriodEnd => 'Period end';
+
+  @override
+  String get adminDefaultCurrency => 'Default currency';
+
+  @override
+  String get adminEffectiveCurrency => 'Currency';
+
+  @override
+  String get adminCurrencyOverride => 'Currency override';
+
+  @override
+  String get adminPlanLabel => 'Plan';
+
+  @override
+  String get adminMembersLabel => 'Members';
+
+  @override
+  String get adminSearchLabel => 'Search';
+
+  @override
+  String get adminFilterLabel => 'Filter';
+
+  @override
+  String get adminSortLabel => 'Sort';
+
+  @override
+  String get adminFilterAll => 'All';
+
+  @override
+  String get adminFilterOrganizationStatus => 'Organization status';
+
+  @override
+  String get adminFilterSubscriptionStatus => 'Subscription status';
+
+  @override
+  String get adminClearFilters => 'Clear filters';
+
+  @override
+  String get adminPrevious => 'Previous';
+
+  @override
+  String get adminNext => 'Next';
+
+  @override
+  String get adminLoadMore => 'Load more';
+
+  @override
+  String get adminNoSubscribers => 'No subscribers match these filters';
+
+  @override
+  String get adminNoRestaurants => 'No restaurants match these filters';
+
+  @override
+  String get adminNoAuditEvents => 'No audit events';
+
+  @override
+  String get adminSortNameAsc => 'Name (A-Z)';
+
+  @override
+  String get adminSortNameDesc => 'Name (Z-A)';
+
+  @override
+  String get adminSortOldestFirst => 'Oldest first';
+
+  @override
+  String get adminSortNewestFirst => 'Newest first';
+
+  @override
+  String get adminSortPeriodEndAsc => 'Period end (earliest)';
+
+  @override
+  String get adminSortPeriodEndDesc => 'Period end (latest)';
+
+  @override
+  String get adminSortOrganizationAsc => 'Organization (A-Z)';
+
+  @override
+  String get adminSortOrganizationDesc => 'Organization (Z-A)';
+
+  @override
+  String get adminSubscriberDetailTitle => 'Subscriber';
+
+  @override
+  String get adminOrganizationHeading => 'Organization';
+
+  @override
+  String get adminCountsHeading => 'Counts';
+
+  @override
+  String get adminSubscriptionHeading => 'Subscription';
+
+  @override
+  String get adminRecentPlatformActivity => 'Recent platform activity';
+
+  @override
+  String get adminNoActivityForSubscriber =>
+      'No platform activity recorded for this subscriber';
+
+  @override
+  String get adminAuditActionLabel => 'Action';
+
+  @override
+  String get adminAuditReasonLabel => 'Reason';
+
+  @override
+  String get adminAuditActorLabel => 'Actor';
+
+  @override
+  String get adminAuditTargetLabel => 'Target';
+
+  @override
+  String get adminAuditPlatformWide => 'Platform-wide';
+
+  @override
+  String get adminAuditFrom => 'From';
+
+  @override
+  String get adminAuditTo => 'To';
+
+  @override
+  String get adminBranchesLabel => 'Branches';
+
+  @override
+  String adminShowingRange(int first, int last, int total) {
+    return 'Showing $first-$last of $total';
+  }
 }
