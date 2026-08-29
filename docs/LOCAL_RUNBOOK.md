@@ -102,6 +102,9 @@ cd apps/pos && flutter run -d chrome
 
 # KDS (kitchen)
 cd apps/kds && flutter run -d chrome
+
+# Admin (RestoFlow PLATFORM operator — see 7b; demo needs no backend)
+cd apps/admin && flutter run -d chrome --web-port=57126
 ```
 
 ### Real Local mode — use the stable-port scripts (recommended)
@@ -149,6 +152,13 @@ cd apps/kds
 flutter run -d chrome --web-port=49622 \
   --dart-define=RESTOFLOW_DEMO_MODE=false \
   --dart-define=RESTOFLOW_SUPABASE_URL=http://127.0.0.1:54321 \
+  --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=<anon key>
+
+# Admin — real (platform plane; point the URL/key at LOCAL or HOSTED)
+cd apps/admin
+flutter run -d chrome --web-port=57126 \
+  --dart-define=RESTOFLOW_DEMO_MODE=false \
+  --dart-define=RESTOFLOW_SUPABASE_URL=<url> \
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=<anon key>
 ```
 
@@ -341,6 +351,37 @@ restaurant accounts can never use it:
   - **platform admin + MFA (aal2)** → the platform overview;
   - **unconfigured** (no Supabase URL/anon key) → the same "Real mode is not
     configured" help page as the other apps.
+
+**Running it (ADMIN-125A).** Until ADMIN-125A `apps/admin` had no web target
+at all — `flutter build web` answered *"This project is not configured for the
+web"*, so `_run_admin_real.bat` (tracked since RF-119-b) could never actually
+start. The Web target now exists and both commands work:
+
+```powershell
+# DEMO (no backend, no sign-in — the demo platform overview)
+cd C:\Users\saleh\Desktop\ClaudeAi\RestoFlow\RestoFlow\apps\admin
+flutter run -d chrome --web-port=57126
+```
+
+```powershell
+# REAL (platform-operator sign-in; local Supabase by default)
+cd C:\Users\saleh\Desktop\ClaudeAi\RestoFlow\RestoFlow
+.\_run_admin_real.bat
+```
+
+The script defaults to the LOCAL Supabase URL + the CLI's local publishable key
+and defers to `RESTOFLOW_SUPABASE_URL` / `RESTOFLOW_SUPABASE_ANON_KEY` when they
+are set — so exporting those (to the hosted project + its **publishable** key,
+never a secret one) points the same script at hosted. Port **57126 is fixed on
+purpose**: the browser scopes the GoTrue session per origin (scheme + host +
+port), so a random port would look like a wiped sign-in on every run.
+
+> **What you can reach today:** real mode boots and stops at the
+> platform-operator **sign-in screen**. It goes no further, because production
+> currently has **zero rows in `platform_admin_grants`** — nobody is a platform
+> admin yet, and this phase deliberately did not create one. Provisioning the
+> production grant + TOTP enrolment, and the first real login, is **ADMIN-125B**.
+> Locally you can complete the whole flow with the dev-only grant below.
 
 **Local, dev-only platform-admin provisioning** (safe flow — no bypass, no
 service-role key; production grants are an operator/DBA action):
