@@ -160,15 +160,88 @@ class SupportModeScaffold extends StatefulWidget {
 }
 
 class _SupportModeScaffoldState extends State<SupportModeScaffold> {
-  Timer? _tick;
+  bool _expired = false;
+
+  DateTime get _now => (widget.clock ?? DateTime.now)();
 
   @override
   void initState() {
     super.initState();
-    // A countdown only; expiry itself is enforced by the server on every read,
-    // so a stopped timer cannot extend anyone's access.
+    _expired = widget.session.remaining(_now) == Duration.zero;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // This build runs ONCE per session, not once per second. The countdown owns
+    // its own ticker inside [_SupportBanner]; if the seconds were held here,
+    // every tick would mark the element holding the whole Dashboard dirty —
+    // the exact shape of the one-second whole-shell rebuild that PERF-110 had
+    // to hunt down in the kiosk.
+    return Directionality(
+      textDirection: Directionality.of(context),
+      child: Column(
+        children: [
+          _SupportBanner(
+            session: widget.session,
+            clock: widget.clock,
+            onEnd: widget.onEnd,
+            onExpired: () {
+              if (mounted && !_expired) setState(() => _expired = true);
+            },
+          ),
+          // Once the clock runs out the content below is stale by definition —
+          // every server read is already failing — so it is replaced rather
+          // than left on screen looking live.
+          Expanded(
+            child: _expired
+                ? const SupportSessionClosedView()
+                // The marker the shell reads to drop the surfaces this session
+                // cannot read anyway. Presentation only — see the scope's own
+                // doc comment.
+                : SupportModeScope(active: true, child: widget.child),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The banner itself, and the only thing that repaints each second.
+class _SupportBanner extends StatefulWidget {
+  const _SupportBanner({
+    required this.session,
+    required this.onEnd,
+    required this.onExpired,
+    this.clock,
+  });
+
+  final PlatformSupportSession session;
+  final Future<void> Function() onEnd;
+  final VoidCallback onExpired;
+  final DateTime Function()? clock;
+
+  @override
+  State<_SupportBanner> createState() => _SupportBannerState();
+}
+
+class _SupportBannerState extends State<_SupportBanner> {
+  Timer? _tick;
+
+  DateTime get _now => (widget.clock ?? DateTime.now)();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.session.remaining(_now) == Duration.zero) return;
+    // A countdown only; expiry itself is re-checked by the server on every
+    // read, so a stopped timer cannot extend anyone's access by a second.
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
+      if (widget.session.remaining(_now) == Duration.zero) {
+        _tick?.cancel();
+        widget.onExpired();
+      }
     });
   }
 
@@ -178,8 +251,6 @@ class _SupportModeScaffoldState extends State<SupportModeScaffold> {
     super.dispose();
   }
 
-  DateTime get _now => (widget.clock ?? DateTime.now)();
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -187,107 +258,89 @@ class _SupportModeScaffoldState extends State<SupportModeScaffold> {
     final left = widget.session.remaining(_now);
     final expired = left == Duration.zero;
 
-    return Directionality(
-      textDirection: Directionality.of(context),
-      child: Column(
-        children: [
-          Material(
-            color: expired
-                ? theme.colorScheme.errorContainer
-                : theme.colorScheme.tertiaryContainer,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: RestoflowSpacing.lg,
-                  vertical: RestoflowSpacing.sm,
-                ),
-                // A Wrap hands its children UNBOUNDED width, so every text
-                // here is given the banner's own width to wrap inside. Without
-                // that, a long label (or a long tenant name, which is tenant
-                // data and can be anything) runs off the edge on a phone
-                // instead of taking a second line.
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final maxWidth = constraints.maxWidth;
-                    Widget bounded(Widget child) => ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: child,
-                    );
-                    return Wrap(
-                      spacing: RestoflowSpacing.md,
-                      runSpacing: RestoflowSpacing.xs,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+    return Material(
+      color: expired
+          ? theme.colorScheme.errorContainer
+          : theme.colorScheme.tertiaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: RestoflowSpacing.lg,
+            vertical: RestoflowSpacing.sm,
+          ),
+          // A Wrap hands its children UNBOUNDED width, so every text here is
+          // given the banner's own width to wrap inside. Without that, a long
+          // label (or a long tenant name, which is tenant data and can be
+          // anything) runs off the edge on a phone instead of taking a second
+          // line.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxWidth = constraints.maxWidth;
+              Widget bounded(Widget child) => ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: child,
+              );
+              return Wrap(
+                spacing: RestoflowSpacing.md,
+                runSpacing: RestoflowSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  bounded(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        bounded(
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.support_agent,
-                                size: RestoflowIconSizes.md,
-                              ),
-                              const SizedBox(width: RestoflowSpacing.sm),
-                              Flexible(
-                                child: Text(
-                                  l10n.supportModeBanner,
-                                  key: const Key('support-mode-banner'),
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        const Icon(
+                          Icons.support_agent,
+                          size: RestoflowIconSizes.md,
                         ),
-                        bounded(
-                          Text(
-                            widget.session.targetLabel,
-                            key: const Key('support-mode-target'),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            l10n.supportModeBanner,
+                            key: const Key('support-mode-banner'),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
-                          ),
-                        ),
-                        bounded(
-                          Text(
-                            expired
-                                ? l10n.supportModeExpired
-                                : l10n.supportModeExpiresIn(_mmss(left)),
-                            key: const Key('support-mode-expiry'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                        bounded(
-                          TextButton.icon(
-                            key: const Key('support-mode-end'),
-                            onPressed: () => unawaited(widget.onEnd()),
-                            icon: const Icon(
-                              Icons.logout,
-                              size: RestoflowIconSizes.sm,
-                            ),
-                            label: Text(l10n.supportModeEnd),
                           ),
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-            ),
+                    ),
+                  ),
+                  bounded(
+                    Text(
+                      widget.session.targetLabel,
+                      key: const Key('support-mode-target'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  bounded(
+                    Text(
+                      expired
+                          ? l10n.supportModeExpired
+                          : l10n.supportModeExpiresIn(_mmss(left)),
+                      key: const Key('support-mode-expiry'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  bounded(
+                    TextButton.icon(
+                      key: const Key('support-mode-end'),
+                      onPressed: () => unawaited(widget.onEnd()),
+                      icon: const Icon(
+                        Icons.logout,
+                        size: RestoflowIconSizes.sm,
+                      ),
+                      label: Text(l10n.supportModeEnd),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-          // Once the clock runs out the content below is stale by definition —
-          // every server read is already failing — so it is replaced rather
-          // than left on screen looking live.
-          Expanded(
-            child: expired
-                ? const SupportSessionClosedView()
-                // The marker the shell reads to drop the surfaces this session
-                // cannot read anyway. Presentation only — see the scope's own
-                // doc comment.
-                : SupportModeScope(active: true, child: widget.child),
-          ),
-        ],
+        ),
       ),
     );
   }

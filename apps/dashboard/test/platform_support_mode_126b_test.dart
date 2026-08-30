@@ -92,6 +92,8 @@ Future<void> _pump(
 }
 
 void main() {
+  setUp(() => _BuildCounter.builds = 0);
+
   group('A. the handoff token', () {
     test('is taken from the fragment and STRIPPED, once', () {
       var replacedWith = 'not called';
@@ -305,6 +307,59 @@ void main() {
       expect(seen, isTrue);
     });
 
+    testWidgets('the countdown ticks WITHOUT rebuilding the dashboard beneath '
+        'it', (tester) async {
+      // The banner counts down every second. If that second lived in the state
+      // holding the Dashboard, every tick would mark the whole shell dirty —
+      // the exact one-second whole-shell rebuild PERF-110 had to hunt down in
+      // the kiosk. The countdown must repaint; the Dashboard must not.
+      var now = DateTime(2026, 9, 3, 12, 5);
+      final l10n = await strings();
+      await _pump(
+        tester,
+        SupportModeScaffold(
+          session: _session(),
+          clock: () => now,
+          onEnd: () async {},
+          child: const _BuildCounter(),
+        ),
+      );
+      expect(_BuildCounter.builds, 1);
+      expect(find.text(l10n.supportModeExpiresIn('10:00')), findsOneWidget);
+      // The scope wrapping the Dashboard, as constructed on the first frame.
+      final scopeBefore = tester.widget<SupportModeScope>(
+        find.byType(SupportModeScope),
+      );
+
+      for (var i = 0; i < 3; i++) {
+        now = now.add(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      // The clock moved and the banner says so...
+      expect(find.text(l10n.supportModeExpiresIn('09:57')), findsOneWidget);
+      // ...while the Dashboard's own wrapper is the SAME OBJECT it was three
+      // seconds ago. This is the discriminating assertion: if the seconds were
+      // held in the state above it, that state would have rebuilt and produced
+      // a fresh wrapper each tick.
+      expect(
+        identical(
+          scopeBefore,
+          tester.widget<SupportModeScope>(find.byType(SupportModeScope)),
+        ),
+        isTrue,
+      );
+      expect(_BuildCounter.builds, 1);
+      // And the banner is a SIBLING of the Dashboard, not an ancestor of it.
+      expect(
+        find.descendant(
+          of: find.byType(SupportModeScope),
+          matching: find.byKey(const Key('support-mode-banner')),
+        ),
+        findsNothing,
+      );
+    });
+
     testWidgets('reads correctly in Arabic and Hebrew', (tester) async {
       for (final locale in ['ar', 'he']) {
         final l10n = await strings(locale);
@@ -494,4 +549,17 @@ void main() {
       expect(session.remaining(DateTime(2026, 9, 3, 13, 0)), Duration.zero);
     });
   });
+}
+
+/// Counts how many times the widget standing in for the Dashboard is built.
+class _BuildCounter extends StatelessWidget {
+  const _BuildCounter();
+
+  static int builds = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    return const Scaffold(body: Text('SUPPORT'));
+  }
 }
