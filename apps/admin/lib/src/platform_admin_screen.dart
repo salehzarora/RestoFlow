@@ -32,6 +32,7 @@ import 'console/overview_page.dart';
 import 'console/restaurants_page.dart';
 import 'console/subscriber_detail_page.dart';
 import 'console/subscribers_page.dart';
+import 'data/console_models.dart';
 import 'state/platform_admin_providers.dart';
 import 'widgets/language_selector.dart';
 
@@ -84,6 +85,13 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
     switch (_section) {
       case ConsoleSection.overview:
         ref.invalidate(consoleOverviewProvider);
+        // The Overview renders today's sales from a SECOND read; refreshing
+        // only the counts would leave the money beside them stale.
+        ref.invalidate(
+          restaurantOperationsPageProvider(
+            const RestaurantOperationsQuery(limit: 200),
+          ),
+        );
       case ConsoleSection.subscribers:
         final open = _openSubscriberId;
         if (open != null) {
@@ -94,8 +102,13 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
           );
         }
       case ConsoleSection.restaurants:
+        // ADMIN-126: the page reads OPERATIONS now. Refreshing the retired
+        // restaurant-list provider would leave the visible figures stale while
+        // the button appeared to work.
         ref.invalidate(
-          restaurantPageProvider(ref.read(restaurantQueryProvider)),
+          restaurantOperationsPageProvider(
+            ref.read(restaurantOperationsQueryProvider),
+          ),
         );
       case ConsoleSection.audit:
         ref.read(auditFeedProvider.notifier).refresh();

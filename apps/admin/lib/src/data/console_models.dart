@@ -348,6 +348,7 @@ class SubscriberDetail {
     required this.counts,
     required this.restaurants,
     this.subscription,
+    this.ownerContacts = const <String>[],
   });
 
   final SubscriberOrganization organization;
@@ -357,7 +358,12 @@ class SubscriberDetail {
   /// Null when the tenant has no `organization_subscriptions` row.
   final SubscriptionInfo? subscription;
 
+  /// ADMIN-126: the ACTIVE organization-owner email(s) — the person to contact.
+  /// Never the staff roster.
+  final List<String> ownerContacts;
+
   bool get hasSubscription => subscription != null;
+  bool get hasOwnerContact => ownerContacts.isNotEmpty;
 }
 
 // ---------------------------------------------------------------------------
@@ -662,3 +668,165 @@ const List<String> kSubscriptionStatuses = <String>[
 /// Sentinel distinguishing "argument omitted" from "explicitly set to null" in
 /// the `copyWith`s above — without it, clearing a filter would be impossible.
 const Object _unset = Object();
+
+// ---------------------------------------------------------------------------
+// Restaurant operations (ADMIN-126)
+// ---------------------------------------------------------------------------
+
+/// How a restaurant-operations page is ordered (fixed server-validated
+/// vocabulary; an unknown value raises SQLSTATE `22023`).
+enum RestaurantOperationsSort {
+  nameAsc('name_asc'),
+  nameDesc('name_desc'),
+  organizationAsc('organization_asc'),
+  organizationDesc('organization_desc'),
+  salesDesc('sales_desc'),
+  salesAsc('sales_asc'),
+  ordersDesc('orders_desc'),
+  ordersAsc('orders_asc');
+
+  const RestaurantOperationsSort(this.wire);
+
+  final String wire;
+}
+
+/// The restaurant-operations request.
+class RestaurantOperationsQuery {
+  const RestaurantOperationsQuery({
+    this.limit = kConsolePageSize,
+    this.offset = 0,
+    this.search,
+    this.organizationStatus,
+    this.sort = RestaurantOperationsSort.salesDesc,
+    this.withSales,
+  });
+
+  final int limit;
+  final int offset;
+  final String? search;
+  final String? organizationStatus;
+  final RestaurantOperationsSort sort;
+
+  /// null = every restaurant; true = only those that took money today;
+  /// false = only the quiet ones.
+  final bool? withSales;
+
+  RestaurantOperationsQuery copyWith({
+    int? limit,
+    int? offset,
+    Object? search = _unset,
+    Object? organizationStatus = _unset,
+    RestaurantOperationsSort? sort,
+    Object? withSales = _unset,
+  }) => RestaurantOperationsQuery(
+    limit: limit ?? this.limit,
+    offset: offset ?? this.offset,
+    search: search == _unset ? this.search : search as String?,
+    organizationStatus: organizationStatus == _unset
+        ? this.organizationStatus
+        : organizationStatus as String?,
+    sort: sort ?? this.sort,
+    withSales: withSales == _unset ? this.withSales : withSales as bool?,
+  );
+
+  RestaurantOperationsQuery resetToFirstPage() => copyWith(offset: 0);
+
+  @override
+  bool operator ==(Object other) =>
+      other is RestaurantOperationsQuery &&
+      other.limit == limit &&
+      other.offset == offset &&
+      other.search == search &&
+      other.organizationStatus == organizationStatus &&
+      other.sort == sort &&
+      other.withSales == withSales;
+
+  @override
+  int get hashCode =>
+      Object.hash(limit, offset, search, organizationStatus, sort, withSales);
+}
+
+/// One restaurant with today's trading figures and its owner contact(s).
+class RestaurantOperationsRow {
+  const RestaurantOperationsRow({
+    required this.restaurantId,
+    required this.restaurantName,
+    required this.restaurantStatus,
+    required this.organizationId,
+    required this.organizationName,
+    required this.organizationStatus,
+    required this.branchesCount,
+    required this.currencyCode,
+    required this.reportingDate,
+    required this.todayOrdersCount,
+    required this.todayRevenueMinor,
+    required this.ownerContacts,
+  });
+
+  final String restaurantId;
+  final String restaurantName;
+  final String restaurantStatus;
+  final String organizationId;
+  final String organizationName;
+  final String organizationStatus;
+  final int branchesCount;
+
+  /// The EFFECTIVE currency of this restaurant. Every money figure on the row
+  /// is in this currency and in no other — rows are never added together
+  /// across currencies.
+  final String currencyCode;
+
+  /// The restaurant's own local business day, as the tenant report computed it.
+  final String reportingDate;
+
+  final int todayOrdersCount;
+
+  /// Today's net sales in integer minor units, taken from the SAME reporting
+  /// function the restaurant owner's Dashboard reads.
+  final int todayRevenueMinor;
+
+  /// ACTIVE organization-owner email(s). Never any other staff.
+  final List<String> ownerContacts;
+
+  bool get hasSales => todayRevenueMinor != 0 || todayOrdersCount != 0;
+  bool get hasOwnerContact => ownerContacts.isNotEmpty;
+}
+
+/// Today's totals for ONE currency. There is deliberately no cross-currency
+/// total: a single number spanning ILS and USD is wrong in both.
+class CurrencyDayTotal {
+  const CurrencyDayTotal({
+    required this.currencyCode,
+    required this.restaurantsCount,
+    required this.todayOrdersCount,
+    required this.todayRevenueMinor,
+  });
+
+  final String currencyCode;
+  final int restaurantsCount;
+  final int todayOrdersCount;
+  final int todayRevenueMinor;
+}
+
+/// One page of restaurant operations plus per-currency totals.
+class RestaurantOperationsPage {
+  const RestaurantOperationsPage({
+    required this.rows,
+    required this.totalCount,
+    required this.totalsByCurrency,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<RestaurantOperationsRow> rows;
+  final int totalCount;
+  final List<CurrencyDayTotal> totalsByCurrency;
+  final int limit;
+  final int offset;
+
+  bool get isEmpty => rows.isEmpty;
+  bool get hasPrevious => offset > 0;
+  bool get hasNext => offset + rows.length < totalCount;
+  int get firstRowNumber => rows.isEmpty ? 0 : offset + 1;
+  int get lastRowNumber => offset + rows.length;
+}

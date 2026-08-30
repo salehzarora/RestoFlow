@@ -7413,4 +7413,52 @@ class AppLocalizationsAr extends AppLocalizations {
   String adminShowingRange(int first, int last, int total) {
     return 'عرض $first-$last من $total';
   }
+
+  @override
+  String get adminTodaySales => 'مبيعات اليوم';
+
+  @override
+  String get adminOwnerContact => 'جهة اتصال المالك';
+
+  @override
+  String get adminNoOwnerContact => 'لا يوجد مالك نشط';
+
+  @override
+  String adminMoreContacts(int count) {
+    return '+$count أخرى';
+  }
+
+  @override
+  String get adminSortSalesDesc => 'المبيعات (من الأعلى)';
+
+  @override
+  String get adminSortSalesAsc => 'المبيعات (من الأدنى)';
+
+  @override
+  String get adminSortOrdersDesc => 'الطلبات (من الأعلى)';
+
+  @override
+  String get adminSortOrdersAsc => 'الطلبات (من الأدنى)';
+
+  @override
+  String get adminFilterSalesToday => 'مبيعات اليوم';
+
+  @override
+  String get adminFilterWithSales => 'لديها مبيعات';
+
+  @override
+  String get adminFilterNoSales => 'بلا مبيعات';
+
+  @override
+  String get adminSalesTodayByCurrency => 'مبيعات اليوم حسب العملة';
+
+  @override
+  String get adminNoSalesTodayYet => 'لا توجد مبيعات مسجَّلة اليوم';
+
+  @override
+  String get adminBusinessDay => 'يوم العمل';
+
+  @override
+  String get adminOperationsNote =>
+      'المبيعات هي أرقام المطعم نفسه ليوم عمله، مقروءة من التقرير نفسه الذي يراه مالكه. ولا تُجمع العملات المختلفة معًا.';
 }

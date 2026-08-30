@@ -39,6 +39,14 @@ abstract class PlatformAdminRepository {
 
   /// One KEYSET page of the platform-admin audit log.
   Future<AuditPage> loadAuditPage(AuditQuery query);
+
+  /// One page of per-restaurant OPERATIONS: today's order count and net sales
+  /// (read from the tenant's own reporting function, so the console and the
+  /// owner's Dashboard cannot disagree), the effective currency, and the active
+  /// organization-owner contact(s).
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  );
 }
 
 /// Computes every console page from a structured demo dataset. There is no
@@ -97,6 +105,14 @@ class DemoPlatformAdminRepository implements PlatformAdminRepository {
   Future<AuditPage> loadAuditPage(AuditQuery query) async {
     _failIfConfigured();
     return computeAuditPage(_data, query);
+  }
+
+  @override
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  ) async {
+    _failIfConfigured();
+    return computeRestaurantOperationsPage(_data, query);
   }
 }
 

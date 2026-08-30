@@ -21,6 +21,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/console_models.dart';
 import '../state/platform_admin_providers.dart';
 import 'console_widgets.dart';
+import 'restaurants_page.dart' show CurrencyTotalsStrip;
 
 class ConsoleOverviewPage extends ConsumerWidget {
   const ConsoleOverviewPage({super.key});
@@ -160,7 +161,38 @@ class _Content extends StatelessWidget {
           const SizedBox(height: RestoflowSpacing.md),
         ],
         ConsoleMetricGrid(cards: subscriptionCards),
+        const SizedBox(height: RestoflowSpacing.xl),
+        const _SalesTodayByCurrency(),
       ],
+    );
+  }
+}
+
+/// Today's trading across the platform, grouped BY CURRENCY.
+///
+/// A SEPARATE read from the counts above, rendered independently: if it fails
+/// or is slow it must not take the Overview's tenant counts down with it, and a
+/// missing sales figure is far less serious than a missing tenant count.
+///
+/// There is deliberately no combined total. The platform trades in several
+/// currencies and this system holds no exchange rate, so one number spanning
+/// them would be wrong in every one of them.
+class _SalesTodayByCurrency extends ConsumerWidget {
+  const _SalesTodayByCurrency();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A page-size of 200 is the server's own cap; the totals it returns cover
+    // the whole filtered set regardless of the page, so this is one read.
+    const query = RestaurantOperationsQuery(limit: 200);
+    final async = ref.watch(restaurantOperationsPageProvider(query));
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (page) => CurrencyTotalsStrip(
+        totals: page.totalsByCurrency,
+        keyPrefix: 'overview',
+      ),
     );
   }
 }

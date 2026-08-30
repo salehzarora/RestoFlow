@@ -64,10 +64,13 @@ void main() {
     final repo = RecordingConsoleRepository();
     await tester.pumpWidget(consoleApp(repo: repo));
     await tester.pumpAndSettle();
-    expect(repo.calls, ['overview']);
+    expect(repo.calls, ['overview', 'operations']);
 
     await tester.tap(find.byKey(const Key('platform-refresh-button')));
     await tester.pumpAndSettle();
-    expect(repo.calls, ['overview', 'overview']);
+    // Refresh re-reads BOTH halves of the Overview — the counts and the money
+    // beside them. Refreshing only one would leave a stale figure on screen
+    // under a button that appeared to work.
+    expect(repo.calls, ['overview', 'operations', 'overview', 'operations']);
   });
 }

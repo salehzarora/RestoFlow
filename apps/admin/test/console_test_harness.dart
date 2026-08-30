@@ -146,6 +146,11 @@ class DelayedConsoleRepository implements PlatformAdminRepository {
   @override
   Future<AuditPage> loadAuditPage(AuditQuery query) =>
       _after(() => _inner.loadAuditPage(query));
+
+  @override
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  ) => _after(() => _inner.loadRestaurantOperations(query));
 }
 
 /// A repository that RECORDS every call, so a test can prove which reads a page
@@ -161,6 +166,8 @@ class RecordingConsoleRepository implements PlatformAdminRepository {
   final List<RestaurantQuery> restaurantQueries = <RestaurantQuery>[];
   final List<AuditQuery> auditQueries = <AuditQuery>[];
   final List<String> detailIds = <String>[];
+  final List<RestaurantOperationsQuery> operationsQueries =
+      <RestaurantOperationsQuery>[];
 
   @override
   Future<ConsoleOverview> loadConsoleOverview() {
@@ -194,5 +201,14 @@ class RecordingConsoleRepository implements PlatformAdminRepository {
     calls.add('audit');
     auditQueries.add(query);
     return _inner.loadAuditPage(query);
+  }
+
+  @override
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  ) {
+    calls.add('operations');
+    operationsQueries.add(query);
+    return _inner.loadRestaurantOperations(query);
   }
 }

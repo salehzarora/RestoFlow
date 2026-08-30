@@ -49,6 +49,8 @@ const String kReasonSubscriberDetail =
 const String kReasonRestaurantList =
     'RestoFlow admin: restaurant list (read-only)';
 const String kReasonAuditLog = 'RestoFlow admin: audit log (read-only)';
+const String kReasonRestaurantOperations =
+    'RestoFlow admin: restaurant operations (read-only)';
 
 /// Reads the platform console from the ADMIN-125C.1 public wrappers.
 class RealPlatformAdminRepository implements PlatformAdminRepository {
@@ -170,6 +172,13 @@ class RealPlatformAdminRepository implements PlatformAdminRepository {
               currentPeriodEndLabel: _dateOrNull(sub['current_period_end']),
             )
           : null,
+      ownerContacts: [
+        for (final e
+            in (raw['owner_contacts'] is List
+                ? raw['owner_contacts'] as List
+                : const []))
+          if (e != null) _string(e),
+      ],
       restaurants: [
         for (final r in _rows(raw['restaurants']))
           SubscriberRestaurant(
@@ -252,6 +261,60 @@ class RealPlatformAdminRepository implements PlatformAdminRepository {
               id: _string(next['id']),
             )
           : null,
+    );
+  }
+
+  @override
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  ) async {
+    final raw = await _call('platform_admin_restaurant_operations', {
+      'p_reason': kReasonRestaurantOperations,
+      'p_limit': query.limit,
+      'p_offset': query.offset,
+      'p_search': _blankToNull(query.search),
+      'p_org_status': query.organizationStatus,
+      'p_sort': query.sort.wire,
+      'p_with_sales': query.withSales,
+    });
+    return RestaurantOperationsPage(
+      rows: [
+        for (final row in _rows(raw['rows']))
+          RestaurantOperationsRow(
+            restaurantId: _string(row['restaurant_id']),
+            restaurantName: _string(row['restaurant_name']),
+            restaurantStatus: _string(row['restaurant_status']),
+            organizationId: _string(row['organization_id']),
+            organizationName: _string(row['organization_name']),
+            organizationStatus: _string(row['organization_status']),
+            branchesCount: _int(row['branches_count']),
+            currencyCode: _string(row['currency_code']),
+            reportingDate: _string(row['reporting_date']),
+            todayOrdersCount: _int(row['today_orders_count']),
+            // Integer minor units, straight from the tenant's own report. No
+            // arithmetic is applied on the way to the screen (D-007).
+            todayRevenueMinor: _int(row['today_revenue_minor']),
+            ownerContacts: [
+              for (final e
+                  in (row['owner_contacts'] is List
+                      ? row['owner_contacts'] as List
+                      : const []))
+                if (e != null) _string(e),
+            ],
+          ),
+      ],
+      totalCount: _int(raw['total_count']),
+      totalsByCurrency: [
+        for (final t in _rows(raw['totals_by_currency']))
+          CurrencyDayTotal(
+            currencyCode: _string(t['currency_code']),
+            restaurantsCount: _int(t['restaurants_count']),
+            todayOrdersCount: _int(t['today_orders_count']),
+            todayRevenueMinor: _int(t['today_revenue_minor']),
+          ),
+      ],
+      limit: _int(raw['limit']),
+      offset: _int(raw['offset']),
     );
   }
 }

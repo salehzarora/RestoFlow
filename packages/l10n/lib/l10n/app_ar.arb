@@ -2270,5 +2270,20 @@
   "adminAuditFrom": "من",
   "adminAuditTo": "إلى",
   "adminBranchesLabel": "الفروع",
-  "adminShowingRange": "عرض {first}-{last} من {total}"
+  "adminShowingRange": "عرض {first}-{last} من {total}",
+  "adminTodaySales": "مبيعات اليوم",
+  "adminOwnerContact": "جهة اتصال المالك",
+  "adminNoOwnerContact": "لا يوجد مالك نشط",
+  "adminMoreContacts": "+{count} أخرى",
+  "adminSortSalesDesc": "المبيعات (من الأعلى)",
+  "adminSortSalesAsc": "المبيعات (من الأدنى)",
+  "adminSortOrdersDesc": "الطلبات (من الأعلى)",
+  "adminSortOrdersAsc": "الطلبات (من الأدنى)",
+  "adminFilterSalesToday": "مبيعات اليوم",
+  "adminFilterWithSales": "لديها مبيعات",
+  "adminFilterNoSales": "بلا مبيعات",
+  "adminSalesTodayByCurrency": "مبيعات اليوم حسب العملة",
+  "adminNoSalesTodayYet": "لا توجد مبيعات مسجَّلة اليوم",
+  "adminBusinessDay": "يوم العمل",
+  "adminOperationsNote": "المبيعات هي أرقام المطعم نفسه ليوم عمله، مقروءة من التقرير نفسه الذي يراه مالكه. ولا تُجمع العملات المختلفة معًا."
 }

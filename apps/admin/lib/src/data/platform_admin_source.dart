@@ -30,6 +30,8 @@ class PlatformRestaurant {
     required this.branchCount,
     required this.createdAtLabel,
     this.currencyOverride,
+    this.todayOrdersCount = 0,
+    this.todayRevenueMinor = 0,
   });
 
   final String id;
@@ -44,6 +46,13 @@ class PlatformRestaurant {
 
   /// Set only when this restaurant overrides its organization's currency.
   final String? currencyOverride;
+
+  /// ADMIN-126: today's trading, in this restaurant's EFFECTIVE currency and
+  /// integer minor units. In real mode these come from the tenant's own
+  /// reporting function; here they are demo figures, derived like everything
+  /// else in this dataset.
+  final int todayOrdersCount;
+  final int todayRevenueMinor;
 }
 
 /// A demo tenant's subscription, when it has one.
@@ -76,6 +85,7 @@ class PlatformOrganization {
     required this.activeMembershipCount,
     required this.restaurants,
     this.subscription,
+    this.ownerContacts = const <String>[],
   });
 
   final String id;
@@ -93,6 +103,9 @@ class PlatformOrganization {
   /// Null for a tenant with no `organization_subscriptions` row — the state
   /// EVERY production tenant is in today.
   final PlatformSubscription? subscription;
+
+  /// ADMIN-126: the ACTIVE organization-owner email(s). Never other staff.
+  final List<String> ownerContacts;
 
   bool get isActive => status == 'active';
   int get branchCount =>
@@ -152,6 +165,7 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
       id: 'd0000000-0000-4000-8000-0000000000a1',
       name: 'Bistro Group',
       status: 'active',
+      ownerContacts: ['amira@bistro.example', 'sam@bistro.example'],
       defaultCurrency: 'USD',
       createdAtLabel: '2026-03-12',
       activeMembershipCount: 9,
@@ -166,6 +180,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b1',
           name: 'Bistro Downtown',
+          todayOrdersCount: 42,
+          todayRevenueMinor: 18750,
           status: 'active',
           branchCount: 2,
           createdAtLabel: '2026-03-12',
@@ -173,6 +189,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b2',
           name: 'Bistro Seaside',
+          todayOrdersCount: 18,
+          todayRevenueMinor: 9600,
           status: 'active',
           branchCount: 1,
           createdAtLabel: '2026-04-18',
@@ -183,6 +201,7 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
       id: 'd0000000-0000-4000-8000-0000000000a2',
       name: 'Cafe Noor',
       status: 'active',
+      ownerContacts: ['noor@cafenoor.example'],
       defaultCurrency: 'ILS',
       createdAtLabel: '2026-04-02',
       activeMembershipCount: 5,
@@ -197,6 +216,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b3',
           name: 'Cafe Noor Central',
+          todayOrdersCount: 27,
+          todayRevenueMinor: 14320,
           status: 'active',
           branchCount: 2,
           createdAtLabel: '2026-04-02',
@@ -207,6 +228,7 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
       id: 'd0000000-0000-4000-8000-0000000000a3',
       name: 'Olive Tree',
       status: 'active',
+      ownerContacts: ['olive@olivetree.example'],
       defaultCurrency: 'USD',
       createdAtLabel: '2026-02-10',
       activeMembershipCount: 2,
@@ -223,6 +245,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b4',
           name: 'Olive Tree Bistro',
+          todayOrdersCount: 0,
+          todayRevenueMinor: 0,
           status: 'suspended',
           branchCount: 1,
           createdAtLabel: '2026-02-10',
@@ -234,6 +258,7 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
       id: 'd0000000-0000-4000-8000-0000000000a4',
       name: 'Sahara Grill',
       status: 'active',
+      ownerContacts: ['sahara@sahara.example'],
       defaultCurrency: 'ILS',
       createdAtLabel: '2026-05-02',
       activeMembershipCount: 4,
@@ -248,6 +273,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b5',
           name: 'Sahara Grill Central',
+          todayOrdersCount: 11,
+          todayRevenueMinor: 6175,
           status: 'active',
           branchCount: 1,
           createdAtLabel: '2026-05-02',
@@ -260,6 +287,9 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
       id: 'd0000000-0000-4000-8000-0000000000a5',
       name: 'Pizza Plaza',
       status: 'suspended',
+      // A tenant with no reachable owner: the console must say so rather than
+      // render an empty cell that looks like a loading failure.
+      ownerContacts: [],
       defaultCurrency: 'EUR',
       createdAtLabel: '2026-05-20',
       activeMembershipCount: 3,
@@ -267,6 +297,8 @@ PlatformDataset demoPlatformDataset() => PlatformDataset(
         PlatformRestaurant(
           id: 'd0000000-0000-4000-8000-0000000000b6',
           name: 'Pizza Plaza HQ',
+          todayOrdersCount: 0,
+          todayRevenueMinor: 0,
           status: 'active',
           branchCount: 1,
           createdAtLabel: '2026-05-20',

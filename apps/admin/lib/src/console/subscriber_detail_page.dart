@@ -178,6 +178,38 @@ class _Content extends ConsumerWidget {
             ],
     );
 
+    // ADMIN-126: who to actually contact about this tenant. Active organization
+    // owners only — a support console needs the signatory, not the roster, and
+    // showing every member here would be an unnecessary spread of staff PII.
+    final ownerCard = RestoflowSectionCard(
+      key: const Key('subscriber-owner-contact-card'),
+      title: l10n.adminOwnerContact,
+      children: [
+        if (detail.ownerContacts.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+            child: Text(
+              // Said plainly: an empty panel would read as a failed load rather
+              // than as the real answer.
+              l10n.adminNoOwnerContact,
+              key: const Key('subscriber-no-owner-contact'),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          for (final email in detail.ownerContacts)
+            ConsoleListRow(
+              key: Key('subscriber-owner-$email'),
+              title: email,
+              trailing: const [
+                Icon(Icons.mail_outline, size: RestoflowIconSizes.sm),
+              ],
+            ),
+      ],
+    );
+
     final restaurantsCard = RestoflowSectionCard(
       key: const Key('subscriber-restaurants-card'),
       title: l10n.adminKpiRestaurants,
@@ -212,6 +244,7 @@ class _Content extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: withSectionGaps([
                   organizationCard,
+                  ownerCard,
                   countsCard,
                   subscriptionCard,
                   restaurantsCard,
@@ -223,7 +256,11 @@ class _Content extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Column(
-                    children: withSectionGaps([organizationCard, countsCard]),
+                    children: withSectionGaps([
+                      organizationCard,
+                      ownerCard,
+                      countsCard,
+                    ]),
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.lg),

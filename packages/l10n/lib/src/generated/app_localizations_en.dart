@@ -7469,4 +7469,52 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminShowingRange(int first, int last, int total) {
     return 'Showing $first-$last of $total';
   }
+
+  @override
+  String get adminTodaySales => 'Today\'s sales';
+
+  @override
+  String get adminOwnerContact => 'Owner contact';
+
+  @override
+  String get adminNoOwnerContact => 'No active owner';
+
+  @override
+  String adminMoreContacts(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String get adminSortSalesDesc => 'Sales (high to low)';
+
+  @override
+  String get adminSortSalesAsc => 'Sales (low to high)';
+
+  @override
+  String get adminSortOrdersDesc => 'Orders (high to low)';
+
+  @override
+  String get adminSortOrdersAsc => 'Orders (low to high)';
+
+  @override
+  String get adminFilterSalesToday => 'Sales today';
+
+  @override
+  String get adminFilterWithSales => 'With sales';
+
+  @override
+  String get adminFilterNoSales => 'No sales';
+
+  @override
+  String get adminSalesTodayByCurrency => 'Sales today by currency';
+
+  @override
+  String get adminNoSalesTodayYet => 'No sales recorded today';
+
+  @override
+  String get adminBusinessDay => 'Business day';
+
+  @override
+  String get adminOperationsNote =>
+      'Sales are the restaurant’s own figures for its own business day, read from the same report its owner sees. Currencies are never added together.';
 }

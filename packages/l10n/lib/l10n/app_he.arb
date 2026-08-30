@@ -2270,5 +2270,20 @@
   "adminAuditFrom": "מתאריך",
   "adminAuditTo": "עד תאריך",
   "adminBranchesLabel": "סניפים",
-  "adminShowingRange": "מוצג {first}-{last} מתוך {total}"
+  "adminShowingRange": "מוצג {first}-{last} מתוך {total}",
+  "adminTodaySales": "מכירות היום",
+  "adminOwnerContact": "איש קשר של הבעלים",
+  "adminNoOwnerContact": "אין בעלים פעיל",
+  "adminMoreContacts": "+{count} נוספים",
+  "adminSortSalesDesc": "מכירות (מהגבוה)",
+  "adminSortSalesAsc": "מכירות (מהנמוך)",
+  "adminSortOrdersDesc": "הזמנות (מהגבוה)",
+  "adminSortOrdersAsc": "הזמנות (מהנמוך)",
+  "adminFilterSalesToday": "מכירות היום",
+  "adminFilterWithSales": "עם מכירות",
+  "adminFilterNoSales": "ללא מכירות",
+  "adminSalesTodayByCurrency": "מכירות היום לפי מטבע",
+  "adminNoSalesTodayYet": "לא נרשמו מכירות היום",
+  "adminBusinessDay": "יום עסקים",
+  "adminOperationsNote": "המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד."
 }

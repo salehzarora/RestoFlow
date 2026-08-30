@@ -13497,6 +13497,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Showing {first}-{last} of {total}'**
   String adminShowingRange(int first, int last, int total);
+
+  /// ADMIN-126: a restaurant net sales for its own business day, read from the tenant reporting function.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s sales'**
+  String get adminTodaySales;
+
+  /// ADMIN-126: the ACTIVE organization-owner email(s). Never other staff.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner contact'**
+  String get adminOwnerContact;
+
+  /// ADMIN-126: the tenant has no active organization-owner to contact.
+  ///
+  /// In en, this message translates to:
+  /// **'No active owner'**
+  String get adminNoOwnerContact;
+
+  /// ADMIN-126: additional owner contacts beyond the first.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String adminMoreContacts(int count);
+
+  /// ADMIN-126: sort option sales_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales (high to low)'**
+  String get adminSortSalesDesc;
+
+  /// ADMIN-126: sort option sales_asc.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales (low to high)'**
+  String get adminSortSalesAsc;
+
+  /// ADMIN-126: sort option orders_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders (high to low)'**
+  String get adminSortOrdersDesc;
+
+  /// ADMIN-126: sort option orders_asc.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders (low to high)'**
+  String get adminSortOrdersAsc;
+
+  /// ADMIN-126: filters restaurants by whether they traded today.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales today'**
+  String get adminFilterSalesToday;
+
+  /// ADMIN-126: only restaurants that took money today.
+  ///
+  /// In en, this message translates to:
+  /// **'With sales'**
+  String get adminFilterWithSales;
+
+  /// ADMIN-126: only restaurants that took no money today.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales'**
+  String get adminFilterNoSales;
+
+  /// ADMIN-126: Overview totals grouped BY CURRENCY. Never a combined cross-currency total.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales today by currency'**
+  String get adminSalesTodayByCurrency;
+
+  /// ADMIN-126: honest empty state when every currency total is zero.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales recorded today'**
+  String get adminNoSalesTodayYet;
+
+  /// ADMIN-126: the restaurant's own local reporting date, which may differ from the operator's.
+  ///
+  /// In en, this message translates to:
+  /// **'Business day'**
+  String get adminBusinessDay;
+
+  /// ADMIN-126: states the provenance and the no-cross-currency rule on the operations page.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales are the restaurant’s own figures for its own business day, read from the same report its owner sees. Currencies are never added together.'**
+  String get adminOperationsNote;
 }
 
 class _AppLocalizationsDelegate

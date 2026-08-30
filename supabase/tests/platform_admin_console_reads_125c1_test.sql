@@ -379,7 +379,11 @@ reset role;
 
 select is(
   (select array(select jsonb_object_keys(res) order by 1) from c_alpha),
-  array['counts', 'ok', 'organization', 'restaurants', 'server_ts', 'subscription'],
+  array['counts', 'ok', 'organization', 'owner_contacts', 'restaurants',
+        'server_ts', 'subscription'],
+  -- ADMIN-126 added owner_contacts. The assertion stays an EXACT key set on
+  -- purpose: it is the thing that notices when a platform read starts carrying
+  -- a field nobody reviewed.
   'C6. exact envelope keys');
 select is(
   (select array(select jsonb_object_keys(res->'organization') order by 1) from c_alpha),

@@ -44,32 +44,78 @@ void main() {
     expect(find.text('Organization: Cafe Noor'), findsOneWidget);
   });
 
-  testWidgets('the currency column is the EFFECTIVE currency, and an override '
-      'is marked', (tester) async {
+  testWidgets('each row shows TODAY'
+      'S SALES in its own currency', (tester) async {
+    useSize(tester, kDesktop);
+    await tester.pumpWidget(consoleApp());
+    await tester.pumpAndSettle();
+    await _openRestaurants(tester);
+
+    // Bistro Downtown trades in USD (its organization default), Cafe Noor
+    // Central in ILS, Olive Tree Bistro in its OVERRIDDEN EUR. Each row is
+    // formatted in its OWN currency — the page never converts.
+    expect(
+      find.byKey(
+        const Key('restaurant-sales-d0000000-0000-4000-8000-0000000000b1'),
+      ),
+      findsOneWidget,
+    );
+    final usd = tester.widget<Text>(
+      find.byKey(
+        const Key('restaurant-sales-d0000000-0000-4000-8000-0000000000b1'),
+      ),
+    );
+    expect(usd.data, contains('187.50'));
+    final eur = tester.widget<Text>(
+      find.byKey(
+        const Key('restaurant-sales-d0000000-0000-4000-8000-0000000000b4'),
+      ),
+    );
+    // A restaurant that took nothing today still shows a real zero, in its own
+    // currency — never a blank cell.
+    expect(eur.data, contains('0.00'));
+  });
+
+  testWidgets('totals are grouped BY CURRENCY and never combined', (
+    tester,
+  ) async {
     useSize(tester, kDesktop);
     final l10n = await englishStrings();
     await tester.pumpWidget(consoleApp());
     await tester.pumpAndSettle();
     await _openRestaurants(tester);
 
-    // Olive Tree Bistro overrides its organization's USD with EUR. Quoting the
-    // organization default here would let the console disagree with the till
-    // that prints the receipt.
-    // Two rows read EUR: Olive Tree Bistro by OVERRIDE, Pizza Plaza HQ by
-    // inheritance from its EUR organization. Only the first is marked.
-    expect(find.text('Currency: EUR'), findsNWidgets(2));
-    expect(
-      find.byKey(
-        const Key(
-          'restaurant-currency-override-d0000000-0000-4000-8000-0000000000b4',
-        ),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text(l10n.adminCurrencyOverride), findsOneWidget);
-    // Restaurants that inherit show their organization's currency, unmarked.
-    expect(find.text('Currency: USD'), findsNWidgets(2));
-    expect(find.text('Currency: ILS'), findsNWidgets(2));
+    expect(find.text(l10n.adminSalesTodayByCurrency), findsOneWidget);
+    // Three currencies in the demo platform => three chips, and no fourth
+    // "total" chip that would add them together.
+    expect(find.byKey(const Key('restaurants-total-USD')), findsOneWidget);
+    expect(find.byKey(const Key('restaurants-total-ILS')), findsOneWidget);
+    expect(find.byKey(const Key('restaurants-total-EUR')), findsOneWidget);
+    expect(find.byKey(const Key('restaurants-total-')), findsNothing);
+  });
+
+  testWidgets('every row names the owner to contact, or says there is none', (
+    tester,
+  ) async {
+    useSize(tester, kDesktop);
+    final l10n = await englishStrings();
+    await tester.pumpWidget(consoleApp());
+    await tester.pumpAndSettle();
+    await _openRestaurants(tester);
+
+    // Bistro Group has TWO active owners: the first is named and the rest are
+    // counted, so the row stays readable.
+    expect(find.textContaining('amira@bistro.example'), findsWidgets);
+    expect(find.textContaining(l10n.adminMoreContacts(1)), findsWidgets);
+    // Pizza Plaza has none, and says so rather than leaving a blank.
+    expect(find.text(l10n.adminNoOwnerContact), findsOneWidget);
+    // And no OTHER staff email appears anywhere on the page.
+    final rendered = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data ?? '')
+        .join('\n');
+    expect(rendered.contains('manager@'), isFalse);
+    expect(rendered.contains('cashier@'), isFalse);
   });
 
   testWidgets('an active restaurant under a SUSPENDED tenant shows both', (
@@ -109,7 +155,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
-    expect(repo.restaurantQueries.last.search, 'Sahara Grill');
+    expect(repo.operationsQueries.last.search, 'Sahara Grill');
     expect(find.text('Sahara Grill Central'), findsOneWidget);
     expect(find.text('Bistro Downtown'), findsNothing);
   });
@@ -128,7 +174,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(l10n.adminOrgStatusSuspended).last);
     await tester.pumpAndSettle();
-    expect(repo.restaurantQueries.last.organizationStatus, 'suspended');
+    expect(repo.operationsQueries.last.organizationStatus, 'suspended');
     expect(find.text('Pizza Plaza HQ'), findsOneWidget);
     expect(find.text('Bistro Downtown'), findsNothing);
 
@@ -136,15 +182,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(l10n.adminSortOrganizationDesc).last);
     await tester.pumpAndSettle();
-    expect(repo.restaurantQueries.last.sort, RestaurantSort.organizationDesc);
-    expect(repo.restaurantQueries.last.sort.wire, 'organization_desc');
+    expect(
+      repo.operationsQueries.last.sort,
+      RestaurantOperationsSort.organizationDesc,
+    );
+    expect(repo.operationsQueries.last.sort.wire, 'organization_desc');
     // A sort change rewinds to page 1.
-    expect(repo.restaurantQueries.last.offset, 0);
+    expect(repo.operationsQueries.last.offset, 0);
   });
 
-  testWidgets('the restaurants page shows no financial or order metric', (
-    tester,
-  ) async {
+  testWidgets('the page shows trading figures but never order or customer '
+      'detail', (tester) async {
     useSize(tester, kDesktop);
     await tester.pumpWidget(consoleApp());
     await tester.pumpAndSettle();
@@ -154,11 +202,20 @@ void main() {
         .widgetList<Text>(find.byType(Text))
         .map((t) => t.data ?? '')
         .join('\n');
-    for (final forbidden in const ['Revenue', 'Orders', 'Total', 'Sales']) {
+    // ADMIN-126 deliberately shows today's sales and order COUNT. What stays
+    // out is anything about individual orders or the people who placed them.
+    for (final forbidden in const [
+      'order_id',
+      'customer',
+      'local_operation_id',
+      'pin_session',
+      'card',
+    ]) {
       expect(
-        rendered.contains(forbidden),
+        rendered.toLowerCase().contains(forbidden),
         isFalse,
-        reason: '"$forbidden" is tenant business data, not platform structure',
+        reason:
+            '"\$forbidden" is per-order/customer data, not platform structure',
       );
     }
   });

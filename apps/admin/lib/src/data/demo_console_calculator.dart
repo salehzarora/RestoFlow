@@ -201,6 +201,7 @@ SubscriberDetail? computeSubscriberDetail(
             currentPeriodStartLabel: sub.currentPeriodStartLabel,
             currentPeriodEndLabel: sub.currentPeriodEndLabel,
           ),
+    ownerContacts: org.ownerContacts,
     restaurants: [
       for (final r in org.restaurants)
         SubscriberRestaurant(
@@ -373,3 +374,119 @@ AuditPage computeAuditPage(PlatformDataset data, AuditQuery query) {
 /// new demo action shows up in the filter without a second edit.
 List<String> demoAuditActions(PlatformDataset data) =>
     (data.auditEvents.map((e) => e.action).toSet().toList())..sort();
+
+// ---------------------------------------------------------------------------
+// Restaurant operations (ADMIN-126)
+// ---------------------------------------------------------------------------
+
+/// Applies [query] to [data] exactly as
+/// `platform_admin_restaurant_operations` does — same filters, same sorts, same
+/// per-currency totalling, and the same refusal to add currencies together.
+RestaurantOperationsPage computeRestaurantOperationsPage(
+  PlatformDataset data,
+  RestaurantOperationsQuery query,
+) {
+  final limit = clampConsoleLimit(query.limit);
+  final offset = query.offset < 0 ? 0 : query.offset;
+
+  var pairs =
+      <(PlatformOrganization, PlatformRestaurant)>[
+        for (final org in data.organizations)
+          for (final r in org.restaurants) (org, r),
+      ].where((pair) {
+        final (org, r) = pair;
+        if (!(_matches(r.name, query.search) ||
+            _matches(org.name, query.search))) {
+          return false;
+        }
+        if (query.organizationStatus != null &&
+            org.status != query.organizationStatus) {
+          return false;
+        }
+        return true;
+      }).toList();
+
+  // The with/without-sales filter is applied BEFORE the total is counted, so
+  // the pager describes the filtered set rather than the platform.
+  if (query.withSales != null) {
+    pairs = pairs
+        .where((p) => (p.$2.todayRevenueMinor != 0) == query.withSales)
+        .toList();
+  }
+
+  int byRestaurant(
+    (PlatformOrganization, PlatformRestaurant) a,
+    (PlatformOrganization, PlatformRestaurant) b,
+  ) => a.$2.name.toLowerCase().compareTo(b.$2.name.toLowerCase());
+
+  pairs.sort((a, b) {
+    final primary = switch (query.sort) {
+      RestaurantOperationsSort.nameAsc => byRestaurant(a, b),
+      RestaurantOperationsSort.nameDesc => byRestaurant(b, a),
+      RestaurantOperationsSort.organizationAsc =>
+        a.$1.name.toLowerCase().compareTo(b.$1.name.toLowerCase()),
+      RestaurantOperationsSort.organizationDesc =>
+        b.$1.name.toLowerCase().compareTo(a.$1.name.toLowerCase()),
+      // Money is compared as integer minor units. Across currencies this is an
+      // ORDERING only — the figures are never added, and the UI shows each row
+      // in its own currency.
+      RestaurantOperationsSort.salesDesc => b.$2.todayRevenueMinor.compareTo(
+        a.$2.todayRevenueMinor,
+      ),
+      RestaurantOperationsSort.salesAsc => a.$2.todayRevenueMinor.compareTo(
+        b.$2.todayRevenueMinor,
+      ),
+      RestaurantOperationsSort.ordersDesc => b.$2.todayOrdersCount.compareTo(
+        a.$2.todayOrdersCount,
+      ),
+      RestaurantOperationsSort.ordersAsc => a.$2.todayOrdersCount.compareTo(
+        b.$2.todayOrdersCount,
+      ),
+    };
+    // Name is the tiebreaker for every sort, so paging is stable: without a
+    // total order two equal-revenue restaurants could swap between pages and
+    // one would vanish.
+    return primary != 0 ? primary : byRestaurant(a, b);
+  });
+
+  final rows = [
+    for (final (org, r) in pairs.skip(offset).take(limit))
+      RestaurantOperationsRow(
+        restaurantId: r.id,
+        restaurantName: r.name,
+        restaurantStatus: r.status,
+        organizationId: org.id,
+        organizationName: org.name,
+        organizationStatus: org.status,
+        branchesCount: r.branchCount,
+        currencyCode: r.currencyOverride ?? org.defaultCurrency,
+        reportingDate: data.serverDateLabel,
+        todayOrdersCount: r.todayOrdersCount,
+        todayRevenueMinor: r.todayRevenueMinor,
+        ownerContacts: org.ownerContacts,
+      ),
+  ];
+
+  // Totals GROUPED BY CURRENCY, over the whole filtered set (not the page).
+  final byCurrency = <String, CurrencyDayTotal>{};
+  for (final (org, r) in pairs) {
+    final code = r.currencyOverride ?? org.defaultCurrency;
+    final prior = byCurrency[code];
+    byCurrency[code] = CurrencyDayTotal(
+      currencyCode: code,
+      restaurantsCount: (prior?.restaurantsCount ?? 0) + 1,
+      todayOrdersCount: (prior?.todayOrdersCount ?? 0) + r.todayOrdersCount,
+      todayRevenueMinor: (prior?.todayRevenueMinor ?? 0) + r.todayRevenueMinor,
+    );
+  }
+  final totals = byCurrency.values.toList()
+    ..sort((a, b) => a.currencyCode.compareTo(b.currencyCode));
+
+  return RestaurantOperationsPage(
+    rows: rows,
+    totalCount: pairs.length,
+    totalsByCurrency: totals,
+    limit: limit,
+    offset: offset,
+  );
+}

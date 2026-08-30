@@ -46,7 +46,9 @@ void main() {
     await tester.pumpWidget(consoleApp(repo: repo));
     await tester.pumpAndSettle();
 
-    expect(repo.calls, ['overview']);
+    // The Overview is TWO reads: the tenant counts, and today's sales grouped
+    // by currency (a separate endpoint, rendered independently).
+    expect(repo.calls, ['overview', 'operations']);
     expect(find.byKey(const Key('kpi-organizations')), findsOneWidget);
 
     await goToSection(tester, l10n.adminNavSubscribers);
@@ -59,8 +61,15 @@ void main() {
     await goToSection(tester, l10n.adminNavAuditLog);
     expect(find.byKey(const Key('audit-card')), findsOneWidget);
 
-    // Each destination read its OWN endpoint, and only when opened.
-    expect(repo.calls, ['overview', 'subscribers', 'restaurants', 'audit']);
+    // Each destination read its OWN endpoint, and only when opened. The
+    // Restaurants page reads OPERATIONS (ADMIN-126), not the plain list.
+    expect(repo.calls, [
+      'overview',
+      'operations',
+      'subscribers',
+      'operations',
+      'audit',
+    ]);
   });
 
   testWidgets(
@@ -195,9 +204,9 @@ void main() {
     await tester.tap(find.byKey(const Key('platform-refresh-button')));
     await tester.pumpAndSettle();
 
-    // Exactly the restaurants read: a blanket invalidate would re-read all five
-    // endpoints and write five audit rows for one operator gesture.
-    expect(repo.calls, ['restaurants']);
+    // Exactly the operations read: a blanket invalidate would re-read every
+    // endpoint and write an audit row for each, for one operator gesture.
+    expect(repo.calls, ['operations']);
   });
 
   testWidgets('the shell shows identity, mode and the read-only marker', (

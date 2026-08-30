@@ -206,3 +206,23 @@ final auditFeedProvider =
         ref.watch(auditFilterProvider),
       );
     });
+
+// ---------------------------------------------------------------------------
+// Restaurant operations (ADMIN-126)
+// ---------------------------------------------------------------------------
+
+/// The CURRENT restaurant-operations query. Defaults to sales high-to-low,
+/// because the first question an operator asks of this page is "who is trading
+/// and who is not".
+final restaurantOperationsQueryProvider =
+    StateProvider<RestaurantOperationsQuery>(
+      (ref) => const RestaurantOperationsQuery(),
+    );
+
+/// One page of restaurant operations for the current query.
+final restaurantOperationsPageProvider =
+    FutureProvider.family<RestaurantOperationsPage, RestaurantOperationsQuery>(
+      (ref, query) => ref
+          .watch(platformAdminRepositoryProvider)
+          .loadRestaurantOperations(query),
+    );

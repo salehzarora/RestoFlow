@@ -7364,4 +7364,52 @@ class AppLocalizationsHe extends AppLocalizations {
   String adminShowingRange(int first, int last, int total) {
     return 'מוצג $first-$last מתוך $total';
   }
+
+  @override
+  String get adminTodaySales => 'מכירות היום';
+
+  @override
+  String get adminOwnerContact => 'איש קשר של הבעלים';
+
+  @override
+  String get adminNoOwnerContact => 'אין בעלים פעיל';
+
+  @override
+  String adminMoreContacts(int count) {
+    return '+$count נוספים';
+  }
+
+  @override
+  String get adminSortSalesDesc => 'מכירות (מהגבוה)';
+
+  @override
+  String get adminSortSalesAsc => 'מכירות (מהנמוך)';
+
+  @override
+  String get adminSortOrdersDesc => 'הזמנות (מהגבוה)';
+
+  @override
+  String get adminSortOrdersAsc => 'הזמנות (מהנמוך)';
+
+  @override
+  String get adminFilterSalesToday => 'מכירות היום';
+
+  @override
+  String get adminFilterWithSales => 'עם מכירות';
+
+  @override
+  String get adminFilterNoSales => 'ללא מכירות';
+
+  @override
+  String get adminSalesTodayByCurrency => 'מכירות היום לפי מטבע';
+
+  @override
+  String get adminNoSalesTodayYet => 'לא נרשמו מכירות היום';
+
+  @override
+  String get adminBusinessDay => 'יום עסקים';
+
+  @override
+  String get adminOperationsNote =>
+      'המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד.';
 }

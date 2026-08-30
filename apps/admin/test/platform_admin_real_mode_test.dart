@@ -42,6 +42,11 @@ class _ThrowingRepo implements PlatformAdminRepository {
 
   @override
   Future<AuditPage> loadAuditPage(AuditQuery query) async => throw _error;
+
+  @override
+  Future<RestaurantOperationsPage> loadRestaurantOperations(
+    RestaurantOperationsQuery query,
+  ) async => throw _error;
 }
 
 void main() {
