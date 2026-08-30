@@ -2285,5 +2285,21 @@
   "adminSalesTodayByCurrency": "מכירות היום לפי מטבע",
   "adminNoSalesTodayYet": "לא נרשמו מכירות היום",
   "adminBusinessDay": "יום עסקים",
-  "adminOperationsNote": "המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד."
+  "adminOperationsNote": "המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד.",
+  "supportModeBanner": "מצב תמיכת פלטפורמה · לקריאה בלבד",
+  "supportModeExpiresIn": "מסתיים בעוד {time}",
+  "supportModeExpired": "הגישה פקעה",
+  "supportModeEnd": "סיום גישת התמיכה",
+  "supportModeClosedTitle": "גישת התמיכה נסגרה",
+  "supportModeClosedBody": "הפעילות הזו אינה פעילה עוד. התחל אחת חדשה ממסוף הפלטפורמה.",
+  "supportModeReadOnly": "לקריאה בלבד במצב תמיכה",
+  "adminOpenDashboard": "פתיחת לוח הבקרה",
+  "adminSupportDialogTitle": "התחלת גישת תמיכה",
+  "adminSupportDialogBody": "תצפה בלוח הבקרה של הלקוח הזה כעצמך, לקריאה בלבד, לזמן קצר. הפעילות נרשמת ביומן הביקורת.",
+  "adminSupportReasonLabel": "סיבה",
+  "adminSupportReasonHint": "לדוגמה: בדיקת דיווח על נתון מכירות חסר",
+  "adminSupportReasonRequired": "חובה לציין סיבה",
+  "adminSupportStarted": "גישת התמיכה הוחלה. לוח הבקרה נפתח בלשונית חדשה.",
+  "adminSupportFailed": "לא ניתן להתחיל גישת תמיכה",
+  "adminSupportUnavailable": "גישת תמיכה אינה זמינה במצב דמו"
 }

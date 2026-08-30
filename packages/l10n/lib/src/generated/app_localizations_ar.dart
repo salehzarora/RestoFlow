@@ -7461,4 +7461,58 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get adminOperationsNote =>
       'المبيعات هي أرقام المطعم نفسه ليوم عمله، مقروءة من التقرير نفسه الذي يراه مالكه. ولا تُجمع العملات المختلفة معًا.';
+
+  @override
+  String get supportModeBanner => 'وضع دعم المنصة · للقراءة فقط';
+
+  @override
+  String supportModeExpiresIn(String time) {
+    return 'ينتهي خلال $time';
+  }
+
+  @override
+  String get supportModeExpired => 'انتهت صلاحية الوصول';
+
+  @override
+  String get supportModeEnd => 'إنهاء وصول الدعم';
+
+  @override
+  String get supportModeClosedTitle => 'أُغلق وصول الدعم';
+
+  @override
+  String get supportModeClosedBody =>
+      'هذه الجلسة لم تعد نشطة. ابدأ جلسة جديدة من وحدة تحكم المنصة.';
+
+  @override
+  String get supportModeReadOnly => 'للقراءة فقط في وضع الدعم';
+
+  @override
+  String get adminOpenDashboard => 'فتح لوحة التحكم';
+
+  @override
+  String get adminSupportDialogTitle => 'بدء وصول الدعم';
+
+  @override
+  String get adminSupportDialogBody =>
+      'ستطّلع على لوحة تحكم هذا المشترك بهويتك أنت، للقراءة فقط، ولمدة قصيرة. تُسجّل الجلسة في سجل التدقيق.';
+
+  @override
+  String get adminSupportReasonLabel => 'السبب';
+
+  @override
+  String get adminSupportReasonHint =>
+      'مثال: التحقق من بلاغ عن رقم مبيعات مفقود';
+
+  @override
+  String get adminSupportReasonRequired => 'السبب مطلوب';
+
+  @override
+  String get adminSupportStarted =>
+      'بدأ وصول الدعم. فُتحت لوحة التحكم في علامة تبويب جديدة.';
+
+  @override
+  String get adminSupportFailed => 'تعذّر بدء وصول الدعم';
+
+  @override
+  String get adminSupportUnavailable => 'وصول الدعم غير متاح في الوضع التجريبي';
 }

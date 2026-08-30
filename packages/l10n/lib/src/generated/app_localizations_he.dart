@@ -7412,4 +7412,57 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get adminOperationsNote =>
       'המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד.';
+
+  @override
+  String get supportModeBanner => 'מצב תמיכת פלטפורמה · לקריאה בלבד';
+
+  @override
+  String supportModeExpiresIn(String time) {
+    return 'מסתיים בעוד $time';
+  }
+
+  @override
+  String get supportModeExpired => 'הגישה פקעה';
+
+  @override
+  String get supportModeEnd => 'סיום גישת התמיכה';
+
+  @override
+  String get supportModeClosedTitle => 'גישת התמיכה נסגרה';
+
+  @override
+  String get supportModeClosedBody =>
+      'הפעילות הזו אינה פעילה עוד. התחל אחת חדשה ממסוף הפלטפורמה.';
+
+  @override
+  String get supportModeReadOnly => 'לקריאה בלבד במצב תמיכה';
+
+  @override
+  String get adminOpenDashboard => 'פתיחת לוח הבקרה';
+
+  @override
+  String get adminSupportDialogTitle => 'התחלת גישת תמיכה';
+
+  @override
+  String get adminSupportDialogBody =>
+      'תצפה בלוח הבקרה של הלקוח הזה כעצמך, לקריאה בלבד, לזמן קצר. הפעילות נרשמת ביומן הביקורת.';
+
+  @override
+  String get adminSupportReasonLabel => 'סיבה';
+
+  @override
+  String get adminSupportReasonHint => 'לדוגמה: בדיקת דיווח על נתון מכירות חסר';
+
+  @override
+  String get adminSupportReasonRequired => 'חובה לציין סיבה';
+
+  @override
+  String get adminSupportStarted =>
+      'גישת התמיכה הוחלה. לוח הבקרה נפתח בלשונית חדשה.';
+
+  @override
+  String get adminSupportFailed => 'לא ניתן להתחיל גישת תמיכה';
+
+  @override
+  String get adminSupportUnavailable => 'גישת תמיכה אינה זמינה במצב דמו';
 }

@@ -26,6 +26,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/console_models.dart';
 import '../state/platform_admin_providers.dart';
 import 'console_widgets.dart';
+import 'support_action.dart';
 
 class ConsoleRestaurantsPage extends ConsumerWidget {
   const ConsoleRestaurantsPage({super.key});
@@ -213,6 +214,14 @@ class _OperationsTile extends StatelessWidget {
             status: row.organizationStatus,
             icon: Icons.domain_outlined,
           ),
+        // ADMIN-126B: opens a short, audited, READ-ONLY support session scoped
+        // to this restaurant. Not a login — see `support_action.dart`.
+        OpenDashboardButton(
+          organizationId: row.organizationId,
+          organizationName: row.organizationName,
+          restaurantId: row.restaurantId,
+          restaurantName: row.restaurantName,
+        ),
       ],
     );
   }

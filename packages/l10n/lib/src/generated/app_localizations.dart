@@ -13587,6 +13587,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sales are the restaurant’s own figures for its own business day, read from the same report its owner sees. Currencies are never added together.'**
   String get adminOperationsNote;
+
+  /// ADMIN-126B: permanent Dashboard banner while a RestoFlow support operator is viewing this tenant. Never hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform Support Mode · Read-only'**
+  String get supportModeBanner;
+
+  /// ADMIN-126B: countdown to the server-set support-session expiry.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends in {time}'**
+  String supportModeExpiresIn(String time);
+
+  /// ADMIN-126B: the support session has passed its expiry; the server already refuses every read.
+  ///
+  /// In en, this message translates to:
+  /// **'Access expired'**
+  String get supportModeExpired;
+
+  /// ADMIN-126B: ends the support session immediately.
+  ///
+  /// In en, this message translates to:
+  /// **'End support access'**
+  String get supportModeEnd;
+
+  /// ADMIN-126B: the safe screen shown once a support session has ended, expired, or was never valid.
+  ///
+  /// In en, this message translates to:
+  /// **'Support access closed'**
+  String get supportModeClosedTitle;
+
+  /// ADMIN-126B: explains that there is no retry here - a handoff is single-use.
+  ///
+  /// In en, this message translates to:
+  /// **'This support session is no longer active. Start a new one from the platform console.'**
+  String get supportModeClosedBody;
+
+  /// ADMIN-126B: why a write control is disabled. The server refuses the write regardless of this control.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only in support mode'**
+  String get supportModeReadOnly;
+
+  /// ADMIN-126B: starts a short, audited, read-only support session and opens the tenant Dashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard'**
+  String get adminOpenDashboard;
+
+  /// ADMIN-126B: title of the typed-reason confirmation dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Start support access'**
+  String get adminSupportDialogTitle;
+
+  /// ADMIN-126B: states plainly that this is not impersonation and that it is audited.
+  ///
+  /// In en, this message translates to:
+  /// **'You will view this tenant’s Dashboard as yourself, read-only, for a short time. The session is recorded in the audit log.'**
+  String get adminSupportDialogBody;
+
+  /// ADMIN-126B: the required typed reason, stored on the support session and in the audit event.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get adminSupportReasonLabel;
+
+  /// ADMIN-126B: example reason.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. investigating a reported missing sales figure'**
+  String get adminSupportReasonHint;
+
+  /// ADMIN-126B: the server refuses an empty reason; the dialog says so first.
+  ///
+  /// In en, this message translates to:
+  /// **'A reason is required'**
+  String get adminSupportReasonRequired;
+
+  /// ADMIN-126B: confirmation after a successful handoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Support access started. The Dashboard opened in a new tab.'**
+  String get adminSupportStarted;
+
+  /// ADMIN-126B: shown when the server declines to open a support session.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start support access'**
+  String get adminSupportFailed;
+
+  /// ADMIN-126B: the demo dataset has no live tenant to support.
+  ///
+  /// In en, this message translates to:
+  /// **'Support access is unavailable in demo mode'**
+  String get adminSupportUnavailable;
 }
 
 class _AppLocalizationsDelegate

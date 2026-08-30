@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show MembershipContext;
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
     show SyncRpcTransport;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -24,6 +26,9 @@ import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
 import 'src/state/locale_controller.dart';
+import 'src/support/platform_support.dart';
+import 'src/support/support_handoff.dart';
+import 'src/support/support_mode_gate.dart';
 import 'src/tables/tables_repository.dart';
 
 /// Composition root (RF-151 + RF-152). In DEMO mode (`RESTOFLOW_DEMO_MODE`
@@ -277,47 +282,64 @@ class DashboardApp extends ConsumerWidget {
       fetchContext: fetchContext!,
       selectedContextStore: selectedContextStore,
       deviceContext: deviceContext,
-      // Resolve the EFFECTIVE tenant context first (sprint): an org-wide
-      // owner membership gets a concrete restaurant/branch + the real
-      // currency from `list_org_structure`, so the menu/printers/staff
-      // surfaces work instead of showing scope-blocked states.
-      onReady: (context, membership) => TenantContextLoader(
-        membership: membership,
-        transport: reportsTransport,
-        builder: (context, resolved) {
-          final scope = dashboardAdminScopeFor(
-            resolved.membership,
-            currencyCode: resolved.currencyCode,
-          );
-          return DashboardShell(
-            // V2.1 — a membership change must DISPOSE this shell, not reuse it.
-            // The shell's admin scope and real repositories are `late final`,
-            // so without a changing key they would stay bound to the previous
-            // membership even though the provider keys had already moved on.
-            key: ValueKey(
-              dashboardShellIdentity(
-                resolved.membership,
-                currencyCode: resolved.currencyCode,
-              ),
-            ),
-            membership: resolved.membership,
-            currencyCode: resolved.currencyCode,
-            deviceRepositoryFor: deviceRepositoryFor,
-            usersRepositoryFor: usersRepositoryFor,
-            menuReadSource: menuReadSource,
-            menuWriter: menuWriter,
-            menuImageStorage: menuImageStorage,
-            brandingLogoStorage: brandingLogoStorage,
-            printersRepository: printersRepositoryFor?.call(scope),
-            staffRepository: staffRepositoryFor?.call(scope),
-            tablesRepository: tablesRepositoryFor?.call(scope),
-            reportsTransport: reportsTransport,
-            // Sign-out from the shell header; the auth flow's session stream
-            // drives the transition + context clearing.
-            onSignOut: authRepository == null ? null : authRepository!.signOut,
-          );
-        },
+      // ADMIN-126B: a RestoFlow operator arriving with a one-time handoff sees
+      // the SAME dashboard below, built from the SAME builder, scoped to the
+      // tenant they are supporting — and wrapped in a banner saying so. What
+      // they may actually read is decided by the server, not here.
+      supportGate: (context, tenantGate) => SupportModeGate(
+        repository: PlatformSupportRepository(reportsTransport),
+        handoffToken: takeSupportHandoff(),
+        onSupport: (context, session) =>
+            _tenantDashboard(context, supportMembershipFor(session)),
+        child: tenantGate,
       ),
+      onReady: _tenantDashboard,
+    );
+  }
+
+  /// The real dashboard for a resolved scope — the one and only builder, shared
+  /// by the ordinary tenant path and by support mode so the two cannot drift.
+  Widget _tenantDashboard(BuildContext context, MembershipContext membership) {
+    // Resolve the EFFECTIVE tenant context first (sprint): an org-wide
+    // owner membership gets a concrete restaurant/branch + the real
+    // currency from `list_org_structure`, so the menu/printers/staff
+    // surfaces work instead of showing scope-blocked states.
+    return TenantContextLoader(
+      membership: membership,
+      transport: reportsTransport,
+      builder: (context, resolved) {
+        final scope = dashboardAdminScopeFor(
+          resolved.membership,
+          currencyCode: resolved.currencyCode,
+        );
+        return DashboardShell(
+          // V2.1 — a membership change must DISPOSE this shell, not reuse it.
+          // The shell's admin scope and real repositories are `late final`,
+          // so without a changing key they would stay bound to the previous
+          // membership even though the provider keys had already moved on.
+          key: ValueKey(
+            dashboardShellIdentity(
+              resolved.membership,
+              currencyCode: resolved.currencyCode,
+            ),
+          ),
+          membership: resolved.membership,
+          currencyCode: resolved.currencyCode,
+          deviceRepositoryFor: deviceRepositoryFor,
+          usersRepositoryFor: usersRepositoryFor,
+          menuReadSource: menuReadSource,
+          menuWriter: menuWriter,
+          menuImageStorage: menuImageStorage,
+          brandingLogoStorage: brandingLogoStorage,
+          printersRepository: printersRepositoryFor?.call(scope),
+          staffRepository: staffRepositoryFor?.call(scope),
+          tablesRepository: tablesRepositoryFor?.call(scope),
+          reportsTransport: reportsTransport,
+          // Sign-out from the shell header; the auth flow's session stream
+          // drives the transition + context clearing.
+          onSignOut: authRepository == null ? null : authRepository!.signOut,
+        );
+      },
     );
   }
 }

@@ -29,6 +29,7 @@ import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
 import 'state/setup_device_providers.dart';
 import 'analytics/dashboard_destination.dart';
+import 'support/support_mode_scope.dart';
 import 'widgets/language_selector.dart';
 import 'quick_notes/quick_notes_repository.dart';
 import 'tables/tables_repository.dart';
@@ -504,6 +505,10 @@ class _DashboardShellState extends State<DashboardShell> {
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n, WidgetRef ref) {
+    // ADMIN-126B: true only while a platform operator is viewing this tenant
+    // under an audited read-only support session. It changes what the
+    // navigation OFFERS, never what the server allows.
+    final supportMode = SupportModeScope.of(context);
     // KeyedSubtree: each tab gets a FRESH subtree, so the per-surface
     // ProviderScopes are recreated instead of reused with different override
     // types across tabs (Riverpod forbids changing an override's type in
@@ -536,7 +541,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final content = KeyedSubtree(
       key: ValueKey('dashboard-tab-$_index'),
       child: switch (_index) {
-        0 => _overview(ref),
+        0 => _overview(ref, supportMode: supportMode),
         1 => _menuSurface(context, l10n),
         2 => _adminSurface(
           const AdminDevicesScreen(),
@@ -615,6 +620,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   membership: widget.membership,
                   width: railWidth,
                   compact: compact,
+                  supportMode: supportMode,
                 ),
                 Expanded(
                   child: Column(
@@ -639,9 +645,18 @@ class _DashboardShellState extends State<DashboardShell> {
                 // its index space is the COMPACTED one. Translate both ways;
                 // a canonical tab with no visible tile (Printing, reached
                 // internally) falls back to 0 rather than asserting.
-                selectedIndex: _visibleIndexOf(_index, l10n),
-                onDestinationSelected: (value) =>
-                    _select(_visibleDestinations(l10n)[value].$1, ref),
+                selectedIndex: _visibleIndexOf(
+                  _index,
+                  l10n,
+                  supportMode: supportMode,
+                ),
+                onDestinationSelected: (value) => _select(
+                  _visibleDestinations(
+                    l10n,
+                    supportMode: supportMode,
+                  )[value].$1,
+                  ref,
+                ),
                 // RF-132 (Codex review): ten destinations at phone width
                 // leave no room to render any label unclipped, so the bar
                 // is deliberately ICON-ONLY. NavigationBar keeps each
@@ -651,7 +666,10 @@ class _DashboardShellState extends State<DashboardShell> {
                 // stays visible via the filled icon + indicator pill.
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
                 destinations: [
-                  for (final entry in _visibleDestinations(l10n))
+                  for (final entry in _visibleDestinations(
+                    l10n,
+                    supportMode: supportMode,
+                  ))
                     NavigationDestination(
                       icon: Icon(entry.$2.icon),
                       selectedIcon: Icon(entry.$2.selectedIcon),
@@ -676,11 +694,15 @@ class _DashboardShellState extends State<DashboardShell> {
   /// chrome), instead of a wrapping Column. Repository ownership, the menu params,
   /// the `_select` navigation callbacks, and the report ProviderScope overrides
   /// are all unchanged.
-  Widget _overview(WidgetRef ref) {
+  Widget _overview(WidgetRef ref, {bool supportMode = false}) {
     final devices = _realDeviceRepo;
     // The direct null-check promotes `devices` to non-null inside the branch.
     final Widget? setupPanel;
-    if (devices != null &&
+    // ADMIN-126B: the setup centre is a WRITE affordance (finish your menu,
+    // pair a device, add staff) whose readiness it computes from reads a
+    // support session is refused. It is omitted rather than shown broken.
+    if (!supportMode &&
+        devices != null &&
         widget.printersRepository != null &&
         widget.staffRepository != null) {
       setupPanel = DashboardSetupCenter(
@@ -948,19 +970,36 @@ class _DashboardShellState extends State<DashboardShell> {
   /// 037: the visible subset, paired with each item's CANONICAL index so
   /// selection keeps speaking the original index space. Hidden-ness comes from
   /// [DashboardDestination] — one source of truth for shell and tests alike.
-  List<(int, _NavItem)> _visibleDestinations(AppLocalizations l10n) {
+  List<(int, _NavItem)> _visibleDestinations(
+    AppLocalizations l10n, {
+    bool supportMode = false,
+  }) {
     final all = _destinations(l10n);
     return [
       for (var i = 0; i < all.length; i++)
-        if (!DashboardDestination.fromIndex(i).hiddenFromNavigation)
-          (i, all[i]),
+        if (!_navHidden(i, supportMode)) (i, all[i]),
     ];
+  }
+
+  /// ADMIN-126B: one predicate for the rail, the bottom bar and the index
+  /// translation, so a destination cannot be hidden in one of the three and
+  /// present in another.
+  static bool _navHidden(int canonical, bool supportMode) {
+    final d = DashboardDestination.fromIndex(canonical);
+    return d.hiddenFromNavigation || (supportMode && !d.readableInSupportMode);
   }
 
   /// The compacted position of a canonical index, or 0 when that tab is hidden
   /// (a hidden screen reached internally highlights nothing in particular).
-  int _visibleIndexOf(int canonical, AppLocalizations l10n) =>
-      DashboardDestination.fromIndex(canonical).visibleIndex ?? 0;
+  int _visibleIndexOf(
+    int canonical,
+    AppLocalizations l10n, {
+    bool supportMode = false,
+  }) =>
+      DashboardDestination.fromIndex(
+        canonical,
+      ).visibleIndexIn(supportMode: supportMode) ??
+      0;
 
   List<_NavItem> _destinations(AppLocalizations l10n) => [
     _NavItem(
@@ -1159,6 +1198,7 @@ class _SideNav extends StatelessWidget {
     required this.membership,
     required this.width,
     required this.compact,
+    this.supportMode = false,
   });
 
   final List<_NavItem> destinations;
@@ -1167,6 +1207,10 @@ class _SideNav extends StatelessWidget {
   final MembershipContext? membership;
   final double width;
   final bool compact;
+
+  /// ADMIN-126B: drops the destinations a support session has no approved read
+  /// for, using the SAME predicate as the bottom bar.
+  final bool supportMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1226,7 +1270,7 @@ class _SideNav extends StatelessWidget {
                 // walks the CANONICAL index space, so selection and taps need
                 // no translation here.
                 for (var i = 0; i < destinations.length; i++)
-                  if (!DashboardDestination.fromIndex(i).hiddenFromNavigation)
+                  if (!_DashboardShellState._navHidden(i, supportMode))
                     _SideNavTile(
                       item: destinations[i],
                       selected: i == selectedIndex,
