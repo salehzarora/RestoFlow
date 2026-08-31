@@ -27,6 +27,11 @@ dependencies:
   # platform-admin repo calls the RF-125 public.platform_admin_* wrappers through.
   restoflow_data_remote:
     path: ../../packages/data_remote
+  # ADMIN-126: the ONE shared money formatter (OPS-043). The console renders
+  # tenant revenue, so it must print it exactly the way every other surface
+  # does — a second formatter is a second rounding story.
+  restoflow_currency:
+    path: ../../packages/currency
   # RF-119-b: real platform-operator sign-in + TOTP MFA. supabase_flutter provides
   # Supabase.initialize (session persistence) + the anon-key SupabaseClient whose
   # GoTrue session carries auth.uid()/aal into get_my_context; and the gotrue MFA

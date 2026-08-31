@@ -2,9 +2,9 @@
 ///
 /// SCOPE, stated up front because the name "Admin" covers two different things
 /// in this repo. `apps/admin` is the PLATFORM console: a gate, a sign-in + MFA
-/// flow, and one read-only overview screen. The tenant-facing admin surfaces
-/// (settings / users / devices) live in `packages/feature_admin` and are
-/// rendered by the DASHBOARD, not here — they keep their own suites. This file
+/// flow, and a read-only four-page console (ADMIN-125C.2). The tenant-facing
+/// admin surfaces (settings / users / devices) live in `packages/feature_admin`
+/// and are rendered by the DASHBOARD, not here — they keep their own suites. This file
 /// covers the platform console.
 ///
 /// WHAT IS ASSERTED, and why in this shape:
@@ -31,7 +31,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_admin/src/auth/admin_mfa_screen.dart';
 import 'package:restoflow_admin/src/auth/admin_sign_in_screen.dart';
 import 'package:restoflow_admin/src/platform_admin_screen.dart';
-import 'package:restoflow_admin/src/widgets/platform_widgets.dart';
+import 'package:restoflow_admin/src/console/console_widgets.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -105,6 +105,49 @@ Future<List<String>> _pumpOverview(
   });
 }
 
+/// Opens a top-level console destination at [width] and reports any overflow
+/// recorded while it renders. Section pages are reachable only THROUGH the
+/// shell, so this pumps the shell and navigates rather than building a page in
+/// isolation — a page that only lays out when nothing else is on screen is not
+/// really laying out.
+Future<List<String>> _pumpSection(
+  WidgetTester tester,
+  String destination, {
+  required double width,
+  Locale locale = const Locale('en'),
+  double scale = 1.0,
+  double height = 4000,
+}) async {
+  _size(tester, Size(width, height));
+  return _overflowsDuring(() async {
+    await tester.pumpWidget(
+      _app(const PlatformAdminScreen(), locale: locale, scale: scale),
+    );
+    await tester.pumpAndSettle();
+    // Scoped to the navigation subtree: several destination names are also
+    // metric-card labels on the Overview page, and an unscoped finder would tap
+    // the card instead of navigating.
+    final rail = find.byKey(const Key('console-rail'));
+    if (rail.evaluate().isNotEmpty) {
+      await tester.tap(
+        find.descendant(of: rail, matching: find.text(destination)).first,
+      );
+    } else {
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(const Key('console-drawer')),
+              matching: find.text(destination),
+            )
+            .first,
+      );
+    }
+    await tester.pumpAndSettle();
+  });
+}
+
 // The console's target widths. 1440 down to 390 — a platform operator opens
 // this on a laptop, but an on-call one opens it on a phone.
 const _widths = [1440.0, 1280.0, 1024.0, 834.0, 700.0, 540.0, 430.0, 390.0];
@@ -173,23 +216,26 @@ void main() {
   // hardening inside the pill can prevent that.
   // =========================================================================
   group('C. pill host rows give the pill a bound', () {
-    testWidgets('the organizations row keeps value AND status pill on screen', (
-      tester,
-    ) async {
-      await _pumpOverview(tester, width: 390);
-      // Every organization row still renders its plan value and its status.
-      expect(find.byKey(const Key('organizations-card')), findsOneWidget);
-      expect(find.text('active'), findsWidgets);
+    testWidgets('a subscriber row keeps its plan AND its status pills on '
+        'screen', (tester) async {
+      final overflows = await _pumpSection(tester, 'Subscribers', width: 390);
+      expect(overflows, isEmpty);
+      // Every subscriber row still renders its plan value and its statuses.
+      expect(find.byKey(const Key('subscribers-card')), findsOneWidget);
+      expect(find.text('Active'), findsWidgets);
+      expect(find.text('Basic'), findsWidgets);
     });
 
-    testWidgets('the activity feed keeps its action pill and timestamp', (
+    testWidgets('the audit feed keeps its action pill and timestamp', (
       tester,
     ) async {
-      await _pumpOverview(tester, width: 390);
-      expect(find.byKey(const Key('recent-activity-card')), findsOneWidget);
+      final overflows = await _pumpSection(tester, 'Audit log', width: 390);
+      expect(overflows, isEmpty);
+      expect(find.byKey(const Key('audit-card')), findsOneWidget);
       // The raw action key is a wire identifier and is deliberately untranslated;
       // it must still be present rather than dropped to make room.
       expect(find.byType(RestoflowStatusPill), findsWidgets);
+      expect(find.text('platform.subscribers.list'), findsWidgets);
     });
 
     testWidgets('the label still owns most of the row at desktop width', (
@@ -199,11 +245,11 @@ void main() {
       // is what stops the overflow, and it is also the thing that could quietly
       // halve the label column at widths that were never in trouble. This
       // measures that it did not.
-      await _pumpOverview(tester, width: 1280);
+      await _pumpSection(tester, 'Subscribers', width: 1280);
       final rowFinder = find
           .descendant(
-            of: find.byKey(const Key('organizations-card')),
-            matching: find.byType(PlatformSectionRow),
+            of: find.byKey(const Key('subscribers-card')),
+            matching: find.byType(ConsoleListRow),
           )
           .first;
       final row = tester.getRect(rowFinder);
@@ -213,7 +259,13 @@ void main() {
       // alternative — would take the full half whether it needed it or not and
       // silently halve the organization name at every desktop width.
       final cluster = tester.getRect(
-        find.descendant(of: rowFinder, matching: find.byType(Wrap)).first,
+        find.descendant(
+          of: rowFinder,
+          // The KEYED trailing cluster, not "the first Wrap": the row also has
+          // a meta-line Wrap inside the label column, and measuring that one
+          // would assert something this guard never meant.
+          matching: find.byKey(const Key('console-row-trailing')),
+        ),
       );
       expect(
         cluster.width,

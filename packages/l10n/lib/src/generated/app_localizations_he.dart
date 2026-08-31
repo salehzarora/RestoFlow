@@ -7168,4 +7168,248 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get dashboardQuickNoteReorderFailed =>
       'לא ניתן היה לשמור את הסדר החדש.';
+
+  @override
+  String get adminNavOverview => 'סקירה';
+
+  @override
+  String get adminNavSubscribers => 'מנויים';
+
+  @override
+  String get adminNavRestaurants => 'מסעדות';
+
+  @override
+  String get adminNavAuditLog => 'יומן ביקורת';
+
+  @override
+  String get adminConsoleReadOnly => 'קונסולת פלטפורמה לקריאה בלבד';
+
+  @override
+  String get adminConsoleSections => 'מדורי הקונסולה';
+
+  @override
+  String get adminBackToSubscribers => 'חזרה למנויים';
+
+  @override
+  String get adminKpiSubscribers => 'מנויים';
+
+  @override
+  String get adminKpiSuspendedOrganizations => 'ארגונים מושעים';
+
+  @override
+  String get adminKpiActiveMemberships => 'חברויות פעילות';
+
+  @override
+  String get adminSubscriptionsHeading => 'מינויים';
+
+  @override
+  String get adminSubStatusTrialing => 'תקופת ניסיון';
+
+  @override
+  String get adminSubStatusActive => 'פעיל';
+
+  @override
+  String get adminSubStatusPastDue => 'בפיגור';
+
+  @override
+  String get adminSubStatusCanceled => 'בוטל';
+
+  @override
+  String get adminOrgStatusActive => 'פעיל';
+
+  @override
+  String get adminOrgStatusSuspended => 'מושעה';
+
+  @override
+  String get adminNoSubscription => 'אין מינוי';
+
+  @override
+  String get adminNoSubscriptionConfigured => 'לא הוגדר מינוי';
+
+  @override
+  String get adminNoSubscriptionsConfiguredTitle => 'עדיין לא הוגדרו מינויים';
+
+  @override
+  String get adminNoSubscriptionsConfiguredBody =>
+      'לאף ארגון עדיין לא הוקצתה תוכנית, ולכן כל מוני המינויים הם אפס.';
+
+  @override
+  String get adminPeriodStart => 'תחילת התקופה';
+
+  @override
+  String get adminPeriodEnd => 'סוף התקופה';
+
+  @override
+  String get adminDefaultCurrency => 'מטבע ברירת מחדל';
+
+  @override
+  String get adminEffectiveCurrency => 'מטבע';
+
+  @override
+  String get adminCurrencyOverride => 'עקיפת מטבע';
+
+  @override
+  String get adminPlanLabel => 'תוכנית';
+
+  @override
+  String get adminMembersLabel => 'חברים';
+
+  @override
+  String get adminSearchLabel => 'חיפוש';
+
+  @override
+  String get adminFilterLabel => 'סינון';
+
+  @override
+  String get adminSortLabel => 'מיון';
+
+  @override
+  String get adminFilterAll => 'הכול';
+
+  @override
+  String get adminFilterOrganizationStatus => 'סטטוס ארגון';
+
+  @override
+  String get adminFilterSubscriptionStatus => 'סטטוס מינוי';
+
+  @override
+  String get adminClearFilters => 'ניקוי מסננים';
+
+  @override
+  String get adminPrevious => 'הקודם';
+
+  @override
+  String get adminNext => 'הבא';
+
+  @override
+  String get adminLoadMore => 'טען עוד';
+
+  @override
+  String get adminNoSubscribers => 'אין מנויים התואמים למסננים האלה';
+
+  @override
+  String get adminNoRestaurants => 'אין מסעדות התואמות למסננים האלה';
+
+  @override
+  String get adminNoAuditEvents => 'אין אירועי ביקורת';
+
+  @override
+  String get adminSortNameAsc => 'שם (א-ת)';
+
+  @override
+  String get adminSortNameDesc => 'שם (ת-א)';
+
+  @override
+  String get adminSortOldestFirst => 'הישן ביותר תחילה';
+
+  @override
+  String get adminSortNewestFirst => 'החדש ביותר תחילה';
+
+  @override
+  String get adminSortPeriodEndAsc => 'סוף תקופה (המוקדם ביותר)';
+
+  @override
+  String get adminSortPeriodEndDesc => 'סוף תקופה (המאוחר ביותר)';
+
+  @override
+  String get adminSortOrganizationAsc => 'ארגון (א-ת)';
+
+  @override
+  String get adminSortOrganizationDesc => 'ארגון (ת-א)';
+
+  @override
+  String get adminSubscriberDetailTitle => 'מנוי';
+
+  @override
+  String get adminOrganizationHeading => 'ארגון';
+
+  @override
+  String get adminCountsHeading => 'מונים';
+
+  @override
+  String get adminSubscriptionHeading => 'מינוי';
+
+  @override
+  String get adminRecentPlatformActivity => 'פעילות פלטפורמה אחרונה';
+
+  @override
+  String get adminNoActivityForSubscriber =>
+      'לא נרשמה פעילות פלטפורמה עבור מנוי זה';
+
+  @override
+  String get adminAuditActionLabel => 'פעולה';
+
+  @override
+  String get adminAuditReasonLabel => 'סיבה';
+
+  @override
+  String get adminAuditActorLabel => 'מבצע';
+
+  @override
+  String get adminAuditTargetLabel => 'יעד';
+
+  @override
+  String get adminAuditPlatformWide => 'כלל־הפלטפורמה';
+
+  @override
+  String get adminAuditFrom => 'מתאריך';
+
+  @override
+  String get adminAuditTo => 'עד תאריך';
+
+  @override
+  String get adminBranchesLabel => 'סניפים';
+
+  @override
+  String adminShowingRange(int first, int last, int total) {
+    return 'מוצג $first-$last מתוך $total';
+  }
+
+  @override
+  String get adminTodaySales => 'מכירות היום';
+
+  @override
+  String get adminOwnerContact => 'איש קשר של הבעלים';
+
+  @override
+  String get adminNoOwnerContact => 'אין בעלים פעיל';
+
+  @override
+  String adminMoreContacts(int count) {
+    return '+$count נוספים';
+  }
+
+  @override
+  String get adminSortSalesDesc => 'מכירות (מהגבוה)';
+
+  @override
+  String get adminSortSalesAsc => 'מכירות (מהנמוך)';
+
+  @override
+  String get adminSortOrdersDesc => 'הזמנות (מהגבוה)';
+
+  @override
+  String get adminSortOrdersAsc => 'הזמנות (מהנמוך)';
+
+  @override
+  String get adminFilterSalesToday => 'מכירות היום';
+
+  @override
+  String get adminFilterWithSales => 'עם מכירות';
+
+  @override
+  String get adminFilterNoSales => 'ללא מכירות';
+
+  @override
+  String get adminSalesTodayByCurrency => 'מכירות היום לפי מטבע';
+
+  @override
+  String get adminNoSalesTodayYet => 'לא נרשמו מכירות היום';
+
+  @override
+  String get adminBusinessDay => 'יום עסקים';
+
+  @override
+  String get adminOperationsNote =>
+      'המכירות הן נתוני המסעדה עצמה ליום העסקים שלה, הנקראים מאותו דוח שהבעלים רואה. מטבעות שונים לעולם אינם מחוברים יחד.';
 }
