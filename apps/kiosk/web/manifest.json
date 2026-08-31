@@ -3,7 +3,7 @@
     "short_name": "VEYRO Kiosk",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#FFFFFF",
     "theme_color": "#16335E",
     "description": "VEYRO Kiosk — customer self-service ordering.",
     "orientation": "portrait-primary",

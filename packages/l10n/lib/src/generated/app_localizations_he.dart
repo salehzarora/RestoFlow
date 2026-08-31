@@ -445,7 +445,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminAppTitle => 'VEYRO - ניהול';
 
   @override
-  String get welcomeMessage => 'ברוכים הבאים לVEYRO';
+  String get welcomeMessage => 'ברוכים הבאים ל-VEYRO';
 
   @override
   String get adminOverviewTitle => 'סקירת הפלטפורמה';
