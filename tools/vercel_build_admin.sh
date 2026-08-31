@@ -25,15 +25,25 @@
 # and never reaches an access log. It is single-use and expires in ~60 seconds.
 #
 # Vercel project settings for this project:
-#   Root directory ........ (repo root — leave blank)
-#   Install command ....... same pinned Flutter clone as vercel.json
-#   Build command ......... bash tools/vercel_build_admin.sh
-#   Output directory ...... apps/admin/build/web
+#   Root directory ........ apps/admin   (NOT blank — see below)
+#   Install / Build / Output / Rewrites ... come from apps/admin/vercel.json
 #   Environment ........... RESTOFLOW_SUPABASE_URL
 #                           RESTOFLOW_SUPABASE_ANON_KEY   (publishable/anon ONLY)
 #                           RESTOFLOW_DASHBOARD_URL
 #   Deployment protection . ON (this is an internal plane, not a public site)
-#   Rewrites .............. apps/admin/vercel.json (SPA fallback)
+#
+# WHY Root directory = apps/admin (ADMIN-126B2 fix). A Vercel project reads a
+# vercel.json ONLY from its Root Directory. With a BLANK root it would read the
+# REPO-ROOT vercel.json — the PUBLIC tenant project's config — which builds the
+# dashboard bundle and never runs this script, and apps/admin/vercel.json (incl.
+# its SPA rewrite) would be dead. Pointing the root at apps/admin makes
+# apps/admin/vercel.json authoritative: its install/build commands `cd ../..`
+# back to the repo root (Vercel still checks out the whole monorepo) so this
+# script and the pinned Flutter clone resolve exactly as before, and
+# outputDirectory `build/web` is apps/admin/build/web. The public project's
+# repo-root vercel.json + tools/vercel_build_web.sh are untouched, so
+# admin_web_target_125a_test.dart still proves the console never enters the
+# public build.
 # ============================================================================
 set -eo pipefail
 

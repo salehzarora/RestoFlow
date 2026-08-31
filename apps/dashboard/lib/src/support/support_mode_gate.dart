@@ -78,6 +78,16 @@ class _SupportModeGateState extends State<SupportModeGate> {
   late Future<PlatformSupportSession?> _future;
   bool _ended = false;
 
+  /// ADMIN-126B2: the handoff token is captured ONCE, at mount, and every
+  /// branch below reads THIS field — never `widget.handoffToken`. The parent
+  /// (`main.dart`'s supportGate closure) reads the URL fragment lazily and
+  /// rebuilds during the exchange (the auth flow's get_my_context resolves and
+  /// setStates), so `widget.handoffToken` flips token->null mid-exchange. A
+  /// captured value keeps the loading branch and the dead-handoff branch stable
+  /// across that rebuild instead of momentarily swapping the spinner for the
+  /// tenant/closed view.
+  late final String? _handoffToken = widget.handoffToken;
+
   @override
   void initState() {
     super.initState();
@@ -85,7 +95,7 @@ class _SupportModeGateState extends State<SupportModeGate> {
   }
 
   Future<PlatformSupportSession?> _resolve() async {
-    final token = widget.handoffToken;
+    final token = _handoffToken;
     if (token != null && token.isNotEmpty) {
       // Spend the handoff. Whether it succeeds or not, we then ask the server
       // what is actually live — the exchange response is a courtesy, the status
@@ -109,7 +119,7 @@ class _SupportModeGateState extends State<SupportModeGate> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           // Only ever brief, and only when a handoff is being spent.
-          return widget.handoffToken == null
+          return _handoffToken == null
               ? widget.child
               : const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
@@ -120,7 +130,7 @@ class _SupportModeGateState extends State<SupportModeGate> {
           // No live session: the ordinary tenant Dashboard, untouched. A
           // platform operator who lands here with a dead handoff sees exactly
           // what any member-less account sees.
-          return widget.handoffToken == null
+          return _handoffToken == null
               ? widget.child
               : const SupportSessionClosedView();
         }
@@ -316,6 +326,17 @@ class _SupportBannerState extends State<_SupportBanner> {
                       ),
                     ),
                   ),
+                  // ADMIN-126B2: the typed reason the operator gave, so the
+                  // tenant's own staff can see WHY someone is looking. Tenant-
+                  // adjacent free text, so it is bounded like the label.
+                  if (widget.session.reason.trim().isNotEmpty)
+                    bounded(
+                      Text(
+                        l10n.supportModeReason(widget.session.reason),
+                        key: const Key('support-mode-reason'),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
                   bounded(
                     Text(
                       expired

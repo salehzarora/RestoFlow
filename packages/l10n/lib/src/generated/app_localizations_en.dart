@@ -7543,6 +7543,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get supportModeReadOnly => 'Read-only in support mode';
 
   @override
+  String supportModeReason(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
   String get adminOpenDashboard => 'Open Dashboard';
 
   @override
@@ -7570,6 +7575,5 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSupportFailed => 'Could not start support access';
 
   @override
-  String get adminSupportUnavailable =>
-      'Support access is unavailable in demo mode';
+  String get adminSupportUnavailable => 'Support access is not available here';
 }

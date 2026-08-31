@@ -13630,6 +13630,12 @@ abstract class AppLocalizations {
   /// **'Read-only in support mode'**
   String get supportModeReadOnly;
 
+  /// ADMIN-126B2: the typed reason the operator gave, shown in the banner so the tenant's own staff can see why someone is looking.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String supportModeReason(String reason);
+
   /// ADMIN-126B: starts a short, audited, read-only support session and opens the tenant Dashboard.
   ///
   /// In en, this message translates to:
@@ -13678,10 +13684,10 @@ abstract class AppLocalizations {
   /// **'Could not start support access'**
   String get adminSupportFailed;
 
-  /// ADMIN-126B: the demo dataset has no live tenant to support.
+  /// ADMIN-126B/126B2: support access could not be started here — the demo dataset has no live tenant, or a real build is missing its backend configuration. Mode-neutral on purpose.
   ///
   /// In en, this message translates to:
-  /// **'Support access is unavailable in demo mode'**
+  /// **'Support access is not available here'**
   String get adminSupportUnavailable;
 }
 

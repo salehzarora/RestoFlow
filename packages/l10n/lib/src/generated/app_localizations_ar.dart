@@ -7487,6 +7487,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get supportModeReadOnly => 'للقراءة فقط في وضع الدعم';
 
   @override
+  String supportModeReason(String reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
   String get adminOpenDashboard => 'فتح لوحة التحكم';
 
   @override
@@ -7514,5 +7519,5 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminSupportFailed => 'تعذّر بدء وصول الدعم';
 
   @override
-  String get adminSupportUnavailable => 'وصول الدعم غير متاح في الوضع التجريبي';
+  String get adminSupportUnavailable => 'وصول الدعم غير متاح هنا';
 }

@@ -738,7 +738,17 @@ class _DashboardShellState extends State<DashboardShell> {
       // seam. The Overview binds it to a WidgetRef and executes typed
       // drill-downs; the shell learns nothing about filters, and no magic
       // number crosses this boundary.
-      onNavigate: (destination) => _goTo(destination, ref),
+      // ADMIN-126B2: a KPI drill-down must not reach a destination that support
+      // mode withholds (Orders, Activity). Those tiles are dropped from the
+      // rail, but the Overview's own drill-down seam bypassed that — so in
+      // support mode a drill-down to a hidden destination is a no-op, matching
+      // the navigation the operator is allowed.
+      onNavigate: (destination) {
+        if (supportMode && _navHidden(destination.tabIndex, supportMode)) {
+          return;
+        }
+        _goTo(destination, ref);
+      },
     );
   }
 

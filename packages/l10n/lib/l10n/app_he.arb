@@ -2293,6 +2293,7 @@
   "supportModeClosedTitle": "גישת התמיכה נסגרה",
   "supportModeClosedBody": "הפעילות הזו אינה פעילה עוד. התחל אחת חדשה ממסוף הפלטפורמה.",
   "supportModeReadOnly": "לקריאה בלבד במצב תמיכה",
+  "supportModeReason": "סיבה: {reason}",
   "adminOpenDashboard": "פתיחת לוח הבקרה",
   "adminSupportDialogTitle": "התחלת גישת תמיכה",
   "adminSupportDialogBody": "תצפה בלוח הבקרה של הלקוח הזה כעצמך, לקריאה בלבד, לזמן קצר. הפעילות נרשמת ביומן הביקורת.",
@@ -2301,5 +2302,5 @@
   "adminSupportReasonRequired": "חובה לציין סיבה",
   "adminSupportStarted": "גישת התמיכה הוחלה. לוח הבקרה נפתח בלשונית חדשה.",
   "adminSupportFailed": "לא ניתן להתחיל גישת תמיכה",
-  "adminSupportUnavailable": "גישת תמיכה אינה זמינה במצב דמו"
+  "adminSupportUnavailable": "גישת תמיכה אינה זמינה כאן"
 }

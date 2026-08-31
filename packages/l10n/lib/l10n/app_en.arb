@@ -4817,6 +4817,8 @@
   "@supportModeClosedBody": {"description": "ADMIN-126B: explains that there is no retry here - a handoff is single-use."},
   "supportModeReadOnly": "Read-only in support mode",
   "@supportModeReadOnly": {"description": "ADMIN-126B: why a write control is disabled. The server refuses the write regardless of this control."},
+  "supportModeReason": "Reason: {reason}",
+  "@supportModeReason": {"description": "ADMIN-126B2: the typed reason the operator gave, shown in the banner so the tenant's own staff can see why someone is looking.", "placeholders": {"reason": {"type": "String"}}},
   "adminOpenDashboard": "Open Dashboard",
   "@adminOpenDashboard": {"description": "ADMIN-126B: starts a short, audited, read-only support session and opens the tenant Dashboard."},
   "adminSupportDialogTitle": "Start support access",
@@ -4833,6 +4835,6 @@
   "@adminSupportStarted": {"description": "ADMIN-126B: confirmation after a successful handoff."},
   "adminSupportFailed": "Could not start support access",
   "@adminSupportFailed": {"description": "ADMIN-126B: shown when the server declines to open a support session."},
-  "adminSupportUnavailable": "Support access is unavailable in demo mode",
-  "@adminSupportUnavailable": {"description": "ADMIN-126B: the demo dataset has no live tenant to support."}
+  "adminSupportUnavailable": "Support access is not available here",
+  "@adminSupportUnavailable": {"description": "ADMIN-126B/126B2: support access could not be started here — the demo dataset has no live tenant, or a real build is missing its backend configuration. Mode-neutral on purpose."}
 }

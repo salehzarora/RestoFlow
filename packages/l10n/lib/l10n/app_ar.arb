@@ -2293,6 +2293,7 @@
   "supportModeClosedTitle": "أُغلق وصول الدعم",
   "supportModeClosedBody": "هذه الجلسة لم تعد نشطة. ابدأ جلسة جديدة من وحدة تحكم المنصة.",
   "supportModeReadOnly": "للقراءة فقط في وضع الدعم",
+  "supportModeReason": "السبب: {reason}",
   "adminOpenDashboard": "فتح لوحة التحكم",
   "adminSupportDialogTitle": "بدء وصول الدعم",
   "adminSupportDialogBody": "ستطّلع على لوحة تحكم هذا المشترك بهويتك أنت، للقراءة فقط، ولمدة قصيرة. تُسجّل الجلسة في سجل التدقيق.",
@@ -2301,5 +2302,5 @@
   "adminSupportReasonRequired": "السبب مطلوب",
   "adminSupportStarted": "بدأ وصول الدعم. فُتحت لوحة التحكم في علامة تبويب جديدة.",
   "adminSupportFailed": "تعذّر بدء وصول الدعم",
-  "adminSupportUnavailable": "وصول الدعم غير متاح في الوضع التجريبي"
+  "adminSupportUnavailable": "وصول الدعم غير متاح هنا"
 }

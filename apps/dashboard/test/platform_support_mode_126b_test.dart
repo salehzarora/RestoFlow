@@ -549,6 +549,137 @@ void main() {
       expect(session.remaining(DateTime(2026, 9, 3, 13, 0)), Duration.zero);
     });
   });
+
+  group('G. the handoff token survives a parent rebuild (126B2)', () {
+    testWidgets('a rebuild that drops widget.handoffToken mid-exchange does not '
+        'lose the token or flip the branch', (tester) async {
+      // Reproduce the production defect: main.dart reads the fragment lazily
+      // inside the supportGate closure, so a rebuild during the exchange passes
+      // handoffToken=null. The gate must keep exchanging and land on the
+      // support scaffold, never on the tenant child or the closed view.
+      final repo = _FakeSupportRepository(
+        exchanged: _session(restaurantName: 'Downtown'),
+        live: _session(restaurantName: 'Downtown'),
+      );
+      final rebuild = ValueNotifier<int>(0);
+      addTearDown(rebuild.dispose);
+      String? tokenFor(int build) => build == 0 ? 'tok-1' : null; // lazy re-read
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: ValueListenableBuilder<int>(
+            valueListenable: rebuild,
+            builder: (context, build, _) => SupportModeGate(
+              repository: repo,
+              handoffToken: tokenFor(build),
+              onSupport: (context, session) => const _BuildCounter(),
+              child: const Scaffold(body: Text('TENANT')),
+            ),
+          ),
+        ),
+      );
+      // First frame: exchange is in flight; force the parent rebuild that used
+      // to pass null and swap the spinner for the tenant child.
+      rebuild.value = 1;
+      await tester.pump();
+      expect(find.text('TENANT'), findsNothing,
+          reason: 'the tenant dashboard must not flash during the exchange');
+      await tester.pumpAndSettle();
+      // The exchange still ran exactly once, with the captured token, and the
+      // support scaffold is shown.
+      expect(repo.exchangeCalls, ['tok-1']);
+      expect(find.text('SUPPORT'), findsOneWidget);
+      expect(find.text('TENANT'), findsNothing);
+    });
+
+    testWidgets('a spent handoff whose parent later passes null still lands on '
+        'the closed view, not the tenant dashboard', (tester) async {
+      final repo = _FakeSupportRepository(exchanged: null, live: null);
+      final rebuild = ValueNotifier<int>(0);
+      addTearDown(rebuild.dispose);
+      final l10n = await strings();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: ValueListenableBuilder<int>(
+            valueListenable: rebuild,
+            builder: (context, build, _) => SupportModeGate(
+              repository: repo,
+              handoffToken: build == 0 ? 'spent' : null,
+              onSupport: (context, session) => const _BuildCounter(),
+              child: const Scaffold(body: Text('TENANT')),
+            ),
+          ),
+        ),
+      );
+      rebuild.value = 1;
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.supportModeClosedTitle), findsOneWidget);
+      expect(find.text('TENANT'), findsNothing);
+    });
+  });
+
+  group('I. withheld destinations stay unreadable in support mode (126B2)', () {
+    test('Orders and Activity are the drill-down targets support withholds', () {
+      // The Overview KPI drill-downs target these; the shell suppresses a
+      // support-mode drill-down by consulting exactly this flag (the same one
+      // that drops their rail tiles), so a silent flip to readable would break
+      // both the rail AND the drill-down guard together — and this pins it.
+      expect(DashboardDestination.orders.readableInSupportMode, isFalse);
+      expect(DashboardDestination.activity.readableInSupportMode, isFalse);
+      expect(DashboardDestination.staff.readableInSupportMode, isFalse);
+      expect(DashboardDestination.users.readableInSupportMode, isFalse);
+      // Overview and the report/catalog surfaces stay reachable.
+      expect(DashboardDestination.overview.readableInSupportMode, isTrue);
+      expect(DashboardDestination.menu.readableInSupportMode, isTrue);
+      expect(DashboardDestination.tables.readableInSupportMode, isTrue);
+    });
+  });
+
+  group('H. the banner shows the typed reason (126B2)', () {
+    testWidgets('the reason is rendered so tenant staff can see why', (
+      tester,
+    ) async {
+      final l10n = await strings();
+      await _pump(
+        tester,
+        SupportModeScaffold(
+          session: _session(restaurantName: 'Downtown'),
+          onEnd: () async {},
+          clock: () => DateTime(2026, 9, 3, 12, 5),
+          child: const _BuildCounter(),
+        ),
+      );
+      expect(find.byKey(const Key('support-mode-reason')), findsOneWidget);
+      expect(
+        find.text(l10n.supportModeReason(
+            'investigating a reported missing sales figure')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('ar: the reason renders RTL without overflow', (tester) async {
+      await _pump(
+        tester,
+        SupportModeScaffold(
+          session: _session(restaurantName: 'وسط البلد'),
+          onEnd: () async {},
+          clock: () => DateTime(2026, 9, 3, 12, 5),
+          child: const _BuildCounter(),
+        ),
+        locale: 'ar',
+        size: const Size(430, 900),
+      );
+      expect(find.byKey(const Key('support-mode-reason')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
 
 /// Counts how many times the widget standing in for the Dashboard is built.

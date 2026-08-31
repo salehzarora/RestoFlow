@@ -7438,6 +7438,11 @@ class AppLocalizationsHe extends AppLocalizations {
   String get supportModeReadOnly => 'לקריאה בלבד במצב תמיכה';
 
   @override
+  String supportModeReason(String reason) {
+    return 'סיבה: $reason';
+  }
+
+  @override
   String get adminOpenDashboard => 'פתיחת לוח הבקרה';
 
   @override
@@ -7464,5 +7469,5 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminSupportFailed => 'לא ניתן להתחיל גישת תמיכה';
 
   @override
-  String get adminSupportUnavailable => 'גישת תמיכה אינה זמינה במצב דמו';
+  String get adminSupportUnavailable => 'גישת תמיכה אינה זמינה כאן';
 }
