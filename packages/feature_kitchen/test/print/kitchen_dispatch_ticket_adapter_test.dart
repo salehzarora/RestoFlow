@@ -29,7 +29,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
   additionLabel: 'Addition',
   roundLabel: (n) => 'Round $n',
-  restaurantNameFallback: 'RestoFlow',
+  restaurantNameFallback: 'Demo Bistro',
 );
 
 /// The OWNER FIXTURE: `qty × Classic Burger 240g` — the 240g size option

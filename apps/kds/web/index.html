@@ -18,18 +18,18 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="RestoFlow KDS — kitchen display demo (in-memory M5 demo).">
+  <meta name="description" content="VEYRO KDS — kitchen display system.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="RestoFlow KDS">
+  <meta name="apple-mobile-web-app-title" content="VEYRO KDS">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>RestoFlow KDS</title>
+  <title>VEYRO KDS</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -45,7 +45,7 @@
     WEB-AUTH-SESSION-ISOLATION-001 — this device surface must not join the
     cross-tab Supabase auth channel.
 
-    RestoFlow serves the Dashboard, POS and KDS from ONE origin (/, /pos/,
+    VEYRO serves the Dashboard, POS and KDS from ONE origin (/, /pos/,
     /kds/). GoTrue opens a BroadcastChannel named "sb-<project-ref>-auth-token"
     in its client constructor, unconditionally on web, and names it from the
     project URL — there is no public option to rename or disable it. Every

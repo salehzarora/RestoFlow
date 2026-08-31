@@ -319,48 +319,48 @@ List<PlatformAuditSeed> demoAuditFeed() {
   const reads = <(String action, String reason, String? target)>[
     (
       'platform.console.overview',
-      'RestoFlow admin: platform overview (read-only)',
+      'VEYRO admin: platform overview (read-only)',
       null,
     ),
     (
       'platform.subscribers.list',
-      'RestoFlow admin: subscriber list (read-only)',
+      'VEYRO admin: subscriber list (read-only)',
       null,
     ),
     (
       'platform.subscriber.detail',
-      'RestoFlow admin: subscriber detail (read-only)',
+      'VEYRO admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a1',
     ),
     (
       'platform.subscriber.detail',
-      'RestoFlow admin: subscriber detail (read-only)',
+      'VEYRO admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a5',
     ),
     (
       'platform.restaurants.list',
-      'RestoFlow admin: restaurant list (read-only)',
+      'VEYRO admin: restaurant list (read-only)',
       null,
     ),
-    ('platform.audit.search', 'RestoFlow admin: audit log (read-only)', null),
+    ('platform.audit.search', 'VEYRO admin: audit log (read-only)', null),
     (
       'platform.organizations.overview',
-      'RestoFlow admin app: platform overview (read-only)',
+      'VEYRO admin app: platform overview (read-only)',
       null,
     ),
     (
       'platform.organization.detail',
-      'RestoFlow admin: subscriber detail (read-only)',
+      'VEYRO admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a2',
     ),
     (
       'platform.audit.read',
-      'RestoFlow admin app: platform overview (read-only)',
+      'VEYRO admin app: platform overview (read-only)',
       null,
     ),
     (
       'platform.subscribers.list',
-      'RestoFlow admin: subscriber list (read-only)',
+      'VEYRO admin: subscriber list (read-only)',
       null,
     ),
   ];

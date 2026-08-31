@@ -111,13 +111,13 @@ class DemoAuditFilterOptionsRepository implements AuditFilterOptionsRepository {
       organizationId: 'demo-org-1',
       branchId: demoBranchDowntown,
       restaurantId: 'demo-rest-1',
-      label: 'RestoFlow · Downtown',
+      label: 'Demo Bistro · Downtown',
     ),
     AuditBranchOption(
       organizationId: 'demo-org-1',
       branchId: demoBranchHarbor,
       restaurantId: 'demo-rest-1',
-      label: 'RestoFlow · Harbor',
+      label: 'Demo Bistro · Harbor',
     ),
   ];
 

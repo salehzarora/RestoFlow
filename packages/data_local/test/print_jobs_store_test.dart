@@ -145,7 +145,7 @@ void main() {
     () async {
       final doc = PrintDocument([
         const PrintTextLine(
-          'RestoFlow',
+          'VEYRO',
           alignment: PrintAlignment.center,
           emphasis: TextEmphasis.bold,
         ),

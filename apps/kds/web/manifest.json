@@ -1,11 +1,11 @@
 {
-    "name": "RestoFlow KDS",
-    "short_name": "RestoFlow KDS",
+    "name": "VEYRO KDS",
+    "short_name": "VEYRO KDS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "RestoFlow KDS — kitchen display demo (in-memory M5 demo).",
+    "description": "VEYRO KDS — kitchen display system.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

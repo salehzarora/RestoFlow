@@ -895,31 +895,31 @@ abstract class AppLocalizations {
   /// The product name, shown across all surfaces.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow'**
+  /// **'VEYRO'**
   String get appName;
 
   /// Window/app title for the POS cashier app.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow POS'**
+  /// **'VEYRO POS'**
   String get posAppTitle;
 
   /// Window/app title for the Kitchen Display System app.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow KDS'**
+  /// **'VEYRO KDS'**
   String get kdsAppTitle;
 
   /// Window/app title for the owner/manager dashboard app.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow Dashboard'**
+  /// **'VEYRO Dashboard'**
   String get dashboardAppTitle;
 
   /// The short product wordmark shown in the dashboard side-rail brand lockup (RF-132).
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow'**
+  /// **'VEYRO'**
   String get dashboardBrandName;
 
   /// The muted tagline under the side-rail wordmark identifying this surface (RF-132).
@@ -931,13 +931,13 @@ abstract class AppLocalizations {
   /// Window/app title for the platform admin app.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow Admin'**
+  /// **'VEYRO Admin'**
   String get adminAppTitle;
 
   /// Generic welcome message shown on the scaffold body.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to RestoFlow'**
+  /// **'Welcome to VEYRO'**
   String get welcomeMessage;
 
   /// Platform-admin overview page heading.
@@ -2563,7 +2563,7 @@ abstract class AppLocalizations {
   /// Demo restaurant name printed at the top of the receipt preview.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow Demo Restaurant'**
+  /// **'Demo Bistro'**
   String get receiptDemoRestaurantName;
 
   /// KDS action on a kitchen order card that opens the kitchen-ticket print preview.
@@ -3655,7 +3655,7 @@ abstract class AppLocalizations {
   /// Body of the real-mode-unconfigured help page explaining why the app is locked.
   ///
   /// In en, this message translates to:
-  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.'**
+  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. VEYRO never fakes a backend, so real mode stays locked until valid settings are provided.'**
   String get authRealModeUnconfiguredBody;
 
   /// Heading above the code block listing the required --dart-define values for real mode.
@@ -3679,7 +3679,7 @@ abstract class AppLocalizations {
   /// Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it.
   ///
   /// In en, this message translates to:
-  /// **'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.'**
+  /// **'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. VEYRO never presents demo data as production.'**
   String get authProductionDemoBlockedBody;
 
   /// Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend.
@@ -5485,7 +5485,7 @@ abstract class AppLocalizations {
   /// Heading on the dashboard sign-in / create-account screen (RF-151).
   ///
   /// In en, this message translates to:
-  /// **'Welcome to RestoFlow'**
+  /// **'Welcome to VEYRO'**
   String get authWelcomeTitle;
 
   /// Muted tagline under the brand mark on login/pairing screens.
@@ -5575,7 +5575,7 @@ abstract class AppLocalizations {
   /// Intro text on the restaurant onboarding screen.
   ///
   /// In en, this message translates to:
-  /// **'Create your restaurant to start using RestoFlow.'**
+  /// **'Create your restaurant to start using VEYRO.'**
   String get onboardingIntro;
 
   /// Restaurant-name field label on the onboarding form.
@@ -7699,7 +7699,7 @@ abstract class AppLocalizations {
   /// POS honest note on the payment sheet for a non-cash tender: RestoFlow records the tender but processes no charge.
   ///
   /// In en, this message translates to:
-  /// **'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.'**
+  /// **'External payment recorded — VEYRO does not process the card or transfer; no real charge is made.'**
   String get posNonCashNote;
 
   /// DESIGN-001: title of the pinned danger banner in the payment sheet after a failed payment push (previously a silent failure).
@@ -8305,7 +8305,7 @@ abstract class AppLocalizations {
   /// POS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-003).
   ///
   /// In en, this message translates to:
-  /// **'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.'**
+  /// **'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.'**
   String get posBluetoothPermissionRequired;
 
   /// POS message when the Bluetooth adapter is off (ANDROID-003).
@@ -8431,7 +8431,7 @@ abstract class AppLocalizations {
   /// KDS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-004).
   ///
   /// In en, this message translates to:
-  /// **'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.'**
+  /// **'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.'**
   String get kdsPrinterBluetoothPermissionRequired;
 
   /// Dashboard left-nav label for the order-history surface (ORDERS-HISTORY-001).
@@ -10921,7 +10921,7 @@ abstract class AppLocalizations {
   /// First line of the stacked top-bar wordmark (POS-THEME-NAVBAR-POLISH-001): the brand name alone.
   ///
   /// In en, this message translates to:
-  /// **'RestoFlow'**
+  /// **'VEYRO'**
   String get posBrandName;
 
   /// Second, smaller line of the stacked top-bar wordmark: the product line under the brand name.
@@ -11887,8 +11887,14 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Powered by RestoFlow · Kiosk {device}'**
+  /// **'Powered by VEYRO · Kiosk {device}'**
   String kioskPoweredBy(String device);
+
+  /// VEYRO-REBRAND: plain platform attribution on the kiosk confirm slip (no device suffix).
+  ///
+  /// In en, this message translates to:
+  /// **'Powered by VEYRO'**
+  String get kioskPoweredByShort;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
@@ -12613,7 +12619,7 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Upload an .mp4 in the RestoFlow dashboard → Devices. It syncs to the device and loops on idle, muted.'**
+  /// **'Upload an .mp4 in the VEYRO dashboard → Devices. It syncs to the device and loops on idle, muted.'**
   String get kioskSettingsVideoHint;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).

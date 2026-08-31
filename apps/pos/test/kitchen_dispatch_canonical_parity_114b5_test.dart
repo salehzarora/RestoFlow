@@ -30,7 +30,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
   additionLabel: 'Addition',
   roundLabel: (n) => 'Round $n',
-  restaurantNameFallback: 'RestoFlow',
+  restaurantNameFallback: 'Demo Bistro',
 );
 
 /// The owner fixture as the POS CART sees it: 2 × Classic Burger, the 240g size

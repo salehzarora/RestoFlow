@@ -1,11 +1,11 @@
 {
-    "name": "RestoFlow Dashboard",
-    "short_name": "RestoFlow Dashboard",
+    "name": "VEYRO Dashboard",
+    "short_name": "VEYRO Dashboard",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "RestoFlow Dashboard — owner reports demo (in-memory M5 demo).",
+    "description": "VEYRO Dashboard — restaurant operations, reporting, and management.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

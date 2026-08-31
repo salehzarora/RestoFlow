@@ -41,16 +41,14 @@ import 'platform_admin_repository.dart';
 /// distinguishes which console surface an operator actually opened. The server
 /// requires a non-empty reason and stores it verbatim.
 const String kReasonConsoleOverview =
-    'RestoFlow admin: platform overview (read-only)';
-const String kReasonSubscriberList =
-    'RestoFlow admin: subscriber list (read-only)';
+    'VEYRO admin: platform overview (read-only)';
+const String kReasonSubscriberList = 'VEYRO admin: subscriber list (read-only)';
 const String kReasonSubscriberDetail =
-    'RestoFlow admin: subscriber detail (read-only)';
-const String kReasonRestaurantList =
-    'RestoFlow admin: restaurant list (read-only)';
-const String kReasonAuditLog = 'RestoFlow admin: audit log (read-only)';
+    'VEYRO admin: subscriber detail (read-only)';
+const String kReasonRestaurantList = 'VEYRO admin: restaurant list (read-only)';
+const String kReasonAuditLog = 'VEYRO admin: audit log (read-only)';
 const String kReasonRestaurantOperations =
-    'RestoFlow admin: restaurant operations (read-only)';
+    'VEYRO admin: restaurant operations (read-only)';
 
 /// Reads the platform console from the ADMIN-125C.1 public wrappers.
 class RealPlatformAdminRepository implements PlatformAdminRepository {

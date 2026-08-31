@@ -294,7 +294,7 @@ void main() {
             organizationId: 'org-1',
             branchId: 'demo-branch-harbor',
             restaurantId: 'demo-rest-1',
-            label: 'RestoFlow · Harbor',
+            label: 'Demo Bistro · Harbor',
           ),
         );
     await tester.pumpAndSettle();

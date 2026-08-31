@@ -26,7 +26,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
   additionLabel: 'Addition',
   roundLabel: (n) => 'Round $n',
-  restaurantNameFallback: 'RestoFlow',
+  restaurantNameFallback: 'Demo Bistro',
 );
 
 final _createdAt = DateTime(2026, 8, 25, 14, 7);

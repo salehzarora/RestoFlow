@@ -429,28 +429,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogCapCloseShift => 'إغلاق الوردية';
 
   @override
-  String get appName => 'ريستوفلو';
+  String get appName => 'VEYRO';
 
   @override
-  String get posAppTitle => 'ريستوفلو - نقطة البيع';
+  String get posAppTitle => 'VEYRO - نقطة البيع';
 
   @override
-  String get kdsAppTitle => 'ريستوفلو - شاشة المطبخ';
+  String get kdsAppTitle => 'VEYRO - شاشة المطبخ';
 
   @override
-  String get dashboardAppTitle => 'ريستوفلو - لوحة التحكم';
+  String get dashboardAppTitle => 'VEYRO - لوحة التحكم';
 
   @override
-  String get dashboardBrandName => 'ريستوفلو';
+  String get dashboardBrandName => 'VEYRO';
 
   @override
   String get dashboardBrandTagline => 'لوحة التحكم';
 
   @override
-  String get adminAppTitle => 'ريستوفلو - الإدارة';
+  String get adminAppTitle => 'VEYRO - الإدارة';
 
   @override
-  String get welcomeMessage => 'مرحبًا بك في ريستوفلو';
+  String get welcomeMessage => 'مرحبًا بك في VEYRO';
 
   @override
   String get adminOverviewTitle => 'نظرة عامة على المنصة';
@@ -1341,7 +1341,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get receiptPreviewTitle => 'معاينة الإيصال';
 
   @override
-  String get receiptDemoRestaurantName => 'مطعم RestoFlow التجريبي';
+  String get receiptDemoRestaurantName => 'بيسترو تجريبي';
 
   @override
   String get kdsPreviewTicketAction => 'معاينة التذكرة';
@@ -1930,7 +1930,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authRealModeUnconfiguredBody =>
-      'تم تشغيل التطبيق في الوضع الحقيقي، لكن إعدادات الاتصال بالخادم مفقودة أو غير صالحة. RestoFlow لا يزيّف الخادم أبدًا، لذا يبقى الوضع الحقيقي مقفلاً حتى يتم توفير إعدادات صالحة.';
+      'تم تشغيل التطبيق في الوضع الحقيقي، لكن إعدادات الاتصال بالخادم مفقودة أو غير صالحة. VEYRO لا يزيّف الخادم أبدًا، لذا يبقى الوضع الحقيقي مقفلاً حتى يتم توفير إعدادات صالحة.';
 
   @override
   String get authRealModeUnconfiguredHowTo => 'شغّل التطبيق بهذه القيم';
@@ -1945,7 +1945,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authProductionDemoBlockedBody =>
-      'يحتوي هذا الإصدار على إعدادات اتصال خلفية صالحة لكنه يعمل في الوضع التجريبي، لذا سيعرض بيانات تجريبية كأنها بيانات حقيقية. أوقِف الوضع التجريبي لعرض البيانات الحقيقية، أو أزِل إعدادات الاتصال لتشغيل النسخة التجريبية. لا يعرض RestoFlow البيانات التجريبية أبدًا كأنها بيانات إنتاج.';
+      'يحتوي هذا الإصدار على إعدادات اتصال خلفية صالحة لكنه يعمل في الوضع التجريبي، لذا سيعرض بيانات تجريبية كأنها بيانات حقيقية. أوقِف الوضع التجريبي لعرض البيانات الحقيقية، أو أزِل إعدادات الاتصال لتشغيل النسخة التجريبية. لا يعرض VEYRO البيانات التجريبية أبدًا كأنها بيانات إنتاج.';
 
   @override
   String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
@@ -2953,7 +2953,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDeviceUpdated => 'تم تحديث الجهاز';
 
   @override
-  String get authWelcomeTitle => 'مرحبًا بك في RestoFlow';
+  String get authWelcomeTitle => 'مرحبًا بك في VEYRO';
 
   @override
   String get authBrandTagline => 'نظام تشغيل المطاعم';
@@ -3000,7 +3000,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get onboardingTitle => 'إعداد مطعمك';
 
   @override
-  String get onboardingIntro => 'أنشئ مطعمك لبدء استخدام RestoFlow.';
+  String get onboardingIntro => 'أنشئ مطعمك لبدء استخدام VEYRO.';
 
   @override
   String get onboardingRestaurantNameLabel => 'اسم المطعم';
@@ -4187,7 +4187,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posNonCashNote =>
-      'دفعة خارجية مُسجّلة — لا يقوم RestoFlow بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
+      'دفعة خارجية مُسجّلة — لا يقوم VEYRO بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
 
   @override
   String get posPaymentFailedTitle => 'لم يتم تسجيل الدفعة';
@@ -4517,7 +4517,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posBluetoothPermissionRequired =>
-      'إذن البلوتوث مطلوب. اسمح به لـ RestoFlow من إعدادات أندرويد ثم حدّث.';
+      'إذن البلوتوث مطلوب. اسمح به لـ VEYRO من إعدادات أندرويد ثم حدّث.';
 
   @override
   String get posBluetoothOff => 'البلوتوث مُطفأ — شغّله ثم حدّث.';
@@ -4584,7 +4584,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
-      'إذن البلوتوث مطلوب. اسمح به لتطبيق RestoFlow في إعدادات أندرويد ثم حدّث.';
+      'إذن البلوتوث مطلوب. اسمح به لتطبيق VEYRO في إعدادات أندرويد ثم حدّث.';
 
   @override
   String get dashboardNavOrders => 'الطلبات';
@@ -5986,7 +5986,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posSending => 'جارٍ الإرسال…';
 
   @override
-  String get posBrandName => 'ريستوفلو';
+  String get posBrandName => 'VEYRO';
 
   @override
   String get posBrandTagline => 'نقطة بيع';
@@ -6544,8 +6544,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String kioskPoweredBy(String device) {
-    return 'مشغّل بواسطة RestoFlow · جهاز $device';
+    return 'مشغّل بواسطة VEYRO · جهاز $device';
   }
+
+  @override
+  String get kioskPoweredByShort => 'مشغّل بواسطة VEYRO';
 
   @override
   String get kioskGroupWeight => 'اختر وزن اللحم';
@@ -6931,7 +6934,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kioskSettingsVideoHint =>
-      'ارفع ملف .mp4 من لوحة تحكم RestoFlow ← الأجهزة. سيتزامن مع الجهاز ويُعرض عند الخمول بدون صوت.';
+      'ارفع ملف .mp4 من لوحة تحكم VEYRO ← الأجهزة. سيتزامن مع الجهاز ويُعرض عند الخمول بدون صوت.';
 
   @override
   String get kioskSettingsPrinterSection => 'طابعة القسائم';

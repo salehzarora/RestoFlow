@@ -63,7 +63,7 @@ const _harborOption = AuditBranchOption(
   organizationId: 'demo-org-1',
   branchId: demoBranchHarbor,
   restaurantId: 'demo-rest-1',
-  label: 'RestoFlow · Harbor',
+  label: 'Demo Bistro · Harbor',
 );
 
 /// Whether [part] appears inside [whole] in the same relative order.
@@ -140,7 +140,7 @@ void main() {
               organizationId: 'demo-org-1',
               branchId: demoBranchHarbor,
               restaurantId: 'demo-rest-1',
-              label: 'RestoFlow · Harbor',
+              label: 'Demo Bistro · Harbor',
             ),
           ),
         );
@@ -179,7 +179,7 @@ void main() {
             organizationId: 'demo-org-1',
             branchId: demoBranchDowntown,
             restaurantId: 'demo-rest-1',
-            label: 'RestoFlow · Downtown',
+            label: 'Demo Bistro · Downtown',
           ),
         ),
       );
@@ -197,7 +197,7 @@ void main() {
             organizationId: 'demo-org-1',
             branchId: demoBranchHarbor,
             restaurantId: 'demo-rest-1',
-            label: 'RestoFlow · Harbor',
+            label: 'Demo Bistro · Harbor',
           ),
         ),
       );
@@ -404,7 +404,7 @@ void main() {
       final all = _resultIds(c);
       expect(all.length, greaterThan(2));
 
-      await _pick(tester, 'activity-branch-filter', 'RestoFlow · Harbor');
+      await _pick(tester, 'activity-branch-filter', 'Demo Bistro · Harbor');
       await _pick(tester, 'activity-actor-filter', 'Amira');
 
       final ids = _resultIds(c);
@@ -471,7 +471,7 @@ void main() {
       );
       final before = _resultIds(c);
 
-      await _pick(tester, 'activity-branch-filter', 'RestoFlow · Harbor');
+      await _pick(tester, 'activity-branch-filter', 'Demo Bistro · Harbor');
       await _pick(tester, 'activity-actor-filter', 'Amira');
       expect(_resultIds(c).length, lessThan(before.length));
 
