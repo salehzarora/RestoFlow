@@ -2956,7 +2956,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get authWelcomeTitle => 'مرحبًا بك في VEYRO';
 
   @override
-  String get authBrandTagline => 'نظام تشغيل المطاعم';
+  String get authBrandTagline => 'نقاط البيع والعمليات';
 
   @override
   String get authSignInTab => 'تسجيل الدخول';

@@ -5491,7 +5491,7 @@ abstract class AppLocalizations {
   /// Muted tagline under the brand mark on login/pairing screens.
   ///
   /// In en, this message translates to:
-  /// **'Restaurant operating system'**
+  /// **'POS & Operations'**
   String get authBrandTagline;
 
   /// Segmented control option / action for signing in (RF-151).

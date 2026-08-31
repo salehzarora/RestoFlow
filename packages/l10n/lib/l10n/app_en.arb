@@ -2152,7 +2152,7 @@
   "adminDeviceUpdated": "Device updated",
   "authWelcomeTitle": "Welcome to VEYRO",
   "@authWelcomeTitle": {"description": "Heading on the dashboard sign-in / create-account screen (RF-151)."},
-  "authBrandTagline": "Restaurant operating system",
+  "authBrandTagline": "POS & Operations",
   "@authBrandTagline": {"description": "Muted tagline under the brand mark on login/pairing screens."},
   "authSignInTab": "Sign in",
   "@authSignInTab": {"description": "Segmented control option / action for signing in (RF-151)."},

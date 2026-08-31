@@ -2976,7 +2976,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authWelcomeTitle => 'Welcome to VEYRO';
 
   @override
-  String get authBrandTagline => 'Restaurant operating system';
+  String get authBrandTagline => 'POS & Operations';
 
   @override
   String get authSignInTab => 'Sign in';
