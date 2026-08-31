@@ -563,7 +563,8 @@ void main() {
       );
       final rebuild = ValueNotifier<int>(0);
       addTearDown(rebuild.dispose);
-      String? tokenFor(int build) => build == 0 ? 'tok-1' : null; // lazy re-read
+      String? tokenFor(int build) =>
+          build == 0 ? 'tok-1' : null; // lazy re-read
 
       await tester.pumpWidget(
         MaterialApp(
@@ -585,8 +586,11 @@ void main() {
       // to pass null and swap the spinner for the tenant child.
       rebuild.value = 1;
       await tester.pump();
-      expect(find.text('TENANT'), findsNothing,
-          reason: 'the tenant dashboard must not flash during the exchange');
+      expect(
+        find.text('TENANT'),
+        findsNothing,
+        reason: 'the tenant dashboard must not flash during the exchange',
+      );
       await tester.pumpAndSettle();
       // The exchange still ran exactly once, with the captured token, and the
       // support scaffold is shown.
@@ -658,8 +662,11 @@ void main() {
       );
       expect(find.byKey(const Key('support-mode-reason')), findsOneWidget);
       expect(
-        find.text(l10n.supportModeReason(
-            'investigating a reported missing sales figure')),
+        find.text(
+          l10n.supportModeReason(
+            'investigating a reported missing sales figure',
+          ),
+        ),
         findsOneWidget,
       );
     });
