@@ -54,10 +54,25 @@ class RestoflowBrandMark extends StatelessWidget {
           borderRadius: BorderRadius.circular(RestoflowRadii.lg),
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
-        child: const Image(
-          image: AssetImage(markAsset, package: _package),
+        child: Image(
+          image: const AssetImage(markAsset, package: _package),
           fit: BoxFit.contain,
           excludeFromSemantics: true,
+          // If the bundled mark ever fails to resolve (e.g. a test asset
+          // bundle without package assets), degrade to the wordmark initial on
+          // the tile rather than surfacing an image-resource exception — the
+          // adjacent VEYRO title still carries the brand.
+          errorBuilder: (context, error, stack) => Center(
+            child: FittedBox(
+              child: Text(
+                'V',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
