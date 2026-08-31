@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_admin/src/data/console_models.dart';
 import 'package:restoflow_admin/src/data/platform_admin_repository.dart';
 import 'package:restoflow_admin/src/data/platform_admin_source.dart';
+import 'package:restoflow_admin/src/data/support_access.dart';
 import 'package:restoflow_admin/src/platform_admin_screen.dart';
 import 'package:restoflow_admin/src/state/platform_admin_providers.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
@@ -47,6 +48,9 @@ Widget consoleApp({
   bool isDemoMode = true,
   String? operatorEmail,
   VoidCallback? onSignOut,
+  PlatformSupportLauncher? supportLauncher,
+  void Function(String url)? openUrl,
+  String dashboardUrl = 'https://dashboard.test',
 }) => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
@@ -55,6 +59,14 @@ Widget consoleApp({
     platformAdminRepositoryProvider.overrideWithValue(
       repo ?? const DemoPlatformAdminRepository(),
     ),
+    // ADMIN-126B. Always present, never conditional — see the note above.
+    platformSupportLauncherProvider.overrideWithValue(
+      supportLauncher ?? const DemoPlatformSupportLauncher(),
+    ),
+    // A test must never open a real browser tab, and the URL it WOULD have
+    // opened is the only place the one-time handoff is observable.
+    supportUrlOpenerProvider.overrideWithValue(openUrl ?? (_) {}),
+    dashboardUrlProvider.overrideWithValue(dashboardUrl),
   ],
   child: MaterialApp(
     locale: locale,
@@ -99,8 +111,16 @@ Future<void> goToSection(WidgetTester tester, String label) async {
     await tester.pumpAndSettle();
     return;
   }
-  // Below the rail breakpoint the destinations live in a drawer.
-  await tester.tap(find.byTooltip('Open navigation menu'));
+  // Below the rail breakpoint the destinations live in a drawer. The opener is
+  // found by TYPE, not by its tooltip: the tooltip is localized, so a
+  // tooltip-based finder silently stops working the moment a test runs in
+  // Arabic or Hebrew.
+  final opener = find.byType(DrawerButton);
+  await tester.tap(
+    opener.evaluate().isNotEmpty
+        ? opener.first
+        : find.byTooltip('Open navigation menu'),
+  );
   await tester.pumpAndSettle();
   await tester.tap(
     find

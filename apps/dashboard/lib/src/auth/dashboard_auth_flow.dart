@@ -43,6 +43,7 @@ class DashboardAuthFlow extends StatefulWidget {
     this.onboardingRepository,
     this.selectedContextStore,
     this.deviceContext,
+    this.supportGate,
     this.contextRetryBackoff = const Duration(milliseconds: 350),
     super.key,
   });
@@ -66,6 +67,15 @@ class DashboardAuthFlow extends StatefulWidget {
   /// The org/branch-scoped device context, cleared on sign-out (RF-152
   /// foundation). Null => an internal controller (absent by default).
   final DeviceContextController? deviceContext;
+
+  /// ADMIN-126B: wraps the SIGNED-IN gate so a live platform-support session can
+  /// short-circuit it, receiving the ordinary tenant gate as its fallback child.
+  ///
+  /// Placed here rather than around the whole flow because support mode needs an
+  /// authenticated session to ask the server anything; by this point there is
+  /// one. Null — the default, and every test below — leaves the tenant path
+  /// bit-for-bit unchanged.
+  final Widget Function(BuildContext context, Widget tenantGate)? supportGate;
 
   /// Delay between bounded context-reload retries (LIVE-DASHBOARD-001).
   ///
@@ -232,7 +242,12 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
           onSignedUpWithSession: _onSignedUpWithSession,
         );
       case AuthSessionStatus.signedIn:
-        return _signedInGate(context);
+        final tenantGate = _signedInGate(context);
+        // ADMIN-126B: a platform operator holds no membership, so the gate below
+        // would (correctly) send them to onboarding. The support wrapper gets
+        // first refusal; with no live session it hands the tenant gate straight
+        // back.
+        return widget.supportGate?.call(context, tenantGate) ?? tenantGate;
     }
   }
 

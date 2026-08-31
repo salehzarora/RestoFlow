@@ -22,6 +22,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/console_models.dart';
 import '../state/platform_admin_providers.dart';
 import 'console_widgets.dart';
+import 'support_action.dart';
 
 class ConsoleSubscriberDetailPage extends ConsumerWidget {
   const ConsoleSubscriberDetailPage({
@@ -114,6 +115,19 @@ class _Content extends ConsumerWidget {
         ConsoleFact(
           label: l10n.adminDefaultCurrency,
           value: org.defaultCurrency,
+        ),
+        // ADMIN-126B: organization-wide support access. The server still
+        // decides what may be read; this only asks for a session.
+        Padding(
+          padding: const EdgeInsets.only(top: RestoflowSpacing.md),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OpenDashboardButton(
+              organizationId: org.id,
+              organizationName: org.name,
+              compact: false,
+            ),
+          ),
         ),
       ],
     );
@@ -225,7 +239,17 @@ class _Content extends ConsumerWidget {
               key: Key('subscriber-restaurant-${restaurant.id}'),
               title: restaurant.name,
               meta: ['${l10n.adminBranchesLabel}: ${restaurant.branchesCount}'],
-              trailing: [ConsoleStatusPill(status: restaurant.status)],
+              trailing: [
+                ConsoleStatusPill(status: restaurant.status),
+                // ADMIN-126B: read-only support access, scoped to this one
+                // restaurant rather than the whole organization.
+                OpenDashboardButton(
+                  organizationId: org.id,
+                  organizationName: org.name,
+                  restaurantId: restaurant.id,
+                  restaurantName: restaurant.name,
+                ),
+              ],
             ),
       ],
     );

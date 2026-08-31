@@ -5,6 +5,9 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../data/console_models.dart';
 import '../data/platform_admin_repository.dart';
 import '../data/real_platform_admin_repository.dart';
+import '../admin_platform_gate.dart';
+import '../data/support_access.dart';
+import '../util/external_link.dart';
 
 /// RF-119-b — the authenticated RPC transport the REAL console reads use. It
 /// DEFAULTS TO NULL (fail-closed): real platform reads require the Admin app to
@@ -226,3 +229,29 @@ final restaurantOperationsPageProvider =
           .watch(platformAdminRepositoryProvider)
           .loadRestaurantOperations(query),
     );
+
+// ---------------------------------------------------------------------------
+// Support access (ADMIN-126B)
+// ---------------------------------------------------------------------------
+
+/// Opens read-only support sessions. Demo mode gets the launcher that REFUSES —
+/// there is no live tenant behind demo data, and a fabricated session would open
+/// a dashboard full of invented numbers under a real-looking banner.
+final platformSupportLauncherProvider = Provider<PlatformSupportLauncher>((
+  ref,
+) {
+  final config = ref.watch(runtimeConfigProvider);
+  if (config.isDemoMode) return const DemoPlatformSupportLauncher();
+  return RealPlatformSupportLauncher(ref.watch(platformAdminTransportProvider));
+});
+
+/// Opens the Dashboard launch URL. Overridden in tests so a widget test never
+/// opens a real browser tab — and so a test can READ the URL that would have
+/// been opened, which is the only place the handoff token is ever observable.
+final supportUrlOpenerProvider = Provider<void Function(String url)>(
+  (ref) => openExternalUrl,
+);
+
+/// The Dashboard origin a support session is handed off to: the hosted
+/// `RESTOFLOW_DASHBOARD_URL` when built with one, else the local fallback.
+final dashboardUrlProvider = Provider<String>((ref) => resolveDashboardUrl());

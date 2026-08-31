@@ -7517,4 +7517,63 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminOperationsNote =>
       'Sales are the restaurant’s own figures for its own business day, read from the same report its owner sees. Currencies are never added together.';
+
+  @override
+  String get supportModeBanner => 'Platform Support Mode · Read-only';
+
+  @override
+  String supportModeExpiresIn(String time) {
+    return 'Ends in $time';
+  }
+
+  @override
+  String get supportModeExpired => 'Access expired';
+
+  @override
+  String get supportModeEnd => 'End support access';
+
+  @override
+  String get supportModeClosedTitle => 'Support access closed';
+
+  @override
+  String get supportModeClosedBody =>
+      'This support session is no longer active. Start a new one from the platform console.';
+
+  @override
+  String get supportModeReadOnly => 'Read-only in support mode';
+
+  @override
+  String supportModeReason(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String get adminOpenDashboard => 'Open Dashboard';
+
+  @override
+  String get adminSupportDialogTitle => 'Start support access';
+
+  @override
+  String get adminSupportDialogBody =>
+      'You will view this tenant’s Dashboard as yourself, read-only, for a short time. The session is recorded in the audit log.';
+
+  @override
+  String get adminSupportReasonLabel => 'Reason';
+
+  @override
+  String get adminSupportReasonHint =>
+      'e.g. investigating a reported missing sales figure';
+
+  @override
+  String get adminSupportReasonRequired => 'A reason is required';
+
+  @override
+  String get adminSupportStarted =>
+      'Support access started. The Dashboard opened in a new tab.';
+
+  @override
+  String get adminSupportFailed => 'Could not start support access';
+
+  @override
+  String get adminSupportUnavailable => 'Support access is not available here';
 }

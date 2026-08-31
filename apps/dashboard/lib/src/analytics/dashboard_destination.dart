@@ -39,16 +39,22 @@ enum DashboardDestination {
   // Dashboard. The destination, its index and the screen behind it all stay —
   // only the visible nav tile is gone — so nothing here is renumbered.
   printers(3, hiddenFromNavigation: true),
-  staff(4),
+  // ADMIN-126B: the four destinations below have NO approved support read.
+  // `list_staff`, `list_members`, the order-history reads and the tenant audit
+  // reads were deliberately withheld from support sessions because they carry
+  // staff and customer identity. A tab whose every read is refused is worse
+  // than an absent one, so support mode drops them from the navigation.
+  staff(4, readableInSupportMode: false),
   tables(5),
-  users(6),
-  orders(7),
-  activity(8),
+  users(6, readableInSupportMode: false),
+  orders(7, readableInSupportMode: false),
+  activity(8, readableInSupportMode: false),
   settings(9);
 
   const DashboardDestination(
     this.tabIndex, {
     this.hiddenFromNavigation = false,
+    this.readableInSupportMode = true,
   });
 
   /// The shell tab index this destination renders as. Existing value — this
@@ -59,11 +65,31 @@ enum DashboardDestination {
   /// [tabIndex]; the shell's destination switch is unchanged.
   final bool hiddenFromNavigation;
 
+  /// ADMIN-126B: whether a PLATFORM SUPPORT session can read this surface at
+  /// all — i.e. whether its reads are among the fifteen the server approved.
+  ///
+  /// This mirrors a server decision; it does not make one. Flipping a false to
+  /// true here would not grant a support session anything, it would only put
+  /// back a tab that errors.
+  final bool readableInSupportMode;
+
   /// Every destination the navigation actually SHOWS, in order.
-  static List<DashboardDestination> get visible => [
+  static List<DashboardDestination> get visible => visibleFor();
+
+  /// The visible set for a given mode. ADMIN-126B: a support session also drops
+  /// every destination it has no approved read for.
+  static List<DashboardDestination> visibleFor({bool supportMode = false}) => [
     for (final d in DashboardDestination.values)
-      if (!d.hiddenFromNavigation) d,
+      if (!d.hiddenFromNavigation && (!supportMode || d.readableInSupportMode))
+        d,
   ];
+
+  /// This destination's position in the visible index space FOR A MODE, or null
+  /// when it is not shown there.
+  int? visibleIndexIn({bool supportMode = false}) {
+    final at = visibleFor(supportMode: supportMode).indexOf(this);
+    return at < 0 ? null : at;
+  }
 
   /// This destination's position in the VISIBLE index space, or null when it
   /// is hidden.

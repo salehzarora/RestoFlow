@@ -2285,5 +2285,22 @@
   "adminSalesTodayByCurrency": "مبيعات اليوم حسب العملة",
   "adminNoSalesTodayYet": "لا توجد مبيعات مسجَّلة اليوم",
   "adminBusinessDay": "يوم العمل",
-  "adminOperationsNote": "المبيعات هي أرقام المطعم نفسه ليوم عمله، مقروءة من التقرير نفسه الذي يراه مالكه. ولا تُجمع العملات المختلفة معًا."
+  "adminOperationsNote": "المبيعات هي أرقام المطعم نفسه ليوم عمله، مقروءة من التقرير نفسه الذي يراه مالكه. ولا تُجمع العملات المختلفة معًا.",
+  "supportModeBanner": "وضع دعم المنصة · للقراءة فقط",
+  "supportModeExpiresIn": "ينتهي خلال {time}",
+  "supportModeExpired": "انتهت صلاحية الوصول",
+  "supportModeEnd": "إنهاء وصول الدعم",
+  "supportModeClosedTitle": "أُغلق وصول الدعم",
+  "supportModeClosedBody": "هذه الجلسة لم تعد نشطة. ابدأ جلسة جديدة من وحدة تحكم المنصة.",
+  "supportModeReadOnly": "للقراءة فقط في وضع الدعم",
+  "supportModeReason": "السبب: {reason}",
+  "adminOpenDashboard": "فتح لوحة التحكم",
+  "adminSupportDialogTitle": "بدء وصول الدعم",
+  "adminSupportDialogBody": "ستطّلع على لوحة تحكم هذا المشترك بهويتك أنت، للقراءة فقط، ولمدة قصيرة. تُسجّل الجلسة في سجل التدقيق.",
+  "adminSupportReasonLabel": "السبب",
+  "adminSupportReasonHint": "مثال: التحقق من بلاغ عن رقم مبيعات مفقود",
+  "adminSupportReasonRequired": "السبب مطلوب",
+  "adminSupportStarted": "بدأ وصول الدعم. فُتحت لوحة التحكم في علامة تبويب جديدة.",
+  "adminSupportFailed": "تعذّر بدء وصول الدعم",
+  "adminSupportUnavailable": "وصول الدعم غير متاح هنا"
 }
