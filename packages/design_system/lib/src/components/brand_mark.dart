@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../semantic_colors.dart';
 import '../tokens.dart';
 
-/// The RestoFlow brand mark (design-polish sprint): a rounded gradient tile
-/// with the restaurant glyph, optionally locked up with the (caller-localized)
-/// product name and a tagline. Gives login, onboarding, and device pairing —
-/// the product's first impressions — an identity beyond a bare form.
+/// The VEYRO brand mark: the approved navy+orange VEYRO symbol on a clean
+/// white tile (a neutral ground that keeps the full-colour mark legible on
+/// both light and dark/navy surfaces without inventing a recoloured logo),
+/// optionally locked up with the (caller-localized) product name and tagline.
+/// Gives login, onboarding, and device pairing — the product's first
+/// impressions — its identity.
+///
+/// The class keeps its historical name (`RestoflowBrandMark`) so the public
+/// rebrand does not force an internal refactor across every call site
+/// (VEYRO-REBRAND: public brand changes, internal symbol names retained).
 class RestoflowBrandMark extends StatelessWidget {
   const RestoflowBrandMark({
     this.title,
@@ -24,29 +29,51 @@ class RestoflowBrandMark extends StatelessWidget {
 
   final double size;
 
+  /// The shared VEYRO mark asset (design-system-owned; one canonical copy).
+  static const String markAsset = 'assets/brand/veyro_mark.png';
+  static const String _package = 'restoflow_design_system';
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final semantic = theme.extension<RestoflowSemanticColors>();
-    final accent = semantic?.accent ?? theme.colorScheme.tertiary;
     final titleText = title;
     final taglineText = tagline;
 
-    final tile = Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-          colors: [theme.colorScheme.primary, accent],
+    // The full-colour VEYRO symbol on a clean white tile. `Image` is never
+    // direction-aware, so the mark does NOT mirror under RTL — only the
+    // surrounding text/lockup follows the ambient direction.
+    final tile = Semantics(
+      image: true,
+      label: 'VEYRO',
+      child: Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * 0.14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
-        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-      ),
-      child: Icon(
-        Icons.restaurant_menu,
-        size: size * 0.55,
-        color: Colors.white,
+        child: Image(
+          image: const AssetImage(markAsset, package: _package),
+          fit: BoxFit.contain,
+          excludeFromSemantics: true,
+          // If the bundled mark ever fails to resolve (e.g. a test asset
+          // bundle without package assets), degrade to the wordmark initial on
+          // the tile rather than surfacing an image-resource exception — the
+          // adjacent VEYRO title still carries the brand.
+          errorBuilder: (context, error, stack) => Center(
+            child: FittedBox(
+              child: Text(
+                'V',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
 

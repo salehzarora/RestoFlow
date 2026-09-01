@@ -43,7 +43,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
   additionLabel: 'Addition',
   roundLabel: (n) => 'Round $n',
-  restaurantNameFallback: 'RestoFlow',
+  restaurantNameFallback: 'Demo Bistro',
 );
 
 const _names = ['240g', 'cheese', 'lettuce', 'tomato', 'onion'];

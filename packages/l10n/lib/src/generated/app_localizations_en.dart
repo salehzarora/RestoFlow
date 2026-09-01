@@ -432,28 +432,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogCapCloseShift => 'Close shift';
 
   @override
-  String get appName => 'RestoFlow';
+  String get appName => 'VEYRO';
 
   @override
-  String get posAppTitle => 'RestoFlow POS';
+  String get posAppTitle => 'VEYRO POS';
 
   @override
-  String get kdsAppTitle => 'RestoFlow KDS';
+  String get kdsAppTitle => 'VEYRO KDS';
 
   @override
-  String get dashboardAppTitle => 'RestoFlow Dashboard';
+  String get dashboardAppTitle => 'VEYRO Dashboard';
 
   @override
-  String get dashboardBrandName => 'RestoFlow';
+  String get dashboardBrandName => 'VEYRO';
 
   @override
   String get dashboardBrandTagline => 'Dashboard';
 
   @override
-  String get adminAppTitle => 'RestoFlow Admin';
+  String get adminAppTitle => 'VEYRO Admin';
 
   @override
-  String get welcomeMessage => 'Welcome to RestoFlow';
+  String get welcomeMessage => 'Welcome to VEYRO';
 
   @override
   String get adminOverviewTitle => 'Platform overview';
@@ -1349,7 +1349,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get receiptPreviewTitle => 'Receipt preview';
 
   @override
-  String get receiptDemoRestaurantName => 'RestoFlow Demo Restaurant';
+  String get receiptDemoRestaurantName => 'Demo Bistro';
 
   @override
   String get kdsPreviewTicketAction => 'Preview ticket';
@@ -1943,7 +1943,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authRealModeUnconfiguredBody =>
-      'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.';
+      'The app was started in real mode, but the backend connection settings are missing or invalid. VEYRO never fakes a backend, so real mode stays locked until valid settings are provided.';
 
   @override
   String get authRealModeUnconfiguredHowTo => 'Start the app with these values';
@@ -1958,7 +1958,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authProductionDemoBlockedBody =>
-      'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.';
+      'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. VEYRO never presents demo data as production.';
 
   @override
   String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
@@ -2973,10 +2973,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDeviceUpdated => 'Device updated';
 
   @override
-  String get authWelcomeTitle => 'Welcome to RestoFlow';
+  String get authWelcomeTitle => 'Welcome to VEYRO';
 
   @override
-  String get authBrandTagline => 'Restaurant operating system';
+  String get authBrandTagline => 'POS & Operations';
 
   @override
   String get authSignInTab => 'Sign in';
@@ -3021,8 +3021,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingTitle => 'Set up your restaurant';
 
   @override
-  String get onboardingIntro =>
-      'Create your restaurant to start using RestoFlow.';
+  String get onboardingIntro => 'Create your restaurant to start using VEYRO.';
 
   @override
   String get onboardingRestaurantNameLabel => 'Restaurant name';
@@ -4210,7 +4209,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posNonCashNote =>
-      'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.';
+      'External payment recorded — VEYRO does not process the card or transfer; no real charge is made.';
 
   @override
   String get posPaymentFailedTitle => 'Payment not recorded';
@@ -4544,7 +4543,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posBluetoothPermissionRequired =>
-      'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.';
+      'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.';
 
   @override
   String get posBluetoothOff => 'Bluetooth is off — turn it on, then refresh.';
@@ -4611,7 +4610,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
-      'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.';
+      'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.';
 
   @override
   String get dashboardNavOrders => 'Orders';
@@ -6034,7 +6033,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posSending => 'Sending…';
 
   @override
-  String get posBrandName => 'RestoFlow';
+  String get posBrandName => 'VEYRO';
 
   @override
   String get posBrandTagline => 'Point of Sale';
@@ -6594,8 +6593,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String kioskPoweredBy(String device) {
-    return 'Powered by RestoFlow · Kiosk $device';
+    return 'Powered by VEYRO · Kiosk $device';
   }
+
+  @override
+  String get kioskPoweredByShort => 'Powered by VEYRO';
 
   @override
   String get kioskGroupWeight => 'Choose your patty weight';
@@ -6984,7 +6986,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kioskSettingsVideoHint =>
-      'Upload an .mp4 in the RestoFlow dashboard → Devices. It syncs to the device and loops on idle, muted.';
+      'Upload an .mp4 in the VEYRO dashboard → Devices. It syncs to the device and loops on idle, muted.';
 
   @override
   String get kioskSettingsPrinterSection => 'Receipt printer';

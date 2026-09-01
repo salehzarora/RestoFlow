@@ -154,23 +154,23 @@
   "activityLogCapApplyDiscount": "Apply discount",
   "activityLogCapVoidOrder": "Void order",
   "activityLogCapCloseShift": "Close shift",
-  "appName": "RestoFlow",
+  "appName": "VEYRO",
   "@appName": {
     "description": "The product name, shown across all surfaces."
   },
-  "posAppTitle": "RestoFlow POS",
+  "posAppTitle": "VEYRO POS",
   "@posAppTitle": {
     "description": "Window/app title for the POS cashier app."
   },
-  "kdsAppTitle": "RestoFlow KDS",
+  "kdsAppTitle": "VEYRO KDS",
   "@kdsAppTitle": {
     "description": "Window/app title for the Kitchen Display System app."
   },
-  "dashboardAppTitle": "RestoFlow Dashboard",
+  "dashboardAppTitle": "VEYRO Dashboard",
   "@dashboardAppTitle": {
     "description": "Window/app title for the owner/manager dashboard app."
   },
-  "dashboardBrandName": "RestoFlow",
+  "dashboardBrandName": "VEYRO",
   "@dashboardBrandName": {
     "description": "The short product wordmark shown in the dashboard side-rail brand lockup (RF-132)."
   },
@@ -178,11 +178,11 @@
   "@dashboardBrandTagline": {
     "description": "The muted tagline under the side-rail wordmark identifying this surface (RF-132)."
   },
-  "adminAppTitle": "RestoFlow Admin",
+  "adminAppTitle": "VEYRO Admin",
   "@adminAppTitle": {
     "description": "Window/app title for the platform admin app."
   },
-  "welcomeMessage": "Welcome to RestoFlow",
+  "welcomeMessage": "Welcome to VEYRO",
   "@welcomeMessage": {
     "description": "Generic welcome message shown on the scaffold body."
   },
@@ -1074,7 +1074,7 @@
   "@receiptPreviewTitle": {
     "description": "Title of the POS receipt print-preview dialog."
   },
-  "receiptDemoRestaurantName": "RestoFlow Demo Restaurant",
+  "receiptDemoRestaurantName": "Demo Bistro",
   "@receiptDemoRestaurantName": {
     "description": "Demo restaurant name printed at the top of the receipt preview."
   },
@@ -1565,7 +1565,7 @@
   "@authRealModeUnconfiguredTitle": {
     "description": "Title of the help page shown when the app starts in real mode without valid Supabase connection settings."
   },
-  "authRealModeUnconfiguredBody": "The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.",
+  "authRealModeUnconfiguredBody": "The app was started in real mode, but the backend connection settings are missing or invalid. VEYRO never fakes a backend, so real mode stays locked until valid settings are provided.",
   "@authRealModeUnconfiguredBody": {
     "description": "Body of the real-mode-unconfigured help page explaining why the app is locked."
   },
@@ -1581,7 +1581,7 @@
   "@authProductionDemoBlockedTitle": {
     "description": "Title of the help page shown when a release build is in demo mode while valid real backend credentials are present (an accidental production demo)."
   },
-  "authProductionDemoBlockedBody": "This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.",
+  "authProductionDemoBlockedBody": "This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. VEYRO never presents demo data as production.",
   "@authProductionDemoBlockedBody": {
     "description": "Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it."
   },
@@ -2150,9 +2150,9 @@
   "adminSessionOpen": "Session active",
   "adminDeviceCreated": "Device added",
   "adminDeviceUpdated": "Device updated",
-  "authWelcomeTitle": "Welcome to RestoFlow",
+  "authWelcomeTitle": "Welcome to VEYRO",
   "@authWelcomeTitle": {"description": "Heading on the dashboard sign-in / create-account screen (RF-151)."},
-  "authBrandTagline": "Restaurant operating system",
+  "authBrandTagline": "POS & Operations",
   "@authBrandTagline": {"description": "Muted tagline under the brand mark on login/pairing screens."},
   "authSignInTab": "Sign in",
   "@authSignInTab": {"description": "Segmented control option / action for signing in (RF-151)."},
@@ -2180,7 +2180,7 @@
   "@authEmailConfirmationSent": {"description": "Honest state shown when sign-up requires email confirmation before a session."},
   "onboardingTitle": "Set up your restaurant",
   "@onboardingTitle": {"description": "Heading on the restaurant onboarding screen (RF-151)."},
-  "onboardingIntro": "Create your restaurant to start using RestoFlow.",
+  "onboardingIntro": "Create your restaurant to start using VEYRO.",
   "@onboardingIntro": {"description": "Intro text on the restaurant onboarding screen."},
   "onboardingRestaurantNameLabel": "Restaurant name",
   "@onboardingRestaurantNameLabel": {"description": "Restaurant-name field label on the onboarding form."},
@@ -2914,7 +2914,7 @@
   "@posPaymentMethodBit": {"description": "POS payment method value: Bit (the mobile transfer app; externally recorded)."},
   "posPaymentMethodExternal": "External",
   "@posPaymentMethodExternal": {"description": "POS payment method value: another external tender, recorded without a real charge."},
-  "posNonCashNote": "External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.",
+  "posNonCashNote": "External payment recorded — VEYRO does not process the card or transfer; no real charge is made.",
   "@posNonCashNote": {"description": "POS honest note on the payment sheet for a non-cash tender: RestoFlow records the tender but processes no charge."},
   "posPaymentFailedTitle": "Payment not recorded",
   "@posPaymentFailedTitle": {"description": "DESIGN-001: title of the pinned danger banner in the payment sheet after a failed payment push (previously a silent failure)."},
@@ -3141,7 +3141,7 @@
   "@posBluetoothRefreshAction": {"description": "POS action to reload the paired Bluetooth devices list (ANDROID-003)."},
   "posBluetoothNoDevices": "No paired Bluetooth devices. Pair your printer in Android settings, then refresh.",
   "@posBluetoothNoDevices": {"description": "POS empty state when no paired Bluetooth devices are found (ANDROID-003)."},
-  "posBluetoothPermissionRequired": "Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.",
+  "posBluetoothPermissionRequired": "Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.",
   "@posBluetoothPermissionRequired": {"description": "POS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-003)."},
   "posBluetoothOff": "Bluetooth is off — turn it on, then refresh.",
   "@posBluetoothOff": {"description": "POS message when the Bluetooth adapter is off (ANDROID-003)."},
@@ -3183,7 +3183,7 @@
   "@kdsPrinterNoPrinterConfigured": {"description": "KDS status when no local kitchen printer is configured on this device (ANDROID-004)."},
   "kdsPrinterBluetoothPairHint": "Select a paired printer above.",
   "@kdsPrinterBluetoothPairHint": {"description": "KDS hint prompting the operator to pick a paired Bluetooth printer before saving/testing (ANDROID-004)."},
-  "kdsPrinterBluetoothPermissionRequired": "Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.",
+  "kdsPrinterBluetoothPermissionRequired": "Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.",
   "@kdsPrinterBluetoothPermissionRequired": {"description": "KDS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-004)."},
   "dashboardNavOrders": "Orders",
   "@dashboardNavOrders": {"description": "Dashboard left-nav label for the order-history surface (ORDERS-HISTORY-001)."},
@@ -4018,7 +4018,7 @@
   "@posCartEmptyHint": {"description": "One helper line under the empty-cart message (approved v4 empty state), telling the cashier how to begin."},
   "posSending": "Sending…",
   "@posSending": {"description": "Send button label while an order submit is in flight (spinner beside it). Replaces the idle Send label only during the in-flight state; layout stays stable."},
-  "posBrandName": "RestoFlow",
+  "posBrandName": "VEYRO",
   "@posBrandName": {"description": "First line of the stacked top-bar wordmark (POS-THEME-NAVBAR-POLISH-001): the brand name alone."},
   "posBrandTagline": "Point of Sale",
   "@posBrandTagline": {"description": "Second, smaller line of the stacked top-bar wordmark: the product line under the brand name."},
@@ -4359,8 +4359,10 @@
   "@kioskZoneBar": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
   "kioskMadeFresh": "Fire-grilled · made fresh for you",
   "@kioskMadeFresh": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
-  "kioskPoweredBy": "Powered by RestoFlow · Kiosk {device}",
+  "kioskPoweredBy": "Powered by VEYRO · Kiosk {device}",
   "@kioskPoweredBy": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).", "placeholders": {"device": {"type": "String"}}},
+  "kioskPoweredByShort": "Powered by VEYRO",
+  "@kioskPoweredByShort": {"description": "VEYRO-REBRAND: plain platform attribution on the kiosk confirm slip (no device suffix)."},
   "kioskGroupWeight": "Choose your patty weight",
   "@kioskGroupWeight": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
   "kioskGroupSide": "Choose your side",
@@ -4503,7 +4505,7 @@
   "@kioskSettingsAttractVideo": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
   "kioskSettingsPromoDropHint": "Drop a meal ad or seasonal poster here — it becomes the idle screen. Portrait 1080×1920 recommended.",
   "@kioskSettingsPromoDropHint": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
-  "kioskSettingsVideoHint": "Upload an .mp4 in the RestoFlow dashboard → Devices. It syncs to the device and loops on idle, muted.",
+  "kioskSettingsVideoHint": "Upload an .mp4 in the VEYRO dashboard → Devices. It syncs to the device and loops on idle, muted.",
   "@kioskSettingsVideoHint": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},
   "kioskSettingsPrinterSection": "Receipt printer",
   "@kioskSettingsPrinterSection": {"description": "KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy)."},

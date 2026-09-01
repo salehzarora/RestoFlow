@@ -348,8 +348,8 @@ class KioskConfirmScreen extends ConsumerWidget {
                   // REAL mode never claims a print it may not make; demo
                   // keeps the fixture line.
                   ref.watch(kioskRealModeProvider)
-                      ? 'Powered by RestoFlow'
-                      : '${l10n.kioskPrintingSlip} · Powered by RestoFlow',
+                      ? l10n.kioskPoweredByShort
+                      : '${l10n.kioskPrintingSlip} · ${l10n.kioskPoweredByShort}',
                   style: KioskType.body(
                     16,
                     FontWeight.w500,

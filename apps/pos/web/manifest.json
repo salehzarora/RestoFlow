@@ -1,11 +1,11 @@
 {
-    "name": "RestoFlow POS",
-    "short_name": "RestoFlow POS",
+    "name": "VEYRO POS",
+    "short_name": "VEYRO POS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "RestoFlow POS — cashier menu and cart demo (in-memory M5 demo).",
+    "description": "VEYRO POS — cashier point of sale.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

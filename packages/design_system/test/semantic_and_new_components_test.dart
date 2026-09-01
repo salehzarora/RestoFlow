@@ -318,7 +318,7 @@ void main() {
           const SingleChildScrollView(
             child: Column(
               children: [
-                RestoflowBrandMark(title: 'ريستوفلو', tagline: 'نظام المطاعم'),
+                RestoflowBrandMark(title: 'VEYRO', tagline: 'نظام المطاعم'),
                 RestoflowCodeBlock(
                   lines: ['RESTOFLOW_DEMO_MODE=false', 'PORT=57026'],
                 ),
@@ -332,7 +332,7 @@ void main() {
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.text('ريستوفلو'), findsOneWidget);
+      expect(find.text('VEYRO'), findsOneWidget);
       final code = tester.widget<Text>(find.text('RESTOFLOW_DEMO_MODE=false'));
       expect(code.textDirection, TextDirection.ltr); // code stays LTR
     });

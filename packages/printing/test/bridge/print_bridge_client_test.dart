@@ -255,7 +255,7 @@ void main() {
         ),
       );
       final doc = const PrintDocument([
-        PrintTextLine('RestoFlow', alignment: PrintAlignment.center),
+        PrintTextLine('VEYRO', alignment: PrintAlignment.center),
         PrintCutLine(),
       ]);
       final result = await dispatcher.dispatch(doc);

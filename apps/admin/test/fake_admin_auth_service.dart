@@ -19,7 +19,7 @@ class FakeAdminAuthService implements AdminAuthService {
       factorId: 'factor-1',
       secret: 'JBSWY3DPEHPK3PXP',
       uri:
-          'otpauth://totp/RestoFlow%20Admin:op@example.test?secret=JBSWY3DPEHPK3PXP',
+          'otpauth://totp/VEYRO%20Admin:op@example.test?secret=JBSWY3DPEHPK3PXP',
     ),
     this.signInError,
     this.verifyError,

@@ -19,3 +19,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+# VEYRO-REBRAND: the one canonical VEYRO brand mark, consumed by the shared
+# RestoflowBrandMark component so no app duplicates the asset.
+flutter:
+  assets:
+    - assets/brand/veyro_mark.png

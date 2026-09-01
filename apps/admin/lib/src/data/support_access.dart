@@ -24,7 +24,7 @@ import 'platform_admin_repository.dart';
 /// The audit reason prefix for a support start. The operator's typed reason is
 /// appended, so the platform log records WHY someone opened a tenant's
 /// dashboard, in their own words.
-const String kReasonSupportStart = 'RestoFlow support (read-only): ';
+const String kReasonSupportStart = 'VEYRO support (read-only): ';
 
 /// A freshly opened support session plus its single-use handoff.
 class SupportHandoff {

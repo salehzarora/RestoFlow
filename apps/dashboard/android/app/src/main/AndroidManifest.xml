@@ -5,7 +5,7 @@
          or a release build's dashboard APK would have no network (ANDROID-001B). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="RestoFlow Dashboard"
+        android:label="VEYRO Dashboard"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

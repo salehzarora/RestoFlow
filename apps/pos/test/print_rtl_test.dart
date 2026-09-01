@@ -52,7 +52,7 @@ app.PrintDocument _arabicReceipt() => app.PrintDocument(
 app.PrintDocument _englishAsciiReceipt() => app.PrintDocument(
   title: 'r',
   lines: [
-    app.PrintLine.title('RestoFlow'),
+    app.PrintLine.title('VEYRO'),
     app.PrintLine.kv('Order', 'A1'),
     app.PrintLine.item('Burger', '2'),
   ],
