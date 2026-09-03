@@ -576,6 +576,12 @@ void main() {
             builder: (context, build, _) => SupportModeGate(
               repository: repo,
               handoffToken: tokenFor(build),
+              // Pinned, like every other test here. Without it the fixture's
+              // fixed `expiresAt` is compared against the real wall clock, so
+              // this test passes until that instant arrives and fails forever
+              // after — and it fails by showing the CLOSED view, which is the
+              // product behaving correctly, not the defect under test.
+              clock: () => DateTime(2026, 9, 3, 12, 5),
               onSupport: (context, session) => const _BuildCounter(),
               child: const Scaffold(body: Text('TENANT')),
             ),
