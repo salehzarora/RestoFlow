@@ -21,7 +21,7 @@ role separately:
 | `/` | `apps/dashboard` (owner/manager) | **REAL** | Manager tablet. GoTrue email/password sign-in. |
 | `/pos`, `/pos/*` | `apps/pos` (cashier) | **REAL** | Cashier tablet. Anonymous device session → pairing → PIN (§8). |
 | `/kds`, `/kds/*` | `apps/kds` (kitchen) | **REAL** | Kitchen tablet. Money-free; anonymous device session → pairing → PIN (§8). |
-| — | `apps/admin` (platform admin) | — | **Out of scope / internal only** — no web target; separate plane (`platform_admin_guard` + aal2). If ever hosted it gets its **own** project/domain + security review (see §6). |
+| — | `apps/admin` (platform admin) | **REAL, run locally** | **Deliberately NOT hosted yet.** A web target and its own deploy contract now exist (ADMIN-125A / 126B), but the dedicated Vercel project is **deferred** — see §14. Never `/admin` on this project. |
 
 The Vercel build ([vercel.json](../vercel.json)) clones **Flutter pinned to `3.44.2`**
 (matching CI) and runs [tools/vercel_build_web.sh](../tools/vercel_build_web.sh),
@@ -766,3 +766,81 @@ definitions restores the old *code*, but it does **not** restore the *world*:
 degrades safely if `owner_report_range` is absent (Today via `owner_daily_report`,
 other ranges range-unavailable). No data is touched (read-only function); no
 destructive rollback.
+
+
+---
+
+## 14. Platform Admin console — FUNCTIONALLY COMPLETE, permanent hosting DEFERRED
+
+**Status: `PLATFORM-ADMIN-FUNCTIONAL-COMPLETE / PERMANENT-HOSTING-DEFERRED`.**
+The internal VEYRO Admin console (`apps/admin`) is feature-complete and its
+backend is fully applied to hosted Supabase. What is deferred is only *where it
+runs* — it has no permanent origin yet, and that is a deliberate scheduling
+decision, **not** a blocker for normal product development.
+
+### Shipped and live on the backend
+
+| Capability | Ticket |
+|---|---|
+| Web target (`apps/admin/web/`) so the console can be built at all | ADMIN-125A |
+| Platform-admin grant + TOTP/`aal2` MFA + typed-reason enforcement (D-026) | RF-119 / 125B |
+| Guarded cross-tenant read contracts (5 RPCs) | ADMIN-125C.1 |
+| Console UI — Overview, Subscribers, Subscriber Detail, Restaurants, Audit Log | ADMIN-125C.2 |
+| Per-restaurant daily revenue, read through the tenant's OWN `app.owner_report_range` so console and owner cannot disagree; totals grouped BY currency, never summed | ADMIN-126 |
+| Active organization-owner contact emails (owners only — not the roster) | ADMIN-126 |
+| Short-lived, one-time-token, hash-only, audited **read-only Platform Support Mode** | ADMIN-126B |
+| Support scope containment + staff-PII redaction | ADMIN-126C |
+| Support handoff `aal` model repair | ADMIN-126B2 |
+| Backend **write-denial matrix** (18 cases) + the structural proof that no function writing a `public` table consults the support read rank | ADMIN-126B |
+
+Hosted Supabase carries **all** of the above: migration ledger **137/137**,
+`supabase db push --dry-run` reports *"Remote database is up to date."*
+
+### How to run it until hosting is scheduled
+
+The console runs locally in REAL mode against hosted Supabase, which is
+sufficient for authorized platform administration today:
+
+```
+.\_run_admin_real.bat          # fixed port 57126 — GoTrue storage is per-ORIGIN
+```
+
+Set `RESTOFLOW_SUPABASE_URL` / `RESTOFLOW_SUPABASE_ANON_KEY` to the hosted pair
+first to point it at production (publishable/anon key only — **never**
+service-role, DECISION D-011). Access is still gated server-side: an active
+`platform_admin_grants` row **plus** a verified `aal2` session **plus** a typed
+reason. Running locally weakens nothing — the client is not the boundary.
+
+### Deferred — future deployment/ops work
+
+1. **Dedicated Vercel project for the Admin console.** The contract is already
+   committed and verified: [apps/admin/vercel.json](../apps/admin/vercel.json) +
+   [tools/vercel_build_admin.sh](../tools/vercel_build_admin.sh).
+   **Root Directory MUST be `apps/admin`** — a Vercel project reads `vercel.json`
+   only from its Root Directory, so a blank root would read the repo-root config
+   (this public project's) and silently build the Dashboard instead. Required
+   variables: `RESTOFLOW_SUPABASE_URL`, `RESTOFLOW_SUPABASE_ANON_KEY`,
+   `RESTOFLOW_DASHBOARD_URL`.
+2. **Custom Admin domain.**
+3. **Vercel Deployment Protection** on that project. The internal plane must not
+   be openly reachable; application-level grant + `aal2` + reason enforcement is
+   mandatory but is **not** a substitute for a hosting-layer protection.
+4. **Internal namespace rename `RESTOFLOW_*` → `VEYRO_*`.** The VEYRO rebrand was
+   deliberately public-surface only; env-var names, the repository, package ids,
+   applicationIds, storage keys, MethodChannels and Supabase identifiers stay as
+   they are until a separate audited phase. The existing public Vercel project
+   likewise keeps its current name.
+5. **Admin write controls** — assign/change subscription plan, suspend/activate an
+   organization. `app.set_organization_plan` already exists, guarded, validated
+   and audited, but has **no `public.` wrapper**, so no client can reach it. The
+   console is read-only by design (D-026) and a write phase needs its own ticket,
+   its own wrapper migration and its own review.
+
+### Invariant that must survive all of the above
+
+Admin is **absent** from [tools/vercel_build_web.sh](../tools/vercel_build_web.sh)
+and from the repo-root `vercel.json`. `/admin` on the public tenant project
+returns the Dashboard SPA catch-all — byte-identical to `/` and to any nonsense
+route — which is the intended behaviour, not an Admin deployment.
+`apps/admin/test/admin_web_target_125a_test.dart` fails if the console ever
+drifts into the public build; keep that guard green.
