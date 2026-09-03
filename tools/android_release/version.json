@@ -24,13 +24,11 @@
     "Artifact SHA-256 values below are of the released APK files and are safe to",
     "publish - they are what a reviewer checks an artifact against."
   ],
-
   "expectedCertificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
   "signingKeyAlias": "restoflow-production",
   "signingCertificateSubject": "CN=RestoFlow Android Production, OU=Mobile Release, O=RestoFlow, C=IL",
   "signingAlgorithm": "SHA256withRSA, 4096-bit RSA",
   "signingValidity": "2026-08-04 through 2053-12-20",
-
   "latestPilotRelease": {
     "versionName": "0.0.20",
     "versionCode": 20,
@@ -38,7 +36,6 @@
     "status": "pilot / debug-signed - manual tablet testing only, never distributed",
     "sourceSha": "279c4fc4337d72ad29c0d27ebb5f7f564c6c3bb2"
   },
-
   "currentOfficialRelease": {
     "versionName": "0.0.27",
     "versionCode": 27,
@@ -100,7 +97,6 @@
       "local and git-ignored - only their public SHA-256 values are recorded."
     ]
   },
-
   "previousOfficialReleases": [
     {
       "versionName": "0.0.26",
@@ -220,36 +216,34 @@
       ]
     }
   ],
-
   "nextOfficialRelease": {
-    "versionName": "0.0.42",
-    "versionCode": 42,
+    "versionName": "0.0.50",
+    "versionCode": 50,
     "signing": "restoflow-production",
-    "status": "planned - not built",
-    "intendedSource": "to be pinned when the next release is planned (main, after its content merges)",
+    "status": "planned - VEYRO final release build (this commit pins the source)",
+    "intendedSource": "e727e0c819114da69be4418195aa00bc24cf0187 (main; application source - this ledger commit adds no app code)",
     "notes": [
-      "PERF-112 ledger correction: this entry had gone stale at 28 while the",
-      "per-phase POS lane consumed versionCodes 29..38 (acceptance/final",
-      "artifacts, see dist/*/BUILD-METADATA.txt) and the PERF lane consumed",
-      "39 (PERF-110 diagnostics test), 40 (PERF-111 renderer A/B test) and",
-      "41 (PERF-112 final PowerVR-compat production build), all on",
-      "com.restoflow.pos with the production certificate. 42 is the next",
-      "free POS code; codes are never reused.",
-      "KDS has NOT tracked these codes (versionSymmetry has been broken de",
-      "facto since v28); before the next OFFICIAL pair build, decide whether",
-      "to jump KDS to the same code or formally retire the pair rule.",
-      "The customer kiosk (com.restoflow.kiosk) runs its own independent",
-      "lineage (v2..v8 as of PERF-112) and is intentionally outside this",
-      "pair contract."
+      "VEYRO-ANDROID-FINAL ledger correction (2026-09-03): the previous entry",
+      "(42) had gone stale again - the per-phase POS lane consumed versionCodes",
+      "42..49 on com.restoflow.pos with the production certificate (see",
+      "dist/*/BUILD-METADATA.txt: 42/43 print-114b, 44/45 table-118, 46 table-119,",
+      "47 table-120, 48 table-121, 49 pos-quick-notes-124b). 50 is the next free",
+      "POS code; codes are never reused.",
+      "KDS last shipped as official v28 (versionCode 28, dist/official-v28) and",
+      "consumed nothing since. This release RESTORES the pair rule (versionSymmetry)",
+      "by moving KDS to the same 0.0.50 / 50 as POS, both from one source SHA;",
+      "50 > 28 so the KDS upgrade stays in-place.",
+      "First official pair carrying the VEYRO public brand (labels/icons/l10n);",
+      "package ids, signing identity and internal RESTOFLOW_* names unchanged.",
+      "The customer kiosk (com.restoflow.kiosk) keeps its own lineage - see",
+      "kioskNextRelease."
     ]
   },
-
   "androidRendererPolicy": {
     "policy": "com.restoflow.pos and com.restoflow.kiosk ship with io.flutter.embedding.android.EnableImpeller=false (Skia/OpenGL); com.restoflow.kds is unchanged",
     "since": "PERF-112 (2026-08-23), owner-accepted after the PERF-111 same-device A/B on the Acer Iconia A16 (PowerVR BXM)",
     "details": "docs/android-renderer-compatibility.md"
   },
-
   "skippedOfficialReleases": [
     {
       "versionName": "0.0.22",
@@ -268,9 +262,19 @@
       ]
     }
   ],
-
   "versionSymmetry": {
     "required": true,
     "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
+  },
+  "kioskNextRelease": {
+    "versionName": "0.2.20",
+    "versionCode": 22,
+    "signing": "restoflow-production",
+    "status": "planned - VEYRO final release build",
+    "notes": [
+      "Independent lineage outside the POS/KDS pair contract: v2..v21 consumed",
+      "(latest 0.2.19+21 in dist/table-room-frame-121). versionName follows the",
+      "established 0.2.<code-2> progression; 22 is the next free code."
+    ]
   }
 }
