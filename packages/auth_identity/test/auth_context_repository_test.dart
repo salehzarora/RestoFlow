@@ -68,6 +68,38 @@ void main() {
       );
     });
 
+    test(
+      'AUTH-257: a 42501 the SHARED classifier calls `server` is still a denial',
+      () async {
+        // This is the production shape, and the reason a freshly confirmed
+        // owner saw "Something went wrong" instead of onboarding.
+        //
+        // POS-OFFLINE-OPERATIONS-002 narrowed 42501 -> `auth` to an allowlist of
+        // PIN/device-session messages, so that a batch-validation or RLS 42501
+        // could never strand the POS in a re-auth hold. `get_my_context` raises
+        // 42501 for exactly one reason — "no linked, authenticated principal" —
+        // and that message is not on a list written for PIN sessions, so it
+        // arrived here as `server` -> AuthUnknownFailure ->
+        // AuthGateInvalidResponse -> the generic error page.
+        //
+        // The test above passes `kind: auth` and therefore never exercised this
+        // at all.
+        final transport = FakeRpcTransport(
+          error: const SyncTransportException(
+            SyncTransportErrorKind.server,
+            code: '42501',
+            message: 'get_my_context: no linked, authenticated principal',
+          ),
+        );
+        final result = await AuthContextRepository(transport).fetchMyContext();
+        expect(
+          (result as Failure<MyContext, AuthFailure>).failure,
+          isA<AuthDeniedFailure>(),
+          reason: 'a 42501 from get_my_context has one meaning: not linked yet',
+        );
+      },
+    );
+
     test('transient transport error maps to AuthNetworkFailure', () async {
       final transport = FakeRpcTransport(
         error: const SyncTransportException(SyncTransportErrorKind.transient),

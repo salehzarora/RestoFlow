@@ -195,10 +195,28 @@ Uri scrubbedUrl(Uri uri) {
   final fragment = keptFragment.entries
       .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
       .join('&');
-  return uri.replace(
-    queryParameters: keptQuery.isEmpty ? null : keptQuery,
-    fragment: fragment.isEmpty ? '' : fragment,
-  );
+
+  // AUTH-257: `Uri.replace(queryParameters: null)` KEEPS the original query —
+  // null means "leave this field alone", not "clear it". So when EVERY
+  // parameter is an auth parameter (the production shape,
+  // `/auth/confirmed?token_hash=…&type=email`) the old code returned the URL
+  // unchanged and the token stayed in the address bar. An empty query has to be
+  // cleared through `query:` instead, and the fragment removed outright rather
+  // than set to '' — which would leave a bare trailing '#'.
+  final withoutQuery = keptQuery.isEmpty
+      ? uri.replace(query: '').removeFragment()
+      : uri.replace(queryParameters: keptQuery).removeFragment();
+  // `replace(query: '')` still renders a trailing '?', so rebuild without one.
+  final cleaned = keptQuery.isEmpty
+      ? Uri(
+          scheme: withoutQuery.scheme,
+          userInfo: withoutQuery.userInfo,
+          host: withoutQuery.host,
+          port: withoutQuery.hasPort ? withoutQuery.port : null,
+          path: withoutQuery.path,
+        )
+      : withoutQuery;
+  return fragment.isEmpty ? cleaned : cleaned.replace(fragment: fragment);
 }
 
 Map<String, String> _fragmentParameters(String fragment) {

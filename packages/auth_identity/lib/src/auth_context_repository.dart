@@ -51,13 +51,29 @@ class AuthContextRepository {
     }
   }
 
-  static AuthFailure _mapTransport(SyncTransportException e) =>
-      switch (e.kind) {
-        SyncTransportErrorKind.auth => const AuthDeniedFailure(),
-        SyncTransportErrorKind.transient => const AuthNetworkFailure(),
-        SyncTransportErrorKind.server => const AuthUnknownFailure(
-          'server error',
-        ),
-        SyncTransportErrorKind.unknown => const AuthUnknownFailure(),
-      };
+  static AuthFailure _mapTransport(SyncTransportException e) {
+    // AUTH-257 — RESTORING THIS CLASS'S OWN DOCUMENTED CONTRACT (see above:
+    // "42501 -> AuthDeniedFailure").
+    //
+    // The shared transport classifier deliberately narrowed 42501 -> `auth` to
+    // an allowlist of PIN/device session messages (POS-OFFLINE-OPERATIONS-002),
+    // so that a batch-validation or RLS 42501 could never strand the POS in a
+    // re-auth hold. Correct for sync — but `get_my_context` is not sync. It
+    // raises 42501 for exactly one reason, "no linked, authenticated
+    // principal", and that message is not on a list written for PIN sessions.
+    //
+    // The consequence reached production: a freshly CONFIRMED owner with no
+    // `app_users` row yet got `server` -> AuthUnknownFailure ->
+    // AuthGateInvalidResponse -> the generic "Something went wrong" page,
+    // instead of AuthGateAuthDenied -> ONBOARDING, which is the entire point of
+    // that state. This RPC has one meaning for 42501, so it is classified here
+    // rather than by widening the shared sync allowlist.
+    if (e.code == '42501') return const AuthDeniedFailure();
+    return switch (e.kind) {
+      SyncTransportErrorKind.auth => const AuthDeniedFailure(),
+      SyncTransportErrorKind.transient => const AuthNetworkFailure(),
+      SyncTransportErrorKind.server => const AuthUnknownFailure('server error'),
+      SyncTransportErrorKind.unknown => const AuthUnknownFailure(),
+    };
+  }
 }
