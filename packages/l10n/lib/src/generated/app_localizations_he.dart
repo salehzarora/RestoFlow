@@ -7473,4 +7473,76 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get adminSupportUnavailable => 'גישת תמיכה אינה זמינה כאן';
+
+  @override
+  String get posTableOpenOrdersHeading => 'הזמנות פתוחות על שולחן זה';
+
+  @override
+  String get posTableOpenOrderOpen => 'פתח';
+
+  @override
+  String posTableOrderAgeMinutes(int minutes) {
+    return '$minutes דק׳';
+  }
+
+  @override
+  String posTableOrderAgeHours(int hours) {
+    return '$hours שע׳';
+  }
+
+  @override
+  String posTableOrderAgeDays(int days, int hours) {
+    return '$days י׳ $hours שע׳';
+  }
+
+  @override
+  String get posTableOrderPaid => 'שולם';
+
+  @override
+  String get posTableOrderUnpaid => 'לא שולם';
+
+  @override
+  String get posTableOrderNotChargeable => 'ללא חיוב';
+
+  @override
+  String get posTableOrderShiftClosed => 'המשמרת נסגרה';
+
+  @override
+  String get posTableRecoveryTitle => 'הזמנה פתוחה';
+
+  @override
+  String get posTableRecoveryHint =>
+      'שלמו כדי לסגור אותה, או בטלו אותה אם היא שגויה. השולחן משתחרר אוטומטית.';
+
+  @override
+  String get posTableRecoveryLoading => 'טוען הזמנה…';
+
+  @override
+  String get posTableRecoveryUnavailable =>
+      'לא ניתן לטעון הזמנה זו. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posTableRecoveryRetry => 'נסו שוב';
+
+  @override
+  String get posTableRecoveryNoActions =>
+      'אין פעולת שחזור זמינה לתפקידך כרגע. מנהל יכול לבטל הזמנה שלא שולמה; תשלום דורש משמרת פתוחה.';
+
+  @override
+  String ordersStaleOpenFor(int hours) {
+    return 'ישן · פתוח $hours שע׳';
+  }
+
+  @override
+  String get ordersStaleShiftClosed => 'המשמרת נסגרה';
+
+  @override
+  String get ordersStalePaidNotCompleted => 'שולם, לא הושלם';
+
+  @override
+  String get ordersStaleNoKitchenWork => 'אין עבודה במטבח';
+
+  @override
+  String get ordersStaleHint =>
+      'שחזרו מהקופה: פתחו את השולחן, אחר כך את ההזמנה, ואז שלמו או בטלו.';
 }

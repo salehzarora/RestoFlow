@@ -187,6 +187,12 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
     staffName: _strOrNull(row['staff_name']),
     paymentMethod: _strOrNull(row['payment_method']),
     paidAmountMinor: _intOrNull(row['paid_amount_minor']),
+    // STALE-TABLE-ORDER-RECOVERY-001: additive flags; absent = null (an older
+    // server simply yields no stale hints, never a fabricated one).
+    shiftStatus: _strOrNull(row['shift_status']),
+    kitchenWorkOpen: row['kitchen_work_open'] is bool
+        ? row['kitchen_work_open'] as bool
+        : null,
   );
 
   static DateTime? _utcOrNull(Object? value) {

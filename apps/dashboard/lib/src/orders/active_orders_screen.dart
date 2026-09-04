@@ -778,6 +778,10 @@ class ActiveOrderTile extends ConsumerWidget {
           tone: statusTone(row.status),
         ),
         settlementPill(l10n, row.settlement),
+        // STALE-TABLE-ORDER-RECOVERY-001: operational WARNINGS, display only.
+        // The board never mutates an order from these; the recovery is the
+        // POS table → order → pay / cancel path.
+        ...staleOrderPills(l10n, row, now),
       ],
     );
 
@@ -975,6 +979,67 @@ class _AgeBlock extends StatelessWidget {
 }
 
 /// The localized elapsed-age text, or null when the age is unknown.
+/// STALE-TABLE-ORDER-RECOVERY-001: an ACTIVE order open at least this long is
+/// flagged as stale on the board. DISPLAY ONLY — a threshold for a warning
+/// pill, never an occupancy or lifecycle rule (occupancy has NO age cutoff).
+const Duration kActiveOrderStaleAfter = Duration(hours: 12);
+
+/// The display-only warning pills for one active order (empty when nothing is
+/// wrong): open beyond [kActiveOrderStaleAfter]; originating shift closed;
+/// served + fully paid but not completed (auto-completion gap); active while
+/// the kitchen holds no work for it. Pure: reads the row and the clock only.
+List<Widget> staleOrderPills(
+  AppLocalizations l10n,
+  OrderHistoryRow row,
+  DateTime now,
+) {
+  final minutes = openMinutes(row, now);
+  final pills = <Widget>[];
+  if (minutes != null && minutes >= kActiveOrderStaleAfter.inMinutes) {
+    pills.add(
+      RestoflowStatusPill(
+        key: Key('stale-age-${row.orderId}'),
+        label: l10n.ordersStaleOpenFor(minutes ~/ 60),
+        tone: RestoflowTone.warning,
+      ),
+    );
+  }
+  if (row.shiftStatus == 'closed') {
+    pills.add(
+      RestoflowStatusPill(
+        key: Key('stale-shift-closed-${row.orderId}'),
+        label: l10n.ordersStaleShiftClosed,
+        tone: RestoflowTone.warning,
+      ),
+    );
+  }
+  if (row.status == 'served' && row.settlement == SettlementState.paid) {
+    pills.add(
+      RestoflowStatusPill(
+        key: Key('stale-paid-not-completed-${row.orderId}'),
+        label: l10n.ordersStalePaidNotCompleted,
+        tone: RestoflowTone.warning,
+      ),
+    );
+  }
+  if (row.kitchenWorkOpen == false &&
+      const {
+        'submitted',
+        'accepted',
+        'preparing',
+        'ready',
+      }.contains(row.status)) {
+    pills.add(
+      RestoflowStatusPill(
+        key: Key('stale-no-kitchen-work-${row.orderId}'),
+        label: l10n.ordersStaleNoKitchenWork,
+        tone: RestoflowTone.neutral,
+      ),
+    );
+  }
+  return pills;
+}
+
 String? activeAgeText(AppLocalizations l10n, int? minutes) {
   if (minutes == null) return null;
   if (minutes < 60) return l10n.ordersActiveAgeMinutes(minutes);

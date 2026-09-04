@@ -13695,6 +13695,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Support access is not available here'**
   String get adminSupportUnavailable;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: heading of the list of live orders occupying a table in the POS table sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Open orders on this table'**
+  String get posTableOpenOrdersHeading;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: button that opens one occupying order for recovery (pay / cancel).
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get posTableOpenOrderOpen;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: elapsed age of an occupying order under one hour.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String posTableOrderAgeMinutes(int minutes);
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: elapsed age of an occupying order of an hour or more (whole hours).
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String posTableOrderAgeHours(int hours);
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: elapsed age of an occupying order of a day or more.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d {hours} h'**
+  String posTableOrderAgeDays(int days, int hours);
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: settlement state of an occupying order.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get posTableOrderPaid;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: settlement state of an occupying order.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get posTableOrderUnpaid;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: a zero-total occupying order (nothing to pay).
+  ///
+  /// In en, this message translates to:
+  /// **'No charge'**
+  String get posTableOrderNotChargeable;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the order's originating shift is closed (payment still settles under the current open shift).
+  ///
+  /// In en, this message translates to:
+  /// **'Shift closed'**
+  String get posTableOrderShiftClosed;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: title of the recovery sheet for one occupying order (followed by its code).
+  ///
+  /// In en, this message translates to:
+  /// **'Open order'**
+  String get posTableRecoveryTitle;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: explains the two canonical recoveries; occupancy is derived, never edited by hand.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay to close it, or cancel it if it is wrong. The table is released automatically.'**
+  String get posTableRecoveryHint;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the occupying order is being fetched from the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading order…'**
+  String get posTableRecoveryLoading;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the by-id fetch failed (offline/transport); never fakes an order.
+  ///
+  /// In en, this message translates to:
+  /// **'This order could not be loaded. Check the connection and try again.'**
+  String get posTableRecoveryUnavailable;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: retry the by-id fetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get posTableRecoveryRetry;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the exact refusal shown when neither pay nor cancel is allowed for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'No recovery action is available for your role right now. A manager can cancel an unpaid order; payment needs an open shift.'**
+  String get posTableRecoveryNoActions;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: display-only warning pill for an active order open beyond the stale threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale · open {hours} h'**
+  String ordersStaleOpenFor(int hours);
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the active order's originating shift is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift closed'**
+  String get ordersStaleShiftClosed;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: a served, fully paid order that has not completed (auto-completion gap).
+  ///
+  /// In en, this message translates to:
+  /// **'Paid, not completed'**
+  String get ordersStalePaidNotCompleted;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: an active order the kitchen is no longer holding.
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen work'**
+  String get ordersStaleNoKitchenWork;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: how to resolve a stale order; the dashboard never mutates it.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover from the POS: open the table, then the order, then pay or cancel it.'**
+  String get ordersStaleHint;
 }
 
 class _AppLocalizationsDelegate

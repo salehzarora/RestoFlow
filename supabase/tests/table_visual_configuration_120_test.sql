@@ -340,7 +340,7 @@ create temp table pos_read as select app.pos_tables(
 reset role;
 select is(
   (select array(select jsonb_object_keys(res->'tables'->0) order by 1) from pos_read),
-  array['active_order_count','area','effective_state','group_id','id','label','layout_x',
+  array['active_order_count','active_orders','area','effective_state','group_id','id','label','layout_x',
         'layout_y','seats','section_display_order','section_floor_preset','section_id','section_name',
         'section_room_frame_preset','status','visual_material','visual_preset'],
   'pos_tables rows pin EXACTLY the 118 fifteen keys + visual_material');

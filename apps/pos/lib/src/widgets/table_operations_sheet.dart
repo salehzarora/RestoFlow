@@ -6,7 +6,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_tables.dart';
 import '../data/table_operations_repository.dart';
 import '../state/order_setup_controller.dart';
+import '../state/order_sync_controller.dart' show posSyncClockProvider;
 import '../state/table_operations_controller.dart';
+import 'table_order_recovery_sheet.dart';
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 — the POS operational table-control sheet.
 ///
@@ -183,6 +185,42 @@ class _TableOperationsSheetState extends ConsumerState<TableOperationsSheet> {
             ),
             if (t.isGrouped)
               _kv(theme, l10n.posTableGroup, l10n.posTableLinked),
+            // STALE-TABLE-ORDER-RECOVERY-001: the floor must never say
+            // "N open orders" without a path to IDENTIFY and OPEN them. The
+            // server projects the very rows behind the count; each opens the
+            // recovery sheet (canonical pay / cancel through the shared policy).
+            if (t.activeOrders.isNotEmpty) ...[
+              const SizedBox(height: RestoflowSpacing.xs),
+              Text(
+                l10n.posTableOpenOrdersHeading,
+                key: const Key('table-ops-open-orders-heading'),
+                style: theme.textTheme.labelLarge,
+              ),
+              for (final e in t.activeOrders)
+                ListTile(
+                  key: Key('table-ops-open-order-${e.orderCode}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: Text(e.orderCode),
+                  subtitle: Text(
+                    tableActiveOrderSummary(
+                      l10n,
+                      e,
+                      ref.watch(posSyncClockProvider)(),
+                    ),
+                  ),
+                  trailing: FilledButton.tonal(
+                    key: Key('table-ops-open-order-open-${e.orderCode}'),
+                    onPressed: () => TableOrderRecoverySheet.show(
+                      context,
+                      table: t,
+                      entry: e,
+                    ),
+                    child: Text(l10n.posTableOpenOrderOpen),
+                  ),
+                ),
+            ],
             const Divider(),
             _action(
               key: 'table-ops-available',

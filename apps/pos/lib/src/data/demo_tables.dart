@@ -45,6 +45,7 @@ class DemoTable {
     this.visualMaterial,
     this.sectionFloorPreset = FloorPreset.plainLight,
     this.sectionRoomFramePreset,
+    this.activeOrders = const <PosTableActiveOrder>[],
     String? memberEffectiveState,
     int? memberActiveOrderCount,
   }) : _memberEffectiveState = memberEffectiveState,
@@ -88,6 +89,13 @@ class DemoTable {
   /// are VALID (second rounds); the count is shown honestly and does NOT by
   /// itself block selection. Demo mode derives it from its seeded orders.
   final int activeOrderCount;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the SAME live orders that make
+  /// [activeOrderCount], projected by `pos_tables.active_orders` (money-free:
+  /// ids/codes/state only) so a cashier can IDENTIFY and OPEN them even after
+  /// they aged out of the POS's today+yesterday recent-orders window. Empty
+  /// when the table is free or the server predates the key.
+  final List<PosTableActiveOrder> activeOrders;
 
   /// PILOT-OPERATIONS-CORRECTIONS-001: the raw MANUAL floor status the operator
   /// set (`available` | `reserved` | `occupied` | `out_of_service`). Distinct
@@ -187,6 +195,7 @@ class DemoTable {
     visualMaterial: visualMaterial,
     sectionFloorPreset: sectionFloorPreset,
     sectionRoomFramePreset: sectionRoomFramePreset,
+    activeOrders: activeOrders,
     memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
     memberActiveOrderCount:
         memberActiveOrderCount ?? this.memberActiveOrderCount,
@@ -197,6 +206,95 @@ class DemoTable {
 /// first (Finding 6): available -> available; reserved/occupied -> occupied (non-
 /// assignable); out_of_service AND unknown -> blocked (non-assignable, fail-closed —
 /// an unknown/unrecognized state never presents as selectable capacity).
+/// STALE-TABLE-ORDER-RECOVERY-001: one live order occupying a table, as the
+/// server projects it in `pos_tables.active_orders`. Deliberately MONEY-FREE
+/// (every PIN role reads the floor); amounts and actions come from the by-id
+/// snapshot fetch (`pos_order_snapshots` with `p_order_ids`, which bypasses
+/// the recent-orders window) and the canonical operations behind it.
+class PosTableActiveOrder {
+  const PosTableActiveOrder({
+    required this.orderId,
+    required this.orderCode,
+    required this.status,
+    required this.createdAt,
+    this.orderType,
+    this.revision,
+    this.paymentStatus = 'unpaid',
+    this.shiftStatus,
+    this.kitchenWorkOpen,
+  });
+
+  final String orderId;
+  final String orderCode;
+  final String status;
+
+  /// The ABSOLUTE instant (UTC) the order was created — for the elapsed age.
+  final DateTime createdAt;
+  final String? orderType;
+  final int? revision;
+
+  /// `paid` | `unpaid` | `not_chargeable` — the server's ONE settlement
+  /// predicate; an unknown token fails CLOSED to `unpaid`.
+  final String paymentStatus;
+
+  /// The originating shift's state (`open` | `closed`), or null when the order
+  /// carries no shift (e.g. a kiosk order). Informational: payment settles
+  /// under the paying device's CURRENT open shift.
+  final String? shiftStatus;
+
+  /// Whether the kitchen is still holding this order (null = unknown).
+  final bool? kitchenWorkOpen;
+
+  bool get isPaid => paymentStatus == 'paid';
+  bool get isNotChargeable => paymentStatus == 'not_chargeable';
+  bool get originatingShiftClosed => shiftStatus == 'closed';
+
+  /// Strict per-row parse: a row without its identity is dropped rather than
+  /// fabricated. Tolerant of an absent/foreign `active_orders` value.
+  static List<PosTableActiveOrder> listFromJson(Object? raw) {
+    if (raw is! List) return const <PosTableActiveOrder>[];
+    final out = <PosTableActiveOrder>[];
+    for (final e in raw.whereType<Map>()) {
+      final id = e['order_id'];
+      final code = e['order_code'];
+      final status = e['status'];
+      final createdAt = DateTime.tryParse('${e['created_at'] ?? ''}');
+      if (id is! String ||
+          id.isEmpty ||
+          code is! String ||
+          status is! String ||
+          createdAt == null) {
+        continue;
+      }
+      final payment = e['payment_status'];
+      final revision = e['revision'];
+      final kitchen = e['kitchen_work_open'];
+      out.add(
+        PosTableActiveOrder(
+          orderId: id,
+          orderCode: code,
+          status: status,
+          createdAt: createdAt.toUtc(),
+          orderType: e['order_type'] is String
+              ? e['order_type'] as String
+              : null,
+          revision: revision is int ? revision : null,
+          paymentStatus: switch (payment) {
+            'paid' => 'paid',
+            'not_chargeable' => 'not_chargeable',
+            _ => 'unpaid',
+          },
+          shiftStatus: e['shift_status'] is String
+              ? e['shift_status'] as String
+              : null,
+          kitchenWorkOpen: kitchen is bool ? kitchen : null,
+        ),
+      );
+    }
+    return out;
+  }
+}
+
 TableStatusKind tableStatusKindFor(String effectiveState) =>
     switch (normalizeTableEffectiveState(effectiveState)) {
       'available' => TableStatusKind.available,
@@ -580,6 +678,7 @@ class RealTablesRepository extends TablesRepository {
           sectionRoomFramePreset: TableSectionRoomFramePreset.tryParse(
             row['section_room_frame_preset']?.toString(),
           ),
+          activeOrders: PosTableActiveOrder.listFromJson(row['active_orders']),
         ),
       );
     }

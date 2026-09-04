@@ -7578,4 +7578,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminSupportUnavailable => 'Support access is not available here';
+
+  @override
+  String get posTableOpenOrdersHeading => 'Open orders on this table';
+
+  @override
+  String get posTableOpenOrderOpen => 'Open';
+
+  @override
+  String posTableOrderAgeMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String posTableOrderAgeHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String posTableOrderAgeDays(int days, int hours) {
+    return '$days d $hours h';
+  }
+
+  @override
+  String get posTableOrderPaid => 'Paid';
+
+  @override
+  String get posTableOrderUnpaid => 'Unpaid';
+
+  @override
+  String get posTableOrderNotChargeable => 'No charge';
+
+  @override
+  String get posTableOrderShiftClosed => 'Shift closed';
+
+  @override
+  String get posTableRecoveryTitle => 'Open order';
+
+  @override
+  String get posTableRecoveryHint =>
+      'Pay to close it, or cancel it if it is wrong. The table is released automatically.';
+
+  @override
+  String get posTableRecoveryLoading => 'Loading order…';
+
+  @override
+  String get posTableRecoveryUnavailable =>
+      'This order could not be loaded. Check the connection and try again.';
+
+  @override
+  String get posTableRecoveryRetry => 'Try again';
+
+  @override
+  String get posTableRecoveryNoActions =>
+      'No recovery action is available for your role right now. A manager can cancel an unpaid order; payment needs an open shift.';
+
+  @override
+  String ordersStaleOpenFor(int hours) {
+    return 'Stale · open $hours h';
+  }
+
+  @override
+  String get ordersStaleShiftClosed => 'Shift closed';
+
+  @override
+  String get ordersStalePaidNotCompleted => 'Paid, not completed';
+
+  @override
+  String get ordersStaleNoKitchenWork => 'No kitchen work';
+
+  @override
+  String get ordersStaleHint =>
+      'Recover from the POS: open the table, then the order, then pay or cancel it.';
 }
