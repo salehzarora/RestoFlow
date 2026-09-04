@@ -172,7 +172,10 @@ class PosOrderActionsAssembly {
       // Complete safety net (server re-enforces).
       completeEligible:
           posOrderCloseEligibility(
-            status: order.status ?? '',
+            // STALE-TABLE-ORDER-RECOVERY-001: the SERVER's status (snapshot
+            // first). A by-id discovered row carries no local status, and the
+            // printer-only Complete safety net is exactly its canonical repair.
+            status: order.serverStatus ?? '',
             settled: order.settlement != PosSettlement.unpaid,
             verifiedMode: _verifiedMode,
             actorAuthorized: _capabilities?.canFinishKitchenOrders ?? false,

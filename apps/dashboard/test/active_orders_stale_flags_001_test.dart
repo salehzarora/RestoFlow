@@ -140,12 +140,16 @@ void main() {
       await _pumpTile(tester, row);
       expect(find.byKey(Key('stale-age-${row.orderId}')), findsOneWidget);
       expect(find.text(l10n.ordersStaleOpenFor(53)), findsOneWidget);
+      // the canonical recovery path is stated next to the warning
+      expect(find.byKey(Key('stale-hint-${row.orderId}')), findsOneWidget);
+      expect(find.text(l10n.ordersStaleHint), findsOneWidget);
     });
 
     testWidgets('a fresh order gets NO stale pill', (tester) async {
       final row = _row(age: const Duration(minutes: 30));
       await _pumpTile(tester, row);
       expect(find.byKey(Key('stale-age-${row.orderId}')), findsNothing);
+      expect(find.byKey(Key('stale-hint-${row.orderId}')), findsNothing);
       expect(
         find.byKey(Key('stale-shift-closed-${row.orderId}')),
         findsNothing,
@@ -279,9 +283,9 @@ void main() {
           kitchenWorkOpen: false,
         );
         final pills = staleOrderPills(l10n, row, _now);
-        expect(pills, hasLength(3));
+        expect(pills, hasLength(4));
         // same inputs → same output; a later clock only changes the age word
-        expect(staleOrderPills(l10n, row, _now), hasLength(3));
+        expect(staleOrderPills(l10n, row, _now), hasLength(4));
         expect(
           staleOrderPills(l10n, _row(age: const Duration(minutes: 1)), _now),
           isEmpty,

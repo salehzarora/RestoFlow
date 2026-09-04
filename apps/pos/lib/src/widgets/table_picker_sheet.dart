@@ -137,21 +137,29 @@ class TablePickerSheet extends ConsumerWidget {
                           },
                         ),
                         // PILOT-OPERATIONS-CORRECTIONS-001: a long-press opens the
-                        // operational table sheet — ONLY for an operator the server
-                        // says holds manage_table_operations. It carries the full
-                        // table list so link-candidate filtering is honest.
-                        onManage:
-                            (ref
-                                    .watch(staffCapabilitiesProvider)
-                                    .valueOrNull
-                                    ?.manageTableOperations ??
-                                false)
-                            ? (t) => TableOperationsSheet.show(
-                                context,
-                                table: t,
-                                allTables: tables,
-                              )
-                            : null,
+                        // operational table sheet for an operator the server says
+                        // holds manage_table_operations. STALE-TABLE-ORDER-
+                        // RECOVERY-001: ALSO for any table that has open orders —
+                        // pay/cancel authorize independently of that capability,
+                        // and a floor must never say "N open orders" without a
+                        // way to open them. It carries the full table list so
+                        // link-candidate filtering is honest.
+                        onManage: (t) {
+                          final manage = ref
+                              .read(staffCapabilitiesProvider)
+                              .valueOrNull
+                              ?.manageTableOperations;
+                          if (!canOpenTableOperations(manage, t)) return;
+                          TableOperationsSheet.show(
+                            context,
+                            table: t,
+                            allTables: tables,
+                            // manual status / link / unlink stay
+                            // capability-gated; only the open-orders
+                            // recovery entries are unconditional.
+                            canManage: manage ?? false,
+                          );
+                        },
                       ),
               ),
             ),

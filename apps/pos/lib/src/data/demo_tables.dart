@@ -300,6 +300,14 @@ class PosTableActiveOrder {
   }
 }
 
+/// STALE-TABLE-ORDER-RECOVERY-001: whether an operator may open the table
+/// operations sheet for [table] — the manage capability (server-resolved;
+/// null while unknown is NOT a grant) OR a table that currently has open
+/// orders, whose recovery (pay / cancel) is authorized by the server on its
+/// own terms. Without the capability the sheet opens in open-orders-only mode.
+bool canOpenTableOperations(bool? manageTableOperations, DemoTable table) =>
+    (manageTableOperations ?? false) || table.activeOrders.isNotEmpty;
+
 TableStatusKind tableStatusKindFor(String effectiveState) =>
     switch (normalizeTableEffectiveState(effectiveState)) {
       'available' => TableStatusKind.available,

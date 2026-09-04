@@ -11,8 +11,13 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_tables.dart';
+import 'package:restoflow_pos/src/data/kitchen_finish_repository.dart'
+    show KitchenFinishResult;
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
+import 'package:restoflow_pos/src/data/ids.dart' show ClientIdGenerator;
+import 'package:restoflow_pos/src/data/payment_repository.dart'
+    show PaymentException, RealPaymentRepository, isNoOpenShiftRefusal;
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
@@ -25,7 +30,8 @@ import 'package:restoflow_pos/src/state/discount_controller.dart'
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart'
-    show tablesProvider;
+    show tablesProvider, tablesSnapshotProvider;
+import 'package:restoflow_pos/src/state/pos_order_complete_controller.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
     show posRecentOrdersStoreProvider;
@@ -136,6 +142,11 @@ class _SnapRepo implements OrderSnapshotRepository {
   }
 }
 
+class _FixedId implements ClientIdGenerator {
+  @override
+  String newId() => 'op-pay-1';
+}
+
 class _OnKitchenPref extends PosAutoPrintKitchenTicketController {
   @override
   Future<bool?> build() async => true;
@@ -152,11 +163,23 @@ class _FakeTransport implements SyncRpcTransport {
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
+/// A no-op printer-only Complete (the real one drives the sync pipeline).
+class _FakeComplete extends PosOrderCompleteController {
+  static int calls = 0;
+  @override
+  Future<KitchenFinishResult?> complete(String orderId) async {
+    calls++;
+    return null;
+  }
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required DemoTable table,
   required _SnapRepo repo,
   String role = 'manager',
+  KitchenModeResult? mode,
+  List<Override> extra = const <Override>[],
 }) async {
   tester.view.physicalSize = const Size(1000, 1800);
   tester.view.devicePixelRatio = 1.0;
@@ -183,7 +206,8 @@ Future<void> _pump(
         staffCapabilitiesProvider.overrideWith(
           (ref) async => PosStaffCapabilities.fromJson(const {}, role: role),
         ),
-        posVerifiedKitchenModeProvider.overrideWithValue(null),
+        posVerifiedKitchenModeProvider.overrideWithValue(mode),
+        ...extra,
       ],
       child: MaterialApp(
         locale: const Locale('en'),
@@ -238,6 +262,10 @@ void main() {
         expect(find.byKey(const Key('table-recovery-title')), findsOneWidget);
         expect(repo.byIdCalls, 1);
         expect(repo.lastIds, [_id]);
+        expect(
+          find.byKey(const Key('table-recovery-pay-$_code')),
+          findsOneWidget,
+        );
         expect(
           find.byKey(const Key('table-recovery-cancel-$_code')),
           findsOneWidget,
@@ -477,6 +505,187 @@ void main() {
       },
     );
 
+    testWidgets(
+      'a zero-total (nothing to pay) active order keeps its Cancel and is never called paid',
+      (tester) async {
+        final l10n = await _en();
+        final e = _entry(payment: 'not_chargeable');
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: _SnapRepo(
+            snapshot: _snapshot(e, settlement: PosSettlement.notChargeable),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-recovery-cancel-$_code')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(l10n.posTableRecoveryPaidNeedsCompletion),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'a PAID but not-yet-served order names the kitchen lifecycle as the exit',
+      (tester) async {
+        final l10n = await _en();
+        final e = _entry(status: 'submitted', payment: 'paid');
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: _SnapRepo(
+            snapshot: _snapshot(e, settlement: PosSettlement.paid),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-recovery-cancel-$_code')),
+          findsNothing,
+        );
+        expect(
+          find.text(l10n.posTableRecoveryPaidAwaitingKitchen),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'closing the cancel sheet re-fetches the FLOOR read model (the table frees as a consequence)',
+      (tester) async {
+        final e = _entry();
+        final repo = _SnapRepo(snapshot: _snapshot(e));
+        var snapshotFetches = 0;
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: repo,
+          extra: [
+            tablesSnapshotProvider.overrideWith((ref) async {
+              snapshotFetches++;
+              return const PosFloorSnapshot(tables: <DemoTable>[]);
+            }),
+          ],
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        final before = snapshotFetches;
+        await tester.tap(find.byKey(const Key('table-recovery-cancel-$_code')));
+        await tester.pumpAndSettle();
+        Navigator.of(tester.element(find.byType(CancelOrderSheet))).pop();
+        await tester.pumpAndSettle();
+        expect(snapshotFetches, greaterThan(before));
+      },
+    );
+
+    testWidgets(
+      'printer-only Complete (served + paid) re-reads the order by id and refreshes the floor',
+      (tester) async {
+        final e = _entry(status: 'served', payment: 'paid');
+        final repo = _SnapRepo(
+          snapshot: _snapshot(e, settlement: PosSettlement.paid),
+        );
+        var snapshotFetches = 0;
+        _FakeComplete.calls = 0;
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: repo,
+          mode: KitchenModePrinterOnlyWithRevision(
+            revision: 4,
+            verifiedAt: _now,
+          ),
+          extra: [
+            posOrderCompleteControllerProvider.overrideWith(_FakeComplete.new),
+            tablesSnapshotProvider.overrideWith((ref) async {
+              snapshotFetches++;
+              return const PosFloorSnapshot(tables: <DemoTable>[]);
+            }),
+          ],
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-recovery-complete-$_code')),
+          findsOneWidget,
+        );
+        final before = snapshotFetches;
+        // the server completed it meanwhile: the next by-id read is terminal
+        repo.snapshot = _snapshot(
+          e,
+          settlement: PosSettlement.paid,
+          status: 'completed',
+        );
+        await tester.tap(
+          find.byKey(const Key('table-recovery-complete-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(_FakeComplete.calls, 1);
+        expect(repo.byIdCalls, 2);
+        expect(snapshotFetches, greaterThan(before));
+        expect(
+          find.byKey(const Key('table-recovery-complete-$_code')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('table-recovery-no-actions')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'without manage_table_operations the sheet is OPEN-ORDERS-ONLY: recovery entries stay, manual mutations are not built',
+      (tester) async {
+        final e = _entry();
+        final t = _table(orders: [e]);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              runtimeConfigProvider.overrideWithValue(
+                RuntimeConfig.test(isDemoMode: false),
+              ),
+              pinnedPosSyncClock(_now),
+              tablesProvider.overrideWith((ref) async => [t]),
+            ],
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: TableOperationsSheet(
+                  table: t,
+                  allTables: [t],
+                  canManage: false,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('table-ops-available')), findsNothing);
+        expect(find.byKey(const Key('table-ops-out-of-service')), findsNothing);
+        expect(find.byKey(const Key('table-ops-link')), findsNothing);
+      },
+    );
+
     testWidgets('a free table shows no open-orders section', (tester) async {
       await _pump(tester, table: _table(active: 0), repo: _SnapRepo());
       expect(
@@ -615,6 +824,96 @@ void main() {
       expect(parsed[0].paymentStatus, 'unpaid');
       expect(parsed[1].isNotChargeable, isTrue);
       expect(parsed[1].originatingShiftClosed, isTrue);
+    });
+  });
+
+  group('entry + refusal plumbing', () {
+    test(
+      'an occupied table opens the operations sheet even without manage_table_operations',
+      () {
+        final occupied = _table(orders: [_entry()]);
+        final free = _table(active: 0);
+        expect(canOpenTableOperations(false, occupied), isTrue);
+        expect(canOpenTableOperations(null, occupied), isTrue);
+        expect(canOpenTableOperations(false, free), isFalse);
+        expect(canOpenTableOperations(null, free), isFalse); // unknown != grant
+        expect(canOpenTableOperations(true, free), isTrue);
+      },
+    );
+
+    test(
+      "the funnel's precondition_failed token becomes PaymentException.shiftRequired",
+      () async {
+        final t = _FakeTransport(
+          (fn, p) => <String, Object?>{
+            'ok': true,
+            'results': <Object?>[
+              <String, Object?>{
+                'local_operation_id': 'op-pay-1',
+                'operation_type': 'payment.create',
+                'ok': false,
+                'error': 'rejected',
+                'sqlstate': '42501',
+                'detail': 'precondition_failed',
+                'status': 'rejected',
+                'idempotency_replay': false,
+              },
+            ],
+          },
+        );
+        final repo = RealPaymentRepository(
+          t,
+          const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
+          _FixedId(),
+        );
+        await expectLater(
+          () => repo.recordCashPayment(
+            orderId: _id,
+            orderNumber: _code,
+            amountMinor: 23200,
+            tenderedMinor: 23200,
+            currencyCode: 'ILS',
+          ),
+          throwsA(
+            isA<PaymentException>().having(
+              (e) => e.shiftRequired,
+              'shiftRequired',
+              isTrue,
+            ),
+          ),
+        );
+      },
+    );
+
+    test('record_payment precondition refusals are recognized exactly', () {
+      expect(
+        isNoOpenShiftRefusal(
+          const SyncTransportException(
+            SyncTransportErrorKind.transient,
+            code: '42501',
+            message:
+                'record_payment: no open shift for this branch/device (precondition_failed)',
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        isNoOpenShiftRefusal(
+          const SyncTransportException(
+            SyncTransportErrorKind.transient,
+            code: '42501',
+            message:
+                'record_payment: no active cash drawer for the open shift (precondition_failed)',
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        isNoOpenShiftRefusal(
+          const SyncTransportException(SyncTransportErrorKind.transient),
+        ),
+        isFalse,
+      );
     });
   });
 

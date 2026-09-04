@@ -28,7 +28,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(73);
+select plan(86);
 
 -- ===== fixture ==============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -46,7 +46,8 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, seats,
   ('9f000000-0000-0000-0000-0000000000d3', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T3', 4, 'available', true),
   ('9f000000-0000-0000-0000-0000000000d4', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T4', 4, 'available', true),
   ('9f000000-0000-0000-0000-0000000000d5', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T5', 4, 'available', true),
-  ('9f000000-0000-0000-0000-0000000000d6', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T6', 4, 'available', true);
+  ('9f000000-0000-0000-0000-0000000000d6', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T6', 4, 'available', true),
+  ('9f000000-0000-0000-0000-0000000000d7', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'T7', 4, 'available', true);
 
 -- devices: a POS (staff PIN sessions) and the KIOSK that submits the stale order
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type, label) values
@@ -113,7 +114,9 @@ insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pi
   ('9f000000-0000-0000-0000-00000000a005', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-0000000ef001', '9f000000-0000-0000-0000-00000000ab01', null, '9f000000-0000-0000-0000-0000000000d4', 'takeaway', 'submitted', 'ILS', 1000, 0, 0, 1000, 'stale-o5', 1, now() - interval '1 hour'),
   -- O6: served + unpaid from the RECONCILED shift (T5); O7: submitted, unpaid, no dispatch (T6) - the kds-leg subject
   ('9f000000-0000-0000-0000-00000000a006', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-0000000ef001', '9f000000-0000-0000-0000-00000000ab01', '9f000000-0000-0000-0000-00000000f003', '9f000000-0000-0000-0000-0000000000d5', 'dine_in', 'served',    'ILS', 3000, 0, 0, 3000, 'stale-o6', 2, now() - interval '5 days'),
-  ('9f000000-0000-0000-0000-00000000a007', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-0000000ef001', '9f000000-0000-0000-0000-00000000ab01', null, '9f000000-0000-0000-0000-0000000000d6', 'dine_in', 'submitted', 'ILS', 4000, 0, 0, 4000, 'stale-o7', 1, now() - interval '2 hours');
+  ('9f000000-0000-0000-0000-00000000a007', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-0000000ef001', '9f000000-0000-0000-0000-00000000ab01', null, '9f000000-0000-0000-0000-0000000000d6', 'dine_in', 'submitted', 'ILS', 4000, 0, 0, 4000, 'stale-o7', 1, now() - interval '2 hours'),
+  -- O8: a ZERO-TOTAL (fully comped) dine-in on T7 - nothing to pay, still occupies
+  ('9f000000-0000-0000-0000-00000000a008', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-0000000ef001', '9f000000-0000-0000-0000-00000000ab01', null, '9f000000-0000-0000-0000-0000000000d7', 'dine_in', 'submitted', 'ILS', 0, 0, 0, 0, 'stale-o8', 1, now() - interval '3 hours');
 
 -- helper: the POS floor read as the manager
 create function pg_temp.floor_read() returns jsonb language sql as $$
@@ -196,12 +199,43 @@ select is(pg_temp.tbl('T5') -> 'active_orders' -> 0 ->> 'shift_status', 'closed'
   'C12. a RECONCILED originating shift is normalized to closed (never the raw enum)');
 select is((pg_temp.tbl('T1') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, true,
   'C13. the kiosk submit left an UNRESOLVED initial dispatch: the kitchen holds it (open-dispatch disjunct)');
+select is((pg_temp.owner_row('#00A001') ->> 'kitchen_work_open')::boolean, true,
+  'C13b. owner_active_orders agrees (the kiosk order''s open initial dispatch)');
 update kitchen_print_dispatches set completed_at = now(), last_client_status = 'transport_accepted'
   where order_id = '9f000000-0000-0000-0000-00000000a001' and completed_at is null;
 select is((pg_temp.tbl('T1') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, false,
   'C14. ...and once that dispatch completes (the incident shape) the kitchen holds nothing');
 select is((pg_temp.tbl('T6') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, false,
   'C15. printer-only + no dispatch + no round: a submitted order has no live kitchen work');
+select is(pg_temp.tbl('T7') -> 'active_orders' -> 0 ->> 'payment_status', 'not_chargeable',
+  'C15b. a zero-total order reads not_chargeable (nothing to pay), and still occupies its table');
+select is((pg_temp.tbl('T7') ->> 'active_order_count')::int, 1, 'C15c. ...occupied indeed');
+select is(pg_temp.owner_row('#00A008') ->> 'payment_status', 'not_chargeable',
+  'C15d. owner_active_orders agrees (not_chargeable)');
+-- the OPEN-DISPATCH disjunct, with the superseded filter: two dispatches on O7 (T6)
+insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key) values
+  ('9f000000-0000-0000-0000-0000000dd001', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000a007', 'initial_order', '{}'::jsonb, 'stale-d1'),
+  ('9f000000-0000-0000-0000-0000000dd002', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000a007', 'void', '{}'::jsonb, 'stale-d2');  -- a supersession target must be a VOID dispatch (trigger)
+select is((pg_temp.tbl('T6') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, true,
+  'C15e. an UNRESOLVED dispatch means the kitchen holds the order (open-dispatch disjunct)');
+select is((pg_temp.owner_row('#00A007') ->> 'kitchen_work_open')::boolean, true,
+  'C15f. owner_active_orders agrees (open dispatch)');
+update kitchen_print_dispatches set superseded_by_dispatch_id = '9f000000-0000-0000-0000-0000000dd002' where id = '9f000000-0000-0000-0000-0000000dd001';
+update kitchen_print_dispatches set completed_at = now(), last_client_status = 'transport_accepted' where id = '9f000000-0000-0000-0000-0000000dd002';
+select is((pg_temp.tbl('T6') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, false,
+  'C15g. a dispatch SUPERSEDED by a completed VOID dispatch does not count (superseded filter)');
+update kitchen_print_dispatches set superseded_by_dispatch_id = null where id = '9f000000-0000-0000-0000-0000000dd001';
+delete from kitchen_print_dispatches where id in ('9f000000-0000-0000-0000-0000000dd001', '9f000000-0000-0000-0000-0000000dd002');
+-- the SERVICE-ROUND disjunct on the served printer-only order O6 (T5)
+insert into order_service_rounds (id, organization_id, restaurant_id, branch_id, order_id, round_number, status, device_id, opened_by_employee_profile_id, local_operation_id, revision) values
+  ('9f000000-0000-0000-0000-0000000ee001', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000a006', 2, 'submitted', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-0000000ef001', 'stale-round-1', 1);
+select is((pg_temp.tbl('T5') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, true,
+  'C15h. an added round still with the kitchen means the kitchen holds the order (round disjunct)');
+select is((pg_temp.owner_row('#00A006') ->> 'kitchen_work_open')::boolean, true,
+  'C15i. owner_active_orders agrees (open round)');
+update order_service_rounds set status = 'served', ready_at = now() where id = '9f000000-0000-0000-0000-0000000ee001';
+select is((pg_temp.tbl('T5') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, false,
+  'C15j. ...and once that round is served the kitchen holds nothing again');
 select is(pg_temp.owner_row('#00A006') ->> 'shift_status', 'closed',
   'C16. owner_active_orders: the reconciled shift reads closed');
 select is(pg_temp.owner_row('#00A002') ->> 'shift_status', 'closed',
@@ -219,6 +253,16 @@ select throws_ok(
   'E1. with NO open shift on the paying device, settlement is refused (precondition), never faked');
 select is((select status from orders where id = '9f000000-0000-0000-0000-00000000a002'), 'served',
   'E2. ...and the served order is untouched');
+-- ...and through the REAL sync_push funnel the POS receives the STABLE token (20260905090001)
+create temp table e0 as select public.sync_push('9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(jsonb_build_object('local_operation_id', 'stale-pay-noshift-push', 'operation_type', 'payment.create',
+    'payload', jsonb_build_object('order_id', '9f000000-0000-0000-0000-00000000a002', 'tender_type', 'cash', 'amount_tendered_minor', 2500)))) as res;
+select is((select res -> 'results' -> 0 ->> 'status' from e0), 'rejected',
+  'E2b. pushed as payment.create with no open shift: rejected (never applied)');
+select is((select res -> 'results' -> 0 ->> 'detail' from e0), 'precondition_failed',
+  'E2c. ...and the envelope carries the stable precondition token the POS shows as open-a-shift');
+select is((select count(*) from payments where order_id = '9f000000-0000-0000-0000-00000000a002')::int, 0,
+  'E2d. ...with no payment row created');
 
 -- ===== K. the KDS leg: the mode flips the kitchen predicate; a PAID but still-active order =====
 update branches set kitchen_workflow_mode = 'kds' where id = '9f000000-0000-0000-0000-00000000a1b1';
@@ -329,8 +373,8 @@ select is((select status from orders where id = '9f000000-0000-0000-0000-0000000
   'E5. full settlement AUTO-COMPLETES the order (served + paid)');
 select is((pg_temp.tbl('T2') ->> 'active_order_count')::int, 0,
   'E6. ...which releases the table');
-select is((select string_agg(upper(right(id::text, 6)), ',' order by id) from orders where organization_id = '9f000000-0000-0000-0000-0000000000a0' and table_id is not null and order_type = 'dine_in' and deleted_at is null and status in ('submitted','accepted','preparing','ready','served')), '00A006',
-  'E7. the ONLY dine-in row still occupying is the untouched served+unpaid O6: every other release came from a canonical transition, none from editing table_id/status');
+select is((select string_agg(upper(right(id::text, 6)), ',' order by id) from orders where organization_id = '9f000000-0000-0000-0000-0000000000a0' and table_id is not null and order_type = 'dine_in' and deleted_at is null and status in ('submitted','accepted','preparing','ready','served')), '00A006,00A008',
+  'E7. the ONLY dine-in rows still occupying are the untouched O6 (served+unpaid) and O8 (zero-total): every other release came from a canonical transition, none from editing table_id/status');
 
 -- ===== F. the Dashboard read: flags only, never a mutation ===================
 set local role authenticated;

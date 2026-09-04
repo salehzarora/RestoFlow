@@ -115,19 +115,40 @@ class _TableOrderRecoverySheetState
 
   /// The EXACT reason nothing can be done here, by the state the server
   /// reported - never a generic shrug when the cause is known.
+  ///   * terminal            -> already closed (the floor frees on refresh)
+  ///   * served + settled    -> completion is the exit (Dashboard / Complete)
+  ///   * paid, not served    -> the kitchen must bring it to served first
+  ///   * zero-total (nothing to pay), nothing offered -> cancel if wrong,
+  ///     otherwise it completes once served
+  ///   * else                -> role / shift limits
   static String _refusal(AppLocalizations l10n, PosRecentOrder order) {
     if (order.isTerminal) return l10n.posTableRecoveryAlreadyClosed;
-    if (order.settlement != PosSettlement.unpaid) {
-      return l10n.posTableRecoveryPaidNeedsCompletion;
+    // The SERVER's status for a discovered row (the local field is only what
+    // this device was told, which for a by-id read is nothing).
+    final served = order.serverStatus == 'served';
+    switch (order.settlement) {
+      case PosSettlement.paid:
+        return served
+            ? l10n.posTableRecoveryPaidNeedsCompletion
+            : l10n.posTableRecoveryPaidAwaitingKitchen;
+      case PosSettlement.notChargeable:
+        return served
+            ? l10n.posTableRecoveryPaidNeedsCompletion
+            : l10n.posTableRecoveryNothingToPay;
+      case PosSettlement.unpaid:
+        return l10n.posTableRecoveryNoActions;
     }
-    return l10n.posTableRecoveryNoActions;
   }
 
+  /// A KNOWN-PAID snapshot is never offered Cancel: the server refuses it
+  /// with order_has_completed_payment. A zero-total (not_chargeable) order
+  /// has NO payment row, so the server accepts its void - the shared policy's
+  /// verdict stands for it.
   static PosOrderActions _withoutVoidWhenSettled(
     PosOrderActions a,
     PosRecentOrder order,
   ) {
-    if (order.settlement == PosSettlement.unpaid || !a.canVoid) return a;
+    if (order.settlement != PosSettlement.paid || !a.canVoid) return a;
     return PosOrderActions(
       canPay: a.canPay,
       canDiscount: a.canDiscount,
@@ -241,6 +262,13 @@ class _TableOrderRecoverySheetState
                 // Whatever the cancel sheet did, re-read the truth by id (a
                 // voided order comes back terminal) and refresh the floor.
                 onCancelClosed: () {
+                  _refreshFloor();
+                  _load();
+                },
+                // The printer-only Complete safety net is the third canonical
+                // exit: re-read by id (a completed order comes back terminal)
+                // and refresh the floor, exactly like the other two.
+                onCompleteFinished: () {
                   _refreshFloor();
                   _load();
                 },

@@ -7658,4 +7658,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posTableRecoveryPaidNeedsCompletion =>
       'This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.';
+
+  @override
+  String get posTableRecoveryPaidAwaitingKitchen =>
+      'This order is paid. The kitchen must bring it to Served (KDS or its rounds); it then completes automatically.';
+
+  @override
+  String get posTableRecoveryNothingToPay =>
+      'Nothing to pay on this order. Cancel it if it is wrong; otherwise it completes automatically once served.';
+
+  @override
+  String get posPaymentNoOpenShift =>
+      'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.';
 }

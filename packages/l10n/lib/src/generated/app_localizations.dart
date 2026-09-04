@@ -13827,6 +13827,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.'**
   String get posTableRecoveryPaidNeedsCompletion;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: a paid order that is not yet served cannot be cancelled or paid again; the exit is the kitchen lifecycle.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is paid. The kitchen must bring it to Served (KDS or its rounds); it then completes automatically.'**
+  String get posTableRecoveryPaidAwaitingKitchen;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: a zero-total order (nothing to pay) with no action offered.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to pay on this order. Cancel it if it is wrong; otherwise it completes automatically once served.'**
+  String get posTableRecoveryNothingToPay;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: record_payment's precondition refusal (no open shift / drawer on the PAYING device), shown instead of a generic failure.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.'**
+  String get posPaymentNoOpenShift;
 }
 
 class _AppLocalizationsDelegate
