@@ -69,6 +69,50 @@ class _StubAuthRepository implements DashboardAuthRepository {
 
   @override
   Future<void> signOut() async => calls++;
+
+  // -- AUTH-256: the recovery seam. Inert unless a test drives it, so every
+  // expectation already in this file keeps asserting what it always did.
+  final _recoveryController = StreamController<bool>.broadcast();
+  bool _recovering = false;
+
+  AuthOutcome resetOutcome = const AuthPasswordResetRequested();
+  AuthOutcome recoveryOutcome = const AuthPasswordUpdated();
+  String? lastResetEmail;
+  String? lastNewPassword;
+  int cancelRecoveryCount = 0;
+
+  @override
+  bool get isPasswordRecovery => _recovering;
+
+  @override
+  Stream<bool> get passwordRecoveryChanges => _recoveryController.stream;
+
+  /// Drives the provider's recovery signal from a test.
+  void emitRecovery(bool recovering) {
+    _recovering = recovering;
+    _recoveryController.add(recovering);
+  }
+
+  @override
+  Future<AuthOutcome> requestPasswordReset({required String email}) async {
+    lastResetEmail = email;
+    return resetOutcome;
+  }
+
+  @override
+  Future<AuthOutcome> completePasswordRecovery({
+    required String newPassword,
+  }) async {
+    lastNewPassword = newPassword;
+    if (recoveryOutcome is AuthPasswordUpdated) emitRecovery(false);
+    return recoveryOutcome;
+  }
+
+  @override
+  Future<void> cancelPasswordRecovery() async {
+    cancelRecoveryCount++;
+    emitRecovery(false);
+  }
 }
 
 /// Mounts the REAL auth gate — the shipped composition, not a stand-in.
@@ -96,7 +140,6 @@ Future<AppLocalizations> _pumpGate(
         ),
         home: LoginSignupScreen(
           authRepository: repository ?? _StubAuthRepository(),
-          onSignedUpWithSession: (_, _) {},
         ),
       ),
     ),
@@ -265,7 +308,9 @@ void main() {
       expect(find.text(l10n.authCreateAccountTab), findsWidgets);
 
       // Sign-in is the initial mode: the sign-up-only fields are absent.
-      expect(find.byKey(const Key('auth-restaurant')), findsNothing);
+      // AUTH-256: the sign-up restaurant field moved to onboarding, so the
+      // mode signal is now the sign-in-only "Forgot password?" control.
+      expect(find.byKey(const Key('auth-forgot-password')), findsOneWidget);
       expect(find.byKey(const Key('auth-email')), findsOneWidget);
     });
 
@@ -280,11 +325,11 @@ void main() {
 
       // Sign-up mode adds the restaurant field — proof the tap was wired
       // through, not merely that a colour changed.
-      expect(find.byKey(const Key('auth-restaurant')), findsOneWidget);
+      expect(find.byKey(const Key('auth-forgot-password')), findsNothing);
 
       await tester.tap(find.text(l10n.authSignInTab).first);
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('auth-restaurant')), findsNothing);
+      expect(find.byKey(const Key('auth-forgot-password')), findsOneWidget);
     });
 
     testWidgets('each segment is tappable across its whole half', (
@@ -310,11 +355,13 @@ void main() {
       await tester.tapAt(signUpEdge);
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const Key('auth-restaurant')),
-        findsOneWidget,
+        find.byKey(const Key('auth-forgot-password')),
+        findsNothing,
         reason:
             'A tap at the far edge of the create-account segment must select '
-            'it — the touch target spans the segment, not just its label.',
+            'it — the touch target spans the segment, not just its label. '
+            '"Forgot password?" is sign-in only, so its absence proves the '
+            'switch happened.',
       );
     });
 

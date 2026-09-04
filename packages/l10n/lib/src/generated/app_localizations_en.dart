@@ -7670,4 +7670,87 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posPaymentNoOpenShift =>
       'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.';
+
+  @override
+  String get authForgotPassword => 'Forgot password?';
+
+  @override
+  String get authResetTitle => 'Reset your password';
+
+  @override
+  String get authResetBody =>
+      'Enter your email and we’ll send you a link to choose a new password.';
+
+  @override
+  String get authResetSend => 'Send reset link';
+
+  @override
+  String get authResetSent =>
+      'If that address has a VEYRO account, a reset link is on its way. Check your inbox.';
+
+  @override
+  String get authBackToSignIn => 'Back to sign in';
+
+  @override
+  String get authNewPasswordTitle => 'Choose a new password';
+
+  @override
+  String get authNewPasswordBody =>
+      'Set a new password for your VEYRO account. You’ll stay signed in on this device.';
+
+  @override
+  String get authNewPasswordLabel => 'New password';
+
+  @override
+  String get authConfirmPasswordLabel => 'Confirm new password';
+
+  @override
+  String get authPasswordsDoNotMatch => 'Passwords don’t match';
+
+  @override
+  String get authUpdatePasswordAction => 'Update password';
+
+  @override
+  String get authPasswordUpdated => 'Your password has been updated.';
+
+  @override
+  String get authLinkExpiredTitle => 'This link is no longer valid';
+
+  @override
+  String get authLinkExpiredBody =>
+      'Password links can be used once and expire quickly. Request a new one to continue.';
+
+  @override
+  String get authRequestNewLink => 'Request a new link';
+
+  @override
+  String get authEmailConfirmedTitle => 'Email confirmed';
+
+  @override
+  String get authEmailConfirmedBody =>
+      'Your email is confirmed. Sign in to continue setting up your restaurant.';
+
+  @override
+  String get authEmailNotConfirmed =>
+      'Confirm your email first — check your inbox for the confirmation link.';
+
+  @override
+  String get authRateLimited =>
+      'Too many attempts. Wait a moment and try again.';
+
+  @override
+  String get authServiceUnavailable =>
+      'The sign-in service is unavailable right now. Please try again shortly.';
+
+  @override
+  String get authAccountUnavailable =>
+      'This account can’t be used right now. Please contact support.';
+
+  @override
+  String get authWeakPassword =>
+      'That password is too weak. Use at least 8 characters.';
+
+  @override
+  String get authSamePassword =>
+      'Choose a password you haven’t used here before.';
 }

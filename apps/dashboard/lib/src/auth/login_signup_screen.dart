@@ -5,26 +5,27 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'dashboard_auth_repository.dart';
 import '../widgets/language_selector.dart';
 
-/// The dashboard real-auth entry (RF-151): a Sign in / Create account form with
-/// basic validation and safe, localized loading / error / email-confirmation
-/// states.
+/// The dashboard real-auth entry (RF-151): Sign in / Create account, plus the
+/// AUTH-256 password-reset request, with safe localized loading / error /
+/// email-confirmation states.
 ///
-/// It ONLY ever calls the injected [authRepository] — it never fakes a successful
-/// sign-in/sign-up and never surfaces a raw provider error (only the safe
-/// [AuthErrorKind] mapped to a localized string). A successful sign-in transitions
-/// via the auth session stream the parent flow watches; a successful sign-up WITH
-/// a session reports the entered restaurant/branch via [onSignedUpWithSession] so
-/// the flow can carry them into onboarding.
+/// It ONLY ever calls the injected [authRepository] — it never fakes a
+/// successful sign-in/sign-up and never surfaces a raw provider error (only the
+/// safe [AuthErrorKind] mapped to a localized string). A successful sign-in
+/// transitions via the auth session stream the parent flow watches.
+///
+/// AUTH-256 removed the restaurant/branch fields from SIGN-UP. They were
+/// collected before the confirmation email was even sent, and then discarded:
+/// the values only ever reached onboarding when the project auto-confirmed and a
+/// session existed immediately. On a project that requires confirmation —
+/// which production does — the operator typed their restaurant name, went to
+/// their inbox, came back through a fresh page load, and it was gone. Onboarding
+/// asks for them after confirmation, where the answer can actually be used, and
+/// nothing about a half-finished sign-up has to be persisted anywhere.
 class LoginSignupScreen extends StatefulWidget {
-  const LoginSignupScreen({
-    required this.authRepository,
-    required this.onSignedUpWithSession,
-    super.key,
-  });
+  const LoginSignupScreen({required this.authRepository, super.key});
 
   final DashboardAuthRepository authRepository;
-  final void Function(String restaurantName, String? branchName)
-  onSignedUpWithSession;
 
   @override
   State<LoginSignupScreen> createState() => _LoginSignupScreenState();
@@ -36,29 +37,45 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _restaurant = TextEditingController();
-  final _branch = TextEditingController();
 
   _AuthMode _mode = _AuthMode.signIn;
+
+  /// AUTH-256: the "forgot password" sub-mode. Deliberately NOT a third
+  /// [_AuthMode] value so the two-segment control stays a two-segment control
+  /// (its width/clip behaviour under Arabic is load-bearing — see build()).
+  bool _resetMode = false;
   bool _busy = false;
   AuthErrorKind? _errorKind;
   bool _confirmationSent = false;
+  bool _resetSent = false;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _restaurant.dispose();
-    _branch.dispose();
     super.dispose();
   }
 
+  void _clearStatus() {
+    _errorKind = null;
+    _confirmationSent = false;
+    _resetSent = false;
+  }
+
   void _setMode(_AuthMode mode) {
-    if (mode == _mode || _busy) return;
+    if ((mode == _mode && !_resetMode) || _busy) return;
     setState(() {
       _mode = mode;
-      _errorKind = null;
-      _confirmationSent = false;
+      _resetMode = false;
+      _clearStatus();
+    });
+  }
+
+  void _setResetMode(bool on) {
+    if (_busy) return;
+    setState(() {
+      _resetMode = on;
+      _clearStatus();
     });
   }
 
@@ -74,7 +91,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
     final email = _email.text.trim();
     final password = _password.text;
     final isSignUp = _mode == _AuthMode.signUp;
-    final outcome = isSignUp
+    final outcome = _resetMode
+        ? await widget.authRepository.requestPasswordReset(email: email)
+        : isSignUp
         ? await widget.authRepository.signUp(email: email, password: password)
         : await widget.authRepository.signIn(email: email, password: password);
     if (!mounted) return;
@@ -82,26 +101,37 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
 
     switch (outcome) {
       case AuthSignedIn():
-        if (isSignUp) {
-          final branch = _branch.text.trim();
-          widget.onSignedUpWithSession(
-            _restaurant.text.trim(),
-            branch.isEmpty ? null : branch,
-          );
-        }
-      // Sign-in: the parent flow's session stream drives the transition.
+        // The parent flow's session stream drives the transition. A fresh
+        // sign-up with no tenant yet lands in onboarding, which is where the
+        // restaurant and branch are now asked for.
+        break;
       case AuthConfirmationRequired():
         setState(() => _confirmationSent = true);
+      case AuthPasswordResetRequested():
+        setState(() => _resetSent = true);
+      case AuthPasswordUpdated():
+        // Unreachable here: recovery completes on its own screen.
+        break;
       case AuthError(:final kind):
         setState(() => _errorKind = kind);
     }
   }
 
   String _errorMessage(AppLocalizations l10n, AuthErrorKind kind) {
-    final isSignUp = _mode == _AuthMode.signUp;
+    final isSignUp = _mode == _AuthMode.signUp && !_resetMode;
     return switch (kind) {
       AuthErrorKind.invalidCredentials =>
         isSignUp ? l10n.authSignUpFailed : l10n.authInvalidCredentials,
+      // AUTH-256: every one of these used to render as "Incorrect email or
+      // password", which is the one explanation guaranteed to waste the
+      // operator's time when the password was never the problem.
+      AuthErrorKind.emailNotConfirmed => l10n.authEmailNotConfirmed,
+      AuthErrorKind.accountUnavailable => l10n.authAccountUnavailable,
+      AuthErrorKind.rateLimited => l10n.authRateLimited,
+      AuthErrorKind.serviceUnavailable => l10n.authServiceUnavailable,
+      AuthErrorKind.weakPassword => l10n.authWeakPassword,
+      AuthErrorKind.samePassword => l10n.authSamePassword,
+      AuthErrorKind.linkExpired => l10n.authLinkExpiredBody,
       AuthErrorKind.network => l10n.authNetworkError,
       AuthErrorKind.unknown =>
         isSignUp ? l10n.authSignUpFailed : l10n.authError,
@@ -133,7 +163,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                   ),
                   const SizedBox(height: RestoflowSpacing.xl),
                   RestoflowSectionCard(
-                    title: l10n.authWelcomeTitle,
+                    title: _resetMode
+                        ? l10n.authResetTitle
+                        : l10n.authWelcomeTitle,
                     children: [
                       // THE SEGMENTS TAKE THE CARD'S WIDTH; THEY USED TO
                       // SHRINK TO THEIR OWN TEXT AND CLIP IT.
@@ -164,34 +196,46 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                       // unaffected in height (it already fit) and simply fills
                       // the card, which is also what the surrounding
                       // stretch-aligned form does.
-                      SizedBox(
-                        width: double.infinity,
-                        child: SegmentedButton<_AuthMode>(
-                          segments: [
-                            ButtonSegment(
-                              value: _AuthMode.signIn,
-                              label: Text(l10n.authSignInTab),
-                              // Icons.login is NOT auto-mirrored; flip under RTL
-                              // so the arrow points into the door.
-                              icon: Transform.flip(
-                                flipX:
-                                    Directionality.of(context) ==
-                                    TextDirection.rtl,
-                                child: const Icon(Icons.login),
+                      if (_resetMode)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: RestoflowSpacing.sm,
+                          ),
+                          child: Text(
+                            l10n.authResetBody,
+                            key: const Key('auth-reset-body'),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<_AuthMode>(
+                            segments: [
+                              ButtonSegment(
+                                value: _AuthMode.signIn,
+                                label: Text(l10n.authSignInTab),
+                                // Icons.login is NOT auto-mirrored; flip under RTL
+                                // so the arrow points into the door.
+                                icon: Transform.flip(
+                                  flipX:
+                                      Directionality.of(context) ==
+                                      TextDirection.rtl,
+                                  child: const Icon(Icons.login),
+                                ),
                               ),
-                            ),
-                            ButtonSegment(
-                              value: _AuthMode.signUp,
-                              label: Text(l10n.authCreateAccountTab),
-                              icon: const Icon(Icons.person_add_alt),
-                            ),
-                          ],
-                          selected: {_mode},
-                          onSelectionChanged: _busy
-                              ? null
-                              : (selection) => _setMode(selection.first),
+                              ButtonSegment(
+                                value: _AuthMode.signUp,
+                                label: Text(l10n.authCreateAccountTab),
+                                icon: const Icon(Icons.person_add_alt),
+                              ),
+                            ],
+                            selected: {_mode},
+                            onSelectionChanged: _busy
+                                ? null
+                                : (selection) => _setMode(selection.first),
+                          ),
                         ),
-                      ),
                       const SizedBox(height: RestoflowSpacing.lg),
                       Form(
                         key: _formKey,
@@ -212,58 +256,42 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                                   ? l10n.authEmailRequired
                                   : null,
                             ),
-                            const SizedBox(height: RestoflowSpacing.md),
-                            TextFormField(
-                              key: const Key('auth-password'),
-                              controller: _password,
-                              enabled: !_busy,
-                              obscureText: true,
-                              decoration: InputDecoration(
-                                labelText: l10n.authPasswordLabel,
-                                prefixIcon: const Icon(Icons.lock_outline),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) {
-                                  return l10n.authPasswordRequired;
-                                }
-                                if (isSignUp && v.length < 6) {
-                                  return l10n.authPasswordTooShort;
-                                }
-                                return null;
-                              },
-                            ),
-                            if (isSignUp) ...[
+                            if (!_resetMode) ...[
                               const SizedBox(height: RestoflowSpacing.md),
                               TextFormField(
-                                key: const Key('auth-restaurant'),
-                                controller: _restaurant,
+                                key: const Key('auth-password'),
+                                controller: _password,
                                 enabled: !_busy,
-                                textCapitalization: TextCapitalization.words,
+                                obscureText: true,
                                 decoration: InputDecoration(
-                                  labelText: l10n.onboardingRestaurantNameLabel,
-                                  prefixIcon: const Icon(
-                                    Icons.storefront_outlined,
-                                  ),
+                                  labelText: l10n.authPasswordLabel,
+                                  prefixIcon: const Icon(Icons.lock_outline),
                                 ),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? l10n.onboardingRestaurantNameRequired
-                                    : null,
-                              ),
-                              const SizedBox(height: RestoflowSpacing.md),
-                              TextFormField(
-                                key: const Key('auth-branch'),
-                                controller: _branch,
-                                enabled: !_busy,
-                                textCapitalization: TextCapitalization.words,
-                                decoration: InputDecoration(
-                                  labelText: l10n.onboardingBranchNameLabel,
-                                  prefixIcon: const Icon(
-                                    Icons.store_mall_directory_outlined,
-                                  ),
-                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return l10n.authPasswordRequired;
+                                  }
+                                  if (isSignUp && v.length < 6) {
+                                    return l10n.authPasswordTooShort;
+                                  }
+                                  return null;
+                                },
                               ),
                             ],
+                            // AUTH-256: "Forgot password?" sits with the
+                            // password field, where someone who has just failed
+                            // to remember one is actually looking.
+                            if (!_resetMode && !isSignUp)
+                              Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: TextButton(
+                                  key: const Key('auth-forgot-password'),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _setResetMode(true),
+                                  child: Text(l10n.authForgotPassword),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -277,8 +305,19 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                       if (_confirmationSent) ...[
                         const SizedBox(height: RestoflowSpacing.md),
                         RestoflowNoticeBanner(
+                          key: const Key('auth-confirmation-sent'),
                           tone: RestoflowTone.info,
                           body: l10n.authEmailConfirmationSent,
+                        ),
+                      ],
+                      if (_resetSent) ...[
+                        const SizedBox(height: RestoflowSpacing.md),
+                        RestoflowNoticeBanner(
+                          key: const Key('auth-reset-sent'),
+                          tone: RestoflowTone.info,
+                          // Deliberately identical whether or not the address
+                          // has an account — see AuthPasswordResetRequested.
+                          body: l10n.authResetSent,
                         ),
                       ],
                       const SizedBox(height: RestoflowSpacing.lg),
@@ -288,11 +327,19 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                         child: _busy
                             ? const RestoflowInlineSpinner(size: 20)
                             : Text(
-                                isSignUp
+                                _resetMode
+                                    ? l10n.authResetSend
+                                    : isSignUp
                                     ? l10n.authCreateAccountTab
                                     : l10n.authSignInAction,
                               ),
                       ),
+                      if (_resetMode)
+                        TextButton(
+                          key: const Key('auth-back-to-sign-in'),
+                          onPressed: _busy ? null : () => _setResetMode(false),
+                          child: Text(l10n.authBackToSignIn),
+                        ),
                     ],
                   ),
                 ],

@@ -24,6 +24,8 @@ import '../menu/supabase_menu_image_storage.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
 import '../tables/tables_repository.dart';
+import 'auth_callback.dart';
+import 'auth_failure_classifier.dart';
 import 'dashboard_auth_repository.dart';
 import 'onboarding_repository.dart';
 import 'web_session_isolation.dart';
@@ -145,6 +147,61 @@ buildDashboardRealAuth(SupabaseClient client) {
   );
 }
 
+/// AUTH-256 — completes an auth callback the SDK cannot finish on its own, and
+/// then scrubs the URL.
+///
+/// Two shapes need help:
+///
+///   * `?token_hash=…&type=…` — the CROSS-BROWSER shape. `verifyOtp` accepts it
+///     anywhere, unlike PKCE's `?code=`, which can only be exchanged in the
+///     browser that started the flow. This is the shape a project gets by
+///     pointing its email templates at `{{ .TokenHash }}`, and handling it here
+///     means that change becomes a config edit rather than a code change.
+///
+///   * `?error=…` — the link was expired or already used. The SDK has nothing
+///     to exchange, so without this the app would simply look broken.
+///
+/// The plain PKCE `?code=` case is left to the SDK, which already exchanges it
+/// and clears the URL. When the verifier is missing (a different browser) it
+/// raises, and [SupabaseDashboardAuthRepository] classifies that as
+/// [AuthErrorKind.linkExpired] rather than pretending the account is at fault.
+///
+/// Returns the callback that was seen, so the caller can render an honest state.
+/// SECURITY: the token is passed straight to the SDK and never logged; the URL
+/// is rewritten immediately so a recovery link cannot be replayed from history.
+Future<AuthCallback> completeAuthCallback({
+  required SupabaseClient client,
+  required Uri uri,
+  required void Function(Uri cleaned) replaceUrl,
+}) async {
+  final callback = parseAuthCallback(uri);
+  if (!callback.isAuthCallback) return callback;
+
+  final tokenHash = callback.tokenHash;
+  if (tokenHash != null) {
+    final kind = resolveCallbackKind(uri);
+    try {
+      await client.auth.verifyOTP(
+        tokenHash: tokenHash,
+        type: kind == AuthCallbackKind.recovery
+            ? OtpType.recovery
+            : OtpType.email,
+      );
+    } on AuthException {
+      // Swallowed on purpose: the app decides what to SAY about a failed link
+      // (see AuthErrorKind.linkExpired). Rethrowing here would crash the very
+      // first frame instead.
+    } catch (_) {
+      // Same reasoning for transport failures.
+    }
+  }
+
+  // Always scrub, success or failure. A `token_hash` or `code` sitting in the
+  // address bar survives into history, screenshots and shared links.
+  replaceUrl(scrubbedUrl(uri));
+  return callback;
+}
+
 /// GoTrue-backed [DashboardAuthRepository].
 class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
   SupabaseDashboardAuthRepository(this._client, {void Function()? onSignedOut})
@@ -195,9 +252,12 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
       return response.session != null
           ? const AuthSignedIn()
           : const AuthError(AuthErrorKind.invalidCredentials);
-    } on AuthException {
-      // Never echo the provider message; sign-in failures are credential errors.
-      return const AuthError(AuthErrorKind.invalidCredentials);
+    } on AuthException catch (e) {
+      // AUTH-FLOW-256: classify instead of assuming. A 402/429/5xx or an
+      // unconfirmed email is NOT a wrong password, and saying so sent owners
+      // to re-type a credential that was never the problem. The raw provider
+      // message is still never surfaced — only the safe kind.
+      return AuthError(_kindOf(e));
     } catch (_) {
       return const AuthError(AuthErrorKind.network);
     }
@@ -216,19 +276,118 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
       final response = await _client.auth.signUp(
         email: email,
         password: password,
-        emailRedirectTo: authRedirectUrlFromEnvironment(),
+        emailRedirectTo:
+            confirmationRedirectUrl(authRedirectUrlFromEnvironment()) ??
+            authRedirectUrlFromEnvironment(),
       );
       // A session means auto-confirm is on; no session means the project requires
       // an email confirmation before a session is issued (honest pending state).
       return response.session != null
           ? const AuthSignedIn()
           : const AuthConfirmationRequired();
-    } on AuthException {
-      return const AuthError(AuthErrorKind.unknown);
+    } on AuthException catch (e) {
+      return AuthError(_kindOf(e));
     } catch (_) {
       return const AuthError(AuthErrorKind.network);
     }
   }
+
+  // -- AUTH-FLOW-256: password recovery ------------------------------------
+
+  /// True once GoTrue reports a `passwordRecovery` event and until the password
+  /// is replaced (or recovery is abandoned).
+  bool _recovering = false;
+
+  @override
+  bool get isPasswordRecovery => _recovering;
+
+  @override
+  Stream<bool> get passwordRecoveryChanges => _client.auth.onAuthStateChange
+      .where(
+        (event) =>
+            event.event == AuthChangeEvent.passwordRecovery ||
+            event.event == AuthChangeEvent.signedOut ||
+            event.event == AuthChangeEvent.userUpdated,
+      )
+      .map((event) {
+        // The provider's own event is the authoritative signal — far more
+        // reliable than the callback URL, which the project's redirect
+        // allowlist and email templates can reshape without warning.
+        _recovering = event.event == AuthChangeEvent.passwordRecovery;
+        return _recovering;
+      });
+
+  @override
+  Future<AuthOutcome> requestPasswordReset({required String email}) async {
+    try {
+      await _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo:
+            recoveryRedirectUrl(authRedirectUrlFromEnvironment()) ??
+            authRedirectUrlFromEnvironment(),
+      );
+      return const AuthPasswordResetRequested();
+    } on AuthException catch (e) {
+      final kind = _kindOf(e);
+      // NON-ENUMERATION: an unknown address must be indistinguishable from a
+      // known one, so only failures that are genuinely about US (rate limiting,
+      // the service being down) are reported. Anything the provider says about
+      // the ADDRESS is answered with the same success the caller would have
+      // seen for a real account.
+      if (kind == AuthErrorKind.rateLimited ||
+          kind == AuthErrorKind.serviceUnavailable) {
+        return AuthError(kind);
+      }
+      return const AuthPasswordResetRequested();
+    } catch (_) {
+      return const AuthError(AuthErrorKind.network);
+    }
+  }
+
+  @override
+  Future<AuthOutcome> completePasswordRecovery({
+    required String newPassword,
+  }) async {
+    // Fail closed: without a session there is nothing to update, and calling
+    // the SDK anyway would surface a confusing provider error.
+    if (_client.auth.currentSession == null) {
+      return const AuthError(AuthErrorKind.linkExpired);
+    }
+    try {
+      final response = await _client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      if (response.user == null) {
+        return const AuthError(AuthErrorKind.unknown);
+      }
+      // Recovery is over: this is an ordinary authenticated session now, and the
+      // normal context gate takes it from here.
+      _recovering = false;
+      return const AuthPasswordUpdated();
+    } on AuthException catch (e) {
+      return AuthError(_kindOf(e));
+    } catch (_) {
+      return const AuthError(AuthErrorKind.network);
+    }
+  }
+
+  @override
+  Future<void> cancelPasswordRecovery() async {
+    _recovering = false;
+    // The recovery session is signed out rather than kept: an abandoned
+    // recovery must not leave behind a session that could be used as an
+    // ordinary one without the password ever being replaced.
+    await signOut();
+  }
+
+  /// Maps a provider exception to a safe kind. The message is passed only as a
+  /// classification hint for older servers that send no `code`; it is never
+  /// stored, logged or displayed.
+  static AuthErrorKind _kindOf(AuthException e) => classifyAuthFailure(
+    statusCode: int.tryParse(e.statusCode ?? ''),
+    errorCode: e.code,
+    message: e.message,
+  );
 
   @override
   Future<void> signOut() async {

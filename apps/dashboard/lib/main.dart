@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
@@ -13,6 +14,7 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'src/auth/auth_url.dart';
 import 'src/auth/dashboard_auth_flow.dart';
 import 'src/auth/dashboard_auth_repository.dart';
 import 'src/branding/restaurant_logo_storage.dart';
@@ -122,6 +124,17 @@ Future<void> main() async {
   // device (anonymous) principal is discarded here, so the operator lands on
   // sign-in instead of a shell whose every request is refused.
   await discardUnusableSession(Supabase.instance.client.auth);
+  // AUTH-256: finish an email-confirmation / password-recovery callback the SDK
+  // cannot finish alone (the cross-browser `token_hash` shape), and scrub the
+  // token out of the address bar either way. Runs BEFORE the first frame so no
+  // screen ever renders with a live recovery token in the URL.
+  if (kIsWeb) {
+    await completeAuthCallback(
+      client: Supabase.instance.client,
+      uri: Uri.base,
+      replaceUrl: replaceBrowserUrl,
+    );
+  }
   final real = buildDashboardRealAuth(Supabase.instance.client);
   runApp(
     ProviderScope(

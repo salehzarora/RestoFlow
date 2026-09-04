@@ -49,6 +49,50 @@ class FakeAuthRepository implements DashboardAuthRepository {
     _status = AuthSessionStatus.signedOut;
     _controller.add(_status);
   }
+
+  // -- AUTH-256: the recovery seam. Inert unless a test drives it, so every
+  // expectation already in this file keeps asserting what it always did.
+  final _recoveryController = StreamController<bool>.broadcast();
+  bool _recovering = false;
+
+  AuthOutcome resetOutcome = const AuthPasswordResetRequested();
+  AuthOutcome recoveryOutcome = const AuthPasswordUpdated();
+  String? lastResetEmail;
+  String? lastNewPassword;
+  int cancelRecoveryCount = 0;
+
+  @override
+  bool get isPasswordRecovery => _recovering;
+
+  @override
+  Stream<bool> get passwordRecoveryChanges => _recoveryController.stream;
+
+  /// Drives the provider's recovery signal from a test.
+  void emitRecovery(bool recovering) {
+    _recovering = recovering;
+    _recoveryController.add(recovering);
+  }
+
+  @override
+  Future<AuthOutcome> requestPasswordReset({required String email}) async {
+    lastResetEmail = email;
+    return resetOutcome;
+  }
+
+  @override
+  Future<AuthOutcome> completePasswordRecovery({
+    required String newPassword,
+  }) async {
+    lastNewPassword = newPassword;
+    if (recoveryOutcome is AuthPasswordUpdated) emitRecovery(false);
+    return recoveryOutcome;
+  }
+
+  @override
+  Future<void> cancelPasswordRecovery() async {
+    cancelRecoveryCount++;
+    emitRecovery(false);
+  }
 }
 
 class FakeOnboardingRepository implements OnboardingRepository {

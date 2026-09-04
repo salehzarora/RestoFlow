@@ -7565,4 +7565,84 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posPaymentNoOpenShift =>
       'אין משמרת פתוחה (או מגירה פעילה) במכשיר זה. פתחו משמרת ואז קבלו את התשלום - ההזמנה לא מושפעת.';
+
+  @override
+  String get authForgotPassword => 'שכחת סיסמה?';
+
+  @override
+  String get authResetTitle => 'איפוס הסיסמה';
+
+  @override
+  String get authResetBody =>
+      'הזן את כתובת האימייל שלך ונשלח לך קישור לבחירת סיסמה חדשה.';
+
+  @override
+  String get authResetSend => 'שליחת קישור לאיפוס';
+
+  @override
+  String get authResetSent =>
+      'אם לכתובת הזו יש חשבון VEYRO, הקישור בדרך אליך. בדוק את תיבת הדואר.';
+
+  @override
+  String get authBackToSignIn => 'חזרה להתחברות';
+
+  @override
+  String get authNewPasswordTitle => 'בחר סיסמה חדשה';
+
+  @override
+  String get authNewPasswordBody =>
+      'הגדר סיסמה חדשה לחשבון VEYRO שלך. תישאר מחובר במכשיר הזה.';
+
+  @override
+  String get authNewPasswordLabel => 'סיסמה חדשה';
+
+  @override
+  String get authConfirmPasswordLabel => 'אישור הסיסמה החדשה';
+
+  @override
+  String get authPasswordsDoNotMatch => 'הסיסמאות אינן תואמות';
+
+  @override
+  String get authUpdatePasswordAction => 'עדכון הסיסמה';
+
+  @override
+  String get authPasswordUpdated => 'הסיסמה עודכנה.';
+
+  @override
+  String get authLinkExpiredTitle => 'הקישור אינו תקף עוד';
+
+  @override
+  String get authLinkExpiredBody =>
+      'קישורי סיסמה ניתנים לשימוש חד-פעמי ופגים במהירות. בקש קישור חדש כדי להמשיך.';
+
+  @override
+  String get authRequestNewLink => 'בקשת קישור חדש';
+
+  @override
+  String get authEmailConfirmedTitle => 'האימייל אומת';
+
+  @override
+  String get authEmailConfirmedBody =>
+      'האימייל שלך אומת. התחבר כדי להמשיך בהקמת המסעדה.';
+
+  @override
+  String get authEmailNotConfirmed =>
+      'אמת קודם את האימייל שלך — חפש בתיבת הדואר את קישור האימות.';
+
+  @override
+  String get authRateLimited => 'יותר מדי ניסיונות. המתן רגע ונסה שוב.';
+
+  @override
+  String get authServiceUnavailable =>
+      'שירות ההתחברות אינו זמין כרגע. נסה שוב בקרוב.';
+
+  @override
+  String get authAccountUnavailable =>
+      'לא ניתן להשתמש בחשבון הזה כרגע. פנה לתמיכה.';
+
+  @override
+  String get authWeakPassword => 'הסיסמה חלשה מדי. השתמש ב-8 תווים לפחות.';
+
+  @override
+  String get authSamePassword => 'בחר סיסמה שלא השתמשת בה כאן בעבר.';
 }
