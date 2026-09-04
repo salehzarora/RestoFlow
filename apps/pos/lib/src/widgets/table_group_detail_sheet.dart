@@ -93,11 +93,13 @@ class _TableGroupDetailSheetState extends ConsumerState<TableGroupDetailSheet> {
   /// offline honesty, and audit behavior. Nothing here assigns a table, and no
   /// status logic is duplicated. On return this sheet rebuilds from the
   /// provider the ops sheet invalidated.
-  Future<void> _manage(DemoTable member) => TableOperationsSheet.show(
-    context,
-    table: member,
-    allTables: widget.allTables,
-  );
+  Future<void> _manage(DemoTable member, {required bool canManage}) =>
+      TableOperationsSheet.show(
+        context,
+        table: member,
+        allTables: widget.allTables,
+        canManage: canManage,
+      );
 
   void _select(DemoTable member) {
     // Defence in depth: the button/tap is only offered for assignable members,
@@ -280,11 +282,15 @@ class _TableGroupDetailSheetState extends ConsumerState<TableGroupDetailSheet> {
                       // Without the capability the control is not built at all
                       // (no hidden semantics/tap action). Selection remains
                       // governed solely by assignability.
-                      trailing: (canManage || m.isAssignable)
+                      // STALE-TABLE-ORDER-RECOVERY-001: a member with open orders keeps
+                      // its route (open-orders-only sheet) without the capability.
+                      trailing:
+                          (canOpenTableOperations(canManage, m) ||
+                              m.isAssignable)
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (canManage)
+                                if (canOpenTableOperations(canManage, m))
                                   IconButton(
                                     key: Key(
                                       'group-member-manage-${m.tableId}',
@@ -293,7 +299,8 @@ class _TableGroupDetailSheetState extends ConsumerState<TableGroupDetailSheet> {
                                     icon: const Icon(Icons.tune),
                                     onPressed: _submitting
                                         ? null
-                                        : () => _manage(m),
+                                        : () =>
+                                              _manage(m, canManage: canManage),
                                   ),
                                 if (m.isAssignable)
                                   FilledButton.tonal(

@@ -30,6 +30,7 @@ DemoTable _t(
   String effective = 'available',
   int active = 0,
   String? group,
+  List<PosTableActiveOrder> orders = const <PosTableActiveOrder>[],
 }) => DemoTable(
   table: DiningTable(
     tableId: id,
@@ -44,6 +45,7 @@ DemoTable _t(
   effectiveState: effective,
   activeOrderCount: active,
   groupId: group,
+  activeOrders: orders,
 );
 
 class _FakeTablesRepo extends TablesRepository {
@@ -523,6 +525,50 @@ void main() {
         expect(find.byKey(const Key('group-member-manage-t5')), findsNothing);
         // Selection remains governed only by assignability.
         expect(find.byKey(const Key('group-member-select-t5')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'C1-2b. STALE-TABLE-ORDER-RECOVERY-001: a group with an OPEN order keeps '
+      'its manage route without the capability (open-orders-only sheet)',
+      (tester) async {
+        final open = PosTableActiveOrder(
+          orderId: '298e598d-9709-4807-b46a-9be2758dd505',
+          orderCode: '#8DD505',
+          status: 'submitted',
+          createdAt: DateTime.utc(2026, 9, 1, 18, 41),
+          orderType: 'dine_in',
+        );
+        await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            _t(
+              't4',
+              'T4',
+              effective: 'occupied',
+              active: 1,
+              group: 'g1',
+              orders: [open],
+            ),
+            _t('t5', 'T5', group: 'g1'),
+          ]),
+          caps: PosStaffCapabilities.none,
+        );
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        // the group aggregation projects the order onto EVERY member, so each
+        // member offers the route to it
+        expect(find.byKey(const Key('group-member-manage-t4')), findsOneWidget);
+        expect(find.byKey(const Key('group-member-manage-t5')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('group-member-manage-t4')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-ops-open-order-open-#8DD505')),
+          findsOneWidget,
+        );
+        // ...but NO manual mutation is built without the capability
+        expect(find.byKey(const Key('table-ops-available')), findsNothing);
+        expect(find.byKey(const Key('table-ops-link')), findsNothing);
       },
     );
 

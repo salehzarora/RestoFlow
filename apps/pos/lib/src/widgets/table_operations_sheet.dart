@@ -24,21 +24,33 @@ class TableOperationsSheet extends ConsumerStatefulWidget {
   const TableOperationsSheet({
     required this.table,
     required this.allTables,
+    this.canManage = true,
     super.key,
   });
 
   final DemoTable table;
   final List<DemoTable> allTables;
 
+  /// STALE-TABLE-ORDER-RECOVERY-001: whether the operator holds
+  /// `manage_table_operations`. When false the sheet is OPEN-ORDERS-ONLY —
+  /// the manual status / link / unlink mutations (which the server would
+  /// refuse and audit as denied) are not built; the recovery entries stay.
+  final bool canManage;
+
   static Future<void> show(
     BuildContext context, {
     required DemoTable table,
     required List<DemoTable> allTables,
+    bool canManage = true,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => TableOperationsSheet(table: table, allTables: allTables),
+    builder: (_) => TableOperationsSheet(
+      table: table,
+      allTables: allTables,
+      canManage: canManage,
+    ),
   );
 
   @override
@@ -236,59 +248,61 @@ class _TableOperationsSheetState extends ConsumerState<TableOperationsSheet> {
                   ),
                 ),
             ],
-            const Divider(),
-            _action(
-              key: 'table-ops-available',
-              icon: Icons.check_circle_outline,
-              tone: RestoflowTone.success,
-              label: l10n.posTableMarkAvailable,
-              selected: t.manualStatus == 'available',
-              onTap: () => _setStatus('available'),
-            ),
-            _action(
-              key: 'table-ops-reserved',
-              icon: Icons.event_seat_outlined,
-              tone: RestoflowTone.info,
-              label: l10n.posTableMarkReserved,
-              selected: t.manualStatus == 'reserved',
-              onTap: () => _setStatus('reserved'),
-            ),
-            _action(
-              key: 'table-ops-occupied',
-              icon: Icons.people_outline,
-              tone: RestoflowTone.warning,
-              label: l10n.posTableMarkOccupied,
-              selected: t.manualStatus == 'occupied',
-              onTap: () => _setStatus('occupied'),
-            ),
-            _action(
-              key: 'table-ops-out-of-service',
-              icon: Icons.block,
-              tone: RestoflowTone.danger,
-              label: l10n.posTableMarkOutOfService,
-              selected: t.manualStatus == 'out_of_service',
-              // Disabled while a live order occupies the table (server refuses it).
-              disabledReason: occupiedByOrder
-                  ? l10n.posTableOccupiedByOrder
-                  : null,
-              onTap: () => _setStatus('out_of_service'),
-            ),
-            const Divider(),
-            _action(
-              key: 'table-ops-link',
-              icon: Icons.link,
-              tone: RestoflowTone.info,
-              label: l10n.posTableLinkAnother,
-              onTap: () => setState(() => _linkMode = true),
-            ),
-            if (t.isGrouped)
+            if (widget.canManage) ...[
+              const Divider(),
               _action(
-                key: 'table-ops-unlink',
-                icon: Icons.link_off,
-                tone: RestoflowTone.neutral,
-                label: l10n.posTableUnlink,
-                onTap: _unlink,
+                key: 'table-ops-available',
+                icon: Icons.check_circle_outline,
+                tone: RestoflowTone.success,
+                label: l10n.posTableMarkAvailable,
+                selected: t.manualStatus == 'available',
+                onTap: () => _setStatus('available'),
               ),
+              _action(
+                key: 'table-ops-reserved',
+                icon: Icons.event_seat_outlined,
+                tone: RestoflowTone.info,
+                label: l10n.posTableMarkReserved,
+                selected: t.manualStatus == 'reserved',
+                onTap: () => _setStatus('reserved'),
+              ),
+              _action(
+                key: 'table-ops-occupied',
+                icon: Icons.people_outline,
+                tone: RestoflowTone.warning,
+                label: l10n.posTableMarkOccupied,
+                selected: t.manualStatus == 'occupied',
+                onTap: () => _setStatus('occupied'),
+              ),
+              _action(
+                key: 'table-ops-out-of-service',
+                icon: Icons.block,
+                tone: RestoflowTone.danger,
+                label: l10n.posTableMarkOutOfService,
+                selected: t.manualStatus == 'out_of_service',
+                // Disabled while a live order occupies the table (server refuses it).
+                disabledReason: occupiedByOrder
+                    ? l10n.posTableOccupiedByOrder
+                    : null,
+                onTap: () => _setStatus('out_of_service'),
+              ),
+              const Divider(),
+              _action(
+                key: 'table-ops-link',
+                icon: Icons.link,
+                tone: RestoflowTone.info,
+                label: l10n.posTableLinkAnother,
+                onTap: () => setState(() => _linkMode = true),
+              ),
+              if (t.isGrouped)
+                _action(
+                  key: 'table-ops-unlink',
+                  icon: Icons.link_off,
+                  tone: RestoflowTone.neutral,
+                  label: l10n.posTableUnlink,
+                  onTap: _unlink,
+                ),
+            ],
             if (_submitting)
               const Padding(
                 key: Key('table-ops-submitting'),

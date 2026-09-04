@@ -28,7 +28,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(83);
+select plan(86);
 
 -- ===== fixture ==============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -253,6 +253,16 @@ select throws_ok(
   'E1. with NO open shift on the paying device, settlement is refused (precondition), never faked');
 select is((select status from orders where id = '9f000000-0000-0000-0000-00000000a002'), 'served',
   'E2. ...and the served order is untouched');
+-- ...and through the REAL sync_push funnel the POS receives the STABLE token (20260905090001)
+create temp table e0 as select public.sync_push('9f000000-0000-0000-0000-00000000c501', '9f000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(jsonb_build_object('local_operation_id', 'stale-pay-noshift-push', 'operation_type', 'payment.create',
+    'payload', jsonb_build_object('order_id', '9f000000-0000-0000-0000-00000000a002', 'tender_type', 'cash', 'amount_tendered_minor', 2500)))) as res;
+select is((select res -> 'results' -> 0 ->> 'status' from e0), 'rejected',
+  'E2b. pushed as payment.create with no open shift: rejected (never applied)');
+select is((select res -> 'results' -> 0 ->> 'detail' from e0), 'precondition_failed',
+  'E2c. ...and the envelope carries the stable precondition token the POS shows as open-a-shift');
+select is((select count(*) from payments where order_id = '9f000000-0000-0000-0000-00000000a002')::int, 0,
+  'E2d. ...with no payment row created');
 
 -- ===== K. the KDS leg: the mode flips the kitchen predicate; a PAID but still-active order =====
 update branches set kitchen_workflow_mode = 'kds' where id = '9f000000-0000-0000-0000-00000000a1b1';

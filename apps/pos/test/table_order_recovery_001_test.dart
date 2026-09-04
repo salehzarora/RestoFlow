@@ -15,8 +15,9 @@ import 'package:restoflow_pos/src/data/kitchen_finish_repository.dart'
     show KitchenFinishResult;
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
+import 'package:restoflow_pos/src/data/ids.dart' show ClientIdGenerator;
 import 'package:restoflow_pos/src/data/payment_repository.dart'
-    show isNoOpenShiftRefusal;
+    show PaymentException, RealPaymentRepository, isNoOpenShiftRefusal;
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
@@ -36,8 +37,6 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
     show posRecentOrdersStoreProvider;
 import 'package:restoflow_pos/src/widgets/cancel_order_sheet.dart';
 import 'package:restoflow_pos/src/widgets/table_operations_sheet.dart';
-import 'package:restoflow_pos/src/widgets/table_picker_sheet.dart'
-    show canOpenTableOperations;
 import 'package:restoflow_pos/src/widgets/table_order_recovery_sheet.dart';
 import 'support/fixed_pos_clock.dart';
 
@@ -141,6 +140,11 @@ class _SnapRepo implements OrderSnapshotRepository {
       hasMore: false,
     );
   }
+}
+
+class _FixedId implements ClientIdGenerator {
+  @override
+  String newId() => 'op-pay-1';
 }
 
 class _OnKitchenPref extends PosAutoPrintKitchenTicketController {
@@ -643,6 +647,45 @@ void main() {
       },
     );
 
+    testWidgets(
+      'without manage_table_operations the sheet is OPEN-ORDERS-ONLY: recovery entries stay, manual mutations are not built',
+      (tester) async {
+        final e = _entry();
+        final t = _table(orders: [e]);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              runtimeConfigProvider.overrideWithValue(
+                RuntimeConfig.test(isDemoMode: false),
+              ),
+              pinnedPosSyncClock(_now),
+              tablesProvider.overrideWith((ref) async => [t]),
+            ],
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: TableOperationsSheet(
+                  table: t,
+                  allTables: [t],
+                  canManage: false,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('table-ops-available')), findsNothing);
+        expect(find.byKey(const Key('table-ops-out-of-service')), findsNothing);
+        expect(find.byKey(const Key('table-ops-link')), findsNothing);
+      },
+    );
+
     testWidgets('a free table shows no open-orders section', (tester) async {
       await _pump(tester, table: _table(active: 0), repo: _SnapRepo());
       expect(
@@ -795,6 +838,50 @@ void main() {
         expect(canOpenTableOperations(false, free), isFalse);
         expect(canOpenTableOperations(null, free), isFalse); // unknown != grant
         expect(canOpenTableOperations(true, free), isTrue);
+      },
+    );
+
+    test(
+      "the funnel's precondition_failed token becomes PaymentException.shiftRequired",
+      () async {
+        final t = _FakeTransport(
+          (fn, p) => <String, Object?>{
+            'ok': true,
+            'results': <Object?>[
+              <String, Object?>{
+                'local_operation_id': 'op-pay-1',
+                'operation_type': 'payment.create',
+                'ok': false,
+                'error': 'rejected',
+                'sqlstate': '42501',
+                'detail': 'precondition_failed',
+                'status': 'rejected',
+                'idempotency_replay': false,
+              },
+            ],
+          },
+        );
+        final repo = RealPaymentRepository(
+          t,
+          const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
+          _FixedId(),
+        );
+        await expectLater(
+          () => repo.recordCashPayment(
+            orderId: _id,
+            orderNumber: _code,
+            amountMinor: 23200,
+            tenderedMinor: 23200,
+            currencyCode: 'ILS',
+          ),
+          throwsA(
+            isA<PaymentException>().having(
+              (e) => e.shiftRequired,
+              'shiftRequired',
+              isTrue,
+            ),
+          ),
+        );
       },
     );
 

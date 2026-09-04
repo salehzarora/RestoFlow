@@ -397,6 +397,15 @@ class RealPaymentRepository implements PaymentRepository {
     if (status is! String) reject('missing_status');
     if (status != 'applied') {
       final error = op['error'];
+      // STALE-TABLE-ORDER-RECOVERY-001: sync_push classifies record_payment's
+      // precondition refusal (no open shift / no active drawer on THIS device)
+      // as the stable detail token 'precondition_failed' (20260905090001).
+      if (op['detail'] == 'precondition_failed') {
+        throw const PaymentException(
+          'payment refused: no open shift on this device',
+          shiftRequired: true,
+        );
+      }
       // MONEY-SETTLEMENT-CONSISTENCY-001: the ONE typed refusal. Matched on the EXACT
       // stable domain code the server returns — never on a raw database message, never on
       // a SQLSTATE, and never inferred from the order's total. Every other rejection

@@ -154,6 +154,10 @@ class TablePickerSheet extends ConsumerWidget {
                             context,
                             table: t,
                             allTables: tables,
+                            // manual status / link / unlink stay
+                            // capability-gated; only the open-orders
+                            // recovery entries are unconditional.
+                            canManage: manage ?? false,
                           );
                         },
                       ),
@@ -1574,10 +1578,3 @@ class _PickerMessage extends StatelessWidget {
     );
   }
 }
-
-/// STALE-TABLE-ORDER-RECOVERY-001: whether a long-press may open the table
-/// operations sheet — the manage capability (server-resolved; null while
-/// unknown is NOT a grant) OR a table that currently has open orders, whose
-/// recovery (pay / cancel) is authorized by the server on its own terms.
-bool canOpenTableOperations(bool? manageTableOperations, DemoTable table) =>
-    (manageTableOperations ?? false) || table.activeOrders.isNotEmpty;
