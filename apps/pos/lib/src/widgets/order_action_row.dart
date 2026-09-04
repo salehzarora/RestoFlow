@@ -56,6 +56,7 @@ class OrderActionRow extends ConsumerWidget {
     this.keyPrefix = 'recent',
     this.onPaymentSuccess,
     this.onCancelClosed,
+    this.onCompleteFinished,
   });
 
   final PosRecentOrder order;
@@ -76,6 +77,11 @@ class OrderActionRow extends ConsumerWidget {
   /// (the table recovery sheet) can re-read it by id. Null for the
   /// store-backed surfaces, which already observe the void.
   final VoidCallback? onCancelClosed;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: fired after the printer-only Complete
+  /// call returns (whatever its outcome), for hosts holding their own copy
+  /// of the order. Null for the store-backed surfaces.
+  final VoidCallback? onCompleteFinished;
 
   /// ORDER-DETAIL-PREVIEW-001: the Widget-key namespace. It defaults to
   /// `recent`, so every key this row emits in the Orders sheet is BYTE-IDENTICAL
@@ -106,9 +112,12 @@ class OrderActionRow extends ConsumerWidget {
             key: Key('$keyPrefix-complete-${order.orderNumber}'),
             onPressed: completing
                 ? null
-                : () => ref
-                      .read(posOrderCompleteControllerProvider.notifier)
-                      .complete(order.orderId ?? ''),
+                : () async {
+                    await ref
+                        .read(posOrderCompleteControllerProvider.notifier)
+                        .complete(order.orderId ?? '');
+                    onCompleteFinished?.call();
+                  },
             icon: completing
                 ? const SizedBox(
                     width: 16,

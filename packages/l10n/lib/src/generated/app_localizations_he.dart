@@ -7553,4 +7553,16 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posTableRecoveryPaidNeedsCompletion =>
       'הזמנה זו שולמה. השלימו אותה מלוח הבקרה (ממתין לסגירה), או באמצעות «השלם» בסניף הדפסה בלבד.';
+
+  @override
+  String get posTableRecoveryPaidAwaitingKitchen =>
+      'הזמנה זו שולמה. המטבח חייב להביא אותה למצב «הוגש» (KDS או הסבבים שלה); לאחר מכן היא מושלמת אוטומטית.';
+
+  @override
+  String get posTableRecoveryNothingToPay =>
+      'אין מה לשלם בהזמנה זו. בטלו אותה אם היא שגויה; אחרת היא מושלמת אוטומטית לאחר ההגשה.';
+
+  @override
+  String get posPaymentNoOpenShift =>
+      'אין משמרת פתוחה (או מגירה פעילה) במכשיר זה. פתחו משמרת ואז קבלו את התשלום - ההזמנה לא מושפעת.';
 }

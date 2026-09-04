@@ -4882,5 +4882,11 @@
   "posTableRecoveryAlreadyClosed": "This order is already closed. The table is released on the next refresh.",
   "@posTableRecoveryAlreadyClosed": {"description": "STALE-TABLE-ORDER-RECOVERY-001: the by-id read returned a terminal order (settled or cancelled elsewhere meanwhile); nothing to recover."},
   "posTableRecoveryPaidNeedsCompletion": "This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.",
-  "@posTableRecoveryPaidNeedsCompletion": {"description": "STALE-TABLE-ORDER-RECOVERY-001: a settled order that has not completed cannot be cancelled or paid again; the canonical exit is completion."}
+  "@posTableRecoveryPaidNeedsCompletion": {"description": "STALE-TABLE-ORDER-RECOVERY-001: a settled order that has not completed cannot be cancelled or paid again; the canonical exit is completion."},
+  "posTableRecoveryPaidAwaitingKitchen": "This order is paid. The kitchen must bring it to Served (KDS or its rounds); it then completes automatically.",
+  "@posTableRecoveryPaidAwaitingKitchen": {"description": "STALE-TABLE-ORDER-RECOVERY-001: a paid order that is not yet served cannot be cancelled or paid again; the exit is the kitchen lifecycle."},
+  "posTableRecoveryNothingToPay": "Nothing to pay on this order. Cancel it if it is wrong; otherwise it completes automatically once served.",
+  "@posTableRecoveryNothingToPay": {"description": "STALE-TABLE-ORDER-RECOVERY-001: a zero-total order (nothing to pay) with no action offered."},
+  "posPaymentNoOpenShift": "This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.",
+  "@posPaymentNoOpenShift": {"description": "STALE-TABLE-ORDER-RECOVERY-001: record_payment's precondition refusal (no open shift / drawer on the PAYING device), shown instead of a generic failure."}
 }

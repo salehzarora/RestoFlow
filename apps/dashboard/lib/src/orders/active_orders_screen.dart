@@ -1039,6 +1039,16 @@ List<Widget> staleOrderPills(
       ),
     );
   }
+  if (pills.isNotEmpty) {
+    // The canonical recovery path, stated next to the warning it explains.
+    pills.add(
+      Text(
+        l10n.ordersStaleHint,
+        key: Key('stale-hint-${row.orderId}'),
+        style: const TextStyle(fontSize: 11, color: kRestoflowInk3),
+      ),
+    );
+  }
   return pills;
 }
 

@@ -24,8 +24,14 @@ class PaymentException implements Exception {
     this.message, {
     this.notChargeable = false,
     this.conflict = false,
+    this.shiftRequired = false,
   });
   final String message;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the server's `record_payment` precondition
+  /// "no open shift for this branch/device" (or no active drawer). The order is
+  /// fine; the PAYING device must open a shift first. Never a generic failure.
+  final bool shiftRequired;
 
   /// The server's EXACT `order_not_chargeable`. Terminal for this sheet: the order
   /// owes nothing, and no tender, amount or retry can change that.
@@ -321,8 +327,15 @@ class RealPaymentRepository implements PaymentRepository {
         'p_operations': <dynamic>[op],
       });
     } on SyncTransportException catch (e) {
-      // A whole-batch failure (e.g. 42501 - revoked device / expired PIN
-      // session). Carry only the error code, never raw backend text.
+      // STALE-TABLE-ORDER-RECOVERY-001: the ONE precondition a cashier can
+      // act on (open a shift) is surfaced exactly; everything else stays a
+      // code-only failure (never raw backend text).
+      if (isNoOpenShiftRefusal(e)) {
+        throw const PaymentException(
+          'payment refused: no open shift on this device',
+          shiftRequired: true,
+        );
+      }
       throw PaymentException('payment failed: ${e.code ?? e.kind.name}');
     }
 
@@ -470,4 +483,14 @@ class RealPaymentRepository implements PaymentRepository {
   /// payments in its state); a real lookup would be a `sync_pull` (deferred).
   @override
   CashPayment? paymentFor(PosOrderIdentity identity) => null;
+}
+
+/// STALE-TABLE-ORDER-RECOVERY-001: recognizes `app.record_payment`'s
+/// precondition refusals (raised as 42501 with a "(precondition_failed)"
+/// message: no open shift for this branch/device, or no active cash drawer).
+bool isNoOpenShiftRefusal(SyncTransportException e) {
+  final text = '${e.message ?? ''} ${e.code ?? ''}'.toLowerCase();
+  return text.contains('precondition_failed') ||
+      text.contains('no open shift') ||
+      text.contains('no active cash drawer');
 }

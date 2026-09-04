@@ -149,6 +149,10 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// input or attempt clears it.
   bool _failed = false;
 
+  /// STALE-TABLE-ORDER-RECOVERY-001: the server refused because THIS device
+  /// has no open shift / active drawer — a precondition, not a failure.
+  bool _shiftRequired = false;
+
   /// MONEY-SETTLEMENT-CONSISTENCY-001: set ONLY by the server's exact typed
   /// `order_not_chargeable` refusal — a ZERO-TOTAL order owes nothing, so the server
   /// refuses to mint a 0-amount payment or burn a receipt number.
@@ -359,7 +363,8 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       if (mounted) {
         setState(() {
           _submitting = false;
-          _failed = !e.notChargeable && !e.conflict;
+          _shiftRequired = e.shiftRequired;
+          _failed = !e.notChargeable && !e.conflict && !e.shiftRequired;
           _notChargeable = e.notChargeable;
           _conflictStale = _conflictStale || e.conflict;
         });
@@ -656,6 +661,15 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 tone: RestoflowTone.warning,
                 title: l10n.posPaymentFailedTitle,
                 body: l10n.posOrdersConflictRefreshed,
+              ),
+            ],
+            if (_shiftRequired) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              RestoflowNoticeBanner(
+                key: const Key('payment-no-shift-banner'),
+                tone: RestoflowTone.warning,
+                title: l10n.posPaymentFailedTitle,
+                body: l10n.posPaymentNoOpenShift,
               ),
             ],
             if (_failed) ...[

@@ -7603,4 +7603,16 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posTableRecoveryPaidNeedsCompletion =>
       'هذا الطلب مدفوع. أكمله من لوحة التحكم (بانتظار الإغلاق)، أو عبر «إكمال» في فرع الطباعة فقط.';
+
+  @override
+  String get posTableRecoveryPaidAwaitingKitchen =>
+      'هذا الطلب مدفوع. يجب أن يوصله المطبخ إلى «مُقدَّم» (شاشة المطبخ أو جولاته)، ثم يكتمل تلقائيًا.';
+
+  @override
+  String get posTableRecoveryNothingToPay =>
+      'لا يوجد ما يُدفع في هذا الطلب. ألغِه إذا كان خاطئًا؛ وإلا يكتمل تلقائيًا بعد تقديمه.';
+
+  @override
+  String get posPaymentNoOpenShift =>
+      'لا توجد وردية مفتوحة (أو درج نشط) على هذا الجهاز. افتح وردية ثم اقبض الدفعة - الطلب غير متأثر.';
 }
