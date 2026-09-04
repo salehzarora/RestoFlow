@@ -7615,4 +7615,85 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posPaymentNoOpenShift =>
       'لا توجد وردية مفتوحة (أو درج نشط) على هذا الجهاز. افتح وردية ثم اقبض الدفعة - الطلب غير متأثر.';
+
+  @override
+  String get authForgotPassword => 'نسيت كلمة المرور؟';
+
+  @override
+  String get authResetTitle => 'إعادة تعيين كلمة المرور';
+
+  @override
+  String get authResetBody =>
+      'أدخل بريدك الإلكتروني وسنرسل لك رابطًا لاختيار كلمة مرور جديدة.';
+
+  @override
+  String get authResetSend => 'إرسال رابط إعادة التعيين';
+
+  @override
+  String get authResetSent =>
+      'إذا كان لهذا العنوان حساب في VEYRO، فالرابط في طريقه إليك. تحقّق من بريدك.';
+
+  @override
+  String get authBackToSignIn => 'العودة إلى تسجيل الدخول';
+
+  @override
+  String get authNewPasswordTitle => 'اختر كلمة مرور جديدة';
+
+  @override
+  String get authNewPasswordBody =>
+      'عيّن كلمة مرور جديدة لحسابك في VEYRO. ستبقى مسجّل الدخول على هذا الجهاز.';
+
+  @override
+  String get authNewPasswordLabel => 'كلمة المرور الجديدة';
+
+  @override
+  String get authConfirmPasswordLabel => 'تأكيد كلمة المرور الجديدة';
+
+  @override
+  String get authPasswordsDoNotMatch => 'كلمتا المرور غير متطابقتين';
+
+  @override
+  String get authUpdatePasswordAction => 'تحديث كلمة المرور';
+
+  @override
+  String get authPasswordUpdated => 'تم تحديث كلمة المرور.';
+
+  @override
+  String get authLinkExpiredTitle => 'لم يعد هذا الرابط صالحًا';
+
+  @override
+  String get authLinkExpiredBody =>
+      'روابط كلمة المرور تُستخدم مرة واحدة وتنتهي صلاحيتها سريعًا. اطلب رابطًا جديدًا للمتابعة.';
+
+  @override
+  String get authRequestNewLink => 'طلب رابط جديد';
+
+  @override
+  String get authEmailConfirmedTitle => 'تم تأكيد البريد الإلكتروني';
+
+  @override
+  String get authEmailConfirmedBody =>
+      'تم تأكيد بريدك. سجّل الدخول لمتابعة إعداد مطعمك.';
+
+  @override
+  String get authEmailNotConfirmed =>
+      'أكّد بريدك الإلكتروني أولًا — تحقّق من صندوق الوارد بحثًا عن رابط التأكيد.';
+
+  @override
+  String get authRateLimited => 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.';
+
+  @override
+  String get authServiceUnavailable =>
+      'خدمة تسجيل الدخول غير متاحة حاليًا. أعد المحاولة بعد قليل.';
+
+  @override
+  String get authAccountUnavailable =>
+      'لا يمكن استخدام هذا الحساب حاليًا. يُرجى التواصل مع الدعم.';
+
+  @override
+  String get authWeakPassword =>
+      'كلمة المرور ضعيفة جدًا. استخدم 8 أحرف على الأقل.';
+
+  @override
+  String get authSamePassword => 'اختر كلمة مرور لم تستخدمها هنا من قبل.';
 }

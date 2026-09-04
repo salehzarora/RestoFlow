@@ -9,6 +9,7 @@ import '../context/device_context.dart';
 import '../context/selected_context_store.dart';
 import 'dashboard_auth_repository.dart';
 import 'login_signup_screen.dart';
+import 'password_recovery_screen.dart';
 import 'onboarding_repository.dart';
 import 'onboarding_screen.dart';
 
@@ -101,8 +102,12 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
   Result<MyContext, AuthFailure>? _contextResult; // null = loading
   String? _selectedMembershipId;
 
-  String? _pendingRestaurantName;
-  String? _pendingBranchName;
+  /// AUTH-256: true while the provider says this session came from a PASSWORD
+  /// RECOVERY link. It gates everything below, because a recovery session is
+  /// authenticated — without this the flow would read "clicked the reset link"
+  /// as "signed in" and never offer the new password the operator came for.
+  bool _recovering = false;
+  StreamSubscription<bool>? _recoverySub;
 
   @override
   void initState() {
@@ -115,14 +120,17 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
       _loadContext();
     } else {
       _status = repo.status;
+      _recovering = repo.isPasswordRecovery;
       _sub = repo.statusChanges.listen(_onStatusChanged);
-      if (_status == AuthSessionStatus.signedIn) _loadContext();
+      _recoverySub = repo.passwordRecoveryChanges.listen(_onRecoveryChanged);
+      if (_status == AuthSessionStatus.signedIn && !_recovering) _loadContext();
     }
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _recoverySub?.cancel();
     // Only dispose a controller WE created; an injected one is caller-owned.
     if (widget.deviceContext == null) _deviceContext.dispose();
     super.dispose();
@@ -132,7 +140,10 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
     if (!mounted) return;
     if (status == AuthSessionStatus.signedIn) {
       setState(() => _status = status);
-      _loadContext();
+      // A recovery session must NOT be resolved into a tenant context: the
+      // password has not been replaced yet, and loading a dashboard behind the
+      // recovery screen is exactly the confusion AUTH-256 removes.
+      if (!_recovering) _loadContext();
     } else {
       // Signed out / session lost: clear ALL session-derived context.
       unawaited(_store.clear());
@@ -141,9 +152,20 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
         _status = status;
         _contextResult = null;
         _selectedMembershipId = null;
-        _pendingRestaurantName = null;
-        _pendingBranchName = null;
+        _recovering = false;
       });
+    }
+  }
+
+  void _onRecoveryChanged(bool recovering) {
+    if (!mounted) return;
+    final wasRecovering = _recovering;
+    setState(() => _recovering = recovering);
+    // Recovery just finished (the password was replaced): the session is an
+    // ordinary one now, so resolve the tenant context and hand over to the
+    // normal gate — member to the dashboard, no membership to onboarding.
+    if (wasRecovering && !recovering && _status == AuthSessionStatus.signedIn) {
+      _loadContext();
     }
   }
 
@@ -224,23 +246,19 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
     // The session stream drives the transition + context clearing.
   }
 
-  void _onSignedUpWithSession(String restaurantName, String? branchName) {
-    setState(() {
-      _pendingRestaurantName = restaurantName;
-      _pendingBranchName = branchName;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    // AUTH-256: recovery outranks the session state. The link creates a real
+    // session, so checking status first would route a recovering operator into
+    // the dashboard/onboarding and strand them there.
+    if (_recovering && widget.authRepository != null) {
+      return PasswordRecoveryScreen(authRepository: widget.authRepository!);
+    }
     switch (_status) {
       case AuthSessionStatus.unknown:
         return const AuthLoadingView();
       case AuthSessionStatus.signedOut:
-        return LoginSignupScreen(
-          authRepository: widget.authRepository!,
-          onSignedUpWithSession: _onSignedUpWithSession,
-        );
+        return LoginSignupScreen(authRepository: widget.authRepository!);
       case AuthSessionStatus.signedIn:
         final tenantGate = _signedInGate(context);
         // ADMIN-126B: a platform operator holds no membership, so the gate below
@@ -300,8 +318,6 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
     }
     return OnboardingScreen(
       onboardingRepository: repo,
-      initialRestaurantName: _pendingRestaurantName,
-      initialBranchName: _pendingBranchName,
       onCreated: _loadContext,
       onSignOut: _signOutAction,
     );

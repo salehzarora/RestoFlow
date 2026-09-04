@@ -67,6 +67,50 @@ class FakeAuthRepository implements DashboardAuthRepository {
     _status = status;
     _controller.add(status);
   }
+
+  // -- AUTH-256: the recovery seam. Inert unless a test drives it, so every
+  // expectation already in this file keeps asserting what it always did.
+  final _recoveryController = StreamController<bool>.broadcast();
+  bool _recovering = false;
+
+  AuthOutcome resetOutcome = const AuthPasswordResetRequested();
+  AuthOutcome recoveryOutcome = const AuthPasswordUpdated();
+  String? lastResetEmail;
+  String? lastNewPassword;
+  int cancelRecoveryCount = 0;
+
+  @override
+  bool get isPasswordRecovery => _recovering;
+
+  @override
+  Stream<bool> get passwordRecoveryChanges => _recoveryController.stream;
+
+  /// Drives the provider's recovery signal from a test.
+  void emitRecovery(bool recovering) {
+    _recovering = recovering;
+    _recoveryController.add(recovering);
+  }
+
+  @override
+  Future<AuthOutcome> requestPasswordReset({required String email}) async {
+    lastResetEmail = email;
+    return resetOutcome;
+  }
+
+  @override
+  Future<AuthOutcome> completePasswordRecovery({
+    required String newPassword,
+  }) async {
+    lastNewPassword = newPassword;
+    if (recoveryOutcome is AuthPasswordUpdated) emitRecovery(false);
+    return recoveryOutcome;
+  }
+
+  @override
+  Future<void> cancelPasswordRecovery() async {
+    cancelRecoveryCount++;
+    emitRecovery(false);
+  }
 }
 
 /// A fake onboarding seam that records the call and returns [outcome].
@@ -194,32 +238,38 @@ void main() {
     expect(find.byType(LoginSignupScreen), findsNothing);
   });
 
-  testWidgets('sign-up validates required fields (email/password/restaurant)', (
-    tester,
-  ) async {
-    final l10n = await _en();
-    await _pump(
-      tester,
-      DashboardApp(
-        demoMode: false,
-        authRepository: FakeAuthRepository(),
-        onboardingRepository: FakeOnboardingRepository(),
-        fetchContext: _fetch(_ctx()),
-      ),
-    );
-    // Switch to the "Create account" tab (the segment is unique in sign-in mode).
-    await tester.tap(find.text(l10n.authCreateAccountTab));
-    await tester.pumpAndSettle();
-    // The sign-up card (brand hero + four fields) can extend past the default
-    // test viewport — scroll the submit into view before tapping.
-    await tester.ensureVisible(find.byKey(const Key('auth-submit')));
-    await tester.tap(find.byKey(const Key('auth-submit')));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'sign-up validates email + password, and no longer asks for a restaurant',
+    (tester) async {
+      final l10n = await _en();
+      await _pump(
+        tester,
+        DashboardApp(
+          demoMode: false,
+          authRepository: FakeAuthRepository(),
+          onboardingRepository: FakeOnboardingRepository(),
+          fetchContext: _fetch(_ctx()),
+        ),
+      );
+      // Switch to the "Create account" tab (the segment is unique in sign-in mode).
+      await tester.tap(find.text(l10n.authCreateAccountTab));
+      await tester.pumpAndSettle();
+      // The sign-up card (brand hero + four fields) can extend past the default
+      // test viewport — scroll the submit into view before tapping.
+      await tester.ensureVisible(find.byKey(const Key('auth-submit')));
+      await tester.tap(find.byKey(const Key('auth-submit')));
+      await tester.pumpAndSettle();
 
-    expect(find.text(l10n.authEmailRequired), findsOneWidget);
-    expect(find.text(l10n.authPasswordRequired), findsOneWidget);
-    expect(find.text(l10n.onboardingRestaurantNameRequired), findsOneWidget);
-  });
+      expect(find.text(l10n.authEmailRequired), findsOneWidget);
+      expect(find.text(l10n.authPasswordRequired), findsOneWidget);
+      // AUTH-256: sign-up no longer asks for a restaurant. It used to, before the
+      // confirmation email had even been sent, and then threw the answer away on
+      // every project that requires confirmation — so onboarding asks instead,
+      // after confirmation, where the answer can actually be used.
+      expect(find.byKey(const Key('auth-restaurant')), findsNothing);
+      expect(find.text(l10n.onboardingRestaurantNameRequired), findsNothing);
+    },
+  );
 
   testWidgets('a login failure shows a SAFE error and no dashboard data', (
     tester,
@@ -358,10 +408,7 @@ void main() {
             locale: const Locale('ar'),
             localizationsDelegates: restoflowLocalizationsDelegates,
             supportedLocales: kSupportedLocales,
-            home: LoginSignupScreen(
-              authRepository: FakeAuthRepository(),
-              onSignedUpWithSession: (_, _) {},
-            ),
+            home: LoginSignupScreen(authRepository: FakeAuthRepository()),
           ),
         ),
       );

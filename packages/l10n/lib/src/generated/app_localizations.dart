@@ -13845,6 +13845,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.'**
   String get posPaymentNoOpenShift;
+
+  /// AUTH-256: opens the password-reset request from the sign-in form.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get authForgotPassword;
+
+  /// AUTH-256: title of the reset-request step.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your password'**
+  String get authResetTitle;
+
+  /// AUTH-256: explains the reset-request step.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email and we’ll send you a link to choose a new password.'**
+  String get authResetBody;
+
+  /// AUTH-256: submits the reset request.
+  ///
+  /// In en, this message translates to:
+  /// **'Send reset link'**
+  String get authResetSend;
+
+  /// AUTH-256: NON-ENUMERATING confirmation — identical whether or not the account exists.
+  ///
+  /// In en, this message translates to:
+  /// **'If that address has a VEYRO account, a reset link is on its way. Check your inbox.'**
+  String get authResetSent;
+
+  /// AUTH-256: returns from reset/recovery to the sign-in form.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get authBackToSignIn;
+
+  /// AUTH-256: title of the recovery screen reached from the emailed link.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a new password'**
+  String get authNewPasswordTitle;
+
+  /// AUTH-256: explains the recovery screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a new password for your VEYRO account. You’ll stay signed in on this device.'**
+  String get authNewPasswordBody;
+
+  /// AUTH-256: the new-password field.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get authNewPasswordLabel;
+
+  /// AUTH-256: the repeat-password field.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get authConfirmPasswordLabel;
+
+  /// AUTH-256: the two password fields differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords don’t match'**
+  String get authPasswordsDoNotMatch;
+
+  /// AUTH-256: submits the new password.
+  ///
+  /// In en, this message translates to:
+  /// **'Update password'**
+  String get authUpdatePasswordAction;
+
+  /// AUTH-256: success after the password is replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Your password has been updated.'**
+  String get authPasswordUpdated;
+
+  /// AUTH-256: an expired, already-used, or unusable confirmation/recovery link.
+  ///
+  /// In en, this message translates to:
+  /// **'This link is no longer valid'**
+  String get authLinkExpiredTitle;
+
+  /// AUTH-256: explains the expired-link state without implying anything is wrong with the account.
+  ///
+  /// In en, this message translates to:
+  /// **'Password links can be used once and expire quickly. Request a new one to continue.'**
+  String get authLinkExpiredBody;
+
+  /// AUTH-256: restarts the reset request from the expired-link state.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a new link'**
+  String get authRequestNewLink;
+
+  /// AUTH-256: shown when a confirmation link succeeded but no session could be established.
+  ///
+  /// In en, this message translates to:
+  /// **'Email confirmed'**
+  String get authEmailConfirmedTitle;
+
+  /// AUTH-256: tells a confirmed user the honest next step.
+  ///
+  /// In en, this message translates to:
+  /// **'Your email is confirmed. Sign in to continue setting up your restaurant.'**
+  String get authEmailConfirmedBody;
+
+  /// AUTH-256: the password was fine; the address is unconfirmed. NEVER shown as a wrong password.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your email first — check your inbox for the confirmation link.'**
+  String get authEmailNotConfirmed;
+
+  /// AUTH-256: HTTP 429 / over_request_rate_limit. NEVER shown as a wrong password.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a moment and try again.'**
+  String get authRateLimited;
+
+  /// AUTH-256: HTTP 402 (project suspended/over quota) or 5xx. NEVER shown as a wrong password.
+  ///
+  /// In en, this message translates to:
+  /// **'The sign-in service is unavailable right now. Please try again shortly.'**
+  String get authServiceUnavailable;
+
+  /// AUTH-256: banned/suspended account, stated without leaking why.
+  ///
+  /// In en, this message translates to:
+  /// **'This account can’t be used right now. Please contact support.'**
+  String get authAccountUnavailable;
+
+  /// AUTH-256: the server rejected the new password.
+  ///
+  /// In en, this message translates to:
+  /// **'That password is too weak. Use at least 8 characters.'**
+  String get authWeakPassword;
+
+  /// AUTH-256: the new password equals the current one.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a password you haven’t used here before.'**
+  String get authSamePassword;
 }
 
 class _AppLocalizationsDelegate
