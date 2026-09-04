@@ -219,6 +219,9 @@ void main() {
             runtimeConfigProvider.overrideWithValue(
               RuntimeConfig.test(isDemoMode: true),
             ),
+            // STALE-TABLE-ORDER-RECOVERY-001: the sheet re-resolves its table
+            // from the floor read model; the fixture list IS that model here.
+            tablesProvider.overrideWith((ref) async => all),
           ],
           child: MaterialApp(
             locale: const Locale('en'),

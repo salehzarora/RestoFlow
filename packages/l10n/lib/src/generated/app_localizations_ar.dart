@@ -7523,4 +7523,84 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminSupportUnavailable => 'وصول الدعم غير متاح هنا';
+
+  @override
+  String get posTableOpenOrdersHeading => 'الطلبات المفتوحة على هذه الطاولة';
+
+  @override
+  String get posTableOpenOrderOpen => 'فتح';
+
+  @override
+  String posTableOrderAgeMinutes(int minutes) {
+    return '$minutes د';
+  }
+
+  @override
+  String posTableOrderAgeHours(int hours) {
+    return '$hours س';
+  }
+
+  @override
+  String posTableOrderAgeDays(int days, int hours) {
+    return '$days ي $hours س';
+  }
+
+  @override
+  String get posTableOrderPaid => 'مدفوع';
+
+  @override
+  String get posTableOrderUnpaid => 'غير مدفوع';
+
+  @override
+  String get posTableOrderNotChargeable => 'بدون رسوم';
+
+  @override
+  String get posTableOrderShiftClosed => 'الوردية مغلقة';
+
+  @override
+  String get posTableRecoveryTitle => 'طلب مفتوح';
+
+  @override
+  String get posTableRecoveryHint =>
+      'ادفع لإغلاقه، أو ألغِه إذا كان خاطئًا. تُحرَّر الطاولة تلقائيًا.';
+
+  @override
+  String get posTableRecoveryLoading => 'جارٍ تحميل الطلب…';
+
+  @override
+  String get posTableRecoveryUnavailable =>
+      'تعذّر تحميل هذا الطلب. تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get posTableRecoveryRetry => 'حاول مجددًا';
+
+  @override
+  String get posTableRecoveryNoActions =>
+      'لا يوجد إجراء استرداد متاح لدورك الآن. يمكن للمدير إلغاء طلب غير مدفوع؛ ويتطلب الدفع وردية مفتوحة.';
+
+  @override
+  String ordersStaleOpenFor(int hours) {
+    return 'قديم · مفتوح منذ $hours س';
+  }
+
+  @override
+  String get ordersStaleShiftClosed => 'الوردية مغلقة';
+
+  @override
+  String get ordersStalePaidNotCompleted => 'مدفوع، غير مكتمل';
+
+  @override
+  String get ordersStaleNoKitchenWork => 'لا عمل في المطبخ';
+
+  @override
+  String get ordersStaleHint =>
+      'استرد من نقطة البيع: افتح الطاولة، ثم الطلب، ثم ادفع أو ألغِه.';
+
+  @override
+  String get posTableRecoveryAlreadyClosed =>
+      'هذا الطلب مغلق بالفعل. تُحرَّر الطاولة عند التحديث التالي.';
+
+  @override
+  String get posTableRecoveryPaidNeedsCompletion =>
+      'هذا الطلب مدفوع. أكمله من لوحة التحكم (بانتظار الإغلاق)، أو عبر «إكمال» في فرع الطباعة فقط.';
 }

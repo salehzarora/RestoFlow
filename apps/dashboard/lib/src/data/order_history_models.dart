@@ -229,6 +229,8 @@ class OrderHistoryRow {
     this.paidAmountMinor,
     this.createdAtUtc,
     this.branchName,
+    this.shiftStatus,
+    this.kitchenWorkOpen,
   });
 
   final String orderId;
@@ -267,6 +269,14 @@ class OrderHistoryRow {
 
   /// The order's branch, for the all-branches board. Null on the history list.
   final String? branchName;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001 (display-only operational facts from
+  /// `owner_active_orders`): the originating shift's state (`open` | `closed`,
+  /// null = no shift / not projected) and whether the kitchen still holds the
+  /// order (null = not projected). The Dashboard only FLAGS with these; it
+  /// never mutates an order from them.
+  final String? shiftStatus;
+  final bool? kitchenWorkOpen;
 }
 
 /// One page of history rows + the keyset continuation.
