@@ -55,6 +55,7 @@ class OrderActionRow extends ConsumerWidget {
     required this.actions,
     this.keyPrefix = 'recent',
     this.onPaymentSuccess,
+    this.onCancelClosed,
   });
 
   final PosRecentOrder order;
@@ -69,6 +70,12 @@ class OrderActionRow extends ConsumerWidget {
   /// (rows re-resolve from the authoritative refresh in place). Cancel,
   /// failure, refusal and both pre-open gates never fire it.
   final VoidCallback? onPaymentSuccess;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: fired after the cancel sheet closes
+  /// (whatever its outcome) so a host that holds its OWN copy of the order
+  /// (the table recovery sheet) can re-read it by id. Null for the
+  /// store-backed surfaces, which already observe the void.
+  final VoidCallback? onCancelClosed;
 
   /// ORDER-DETAIL-PREVIEW-001: the Widget-key namespace. It defaults to
   /// `recent`, so every key this row emits in the Orders sheet is BYTE-IDENTICAL
@@ -207,7 +214,10 @@ class OrderActionRow extends ConsumerWidget {
         OrderActionButton(
           child: OutlinedButton.icon(
             key: Key('$keyPrefix-cancel-${order.orderNumber}'),
-            onPressed: () => CancelOrderSheet.show(context, order: order),
+            onPressed: () async {
+              await CancelOrderSheet.show(context, order: order);
+              onCancelClosed?.call();
+            },
             icon: const Icon(Icons.block, size: 18),
             label: Text(l10n.posCancelOrderAction),
             style: OutlinedButton.styleFrom(

@@ -7650,4 +7650,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ordersStaleHint =>
       'Recover from the POS: open the table, then the order, then pay or cancel it.';
+
+  @override
+  String get posTableRecoveryAlreadyClosed =>
+      'This order is already closed. The table is released on the next refresh.';
+
+  @override
+  String get posTableRecoveryPaidNeedsCompletion =>
+      'This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.';
 }

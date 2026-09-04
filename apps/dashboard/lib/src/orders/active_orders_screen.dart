@@ -1004,7 +1004,7 @@ List<Widget> staleOrderPills(
       ),
     );
   }
-  if (row.shiftStatus == 'closed') {
+  if (row.shiftStatus == 'closed' || row.shiftStatus == 'reconciled') {
     pills.add(
       RestoflowStatusPill(
         key: Key('stale-shift-closed-${row.orderId}'),
@@ -1013,7 +1013,9 @@ List<Widget> staleOrderPills(
       ),
     );
   }
-  if (row.status == 'served' && row.settlement == SettlementState.paid) {
+  // SETTLED, not merely paid: a zero-total (not_chargeable) served order is the
+  // same auto-completion gap (the ONE settlement predicate treats it as settled).
+  if (row.status == 'served' && row.settlement.isSettled) {
     pills.add(
       RestoflowStatusPill(
         key: Key('stale-paid-not-completed-${row.orderId}'),

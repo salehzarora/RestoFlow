@@ -179,6 +179,7 @@ class DemoTable {
     required TableStatusKind status,
     String? memberEffectiveState,
     int? memberActiveOrderCount,
+    List<PosTableActiveOrder>? activeOrders,
   }) => DemoTable(
     table: table,
     status: status,
@@ -195,7 +196,7 @@ class DemoTable {
     visualMaterial: visualMaterial,
     sectionFloorPreset: sectionFloorPreset,
     sectionRoomFramePreset: sectionRoomFramePreset,
-    activeOrders: activeOrders,
+    activeOrders: activeOrders ?? this.activeOrders,
     memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
     memberActiveOrderCount:
         memberActiveOrderCount ?? this.memberActiveOrderCount,
@@ -247,7 +248,11 @@ class PosTableActiveOrder {
 
   bool get isPaid => paymentStatus == 'paid';
   bool get isNotChargeable => paymentStatus == 'not_chargeable';
-  bool get originatingShiftClosed => shiftStatus == 'closed';
+
+  /// The server normalizes to `closed`; `reconciled` (the terminal state after
+  /// closed) is accepted defensively so an older server can never read as open.
+  bool get originatingShiftClosed =>
+      shiftStatus == 'closed' || shiftStatus == 'reconciled';
 
   /// Strict per-row parse: a row without its identity is dropped rather than
   /// fabricated. Tolerant of an absent/foreign `active_orders` value.
@@ -359,6 +364,21 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
   final aggByGroup = <String, TableGroupAggregate>{
     for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
   };
+  // STALE-TABLE-ORDER-RECOVERY-001: the group-wide count is projected onto
+  // every member, so every member must also list the orders behind it —
+  // a member sheet must never say "N open orders" with nothing to open.
+  final ordersByGroup = <String, List<PosTableActiveOrder>>{};
+  for (final t in deduped) {
+    final g = t.groupId;
+    if (g == null) continue;
+    final acc = ordersByGroup[g] ??= <PosTableActiveOrder>[];
+    for (final o in t.activeOrders) {
+      if (!acc.any((x) => x.orderId == o.orderId)) acc.add(o);
+    }
+  }
+  for (final list in ordersByGroup.values) {
+    list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
   return <DemoTable>[
     for (final t in deduped)
       if (t.groupId case final g? when aggByGroup[g] != null)
@@ -366,6 +386,7 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
           effectiveState: aggByGroup[g]!.effectiveState,
           activeOrderCount: aggByGroup[g]!.activeOrderCount,
           status: tableStatusKindFor(aggByGroup[g]!.effectiveState),
+          activeOrders: ordersByGroup[g] ?? t.activeOrders,
         )
       else
         t,

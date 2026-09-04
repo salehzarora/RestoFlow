@@ -7545,4 +7545,12 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get ordersStaleHint =>
       'שחזרו מהקופה: פתחו את השולחן, אחר כך את ההזמנה, ואז שלמו או בטלו.';
+
+  @override
+  String get posTableRecoveryAlreadyClosed =>
+      'הזמנה זו כבר סגורה. השולחן משתחרר ברענון הבא.';
+
+  @override
+  String get posTableRecoveryPaidNeedsCompletion =>
+      'הזמנה זו שולמה. השלימו אותה מלוח הבקרה (ממתין לסגירה), או באמצעות «השלם» בסניף הדפסה בלבד.';
 }

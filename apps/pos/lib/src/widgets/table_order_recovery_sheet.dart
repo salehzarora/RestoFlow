@@ -4,10 +4,13 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_tables.dart';
+import '../data/order_actions.dart';
 import '../data/order_actions_assembly.dart';
+import '../data/order_snapshot.dart' show PosSettlement;
 import '../data/recent_order.dart';
 import '../state/order_sync_controller.dart'
     show orderSnapshotRepositoryProvider, posSyncClockProvider;
+import '../state/order_setup_controller.dart' show tablesSnapshotProvider;
 import 'order_action_row.dart';
 
 /// STALE-TABLE-ORDER-RECOVERY-001 — the recovery path for ONE live order that
@@ -103,6 +106,43 @@ class _TableOrderRecoverySheetState
     }
   }
 
+  void _refreshFloor() {
+    if (!mounted) return;
+    // The snapshot provider is the fetcher; tablesProvider derives from it
+    // (the same idiom the move-table and table-operations sheets use).
+    ref.invalidate(tablesSnapshotProvider);
+  }
+
+  /// The EXACT reason nothing can be done here, by the state the server
+  /// reported - never a generic shrug when the cause is known.
+  static String _refusal(AppLocalizations l10n, PosRecentOrder order) {
+    if (order.isTerminal) return l10n.posTableRecoveryAlreadyClosed;
+    if (order.settlement != PosSettlement.unpaid) {
+      return l10n.posTableRecoveryPaidNeedsCompletion;
+    }
+    return l10n.posTableRecoveryNoActions;
+  }
+
+  static PosOrderActions _withoutVoidWhenSettled(
+    PosOrderActions a,
+    PosRecentOrder order,
+  ) {
+    if (order.settlement == PosSettlement.unpaid || !a.canVoid) return a;
+    return PosOrderActions(
+      canPay: a.canPay,
+      canDiscount: a.canDiscount,
+      canFullComp: a.canFullComp,
+      canVoid: false,
+      canMoveTable: a.canMoveTable,
+      canOpenReceipt: a.canOpenReceipt,
+      pendingKind: a.pendingKind,
+      canAddItems: a.canAddItems,
+      canComplete: a.canComplete,
+      canPrintBill: a.canPrintBill,
+      submitUnacknowledged: a.submitUnacknowledged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -110,11 +150,17 @@ class _TableOrderRecoverySheetState
     final entry = widget.entry;
     final now = ref.watch(posSyncClockProvider)();
     final order = _order;
-    final actions = order == null
+    final resolved = order == null
         ? null
         : PosOrderActionsAssembly.watch(ref, <PosRecentOrder>[
             order,
           ]).resolveFor(order);
+    // The shared policy never denies on unknowns; here the by-id snapshot is
+    // KNOWN, so a settled order must not be offered a Cancel the server would
+    // refuse (order_has_completed_payment). The server stays authoritative.
+    final actions = (resolved == null || order == null)
+        ? null
+        : _withoutVoidWhenSettled(resolved, order);
     final anyAction =
         actions != null &&
         (actions.canPay || actions.canVoid || actions.canComplete);
@@ -185,8 +231,18 @@ class _TableOrderRecoverySheetState
                 l10n: l10n,
                 actions: actions,
                 keyPrefix: 'table-recovery',
+                // A settlement frees the table as a CONSEQUENCE: refresh the
+                // floor read model and leave; the operations sheet beneath
+                // re-resolves its row from that model.
                 onPaymentSuccess: () {
+                  _refreshFloor();
                   if (mounted) Navigator.of(context).maybePop();
+                },
+                // Whatever the cancel sheet did, re-read the truth by id (a
+                // voided order comes back terminal) and refresh the floor.
+                onCancelClosed: () {
+                  _refreshFloor();
+                  _load();
                 },
               ),
               if (!anyAction) ...[
@@ -195,7 +251,7 @@ class _TableOrderRecoverySheetState
                   key: const Key('table-recovery-no-actions'),
                   tone: RestoflowTone.info,
                   icon: Icons.lock_outline,
-                  body: l10n.posTableRecoveryNoActions,
+                  body: _refusal(l10n, order),
                 ),
               ],
             ],

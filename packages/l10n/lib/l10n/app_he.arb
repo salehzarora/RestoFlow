@@ -2323,5 +2323,7 @@
   "ordersStaleShiftClosed": "המשמרת נסגרה",
   "ordersStalePaidNotCompleted": "שולם, לא הושלם",
   "ordersStaleNoKitchenWork": "אין עבודה במטבח",
-  "ordersStaleHint": "שחזרו מהקופה: פתחו את השולחן, אחר כך את ההזמנה, ואז שלמו או בטלו."
+  "ordersStaleHint": "שחזרו מהקופה: פתחו את השולחן, אחר כך את ההזמנה, ואז שלמו או בטלו.",
+  "posTableRecoveryAlreadyClosed": "הזמנה זו כבר סגורה. השולחן משתחרר ברענון הבא.",
+  "posTableRecoveryPaidNeedsCompletion": "הזמנה זו שולמה. השלימו אותה מלוח הבקרה (ממתין לסגירה), או באמצעות «השלם» בסניף הדפסה בלבד."
 }

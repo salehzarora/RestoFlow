@@ -51,7 +51,20 @@ class _TableOperationsSheetState extends ConsumerState<TableOperationsSheet> {
   String? _errorCode;
   bool _linkMode = false;
 
-  DemoTable get _table => widget.table;
+  /// STALE-TABLE-ORDER-RECOVERY-001: the sheet used to render the row it was
+  /// opened with, so a recovery (pay / cancel) beneath it left a stale
+  /// "N open orders" on screen. Re-resolve by id from the floor read model
+  /// (invalidated after every canonical operation); the passed row is only
+  /// the fallback while the read model has nothing fresher.
+  DemoTable get _table {
+    final live = ref.read(tablesProvider).valueOrNull;
+    if (live != null) {
+      for (final x in live) {
+        if (x.tableId == widget.table.tableId) return x;
+      }
+    }
+    return widget.table;
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     if (_submitting) return;
@@ -139,6 +152,8 @@ class _TableOperationsSheetState extends ConsumerState<TableOperationsSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // Rebuild whenever the floor read model refreshes (see [_table]).
+    ref.watch(tablesProvider);
     final t = _table;
 
     if (_linkMode) return _buildLinkCandidates(l10n, theme);

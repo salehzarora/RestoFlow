@@ -180,6 +180,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(l10n.ordersStaleShiftClosed), findsOneWidget);
+      // the terminal RECONCILED state is a closed shift too (defensive: the
+      // server normalizes to 'closed'; an older server might not)
+      final rec = _row(
+        age: const Duration(minutes: 10),
+        shiftStatus: 'reconciled',
+      );
+      await _pumpTile(tester, rec);
+      expect(
+        find.byKey(Key('stale-shift-closed-${rec.orderId}')),
+        findsOneWidget,
+      );
       // an OPEN shift is not a warning
       final open = _row(age: const Duration(minutes: 10), shiftStatus: 'open');
       await _pumpTile(tester, open);
@@ -204,6 +215,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(l10n.ordersStalePaidNotCompleted), findsOneWidget);
+      // a served ZERO-TOTAL (not_chargeable) order is SETTLED too: same gap
+      final free = _row(
+        age: const Duration(minutes: 10),
+        status: 'served',
+        settlement: SettlementState.notChargeable,
+      );
+      await _pumpTile(tester, free);
+      expect(
+        find.byKey(Key('stale-paid-not-completed-${free.orderId}')),
+        findsOneWidget,
+      );
       // served + UNPAID is the normal "awaiting close" state, not a gap
       final unpaid = _row(age: const Duration(minutes: 10), status: 'served');
       await _pumpTile(tester, unpaid);

@@ -4878,5 +4878,9 @@
   "ordersStaleNoKitchenWork": "No kitchen work",
   "@ordersStaleNoKitchenWork": {"description": "STALE-TABLE-ORDER-RECOVERY-001: an active order the kitchen is no longer holding."},
   "ordersStaleHint": "Recover from the POS: open the table, then the order, then pay or cancel it.",
-  "@ordersStaleHint": {"description": "STALE-TABLE-ORDER-RECOVERY-001: how to resolve a stale order; the dashboard never mutates it."}
+  "@ordersStaleHint": {"description": "STALE-TABLE-ORDER-RECOVERY-001: how to resolve a stale order; the dashboard never mutates it."},
+  "posTableRecoveryAlreadyClosed": "This order is already closed. The table is released on the next refresh.",
+  "@posTableRecoveryAlreadyClosed": {"description": "STALE-TABLE-ORDER-RECOVERY-001: the by-id read returned a terminal order (settled or cancelled elsewhere meanwhile); nothing to recover."},
+  "posTableRecoveryPaidNeedsCompletion": "This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.",
+  "@posTableRecoveryPaidNeedsCompletion": {"description": "STALE-TABLE-ORDER-RECOVERY-001: a settled order that has not completed cannot be cancelled or paid again; the canonical exit is completion."}
 }

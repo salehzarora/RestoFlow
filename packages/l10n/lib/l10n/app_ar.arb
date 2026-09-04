@@ -2323,5 +2323,7 @@
   "ordersStaleShiftClosed": "الوردية مغلقة",
   "ordersStalePaidNotCompleted": "مدفوع، غير مكتمل",
   "ordersStaleNoKitchenWork": "لا عمل في المطبخ",
-  "ordersStaleHint": "استرد من نقطة البيع: افتح الطاولة، ثم الطلب، ثم ادفع أو ألغِه."
+  "ordersStaleHint": "استرد من نقطة البيع: افتح الطاولة، ثم الطلب، ثم ادفع أو ألغِه.",
+  "posTableRecoveryAlreadyClosed": "هذا الطلب مغلق بالفعل. تُحرَّر الطاولة عند التحديث التالي.",
+  "posTableRecoveryPaidNeedsCompletion": "هذا الطلب مدفوع. أكمله من لوحة التحكم (بانتظار الإغلاق)، أو عبر «إكمال» في فرع الطباعة فقط."
 }

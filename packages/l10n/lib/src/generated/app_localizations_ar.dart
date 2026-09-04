@@ -7595,4 +7595,12 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get ordersStaleHint =>
       'استرد من نقطة البيع: افتح الطاولة، ثم الطلب، ثم ادفع أو ألغِه.';
+
+  @override
+  String get posTableRecoveryAlreadyClosed =>
+      'هذا الطلب مغلق بالفعل. تُحرَّر الطاولة عند التحديث التالي.';
+
+  @override
+  String get posTableRecoveryPaidNeedsCompletion =>
+      'هذا الطلب مدفوع. أكمله من لوحة التحكم (بانتظار الإغلاق)، أو عبر «إكمال» في فرع الطباعة فقط.';
 }

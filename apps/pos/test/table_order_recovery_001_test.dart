@@ -24,9 +24,12 @@ import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
+import 'package:restoflow_pos/src/state/order_setup_controller.dart'
+    show tablesProvider;
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
     show posRecentOrdersStoreProvider;
+import 'package:restoflow_pos/src/widgets/cancel_order_sheet.dart';
 import 'package:restoflow_pos/src/widgets/table_operations_sheet.dart';
 import 'package:restoflow_pos/src/widgets/table_order_recovery_sheet.dart';
 import 'support/fixed_pos_clock.dart';
@@ -254,7 +257,7 @@ void main() {
       'a closed originating shift is stated on the row (informational, never a block)',
       (tester) async {
         final l10n = await _en();
-        final e = _entry(status: 'served', shift: 'closed');
+        final e = _entry(status: 'served', shift: 'reconciled');
         await _pump(
           tester,
           table: _table(orders: [e]),
@@ -308,6 +311,7 @@ void main() {
     testWidgets(
       'a TERMINAL by-id result (voided or paid+completed elsewhere meanwhile) offers NO fake action and states the refusal',
       (tester) async {
+        final l10n = await _en();
         final e = _entry(); // the floor still listed it...
         await _pump(
           tester,
@@ -324,12 +328,111 @@ void main() {
           find.byKey(const Key('table-recovery-no-actions')),
           findsOneWidget,
         );
+        expect(find.text(l10n.posTableRecoveryAlreadyClosed), findsOneWidget);
         expect(
           find.byKey(const Key('table-recovery-cancel-$_code')),
           findsNothing,
         );
         expect(
           find.byKey(const Key('table-recovery-pay-$_code')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'a KNOWN-paid (served, not completed) order is never offered Cancel or Pay; the refusal names completion',
+      (tester) async {
+        final l10n = await _en();
+        final e = _entry(status: 'served', payment: 'paid');
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: _SnapRepo(
+            snapshot: _snapshot(e, settlement: PosSettlement.paid),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-recovery-cancel-$_code')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('table-recovery-pay-$_code')),
+          findsNothing,
+        );
+        expect(
+          find.text(l10n.posTableRecoveryPaidNeedsCompletion),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'closing the cancel sheet re-reads the order by id (a void elsewhere reads terminal)',
+      (tester) async {
+        final e = _entry();
+        final repo = _SnapRepo(snapshot: _snapshot(e));
+        await _pump(
+          tester,
+          table: _table(orders: [e]),
+          repo: repo,
+        );
+        await tester.tap(
+          find.byKey(const Key('table-ops-open-order-open-$_code')),
+        );
+        await tester.pumpAndSettle();
+        expect(repo.byIdCalls, 1);
+        await tester.tap(find.byKey(const Key('table-recovery-cancel-$_code')));
+        await tester.pumpAndSettle();
+        // the order was voided meanwhile: the next by-id read is terminal
+        repo.snapshot = _snapshot(e, status: 'voided');
+        // close the cancel sheet (a modal bottom sheet) without confirming
+        Navigator.of(tester.element(find.byType(CancelOrderSheet))).pop();
+        await tester.pumpAndSettle();
+        expect(repo.byIdCalls, 2);
+        expect(
+          find.byKey(const Key('table-recovery-cancel-$_code')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('table-recovery-no-actions')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'the operations sheet re-resolves its table from the floor read model (a freed table stops listing orders)',
+      (tester) async {
+        final e = _entry();
+        final stale = _table(orders: [e]);
+        final fresh = _table(active: 0);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              runtimeConfigProvider.overrideWithValue(
+                RuntimeConfig.test(isDemoMode: false),
+              ),
+              pinnedPosSyncClock(_now),
+              tablesProvider.overrideWith((ref) async => [fresh]),
+            ],
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: TableOperationsSheet(table: stale, allTables: [stale]),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('table-ops-open-orders-heading')),
           findsNothing,
         );
       },
@@ -439,6 +542,40 @@ void main() {
         expect(grouped.activeOrders, hasLength(1));
       },
     );
+
+    test('a linked-group member lists the orders occupying the GROUP', () {
+      final e = _entry();
+      final a = DemoTable(
+        table: DiningTable(
+          tableId: 'a',
+          label: 'A',
+          organizationId: 'o',
+          restaurantId: 'r',
+          branchId: 'b',
+        ),
+        status: TableStatusKind.occupied,
+        effectiveState: 'occupied',
+        activeOrderCount: 1,
+        activeOrders: [e],
+        groupId: 'g1',
+      );
+      final b = DemoTable(
+        table: DiningTable(
+          tableId: 'b',
+          label: 'B',
+          organizationId: 'o',
+          restaurantId: 'r',
+          branchId: 'b',
+        ),
+        status: TableStatusKind.available,
+        effectiveState: 'available',
+        groupId: 'g1',
+      );
+      final agg = withGroupAggregation([a, b]);
+      final bAgg = agg.firstWhere((t) => t.tableId == 'b');
+      expect(bAgg.activeOrderCount, 1); // the group-wide count...
+      expect(bAgg.activeOrders.map((o) => o.orderId), [_id]); // ...WITH orders
+    });
 
     test('listFromJson is tolerant but never fabricates', () {
       expect(PosTableActiveOrder.listFromJson(null), isEmpty);

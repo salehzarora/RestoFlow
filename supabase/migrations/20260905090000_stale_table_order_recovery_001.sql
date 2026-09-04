@@ -159,7 +159,12 @@ begin
                -- originating shift state (NULL: no shift, e.g. a kiosk order);
                -- record_payment settles under the paying device's CURRENT open
                -- shift, so a closed originating shift never blocks recovery
-               'shift_status', sh.status,
+               -- normalized to the documented tri-state: closed|reconciled -> 'closed';
+               -- opening|open|closing -> 'open'; no shift -> null (review: the raw
+               -- 5-value enum let a RECONCILED shift silently read as not-closed)
+               'shift_status', case when sh.status in ('closed', 'reconciled') then 'closed'
+                                    when sh.status is null then null
+                                    else 'open' end,
                -- is the kitchen still holding this order? kds mode: any
                -- in-progress status is a live KDS ticket; any mode: an
                -- unresolved print dispatch or a service round not yet served
@@ -383,7 +388,9 @@ begin
            (o.grand_total_minor > 0)               as is_chargeable,
            -- STALE-TABLE-ORDER-RECOVERY-001 (display-only operational facts;
            -- the read never mutates): originating shift state + live kitchen work
-           sh.status                               as shift_status,
+           case when sh.status in ('closed', 'reconciled') then 'closed'
+                when sh.status is null then null
+                else 'open' end                  as shift_status,
            ((coalesce(b.kitchen_workflow_mode, 'kds') = 'kds'
                and o.status in ('submitted', 'accepted', 'preparing', 'ready'))
             or exists (select 1 from public.kitchen_print_dispatches k

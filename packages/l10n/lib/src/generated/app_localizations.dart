@@ -13815,6 +13815,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recover from the POS: open the table, then the order, then pay or cancel it.'**
   String get ordersStaleHint;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: the by-id read returned a terminal order (settled or cancelled elsewhere meanwhile); nothing to recover.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is already closed. The table is released on the next refresh.'**
+  String get posTableRecoveryAlreadyClosed;
+
+  /// STALE-TABLE-ORDER-RECOVERY-001: a settled order that has not completed cannot be cancelled or paid again; the canonical exit is completion.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is paid. Complete it from the Dashboard (Awaiting close), or with Complete on a printer-only branch.'**
+  String get posTableRecoveryPaidNeedsCompletion;
 }
 
 class _AppLocalizationsDelegate
