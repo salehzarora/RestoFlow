@@ -38,7 +38,10 @@ void main() {
     );
     // The temporary typographic monogram is gone: no Text at all in the
     // symbol-only mark, and no Material glyph standing in for a logo.
-    expect(find.descendant(of: mark, matching: find.byType(Text)), findsNothing);
+    expect(
+      find.descendant(of: mark, matching: find.byType(Text)),
+      findsNothing,
+    );
     expect(find.byIcon(Icons.restaurant_menu), findsNothing);
     expect(
       RestoflowBrandMark.symbolAsset,

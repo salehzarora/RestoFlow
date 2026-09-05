@@ -174,8 +174,9 @@ void main() {
 
     test('no temporary-monogram or VEYRO asset reference remains active', () {
       expect(
-        File('${root.path}/tools/brand/generate_bizbot_temp_icons.py')
-            .existsSync(),
+        File(
+          '${root.path}/tools/brand/generate_bizbot_temp_icons.py',
+        ).existsSync(),
         isFalse,
         reason: 'the temporary icon generator is retired',
       );
@@ -268,8 +269,9 @@ void main() {
           File('$android/build.gradle'),
         ].firstWhere((f) => f.existsSync()).readAsStringSync();
         expect(
-          RegExp(r'applicationId\s*=?\s*"com\.restoflow\.[a-z_.]+"')
-              .hasMatch(gradle),
+          RegExp(
+            r'applicationId\s*=?\s*"com\.restoflow\.[a-z_.]+"',
+          ).hasMatch(gradle),
           isTrue,
           reason: '$app applicationId must remain com.restoflow.*',
         );
@@ -323,10 +325,11 @@ void main() {
       // recorded for it (so nothing was hand-edited or left over from the
       // temporary generator).
       // `\r?` — the checkout may be CRLF on Windows.
-      final rows = RegExp(r'^\| `([^`]+)` \| `([0-9a-f]{64})` \|\r?$', multiLine: true)
-          .allMatches(manifest)
-          .where((m) => !m.group(1)!.startsWith('tools/brand/masters/'))
-          .toList();
+      final rows =
+          RegExp(r'^\| `([^`]+)` \| `([0-9a-f]{64})` \|\r?$', multiLine: true)
+              .allMatches(manifest)
+              .where((m) => !m.group(1)!.startsWith('tools/brand/masters/'))
+              .toList();
       expect(rows.length, greaterThanOrEqualTo(60));
       for (final row in rows) {
         final file = File('${root.path}/${row.group(1)}');
