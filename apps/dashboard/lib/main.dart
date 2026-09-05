@@ -14,6 +14,7 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'src/auth/auth_callback.dart';
 import 'src/auth/auth_url.dart';
 import 'src/auth/dashboard_auth_flow.dart';
 import 'src/auth/dashboard_auth_repository.dart';
@@ -128,14 +129,24 @@ Future<void> main() async {
   // cannot finish alone (the cross-browser `token_hash` shape), and scrub the
   // token out of the address bar either way. Runs BEFORE the first frame so no
   // screen ever renders with a live recovery token in the URL.
+  var bootCallbackKind = AuthCallbackKind.none;
   if (kIsWeb) {
-    await completeAuthCallback(
+    final callback = await completeAuthCallback(
       client: Supabase.instance.client,
       uri: Uri.base,
       replaceUrl: replaceBrowserUrl,
     );
+    bootCallbackKind = callback.kind == AuthCallbackKind.failure
+        ? AuthCallbackKind.failure
+        : resolveCallbackKind(Uri.base);
   }
-  final real = buildDashboardRealAuth(Supabase.instance.client);
+  final real = buildDashboardRealAuth(
+    Supabase.instance.client,
+    // AUTH-257: carry the recovery intent across initialization. The
+    // passwordRecovery event fires while the callback is being verified above,
+    // before this repository exists to hear it.
+    initialPasswordRecovery: bootCallbackKind == AuthCallbackKind.recovery,
+  );
   runApp(
     ProviderScope(
       overrides: [localeOverride],

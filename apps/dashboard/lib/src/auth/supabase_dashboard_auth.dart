@@ -77,7 +77,10 @@ const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
   TablesAdminRepository Function(AdminScope scope) tablesRepositoryFor,
   SyncRpcTransport transport,
 })
-buildDashboardRealAuth(SupabaseClient client) {
+buildDashboardRealAuth(
+  SupabaseClient client, {
+  bool initialPasswordRecovery = false,
+}) {
   final transport = SupabaseSyncRpcTransport(client);
   String? currentUserId() => client.auth.currentUser?.id;
   // EGRESS-REMEDIATION-001.1: the two media storages are built HERE so the
@@ -90,6 +93,13 @@ buildDashboardRealAuth(SupabaseClient client) {
   return (
     auth: SupabaseDashboardAuthRepository(
       client,
+      // AUTH-257: the callback is verified BEFORE this repository exists, so a
+      // `passwordRecovery` event fired during that verification has no listener
+      // yet and is simply lost — the operator would land on the dashboard with
+      // the password they came to change still in place. The intent is
+      // therefore passed in explicitly rather than inferred from an event that
+      // may already have happened.
+      initialPasswordRecovery: initialPasswordRecovery,
       onSignedOut: () {
         signedUrlCacheFor(menuImageStorage).clear();
         signedUrlCacheFor(brandingLogoStorage).clear();
@@ -177,35 +187,66 @@ Future<AuthCallback> completeAuthCallback({
   final callback = parseAuthCallback(uri);
   if (!callback.isAuthCallback) return callback;
 
+  // AUTH-257: SCRUB FIRST, VERIFY SECOND.
+  //
+  // The token used to be verified and only then removed from the URL, which
+  // left a window — and, while `scrubbedUrl` was a no-op for an all-auth query,
+  // left the token in the address bar permanently. Every reload then re-ran
+  // this function and spent the token again: that is the second `/verify` in
+  // the production logs, arriving as a WARNING because the first had already
+  // consumed it. Clearing the URL before the network call closes both.
+  //
+  // Losing the token if verification then fails costs nothing: it is single-use
+  // and a failed verification can never be retried anyway.
+  replaceUrl(scrubbedUrl(uri));
+
   final tokenHash = callback.tokenHash;
-  if (tokenHash != null) {
-    final kind = resolveCallbackKind(uri);
-    try {
-      await client.auth.verifyOTP(
-        tokenHash: tokenHash,
-        type: kind == AuthCallbackKind.recovery
-            ? OtpType.recovery
-            : OtpType.email,
-      );
-    } on AuthException {
-      // Swallowed on purpose: the app decides what to SAY about a failed link
-      // (see AuthErrorKind.linkExpired). Rethrowing here would crash the very
-      // first frame instead.
-    } catch (_) {
-      // Same reasoning for transport failures.
-    }
+  if (tokenHash == null) {
+    // `?code=` and `#access_token=` are the shapes supabase_flutter DOES
+    // recognise (`_isAuthCallbackDeeplink` matches access_token/code/error, and
+    // notably NOT token_hash). It has already exchanged them and cleared the
+    // URL itself; calling anything here would be the double-handling this phase
+    // exists to remove.
+    return callback;
   }
 
-  // Always scrub, success or failure. A `token_hash` or `code` sitting in the
-  // address bar survives into history, screenshots and shared links.
-  replaceUrl(scrubbedUrl(uri));
+  final kind = resolveCallbackKind(uri);
+
+  // ONE AUTHORITATIVE VERIFIER. A confirmation whose session already exists has
+  // nothing left to prove — verifying again could only consume a second token
+  // and, on a replay, fail. Recovery is deliberately exempt: a signed-in
+  // operator clicking a reset link still needs the RECOVERY session, and a
+  // restored ordinary session must not stand in for it.
+  if (kind == AuthCallbackKind.confirmation &&
+      client.auth.currentSession != null) {
+    return callback;
+  }
+
+  try {
+    await client.auth.verifyOTP(
+      tokenHash: tokenHash,
+      type: kind == AuthCallbackKind.recovery
+          ? OtpType.recovery
+          : OtpType.email,
+    );
+  } on AuthException {
+    // Swallowed on purpose: the app decides what to SAY about a failed link
+    // (see AuthErrorKind.linkExpired). Rethrowing here would crash the very
+    // first frame instead.
+  } catch (_) {
+    // Same reasoning for transport failures.
+  }
   return callback;
 }
 
 /// GoTrue-backed [DashboardAuthRepository].
 class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
-  SupabaseDashboardAuthRepository(this._client, {void Function()? onSignedOut})
-    : _onSignedOut = onSignedOut;
+  SupabaseDashboardAuthRepository(
+    this._client, {
+    void Function()? onSignedOut,
+    bool initialPasswordRecovery = false,
+  }) : _onSignedOut = onSignedOut,
+       _recovering = initialPasswordRecovery;
 
   final SupabaseClient _client;
 
@@ -294,9 +335,10 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
 
   // -- AUTH-FLOW-256: password recovery ------------------------------------
 
-  /// True once GoTrue reports a `passwordRecovery` event and until the password
-  /// is replaced (or recovery is abandoned).
-  bool _recovering = false;
+  /// True once GoTrue reports a `passwordRecovery` event — or once the boot
+  /// callback told us this session came from a recovery link — and until the
+  /// password is replaced (or recovery is abandoned).
+  bool _recovering;
 
   @override
   bool get isPasswordRecovery => _recovering;
