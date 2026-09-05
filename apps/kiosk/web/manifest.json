@@ -1,11 +1,11 @@
 {
-    "name": "VEYRO Kiosk",
-    "short_name": "VEYRO Kiosk",
+    "name": "BIZBOT Kiosk",
+    "short_name": "BIZBOT Kiosk",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "VEYRO Kiosk — customer self-service ordering.",
+    "description": "BIZBOT Kiosk — customer self-service ordering.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

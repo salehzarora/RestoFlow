@@ -58,14 +58,14 @@ void main() {
 
     test('A3. the title says Admin — never a tenant surface', () {
       final html = _web('index.html').readAsStringSync();
-      expect(html, contains('<title>VEYRO Admin</title>'));
+      expect(html, contains('<title>BIZBOT Admin</title>'));
       // The whole point of the app is that it is NOT the restaurant console.
       // A copy-paste from apps/dashboard/web would silently mislabel it.
       for (final wrong in const [
-        'VEYRO Dashboard',
-        'VEYRO POS',
-        'VEYRO KDS',
-        'VEYRO Kiosk',
+        'BIZBOT Dashboard',
+        'BIZBOT POS',
+        'BIZBOT KDS',
+        'BIZBOT Kiosk',
       ]) {
         expect(
           html,
@@ -77,10 +77,10 @@ void main() {
 
     test('A4. the shell describes an internal platform console', () {
       final html = _web('index.html').readAsStringSync();
-      expect(html, contains('VEYRO Admin — internal platform'));
+      expect(html, contains('BIZBOT Admin — internal platform'));
       expect(
         html,
-        contains('apple-mobile-web-app-title" content="VEYRO Admin"'),
+        contains('apple-mobile-web-app-title" content="BIZBOT Admin"'),
       );
     });
 
@@ -94,8 +94,8 @@ void main() {
       final manifest =
           jsonDecode(_web('manifest.json').readAsStringSync())
               as Map<String, dynamic>;
-      expect(manifest['name'], 'VEYRO Admin');
-      expect(manifest['short_name'], 'VEYRO Admin');
+      expect(manifest['name'], 'BIZBOT Admin');
+      expect(manifest['short_name'], 'BIZBOT Admin');
       expect(manifest['description'], contains('internal platform'));
       expect(manifest['prefer_related_applications'], isFalse);
       final icons = (manifest['icons'] as List).cast<Map<String, dynamic>>();

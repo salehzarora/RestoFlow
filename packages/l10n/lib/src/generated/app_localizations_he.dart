@@ -424,28 +424,28 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogCapCloseShift => 'סגירת משמרת';
 
   @override
-  String get appName => 'VEYRO';
+  String get appName => 'BIZBOT';
 
   @override
-  String get posAppTitle => 'VEYRO - קופה';
+  String get posAppTitle => 'BIZBOT - קופה';
 
   @override
-  String get kdsAppTitle => 'VEYRO - מסך מטבח';
+  String get kdsAppTitle => 'BIZBOT - מסך מטבח';
 
   @override
-  String get dashboardAppTitle => 'VEYRO - לוח בקרה';
+  String get dashboardAppTitle => 'BIZBOT - לוח בקרה';
 
   @override
-  String get dashboardBrandName => 'VEYRO';
+  String get dashboardBrandName => 'BIZBOT';
 
   @override
   String get dashboardBrandTagline => 'לוח בקרה';
 
   @override
-  String get adminAppTitle => 'VEYRO - ניהול';
+  String get adminAppTitle => 'BIZBOT - ניהול';
 
   @override
-  String get welcomeMessage => 'ברוכים הבאים ל-VEYRO';
+  String get welcomeMessage => 'ברוכים הבאים ל-BIZBOT';
 
   @override
   String get adminOverviewTitle => 'סקירת הפלטפורמה';
@@ -1912,7 +1912,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authRealModeUnconfiguredBody =>
-      'האפליקציה הופעלה במצב אמת, אך הגדרות החיבור לשרת חסרות או שגויות. VEYRO לעולם אינו מזייף שרת, ולכן מצב האמת נשאר נעול עד שיסופקו הגדרות תקינות.';
+      'האפליקציה הופעלה במצב אמת, אך הגדרות החיבור לשרת חסרות או שגויות. BIZBOT לעולם אינו מזייף שרת, ולכן מצב האמת נשאר נעול עד שיסופקו הגדרות תקינות.';
 
   @override
   String get authRealModeUnconfiguredHowTo =>
@@ -1928,7 +1928,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authProductionDemoBlockedBody =>
-      'לגרסה זו יש הגדרות חיבור שרת תקפות אך היא פועלת במצב הדגמה, ולכן היא תציג נתוני הדגמה כאילו היו אמיתיים. כבה את מצב ההדגמה כדי להציג נתונים אמיתיים, או הסר את הגדרות החיבור כדי להריץ את ההדגמה. VEYRO לעולם אינו מציג נתוני הדגמה כנתוני ייצור.';
+      'לגרסה זו יש הגדרות חיבור שרת תקפות אך היא פועלת במצב הדגמה, ולכן היא תציג נתוני הדגמה כאילו היו אמיתיים. כבה את מצב ההדגמה כדי להציג נתונים אמיתיים, או הסר את הגדרות החיבור כדי להריץ את ההדגמה. BIZBOT לעולם אינו מציג נתוני הדגמה כנתוני ייצור.';
 
   @override
   String get authDeviceSignInUnavailableTitle => 'כניסת המכשיר אינה זמינה';
@@ -2934,7 +2934,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminDeviceUpdated => 'המכשיר עודכן';
 
   @override
-  String get authWelcomeTitle => 'ברוכים הבאים ל-VEYRO';
+  String get authWelcomeTitle => 'ברוכים הבאים ל-BIZBOT';
 
   @override
   String get authBrandTagline => 'קופות ותפעול';
@@ -2980,7 +2980,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get onboardingTitle => 'הגדרת המסעדה שלך';
 
   @override
-  String get onboardingIntro => 'צרו את המסעדה כדי להתחיל להשתמש ב-VEYRO.';
+  String get onboardingIntro => 'צרו את המסעדה כדי להתחיל להשתמש ב-BIZBOT.';
 
   @override
   String get onboardingRestaurantNameLabel => 'שם המסעדה';
@@ -4155,7 +4155,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posNonCashNote =>
-      'תשלום חיצוני נרשם — VEYRO אינו מעבד את הכרטיס או ההעברה; לא מבוצע חיוב אמיתי.';
+      'תשלום חיצוני נרשם — BIZBOT אינו מעבד את הכרטיס או ההעברה; לא מבוצע חיוב אמיתי.';
 
   @override
   String get posPaymentFailedTitle => 'התשלום לא נרשם';
@@ -4485,7 +4485,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posBluetoothPermissionRequired =>
-      'נדרשת הרשאת בלוטות\'. אשר אותה ל‑VEYRO בהגדרות אנדרואיד ואז רענן.';
+      'נדרשת הרשאת בלוטות\'. אשר אותה ל‑BIZBOT בהגדרות אנדרואיד ואז רענן.';
 
   @override
   String get posBluetoothOff => 'הבלוטות\' כבוי — הפעל אותו ואז רענן.';
@@ -4550,7 +4550,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
-      'נדרשת הרשאת Bluetooth. אפשר אותה עבור VEYRO בהגדרות Android ואז רענן.';
+      'נדרשת הרשאת Bluetooth. אפשר אותה עבור BIZBOT בהגדרות Android ואז רענן.';
 
   @override
   String get dashboardNavOrders => 'הזמנות';
@@ -5947,7 +5947,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posSending => 'שולח…';
 
   @override
-  String get posBrandName => 'VEYRO';
+  String get posBrandName => 'BIZBOT';
 
   @override
   String get posBrandTagline => 'נקודת מכירה';
@@ -6503,11 +6503,11 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String kioskPoweredBy(String device) {
-    return 'מופעל על ידי VEYRO · עמדה $device';
+    return 'מופעל על ידי BIZBOT · עמדה $device';
   }
 
   @override
-  String get kioskPoweredByShort => 'מופעל על ידי VEYRO';
+  String get kioskPoweredByShort => 'מופעל על ידי BIZBOT';
 
   @override
   String get kioskGroupWeight => 'בחרו משקל קציצה';
@@ -6890,7 +6890,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kioskSettingsVideoHint =>
-      'העלו קובץ .mp4 בלוח הבקרה של VEYRO ← מכשירים. הוא יסתנכרן לעמדה ויתנגן בהמתנה, ללא קול.';
+      'העלו קובץ .mp4 בלוח הבקרה של BIZBOT ← מכשירים. הוא יסתנכרן לעמדה ויתנגן בהמתנה, ללא קול.';
 
   @override
   String get kioskSettingsPrinterSection => 'מדפסת פתקים';
@@ -7581,7 +7581,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authResetSent =>
-      'אם לכתובת הזו יש חשבון VEYRO, הקישור בדרך אליך. בדוק את תיבת הדואר.';
+      'אם לכתובת הזו יש חשבון BIZBOT, הקישור בדרך אליך. בדוק את תיבת הדואר.';
 
   @override
   String get authBackToSignIn => 'חזרה להתחברות';
@@ -7591,7 +7591,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authNewPasswordBody =>
-      'הגדר סיסמה חדשה לחשבון VEYRO שלך. תישאר מחובר במכשיר הזה.';
+      'הגדר סיסמה חדשה לחשבון BIZBOT שלך. תישאר מחובר במכשיר הזה.';
 
   @override
   String get authNewPasswordLabel => 'סיסמה חדשה';

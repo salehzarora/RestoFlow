@@ -34,7 +34,7 @@ void main() {
   testWidgets('en resolves LTR and AppLocalizations resolves', (tester) async {
     final r = await pumpFor(tester, const Locale('en'));
     expect(r.direction, TextDirection.ltr);
-    expect(r.l10n.appName, 'VEYRO');
+    expect(r.l10n.appName, 'BIZBOT');
   });
 
   testWidgets('ar resolves RTL and AppLocalizations resolves', (tester) async {
@@ -42,12 +42,12 @@ void main() {
     expect(r.direction, TextDirection.rtl);
     // VEYRO-REBRAND: the brand stays Latin uppercase in every locale — only
     // the SURROUNDING copy localizes, never the brand token itself.
-    expect(r.l10n.appName, 'VEYRO');
+    expect(r.l10n.appName, 'BIZBOT');
   });
 
   testWidgets('he resolves RTL and AppLocalizations resolves', (tester) async {
     final r = await pumpFor(tester, const Locale('he'));
     expect(r.direction, TextDirection.rtl);
-    expect(r.l10n.appName, 'VEYRO');
+    expect(r.l10n.appName, 'BIZBOT');
   });
 }

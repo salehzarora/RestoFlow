@@ -17,7 +17,7 @@ PrintDocument escPosNetworkTestDocument({
   final label = deviceLabel?.trim() ?? '';
   return PrintDocument([
     const PrintTextLine(
-      'VEYRO',
+      'BIZBOT',
       alignment: PrintAlignment.center,
       emphasis: TextEmphasis.bold,
     ),

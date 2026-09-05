@@ -159,7 +159,7 @@ Object? _productionShaped(String function, Map<String, dynamic> params) {
             'actor_app_user_id': '92b4483f-0be3-462e-aced-e35e7493b337',
             'target_organization_id': null,
             'action': 'platform.console.overview',
-            'reason': 'VEYRO admin: platform overview (read-only)',
+            'reason': 'BIZBOT admin: platform overview (read-only)',
             'occurred_at': '2026-09-02T09:29:00+00:00',
           },
         ],

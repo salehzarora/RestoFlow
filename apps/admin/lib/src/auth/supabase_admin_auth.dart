@@ -89,7 +89,7 @@ class SupabaseAdminAuthService implements AdminAuthService {
     try {
       final response = await _auth.mfa.enroll(
         factorType: FactorType.totp,
-        issuer: 'VEYRO Admin',
+        issuer: 'BIZBOT Admin',
       );
       final totp = response.totp;
       if (totp == null) {

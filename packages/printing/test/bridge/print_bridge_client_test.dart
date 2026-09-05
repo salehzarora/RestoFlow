@@ -255,7 +255,7 @@ void main() {
         ),
       );
       final doc = const PrintDocument([
-        PrintTextLine('VEYRO', alignment: PrintAlignment.center),
+        PrintTextLine('BIZBOT', alignment: PrintAlignment.center),
         PrintCutLine(),
       ]);
       final result = await dispatcher.dispatch(doc);

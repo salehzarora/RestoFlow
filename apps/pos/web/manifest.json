@@ -1,11 +1,11 @@
 {
-    "name": "VEYRO POS",
-    "short_name": "VEYRO POS",
+    "name": "BIZBOT POS",
+    "short_name": "BIZBOT POS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "VEYRO POS — cashier point of sale.",
+    "description": "BIZBOT POS — cashier point of sale.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

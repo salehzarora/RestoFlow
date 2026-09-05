@@ -114,7 +114,7 @@ void main() {
         transportFactory: () => transport,
       );
       final result = await bridge.submit(
-        app.PrintDocument(title: 'r', lines: [app.PrintLine.title('VEYRO')]),
+        app.PrintDocument(title: 'r', lines: [app.PrintLine.title('BIZBOT')]),
       );
       expect(result.outcome, pp.BridgeSubmitOutcome.sentToPrinter);
       expect(transport.sent, isNotNull); // real ESC/POS bytes were encoded

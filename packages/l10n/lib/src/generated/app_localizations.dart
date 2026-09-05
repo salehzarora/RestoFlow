@@ -895,31 +895,31 @@ abstract class AppLocalizations {
   /// The product name, shown across all surfaces.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO'**
+  /// **'BIZBOT'**
   String get appName;
 
   /// Window/app title for the POS cashier app.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO POS'**
+  /// **'BIZBOT POS'**
   String get posAppTitle;
 
   /// Window/app title for the Kitchen Display System app.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO KDS'**
+  /// **'BIZBOT KDS'**
   String get kdsAppTitle;
 
   /// Window/app title for the owner/manager dashboard app.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO Dashboard'**
+  /// **'BIZBOT Dashboard'**
   String get dashboardAppTitle;
 
   /// The short product wordmark shown in the dashboard side-rail brand lockup (RF-132).
   ///
   /// In en, this message translates to:
-  /// **'VEYRO'**
+  /// **'BIZBOT'**
   String get dashboardBrandName;
 
   /// The muted tagline under the side-rail wordmark identifying this surface (RF-132).
@@ -931,13 +931,13 @@ abstract class AppLocalizations {
   /// Window/app title for the platform admin app.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO Admin'**
+  /// **'BIZBOT Admin'**
   String get adminAppTitle;
 
   /// Generic welcome message shown on the scaffold body.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to VEYRO'**
+  /// **'Welcome to BIZBOT'**
   String get welcomeMessage;
 
   /// Platform-admin overview page heading.
@@ -3655,7 +3655,7 @@ abstract class AppLocalizations {
   /// Body of the real-mode-unconfigured help page explaining why the app is locked.
   ///
   /// In en, this message translates to:
-  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. VEYRO never fakes a backend, so real mode stays locked until valid settings are provided.'**
+  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. BIZBOT never fakes a backend, so real mode stays locked until valid settings are provided.'**
   String get authRealModeUnconfiguredBody;
 
   /// Heading above the code block listing the required --dart-define values for real mode.
@@ -3679,7 +3679,7 @@ abstract class AppLocalizations {
   /// Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it.
   ///
   /// In en, this message translates to:
-  /// **'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. VEYRO never presents demo data as production.'**
+  /// **'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. BIZBOT never presents demo data as production.'**
   String get authProductionDemoBlockedBody;
 
   /// Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend.
@@ -5485,7 +5485,7 @@ abstract class AppLocalizations {
   /// Heading on the dashboard sign-in / create-account screen (RF-151).
   ///
   /// In en, this message translates to:
-  /// **'Welcome to VEYRO'**
+  /// **'Welcome to BIZBOT'**
   String get authWelcomeTitle;
 
   /// Muted tagline under the brand mark on login/pairing screens.
@@ -5575,7 +5575,7 @@ abstract class AppLocalizations {
   /// Intro text on the restaurant onboarding screen.
   ///
   /// In en, this message translates to:
-  /// **'Create your restaurant to start using VEYRO.'**
+  /// **'Create your restaurant to start using BIZBOT.'**
   String get onboardingIntro;
 
   /// Restaurant-name field label on the onboarding form.
@@ -7699,7 +7699,7 @@ abstract class AppLocalizations {
   /// POS honest note on the payment sheet for a non-cash tender: RestoFlow records the tender but processes no charge.
   ///
   /// In en, this message translates to:
-  /// **'External payment recorded — VEYRO does not process the card or transfer; no real charge is made.'**
+  /// **'External payment recorded — BIZBOT does not process the card or transfer; no real charge is made.'**
   String get posNonCashNote;
 
   /// DESIGN-001: title of the pinned danger banner in the payment sheet after a failed payment push (previously a silent failure).
@@ -8305,7 +8305,7 @@ abstract class AppLocalizations {
   /// POS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-003).
   ///
   /// In en, this message translates to:
-  /// **'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.'**
+  /// **'Bluetooth permission is required. Allow it for BIZBOT in Android settings, then refresh.'**
   String get posBluetoothPermissionRequired;
 
   /// POS message when the Bluetooth adapter is off (ANDROID-003).
@@ -8431,7 +8431,7 @@ abstract class AppLocalizations {
   /// KDS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-004).
   ///
   /// In en, this message translates to:
-  /// **'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.'**
+  /// **'Bluetooth permission is required. Allow it for BIZBOT in Android settings, then refresh.'**
   String get kdsPrinterBluetoothPermissionRequired;
 
   /// Dashboard left-nav label for the order-history surface (ORDERS-HISTORY-001).
@@ -10921,7 +10921,7 @@ abstract class AppLocalizations {
   /// First line of the stacked top-bar wordmark (POS-THEME-NAVBAR-POLISH-001): the brand name alone.
   ///
   /// In en, this message translates to:
-  /// **'VEYRO'**
+  /// **'BIZBOT'**
   String get posBrandName;
 
   /// Second, smaller line of the stacked top-bar wordmark: the product line under the brand name.
@@ -11887,13 +11887,13 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Powered by VEYRO · Kiosk {device}'**
+  /// **'Powered by BIZBOT · Kiosk {device}'**
   String kioskPoweredBy(String device);
 
   /// VEYRO-REBRAND: plain platform attribution on the kiosk confirm slip (no device suffix).
   ///
   /// In en, this message translates to:
-  /// **'Powered by VEYRO'**
+  /// **'Powered by BIZBOT'**
   String get kioskPoweredByShort;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
@@ -12619,7 +12619,7 @@ abstract class AppLocalizations {
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
   ///
   /// In en, this message translates to:
-  /// **'Upload an .mp4 in the VEYRO dashboard → Devices. It syncs to the device and loops on idle, muted.'**
+  /// **'Upload an .mp4 in the BIZBOT dashboard → Devices. It syncs to the device and loops on idle, muted.'**
   String get kioskSettingsVideoHint;
 
   /// KIOSK-001 Phase 1: customer self-service kiosk (V2 design lock copy).
@@ -13873,7 +13873,7 @@ abstract class AppLocalizations {
   /// AUTH-256: NON-ENUMERATING confirmation — identical whether or not the account exists.
   ///
   /// In en, this message translates to:
-  /// **'If that address has a VEYRO account, a reset link is on its way. Check your inbox.'**
+  /// **'If that address has a BIZBOT account, a reset link is on its way. Check your inbox.'**
   String get authResetSent;
 
   /// AUTH-256: returns from reset/recovery to the sign-in form.
@@ -13891,7 +13891,7 @@ abstract class AppLocalizations {
   /// AUTH-256: explains the recovery screen.
   ///
   /// In en, this message translates to:
-  /// **'Set a new password for your VEYRO account. You’ll stay signed in on this device.'**
+  /// **'Set a new password for your BIZBOT account. You’ll stay signed in on this device.'**
   String get authNewPasswordBody;
 
   /// AUTH-256: the new-password field.
