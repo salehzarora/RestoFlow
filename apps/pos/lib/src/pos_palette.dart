@@ -60,8 +60,9 @@ final Color kPosTerracottaContainer = RestoflowBrandPalette.of(
 /// counterpart — the brand palette carries no on-accent-container ink — so it
 /// stays an explicit value rather than being forced into a role that does not
 /// exist. BIZBOT official identity: the container is the Mint highlight, so
-/// the ink is the Charcoal foundation (11.4:1).
-const Color kPosTerracottaText = kBizbotFoundation;
+/// the ink is the charcoal-black foundation step (13.9:1 on Mint) — deliberately
+/// not the accent role itself, which is a fill, not a reading ink.
+const Color kPosTerracottaText = kBizbotFoundationDeep;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the three warm surface values and the
 /// muted body ink the Phase-1 spec adds (§10). POS-local by design: Step 1 must

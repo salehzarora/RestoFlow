@@ -236,10 +236,12 @@ void main() {
   group('B. the cart reads as a lighter, muted deep navy', () {
     test('008-B1. the operational surface is lighter than the old near-black '
         'ink, and still clearly darker than the menu canvas', () {
-      // Lighter than the previous #17201B...
+      // Lighter than the previous #17201B (the 008 contract names that value;
+      // it is pinned literally because the shared text ink it once stood in
+      // for has since moved to the BIZBOT charcoal, which is lighter still).
       expect(
         kPosCartHeaderInk.computeLuminance(),
-        greaterThan(kRestoflowInk.computeLuminance()),
+        greaterThan(const Color(0xFF17201B).computeLuminance()),
       );
       // ...but still an unmistakably dark surface against the canvas.
       expect(

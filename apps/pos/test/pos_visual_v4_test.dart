@@ -287,21 +287,24 @@ void main() {
       }
     });
 
-    test('the selection family is NAVY, not brand green', () {
-      // The selected tint is a navy wash: blue-dominant, and clearly not the
-      // green it used to be.
-      expect(kPosSelectedTint.b, greaterThan(kPosSelectedTint.g));
+    test('the selection family is the brand EMERALD, not a one-off green '
+        'and no longer navy', () {
+      // BIZBOT official identity: the selected tint is the Mint wash —
+      // green-dominant with a blue lean (emerald, not a yellow-green), and
+      // clearly derived from the shared brand tokens.
+      expect(kPosSelectedTint, kRestoflowNavyContainer);
+      expect(kPosSelectedTint.g, greaterThan(kPosSelectedTint.b));
       expect(kPosSelectedTint.b, greaterThan(kPosSelectedTint.r));
-      // The primary CTA glow is drawn from the brand navy rather than a
-      // one-off green.
-      expect(
-        kPosPrimaryGlow.single.color.b,
-        greaterThan(kPosPrimaryGlow.single.color.g),
-      );
-      expect(
-        kPosChipSelectedShadow.single.color.b,
-        greaterThan(kPosChipSelectedShadow.single.color.g),
-      );
+      // The primary CTA glow and the selected chip's shadow are the brand
+      // Emerald at low alpha rather than a one-off green or the old navy.
+      for (final shadow in [
+        kPosPrimaryGlow.single.color,
+        kPosChipSelectedShadow.single.color,
+      ]) {
+        expect(shadow.withValues(alpha: 1), kBizbotPrimary);
+        expect(shadow.g, greaterThan(shadow.b));
+        expect(shadow.b, greaterThan(shadow.r));
+      }
     });
 
     test('the cart operational plane is a deep NAVY block', () {
