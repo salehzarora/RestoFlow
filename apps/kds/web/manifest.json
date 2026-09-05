@@ -1,11 +1,11 @@
 {
-    "name": "VEYRO KDS",
-    "short_name": "VEYRO KDS",
+    "name": "BIZBOT KDS",
+    "short_name": "BIZBOT KDS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "VEYRO KDS — kitchen display system.",
+    "description": "BIZBOT KDS — kitchen display system.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

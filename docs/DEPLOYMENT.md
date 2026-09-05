@@ -773,7 +773,7 @@ destructive rollback.
 ## 14. Platform Admin console — FUNCTIONALLY COMPLETE, permanent hosting DEFERRED
 
 **Status: `PLATFORM-ADMIN-FUNCTIONAL-COMPLETE / PERMANENT-HOSTING-DEFERRED`.**
-The internal VEYRO Admin console (`apps/admin`) is feature-complete and its
+The internal BIZBOT Admin console (`apps/admin`) is feature-complete and its
 backend is fully applied to hosted Supabase. What is deferred is only *where it
 runs* — it has no permanent origin yet, and that is a deliberate scheduling
 decision, **not** a blocker for normal product development.
@@ -825,11 +825,12 @@ reason. Running locally weakens nothing — the client is not the boundary.
 3. **Vercel Deployment Protection** on that project. The internal plane must not
    be openly reachable; application-level grant + `aal2` + reason enforcement is
    mandatory but is **not** a substitute for a hosting-layer protection.
-4. **Internal namespace rename `RESTOFLOW_*` → `VEYRO_*`.** The VEYRO rebrand was
-   deliberately public-surface only; env-var names, the repository, package ids,
-   applicationIds, storage keys, MethodChannels and Supabase identifiers stay as
-   they are until a separate audited phase. The existing public Vercel project
-   likewise keeps its current name.
+4. **Internal namespace rename `RESTOFLOW_*` → `BIZBOT_*`.** Both public rebrands
+   (RestoFlow → VEYRO, then VEYRO → BIZBOT) were deliberately public-surface only;
+   env-var names, the repository, package ids, applicationIds, storage keys,
+   MethodChannels and Supabase identifiers stay as they are until a separate
+   audited phase. The existing public Vercel project likewise keeps its
+   `resto-flow` slug — the public identity is carried by the custom domain.
 5. **Admin write controls** — assign/change subscription plan, suspend/activate an
    organization. `app.set_organization_plan` already exists, guarded, validated
    and audited, but has **no `public.` wrapper**, so no client can reach it. The

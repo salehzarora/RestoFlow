@@ -1,11 +1,11 @@
 {
-    "name": "VEYRO Admin",
-    "short_name": "VEYRO Admin",
+    "name": "BIZBOT Admin",
+    "short_name": "BIZBOT Admin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "VEYRO Admin — internal platform operations console. Not the restaurant Dashboard.",
+    "description": "BIZBOT Admin — internal platform operations console. Not the restaurant Dashboard.",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [

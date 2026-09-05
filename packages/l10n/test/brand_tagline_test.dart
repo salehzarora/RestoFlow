@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// VEYRO-REBRAND — the brand tagline under the VEYRO mark (login/onboarding/
+/// VEYRO-REBRAND — the brand tagline under the BIZBOT mark (login/onboarding/
 /// pairing) is the NEUTRAL master-brand positioning, not restaurant-specific:
 /// the platform is POS & operations, broader than restaurants even while the
 /// current workflows remain restaurant-specific.
@@ -26,7 +26,7 @@ Future<AppLocalizations> _l10n(WidgetTester tester, String locale) async {
 }
 
 void main() {
-  testWidgets('authBrandTagline is the neutral VEYRO positioning per locale', (
+  testWidgets('authBrandTagline is the neutral BIZBOT positioning per locale', (
     tester,
   ) async {
     expect((await _l10n(tester, 'en')).authBrandTagline, 'POS & Operations');
@@ -37,7 +37,7 @@ void main() {
     expect((await _l10n(tester, 'he')).authBrandTagline, 'קופות ותפעול');
   });
 
-  testWidgets('the tagline no longer positions VEYRO as restaurant-only', (
+  testWidgets('the tagline no longer positions BIZBOT as restaurant-only', (
     tester,
   ) async {
     for (final loc in const ['en', 'ar', 'he']) {

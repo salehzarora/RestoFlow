@@ -1,11 +1,11 @@
 {
-    "name": "VEYRO Dashboard",
-    "short_name": "VEYRO Dashboard",
+    "name": "BIZBOT Dashboard",
+    "short_name": "BIZBOT Dashboard",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#16335E",
-    "description": "VEYRO Dashboard — restaurant operations, reporting, and management.",
+    "description": "BIZBOT Dashboard — restaurant operations, reporting, and management.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

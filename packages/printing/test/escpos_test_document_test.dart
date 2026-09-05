@@ -11,8 +11,8 @@ void main() {
     final doc = escPosNetworkTestDocument();
     final bytes = adapter.encode(doc, profile);
 
-    // Contains the ASCII "RestoFlow" banner (as raw data bytes).
-    final banner = 'VEYRO'.codeUnits;
+    // Contains the ASCII "BIZBOT" banner (as raw data bytes).
+    final banner = 'BIZBOT'.codeUnits;
     expect(_indexOf(bytes, banner), isNonNegative);
     // Ends with a partial cut (GS V 1) since the 80mm profile supports it.
     expect(_indexOf(bytes, [0x1D, 0x56, 0x01]), isNonNegative);

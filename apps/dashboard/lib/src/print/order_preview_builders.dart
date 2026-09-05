@@ -58,9 +58,10 @@ PrintDocument buildOrderReceiptPreview(
     // only when a (transient, non-persisted) URL is supplied. Absent => the
     // line list is byte-identical to the pre-branding preview.
     if (logoUrl != null && logoUrl.isNotEmpty) PrintLine.headerImage(logoUrl),
-    // VEYRO-REBRAND: a merchant receipt never falls back to the PLATFORM brand.
+    // BIZBOT-REBRAND: a merchant receipt never falls back to the PLATFORM
+    // brand.
     // Prefer the real branch/restaurant name; otherwise the neutral generic
-    // "Restaurant" label — never "VEYRO".
+    // "Restaurant" label — never "BIZBOT".
     PrintLine.title(detail.branchName ?? l10n.printRestaurantNameFallback),
     PrintLine.center(detail.orderCode),
     if (detail.createdAtLabel != null && detail.createdAtLabel!.isNotEmpty)
