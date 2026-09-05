@@ -348,7 +348,8 @@ void main() {
         expect(KioskColors.tableReserved.toARGB32(), 0xFFFBBF24);
         expect(KioskColors.slipPaper, Colors.white);
         expect(KioskColors.slipInk.toARGB32(), 0xFF101828);
-        expect(KioskColors.slipAccent.toARGB32(), 0xFFC2410C);
+        // BIZBOT official identity: the slip accent is the Emerald primary.
+        expect(KioskColors.slipAccent.toARGB32(), 0xFF059669);
         expect(KioskColors.scrim.toARGB32(), 0xB303060C);
         expect(kioskSuccessGradient.colors.map((c) => c.toARGB32()), [
           0xFF22C55E,

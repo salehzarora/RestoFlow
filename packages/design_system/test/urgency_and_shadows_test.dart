@@ -73,8 +73,9 @@ void main() {
           expect(shadow.color.a, lessThan(0.25));
         }
       }
-      // The ink itself is the navy-black the rail is built from.
-      expect(kRestoflowShadowInk.toARGB32() & 0x00FFFFFF, 0x0B1526);
+      // The ink itself is the charcoal-black the BIZBOT dark chrome is built
+      // from (the official Foundation, one step deeper).
+      expect(kRestoflowShadowInk.toARGB32() & 0x00FFFFFF, 0x111827);
     });
   });
 }

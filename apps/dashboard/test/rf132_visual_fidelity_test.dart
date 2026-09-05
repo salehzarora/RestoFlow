@@ -325,9 +325,29 @@ void main() {
     // title that used to ellipsize inside the rail. (Pixel truncation itself
     // cannot be asserted under the square test font, where every word is far
     // wider than in any real font; it is covered by the RF-132 screenshot
-    // review gate.)
+    // review gate.) BIZBOT official identity: the wordmark is the official
+    // Latin artwork, so the rail carries the wordmark IMAGE (the brand token
+    // is still announced once, via the symbol's semantics label).
+    final railWordmark = find.descendant(
+      of: rail,
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is Image &&
+            w.image is AssetImage &&
+            (w.image as AssetImage).assetName ==
+                RestoflowBrandMark.wordmarkLatinAsset,
+      ),
+    );
+    expect(railWordmark, findsOneWidget);
     expect(
       find.descendant(of: rail, matching: find.text(l10n.dashboardBrandName)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: rail,
+        matching: find.bySemanticsLabel(RestoflowBrandMark.brand),
+      ),
       findsOneWidget,
     );
     expect(

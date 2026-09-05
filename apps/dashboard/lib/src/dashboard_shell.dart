@@ -1251,7 +1251,9 @@ class _SideNav extends StatelessWidget {
           // RF-132: a stronger, never-truncated brand area — the short product
           // wordmark with the surface tagline beneath it (the previous long
           // app title ellipsized inside the rail), and a touch more air above
-          // the navigation.
+          // the navigation. BIZBOT official identity: the wordmark is the
+          // official Latin artwork (the brand token is Latin in every locale);
+          // only the tagline is localized text.
           Padding(
             padding: EdgeInsetsDirectional.fromSTEB(
               side,
@@ -1263,7 +1265,7 @@ class _SideNav extends StatelessWidget {
                 ? const Center(child: RestoflowBrandMark(size: 40))
                 : RestoflowBrandMark(
                     size: 42,
-                    title: l10n.dashboardBrandName,
+                    wordmark: BizbotWordmark.latin,
                     tagline: l10n.dashboardBrandTagline,
                   ),
           ),

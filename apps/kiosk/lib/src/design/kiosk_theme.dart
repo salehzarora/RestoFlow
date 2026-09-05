@@ -84,7 +84,8 @@ abstract final class KioskColors {
   static const slipInk = Color(0xFF101828);
   static const slipSoft = Color(0xFF5B6472);
   static const slipFaint = Color(0xFF98A2B3);
-  static const slipAccent = Color(0xFFC2410C);
+  // BIZBOT official identity: the slip's one accent is the Emerald primary.
+  static const slipAccent = Color(0xFF059669);
   static const slipHairline = Color(0xFFE4E9F0);
 
   // Glass fills/borders (white at the artifact's opacities).
