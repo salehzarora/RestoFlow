@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show RestoflowBrandMark;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_appearance.dart';
@@ -344,17 +346,32 @@ class KioskConfirmScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  // REAL mode never claims a print it may not make; demo
-                  // keeps the fixture line.
-                  ref.watch(kioskRealModeProvider)
-                      ? l10n.kioskPoweredByShort
-                      : '${l10n.kioskPrintingSlip} · ${l10n.kioskPoweredByShort}',
-                  style: KioskType.body(
-                    16,
-                    FontWeight.w500,
-                    color: KioskColors.slipFaint,
-                  ),
+                // BIZBOT official identity: the platform attribution on the
+                // slip carries the official symbol.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const RestoflowBrandMark(size: 18),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        // REAL mode never claims a print it may not make;
+                        // demo keeps the fixture line.
+                        ref.watch(kioskRealModeProvider)
+                            ? l10n.kioskPoweredByShort
+                            : '${l10n.kioskPrintingSlip} · '
+                                  '${l10n.kioskPoweredByShort}',
+                        style: KioskType.body(
+                          16,
+                          FontWeight.w500,
+                          color: KioskColors.slipFaint,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -21,8 +21,8 @@ import 'tokens.dart';
 ThemeData? _cachedDefaultTheme;
 ThemeData? _cachedKdsDarkTheme;
 
-/// RESTOFLOW-GLOBAL-VISUAL-V0 — the LIGHT brand theme: navy on white, cool
-/// neutrals. Used by Dashboard, POS and Admin.
+/// The LIGHT brand theme: BIZBOT emerald on white over the Light Neutral
+/// canvas, charcoal ink. Used by Dashboard, POS and Admin.
 ///
 /// Prefer this over calling [restoflowBaseTheme] directly at an app entry point:
 /// the name states which brand mode the app is in, so a reader of `main.dart`
@@ -30,8 +30,8 @@ ThemeData? _cachedKdsDarkTheme;
 ThemeData restoflowLightBrandTheme() =>
     restoflowBaseTheme(brightness: Brightness.light);
 
-/// RESTOFLOW-GLOBAL-VISUAL-V0 — the DARK brand theme for the kitchen board:
-/// deep navy surfaces, strong off-white text, semantic tones kept vivid.
+/// The DARK brand theme for the kitchen board: charcoal (foundation) surfaces,
+/// Light Neutral text, Mint as the primary tone, semantic tones kept vivid.
 ///
 /// KDS is dark on purpose (a bright board in a kitchen is unreadable and
 /// unpleasant at a glance), so it is a first-class brand mode rather than the
@@ -54,26 +54,35 @@ ThemeData restoflowBaseTheme({
 }
 
 ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
+  final isDark = brightness == Brightness.dark;
+  // BIZBOT: the light mode is seeded from the PRIMARY (Emerald) so the derived
+  // secondary/tertiary/neutral families harmonise with it; the dark brand mode
+  // is seeded from the FOUNDATION (Charcoal) so the board's surfaces are the
+  // official charcoal family rather than a green-tinted dark. A caller passing
+  // its own seed (device/merchant themes) gets exactly what it asked for.
+  final effectiveSeed = isDark && seedColor == kRestoflowSeedColor
+      ? kBizbotFoundation
+      : seedColor;
   final seeded = ColorScheme.fromSeed(
-    seedColor: seedColor,
+    seedColor: effectiveSeed,
     brightness: brightness,
   );
   final brand = RestoflowBrandPalette.of(brightness);
-  // PIN THE BRAND PRIMARY, DERIVE THE REST. `fromSeed` tone-maps the seed, so a
-  // #16335E seed comes back as a noticeably lighter, less saturated primary —
-  // close enough to look intentional and wrong enough that buttons would not
-  // match the brand. Only the primary family is pinned; secondary, tertiary and
-  // the neutrals stay Material-derived so the scheme remains internally
-  // harmonious instead of a set of hand-picked colours that clash on hover.
+  // PIN THE BRAND PRIMARY, DERIVE THE REST. `fromSeed` tone-maps the seed, so
+  // an #059669 seed comes back as a noticeably different primary — close enough
+  // to look intentional and wrong enough that buttons would not match the
+  // brand. Only the primary family is pinned; secondary, tertiary and the
+  // neutrals stay Material-derived so the scheme remains internally harmonious
+  // instead of a set of hand-picked colours that clash on hover.
+  //
+  // Contrast (WCAG): white on Emerald 3.77:1 (AA for large text / controls);
+  // Charcoal on Mint 11.4:1; Charcoal on Light Neutral 13.5:1; Light Neutral on
+  // deep emerald 5.05:1.
   final colorScheme = seeded.copyWith(
     primary: brand.primaryNavy,
-    onPrimary: brightness == Brightness.dark
-        ? const Color(0xFF0B1526)
-        : const Color(0xFFFFFFFF),
+    onPrimary: isDark ? kBizbotFoundation : const Color(0xFFFFFFFF),
     primaryContainer: brand.primaryNavyContainer,
-    onPrimaryContainer: brightness == Brightness.dark
-        ? const Color(0xFFE8EDF5)
-        : kRestoflowNavyDeep,
+    onPrimaryContainer: isDark ? kBizbotSurface : kBizbotFoundation,
   );
   final base = ThemeData(colorScheme: colorScheme);
   final semantic = RestoflowSemanticColors.of(brightness);
@@ -98,10 +107,9 @@ ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
       )
       .apply(fontFamilyFallback: fontFallbacks);
 
-  // V0: a cool near-white canvas + a cool hairline on cards, for the LIGHT
-  // theme only (the dark KDS theme keeps its own surfaces). These neutrals are
-  // brand values shared with the rail and the shared components.
-  final isDark = brightness == Brightness.dark;
+  // The Light Neutral canvas + a neutral hairline on cards, for the LIGHT
+  // theme only (the dark KDS theme keeps its charcoal-seeded surfaces). These
+  // neutrals are brand values shared with the rail and the shared components.
   final scaffoldBackground = isDark ? colorScheme.surface : kRestoflowCanvas;
   final cardBorder = isDark ? colorScheme.outlineVariant : kRestoflowHairline;
 

@@ -19,8 +19,18 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # bizbot_official_identity_test pins the generated brand assets by SHA-256.
+  crypto: '>=3.0.0 <4.0.0'
 
-# BIZBOT-REBRAND: the shared RestoflowBrandMark is a TEMPORARY typographic
-# monogram drawn in code (no owner-approved BIZBOT logo yet), so no brand asset
-# is bundled. The retired VEYRO symbol is kept UNREFERENCED for rollback under
-# assets/brand/archive/ (not declared here, therefore never shipped).
+# BIZBOT OFFICIAL IDENTITY (2026-09-05): the shared RestoflowBrandMark renders
+# the owner's official symbol and wordmarks. These three PNGs are the ONLY
+# brand assets bundled; they are generated from the pinned masters by
+# tools/brand/generate_bizbot_official_icons.py (see
+# tools/brand/BIZBOT_BRAND_ASSETS.md for the hashes). The identity board and
+# the retired VEYRO symbol (assets/brand/archive/) are deliberately NOT
+# declared here, therefore never shipped.
+flutter:
+  assets:
+    - assets/brand/bizbot/bizbot_symbol.png
+    - assets/brand/bizbot/bizbot_wordmark_en.png
+    - assets/brand/bizbot/bizbot_wordmark_ar.png

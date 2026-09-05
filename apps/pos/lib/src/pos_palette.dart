@@ -59,8 +59,10 @@ final Color kPosTerracottaContainer = RestoflowBrandPalette.of(
 /// Reading ink for text ON [kPosTerracottaContainer]. This one has NO brand
 /// counterpart — the brand palette carries no on-accent-container ink — so it
 /// stays an explicit value rather than being forced into a role that does not
-/// exist.
-const Color kPosTerracottaText = Color(0xFF7C2D12);
+/// exist. BIZBOT official identity: the container is the Mint highlight, so
+/// the ink is the charcoal-black foundation step (13.9:1 on Mint) — deliberately
+/// not the accent role itself, which is a fill, not a reading ink.
+const Color kPosTerracottaText = kBizbotFoundationDeep;
 
 /// POS-VISUAL-REDESIGN-PHASE-1-007 — the three warm surface values and the
 /// muted body ink the Phase-1 spec adds (§10). POS-local by design: Step 1 must
@@ -80,18 +82,20 @@ const Color kPosMutedBodyInk = Color(0xFF616B7B);
 /// second layer of `RestoflowShadows.sm` was invisible at card size and doubled
 /// the paint cost across ~19 cards.
 const List<BoxShadow> kPosCardShadow = [
-  BoxShadow(color: Color(0x0D0B1526), offset: Offset(0, 1), blurRadius: 2),
+  BoxShadow(color: Color(0x0D111827), offset: Offset(0, 1), blurRadius: 2),
 ];
 
-/// The menu deck's downward shadow (spec §7 "deck").
+/// The menu deck's downward shadow (spec §7 "deck") — the shared shadow ink
+/// (charcoal-black) at low alpha.
 const List<BoxShadow> kPosDeckShadow = [
-  BoxShadow(color: Color(0x0A0B1526), offset: Offset(0, 2), blurRadius: 6),
+  BoxShadow(color: Color(0x0A111827), offset: Offset(0, 2), blurRadius: 6),
 ];
 
 /// The SELECTED category chip's brand shadow (spec §7 "brand-s") — softer than
 /// [kPosPrimaryGlow]; the selected chip is the only chip carrying elevation.
+/// BIZBOT official identity: the glow is the Emerald primary at 28% alpha.
 const List<BoxShadow> kPosChipSelectedShadow = [
-  BoxShadow(color: Color(0x4716335E), offset: Offset(0, 3), blurRadius: 10),
+  BoxShadow(color: Color(0x47059669), offset: Offset(0, 3), blurRadius: 10),
 ];
 
 /// Product-card corner radius (004: the approved v4 card is r14 with a thin
@@ -209,9 +213,10 @@ const double kPosSendRadius = 13;
   );
 }
 
-/// The primary-CTA glow used on the add / send buttons (navy, was green).
+/// The primary-CTA glow used on the add / send buttons — the Emerald primary
+/// at 35% alpha (BIZBOT official identity; was navy, before that green).
 const List<BoxShadow> kPosPrimaryGlow = [
-  BoxShadow(color: Color(0x5916335E), offset: Offset(0, 6), blurRadius: 16),
+  BoxShadow(color: Color(0x59059669), offset: Offset(0, 6), blurRadius: 16),
 ];
 
 /// The responsive layout mode of the POS cashier screen, chosen from the

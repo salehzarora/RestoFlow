@@ -2,13 +2,29 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// RESTOFLOW-GLOBAL-VISUAL-V0 — the BRAND surface palette, as a theme extension.
+/// The BRAND surface palette, as a theme extension.
+///
+/// BIZBOT OFFICIAL IDENTITY (2026-09-05): the values are the official palette —
+/// Charcoal `#1F2937` (foundation), Emerald `#059669` (primary), Mint `#A7F3D0`
+/// (highlight), Light Neutral `#F4F6F5` (support) — plus the derived functional
+/// shades in tokens.dart. The FIELD NAMES still say navy/orange: they are read
+/// in ~15 files across four apps and were kept (exactly as V0 kept the warm
+/// names) so the identity change is not buried in a rename. Read them as roles:
+///
+///   primaryNavy          → the brand PRIMARY fill   (Emerald; Mint on dark)
+///   primaryNavyHover     → its pressed/hover partner
+///   primaryNavyContainer → the brand selection bed  (Mint; deep emerald on dark)
+///   accentOrange         → the high-emphasis ACCENT: the one CTA per view, the
+///                          active marker, the attention hue (Charcoal on light,
+///                          Light Neutral on dark — the foundation colour
+///                          inverted per surface, so it is always legible)
+///   accentOrangeContainer→ the accent's soft bed    (Mint; charcoal-soft on dark)
 ///
 /// Deliberately separate from [RestoflowSemanticColors]. That one carries
 /// MEANING — success, warning, danger, info — and must survive any rebrand
-/// untouched. This one carries IDENTITY: navy, orange, and the cool neutral
-/// surfaces they sit on. Merging them would be the fastest route back to a
-/// rebrand that silently turns a "synced" badge into a brand highlight.
+/// untouched. This one carries IDENTITY. Merging them would be the fastest
+/// route back to a rebrand that silently turns a "synced" badge into a brand
+/// highlight.
 ///
 /// Field names are semantic, never app names: KDS is not the only dark surface
 /// and the Dashboard is not the only light one, so `surfaceDark` says what it is
@@ -38,20 +54,23 @@ class RestoflowBrandPalette extends ThemeExtension<RestoflowBrandPalette> {
     required this.chartGridDark,
   });
 
-  /// The brand primary. Buttons, selected segments, chart lines, rail active.
+  /// The brand primary (Emerald). Buttons, selected segments, chart lines,
+  /// rail active. Mint on dark surfaces.
   final Color primaryNavy;
 
-  /// Hover / pressed / deep brand text on white.
+  /// Hover / pressed / deep brand text on white (deep emerald).
   final Color primaryNavyHover;
 
-  /// Quiet brand tint — selection beds, hover washes, soft containers.
+  /// Brand selection bed — selected segments, nav indicator (Mint).
   final Color primaryNavyContainer;
 
-  /// The brand ACCENT. Sparing by design: a highlight, never a second primary,
-  /// and never a substitute for a semantic status colour.
+  /// The brand ACCENT (Charcoal on light, Light Neutral on dark). Sparing by
+  /// design: the one CTA per view and the attention marker, never a second
+  /// primary, and never a substitute for a semantic status colour.
   final Color accentOrange;
 
-  /// Soft accent bed. Decorative — see the contrast note on [accentOrange].
+  /// Soft accent bed (Mint on light). Decorative — charcoal ink sits on it at
+  /// 11.4:1.
   final Color accentOrangeContainer;
 
   /// Page background behind cards in light surfaces.
@@ -77,46 +96,48 @@ class RestoflowBrandPalette extends ThemeExtension<RestoflowBrandPalette> {
   final Color chartGridLight;
   final Color chartGridDark;
 
-  /// The light preset. Values are the frozen brand constants.
+  /// The light preset. Values are the official BIZBOT constants.
   static const light = RestoflowBrandPalette(
-    primaryNavy: kRestoflowSeedColor,
-    primaryNavyHover: kRestoflowNavyDeep,
-    primaryNavyContainer: kRestoflowNavyContainer,
-    accentOrange: Color(0xFFC2410C),
-    accentOrangeContainer: Color(0xFFFFEDD5),
+    primaryNavy: kBizbotPrimary,
+    primaryNavyHover: kBizbotPrimaryDeep,
+    primaryNavyContainer: kBizbotHighlight,
+    accentOrange: kBizbotFoundation,
+    accentOrangeContainer: kBizbotHighlight,
     canvasLight: kRestoflowCanvas,
     surfaceLight: kRestoflowSurface,
-    surfaceDark: Color(0xFF0F2038),
+    surfaceDark: kBizbotFoundation,
     borderLight: kRestoflowHairline,
-    borderDark: Color(0xFF223A5E),
+    borderDark: kBizbotFoundationSoft,
     textPrimaryLight: kRestoflowInk,
     textSecondaryLight: kRestoflowInk2,
-    textPrimaryDark: Color(0xFFE8EDF5),
-    textSecondaryDark: Color(0xFF9AA7BC),
-    chartGridLight: Color(0xFFEDF1F7),
-    chartGridDark: Color(0xFF1E2F4B),
+    textPrimaryDark: kBizbotSurface,
+    textSecondaryDark: Color(0xFF9CA3AF),
+    chartGridLight: Color(0xFFEBF0ED),
+    chartGridDark: kBizbotFoundationSoft,
   );
 
-  /// The dark preset. The brand accent brightens (an orange that reads on white
-  /// is muddy on navy) and the neutral roles swap; the navy family itself does
-  /// not move, because it IS the surface here.
+  /// The dark preset. On charcoal surfaces the primary is the light Mint tone
+  /// (charcoal ink on it, 11.4:1) with a deep-emerald bed, and the accent is
+  /// the Light Neutral — the foundation colour inverted — so "the one CTA" and
+  /// the attention marker stay the brightest thing on a dark board. The
+  /// neutral roles carry both values and do not move.
   static const dark = RestoflowBrandPalette(
-    primaryNavy: Color(0xFF7FA3DA),
-    primaryNavyHover: Color(0xFF9CBAE8),
-    primaryNavyContainer: Color(0xFF1B3A63),
-    accentOrange: Color(0xFFFB923C),
-    accentOrangeContainer: Color(0xFF431407),
+    primaryNavy: kBizbotHighlight,
+    primaryNavyHover: kBizbotHighlightSoft,
+    primaryNavyContainer: kBizbotPrimaryDeep,
+    accentOrange: kBizbotSurface,
+    accentOrangeContainer: kBizbotFoundationSoft,
     canvasLight: kRestoflowCanvas,
     surfaceLight: kRestoflowSurface,
-    surfaceDark: Color(0xFF0F2038),
+    surfaceDark: kBizbotFoundation,
     borderLight: kRestoflowHairline,
-    borderDark: Color(0xFF223A5E),
+    borderDark: kBizbotFoundationSoft,
     textPrimaryLight: kRestoflowInk,
     textSecondaryLight: kRestoflowInk2,
-    textPrimaryDark: Color(0xFFE8EDF5),
-    textSecondaryDark: Color(0xFF9AA7BC),
-    chartGridLight: Color(0xFFEDF1F7),
-    chartGridDark: Color(0xFF1E2F4B),
+    textPrimaryDark: kBizbotSurface,
+    textSecondaryDark: Color(0xFF9CA3AF),
+    chartGridLight: Color(0xFFEBF0ED),
+    chartGridDark: kBizbotFoundationSoft,
   );
 
   /// The palette for [brightness].

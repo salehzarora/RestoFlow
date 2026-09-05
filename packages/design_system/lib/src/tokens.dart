@@ -4,73 +4,127 @@ import 'package:flutter/material.dart';
 /// shared scales every surface uses for consistent spacing, corner radius,
 /// icon sizing, breakpoints, panel widths, motion, and brand colour.
 
-/// RESTOFLOW-GLOBAL-VISUAL-V0 — the brand identity is NAVY / WHITE / ORANGE, and
-/// it is deliberately global: Dashboard, POS, Admin and KDS all inherit it.
-///
-/// These constants are RE-VALUED IN PLACE rather than added alongside the old
-/// warm-green set, because the owner wants every surface to move together. The
-/// names stay because they are consumed in ~40 files across four apps and a
-/// rename would bury the colour change in unrelated churn; the one exception is
-/// [kRestoflowSeedColor], whose "seed" meaning is unchanged.
-///
-/// SEMANTIC STATUS COLOURS ARE NOT PART OF THIS. Success stays green, danger
-/// red, warning amber, info blue — they carry meaning, not identity, and live in
-/// [RestoflowSemanticColors].
+// ─────────────────────────────────────────────────────────────────────────────
+// BIZBOT OFFICIAL BRAND PALETTE (identity board, 2026-09-05)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Four official colours. They are the platform identity — never a merchant or
+// device theme (those stay tenant-owned), and never a semantic status colour
+// (success/warning/danger/info live in `RestoflowSemanticColors` and carry
+// meaning, not identity).
+//
+// The legacy `kRestoflow*` names below are RE-VALUED IN PLACE onto this palette
+// (exactly as RESTOFLOW-GLOBAL-VISUAL-V0 did for navy/orange): they are consumed
+// across four apps and renaming them would bury the identity change in churn.
+// New code should prefer the semantic `BizbotBrand` names.
 
-/// The brand seed. Navy is the primary; [ColorScheme.fromSeed] derives the rest
-/// and the theme pins the exact primary roles back on top.
-const Color kRestoflowSeedColor = Color(0xFF16335E);
+/// Charcoal — FOUNDATION. Primary text ink, dark chrome, the high-emphasis CTA.
+const Color kBizbotFoundation = Color(0xFF1F2937);
 
-/// Navy deep — hover/pressed and dark-on-white text on brand surfaces.
-const Color kRestoflowNavyDeep = Color(0xFF0F2547);
+/// Emerald — PRIMARY. Buttons, selection, focus, progress, links, active rail.
+const Color kBizbotPrimary = Color(0xFF059669);
 
-/// Navy container — quiet brand tint (selection, hover wash, rail active bed).
-const Color kRestoflowNavyContainer = Color(0xFFE9EEF6);
+/// Mint — HIGHLIGHT. Selection beds, hover washes, highlight badges; the
+/// primary tone on dark surfaces.
+const Color kBizbotHighlight = Color(0xFFA7F3D0);
 
-/// Cool light neutrals. The canvas is a near-white with a hint of blue so white
-/// cards read as raised against it, with a cool hairline and a three-step cool
-/// ink ramp for text.
-const Color kRestoflowCanvas = Color(0xFFF7F9FC); // page background
+/// Light Neutral — SUPPORT. The page canvas and icon/avatar tile ground.
+const Color kBizbotSurface = Color(0xFFF4F6F5);
+
+/// Semantic names for the official palette. Values are frozen; if the owner
+/// ever ships a revised board, change them HERE and nowhere else.
+abstract final class BizbotBrand {
+  static const Color foundation = kBizbotFoundation;
+  static const Color primary = kBizbotPrimary;
+  static const Color highlight = kBizbotHighlight;
+  static const Color surface = kBizbotSurface;
+
+  /// Alias of [surface] under the board's own name.
+  static const Color lightNeutral = kBizbotSurface;
+
+  /// The public brand token — always Latin uppercase, never localized.
+  static const String name = 'BIZBOT';
+
+  /// The brand-board marketing line. For landing / marketing / presentation
+  /// surfaces only — the compact in-app tagline stays the localized
+  /// `authBrandTagline` ("POS & Operations").
+  static const String marketingTagline = 'SMART POS. SMOOTH OPERATIONS.';
+}
+
+// Derived FUNCTIONAL shades. These are tone steps of the official colours used
+// where a fill needs a hover/pressed partner or where text on a light surface
+// needs more contrast than the raw primary offers (emerald on white is 3.77:1 —
+// fine for large text and controls, short of AA for body copy). They are not a
+// fifth and sixth brand colour and must not be used decoratively.
+
+/// Emerald, one step deeper (pressed / hover / deep brand text on light).
+/// 5.48:1 on white, 5.05:1 on Light Neutral.
+const Color kBizbotPrimaryDeep = Color(0xFF047857);
+
+/// Charcoal-black — the dark canvas behind charcoal cards and the shadow ink.
+const Color kBizbotFoundationDeep = Color(0xFF111827);
+
+/// Charcoal, one step lighter — hairlines and quiet beds on dark surfaces.
+const Color kBizbotFoundationSoft = Color(0xFF374151);
+
+/// Mint at ~50% over white — the quiet hover / selection wash on light
+/// surfaces where full Mint would shout.
+const Color kBizbotHighlightSoft = Color(0xFFD1FAE5);
+
+/// The brand seed. Emerald is the primary; [ColorScheme.fromSeed] derives the
+/// rest and the theme pins the exact primary roles back on top.
+const Color kRestoflowSeedColor = kBizbotPrimary;
+
+/// Deep primary — hover/pressed and deep brand text on light brand surfaces.
+/// (Name kept from the navy era; value is now [kBizbotPrimaryDeep].)
+const Color kRestoflowNavyDeep = kBizbotPrimaryDeep;
+
+/// Quiet brand tint (selection, hover wash, rail active bed).
+/// (Name kept from the navy era; value is now [kBizbotHighlightSoft].)
+const Color kRestoflowNavyContainer = kBizbotHighlightSoft;
+
+/// Light neutrals. The canvas is the official Light Neutral so white cards read
+/// as raised against it, with a neutral hairline and a three-step charcoal ink
+/// ramp for text.
+const Color kRestoflowCanvas = kBizbotSurface; // page background
 const Color kRestoflowSurface = Color(0xFFFFFFFF); // card / sheet surface
-const Color kRestoflowHairline = Color(0xFFE4E9F0); // cool thin border
-const Color kRestoflowInk = Color(0xFF101828); // primary text
-const Color kRestoflowInk2 = Color(0xFF5B6472); // secondary text
-const Color kRestoflowInk3 = Color(0xFF667085); // muted text
+const Color kRestoflowHairline = Color(0xFFE3E8E5); // neutral thin border
+const Color kRestoflowInk = kBizbotFoundation; // primary text (Charcoal)
+const Color kRestoflowInk2 = Color(0xFF4B5563); // secondary text
+const Color kRestoflowInk3 = Color(0xFF626D79); // muted text
 
 /// NOTE on the muted step: it is DARKER than a conventional grey-400 on purpose.
-/// This token is used for real `bodySmall` text in ~33 places, and the previous
-/// warm value (#9A9384 on #F6F3EC) scored 2.75:1 — below AA. A literal cool
-/// translation (#98A2B3) would have been 2.44:1, i.e. worse. #667085 reads as
-/// clearly muted next to the primary and secondary inks while clearing AA at
-/// 4.72:1, so the rebrand fixes an inherited contrast failure instead of
-/// carrying it forward.
+/// This token is used for real `bodySmall` text in ~33 places; #626D79 reads as
+/// clearly muted next to the primary and secondary inks while clearing AA on
+/// both the white card (5.27:1) and the Light Neutral canvas (4.86:1).
 
 /// Brand dark value (button hover / dark-on-white text on brand surfaces).
-/// Kept under its original name; the value is now navy deep.
-const Color kRestoflowBrandDark = kRestoflowNavyDeep;
+/// Kept under its original name; the value is now the deep emerald.
+const Color kRestoflowBrandDark = kBizbotPrimaryDeep;
 
-/// The 118° brand gradient used by the side-rail logo tile (and the legacy
-/// [RestoflowGradientHeader]): navy-black → navy → brand navy → a restrained
-/// orange corner pushed just past the frame. RTL-safe: begins at the directional
-/// top-start and ends past the opposite side so it mirrors with the layout.
+/// The 118° brand gradient used by the legacy [RestoflowGradientHeader]:
+/// charcoal-black → charcoal → emerald → a mint corner pushed just past the
+/// frame. RTL-safe: begins at the directional top-start and ends past the
+/// opposite side so it mirrors with the layout.
 ///
-/// The orange endpoint is deliberately the LAST stop and sits mostly outside the
-/// frame, so it reads as a warm edge rather than a second background hue.
+/// The mint endpoint is deliberately the LAST stop and sits mostly outside the
+/// frame, so it reads as a light edge rather than a second background hue.
 const LinearGradient kRestoflowBrandGradient = LinearGradient(
   begin: AlignmentDirectional.topStart,
   end: Alignment(-1.6, 1.0),
   colors: [
-    Color(0xFF0B1526),
-    Color(0xFF0F2547),
-    Color(0xFF16335E),
-    Color(0xFFC2410C),
+    kBizbotFoundationDeep,
+    kBizbotFoundation,
+    kBizbotPrimary,
+    kBizbotHighlight,
   ],
   stops: [0.0, 0.42, 0.70, 1.0],
 );
 
-/// The ink every elevation tier tints with — the brand's navy-black. Exposed so
-/// a surface that needs a one-off shadow tints with the same material.
-const Color kRestoflowShadowInk = Color(0xFF0B1526);
+/// The ink every elevation tier tints with — the brand's charcoal-black.
+/// Exposed so a surface that needs a one-off shadow tints with the same
+/// material.
+const Color kRestoflowShadowInk = kBizbotFoundationDeep;
 
 /// 4-point spacing scale (logical pixels).
 abstract final class RestoflowSpacing {
@@ -176,29 +230,29 @@ abstract final class RestoflowDurations {
 ///
 /// The product keeps its hairline-outlined flat cards; these shadows ADD depth
 /// selectively (hover/popover/dialog moments) instead of Material elevation
-/// tints. The shadow ink is the brand's navy-black ([kRestoflowShadowInk],
-/// `#0B1526`) at low alpha, so shadows read as the same material as the dark
-/// rail rather than a neutral grey. Purely additive — nothing consumes them
+/// tints. The shadow ink is the brand's charcoal-black ([kRestoflowShadowInk],
+/// `#111827`) at low alpha, so shadows read as the same material as the dark
+/// chrome rather than a neutral grey. Purely additive — nothing consumes them
 /// implicitly.
 abstract final class RestoflowShadows {
   /// Resting list items and quiet tiles.
   static const List<BoxShadow> xs = [
-    BoxShadow(color: Color(0x0D0B1526), offset: Offset(0, 1), blurRadius: 2),
+    BoxShadow(color: Color(0x0D111827), offset: Offset(0, 1), blurRadius: 2),
   ];
 
   /// Standard cards on the tinted canvas.
   static const List<BoxShadow> sm = [
-    BoxShadow(color: Color(0x120B1526), offset: Offset(0, 1), blurRadius: 3),
-    BoxShadow(color: Color(0x0A0B1526), offset: Offset(0, 1), blurRadius: 2),
+    BoxShadow(color: Color(0x12111827), offset: Offset(0, 1), blurRadius: 3),
+    BoxShadow(color: Color(0x0A111827), offset: Offset(0, 1), blurRadius: 2),
   ];
 
   /// Hover emphasis and popovers.
   static const List<BoxShadow> md = [
-    BoxShadow(color: Color(0x140B1526), offset: Offset(0, 4), blurRadius: 14),
+    BoxShadow(color: Color(0x14111827), offset: Offset(0, 4), blurRadius: 14),
   ];
 
   /// Dialogs, sheets, and other top surfaces.
   static const List<BoxShadow> lg = [
-    BoxShadow(color: Color(0x240B1526), offset: Offset(0, 12), blurRadius: 32),
+    BoxShadow(color: Color(0x24111827), offset: Offset(0, 12), blurRadius: 32),
   ];
 }

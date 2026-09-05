@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show RestoflowBrandMark;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_appearance.dart';
@@ -409,13 +411,27 @@ class _KioskAttractScreenState extends ConsumerState<KioskAttractScreen>
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  l10n.kioskPoweredBy(deviceLabel),
-                  style: KioskType.body(
-                    18,
-                    FontWeight.w500,
-                    color: KioskColors.textGhost,
-                  ),
+                // BIZBOT official identity: the PLATFORM footer carries the
+                // official symbol next to the attribution. Everything above
+                // it (hero, wordmark, products) stays the merchant's.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const RestoflowBrandMark(size: 22),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        l10n.kioskPoweredBy(deviceLabel),
+                        style: KioskType.body(
+                          18,
+                          FontWeight.w500,
+                          color: KioskColors.textGhost,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

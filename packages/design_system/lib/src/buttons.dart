@@ -30,27 +30,30 @@ abstract final class RestoflowButtonStyles {
   // WHICH ONE TO USE. There is exactly one [accent] button in a view: the
   // single highest-value next step (POS "Send order" / "Pay", the Dashboard's
   // one primary CTA). Everything else that is still a primary action uses
-  // [navyPrimary], which keeps the navy structure and earns its orange only on
-  // focus/press. Two orange fills in one view is the failure mode this split
+  // [navyPrimary], which keeps the emerald structure and earns the accent only
+  // on focus/press. Two accent fills in one view is the failure mode this split
   // exists to prevent — the accent stops meaning "do this next" the moment it
   // is repeated.
   //
-  // Orange here is BRAND identity, so it is read from [RestoflowBrandPalette].
-  // It is deliberately NOT read from [RestoflowSemanticColors.accent]: those two
-  // happen to hold the same value today, but they are independent types, and
-  // sourcing a brand fill from the semantic role is how a future rebrand
-  // silently repaints an attention state.
+  // BIZBOT official identity: the accent is the brand FOUNDATION colour
+  // (Charcoal on light surfaces, Light Neutral on dark) and the structural
+  // primary is Emerald. The accent is BRAND identity, so it is read from
+  // [RestoflowBrandPalette]. It is deliberately NOT read from
+  // [RestoflowSemanticColors.accent]: those two happen to hold the same value
+  // today, but they are independent types, and sourcing a brand fill from the
+  // semantic role is how a future rebrand silently repaints an attention state.
 
-  /// THE single highest-value action in a view — orange fill, white label.
+  /// THE single highest-value action in a view — charcoal fill, white label
+  /// (Light Neutral fill, charcoal label on dark surfaces).
   ///
-  /// Contrast: white on the light-preset orange measures 5.18:1, so the label
-  /// passes AA at normal text size, not only as a large control.
+  /// Contrast: white on Charcoal measures 14.7:1 and Charcoal on Light Neutral
+  /// 13.5:1, so the label passes AA at normal text size on both grounds.
   static ButtonStyle accent(BuildContext context) {
     final theme = Theme.of(context);
     final brand = RestoflowBrandPalette.of(theme.brightness);
     final fill = brand.accentOrange;
     final onFill = theme.brightness == Brightness.dark
-        ? kRestoflowNavyDeep
+        ? kBizbotFoundation
         : Colors.white;
     return FilledButton.styleFrom(
       backgroundColor: fill,
@@ -62,14 +65,15 @@ abstract final class RestoflowButtonStyles {
       ),
       animationDuration: RestoflowDurations.fast,
     ).copyWith(
-      // Hover/press deepen the SAME hue rather than switching colour, so the
-      // control never looks like it changed meaning mid-interaction.
+      // Hover/press shift the SAME fill towards its label ink rather than
+      // switching colour, so the control never looks like it changed meaning
+      // mid-interaction.
       overlayColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.pressed)) {
-          return kRestoflowNavyDeep.withValues(alpha: 0.22);
+          return onFill.withValues(alpha: 0.22);
         }
         if (states.contains(WidgetState.hovered)) {
-          return kRestoflowNavyDeep.withValues(alpha: 0.12);
+          return onFill.withValues(alpha: 0.12);
         }
         return null;
       }),
@@ -89,8 +93,8 @@ abstract final class RestoflowButtonStyles {
     );
   }
 
-  /// A primary action that keeps the navy structure and earns orange on
-  /// interaction — the default for "important, but not THE next step".
+  /// A primary action that keeps the emerald structure and earns the accent
+  /// on interaction — the default for "important, but not THE next step".
   static ButtonStyle navyPrimary(BuildContext context) {
     final theme = Theme.of(context);
     final brand = RestoflowBrandPalette.of(theme.brightness);
@@ -118,7 +122,7 @@ abstract final class RestoflowButtonStyles {
         if (states.contains(WidgetState.hovered)) return 3.0;
         return 1.0;
       }),
-      // The orange edge IS the focus signal here; the fill stays navy so the
+      // The accent edge IS the focus signal here; the fill stays emerald so the
       // structural colour never moves.
       side: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.focused)) {

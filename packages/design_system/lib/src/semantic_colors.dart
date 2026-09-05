@@ -68,15 +68,17 @@ class RestoflowSemanticColors extends ThemeExtension<RestoflowSemanticColors> {
   final Color infoContainer;
   final Color onInfoContainer;
 
-  /// The warm restaurant accent (terracotta) — brand moments only
-  /// (hero panels, active nav, highlights), never for statuses.
+  /// The brand ATTENTION accent — brand moments only (the New-order arrival
+  /// glow, hero panels, active nav, highlights), never for statuses. Held
+  /// equal to `RestoflowBrandPalette.accentOrange` (Charcoal on light, Light
+  /// Neutral on dark) so identity and attention agree.
   final Color accent;
   final Color onAccent;
   final Color accentContainer;
   final Color onAccentContainer;
 
-  /// Dashboard dark-sidebar palette (soft dark green-black over the light
-  /// content area).
+  /// Dashboard dark-sidebar palette (charcoal chrome over the light content
+  /// area).
   final Color sidebarSurface;
   final Color sidebarOnSurface;
   final Color sidebarMuted;
@@ -101,16 +103,17 @@ class RestoflowSemanticColors extends ThemeExtension<RestoflowSemanticColors> {
     onInfo: Color(0xFFFFFFFF),
     infoContainer: Color(0xFFDBEAFE),
     onInfoContainer: Color(0xFF1E3A8A),
-    accent: Color(0xFFC2410C),
+    // BIZBOT official identity: the accent is the brand accent (Charcoal on
+    // light) with the Mint bed; the sidebar is brand CHROME, not a status, so
+    // it moves with the identity. The status fields above deliberately do not.
+    accent: Color(0xFF1F2937),
     onAccent: Color(0xFFFFFFFF),
-    accentContainer: Color(0xFFFFEDD5),
-    onAccentContainer: Color(0xFF7C2D12),
-    // RESTOFLOW-GLOBAL-VISUAL-V0: the rail is brand CHROME, not a status, so it
-    // moves with the identity. The status fields above deliberately do not.
-    sidebarSurface: Color(0xFF0F2038),
-    sidebarOnSurface: Color(0xFFE8EDF5),
-    sidebarMuted: Color(0xFF9AA7BC),
-    sidebarActiveBackground: Color(0xFF16335E),
+    accentContainer: Color(0xFFA7F3D0),
+    onAccentContainer: Color(0xFF1F2937),
+    sidebarSurface: Color(0xFF1F2937),
+    sidebarOnSurface: Color(0xFFF4F6F5),
+    sidebarMuted: Color(0xFF9CA3AF),
+    sidebarActiveBackground: Color(0xFF059669),
     sidebarActiveForeground: Color(0xFFFFFFFF),
   );
 
@@ -132,14 +135,16 @@ class RestoflowSemanticColors extends ThemeExtension<RestoflowSemanticColors> {
     onInfo: Color(0xFF172554),
     infoContainer: Color(0xFF1E40AF),
     onInfoContainer: Color(0xFFDBEAFE),
-    accent: Color(0xFFFB923C),
-    onAccent: Color(0xFF431407),
-    accentContainer: Color(0xFF9A3412),
-    onAccentContainer: Color(0xFFFFEDD5),
-    sidebarSurface: Color(0xFF0B1526),
-    sidebarOnSurface: Color(0xFFE8EDF5),
-    sidebarMuted: Color(0xFF8494AC),
-    sidebarActiveBackground: Color(0xFF16335E),
+    // Dark: the accent is the Light Neutral (foundation inverted) so the
+    // arrival glow is the brightest thing on a charcoal board.
+    accent: Color(0xFFF4F6F5),
+    onAccent: Color(0xFF1F2937),
+    accentContainer: Color(0xFF374151),
+    onAccentContainer: Color(0xFFF4F6F5),
+    sidebarSurface: Color(0xFF111827),
+    sidebarOnSurface: Color(0xFFF4F6F5),
+    sidebarMuted: Color(0xFF9CA3AF),
+    sidebarActiveBackground: Color(0xFF059669),
     sidebarActiveForeground: Color(0xFFFFFFFF),
   );
 

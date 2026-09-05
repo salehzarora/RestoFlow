@@ -572,7 +572,7 @@ class _ImageBand extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x2E0B1526), Color(0x000B1526)],
+                colors: [Color(0x2E111827), Color(0x00111827)],
                 stops: [0.0, 0.45],
               ),
             ),
@@ -686,7 +686,7 @@ class _InCartBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x470B1526),
+            color: Color(0x47111827),
             offset: Offset(0, 2),
             blurRadius: 6,
           ),
@@ -729,7 +729,7 @@ class _OptionsIndicator extends StatelessWidget {
         // Flat translucent ink over the photo — the spec's one backdrop-blur is
         // deliberately NOT ported: it reads the same and costs a layer.
         decoration: BoxDecoration(
-          color: const Color(0xB80B1526),
+          color: const Color(0xB8111827),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
