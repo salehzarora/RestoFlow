@@ -20,8 +20,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-# VEYRO-REBRAND: the one canonical VEYRO brand mark, consumed by the shared
-# RestoflowBrandMark component so no app duplicates the asset.
-flutter:
-  assets:
-    - assets/brand/veyro_mark.png
+# BIZBOT-REBRAND: the shared RestoflowBrandMark is a TEMPORARY typographic
+# monogram drawn in code (no owner-approved BIZBOT logo yet), so no brand asset
+# is bundled. The retired VEYRO symbol is kept UNREFERENCED for rollback under
+# assets/brand/archive/ (not declared here, therefore never shipped).

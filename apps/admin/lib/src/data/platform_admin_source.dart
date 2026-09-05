@@ -319,48 +319,48 @@ List<PlatformAuditSeed> demoAuditFeed() {
   const reads = <(String action, String reason, String? target)>[
     (
       'platform.console.overview',
-      'VEYRO admin: platform overview (read-only)',
+      'BIZBOT admin: platform overview (read-only)',
       null,
     ),
     (
       'platform.subscribers.list',
-      'VEYRO admin: subscriber list (read-only)',
+      'BIZBOT admin: subscriber list (read-only)',
       null,
     ),
     (
       'platform.subscriber.detail',
-      'VEYRO admin: subscriber detail (read-only)',
+      'BIZBOT admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a1',
     ),
     (
       'platform.subscriber.detail',
-      'VEYRO admin: subscriber detail (read-only)',
+      'BIZBOT admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a5',
     ),
     (
       'platform.restaurants.list',
-      'VEYRO admin: restaurant list (read-only)',
+      'BIZBOT admin: restaurant list (read-only)',
       null,
     ),
-    ('platform.audit.search', 'VEYRO admin: audit log (read-only)', null),
+    ('platform.audit.search', 'BIZBOT admin: audit log (read-only)', null),
     (
       'platform.organizations.overview',
-      'VEYRO admin app: platform overview (read-only)',
+      'BIZBOT admin app: platform overview (read-only)',
       null,
     ),
     (
       'platform.organization.detail',
-      'VEYRO admin: subscriber detail (read-only)',
+      'BIZBOT admin: subscriber detail (read-only)',
       'd0000000-0000-4000-8000-0000000000a2',
     ),
     (
       'platform.audit.read',
-      'VEYRO admin app: platform overview (read-only)',
+      'BIZBOT admin app: platform overview (read-only)',
       null,
     ),
     (
       'platform.subscribers.list',
-      'VEYRO admin: subscriber list (read-only)',
+      'BIZBOT admin: subscriber list (read-only)',
       null,
     ),
   ];

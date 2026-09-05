@@ -429,28 +429,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogCapCloseShift => 'إغلاق الوردية';
 
   @override
-  String get appName => 'VEYRO';
+  String get appName => 'BIZBOT';
 
   @override
-  String get posAppTitle => 'VEYRO - نقطة البيع';
+  String get posAppTitle => 'BIZBOT - نقطة البيع';
 
   @override
-  String get kdsAppTitle => 'VEYRO - شاشة المطبخ';
+  String get kdsAppTitle => 'BIZBOT - شاشة المطبخ';
 
   @override
-  String get dashboardAppTitle => 'VEYRO - لوحة التحكم';
+  String get dashboardAppTitle => 'BIZBOT - لوحة التحكم';
 
   @override
-  String get dashboardBrandName => 'VEYRO';
+  String get dashboardBrandName => 'BIZBOT';
 
   @override
   String get dashboardBrandTagline => 'لوحة التحكم';
 
   @override
-  String get adminAppTitle => 'VEYRO - الإدارة';
+  String get adminAppTitle => 'BIZBOT - الإدارة';
 
   @override
-  String get welcomeMessage => 'مرحبًا بك في VEYRO';
+  String get welcomeMessage => 'مرحبًا بك في BIZBOT';
 
   @override
   String get adminOverviewTitle => 'نظرة عامة على المنصة';
@@ -1930,7 +1930,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authRealModeUnconfiguredBody =>
-      'تم تشغيل التطبيق في الوضع الحقيقي، لكن إعدادات الاتصال بالخادم مفقودة أو غير صالحة. VEYRO لا يزيّف الخادم أبدًا، لذا يبقى الوضع الحقيقي مقفلاً حتى يتم توفير إعدادات صالحة.';
+      'تم تشغيل التطبيق في الوضع الحقيقي، لكن إعدادات الاتصال بالخادم مفقودة أو غير صالحة. BIZBOT لا يزيّف الخادم أبدًا، لذا يبقى الوضع الحقيقي مقفلاً حتى يتم توفير إعدادات صالحة.';
 
   @override
   String get authRealModeUnconfiguredHowTo => 'شغّل التطبيق بهذه القيم';
@@ -1945,7 +1945,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authProductionDemoBlockedBody =>
-      'يحتوي هذا الإصدار على إعدادات اتصال خلفية صالحة لكنه يعمل في الوضع التجريبي، لذا سيعرض بيانات تجريبية كأنها بيانات حقيقية. أوقِف الوضع التجريبي لعرض البيانات الحقيقية، أو أزِل إعدادات الاتصال لتشغيل النسخة التجريبية. لا يعرض VEYRO البيانات التجريبية أبدًا كأنها بيانات إنتاج.';
+      'يحتوي هذا الإصدار على إعدادات اتصال خلفية صالحة لكنه يعمل في الوضع التجريبي، لذا سيعرض بيانات تجريبية كأنها بيانات حقيقية. أوقِف الوضع التجريبي لعرض البيانات الحقيقية، أو أزِل إعدادات الاتصال لتشغيل النسخة التجريبية. لا يعرض BIZBOT البيانات التجريبية أبدًا كأنها بيانات إنتاج.';
 
   @override
   String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
@@ -2953,7 +2953,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDeviceUpdated => 'تم تحديث الجهاز';
 
   @override
-  String get authWelcomeTitle => 'مرحبًا بك في VEYRO';
+  String get authWelcomeTitle => 'مرحبًا بك في BIZBOT';
 
   @override
   String get authBrandTagline => 'نقاط البيع والعمليات';
@@ -3000,7 +3000,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get onboardingTitle => 'إعداد مطعمك';
 
   @override
-  String get onboardingIntro => 'أنشئ مطعمك لبدء استخدام VEYRO.';
+  String get onboardingIntro => 'أنشئ مطعمك لبدء استخدام BIZBOT.';
 
   @override
   String get onboardingRestaurantNameLabel => 'اسم المطعم';
@@ -4187,7 +4187,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posNonCashNote =>
-      'دفعة خارجية مُسجّلة — لا يقوم VEYRO بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
+      'دفعة خارجية مُسجّلة — لا يقوم BIZBOT بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
 
   @override
   String get posPaymentFailedTitle => 'لم يتم تسجيل الدفعة';
@@ -4517,7 +4517,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posBluetoothPermissionRequired =>
-      'إذن البلوتوث مطلوب. اسمح به لـ VEYRO من إعدادات أندرويد ثم حدّث.';
+      'إذن البلوتوث مطلوب. اسمح به لـ BIZBOT من إعدادات أندرويد ثم حدّث.';
 
   @override
   String get posBluetoothOff => 'البلوتوث مُطفأ — شغّله ثم حدّث.';
@@ -4584,7 +4584,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
-      'إذن البلوتوث مطلوب. اسمح به لتطبيق VEYRO في إعدادات أندرويد ثم حدّث.';
+      'إذن البلوتوث مطلوب. اسمح به لتطبيق BIZBOT في إعدادات أندرويد ثم حدّث.';
 
   @override
   String get dashboardNavOrders => 'الطلبات';
@@ -5986,7 +5986,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posSending => 'جارٍ الإرسال…';
 
   @override
-  String get posBrandName => 'VEYRO';
+  String get posBrandName => 'BIZBOT';
 
   @override
   String get posBrandTagline => 'نقطة بيع';
@@ -6544,11 +6544,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String kioskPoweredBy(String device) {
-    return 'مشغّل بواسطة VEYRO · جهاز $device';
+    return 'مشغّل بواسطة BIZBOT · جهاز $device';
   }
 
   @override
-  String get kioskPoweredByShort => 'مشغّل بواسطة VEYRO';
+  String get kioskPoweredByShort => 'مشغّل بواسطة BIZBOT';
 
   @override
   String get kioskGroupWeight => 'اختر وزن اللحم';
@@ -6934,7 +6934,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kioskSettingsVideoHint =>
-      'ارفع ملف .mp4 من لوحة تحكم VEYRO ← الأجهزة. سيتزامن مع الجهاز ويُعرض عند الخمول بدون صوت.';
+      'ارفع ملف .mp4 من لوحة تحكم BIZBOT ← الأجهزة. سيتزامن مع الجهاز ويُعرض عند الخمول بدون صوت.';
 
   @override
   String get kioskSettingsPrinterSection => 'طابعة القسائم';
@@ -7631,7 +7631,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authResetSent =>
-      'إذا كان لهذا العنوان حساب في VEYRO، فالرابط في طريقه إليك. تحقّق من بريدك.';
+      'إذا كان لهذا العنوان حساب في BIZBOT، فالرابط في طريقه إليك. تحقّق من بريدك.';
 
   @override
   String get authBackToSignIn => 'العودة إلى تسجيل الدخول';
@@ -7641,7 +7641,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authNewPasswordBody =>
-      'عيّن كلمة مرور جديدة لحسابك في VEYRO. ستبقى مسجّل الدخول على هذا الجهاز.';
+      'عيّن كلمة مرور جديدة لحسابك في BIZBOT. ستبقى مسجّل الدخول على هذا الجهاز.';
 
   @override
   String get authNewPasswordLabel => 'كلمة المرور الجديدة';

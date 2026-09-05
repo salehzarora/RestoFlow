@@ -131,6 +131,45 @@ password-reset deep-link callback surface.
   URL configuration) to include the Vercel production + preview domains (and any
   custom domain), so GoTrue accepts the origin-derived redirect target.
 
+### 5.1 BIZBOT public domain and production origins (BIZBOT-REBRAND, 2026-09-05)
+
+The public brand domain is **`bizbot.systems`** (registered at Porkbun, auto-renew
+on). The public tenant project (`resto-flow`, slug unchanged on purpose) now
+serves the SAME production deployment on two origins:
+
+| Origin | Role |
+|---|---|
+| `https://app.bizbot.systems` | **Canonical** production origin — Dashboard at `/`, `/pos`, `/kds`, `/kiosk` |
+| `https://resto-flow-phi.vercel.app` | **Legacy origin, deliberately retained** — identical deployment, never removed abruptly |
+| `https://bizbot.systems`, `https://www.bizbot.systems` | Brand root — currently a **307 (temporary) redirect** to `app.bizbot.systems`; reserved for a marketing landing page later |
+
+Why both origins stay: POS/KDS/Kiosk device pairing and the human session live in
+browser storage, which is scoped **per origin**. A device paired on the old
+origin keeps working there indefinitely; nothing force-redirects it. To move a
+device to the BIZBOT origin, open `https://app.bizbot.systems/pos` (or `/kds`,
+`/kiosk`) on that device and pair it again with a fresh enrollment code from the
+Dashboard → Devices — the old pairing can then be revoked. Retire the legacy
+origin only after every device has been re-paired.
+
+Supabase Auth for the production project is configured as: **Site URL**
+`https://app.bizbot.systems`; **Redirect URLs** = both origins × `/`,
+`/auth/confirmed`, `/auth/recovery` (the legacy entries stay until the last
+device/session is migrated); **custom SMTP** = Resend (`eu-west-1`), sender
+`BIZBOT <auth@bizbot.systems>`. `RESTOFLOW_AUTH_REDIRECT_URL` stays **unset**:
+the origin-derived redirect already returns each user to whichever origin they
+signed up from, and both origins are allow-listed.
+
+DNS (Porkbun, `bizbot.systems`): `A @ → 216.198.79.1` (Vercel), `CNAME app` and
+`CNAME www → <project>.vercel-dns-017.com` (Vercel-issued), Resend
+`TXT resend._domainkey`, `MX send` + `TXT send` (SPF for the `send.` return-path),
+`TXT _dmarc` (`p=none`, monitor mode), Porkbun email-forwarding `MX @` +
+apex `TXT` SPF. Public mailboxes `hello@`, `sales@`, `support@`, `auth@`,
+`dmarc@bizbot.systems` are Porkbun forwards into the internal recovery Gmail.
+
+Legacy `veyro.systems`: kept registered (auto-renew on), its Resend sender is
+retained only until the BIZBOT sender has proven itself, and its web traffic is
+forwarded to `https://bizbot.systems`. It is no longer a public identity.
+
 ---
 
 ## 6. RF-LIVE-002 — hosted auth + mode-safety hardening (**done**)
@@ -773,7 +812,7 @@ destructive rollback.
 ## 14. Platform Admin console — FUNCTIONALLY COMPLETE, permanent hosting DEFERRED
 
 **Status: `PLATFORM-ADMIN-FUNCTIONAL-COMPLETE / PERMANENT-HOSTING-DEFERRED`.**
-The internal VEYRO Admin console (`apps/admin`) is feature-complete and its
+The internal BIZBOT Admin console (`apps/admin`) is feature-complete and its
 backend is fully applied to hosted Supabase. What is deferred is only *where it
 runs* — it has no permanent origin yet, and that is a deliberate scheduling
 decision, **not** a blocker for normal product development.
@@ -825,11 +864,12 @@ reason. Running locally weakens nothing — the client is not the boundary.
 3. **Vercel Deployment Protection** on that project. The internal plane must not
    be openly reachable; application-level grant + `aal2` + reason enforcement is
    mandatory but is **not** a substitute for a hosting-layer protection.
-4. **Internal namespace rename `RESTOFLOW_*` → `VEYRO_*`.** The VEYRO rebrand was
-   deliberately public-surface only; env-var names, the repository, package ids,
-   applicationIds, storage keys, MethodChannels and Supabase identifiers stay as
-   they are until a separate audited phase. The existing public Vercel project
-   likewise keeps its current name.
+4. **Internal namespace rename `RESTOFLOW_*` → `BIZBOT_*`.** Both public rebrands
+   (RestoFlow → VEYRO, then VEYRO → BIZBOT) were deliberately public-surface only;
+   env-var names, the repository, package ids, applicationIds, storage keys,
+   MethodChannels and Supabase identifiers stay as they are until a separate
+   audited phase. The existing public Vercel project likewise keeps its
+   `resto-flow` slug — the public identity is carried by the custom domain.
 5. **Admin write controls** — assign/change subscription plan, suspend/activate an
    organization. `app.set_organization_plan` already exists, guarded, validated
    and audited, but has **no `public.` wrapper**, so no client can reach it. The

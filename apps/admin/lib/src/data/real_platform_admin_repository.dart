@@ -41,14 +41,16 @@ import 'platform_admin_repository.dart';
 /// distinguishes which console surface an operator actually opened. The server
 /// requires a non-empty reason and stores it verbatim.
 const String kReasonConsoleOverview =
-    'VEYRO admin: platform overview (read-only)';
-const String kReasonSubscriberList = 'VEYRO admin: subscriber list (read-only)';
+    'BIZBOT admin: platform overview (read-only)';
+const String kReasonSubscriberList =
+    'BIZBOT admin: subscriber list (read-only)';
 const String kReasonSubscriberDetail =
-    'VEYRO admin: subscriber detail (read-only)';
-const String kReasonRestaurantList = 'VEYRO admin: restaurant list (read-only)';
-const String kReasonAuditLog = 'VEYRO admin: audit log (read-only)';
+    'BIZBOT admin: subscriber detail (read-only)';
+const String kReasonRestaurantList =
+    'BIZBOT admin: restaurant list (read-only)';
+const String kReasonAuditLog = 'BIZBOT admin: audit log (read-only)';
 const String kReasonRestaurantOperations =
-    'VEYRO admin: restaurant operations (read-only)';
+    'BIZBOT admin: restaurant operations (read-only)';
 
 /// Reads the platform console from the ADMIN-125C.1 public wrappers.
 class RealPlatformAdminRepository implements PlatformAdminRepository {

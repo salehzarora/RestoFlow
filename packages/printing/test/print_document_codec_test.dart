@@ -11,7 +11,7 @@ void main() {
   test('round-trips a mixed document and re-renders identical ESC/POS bytes', () {
     final doc = PrintDocument([
       const PrintTextLine(
-        'VEYRO',
+        'BIZBOT',
         alignment: PrintAlignment.center,
         emphasis: TextEmphasis.bold,
       ),

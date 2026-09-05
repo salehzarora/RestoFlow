@@ -432,28 +432,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogCapCloseShift => 'Close shift';
 
   @override
-  String get appName => 'VEYRO';
+  String get appName => 'BIZBOT';
 
   @override
-  String get posAppTitle => 'VEYRO POS';
+  String get posAppTitle => 'BIZBOT POS';
 
   @override
-  String get kdsAppTitle => 'VEYRO KDS';
+  String get kdsAppTitle => 'BIZBOT KDS';
 
   @override
-  String get dashboardAppTitle => 'VEYRO Dashboard';
+  String get dashboardAppTitle => 'BIZBOT Dashboard';
 
   @override
-  String get dashboardBrandName => 'VEYRO';
+  String get dashboardBrandName => 'BIZBOT';
 
   @override
   String get dashboardBrandTagline => 'Dashboard';
 
   @override
-  String get adminAppTitle => 'VEYRO Admin';
+  String get adminAppTitle => 'BIZBOT Admin';
 
   @override
-  String get welcomeMessage => 'Welcome to VEYRO';
+  String get welcomeMessage => 'Welcome to BIZBOT';
 
   @override
   String get adminOverviewTitle => 'Platform overview';
@@ -1943,7 +1943,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authRealModeUnconfiguredBody =>
-      'The app was started in real mode, but the backend connection settings are missing or invalid. VEYRO never fakes a backend, so real mode stays locked until valid settings are provided.';
+      'The app was started in real mode, but the backend connection settings are missing or invalid. BIZBOT never fakes a backend, so real mode stays locked until valid settings are provided.';
 
   @override
   String get authRealModeUnconfiguredHowTo => 'Start the app with these values';
@@ -1958,7 +1958,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authProductionDemoBlockedBody =>
-      'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. VEYRO never presents demo data as production.';
+      'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. BIZBOT never presents demo data as production.';
 
   @override
   String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
@@ -2973,7 +2973,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDeviceUpdated => 'Device updated';
 
   @override
-  String get authWelcomeTitle => 'Welcome to VEYRO';
+  String get authWelcomeTitle => 'Welcome to BIZBOT';
 
   @override
   String get authBrandTagline => 'POS & Operations';
@@ -3021,7 +3021,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingTitle => 'Set up your restaurant';
 
   @override
-  String get onboardingIntro => 'Create your restaurant to start using VEYRO.';
+  String get onboardingIntro => 'Create your restaurant to start using BIZBOT.';
 
   @override
   String get onboardingRestaurantNameLabel => 'Restaurant name';
@@ -4209,7 +4209,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posNonCashNote =>
-      'External payment recorded — VEYRO does not process the card or transfer; no real charge is made.';
+      'External payment recorded — BIZBOT does not process the card or transfer; no real charge is made.';
 
   @override
   String get posPaymentFailedTitle => 'Payment not recorded';
@@ -4543,7 +4543,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posBluetoothPermissionRequired =>
-      'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.';
+      'Bluetooth permission is required. Allow it for BIZBOT in Android settings, then refresh.';
 
   @override
   String get posBluetoothOff => 'Bluetooth is off — turn it on, then refresh.';
@@ -4610,7 +4610,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
-      'Bluetooth permission is required. Allow it for VEYRO in Android settings, then refresh.';
+      'Bluetooth permission is required. Allow it for BIZBOT in Android settings, then refresh.';
 
   @override
   String get dashboardNavOrders => 'Orders';
@@ -6033,7 +6033,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posSending => 'Sending…';
 
   @override
-  String get posBrandName => 'VEYRO';
+  String get posBrandName => 'BIZBOT';
 
   @override
   String get posBrandTagline => 'Point of Sale';
@@ -6593,11 +6593,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String kioskPoweredBy(String device) {
-    return 'Powered by VEYRO · Kiosk $device';
+    return 'Powered by BIZBOT · Kiosk $device';
   }
 
   @override
-  String get kioskPoweredByShort => 'Powered by VEYRO';
+  String get kioskPoweredByShort => 'Powered by BIZBOT';
 
   @override
   String get kioskGroupWeight => 'Choose your patty weight';
@@ -6986,7 +6986,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kioskSettingsVideoHint =>
-      'Upload an .mp4 in the VEYRO dashboard → Devices. It syncs to the device and loops on idle, muted.';
+      'Upload an .mp4 in the BIZBOT dashboard → Devices. It syncs to the device and loops on idle, muted.';
 
   @override
   String get kioskSettingsPrinterSection => 'Receipt printer';
@@ -7686,7 +7686,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authResetSent =>
-      'If that address has a VEYRO account, a reset link is on its way. Check your inbox.';
+      'If that address has a BIZBOT account, a reset link is on its way. Check your inbox.';
 
   @override
   String get authBackToSignIn => 'Back to sign in';
@@ -7696,7 +7696,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authNewPasswordBody =>
-      'Set a new password for your VEYRO account. You’ll stay signed in on this device.';
+      'Set a new password for your BIZBOT account. You’ll stay signed in on this device.';
 
   @override
   String get authNewPasswordLabel => 'New password';
