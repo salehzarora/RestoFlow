@@ -195,7 +195,10 @@ void main() {
           findsOneWidget,
           reason: 'symbol at ${width}px',
         );
-        expect(RestoflowBrandMark.symbolAsset, 'assets/brand/bizbot/bizbot_symbol.png');
+        expect(
+          RestoflowBrandMark.symbolAsset,
+          'assets/brand/bizbot/bizbot_symbol.png',
+        );
         expect(
           _asset(RestoflowBrandMark.wordmarkLatinAsset),
           width >= kPosCompactAppBarWidth ? findsOneWidget : findsNothing,
@@ -210,9 +213,24 @@ void main() {
         expect(symbol.height, m.markSize);
         expect(symbol.fit, BoxFit.contain);
         // No retired art, no temporary monogram, no VEYRO anywhere in the bar.
-        expect(find.descendant(of: _appBar(), matching: find.byIcon(Icons.point_of_sale)), findsNothing);
-        expect(find.descendant(of: _appBar(), matching: find.text('B')), findsNothing);
-        expect(find.descendant(of: _appBar(), matching: find.textContaining('VEYRO')), findsNothing);
+        expect(
+          find.descendant(
+            of: _appBar(),
+            matching: find.byIcon(Icons.point_of_sale),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: _appBar(), matching: find.text('B')),
+          findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: _appBar(),
+            matching: find.textContaining('VEYRO'),
+          ),
+          findsNothing,
+        );
       }
     });
 
@@ -235,7 +253,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.runAsync(() async {
-        await tester.pumpWidget(_app(locale: const Locale('en'), bundle: bundle));
+        await tester.pumpWidget(
+          _app(locale: const Locale('en'), bundle: bundle),
+        );
         final context = tester.element(find.byType(PosMenuScreen));
         await precacheImage(
           const AssetImage(
@@ -312,12 +332,19 @@ void main() {
           expect(image.matchTextDirection, isFalse);
         }
         for (final t in tester.widgetList<Transform>(
-          find.descendant(of: find.byKey(_plate), matching: find.byType(Transform)),
+          find.descendant(
+            of: find.byKey(_plate),
+            matching: find.byType(Transform),
+          ),
         )) {
           expect(t.transform.storage[0], greaterThanOrEqualTo(0));
         }
-        final symbolX = tester.getCenter(_asset(RestoflowBrandMark.symbolAsset)).dx;
-        final wordX = tester.getCenter(_asset(RestoflowBrandMark.wordmarkLatinAsset)).dx;
+        final symbolX = tester
+            .getCenter(_asset(RestoflowBrandMark.symbolAsset))
+            .dx;
+        final wordX = tester
+            .getCenter(_asset(RestoflowBrandMark.wordmarkLatinAsset))
+            .dx;
         final direction = Directionality.of(tester.element(find.byKey(_plate)));
         if (direction == TextDirection.rtl) {
           expect(symbolX, greaterThan(wordX));
