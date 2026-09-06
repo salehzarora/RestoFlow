@@ -363,8 +363,25 @@
     "versionName": "0.0.53",
     "versionCode": 53,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main at the merge of the BIZBOT-LAUNCHER-TRANSPARENT / POS-NAVBAR-TRANSPARENT-BRAND PR (transparent adaptive + legacy launcher icons for all four apps, frameless POS brand lockup with the reverse wordmark on dark bars, bar-centred identity chip); the exact SHA is recorded at build time",
+    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+    "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+    "buildDate": "2026-09-06",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v53-28a9b42.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "a70605159d510723f59dc3bbf055bfdce78cfbc644a7d36a8264c8a8af153fdd"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v53-28a9b42.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "e8f97d8557ef5cd46cac6d4e4305300aa867d432062f661e6d7ecf24be4730d2"
+      }
+    },
+    "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (main = the PR #266 merge: transparent launcher icons, frameless POS lockup with the reverse wordmark, bar-centred identity chip, ledger advance)",
     "notes": [
       "BIZBOT-ANDROID-RELEASE-V53 (2026-09-06): the owner asked, after seeing v52 on",
       "the tablet, for a launcher icon with NO background behind the symbol",
@@ -380,6 +397,33 @@
       "runner never installs, uploads or publishes; device rollout stays a",
       "separate owner step. Kiosk and dashboard keep their own lineages - see",
       "kioskNextRelease and dashboardNextRelease."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 by tools/android_release/build_official_pair.ps1 from main at",
+      "28a9b422 (the PR #266 merge - application source and ledger in one commit).",
+      "Preflight: branch main, tracked tree clean, production signing identity check",
+      "OK (alias restoflow-production, fingerprint matches the pin, not the debug",
+      "certificate), hosted project + public key only, demo=false. Both artifacts",
+      "verified by verify_official_apk.ps1: not debuggable, Release/AOT, zipaligned,",
+      "apksigner-verified, production certificate matches the pin, hosted ref",
+      "present, forbidden ref absent, no localhost backend, no JWT-shaped token,",
+      "minSdk 24 / targetSdk 36, ABIs arm64-v8a armeabi-v7a x86_64,",
+      "application-label BIZBOT POS / BIZBOT KDS. SHA256SUMS.txt re-verified;",
+      "dist/official-v53/BUILD-METADATA.txt is the build record. Inside both APKs",
+      "the bundled brand assets hash-match the committed bizbot_symbol.png",
+      "(9f8d72e3...) / bizbot_wordmark_en.png (9b817af0...) - unchanged by this",
+      "release - and all ten committed launcher PNGs (legacy, now TRANSPARENT, and",
+      "adaptive foregrounds at 50 %) are present pixel-for-pixel (<= 2 levels of",
+      "AAPT re-encoding); the adaptive background layer is transparent; the AOT",
+      "snapshot contains no VEYRO string. Content vs v52: launcher icon with",
+      "nothing behind the symbol; POS navbar lockup directly on the bar (reverse",
+      "wordmark on dark bars); restaurant identity chip centred on the bar and as",
+      "tall as the lockup.",
+      "Handoff copies (same bytes): release/BIZBOT-Android-2026-09-06-28a9b42/",
+      "BIZBOT-POS-0.0.53-release.apk / BIZBOT-KDS-0.0.53-release.apk (local,",
+      "git-excluded). NOT installed, NOT uploaded, NOT distributed, no GitHub",
+      "Release, not published to any store or MDM. Promotion follows device",
+      "validation per docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md."
     ]
   },
   "androidRendererPolicy": {
@@ -483,8 +527,16 @@
     "versionName": "0.2.23",
     "versionCode": 25,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "the same main SHA as the v53 pair (recorded at build time)",
+    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+    "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+    "buildDate": "2026-09-06",
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifact": {
+      "filename": "RestoFlow-Kiosk-official-v25-28a9b42.apk",
+      "packageId": "com.restoflow.kiosk",
+      "sha256": "3d7059d3d6bc67a933ec00f2ae1bb7756803cca0662c972113b7b5b63b0ce995"
+    },
+    "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (the same main SHA as the v53 pair)",
     "notes": [
       "Independent lineage outside the POS/KDS pair contract: v2..v24 consumed",
       "(latest 0.2.22 / 24, owner-installed on the test tablet). versionName follows",
@@ -493,6 +545,17 @@
       "verified with verify_official_apk.ps1 (com.restoflow.kiosk, production",
       "certificate). Content vs v24: transparent launcher icon (adaptive background",
       "layer transparent, legacy icons transparent)."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 from the same main HEAD 28a9b422 as the v53 pair with the pair",
+      "runner's flags (build-name 0.2.23, build-number 25, RESTOFLOW_DEMO_MODE=false,",
+      "hosted project URL + public anon key), production signing via",
+      "RESTOFLOW_ANDROID_SIGNING_PROPERTIES. verify_official_apk.ps1 PASS:",
+      "com.restoflow.kiosk, 0.2.23 / 25, production certificate, application-label",
+      "BIZBOT Kiosk, minSdk 24 / targetSdk 36, AOT. Transparent launcher icon",
+      "(10/10 committed PNGs pixel-matched, adaptive background transparent).",
+      "Handoff copy: release/BIZBOT-Android-2026-09-06-28a9b42/",
+      "BIZBOT-Kiosk-0.2.23-release.apk. NOT installed, NOT uploaded."
     ]
   },
   "dashboardReleases": [
@@ -551,14 +614,33 @@
     "versionName": "0.0.3",
     "versionCode": 3,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "the same main SHA as the v53 pair (recorded at build time)",
+    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+    "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+    "buildDate": "2026-09-06",
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifact": {
+      "filename": "RestoFlow-Dashboard-official-v3-28a9b42.apk",
+      "packageId": "com.restoflow.dashboard",
+      "sha256": "8bb942b7fcaa10580e715ffbc604d48312711e0efad80ce66312ae35756ea33c"
+    },
+    "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (the same main SHA as the v53 pair)",
     "notes": [
       "Own lineage (0.0.<code>): 0.0.1 / 1 pilot, 0.0.2 / 2 first production-signed",
       "(owner-installed on the test tablet); 3 is the next free code. Built from the",
       "same main SHA as the v53 pair with the pair runner's flags and verified with",
       "verify_official_apk.ps1 (com.restoflow.dashboard, production certificate).",
       "Content vs v2: transparent launcher icon."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 from the same main HEAD 28a9b422 as the v53 pair with the pair",
+      "runner's flags (build-name 0.0.3, build-number 3, RESTOFLOW_DEMO_MODE=false,",
+      "hosted project URL + public anon key), production signing via",
+      "RESTOFLOW_ANDROID_SIGNING_PROPERTIES. verify_official_apk.ps1 PASS:",
+      "com.restoflow.dashboard, 0.0.3 / 3, production certificate, application-label",
+      "BIZBOT Dashboard, minSdk 24 / targetSdk 36, AOT. Transparent launcher icon",
+      "(10/10 committed PNGs pixel-matched, adaptive background transparent).",
+      "Handoff copy: release/BIZBOT-Android-2026-09-06-28a9b42/",
+      "BIZBOT-Dashboard-0.0.3-release.apk. NOT installed, NOT uploaded."
     ]
   }
 }
