@@ -239,6 +239,8 @@ never installs, uploads, pushes, releases or deploys.
 | 0.0.26 / 26 | `restoflow-production` | `e62cc54` (app source `2b05204`) | POS updated IN PLACE over v25 on 2026-08-07 — state preserved; Offline foundation validated but THREE acceptance defects found (latched offline state, reconnect payment block, no offline pre-bill) — fixed by PR #202; updated in place by v27; KDS never installed |
 | **0.0.27 / 27** | **`restoflow-production`** | `6a82ec8` (app source `b670b59`) | **POS updated IN PLACE over v26 on 2026-08-07 — FOCUSED ACCEPTANCE MATRIX PASSED: automatic reconnect without restart, Offline unpaid pre-bill printed, payment correctly blocked until sync then completed once on the reconciled order, no duplicates; KDS built, not installed; not uploaded** |
 | 0.0.28 / 28 | `restoflow-production` | — | reserved, not planned in detail |
+| 0.0.50 / 50 | `restoflow-production` | `d6a9934` (app source `e727e0c`) | built 2026-09-03 with the interim VEYRO brand — never installed, never uploaded; superseded by v51 before any rollout (code 50 stays consumed) |
+| **0.0.51 / 51** | **`restoflow-production`** | `7326d03` (app source `f2bf734b`) | **built 2026-09-06 — first official pair carrying the official BIZBOT visual identity; verified, NOT installed, NOT uploaded; kiosk 0.2.21 / 23 built from the same source. Promotion follows device validation** |
 
 **v21 was the first RestoFlow artifact ever signed with the production identity**
 (verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
