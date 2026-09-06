@@ -99,6 +99,49 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.50",
+      "versionCode": 50,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / never installed / never uploaded - superseded by v51 (BIZBOT official identity) on 2026-09-06",
+      "applicationSourceSha": "e727e0c819114da69be4418195aa00bc24cf0187",
+      "sourceSha": "d6a99348ca9d729160d7dd48286b9330def99e05",
+      "buildDate": "2026-09-03",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v50-d6a9934.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "4c0d7d96efb784b7bc5572d1972d41bb692a33a3597760c0a0dbda9dbc8d1644"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v50-d6a9934.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "f75d2d5786f5fad3acb17534ec3b9b112a6584062b9e26370fa419e2606e31a5"
+        }
+      },
+      "notes": [
+        "Built 2026-09-03 by build_official_pair.ps1 from release-branch HEAD",
+        "d6a9934 (application source e727e0c8 = main at the time + the PR #253",
+        "ledger correction only), verified (production certificate, not",
+        "debuggable, demo=false, AOT, zipalign, apksigner, hosted project",
+        "present, forbidden reference absent); dist/official-v50/BUILD-METADATA.txt",
+        "is the build record. PR #253 merged that ledger branch into main at",
+        "04d69336. This ledger entry was not advanced at build time; corrected",
+        "here (2026-09-06) with the artifact hashes read back from the files.",
+        "The pair carried the interim VEYRO public brand. Before any device",
+        "received it, the public brand moved to BIZBOT (PR #258) and the official",
+        "BIZBOT visual identity landed (PR #259), so v50 was never installed,",
+        "never uploaded and never distributed. It is superseded by v51 and must",
+        "not be installed anywhere: codes are never reused, and 50 stays consumed.",
+        "The same run also produced a kiosk artifact: RestoFlow-Kiosk-official-",
+        "v22-d6a9934.apk (com.restoflow.kiosk, 0.2.20 / 22, production-signed,",
+        "sha256 2d5c1090638a9a29aa11e0c67ac2fd374398373cc001fe1fc1604212476207f0),",
+        "recorded under kioskReleases; it is superseded by kiosk v23 for the same",
+        "reason and was never installed."
+      ]
+    },
+    {
       "versionName": "0.0.26",
       "versionCode": 26,
       "signing": "restoflow-production",
@@ -217,24 +260,27 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.50",
-    "versionCode": 50,
+    "versionName": "0.0.51",
+    "versionCode": 51,
     "signing": "restoflow-production",
-    "status": "planned - VEYRO final release build (this commit pins the source)",
-    "intendedSource": "e727e0c819114da69be4418195aa00bc24cf0187 (main; application source - this ledger commit adds no app code)",
+    "status": "planned - BIZBOT official identity release build (this commit pins the source)",
+    "intendedSource": "f2bf734b851ac624a01861ec39ceee578895f622 (main = the PR #259 merge; application source - this ledger commit adds no app code)",
     "notes": [
-      "VEYRO-ANDROID-FINAL ledger correction (2026-09-03): the previous entry",
-      "(42) had gone stale again - the per-phase POS lane consumed versionCodes",
-      "42..49 on com.restoflow.pos with the production certificate (see",
-      "dist/*/BUILD-METADATA.txt: 42/43 print-114b, 44/45 table-118, 46 table-119,",
-      "47 table-120, 48 table-121, 49 pos-quick-notes-124b). 50 is the next free",
-      "POS code; codes are never reused.",
-      "KDS last shipped as official v28 (versionCode 28, dist/official-v28) and",
-      "consumed nothing since. This release RESTORES the pair rule (versionSymmetry)",
-      "by moving KDS to the same 0.0.50 / 50 as POS, both from one source SHA;",
-      "50 > 28 so the KDS upgrade stays in-place.",
-      "First official pair carrying the VEYRO public brand (labels/icons/l10n);",
-      "package ids, signing identity and internal RESTOFLOW_* names unchanged.",
+      "BIZBOT-IDENTITY (2026-09-06): first official pair carrying the OFFICIAL",
+      "BIZBOT visual identity - the owner's symbol/wordmark artwork, the official",
+      "palette (#1F2937 / #059669 / #A7F3D0 / #F4F6F5), regenerated launcher icons",
+      "(legacy mipmaps + adaptive foregrounds on a Light Neutral background) and",
+      "the `BIZBOT <App>` labels from PR #258. Package ids (com.restoflow.*),",
+      "the signing identity, RESTOFLOW_* names, storage keys and channels are",
+      "unchanged, so v51 installs IN PLACE over any earlier official code.",
+      "51 is the next free code: 50 was consumed by the never-installed VEYRO",
+      "final pair (see previousOfficialReleases). versionSymmetry holds: POS and",
+      "KDS both 0.0.51 / 51 from one main SHA; 51 > 50 > 28 keeps both",
+      "lineages strictly monotonic.",
+      "Build with tools/android_release/build_official_pair.ps1 from main at",
+      "the intended source (tree clean, production signing, hosted project).",
+      "The runner never installs, uploads or publishes; device rollout stays a",
+      "separate owner-authorized step (ANDROID_FLEET_UPDATE_AND_ROLLBACK.md).",
       "The customer kiosk (com.restoflow.kiosk) keeps its own lineage - see",
       "kioskNextRelease."
     ]
@@ -266,15 +312,39 @@
     "required": true,
     "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
   },
+  "kioskReleases": [
+    {
+      "versionName": "0.2.20",
+      "versionCode": 22,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / never installed / never uploaded - superseded by kiosk v23 (BIZBOT official identity) on 2026-09-06",
+      "sourceSha": "d6a99348ca9d729160d7dd48286b9330def99e05",
+      "buildDate": "2026-09-03",
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifact": {
+        "filename": "RestoFlow-Kiosk-official-v22-d6a9934.apk",
+        "packageId": "com.restoflow.kiosk",
+        "sha256": "2d5c1090638a9a29aa11e0c67ac2fd374398373cc001fe1fc1604212476207f0"
+      },
+      "notes": [
+        "Built 2026-09-03 alongside the v50 pair (dist/official-v50/), outside the",
+        "pair runner (the kiosk has no pair contract). Carried the interim VEYRO",
+        "brand; superseded before any rollout, never installed."
+      ]
+    }
+  ],
   "kioskNextRelease": {
-    "versionName": "0.2.20",
-    "versionCode": 22,
+    "versionName": "0.2.21",
+    "versionCode": 23,
     "signing": "restoflow-production",
-    "status": "planned - VEYRO final release build",
+    "status": "planned - BIZBOT official identity release build",
+    "intendedSource": "f2bf734b851ac624a01861ec39ceee578895f622 (main = the PR #259 merge)",
     "notes": [
-      "Independent lineage outside the POS/KDS pair contract: v2..v21 consumed",
-      "(latest 0.2.19+21 in dist/table-room-frame-121). versionName follows the",
-      "established 0.2.<code-2> progression; 22 is the next free code."
+      "Independent lineage outside the POS/KDS pair contract: v2..v22 consumed",
+      "(latest 0.2.20+22 in dist/official-v50, never installed). versionName",
+      "follows the established 0.2.<code-2> progression; 23 is the next free",
+      "code. Same source SHA as the v51 pair; verified with",
+      "verify_official_apk.ps1 (com.restoflow.kiosk, production certificate)."
     ]
   }
 }
