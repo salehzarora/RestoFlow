@@ -303,8 +303,25 @@
     "versionName": "0.0.52",
     "versionCode": 52,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main at the merge of the BIZBOT-ANDROID-RELEASE-V52 release-prep PR; application source for POS/KDS = 8d6bc34a2dd3e34d27dc8573a5b39bb78ceb8c8a (main = the PR #263 merge, the first main carrying BOTH the final approved BIZBOT symbol from PR #262 and the POS navbar lockup from PR #263) - the prep PR adds only the dashboard signing block, this ledger and docs",
+    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+    "applicationSourceSha": "8d6bc34a2dd3e34d27dc8573a5b39bb78ceb8c8a",
+    "sourceSha": "4a3946b4a32c8f7465e54cd07ad568cc804b25db",
+    "buildDate": "2026-09-06",
+    "versionSymmetrySatisfied": true,
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifacts": {
+      "pos": {
+        "filename": "RestoFlow-POS-official-v52-4a3946b.apk",
+        "packageId": "com.restoflow.pos",
+        "sha256": "2ddcd470efec9ab5a2fdaadd792c3f8357403730f5dd402c9177376de3e74ab0"
+      },
+      "kds": {
+        "filename": "RestoFlow-KDS-official-v52-4a3946b.apk",
+        "packageId": "com.restoflow.kds",
+        "sha256": "934be167cb6a694fef21f369b6ea180aac79c2d7a0e43dfabe0059faaf48d76e"
+      }
+    },
+    "intendedSource": "4a3946b4a32c8f7465e54cd07ad568cc804b25db (main = the PR #264 release-prep merge; POS/KDS application source = 8d6bc34a2dd3e34d27dc8573a5b39bb78ceb8c8a, the PR #263 merge - the prep commit added only the dashboard signing block, the ledger and docs)",
     "notes": [
       "BIZBOT-ANDROID-RELEASE-V52 (2026-09-06): the previous signed candidates",
       "(v51 pair, kiosk v23) were built BEFORE the final approved symbol swap",
@@ -327,6 +344,36 @@
       "The customer kiosk (com.restoflow.kiosk) and the dashboard",
       "(com.restoflow.dashboard) keep their own lineages - see kioskNextRelease",
       "and dashboardNextRelease."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 by tools/android_release/build_official_pair.ps1 from main at",
+      "4a3946b4 (the PR #264 release-prep merge; POS/KDS application source is",
+      "8d6bc34a = the PR #263 merge - the first main carrying BOTH the final",
+      "approved BIZBOT symbol from PR #262 and the POS navbar lockup). Preflight:",
+      "branch main, tracked tree clean, production signing identity check OK",
+      "(alias restoflow-production, fingerprint matches the pin, not the debug",
+      "certificate), hosted project + public key only, demo=false. Both artifacts",
+      "verified by verify_official_apk.ps1: not debuggable, Release/AOT (libapp.so,",
+      "no kernel_blob), zipaligned, apksigner-verified, production certificate",
+      "matches the pin, hosted project ref present, forbidden ref absent, no",
+      "localhost backend, no JWT-shaped token, minSdk 24 / targetSdk 36, ABIs",
+      "arm64-v8a armeabi-v7a x86_64, application-label BIZBOT POS / BIZBOT KDS.",
+      "SHA256SUMS.txt re-verified; dist/official-v52/BUILD-METADATA.txt is the",
+      "build record. Inside both APKs the bundled brand assets hash-match the",
+      "committed FINAL bizbot_symbol.png (9f8d72e3...) and bizbot_wordmark_en.png",
+      "(9b817af0...), every committed launcher mipmap (legacy + adaptive",
+      "foreground) is present pixel-for-pixel (one 96 px variant re-encoded by the",
+      "AAPT cruncher within +/-1 level), the adaptive icon XML is present, and the",
+      "AOT snapshot contains no VEYRO string. First pair carrying the final",
+      "approved symbol and the taller POS navbar lockup (76 / 70 / 62).",
+      "Copies for handoff live in release/BIZBOT-Android-2026-09-06-4a3946b/ as",
+      "BIZBOT-POS-0.0.52-release.apk / BIZBOT-KDS-0.0.52-release.apk (same bytes,",
+      "same SHA-256; the folder is local and git-excluded).",
+      "NOT installed on any device (test tablet or live restaurant), NOT uploaded,",
+      "NOT distributed, no GitHub Release, not published to any store or MDM.",
+      "Promotion to currentOfficialRelease follows device validation per",
+      "docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md (in-place update over the",
+      "installed official code on SALEH-POS-TEST-01 first, owner-authorized)."
     ]
   },
   "androidRendererPolicy": {
@@ -401,8 +448,16 @@
     "versionName": "0.2.22",
     "versionCode": 24,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "the same main SHA as the v52 pair (kiosk application source = 8d6bc34a2dd3e34d27dc8573a5b39bb78ceb8c8a; recorded exactly at build time)",
+    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+    "sourceSha": "4a3946b4a32c8f7465e54cd07ad568cc804b25db",
+    "buildDate": "2026-09-06",
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifact": {
+      "filename": "RestoFlow-Kiosk-official-v24-4a3946b.apk",
+      "packageId": "com.restoflow.kiosk",
+      "sha256": "7719fd6bc32ec6ca8213d177c6b877f4605df0920e5f8e52accce5c00e4c6895"
+    },
+    "intendedSource": "4a3946b4a32c8f7465e54cd07ad568cc804b25db (the same main SHA as the v52 pair; kiosk application source = 8d6bc34a2dd3e34d27dc8573a5b39bb78ceb8c8a)",
     "notes": [
       "Independent lineage outside the POS/KDS pair contract: v2..v23 consumed",
       "(latest 0.2.21 / 23 in dist/official-v51, never installed). versionName",
@@ -412,6 +467,20 @@
       "+ public anon key, production signing via RESTOFLOW_ANDROID_SIGNING_PROPERTIES)",
       "and verified with verify_official_apk.ps1 (com.restoflow.kiosk, production",
       "certificate)."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 from the same main HEAD 4a3946b4 as the v52 pair with the",
+      "pair runner's flags (flutter build apk --release, build-name 0.2.22,",
+      "build-number 24, RESTOFLOW_DEMO_MODE=false, hosted project URL + public",
+      "anon key), production signing via RESTOFLOW_ANDROID_SIGNING_PROPERTIES.",
+      "verify_official_apk.ps1 PASS: com.restoflow.kiosk, 0.2.22 / 24, not",
+      "debuggable, zipaligned, apksigner-verified, production certificate matches",
+      "the pin, hosted ref present, forbidden ref absent, no localhost backend, no",
+      "JWT-shaped token, AOT release, minSdk 24 / targetSdk 36, ABIs arm64-v8a",
+      "armeabi-v7a x86_64, application-label BIZBOT Kiosk. Bundled brand assets",
+      "hash-match the committed final symbol / wordmark; launcher mipmaps present.",
+      "Handoff copy: release/BIZBOT-Android-2026-09-06-4a3946b/",
+      "BIZBOT-Kiosk-0.2.22-release.apk (same bytes). NOT installed, NOT uploaded."
     ]
   },
   "dashboardReleases": [
@@ -436,8 +505,16 @@
     "versionName": "0.0.2",
     "versionCode": 2,
     "signing": "restoflow-production",
-    "status": "planned - first official (production-signed) dashboard candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "the same main SHA as the v52 pair (the dashboard application source includes the fail-closed signing block this prep PR adds; recorded exactly at build time)",
+    "status": "built - first official (production-signed) dashboard candidate / NOT installed / NOT uploaded",
+    "sourceSha": "4a3946b4a32c8f7465e54cd07ad568cc804b25db",
+    "buildDate": "2026-09-06",
+    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+    "artifact": {
+      "filename": "RestoFlow-Dashboard-official-v2-4a3946b.apk",
+      "packageId": "com.restoflow.dashboard",
+      "sha256": "99d8bc2c98f2499ba3b01cfd58c40a6b221e9fef637b270a3e711c1e74d2e83a"
+    },
+    "intendedSource": "4a3946b4a32c8f7465e54cd07ad568cc804b25db (the same main SHA as the v52 pair; the dashboard application source includes the fail-closed signing block from PR #264)",
     "notes": [
       "Own lineage (no pair contract, no shared numbering with POS/KDS or the",
       "kiosk): versionName 0.0.<code>, starting right after the pilot's 0.0.1 / 1.",
@@ -448,6 +525,25 @@
       "with verify_official_apk.ps1 (com.restoflow.dashboard, production",
       "certificate, application-label BIZBOT Dashboard). The dashboard's primary",
       "deploy stays the hosted web app; the Android package is additive."
+    ],
+    "candidateNotes": [
+      "Built 2026-09-06 from the same main HEAD 4a3946b4 as the v52 pair with the",
+      "pair runner's flags (flutter build apk --release, build-name 0.0.2,",
+      "build-number 2, RESTOFLOW_DEMO_MODE=false, hosted project URL + public anon",
+      "key), production signing via RESTOFLOW_ANDROID_SIGNING_PROPERTIES - the",
+      "first dashboard artifact ever signed with the production identity (the",
+      "fail-closed block from PR #264 resolved the release signing config; no",
+      "debug fallback exists any more).",
+      "verify_official_apk.ps1 PASS: com.restoflow.dashboard, 0.0.2 / 2, not",
+      "debuggable, zipaligned, apksigner-verified, production certificate matches",
+      "the pin, hosted ref present, forbidden ref absent, no localhost backend, no",
+      "JWT-shaped token, AOT release, minSdk 24 / targetSdk 36, ABIs arm64-v8a",
+      "armeabi-v7a x86_64, application-label BIZBOT Dashboard. Bundled brand",
+      "assets hash-match the committed final symbol / wordmark; launcher mipmaps",
+      "present. Handoff copy: release/BIZBOT-Android-2026-09-06-4a3946b/",
+      "BIZBOT-Dashboard-0.0.2-release.apk (same bytes). NOT installed, NOT",
+      "uploaded. A production-signed dashboard cannot update a debug-signed pilot",
+      "install in place - uninstall the pilot first (fleet runbook)."
     ]
   }
 }
