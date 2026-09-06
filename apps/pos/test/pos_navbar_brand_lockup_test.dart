@@ -389,10 +389,7 @@ void main() {
         final slot = _titleRow(tester).constraints.maxWidth;
         final resolved = posNavbarBrandPlateFor(m, slot);
         expect(resolved.wordmark, entry.value, reason: 'slot $slot @ $width');
-        expect(
-          resolved.markSize,
-          greaterThanOrEqualTo(kPosNavbarBrandMarkMin),
-        );
+        expect(resolved.markSize, greaterThanOrEqualTo(kPosNavbarBrandMarkMin));
         final plate = tester.getSize(find.byKey(_plate));
         expect(plate.width, resolved.width, reason: 'plate at ${width}px');
         expect(plate.width, lessThanOrEqualTo(slot));
