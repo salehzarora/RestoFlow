@@ -95,9 +95,10 @@ Notes:
 - `RESTOFLOW_PRINT_BRIDGE_URL` is a per-device **local loopback** define only; it is
   never a hosted value and is not needed for a normal pilot build.
 - **Superseded by RELEASE-KEY-AND-PIPELINE-001.** A `--release` APK used to be
-  signed with the **debug** key. It is not any more: `apps/{pos,kds}` resolve the
-  release signing config from a keystore held outside this repository and **fail
-  the build** when it is unavailable — they never fall back to debug signing. The
+  signed with the **debug** key. It is not any more: `apps/{pos,kds,kiosk,dashboard}`
+  resolve the release signing config from a keystore held outside this repository
+  and **fail the build** when it is unavailable — they never fall back to debug
+  signing (the dashboard joined with BIZBOT-ANDROID-RELEASE-V52). The
   commands in §3b therefore only produce a release APK on a machine with the
   production signing configuration. See
   [ANDROID_RELEASE_SIGNING.md](ANDROID_RELEASE_SIGNING.md), and use

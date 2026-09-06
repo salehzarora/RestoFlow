@@ -48,10 +48,13 @@ fixed before the first official release.
 | Key | RSA 4096 |
 | Signature | SHA-256 with RSA |
 | Validity | ≥ 30 years (an Android app must be updatable for its whole life) |
-| Used by | **both** `com.restoflow.pos` and `com.restoflow.kds` |
+| Used by | `com.restoflow.pos`, `com.restoflow.kds`, `com.restoflow.kiosk` and (since BIZBOT-ANDROID-RELEASE-V52) `com.restoflow.dashboard` |
 
 POS and KDS deliberately share **one** identity. They are one product shipped as
-a synchronized pair; two keys would double the loss surface for no benefit.
+a synchronized pair; two keys would double the loss surface for no benefit. The
+kiosk (KIOSK-001-102) and the dashboard (BIZBOT-ANDROID-RELEASE-V52) sign with
+the same identity for the same reason — one product, one key holder — while
+keeping their own version lineages in `version.json`.
 
 The certificate's **public SHA-256 fingerprint** is committed in
 [`tools/android_release/version.json`](../tools/android_release/version.json).
@@ -182,8 +185,11 @@ both.
 
 ## 5. Fail-closed behaviour
 
-`apps/{pos,kds}/android/app/build.gradle.kts` resolve the release signing config
-from the properties file and **never** fall back to debug:
+`apps/{pos,kds,kiosk,dashboard}/android/app/build.gradle.kts` resolve the release
+signing config from the properties file and **never** fall back to debug (the
+dashboard copy landed with BIZBOT-ANDROID-RELEASE-V52; until then its release
+build type still carried the template debug-signing line and only pilot debug
+builds were ever made):
 
 ```kotlin
 signingConfig = signingConfigs.findByName("release")   // null when unavailable
@@ -240,7 +246,8 @@ never installs, uploads, pushes, releases or deploys.
 | **0.0.27 / 27** | **`restoflow-production`** | `6a82ec8` (app source `b670b59`) | **POS updated IN PLACE over v26 on 2026-08-07 — FOCUSED ACCEPTANCE MATRIX PASSED: automatic reconnect without restart, Offline unpaid pre-bill printed, payment correctly blocked until sync then completed once on the reconciled order, no duplicates; KDS built, not installed; not uploaded** |
 | 0.0.28 / 28 | `restoflow-production` | — | reserved, not planned in detail |
 | 0.0.50 / 50 | `restoflow-production` | `d6a9934` (app source `e727e0c`) | built 2026-09-03 with the interim VEYRO brand — never installed, never uploaded; superseded by v51 before any rollout (code 50 stays consumed) |
-| **0.0.51 / 51** | **`restoflow-production`** | `7326d03` (app source `f2bf734b`) | **built 2026-09-06 — first official pair carrying the official BIZBOT visual identity; verified, NOT installed, NOT uploaded; kiosk 0.2.21 / 23 built from the same source. Promotion follows device validation** |
+| 0.0.51 / 51 | `restoflow-production` | `7326d03` (app source `f2bf734b`) | built 2026-09-06 — first official pair carrying the official BIZBOT visual identity; verified, never installed, never uploaded; kiosk 0.2.21 / 23 built from the same source. Superseded by v52 before any rollout: it predates the FINAL approved symbol (PR #262) and the POS navbar lockup (PR #263); code 51 stays consumed |
+| **0.0.52 / 52** | **`restoflow-production`** | main after PR #263 (recorded at build time) | **planned (BIZBOT-ANDROID-RELEASE-V52) — the first pair carrying the final approved BIZBOT symbol + the POS navbar lockup; kiosk 0.2.22 / 24 and the first production-signed dashboard 0.0.2 / 2 build from the same source. NOT built yet** |
 
 **v21 was the first RestoFlow artifact ever signed with the production identity**
 (verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
