@@ -1,0 +1,21 @@
+{
+  "siteUrl": "https://bizbot.systems",
+  "appUrl": "https://app.bizbot.systems",
+  "brand": { "en": "BIZBOT", "ar": "بِزبط" },
+  "contact": {
+    "sales": "sales@bizbot.systems",
+    "support": "support@bizbot.systems",
+    "hello": "hello@bizbot.systems",
+    "phone": "",
+    "whatsapp": ""
+  },
+  "social": {
+    "instagram": "",
+    "facebook": "",
+    "linkedin": "",
+    "tiktok": "",
+    "youtube": "",
+    "x": ""
+  },
+  "copyrightYear": 2026
+}
