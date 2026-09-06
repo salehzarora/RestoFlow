@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildEmail, createHandler, isBot, rateLimited, validate } from '../lib/lead.mjs';
+import { buildEmail, createHandler, isBot, isJsonRequest, originAllowed, rateLimited, validate } from '../lib/lead.mjs';
 
 const NOW = 1_800_000_000_000;
 const good = () => ({
@@ -18,7 +18,15 @@ const good = () => ({
 });
 
 function fakeReq(body, extra = {}) {
-  return { method: 'POST', headers: { 'x-forwarded-for': extra.ip || '203.0.113.7' }, body, ...extra };
+  const headers = {
+    'x-forwarded-for': extra.ip || '203.0.113.7',
+    host: 'bizbot.systems',
+    origin: 'https://bizbot.systems',
+    'content-type': 'application/json',
+    ...(extra.headers || {}),
+  };
+  const { headers: _h, ip: _ip, ...rest } = extra;
+  return { method: 'POST', headers, body, ...rest };
 }
 function fakeRes() {
   const res = { statusCode: 200, headers: {}, body: undefined };
@@ -142,4 +150,70 @@ test('handler: 502 send_failed when Resend rejects, without leaking the response
   await handler(fakeReq(good(), { ip: '198.51.100.9' }), res);
   assert.equal(res.statusCode, 502);
   assert.deepEqual(res.body, { ok: false, code: 'send_failed' });
+});
+
+test('originAllowed: same host, brand hosts, project previews, local dev; everything else refused', () => {
+  const env = {};
+  const req = (origin, host, e = env) => originAllowed({ headers: { origin, host } }, e);
+  assert.equal(req('https://bizbot.systems', 'bizbot.systems'), true);
+  assert.equal(req('https://www.bizbot.systems', 'www.bizbot.systems'), true);
+  assert.equal(req('https://bizbot.systems', 'bizbot-site-abc123-salehzaroras-projects.vercel.app'), true, 'brand origin on a preview host');
+  assert.equal(req('https://bizbot-site-abc123-salehzaroras-projects.vercel.app', 'bizbot-site-abc123-salehzaroras-projects.vercel.app'), true);
+  assert.equal(req('https://bizbot-site.vercel.app', 'bizbot.systems'), true, 'project alias');
+  assert.equal(req('http://localhost:8787', 'localhost:8787'), true, 'local dev (no VERCEL_ENV)');
+  assert.equal(req('http://localhost:8787', 'bizbot.systems', { VERCEL_ENV: 'production' }), false, 'localhost refused on Vercel');
+  assert.equal(req('https://evil.example', 'bizbot.systems'), false);
+  assert.equal(req('https://evil-bizbot-site.vercel.app', 'bizbot.systems'), false, 'lookalike preview host');
+  assert.equal(req('', 'bizbot.systems'), false, 'missing Origin');
+  assert.equal(req('not a url', 'bizbot.systems'), false);
+  assert.equal(req('https://partner.example', 'bizbot.systems', { LEAD_ALLOWED_ORIGINS: 'partner.example, other.example' }), true, 'explicit allow-list');
+  assert.equal(originAllowed({ headers: { origin: 'https://bizbot.systems', 'x-forwarded-host': 'bizbot.systems', host: 'internal' } }), true, 'x-forwarded-host wins');
+});
+
+test('handler: refuses cross-origin (403), non-JSON (415) and oversized (413) submissions before touching the lead', async () => {
+  let called = false;
+  const handler = createHandler({ env: { RESEND_API_KEY: 'k', VERCEL_ENV: 'production' }, fetchImpl: async () => { called = true; }, now: () => NOW });
+  let res = fakeRes();
+  await handler(fakeReq(good(), { headers: { origin: 'https://evil.example' } }), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'bad_origin');
+
+  res = fakeRes();
+  await handler(fakeReq(good(), { headers: { origin: '' } }), res);
+  assert.equal(res.statusCode, 403, 'missing origin');
+
+  res = fakeRes();
+  await handler(fakeReq(JSON.stringify(good()), { headers: { 'content-type': 'text/plain' } }), res);
+  assert.equal(res.statusCode, 415);
+  assert.equal(res.body.code, 'json_required');
+
+  res = fakeRes();
+  await handler(fakeReq({ ...good(), notes: 'x'.repeat(20000) }), res);
+  assert.equal(res.statusCode, 413);
+  assert.equal(res.body.code, 'too_large');
+  assert.equal(called, false);
+  assert.equal(isJsonRequest({ headers: { 'content-type': 'application/json; charset=utf-8' } }), true);
+  assert.equal(isJsonRequest({ headers: {} }), false);
+});
+
+test('handler: never logs the lead and never exposes the provider response', async () => {
+  const logged = [];
+  const orig = console.error;
+  console.error = (...a) => logged.push(a.join(' '));
+  try {
+    const handler = createHandler({
+      env: { RESEND_API_KEY: 'k' },
+      fetchImpl: async () => ({ ok: false, status: 422, text: async () => 'to: lead@example.com rejected', json: async () => ({}) }),
+      now: () => NOW,
+    });
+    const res = fakeRes();
+    await handler(fakeReq(good()), res);
+    assert.equal(res.statusCode, 502);
+    assert.ok(logged.length === 1);
+    assert.ok(!logged[0].includes('lead@example.com'), 'provider body leaked into logs');
+    assert.ok(!logged[0].includes('Saleh'), 'lead name leaked into logs');
+    assert.ok(!JSON.stringify(res.body).includes('lead@example.com'));
+  } finally {
+    console.error = orig;
+  }
 });

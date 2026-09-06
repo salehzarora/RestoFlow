@@ -417,9 +417,10 @@ function footer(t, cfg, locales) {
   ]
     .map(([h, l]) => `<li><a href="${h}">${esc(l)}</a></li>`)
     .join('');
+  const SOCIAL_LABEL = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube', x: 'X' };
   const socials = Object.entries(cfg.social)
-    .filter(([, url]) => url)
-    .map(([k, url]) => `<a href="${esc(url)}" rel="noopener" aria-label="${esc(k)}">${esc(k)}</a>`)
+    .filter(([, url]) => typeof url === 'string' && /^https:\/\//.test(url))
+    .map(([k, url]) => `<a href="${esc(url)}" rel="noopener" target="_blank">${k === 'instagram' ? icon('instagram') : ''}<span>${esc(SOCIAL_LABEL[k] || k)}</span></a>`)
     .join('');
   const langs = locales
     .map((l) => `<li><a href="${l.path}" lang="${l.htmlLang}" hreflang="${l.htmlLang}">${esc(l.name)}</a></li>`)

@@ -59,6 +59,10 @@ const P = {
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   external:
     '<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-11A1.5 1.5 0 0 1 6.5 6H11"/>',
+  menuboard:
+    '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h5M8 12h8M8 15.5h6"/><circle cx="16.5" cy="8.5" r="1"/>',
+  instagram:
+    '<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><circle cx="12" cy="12" r="3.8"/><circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   login: '<path d="M10 4h7.5A1.5 1.5 0 0 1 19 5.5v13a1.5 1.5 0 0 1-1.5 1.5H10"/><path d="M4 12h9M9.5 8l4 4-4 4"/>',
 };

@@ -1,7 +1,10 @@
 {
   "siteUrl": "https://bizbot.systems",
   "appUrl": "https://app.bizbot.systems",
-  "brand": { "en": "BIZBOT", "ar": "بِزبط" },
+  "brand": {
+    "en": "BIZBOT",
+    "ar": "بِزبط"
+  },
   "contact": {
     "sales": "sales@bizbot.systems",
     "support": "support@bizbot.systems",
@@ -10,7 +13,7 @@
     "whatsapp": ""
   },
   "social": {
-    "instagram": "",
+    "instagram": "https://www.instagram.com/bizbot.systems/",
     "facebook": "",
     "linkedin": "",
     "tiktok": "",

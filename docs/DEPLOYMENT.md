@@ -193,11 +193,21 @@ alive on the brand root during and after the move: `/pos`, `/kds`, `/kiosk`,
 `/dashboard`, `/app`, `/login`, `/auth/*` → `https://app.bizbot.systems/...`.
 Rollback = move the two domains back; nothing else changes.
 
+The `bizbot-site` project exists at `https://vercel.com/salehzaroras-projects/bizbot-site`
+(created 2026-09-06 through the Vercel integration, Git-linked to
+`salehzarora/RestoFlow`, Root Directory `site`; its `bizbot-site.vercel.app`
+alias serves the site). **Before the domain cut-over its Production Branch must
+be `main`** (the first deployments came from the feature branch — verify under
+Settings → Git) so that merges to `main` are what reach production.
+
 Lead form: `POST /api/lead` on the site project e-mails demo requests through
 Resend (domain `bizbot.systems`, already verified) to `sales@bizbot.systems`.
 Configuration is by env-var NAME on the `bizbot-site` project only:
 `RESEND_API_KEY` (required to send; absent → the endpoint answers 503 and the
-page shows the direct e-mail fallback), optional `LEAD_TO` / `LEAD_FROM`.
+page shows the direct e-mail fallback), optional `LEAD_TO` / `LEAD_FROM` /
+`LEAD_ALLOWED_ORIGINS`. Abuse controls are in-process (same-origin gate, JSON
+only, 16 KiB cap, honeypot + minimum fill time, per-instance IP rate limit —
+not a distributed quota; see `site/README.md`).
 
 ---
 

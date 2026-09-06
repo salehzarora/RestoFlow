@@ -11,8 +11,24 @@
 //   LEAD_TO          recipient (default sales@bizbot.systems)
 //   LEAD_FROM        verified sender (default "BIZBOT <leads@bizbot.systems>")
 //
+//   LEAD_ALLOWED_ORIGINS  optional, comma-separated extra origins (host[:port])
+//                         allowed to POST besides the request's own host.
+//
 // No database, no cookies, no third-party scripts. The lead's own e-mail is
-// used only as Reply-To so the owner can answer in one click.
+// used only as Reply-To so the owner can answer in one click; the From address
+// is always the configured sender, never user input.
+//
+// Abuse controls (all no-cost, in-process):
+//   * same-origin check — the browser's Origin must match the serving host
+//     (bizbot.systems / www / this project's *.vercel.app previews / localhost
+//     in local dev only) → otherwise 403;
+//   * JSON only (Content-Type application/json) → otherwise 415; body ≤ 16 KiB → otherwise 413;
+//   * honeypot field + minimum fill time → silent 200, nothing sent;
+//   * rate limit per client IP — NOTE: the Map below lives in ONE function
+//     instance, so the limit is per-instance, not distributed. It caps bursts
+//     against a warm instance; a platform-level (Vercel WAF) rate rule is the
+//     place for a hard global cap.
+//   * nothing about the lead (name, phone, e-mail, notes) is ever logged.
 
 const DEFAULT_TO = 'sales@bizbot.systems';
 const DEFAULT_FROM = 'BIZBOT <leads@bizbot.systems>';
@@ -23,6 +39,8 @@ const BRANCHES = new Set(['1', '2-3', '4-10', '10+']);
 const LOCALES = new Set(['ar', 'en', 'he']);
 const MIN_FILL_MS = 2500;
 const RATE = { windowMs: 10 * 60 * 1000, max: 6 };
+const MAX_BODY_BYTES = 16 * 1024;
+const STATIC_ORIGINS = new Set(['bizbot.systems', 'www.bizbot.systems']);
 
 const LABELS = {
   ar: { subject: 'طلب عرض جديد', name: 'الاسم', business: 'اسم النشاط', phone: 'الهاتف', email: 'البريد', type: 'نوع النشاط', branches: 'عدد الفروع', notes: 'ملاحظات', locale: 'اللغة', page: 'الصفحة' },
@@ -132,10 +150,49 @@ async function sendViaResend(lead, env, fetchImpl) {
     body: JSON.stringify(payload),
   });
   if (!r.ok) {
-    const detail = await r.text().catch(() => '');
-    throw new Error(`resend ${r.status}: ${detail.slice(0, 200)}`);
+    // Status only — the provider body could echo addresses.
+    throw new Error(`resend responded ${r.status}`);
   }
   return r.json().catch(() => ({}));
+}
+
+function headerValue(req, name) {
+  const v = (req.headers || {})[name];
+  return Array.isArray(v) ? v[0] : v || '';
+}
+
+/** Same-origin gate for browser submissions. Exported for tests. */
+export function originAllowed(req, env = process.env) {
+  const origin = headerValue(req, 'origin');
+  if (!origin) return false;
+  let host;
+  try {
+    host = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const served = (headerValue(req, 'x-forwarded-host') || headerValue(req, 'host')).split(',')[0].trim().toLowerCase();
+  if (host && host === served) return true;
+  if (STATIC_ORIGINS.has(host)) return true;
+  const extra = String(env.LEAD_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (extra.includes(host)) return true;
+  if (/^bizbot-site(-[a-z0-9-]+)?\.vercel\.app$/.test(host)) return true; // this project's preview URLs
+  if (!env.VERCEL_ENV && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return true; // local dev only
+  return false;
+}
+
+export function isJsonRequest(req) {
+  return /^application\/json\b/i.test(headerValue(req, 'content-type'));
+}
+
+function bodyBytes(req) {
+  if (typeof req.body === 'string') return Buffer.byteLength(req.body);
+  if (req.body && typeof req.body === 'object') return Buffer.byteLength(JSON.stringify(req.body));
+  const len = Number(headerValue(req, 'content-length'));
+  return Number.isFinite(len) ? len : 0;
 }
 
 function clientIp(req) {
@@ -166,6 +223,9 @@ export function createHandler({ env = process.env, fetchImpl = globalThis.fetch,
       res.setHeader('Allow', 'POST');
       return res.status(405).json({ ok: false, code: 'method_not_allowed' });
     }
+    if (!originAllowed(req, env)) return res.status(403).json({ ok: false, code: 'bad_origin' });
+    if (!isJsonRequest(req)) return res.status(415).json({ ok: false, code: 'json_required' });
+    if (bodyBytes(req) > MAX_BODY_BYTES) return res.status(413).json({ ok: false, code: 'too_large' });
     const body = parseBody(req);
     if (!body) return res.status(400).json({ ok: false, code: 'bad_json' });
 
@@ -181,7 +241,7 @@ export function createHandler({ env = process.env, fetchImpl = globalThis.fetch,
       await sendViaResend(lead, env, fetchImpl);
       return res.status(200).json({ ok: true });
     } catch (err) {
-      console.error('[lead] send failed:', err && err.message ? err.message : err);
+      console.error('[lead] send failed:', err && err.message ? err.message : 'error'); // never the lead itself
       return res.status(502).json({ ok: false, code: 'send_failed' });
     }
   };

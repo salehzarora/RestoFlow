@@ -11,7 +11,7 @@ Supabase, no shared runtime.
 | Path | Role |
 |---|---|
 | `src/locales/{ar,en,he}.json` | All copy, one file per language. Arabic is the default (`/`), English at `/en`, Hebrew at `/he`. Edit copy here only. |
-| `src/site.config.json` | Public contact values and links (sales/support mailboxes, app URL, optional phone / WhatsApp / social URLs — empty values are simply not rendered). |
+| `src/site.config.json` | Public contact values and links (sales/support mailboxes, app URL, the confirmed Instagram account; phone / WhatsApp / other socials stay empty until confirmed — empty values are simply not rendered, and `tests/build.test.mjs` fails on any empty placeholder). |
 | `src/render.mjs` | HTML renderer (sections, device mockups, SEO tags, JSON-LD). Pure function of locale + config. |
 | `src/styles.css` / `src/main.js` | Styles (brand tokens, device frames, RTL/LTR via logical properties, motion) and the progressive-enhancement script (tabs, mobile menu, reveal-on-scroll, video autoplay-in-view, form submission). |
 | `src/icons.mjs` | Inline SVG icon set. |
@@ -52,15 +52,40 @@ brand root (`/pos`, `/kds`, `/kiosk`, `/dashboard`, `/app`, `/login`, `/auth/*`
 |---|---|---|
 | `RESEND_API_KEY` | to send | Resend API key with **sending** access for `bizbot.systems` (domain already verified in Resend). Without it the endpoint answers `503 not_configured` and the page shows the direct e-mail fallback. |
 | `LEAD_TO` | no | Recipient of demo requests (default `sales@bizbot.systems`). |
-| `LEAD_FROM` | no | Verified sender (default `BIZBOT <leads@bizbot.systems>`). |
+| `LEAD_FROM` | no | Verified sender (default `BIZBOT <leads@bizbot.systems>`). Never user-controlled. |
+| `LEAD_ALLOWED_ORIGINS` | no | Comma-separated extra origins (`host[:port]`) allowed to POST besides the serving host, the brand hosts and this project's `bizbot-site*.vercel.app` previews. |
 
 ### The lead form
 
 `POST /api/lead` (JSON) → validates (name, business, phone, e-mail, business
-type, branches, notes ≤ 1500 chars), drops bots (honeypot field, minimum fill
-time, small per-instance rate limit), then e-mails the lead through Resend with
-the lead's address as `Reply-To`. Nothing is stored server-side; no cookies, no
-third-party scripts.
+type, branches, notes ≤ 1500 chars), then e-mails the lead through Resend with
+the lead's address as `Reply-To` and the configured sender as `From`. Nothing is
+stored server-side; no cookies, no third-party scripts; the lead itself is never
+written to logs (only provider status codes are).
+
+Abuse controls, all no-cost and in-process:
+
+| Gate | Response |
+|---|---|
+| Browser `Origin` must match the serving host (or a brand host / this project's preview host / `LEAD_ALLOWED_ORIGINS`; `localhost` only outside Vercel) | `403 bad_origin` |
+| `Content-Type: application/json` required | `415 json_required` |
+| Body larger than 16 KiB | `413 too_large` |
+| Honeypot filled or submitted < 2.5 s after render | silent `200`, nothing sent |
+| More than 6 submissions / 10 min from one IP | `429 rate_limited` |
+
+The rate limiter is a `Map` inside one function instance — **per-instance, not
+distributed**: it caps bursts against a warm instance but is not a global
+quota. A platform rule (Vercel WAF rate limiting on `/api/lead`) is the right
+place for a hard cap if abuse ever shows up; nothing paid is required for the
+current volume.
+
+## Product-truth contract
+
+Copy may only market what the product does today. `tests/claims.test.mjs`
+fails the build if any locale reintroduces advanced inventory, delivery or
+third-party channel integrations, weight-based selling, pre-orders, a same-day
+setup guarantee, "no hidden fees" or "no training" claims, or fake scale / SLA
+numbers. Shipping such a capability means updating that contract in the same PR.
 
 ## Brand rules honoured
 

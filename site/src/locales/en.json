@@ -104,7 +104,7 @@
       {
         "icon": "orders",
         "title": "Order management",
-        "desc": "Tables, takeaway and delivery from one screen, with the live status of every order."
+        "desc": "Tables and takeaway from one screen, with the live status of every order."
       },
       {
         "icon": "chart",
@@ -112,9 +112,9 @@
         "desc": "Today's sales, best-selling items and payments — clear numbers that support decisions."
       },
       {
-        "icon": "box",
-        "title": "Inventory management",
-        "desc": "Track items, ingredients and availability per branch."
+        "icon": "menuboard",
+        "title": "Menu management",
+        "desc": "Manage categories, items, prices and modifiers from the dashboard, tied to branches and permissions."
       },
       {
         "icon": "team",
@@ -134,7 +134,7 @@
       {
         "icon": "touch",
         "title": "Easy to use",
-        "desc": "A simple interface a new employee learns in minutes — no long training."
+        "desc": "A clear, simple interface that shortens the learning curve and makes team training easier."
       },
       {
         "icon": "devices",
@@ -149,7 +149,7 @@
       {
         "icon": "bolt",
         "title": "Fast setup",
-        "desc": "Pair devices with a short code and start selling from your menu the same day."
+        "desc": "Clear setup and quick device pairing so you start operating in as few steps as possible."
       },
       {
         "icon": "offline",
@@ -190,7 +190,7 @@
       {
         "icon": "sweets",
         "title": "Sweets & desserts",
-        "desc": "Sell by piece or weight, plus pre-orders."
+        "desc": "Flexible menus, modifiers, sizes and prices that suit dessert products."
       },
       {
         "icon": "fastfood",
@@ -200,7 +200,7 @@
       {
         "icon": "cloud",
         "title": "Cloud kitchens",
-        "desc": "Multi-channel orders on one screen."
+        "desc": "Organised orders and a clear kitchen screen for a faster flow inside the business."
       },
       {
         "icon": "more",
@@ -324,7 +324,7 @@
       {
         "icon": "offline",
         "title": "Works offline",
-        "desc": "The counter keeps taking orders and payments during an outage and syncs everything automatically when the network is back."
+        "desc": "The counter keeps taking and printing orders during an outage and syncs everything automatically when the network is back."
       },
       {
         "icon": "shield",
@@ -356,11 +356,11 @@
   "pricing": {
     "eyebrow": "Pricing",
     "title": "Clear pricing that fits the size of your business",
-    "subtitle": "Priced by the number of devices and branches — no hidden fees. Tell us about your business and we'll send a tailored quote.",
+    "subtitle": "A clear quote based on the number of devices, branches and modules you need. Tell us about your business and we'll send a tailored quote.",
     "includes": [
       "POS, kitchen display and the dashboard",
       "Self-service kiosks when you need them",
-      "Initial setup and team training",
+      "Initial setup and onboarding of your team",
       "Updates and support"
     ],
     "cta": "Request a quote",

@@ -85,3 +85,24 @@ test('sitemap, robots and manifest are emitted', () => {
   const sm = readFileSync(join(dist, 'sitemap.xml'), 'utf8');
   assert.equal((sm.match(/<loc>/g) || []).length, 3);
 });
+
+test('contact / social: only confirmed values are rendered, never empty placeholders', () => {
+  const cfg = JSON.parse(readFileSync(join(process.cwd(), 'src', 'site.config.json'), 'utf8'));
+  for (const exp of Object.values(expectPage)) {
+    const html = readFileSync(join(dist, exp.file), 'utf8');
+    assert.ok(!/href="mailto:"/.test(html), exp.file + ' empty mailto');
+    assert.ok(!/href="(tel:|https:\/\/wa\.me\/)"/.test(html), exp.file + ' empty tel/whatsapp');
+    assert.ok(!/href=""/.test(html), exp.file + ' empty href');
+    assert.equal(/href="tel:/.test(html), Boolean(cfg.contact.phone), exp.file + ' phone rendered iff configured');
+    assert.equal(/wa\.me\//.test(html), Boolean(cfg.contact.whatsapp), exp.file + ' whatsapp rendered iff configured');
+    for (const [name, url] of Object.entries(cfg.social)) {
+      const rendered = new RegExp(`class="socials">[\\s\\S]*?${name === 'x' ? '>X<' : name}`, 'i').test(html);
+      if (url) assert.ok(html.includes(`href="${url}"`), `${exp.file} ${name} link missing`);
+      else assert.ok(!rendered, `${exp.file} ${name} rendered without a confirmed URL`);
+    }
+    assert.ok(html.includes('mailto:' + cfg.contact.sales), exp.file + ' sales mailbox');
+    assert.ok(html.includes('mailto:' + cfg.contact.support), exp.file + ' support mailbox');
+  }
+  // The confirmed Instagram account is the only social link today.
+  assert.equal(cfg.social.instagram, 'https://www.instagram.com/bizbot.systems/');
+});

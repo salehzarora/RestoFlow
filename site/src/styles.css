@@ -444,7 +444,9 @@ html[lang='en'] .hero h1 { max-width: 15ch; letter-spacing: -.02em; font-size: c
 .foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.2fr; gap: 32px; }
 .foot-brand p { margin-top: 18px; max-width: 34ch; font-size: 14.5px; }
 .socials { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.socials a { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); font-size: 13px; text-transform: capitalize; }
+.socials a { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .85); transition: border-color .2s, color .2s; }
+.socials a:hover { border-color: var(--mint); color: var(--mint); }
+.socials .ic { font-size: 16px; }
 .foot-col h3 { color: #fff; font-size: 14px; letter-spacing: .02em; text-transform: uppercase; margin-bottom: 14px; font-family: var(--font-body); font-weight: 700; }
 html[lang='ar'] .foot-col h3, html[lang='he'] .foot-col h3 { text-transform: none; font-size: 15px; }
 .foot-col h3.mt { margin-top: 22px; }
