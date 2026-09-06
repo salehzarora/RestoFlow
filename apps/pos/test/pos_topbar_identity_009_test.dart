@@ -486,8 +486,8 @@ void main() {
           final logo = tester.getSize(find.byKey(kIdentityLogo));
           expect(logo.width, mark);
           expect(logo.height, mark);
-          // Chip = logo + the 6 px vertical padding — the brand lockup's own
-          // height (mark + its 6 px insets).
+          // Chip outer box = logo + 5 px padding + 1 px edge per side — the
+          // brand lockup's own height (mark + its 6 px insets).
           expect(chipBox.height, mark + 12);
           _expectNoOverlapWithControls(tester);
         }

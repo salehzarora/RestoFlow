@@ -45,8 +45,13 @@ const double kPosIdentityLogoSize = 34;
 /// free region cannot reach the midpoint it sits as close to it as it safely
 /// can.
 
-/// The chip's vertical padding around the logo box (component specs §8).
-const double kPosIdentityChipVerticalPadding = 6;
+/// The chip's vertical padding around the logo box. With the chip's 1 px
+/// hairline edge on each side the chip's OUTER box is `logo + 12` — exactly
+/// the brand lockup's height (mark + its 6 px insets) beside it.
+const double kPosIdentityChipVerticalPadding = 5;
+
+/// The chip's hairline edge (`Border.all` default width).
+const double kPosIdentityChipEdge = 1;
 
 /// The name's scale over the base title style (010 set 1.1;
 /// POS-THEME-NAVBAR-POLISH-001 raises it with the taller bar so the one
@@ -104,7 +109,9 @@ class PosIdentityTitle extends ConsumerWidget {
             // The AppBar title slot is unbounded in height; the box takes the
             // chip's own height (logo + 2 x 6 px padding) so it never asks
             // for an infinite size.
-            height: logoSize + 2 * kPosIdentityChipVerticalPadding,
+            height:
+                logoSize +
+                2 * (kPosIdentityChipVerticalPadding + kPosIdentityChipEdge),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
