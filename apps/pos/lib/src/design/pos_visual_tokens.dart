@@ -183,6 +183,11 @@ class PosThemePair extends ThemeExtension<PosThemePair> {
   /// world, and the branch every navbar-chrome getter keeps byte-identical.
   bool get _darkPrimaryBed => onPrimary == Colors.white;
 
+  /// Public read of the bed judgement (POS-NAVBAR-TRANSPARENT-BRAND): the
+  /// brand lockup picks the wordmark's REVERSE rendition on a dark bed and
+  /// the standard artwork on a light custom bar.
+  bool get isDarkPrimaryBed => _darkPrimaryBed;
+
   /// The navbar chrome ink (icon cluster, appbar icons). Exactly
   /// [kPosNavbarInk] whenever the primary is a dark bed — every preset — and
   /// a primary-tinted dark ink on light custom bars.
@@ -389,13 +394,15 @@ const Color kPosNavbarInk = Color(0xFFE5EBF4);
 /// action ≥ 52dp tall on every step.
 ///
 /// The lockup is the shared [RestoflowBrandMark] (official symbol + the
-/// official English wordmark PNG — never typed text), on a Light Neutral
-/// brand plate ([kBizbotSurface]) so the charcoal `BIZ` reads on the dark
-/// device-theme bar exactly as on the identity board. The plate replaces the
-/// former white tile + typed brand name; the symbol side per ladder step is
+/// official English wordmark PNG — never typed text) sitting DIRECTLY on the
+/// device-theme bar (POS-NAVBAR-TRANSPARENT-BRAND: the owner asked for no
+/// white frame — the "plate" below is an invisible layout box, never a fill).
+/// On a dark bed the wordmark uses its REVERSE rendition (charcoal → white,
+/// emerald kept; `RestoflowBrandMark.reverse`), on a light custom bar the
+/// standard artwork. The symbol side per ladder step is
 /// [kPosNavbarBrandMarkWide] / [kPosNavbarBrandMarkTwoPane] /
 /// [kPosNavbarBrandMarkCompact]. Below [kPosCompactAppBarWidth] the wordmark
-/// yields (symbol-only plate), exactly as the typed title used to.
+/// yields (symbol-only), exactly as the typed title used to.
 const double kPosTopBarHeightWide = 76;
 const double kPosTopBarHeightTwoPane = 70;
 const double kPosTopBarHeightCompact = 62;
@@ -403,9 +410,10 @@ const double kPosNavbarBrandMarkWide = 44;
 const double kPosNavbarBrandMarkTwoPane = 40;
 const double kPosNavbarBrandMarkCompact = 34;
 
-/// Insets of the Light Neutral brand plate around the lockup (wordmark mode)
-/// and around the symbol alone (compact mode — the plate must stay as narrow
-/// as the former 38 px tile's slot allowed on a 320 px phone bar).
+/// Insets of the brand block around the lockup (wordmark mode) and around the
+/// symbol alone (compact mode — the block must stay as narrow as the former
+/// 38 px tile's slot allowed on a 320 px phone bar). Pure spacing: the block
+/// paints nothing.
 const EdgeInsets kPosNavbarBrandPlateInsets = EdgeInsets.symmetric(
   horizontal: 10,
   vertical: 6,

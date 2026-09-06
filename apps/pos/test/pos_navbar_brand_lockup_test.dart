@@ -423,14 +423,47 @@ void main() {
       }
     });
 
-    testWidgets('the plate is Light Neutral with no white halo box around '
-        'the artwork', (tester) async {
+    testWidgets('POS-NAVBAR-TRANSPARENT-BRAND: the brand block paints '
+        'NOTHING (no plate, no frame) and the wordmark is the reverse '
+        'rendition on the dark device-theme bar', (tester) async {
       await _pump(tester, width: 1280);
       final plate = tester.widget<Container>(find.byKey(_plate));
-      final deco = plate.decoration! as BoxDecoration;
-      expect(deco.color, kBizbotSurface);
-      expect(deco.borderRadius, BorderRadius.circular(RestoflowRadii.md));
+      expect(plate.decoration, isNull, reason: 'no fill, no frame');
+      expect(plate.color, isNull);
       expect(plate.alignment, AlignmentDirectional.centerStart);
+      final mark = tester.widget<RestoflowBrandMark>(
+        find.descendant(
+          of: find.byKey(_plate),
+          matching: find.byType(RestoflowBrandMark),
+        ),
+      );
+      expect(mark.reverse, isTrue, reason: 'dark bed → reverse wordmark');
+      final filtered = find.ancestor(
+        of: _asset(RestoflowBrandMark.wordmarkLatinAsset),
+        matching: find.byType(ColorFiltered),
+      );
+      expect(filtered, findsOneWidget);
+      expect(
+        tester.widget<ColorFiltered>(filtered).colorFilter,
+        RestoflowBrandMark.reverseWordmarkFilter,
+      );
+      expect(
+        find.ancestor(
+          of: _asset(RestoflowBrandMark.symbolAsset),
+          matching: find.byType(ColorFiltered),
+        ),
+        findsNothing,
+        reason: 'the symbol is never recoloured',
+      );
+      // The tagline reads in the navbar chrome ink, like the action glyphs.
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final tagline = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(_plate),
+          matching: find.text(l10n.posBrandTagline),
+        ),
+      );
+      expect(tagline.style?.color, kPosNavbarInk);
     });
 
     for (final locale in const [Locale('en'), Locale('ar')]) {

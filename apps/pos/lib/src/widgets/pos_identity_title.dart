@@ -34,16 +34,16 @@ const double kPosIdentityMaxWidth = 340;
 /// vertical padding.
 const double kPosIdentityLogoSize = 34;
 
-/// POS-TOPBAR-QUICK-TWEAK-010: in RTL the block sits left of centre.
-///
-/// [Alignment] is used rather than a translation or end-padding on purpose. It
-/// shifts by `|x|/2` of the FREE width, which means it can never push the block
-/// outside its own box and never steals width from the name — so both the
-/// no-overlap guarantee and the ellipsis behaviour survive the tweak at every
-/// width. On a typical 1280 landscape bar this lands the block ~15% of the
-/// middle region to the left (~74dp); for a long name, where there is little
-/// free width, it self-clamps to whatever is safely available.
-const double kPosIdentityRtlAlignX = -0.6;
+/// POS-NAVBAR-TRANSPARENT-BRAND (supersedes the POS-TOPBAR-QUICK-TWEAK-010
+/// RTL nudge): the block is centred on the BAR itself — the owner reads it as
+/// the bar's centrepiece, not as the centre of whatever free region the brand
+/// block and the action cluster happen to leave. The chip is laid out by
+/// [_BarCentredLayout]: it targets the bar's midpoint (computed from the
+/// region's own offset inside the bar, [PosIdentityTitle.barStartInset]) and
+/// self-clamps inside the region, so it can never touch the brand block or
+/// the actions and the ellipsis behaviour survives at every width. When the
+/// free region cannot reach the midpoint it sits as close to it as it safely
+/// can.
 
 /// The name's scale over the base title style (010 set 1.1;
 /// POS-THEME-NAVBAR-POLISH-001 raises it with the taller bar so the one
@@ -51,7 +51,21 @@ const double kPosIdentityRtlAlignX = -0.6;
 const double kPosIdentityNameScale = 1.2;
 
 class PosIdentityTitle extends ConsumerWidget {
-  const PosIdentityTitle({super.key});
+  const PosIdentityTitle({
+    this.barStartInset = 0,
+    this.logoSize = kPosIdentityLogoSize,
+    super.key,
+  });
+
+  /// Distance, in the reading direction, from the bar's START edge to this
+  /// widget's own region (the title inset + the brand block). Lets the chip
+  /// centre itself on the BAR instead of on its region.
+  final double barStartInset;
+
+  /// The logo box side. POS-NAVBAR-TRANSPARENT-BRAND: the caller passes the
+  /// bar's brand-mark size so the chip stands exactly as tall as the BIZBOT
+  /// lockup beside it (logo + the chip's 6 px vertical padding).
+  final double logoSize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,15 +87,18 @@ class PosIdentityTitle extends ConsumerWidget {
         if (constraints.maxWidth < kPosIdentityMinWidth) {
           return const SizedBox.shrink();
         }
-        // POS-TOPBAR-QUICK-TWEAK-010: centred in LTR, nudged left in RTL.
-        final rtl = Directionality.of(context) == TextDirection.rtl;
+        // POS-NAVBAR-TRANSPARENT-BRAND: centred on the BAR in both text
+        // directions (the region's offset inside the bar is barStartInset).
+        final direction = Directionality.of(context);
         // POS-DESIGN-HANDOFF-IMPLEMENTATION-004: the identity rides the navy
         // bar as the approved translucent chip (white-9% bed) with light
         // text. Still DERIVED-only — the chip adds no tap, no configuration.
-        return Align(
-          alignment: rtl
-              ? const Alignment(kPosIdentityRtlAlignX, 0)
-              : Alignment.center,
+        return CustomSingleChildLayout(
+          delegate: _BarCentredLayout(
+            barWidth: MediaQuery.sizeOf(context).width,
+            barStartInset: barStartInset,
+            direction: direction,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
             // POS-THEME-NAVBAR-POLISH-001: a stronger, easier-to-read chip —
@@ -104,7 +121,7 @@ class PosIdentityTitle extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (logo != null) ...[
-                    _IdentityLogo(bytes: logo.sourceBytes),
+                    _IdentityLogo(bytes: logo.sourceBytes, size: logoSize),
                     const SizedBox(width: RestoflowSpacing.sm),
                   ],
                   // Flexible + ellipsis: a long Arabic/Hebrew/English name stays
@@ -121,9 +138,13 @@ class PosIdentityTitle extends ConsumerWidget {
                         color: PosThemePair.of(context).onPrimary,
                         // 010: +10% on whatever the theme resolves to, so the
                         // tweak rides the theme instead of pinning a literal.
+                        // POS-NAVBAR-TRANSPARENT-BRAND: and it grows gently
+                        // with the logo box (44 → ×1.07, 40 → ×1.04, 34 → ×1)
+                        // so the name keeps pace with the taller chip.
                         fontSize:
                             (theme.textTheme.titleSmall?.fontSize ?? 14) *
-                            kPosIdentityNameScale,
+                            kPosIdentityNameScale *
+                            posIdentityNameGrowth(logoSize),
                       ),
                     ),
                   ),
@@ -142,16 +163,17 @@ class PosIdentityTitle extends ConsumerWidget {
 /// `BoxFit.contain` — a logo mark must never be cropped to fill a box, so the
 /// aspect ratio wins and the padding absorbs the difference.
 class _IdentityLogo extends StatelessWidget {
-  const _IdentityLogo({required this.bytes});
+  const _IdentityLogo({required this.bytes, required this.size});
 
   final Uint8List bytes;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const Key('pos-topbar-identity-logo'),
-      width: kPosIdentityLogoSize,
-      height: kPosIdentityLogoSize,
+      width: size,
+      height: size,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -168,4 +190,47 @@ class _IdentityLogo extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The name's growth over the 34 px logo baseline: a quarter of the logo's
+/// relative growth, so a 44 px chip reads ~7 % larger — never a shout.
+double posIdentityNameGrowth(double logoSize) =>
+    0.75 + 0.25 * (logoSize / kPosIdentityLogoSize);
+
+/// Positions the identity chip at the BAR's midpoint (not the region's),
+/// clamped inside the region so it can never overlap the brand block or the
+/// action cluster. The child keeps its natural (capped) size.
+class _BarCentredLayout extends SingleChildLayoutDelegate {
+  const _BarCentredLayout({
+    required this.barWidth,
+    required this.barStartInset,
+    required this.direction,
+  });
+
+  final double barWidth;
+  final double barStartInset;
+  final TextDirection direction;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    // Leading edge (in the reading direction) that puts the chip's centre on
+    // the bar's centre, clamped to the region.
+    final free = (size.width - childSize.width).clamp(0.0, double.infinity);
+    final wanted = barWidth / 2 - barStartInset - childSize.width / 2;
+    final leading = wanted.clamp(0.0, free).toDouble();
+    final dx = direction == TextDirection.rtl
+        ? size.width - leading - childSize.width
+        : leading;
+    return Offset(dx, (size.height - childSize.height) / 2);
+  }
+
+  @override
+  bool shouldRelayout(_BarCentredLayout oldDelegate) =>
+      barWidth != oldDelegate.barWidth ||
+      barStartInset != oldDelegate.barStartInset ||
+      direction != oldDelegate.direction;
 }

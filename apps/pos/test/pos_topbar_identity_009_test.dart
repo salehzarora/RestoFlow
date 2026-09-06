@@ -9,6 +9,8 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/receipt_logo_raster_cache.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart'
+    show posTopBarMetricsFor;
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/print/receipt_logo_asset.dart';
 import 'package:restoflow_pos/src/state/pos_printer_assignments.dart';
@@ -450,6 +452,66 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(kIdentity), findsOneWidget);
       expect(find.byKey(kIdentityLogo), findsOneWidget);
+      _expectNoOverlapWithControls(tester);
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // 6. POS-NAVBAR-TRANSPARENT-BRAND — centred on the BAR, as tall as the mark.
+  // ─────────────────────────────────────────────────────────────────────────
+  group('bar-centred identity', () {
+    for (final locale in const [Locale('en'), Locale('ar')]) {
+      testWidgets('${locale.languageCode}: the chip sits on the bar\'s own '
+          'midpoint (not the free region\'s) and stands as tall as the brand '
+          'mark', (tester) async {
+        for (final width in const [1280.0, 1920.0]) {
+          await _pump(
+            tester,
+            width: width,
+            locale: locale,
+            logo: _logoAsset(),
+          );
+          expect(tester.takeException(), isNull);
+          final chip = tester.getRect(find.byKey(kIdentity));
+          expect(
+            chip.center.dx,
+            closeTo(width / 2, 1.0),
+            reason: '${locale.languageCode} @ $width: centred on the bar',
+          );
+          final mark = posTopBarMetricsFor(width).markSize;
+          final logo = tester.getSize(find.byKey(kIdentityLogo));
+          expect(logo.width, mark);
+          expect(logo.height, mark);
+          // Chip = logo + the 6 px vertical padding — the brand lockup's own
+          // height (mark + its 6 px insets).
+          final chipBox = tester.getSize(
+            find
+                .ancestor(
+                  of: find.byKey(kIdentity),
+                  matching: find.byType(Container),
+                )
+                .first,
+          );
+          expect(chipBox.height, mark + 12);
+          _expectNoOverlapWithControls(tester);
+        }
+      });
+    }
+
+    testWidgets('when the free region cannot reach the midpoint the chip '
+        'clamps inside it — never over the brand block or the actions', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        width: 1024,
+        height: 600,
+        logo: _logoAsset(),
+        assignments: _assignments(
+          restaurantName: 'A Very Long Restaurant Name For The Bar Test',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(kIdentity), findsOneWidget);
       _expectNoOverlapWithControls(tester);
     });
   });

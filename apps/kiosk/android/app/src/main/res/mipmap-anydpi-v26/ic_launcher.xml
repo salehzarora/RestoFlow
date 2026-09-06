@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BIZBOT official identity: adaptive launcher icon (API 26+). Background is
-     the official Light Neutral; the foreground PNGs are generated from the
-     owner's symbol master by tools/brand/generate_bizbot_official_icons.py. -->
+<!-- BIZBOT official identity: adaptive launcher icon (API 26+). The background
+     layer is TRANSPARENT (BIZBOT-LAUNCHER-TRANSPARENT, owner decision: nothing
+     behind the symbol); the foreground PNGs are generated from the owner's
+     symbol master by tools/brand/generate_bizbot_official_icons.py. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@mipmap/ic_launcher_foreground"/>

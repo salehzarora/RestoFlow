@@ -284,11 +284,14 @@ void main() {
           contains('@mipmap/ic_launcher_foreground'),
           reason: app,
         );
+        // BIZBOT-LAUNCHER-TRANSPARENT (owner decision, 2026-09-06): the
+        // adaptive background layer is fully transparent — the launcher shows
+        // the symbol alone, nothing behind it.
         expect(
           File(
             '$android/src/main/res/values/ic_launcher_background.xml',
           ).readAsStringSync(),
-          contains('#F4F6F5'),
+          contains('#00000000'),
           reason: app,
         );
         for (final density in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
