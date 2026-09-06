@@ -132,12 +132,7 @@ const Key _plate = Key('pos-brand-tile');
 void main() {
   group('bar height ladder', () {
     test('metrics: one modest step over the 68 / 62 / 56 ladder', () {
-      final previous = <double, double>{
-        1280: 68,
-        900: 62,
-        600: 56,
-        430: 56,
-      };
+      final previous = <double, double>{1280: 68, 900: 62, 600: 56, 430: 56};
       for (final entry in previous.entries) {
         final m = posTopBarMetricsFor(entry.key);
         final ratio = m.height / entry.value;
@@ -226,7 +221,9 @@ void main() {
           expect(
             plate.width,
             greaterThanOrEqualTo(
-              posNavbarWordmarkMinPlateWidth(posTopBarMetricsFor(width).markSize),
+              posNavbarWordmarkMinPlateWidth(
+                posTopBarMetricsFor(width).markSize,
+              ),
             ),
           );
         }

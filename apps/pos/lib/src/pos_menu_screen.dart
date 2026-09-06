@@ -79,13 +79,16 @@ class PosMenuScreen extends StatelessWidget {
             // contained, tagline ellipsized — instead of overflowing the bar
             // when the five actions and their full outbox label take the
             // room on a 480–820 px bar.
-            final plateMax = (constraints.maxWidth * kPosNavbarBrandPlateMaxShare)
-                .clamp(
-                  metrics.markSize + kPosNavbarBrandPlateCompactInsets.horizontal,
-                  kPosNavbarBrandPlateMaxWidth,
-                )
-                .toDouble();
-            final showWordmark = metrics.wordmark &&
+            final plateMax =
+                (constraints.maxWidth * kPosNavbarBrandPlateMaxShare)
+                    .clamp(
+                      metrics.markSize +
+                          kPosNavbarBrandPlateCompactInsets.horizontal,
+                      kPosNavbarBrandPlateMaxWidth,
+                    )
+                    .toDouble();
+            final showWordmark =
+                metrics.wordmark &&
                 plateMax >= posNavbarWordmarkMinPlateWidth(metrics.markSize);
             return Row(
               children: [
