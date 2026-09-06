@@ -466,9 +466,19 @@ void main() {
         for (final width in const [1280.0, 1920.0]) {
           await _pump(tester, width: width, locale: locale, logo: _logoAsset());
           expect(tester.takeException(), isNull);
-          final chip = tester.getRect(find.byKey(kIdentity));
+          // The visible chip is the padded Container around the keyed Row
+          // (its padding is 9 / 14 start / end, so the Row's own centre sits
+          // 2.5 px off the chip's).
+          final chipBox = tester.getRect(
+            find
+                .ancestor(
+                  of: find.byKey(kIdentity),
+                  matching: find.byType(Container),
+                )
+                .first,
+          );
           expect(
-            chip.center.dx,
+            chipBox.center.dx,
             closeTo(width / 2, 1.0),
             reason: '${locale.languageCode} @ $width: centred on the bar',
           );
@@ -478,14 +488,6 @@ void main() {
           expect(logo.height, mark);
           // Chip = logo + the 6 px vertical padding — the brand lockup's own
           // height (mark + its 6 px insets).
-          final chipBox = tester.getSize(
-            find
-                .ancestor(
-                  of: find.byKey(kIdentity),
-                  matching: find.byType(Container),
-                )
-                .first,
-          );
           expect(chipBox.height, mark + 12);
           _expectNoOverlapWithControls(tester);
         }
