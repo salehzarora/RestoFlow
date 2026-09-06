@@ -4,20 +4,32 @@
 Source of truth: the owner-supplied masters (byte-identical copies of the files
 delivered in `App-logo/`, SHA-256 pinned in MASTERS below). Nothing here is
 drawn, typeset, recoloured or reinterpreted: the masters are white-background
-JPEGs, so this script only
+images (the symbol a PNG, the wordmarks JPEGs), so this script only
 
   1. removes the EXTERIOR white background algorithmically (flood fill from the
-     frame, JPEG ringing resolved by un-blending each boundary pixel against
-     white with the nearest solid colour as reference — no halo, no fringe),
-  2. keeps the symbol's own white (the receipt paper) opaque, resolving the two
-     places where paper meets background white-on-white with straight cuts
-     (documented in SYMBOL_CUTS — they are alpha decisions, not redrawing),
-  3. trims / centres / downsamples (LANCZOS) the resulting RGBA cut-outs into
+     frame; each boundary pixel is un-blended against white with the nearest
+     solid colour as reference — no halo, no fringe),
+  2. keeps the symbol's own white (the receipt paper) opaque, while background
+     that is background BY TOPOLOGY (connected to the frame) can never turn
+     into paper — the soft tip of the waist notch stays transparent,
+  3. renders the symbol's designed fade-to-white elements (the three mint
+     motion lines that run out into the background) as a true alpha fade:
+     every pixel of such a line is un-blended against white with the line's
+     own saturated colour as reference (see FADE_RULE). On white this
+     reproduces the master exactly; on any other surface the line fades out
+     instead of leaving an opaque white bar,
+  4. trims / centres / downsamples (LANCZOS) the resulting RGBA cut-outs into
      every runtime derivative the apps need.
+
+Symbol history: the first official symbol (`photo_2026-09-05_23-03-17 (2).jpg`,
+SHA-256 d3cafcf6…) was replaced on 2026-09-06 by the final approved mark
+(`c2355a92-43d1-42a2-8dbf-aa13e0121514.png`); its two master-specific straight
+cuts were retired with it — the new master's paper is enclosed by ink and needs
+none.
 
 Outputs (all regenerated from scratch, byte-for-byte reproducible):
 
-  packages/design_system/assets/brand/bizbot/bizbot_symbol.png        800x800 RGBA, symbol centred, native scale
+  packages/design_system/assets/brand/bizbot/bizbot_symbol.png        square RGBA (native scale, padded to a multiple of 16), symbol centred
   packages/design_system/assets/brand/bizbot/bizbot_wordmark_en.png   trimmed RGBA
   packages/design_system/assets/brand/bizbot/bizbot_wordmark_ar.png   trimmed RGBA
   apps/<app>/web/favicon.png                                          64x64 RGBA, transparent
@@ -57,10 +69,13 @@ EMERALD = (0x05, 0x96, 0x69)
 MINT = (0xA7, 0xF3, 0xD0)
 LIGHT_NEUTRAL = (0xF4, 0xF6, 0xF5)
 
-# Owner masters — byte-identical copies of App-logo/photo_2026-09-05_23-03-*.jpg.
+# Owner masters — byte-identical copies of the files in App-logo/:
+#   symbol      c2355a92-43d1-42a2-8dbf-aa13e0121514.png   (final approved mark, 2026-09-06)
+#   wordmarks   photo_2026-09-05_23-03-17.jpg (EN) / photo_2026-09-05_23-03-16.jpg (AR)
+#   board       photo_2026-09-05_23-03-17 (3).jpg
 MASTERS = {
-    "symbol": ("bizbot_symbol_master.jpg",
-               "d3cafcf6e3bdfbdbd22948d39b6cb6da035af39302348a8ffa7581600813b339"),
+    "symbol": ("bizbot_symbol_master.png",
+               "b09550aa9b283b43c7f3791e2b6b46cbf06584838a875a3d673832a9add651ef"),
     "wordmark_en": ("bizbot_wordmark_en_master.jpg",
                     "486f3aaaff6fc1e8a3b9fad2c62164e5944939d974818f8b8d13713974795c2b"),
     "wordmark_ar": ("bizbot_wordmark_ar_master.jpg",
@@ -77,35 +92,22 @@ ADAPTIVE_FG = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi":
 
 
 @dataclass(frozen=True)
-class Cut:
-    """A straight alpha decision inside a white-on-white ambiguity.
+class FadeRule:
+    """How a designed fade-to-white element is recognised in the symbol master.
 
-    kind='exterior': non-ink pixels inside the window with x >= x_cut become
-                     background (the receipt's right edge continues vertically
-                     between the two bowl tips instead of leaking into the
-                     background channel between them).
-    kind='paper':    non-ink pixels inside the window with x >= x_cut are the
-                     receipt paper (opaque); x < x_cut is background (the paper
-                     fills the pocket between the top bar and the spine dome,
-                     flush with the bar's rounded corner).
-    Coordinates are master pixels; each cut also carries an ink-geometry guard
-    so a different master cannot silently be cut in the wrong place.
+    A fade is a THICK region of tinted, non-ink pixels (min channel >= min_channel,
+    surviving `open_iter` erosions) that runs out into the frame-connected
+    background and is not grey (median saturation >= sat) — i.e. the mint motion
+    lines, never the receipt paper (grey shading, enclosed by ink) and never an
+    antialiased outline (thin). Its pixels get alpha by un-blending against white
+    with the region's own most-saturated colour as reference.
     """
-    kind: str
-    x_cut: int
-    y0: int
-    y1: int
-    x_max: int
-    guard: tuple[int, int, int]  # (x, y, expected ink? 1/0) sampled on the master
+    min_channel: int = 100
+    sat: int = 25
+    open_iter: int = 4
 
 
-SYMBOL_CUTS = (
-    # Waist notch: the upper and lower bowl tips meet at x≈850, y≈586.
-    Cut("exterior", x_cut=850, y0=555, y1=620, x_max=960, guard=(850, 585, 1)),
-    # Top-left pocket under the bar: bar corner ends at x≈289 (row 422); the
-    # spine dome starts at row 448.
-    Cut("paper", x_cut=289, y0=422, y1=470, x_max=500, guard=(345, 450, 1)),
-)
+FADE_RULE = FadeRule()
 
 
 def sha256(path: Path | bytes) -> str:
@@ -124,24 +126,64 @@ def load_master(key: str) -> np.ndarray:
 
 # ─── background removal ────────────────────────────────────────────────────
 
-def cutout(rgb_u8: np.ndarray, *, keep_holes: bool, cuts: tuple[Cut, ...] = (),
+def _frame_connected(mask: np.ndarray) -> np.ndarray:
+    """The part of `mask` that touches the image frame (background by topology)."""
+    lab, _ = ndi.label(mask)
+    border = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    return np.isin(lab, border[border != 0])
+
+
+def _channel_alphas(rgb: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """Per-channel alpha of `rgb` as `ref` blended over white (NaN where the
+    channel carries no information because ref is itself near white)."""
+    denom = 255.0 - ref
+    informative = denom > 40
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(informative, (255.0 - rgb) / np.maximum(denom, 1e-6), np.nan)
+
+
+def _unblend(rgb: np.ndarray, ref: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """alpha + un-premultiplied colour of `rgb` read as `ref` over white."""
+    a_c = _channel_alphas(rgb, ref)
+    with np.errstate(invalid="ignore"):
+        a_c = np.where((np.isnan(a_c).all(axis=2))[..., None], 1.0, a_c)
+        alpha = np.nanmax(a_c, axis=2)
+    alpha = np.clip(np.nan_to_num(alpha, nan=1.0), 0.0, 1.0)
+    a3 = alpha[..., None]
+    colour = np.where(a3 > 0.15, (rgb - (1.0 - a3) * 255.0) / np.maximum(a3, 1e-6), ref)
+    return alpha, colour
+
+
+def _alpha_spread(a_c: np.ndarray) -> np.ndarray:
+    """How much the per-channel alphas disagree (the wrong reference makes the
+    channels disagree or overshoot 1)."""
+    with np.errstate(invalid="ignore"):
+        hi = np.nanmax(a_c, axis=2)
+        lo = np.nanmin(a_c, axis=2)
+    return np.nan_to_num(hi - lo, nan=9.0) + np.maximum(0.0, np.nan_to_num(hi, nan=0.0) - 1.0)
+
+
+def cutout(rgb_u8: np.ndarray, *, keep_holes: bool, fades: FadeRule | None = None,
            strict_thr: int = 250, halo_thr: int = 236, band: int = 8,
            close_iter: int = 2, white_open: int = 4, noise_alpha: float = 0.04,
            min_area: int = 50, ink_thr: int = 200, ink_px: int = 20) -> np.ndarray:
     rgb = rgb_u8.astype(np.float64)
     mn = rgb.min(axis=2)
+    sat = rgb.max(axis=2) - mn
     ink = mn < ink_thr
     strict_white = mn >= strict_thr
 
     # 1) Exterior. keep_holes=True: only white connected to the frame (the
     #    symbol's receipt stays). keep_holes=False: every white region (letter
-    #    counters are background).
+    #    counters are background). `ext_soft` is the frame-connected NEAR-white:
+    #    background by topology even where the master rendered it a little
+    #    grey (the soft tip of the waist notch) — it never becomes paper.
     if keep_holes:
-        lab, _ = ndi.label(strict_white)
-        border = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
-        ext = np.isin(lab, border[border != 0])
+        ext = _frame_connected(strict_white)
+        ext_soft = _frame_connected(mn >= halo_thr)
     else:
         ext = strict_white.copy()
+        ext_soft = np.zeros_like(ext)
 
     # 2) Object = the rest, minus stray dust / ringing blobs; narrow channels
     #    (< 2*close_iter px, white-on-white anyway) bridged.
@@ -157,53 +199,75 @@ def cutout(rgb_u8: np.ndarray, *, keep_holes: bool, cuts: tuple[Cut, ...] = (),
             obj &= ~np.isin(obj_lab, drop)
     if close_iter:
         obj = ndi.binary_closing(obj, iterations=close_iter) | obj
-
-    # 3) Straight cuts for the documented white-on-white ambiguities.
-    forced_solid = np.zeros_like(obj)
-    h, w = mn.shape
-    yy, xx = np.mgrid[0:h, 0:w]
-    for cut in cuts:
-        gx, gy, expect = cut.guard
-        if bool(ink[gy, gx]) != bool(expect):
-            sys.exit(f"symbol cut guard failed at {(gx, gy)} — master geometry changed")
-        window = (yy >= cut.y0) & (yy <= cut.y1) & (xx <= cut.x_max) & ~ink
-        if cut.kind == "exterior":
-            obj &= ~(window & (xx >= cut.x_cut))
-        elif cut.kind == "paper":
-            paper = window & (xx >= cut.x_cut)
-            obj |= paper
-            forced_solid |= paper
-            obj &= ~(window & (xx < cut.x_cut))
-        else:
-            raise ValueError(cut.kind)
     ext = ~obj
 
-    # 4) Thick genuine white regions inside the object (receipt paper) are solid
-    #    no matter how close they come to the exterior.
+    # 3) Thick genuine white regions inside the object (receipt paper) are solid
+    #    no matter how close they come to the exterior — unless they ARE the
+    #    exterior by topology.
     near_white = mn >= halo_thr
-    white_core = ndi.binary_opening(near_white & obj, iterations=white_open) if keep_holes \
-        else np.zeros_like(obj)
+    if keep_holes:
+        white_core = ndi.binary_opening(near_white & obj, iterations=white_open) \
+            & ~ndi.binary_dilation(ext_soft, iterations=2)
+    else:
+        white_core = np.zeros_like(obj)
+
+    # 4) Designed fades (FADE_RULE): thick tinted regions running out into the
+    #    background. Each gets its own reference colour (its saturated end).
+    fade = np.zeros_like(obj)
+    fade_ref = np.zeros_like(rgb)
+    if fades is not None:
+        pale = obj & (mn >= fades.min_channel)
+        fl, nf = ndi.label(ndi.binary_opening(pale, iterations=fades.open_iter))
+        ext_near = ndi.binary_dilation(ext, iterations=2)
+        for i in range(1, nf + 1):
+            comp = fl == i
+            if not (comp & ext_near).any():          # enclosed: paper / check mark
+                continue
+            if np.percentile(sat[comp], 50) < fades.sat:   # grey shading, not a tint
+                continue
+            region = ndi.binary_dilation(comp, iterations=band) & pale
+            top = np.percentile(sat[region], 99)
+            fade |= region
+            fade_ref[region] = np.median(rgb[region & (sat >= top)], axis=0)
 
     # 5) Boundary band + un-blend against white with nearest-solid reference.
     ext_d = ndi.binary_dilation(ext, iterations=band)
-    solid = (obj & ~ext_d) | white_core | forced_solid
+    solid = ((obj & ~ext_d) | white_core) & ~fade
     edge = obj & ~solid
     idx = ndi.distance_transform_edt(~solid, return_distances=False, return_indices=True)
     ref = rgb[idx[0], idx[1]]
-    denom = 255.0 - ref
-    num = 255.0 - rgb
-    informative = denom > 40
-    with np.errstate(invalid="ignore", divide="ignore"):
-        a_c = np.where(informative, num / np.maximum(denom, 1e-6), np.nan)
-        a_c = np.where((~informative.any(axis=2))[..., None], 1.0, a_c)
-        alpha = np.nanmax(a_c, axis=2)
-    alpha = np.clip(np.nan_to_num(alpha, nan=1.0), 0.0, 1.0)
+    ref[fade] = fade_ref[fade]
+    if keep_holes:
+        # A boundary pixel next to the background whose nearest solid is PAPER
+        # would be judged "paper, opaque" — wrong for the antialiased rim of a
+        # background channel that touches the paper. Use the nearest solid INK.
+        paper_ref = edge & (ref.min(axis=2) >= halo_thr) & ndi.binary_dilation(ext_soft, iterations=2)
+        if paper_ref.any():
+            ink_solid = solid & (mn < halo_thr)
+            ii = ndi.distance_transform_edt(~ink_solid, return_distances=False, return_indices=True)
+            ref = np.where(paper_ref[..., None], rgb[ii[0], ii[1]], ref)
+    alpha, colour = _unblend(rgb, ref)
+
+    # 6) Seam between a fade and dark ink (the 1-2 px antialiased join): such a
+    #    pixel is either "dark ink over white" or "the fade over white"; keep
+    #    the reference whose per-channel alphas agree.
+    if fade.any():
+        dark = solid & (mn < fades.min_channel)
+        seam = fade & ndi.binary_dilation(dark, iterations=2)
+        if seam.any() and dark.any():
+            di = ndi.distance_transform_edt(~dark, return_distances=False, return_indices=True)
+            dark_ref = rgb[di[0], di[1]]
+            use_dark = seam & (_alpha_spread(_channel_alphas(rgb, dark_ref))
+                               < _alpha_spread(_channel_alphas(rgb, fade_ref)))
+            alpha_d, colour_d = _unblend(rgb, dark_ref)
+            alpha = np.where(use_dark, alpha_d, alpha)
+            colour = np.where(use_dark[..., None], colour_d, colour)
+
     alpha[solid] = 1.0
     alpha[ext] = 0.0
-    a3 = alpha[..., None]
-    fg = np.where(a3 > 0.15, (rgb - (1.0 - a3) * 255.0) / np.maximum(a3, 1e-6), ref)
+    alpha[ext_soft & ~fade] = 0.0  # background by topology is never opaque
     out = rgb.copy()
-    out[edge] = np.clip(fg, 0.0, 255.0)[edge]
+    out[edge] = np.clip(colour, 0.0, 255.0)[edge]
     out[ext] = ref[ext]  # transparent pixels carry the nearest solid colour
     alpha[edge & (alpha < noise_alpha)] = 0.0
     return np.dstack([out, alpha * 255.0]).round().astype(np.uint8)
@@ -271,11 +335,11 @@ def png_bytes(img: Image.Image) -> bytes:
 def build() -> dict[Path, bytes]:
     out: dict[Path, bytes] = {}
 
-    symbol_rgba = cutout(load_master("symbol"), keep_holes=True, cuts=SYMBOL_CUTS)
+    symbol_rgba = cutout(load_master("symbol"), keep_holes=True, fades=FADE_RULE)
     symbol = to_image(trim(symbol_rgba))
-    # Canonical symbol: centred on a square transparent canvas at native scale.
-    side = 800
-    assert max(symbol.size) <= side, symbol.size
+    # Canonical symbol: centred on a square transparent canvas at native scale
+    # (side = the trimmed mark's longer side, padded up to a multiple of 16).
+    side = -(-max(symbol.size) // 16) * 16
     canonical = place(Image.new("RGBA", (side, side), (0, 0, 0, 0)), symbol)
     out[ASSET_DIR / "bizbot_symbol.png"] = png_bytes(canonical)
 

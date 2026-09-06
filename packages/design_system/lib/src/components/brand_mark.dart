@@ -60,8 +60,8 @@ class RestoflowBrandMark extends StatelessWidget {
   /// The package the brand assets ship in.
   static const String package = 'restoflow_design_system';
 
-  /// Official standalone symbol — 800x800 RGBA, the mark centred at native
-  /// scale, transparent background.
+  /// Official standalone symbol — square RGBA (848x848), the final approved
+  /// mark centred at native scale, transparent background.
   static const String symbolAsset = 'assets/brand/bizbot/bizbot_symbol.png';
 
   /// Official English wordmark — trimmed RGBA (≈5.2:1).
