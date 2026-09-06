@@ -85,9 +85,9 @@ class PosMenuScreen extends StatelessWidget {
               children: [
                 // POS-NAVBAR-BRAND-LOCKUP: the official BIZBOT lockup — the
                 // shared RestoflowBrandMark (final symbol + the official
-                // English wordmark PNG, never typed) on a Light Neutral brand
-                // plate, so the charcoal `BIZ` reads on the dark device-theme
-                // bar exactly as on the identity board. Always visible, every
+                // English wordmark PNG, never typed) directly on the bar (no
+                // plate — POS-NAVBAR-TRANSPARENT-BRAND; the wordmark's
+                // reverse rendition on a dark bed). Always visible, every
                 // width; below kPosCompactAppBarWidth the wordmark yields to
                 // the five operational actions (PSC-001A) and the symbol
                 // keeps the identity. Artwork is never mirrored in RTL (the
@@ -107,9 +107,15 @@ class PosMenuScreen extends StatelessWidget {
                 // what makes this safe — the identity can only ever use the
                 // space the left block and the actions did NOT take, so it
                 // cannot overlap either, at any width or in either text
-                // direction. The left block above is unchanged and keeps its
-                // natural size.
-                const Expanded(child: PosIdentityTitle()),
+                // direction. POS-NAVBAR-TRANSPARENT-BRAND: the chip centres
+                // itself on the BAR (it knows how far its region starts from
+                // the bar's edge) and stands as tall as the brand mark.
+                Expanded(
+                  child: PosIdentityTitle(
+                    barStartInset: RestoflowSpacing.lg + plate.width,
+                    logoSize: metrics.markSize,
+                  ),
+                ),
               ],
             );
           },
@@ -268,12 +274,15 @@ class PosMenuScreen extends StatelessWidget {
   }
 }
 
-/// POS-NAVBAR-BRAND-LOCKUP — the brand plate at the bar's start edge: the
+/// POS-NAVBAR-BRAND-LOCKUP — the brand block at the bar's start edge: the
 /// shared [RestoflowBrandMark] (official symbol; + the official English
 /// wordmark artwork over the localized product line when the bar is wide
-/// enough) on a Light Neutral plate. Keyed `pos-brand-tile` — the same key
-/// the former white tile carried, so every existing top-bar test keeps
-/// finding the brand block where it always was.
+/// enough) sitting DIRECTLY on the bar — POS-NAVBAR-TRANSPARENT-BRAND removed
+/// the Light Neutral plate at the owner's request; on a dark bed the wordmark
+/// is the reverse rendition (`reverse: true`), on a light custom bar the
+/// standard artwork. Keyed `pos-brand-tile` — the same key the former white
+/// tile carried, so every existing top-bar test keeps finding the brand block
+/// where it always was.
 class _PosBrandPlate extends StatelessWidget {
   const _PosBrandPlate({
     required this.markSize,
@@ -293,32 +302,32 @@ class _PosBrandPlate extends StatelessWidget {
     if (markSize <= 0) {
       return const SizedBox.shrink(key: Key('pos-brand-tile'));
     }
+    final pair = PosThemePair.of(context);
+    final darkBed = pair.isDarkPrimaryBed;
     return Container(
       key: const Key('pos-brand-tile'),
-      // The plate is a fixed-width box (posNavbarBrandPlateFor); the lockup
-      // hugs its START edge in both text directions, its height stays the
-      // lockup's own.
+      // The block is a fixed-width box (posNavbarBrandPlateFor) that paints
+      // NOTHING — no fill, no frame; the lockup hugs its START edge in both
+      // text directions and its height stays the lockup's own.
       alignment: AlignmentDirectional.centerStart,
       padding: wordmark
           ? kPosNavbarBrandPlateInsets
           : kPosNavbarBrandPlateCompactInsets,
-      decoration: BoxDecoration(
-        color: kBizbotSurface,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-      ),
-      // The plate is the light identity surface; the lockup's tagline ink
-      // must read on IT, not on whatever the device-theme bar is.
+      // The tagline ink reads on the BAR: the navbar chrome ink on a dark
+      // bed (byte-identical to the action glyphs), the charcoal secondary
+      // ink on a light custom bar.
       child: Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(
-            context,
-          ).colorScheme.copyWith(onSurfaceVariant: kRestoflowInk2),
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            onSurfaceVariant: darkBed ? pair.navInk : kRestoflowInk2,
+          ),
         ),
         child: wordmark
             ? RestoflowBrandMark(
                 size: markSize,
                 wordmark: BizbotWordmark.latin,
                 tagline: tagline,
+                reverse: darkBed,
               )
             : RestoflowBrandMark(size: markSize),
       ),

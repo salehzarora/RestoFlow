@@ -35,8 +35,8 @@ Outputs (all regenerated from scratch, byte-for-byte reproducible):
   apps/<app>/web/favicon.png                                          64x64 RGBA, transparent
   apps/<app>/web/icons/Icon-{192,512}.png                             RGBA, transparent, 8% padding
   apps/<app>/web/icons/Icon-maskable-{192,512}.png                    Light Neutral full-bleed, mark 56% (inside the 80% safe circle)
-  apps/<app>/android/.../mipmap-*/ic_launcher.png                     legacy launcher: Light Neutral rounded tile
-  apps/<app>/android/.../mipmap-*/ic_launcher_foreground.png          adaptive foreground (108dp canvas, mark 43%, inside the 66dp safe circle)
+  apps/<app>/android/.../mipmap-*/ic_launcher.png                     legacy launcher: symbol alone, TRANSPARENT (no tile), mark 80%
+  apps/<app>/android/.../mipmap-*/ic_launcher_foreground.png          adaptive foreground (108dp canvas, mark 50% — every ink pixel inside the 72dp circle mask; the adaptive BACKGROUND layer is transparent)
   tools/brand/social/bizbot_avatar_1080.png                           Instagram / social avatar
   tools/brand/BIZBOT_BRAND_ASSETS.md                                  manifest: master hashes + output hashes
 
@@ -359,13 +359,22 @@ def build() -> dict[Path, bytes]:
     for app in ANDROID_APPS:
         res = ROOT / "apps" / app / "android" / "app" / "src" / "main" / "res"
         for density, px in MIPMAPS.items():
-            # Legacy launcher icon: Light Neutral rounded tile (transparent corners).
+            # Legacy launcher icon (BIZBOT-LAUNCHER-TRANSPARENT, 2026-09-06 —
+            # owner decision: nothing behind the symbol): the symbol alone on
+            # a transparent canvas. 0.80 keeps every ink pixel inside the
+            # square (the mark's ink reaches 0.614 x its longer side from the
+            # centre; 0.80 x 0.614 = 0.49 <= 0.5).
             out[res / f"mipmap-{density}" / "ic_launcher.png"] = png_bytes(
-                tile_icon(symbol, px, 0.72, LIGHT_NEUTRAL, 0.2))
+                transparent_icon(symbol, px, 0.80))
         for density, px in ADAPTIVE_FG.items():
-            # Adaptive foreground: 108dp canvas, mark inside the 66dp safe zone.
+            # Adaptive foreground: 108dp canvas, background layer transparent
+            # (values/ic_launcher_background.xml), so the launcher shows the
+            # symbol shape alone. 0.50 keeps every ink pixel inside the 72dp
+            # circle mask with breathing room (0.50 x 0.614 x 108 = 33.2dp
+            # <= 36dp radius) — as large as the mark can be without any
+            # launcher mask clipping it.
             out[res / f"mipmap-{density}" / "ic_launcher_foreground.png"] = png_bytes(
-                transparent_icon(symbol, px, 0.43))
+                transparent_icon(symbol, px, 0.50))
 
     out[SOCIAL_DIR / "bizbot_avatar_1080.png"] = png_bytes(
         tile_icon(symbol, 1080, 0.64, LIGHT_NEUTRAL, 0.0))

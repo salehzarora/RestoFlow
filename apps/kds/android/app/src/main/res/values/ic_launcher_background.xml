@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- BIZBOT official identity: the adaptive launcher icon's BACKGROUND layer.
+     BIZBOT-LAUNCHER-TRANSPARENT (2026-09-06, owner decision): fully transparent,
+     so the launcher shows the official symbol alone with nothing behind it.
+     The foreground PNGs come from tools/brand/generate_bizbot_official_icons.py. -->
 <resources>
-    <!-- BIZBOT official palette: Light Neutral / Support. -->
-    <color name="ic_launcher_background">#F4F6F5</color>
+    <color name="ic_launcher_background">#00000000</color>
 </resources>

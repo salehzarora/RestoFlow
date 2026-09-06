@@ -591,14 +591,24 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
       expect(appBar.backgroundColor, const Color(0xFFF2EFE8));
-      // POS-NAVBAR-BRAND-LOCKUP: the brand is the official artwork on its own
-      // Light Neutral plate, so it reads on ANY bar (light or dark) without
-      // recolouring; the typed brand name is gone from the bar.
+      // POS-NAVBAR-TRANSPARENT-BRAND: the brand block paints nothing; on a
+      // LIGHT custom bar the wordmark is the STANDARD artwork (charcoal BIZ
+      // reads on a light ground) and the tagline takes the charcoal
+      // secondary ink; the typed brand name is gone from the bar.
       final plate = tester.widget<Container>(
         find.byKey(const Key('pos-brand-tile')),
       );
-      expect((plate.decoration! as BoxDecoration).color, kBizbotSurface);
-      expect(find.text(l10n.posBrandTagline), findsOneWidget);
+      expect(plate.decoration, isNull);
+      final mark = tester.widget<RestoflowBrandMark>(
+        find.descendant(
+          of: find.byKey(const Key('pos-brand-tile')),
+          matching: find.byType(RestoflowBrandMark),
+        ),
+      );
+      expect(mark.reverse, isFalse);
+      expect(find.byType(ColorFiltered), findsNothing);
+      final tagline = tester.widget<Text>(find.text(l10n.posBrandTagline));
+      expect(tagline.style?.color, kRestoflowInk2);
       expect(appBar.iconTheme?.color, isNot(kPosNavbarInk));
     });
 
@@ -633,12 +643,22 @@ void main() {
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
       expect(appBar.backgroundColor, const Color(0xFF14324A));
       expect(appBar.iconTheme?.color, kPosNavbarInk);
-      // POS-NAVBAR-BRAND-LOCKUP: same official plate on a dark custom bar.
+      // POS-NAVBAR-TRANSPARENT-BRAND: on a DARK custom bar the block still
+      // paints nothing and the wordmark is the reverse rendition, tagline in
+      // the navbar chrome ink — byte-identical to the presets' world.
       final plate = tester.widget<Container>(
         find.byKey(const Key('pos-brand-tile')),
       );
-      expect((plate.decoration! as BoxDecoration).color, kBizbotSurface);
-      expect(find.text(l10n.posBrandTagline), findsOneWidget);
+      expect(plate.decoration, isNull);
+      final mark = tester.widget<RestoflowBrandMark>(
+        find.descendant(
+          of: find.byKey(const Key('pos-brand-tile')),
+          matching: find.byType(RestoflowBrandMark),
+        ),
+      );
+      expect(mark.reverse, isTrue);
+      final tagline = tester.widget<Text>(find.text(l10n.posBrandTagline));
+      expect(tagline.style?.color, kPosNavbarInk);
     });
   });
 

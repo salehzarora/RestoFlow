@@ -36,6 +36,7 @@ class RestoflowBrandMark extends StatelessWidget {
     this.tagline,
     this.wordmark,
     this.size = 56,
+    this.reverse = false,
     super.key,
   });
 
@@ -52,6 +53,16 @@ class RestoflowBrandMark extends StatelessWidget {
 
   /// Symbol side in logical pixels. The wordmark scales with it.
   final double size;
+
+  /// REVERSE rendition of the wordmark for DARK surfaces (a navy POS bar, a
+  /// dark rail): the artwork's charcoal ink is rendered white while its
+  /// emerald ink keeps the brand colour — the one colour treatment a two-tone
+  /// logotype needs to read on a dark ground. It is a [ColorFilter] over the
+  /// SAME official asset ([reverseWordmarkMatrix]): geometry, spacing and
+  /// proportions are untouched, no second artwork exists, and the symbol is
+  /// never filtered (it carries its own paper and reads on any ground).
+  /// Callers pick it by their surface — dark bed → `reverse: true`.
+  final bool reverse;
 
   /// The public brand token. Always Latin uppercase, never localized or
   /// transliterated (the surrounding copy is localized instead).
@@ -76,6 +87,36 @@ class RestoflowBrandMark extends StatelessWidget {
     BizbotWordmark.latin => wordmarkLatinAsset,
     BizbotWordmark.arabic => wordmarkArabicAsset,
   };
+
+  /// The official wordmarks carry exactly two inks: charcoal (`BIZ`, the
+  /// Arabic body — green channel ≈ [wordmarkInkGreen] in the committed
+  /// artwork) and emerald (`BOT`, the Arabic accent — green channel ≈
+  /// [wordmarkEmeraldGreen]). The reverse matrix is keyed on that green
+  /// channel alone, so it maps charcoal → white and emerald → emerald
+  /// EXACTLY, leaves alpha untouched (anti-aliased edges survive), and is
+  /// insensitive to the artwork's per-pixel noise. Pinned against the asset in
+  /// brand_mark_bizbot_test.
+  static const double wordmarkInkGreen = 49;
+  static const double wordmarkEmeraldGreen = 149;
+
+  /// Row-major 4×5 colour matrix (see [ColorFilter.matrix]) of the reverse
+  /// rendition: out = white + (emerald − white) × (G − ink) / (emerald − ink),
+  /// per channel, alpha preserved.
+  ///
+  ///   R: 255 → 5     slope −2.50   offset 377.50
+  ///   G: 255 → 150   slope −1.05   offset 306.45
+  ///   B: 255 → 105   slope −1.50   offset 328.50
+  static const List<double> reverseWordmarkMatrix = <double>[
+    0, -2.5, 0, 0, 377.5, //
+    0, -1.05, 0, 0, 306.45, //
+    0, -1.5, 0, 0, 328.5, //
+    0, 0, 0, 1, 0,
+  ];
+
+  /// The [ColorFilter] the reverse rendition applies to the wordmark image.
+  static const ColorFilter reverseWordmarkFilter = ColorFilter.matrix(
+    reverseWordmarkMatrix,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +161,7 @@ class RestoflowBrandMark extends StatelessWidget {
         BizbotWordmark.latin => size * 0.40,
         BizbotWordmark.arabic => size * 0.60,
       };
-      headline = Image.asset(
+      final Widget image = Image.asset(
         assetFor(mark),
         package: package,
         height: height,
@@ -130,11 +171,19 @@ class RestoflowBrandMark extends StatelessWidget {
         excludeFromSemantics: true,
         errorBuilder: (context, error, stackTrace) => Text(
           brand,
-          style: theme.textTheme.titleLarge,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: reverse ? Colors.white : null,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
       );
+      // Reverse rendition (dark surfaces): the same asset through the
+      // charcoal→white / emerald→emerald matrix. Only the wordmark — never
+      // the symbol.
+      headline = reverse
+          ? ColorFiltered(colorFilter: reverseWordmarkFilter, child: image)
+          : image;
     } else {
       headline = Text(
         titleText!,

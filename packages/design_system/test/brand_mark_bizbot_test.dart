@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -144,5 +148,134 @@ void main() {
       ),
       findsNothing,
     );
+  });
+  group('reverse rendition (dark surfaces)', () {
+    List<double> apply(List<double> m, List<double> rgba) => List.generate(
+      4,
+      (r) =>
+          (m[r * 5] * rgba[0] +
+                  m[r * 5 + 1] * rgba[1] +
+                  m[r * 5 + 2] * rgba[2] +
+                  m[r * 5 + 3] * rgba[3] +
+                  m[r * 5 + 4])
+              .clamp(0, 255)
+              .toDouble(),
+    );
+
+    test('the matrix maps the artwork\'s charcoal ink to white and keeps '
+        'its emerald ink — alpha untouched', () {
+      const m = RestoflowBrandMark.reverseWordmarkMatrix;
+      expect(m.length, 20);
+      // The two inks as they sit in the committed PNG (see the asset pin
+      // below): charcoal ≈ (40, 49, 58), emerald ≈ (9, 149, 104).
+      final charcoal = apply(m, [40, 49, 58, 255]);
+      final emerald = apply(m, [9, 149, 104, 255]);
+      for (var i = 0; i < 3; i++) {
+        expect(charcoal[i], closeTo(255, 1), reason: 'charcoal → white');
+      }
+      expect(emerald[0], closeTo(5, 2));
+      expect(emerald[1], closeTo(150, 2));
+      expect(emerald[2], closeTo(105, 2));
+      // Alpha passes through — anti-aliased edges keep their coverage.
+      expect(apply(m, [40, 49, 58, 96])[3], 96);
+      expect(apply(m, [9, 149, 104, 40])[3], 40);
+      // A half-covered charcoal edge pixel is still white (not grey).
+      expect(apply(m, [40, 49, 58, 128])[0], closeTo(255, 1));
+    });
+
+    testWidgets('reverse: only the wordmark goes through the filter; the '
+        'symbol and the default lockup never do', (tester) async {
+      await tester.pumpWidget(
+        host(
+          const RestoflowBrandMark(
+            wordmark: BizbotWordmark.latin,
+            tagline: 'Point of Sale',
+            reverse: true,
+          ),
+        ),
+      );
+      final wordmark = assetImage(RestoflowBrandMark.wordmarkLatinAsset);
+      final symbol = assetImage(RestoflowBrandMark.symbolAsset);
+      expect(wordmark, findsOneWidget);
+      expect(symbol, findsOneWidget);
+      final filtered = find.ancestor(
+        of: wordmark,
+        matching: find.byType(ColorFiltered),
+      );
+      expect(filtered, findsOneWidget);
+      expect(
+        tester.widget<ColorFiltered>(filtered).colorFilter,
+        RestoflowBrandMark.reverseWordmarkFilter,
+      );
+      expect(
+        find.ancestor(of: symbol, matching: find.byType(ColorFiltered)),
+        findsNothing,
+        reason: 'the symbol carries its own paper and is never recoloured',
+      );
+      // Same asset, same geometry: the reverse rendition is a colour
+      // treatment, not a second artwork.
+      final image = tester.widget<Image>(wordmark);
+      expect(image.height, closeTo(56 * 0.40, 0.01));
+      expect(image.fit, BoxFit.contain);
+      expect(image.matchTextDirection, isFalse);
+
+      await tester.pumpWidget(
+        host(const RestoflowBrandMark(wordmark: BizbotWordmark.latin)),
+      );
+      expect(find.byType(ColorFiltered), findsNothing);
+    });
+
+    testWidgets('the committed wordmark artwork still carries exactly the '
+        'two inks the matrix is keyed on', (tester) async {
+      var dir = Directory.current;
+      while (!File('${dir.path}/melos.yaml').existsSync() &&
+          !File('${dir.path}/vercel.json').existsSync()) {
+        if (dir.parent.path == dir.path) fail('repo root not found');
+        dir = dir.parent;
+      }
+      for (final asset in [
+        RestoflowBrandMark.wordmarkLatinAsset,
+        RestoflowBrandMark.wordmarkArabicAsset,
+      ]) {
+        final bytes = File(
+          '${dir.path}/packages/design_system/$asset',
+        ).readAsBytesSync();
+        late final ByteData pixels;
+        late final int count;
+        await tester.runAsync(() async {
+          final codec = await ui.instantiateImageCodec(bytes);
+          final frame = await codec.getNextFrame();
+          pixels = (await frame.image.toByteData(
+            format: ui.ImageByteFormat.rawStraightRgba,
+          ))!;
+          count = frame.image.width * frame.image.height;
+        });
+        var ink = 0, emerald = 0, other = 0;
+        for (var i = 0; i < count; i++) {
+          final a = pixels.getUint8(i * 4 + 3);
+          if (a < 200) continue; // edges / fades are not an ink
+          final g = pixels.getUint8(i * 4 + 1);
+          // The master's own tonal noise spreads each ink over a band; the
+          // matrix is anchored on the band centres (49 / 149) and stays
+          // monotone across both bands.
+          if ((g - RestoflowBrandMark.wordmarkInkGreen).abs() <= 20) {
+            ink++;
+          } else if ((g - RestoflowBrandMark.wordmarkEmeraldGreen).abs() <=
+              30) {
+            emerald++;
+          } else {
+            other++;
+          }
+        }
+        expect(ink, greaterThan(0), reason: '$asset charcoal ink');
+        expect(emerald, greaterThan(0), reason: '$asset emerald ink');
+        // Anything else is residual master paper/noise, never a third ink.
+        expect(
+          other / (ink + emerald + other),
+          lessThan(0.03),
+          reason: '$asset: pixels that are neither ink',
+        );
+      }
+    });
   });
 }
