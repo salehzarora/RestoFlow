@@ -170,6 +170,45 @@ Legacy `veyro.systems`: kept registered (auto-renew on), its Resend sender is
 retained only until the BIZBOT sender has proven itself, and its web traffic is
 forwarded to `https://bizbot.systems`. It is no longer a public identity.
 
+### 5.2 Public marketing website — `site/` (BIZBOT-SITE, 2026-09-06)
+
+The customer-facing website lives in [`site/`](../site/README.md) and is
+deployed as a **separate Vercel project, `bizbot-site`** (Root Directory `site`,
+static HTML per locale + one Node function `api/lead.js`). It shares nothing at
+runtime with the product apps: no Flutter, no Supabase, no service key, no
+cookies. Arabic is the default document (`/`), English at `/en`, Hebrew at `/he`.
+
+Domain plan for the brand root (the app origins above are untouched):
+
+| Origin | Today | Target |
+|---|---|---|
+| `https://bizbot.systems` | 307 → `app.bizbot.systems` (assigned to `resto-flow`) | Marketing site (assigned to `bizbot-site`) |
+| `https://www.bizbot.systems` | 307 → `app.bizbot.systems` | 308 → `https://bizbot.systems/…` (rule in `site/vercel.json`) |
+| `https://app.bizbot.systems` | canonical app origin | **unchanged** |
+
+Cut-over = in Vercel move the two domains `bizbot.systems` + `www.bizbot.systems`
+from `resto-flow` to `bizbot-site` (DNS at Porkbun already points both at
+Vercel, so no DNS edit is needed). `site/vercel.json` keeps every product path
+alive on the brand root during and after the move: `/pos`, `/kds`, `/kiosk`,
+`/dashboard`, `/app`, `/login`, `/auth/*` → `https://app.bizbot.systems/...`.
+Rollback = move the two domains back; nothing else changes.
+
+The `bizbot-site` project exists at `https://vercel.com/salehzaroras-projects/bizbot-site`
+(created 2026-09-06 through the Vercel integration, Git-linked to
+`salehzarora/RestoFlow`, Root Directory `site`; its `bizbot-site.vercel.app`
+alias serves the site). **Before the domain cut-over its Production Branch must
+be `main`** (the first deployments came from the feature branch — verify under
+Settings → Git) so that merges to `main` are what reach production.
+
+Lead form: `POST /api/lead` on the site project e-mails demo requests through
+Resend (domain `bizbot.systems`, already verified) to `sales@bizbot.systems`.
+Configuration is by env-var NAME on the `bizbot-site` project only:
+`RESEND_API_KEY` (required to send; absent → the endpoint answers 503 and the
+page shows the direct e-mail fallback), optional `LEAD_TO` / `LEAD_FROM` /
+`LEAD_ALLOWED_ORIGINS`. Abuse controls are in-process (same-origin gate, JSON
+only, 16 KiB cap, honeypot + minimum fill time, per-instance IP rate limit —
+not a distributed quota; see `site/README.md`).
+
 ---
 
 ## 6. RF-LIVE-002 — hosted auth + mode-safety hardening (**done**)
