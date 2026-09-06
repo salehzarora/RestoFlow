@@ -114,6 +114,40 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+/// Pumps with the REAL artwork decoded (repo-backed bundle + precache), so the
+/// measured geometry is production geometry, not the Image fallbacks'.
+Future<void> _pumpReal(
+  WidgetTester tester, {
+  required double width,
+  Locale locale = const Locale('en'),
+}) async {
+  final bundle = _RepoAssetBundle(_repoRoot());
+  tester.view.physicalSize = Size(width, 800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.runAsync(() async {
+    await tester.pumpWidget(_app(locale: locale, bundle: bundle));
+    final context = tester.element(find.byType(PosMenuScreen));
+    for (final asset in const [
+      RestoflowBrandMark.symbolAsset,
+      RestoflowBrandMark.wordmarkLatinAsset,
+    ]) {
+      await precacheImage(
+        AssetImage(asset, package: RestoflowBrandMark.package),
+        context,
+      );
+    }
+  });
+  await tester.pumpAndSettle();
+}
+
+/// Width / height from a PNG's IHDR chunk (offset 16 / 20, big-endian).
+({int width, int height}) _pngSize(File file) {
+  final data = ByteData.sublistView(file.readAsBytesSync());
+  return (width: data.getUint32(16), height: data.getUint32(20));
+}
+
 Finder _appBar() => find.byType(AppBar);
 
 Finder _asset(String asset) => find.descendant(
@@ -145,21 +179,25 @@ void main() {
       expect(posTopBarMetricsFor(1280), (
         height: 76.0,
         markSize: 44.0,
+        plateWidth: 170.0,
         wordmark: true,
       ));
       expect(posTopBarMetricsFor(900), (
         height: 70.0,
         markSize: 40.0,
+        plateWidth: 158.0,
         wordmark: true,
       ));
       expect(posTopBarMetricsFor(600), (
         height: 62.0,
         markSize: 34.0,
+        plateWidth: 140.0,
         wordmark: true,
       ));
       expect(posTopBarMetricsFor(430), (
         height: 62.0,
         markSize: 34.0,
+        plateWidth: 140.0,
         wordmark: false,
       ));
       // The wordmark yields at the same width the typed title used to.
@@ -168,17 +206,101 @@ void main() {
       expect(posTopBarMetricsFor(479).wordmark, isFalse);
     });
 
-    testWidgets('the rendered bar is 76 / 70 / 62 and the lockup fits inside '
-        'it', (tester) async {
+    test('the fixed wordmark plates are the lockup\'s natural width at the '
+        'REAL artwork\'s proportion — never a squeezed wordmark', () {
+      final png = _pngSize(
+        File(
+          '${_repoRoot().path}/packages/design_system/'
+          '${RestoflowBrandMark.wordmarkLatinAsset}',
+        ),
+      );
+      final aspect = png.width / png.height;
+      expect(aspect, closeTo(796 / 152, 0.01));
+      for (final width in const [1280.0, 900.0, 600.0]) {
+        final m = posTopBarMetricsFor(width);
+        final natural =
+            kPosNavbarBrandPlateInsets.horizontal +
+            m.markSize +
+            RestoflowSpacing.md +
+            m.markSize * 0.40 * aspect;
+        expect(
+          m.plateWidth,
+          inInclusiveRange(natural, natural + 4),
+          reason: '${width}px: natural $natural → ${m.plateWidth}',
+        );
+        expect(m.plateWidth % 2, 0, reason: 'even px');
+      }
+    });
+
+    test('the plate resolves against the title slot: wordmark plate within '
+        'its share, symbol-only otherwise, never wider than the slot', () {
+      final wide = posTopBarMetricsFor(1280);
+      expect(posNavbarBrandPlateFor(wide, 828), (width: 170.0, wordmark: true));
+      expect(posNavbarBrandPlateFor(wide, 340), (width: 170.0, wordmark: true));
+      expect(posNavbarBrandPlateFor(wide, 339), (width: 52.0, wordmark: false));
+      expect(posNavbarBrandPlateFor(wide, 30), (width: 30.0, wordmark: false));
+      final twoPane = posTopBarMetricsFor(900);
+      expect(posNavbarBrandPlateFor(twoPane, 428), (
+        width: 158.0,
+        wordmark: true,
+      ));
+      expect(posNavbarBrandPlateFor(twoPane, 300), (
+        width: 48.0,
+        wordmark: false,
+      ));
+      final phone = posTopBarMetricsFor(430);
+      expect(posNavbarBrandPlateFor(phone, 1000), (
+        width: 42.0,
+        wordmark: false,
+      ));
+      expect(posNavbarSymbolPlateWidth(34), 42);
+    });
+
+    testWidgets('the rendered bar is 76 / 70 / 62 and the REAL lockup sits '
+        'inside it with ≥ 6 px above and below', (tester) async {
       for (final entry in {1280.0: 76.0, 900.0: 70.0, 430.0: 62.0}.entries) {
-        await _pump(tester, width: entry.key);
+        await _pumpReal(tester, width: entry.key);
+        expect(tester.takeException(), isNull);
         final appBar = tester.widget<AppBar>(_appBar());
         expect(appBar.toolbarHeight, entry.value, reason: '${entry.key}px');
         expect(tester.getSize(_appBar()).height, entry.value);
+        final m = posTopBarMetricsFor(entry.key);
         final plate = tester.getRect(find.byKey(_plate));
         final bar = tester.getRect(_appBar());
+        // The plate is exactly the symbol + its insets tall: the wordmark
+        // column (17.6 / 16 px image + tagline) never rises above the symbol.
+        final insets = m.wordmark
+            ? kPosNavbarBrandPlateInsets
+            : kPosNavbarBrandPlateCompactInsets;
+        expect(plate.height, m.markSize + insets.vertical);
         expect(plate.top, greaterThanOrEqualTo(bar.top + 6));
         expect(plate.bottom, lessThanOrEqualTo(bar.bottom - 6));
+        // The symbol renders at the step's mark size, the wordmark at its
+        // native proportion (contained, never squeezed or stretched).
+        final symbol = tester.getSize(_asset(RestoflowBrandMark.symbolAsset));
+        expect(symbol, Size(m.markSize, m.markSize));
+        if (m.wordmark) {
+          final word = tester.getSize(
+            _asset(RestoflowBrandMark.wordmarkLatinAsset),
+          );
+          expect(word.height, closeTo(m.markSize * 0.40, 0.01));
+          expect(word.width, closeTo(word.height * 796 / 152, 0.5));
+          expect(plate.width, m.plateWidth);
+        } else {
+          expect(plate.width, posNavbarSymbolPlateWidth(m.markSize));
+        }
+      }
+    });
+
+    testWidgets('even with the Image fallbacks (no package bundle) the plate '
+        'stays inside the bar', (tester) async {
+      for (final width in const [1280.0, 900.0, 430.0]) {
+        await _pump(tester, width: width);
+        expect(tester.takeException(), isNull);
+        final plate = tester.getRect(find.byKey(_plate));
+        final bar = tester.getRect(_appBar());
+        expect(plate.top, greaterThanOrEqualTo(bar.top));
+        expect(plate.bottom, lessThanOrEqualTo(bar.bottom));
       }
     });
   });
@@ -199,6 +321,9 @@ void main() {
       for (final entry in wordmarkExpected.entries) {
         final width = entry.key;
         await _pump(tester, width: width);
+        // Sequential pumps in ONE tree double as a live-resize check: the
+        // bar must re-lay out cleanly when the window grows or shrinks.
+        expect(tester.takeException(), isNull, reason: 'resize → ${width}px');
         expect(
           _asset(RestoflowBrandMark.symbolAsset),
           findsOneWidget,
@@ -213,25 +338,20 @@ void main() {
           entry.value ? findsOneWidget : findsNothing,
           reason: 'wordmark at ${width}px',
         );
-        // The plate never exceeds its cap and, whenever the wordmark shows,
-        // is wide enough to show it undistorted.
+        // The plate is the step's fixed box: the wordmark plate (the lockup's
+        // natural width) when the wordmark shows, the symbol-only plate
+        // otherwise — the Image fallbacks in this bundle cannot inflate it.
+        final m = posTopBarMetricsFor(width);
         final plate = tester.getSize(find.byKey(_plate));
-        expect(plate.width, lessThanOrEqualTo(kPosNavbarBrandPlateMaxWidth));
-        if (entry.value) {
-          expect(
-            plate.width,
-            greaterThanOrEqualTo(
-              posNavbarWordmarkMinPlateWidth(
-                posTopBarMetricsFor(width).markSize,
-              ),
-            ),
-          );
-        }
+        expect(
+          plate.width,
+          entry.value ? m.plateWidth : posNavbarSymbolPlateWidth(m.markSize),
+          reason: 'plate width at ${width}px',
+        );
         // The symbol is drawn at the ladder's mark size, aspect preserved.
         final symbol = tester.widget<Image>(
           _asset(RestoflowBrandMark.symbolAsset),
         );
-        final m = posTopBarMetricsFor(width);
         expect(symbol.width, m.markSize);
         expect(symbol.height, m.markSize);
         expect(symbol.fit, BoxFit.contain);
@@ -264,7 +384,47 @@ void main() {
       final deco = plate.decoration! as BoxDecoration;
       expect(deco.color, kBizbotSurface);
       expect(deco.borderRadius, BorderRadius.circular(RestoflowRadii.md));
+      expect(plate.alignment, AlignmentDirectional.centerStart);
     });
+
+    for (final locale in const [Locale('en'), Locale('ar')]) {
+      testWidgets('${locale.languageCode}: a LIVE resize (desktop window / '
+          'tablet rotation) re-lays the bar out without overflow, and the '
+          'title Row always sums to its slot', (tester) async {
+        for (final width in const [
+          900.0,
+          1280.0,
+          430.0,
+          1920.0,
+          600.0,
+          320.0,
+          1100.0,
+        ]) {
+          await _pump(tester, width: width, locale: locale);
+          final exception = tester.takeException();
+          if (exception != null) {
+            // Leave the geometry in the log so a recurrence is diagnosable.
+            final plateBox = tester.renderObject(find.byKey(_plate));
+            RenderObject? flex = plateBox.parent;
+            while (flex != null && flex is! RenderFlex) {
+              flex = flex.parent;
+            }
+            debugPrint(flex?.toStringDeep());
+          }
+          expect(exception, isNull, reason: 'resize → ${width}px');
+          final row = tester.renderObject<RenderFlex>(
+            find.ancestor(
+              of: find.byKey(_plate),
+              matching: find.byType(Row),
+            ).first,
+          );
+          var sum = 0.0;
+          row.visitChildren((child) => sum += (child as RenderBox).size.width);
+          expect(sum, closeTo(row.size.width, 0.01), reason: '${width}px');
+          expect(row.size.width, lessThanOrEqualTo(row.constraints.maxWidth));
+        }
+      });
+    }
 
     testWidgets('with the REAL artwork decoded, no typed BIZBOT stands in for '
         'the wordmark (the tagline stays a localized text line)', (

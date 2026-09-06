@@ -74,22 +74,13 @@ class PosMenuScreen extends StatelessWidget {
             final metrics = posTopBarMetricsFor(
               MediaQuery.sizeOf(context).width,
             );
-            // The plate is bounded by the title slot (never the unbounded
-            // Row slot), so the lockup shrinks gracefully — wordmark image
-            // contained, tagline ellipsized — instead of overflowing the bar
-            // when the five actions and their full outbox label take the
-            // room on a 480–820 px bar.
-            final plateMax =
-                (constraints.maxWidth * kPosNavbarBrandPlateMaxShare)
-                    .clamp(
-                      metrics.markSize +
-                          kPosNavbarBrandPlateCompactInsets.horizontal,
-                      kPosNavbarBrandPlateMaxWidth,
-                    )
-                    .toDouble();
-            final showWordmark =
-                metrics.wordmark &&
-                plateMax >= posNavbarWordmarkMinPlateWidth(metrics.markSize);
+            // The plate is a FIXED box resolved from the title slot (what is
+            // left beside the five actions and their outbox label): the
+            // step's wordmark plate when it fits its share of the slot,
+            // otherwise the symbol-only plate — never wider than the slot.
+            // A tight width means the Row below can never overflow, at any
+            // width, in any locale, or across a live resize.
+            final plate = posNavbarBrandPlateFor(metrics, constraints.maxWidth);
             return Row(
               children: [
                 // POS-NAVBAR-BRAND-LOCKUP: the official BIZBOT lockup — the
@@ -103,11 +94,11 @@ class PosMenuScreen extends StatelessWidget {
                 // mark pins matchTextDirection=false); the Row itself flips
                 // so the symbol stays at the bar's START edge in both
                 // directions.
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: plateMax),
+                SizedBox(
+                  width: plate.width,
                   child: _PosBrandPlate(
                     markSize: metrics.markSize,
-                    wordmark: showWordmark,
+                    wordmark: plate.wordmark,
                     tagline: l10n.posBrandTagline,
                   ),
                 ),
@@ -298,6 +289,10 @@ class _PosBrandPlate extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const Key('pos-brand-tile'),
+      // The plate is a fixed-width box (posNavbarBrandPlateFor); the lockup
+      // hugs its START edge in both text directions, its height stays the
+      // lockup's own.
+      alignment: AlignmentDirectional.centerStart,
       padding: wordmark
           ? kPosNavbarBrandPlateInsets
           : kPosNavbarBrandPlateCompactInsets,

@@ -412,23 +412,43 @@ const EdgeInsets kPosNavbarBrandPlateInsets = EdgeInsets.symmetric(
 );
 const EdgeInsets kPosNavbarBrandPlateCompactInsets = EdgeInsets.all(4);
 
-/// The plate never takes more than this share of the title slot (the
-/// restaurant identity keeps the rest) and never more than this many px; the
-/// lockup scales down inside it (the wordmark image is `BoxFit.contain`, the
-/// tagline ellipsizes) instead of pushing the bar.
-const double kPosNavbarBrandPlateMaxShare = 0.5;
-const double kPosNavbarBrandPlateMaxWidth = 200;
+/// The wordmark plate is a FIXED box per ladder step — the lockup's natural
+/// width: plate insets + symbol + the mark's gap ([RestoflowSpacing.md]) + the
+/// official English wordmark PNG at its native 796:152 proportion when it is
+/// `symbol × 0.40` tall (the shared [RestoflowBrandMark] rule), rounded up to
+/// an even px. A fixed width means the wordmark always renders at its natural
+/// size (never squeezed, never clipped) and the title Row that carries the
+/// plate can never overflow, whatever a locale's tagline measures (the
+/// tagline ellipsizes inside). Pinned against the real PNG's IHDR in
+/// pos_navbar_brand_lockup_test.
+///
+///   wide     10 + 44 + 12 + 17.6 × 796/152 (92.2) + 10 = 168.2 → 170
+///   two-pane 10 + 40 + 12 + 16.0 × 796/152 (83.8) + 10 = 155.8 → 158
+///   compact  10 + 34 + 12 + 13.6 × 796/152 (71.2) + 10 = 137.2 → 140
+const double kPosNavbarBrandPlateWidthWide = 170;
+const double kPosNavbarBrandPlateWidthTwoPane = 158;
+const double kPosNavbarBrandPlateWidthCompact = 140;
 
-/// The least plate width at which the English wordmark is worth showing
-/// beside a symbol of [markSize]: symbol + the mark's gap + plate insets +
-/// 60 px of wordmark. Below it the plate is symbol-only (the same graceful
-/// yield the typed title had), never a squeezed or clipped wordmark.
-double posNavbarWordmarkMinPlateWidth(double markSize) =>
-    markSize + RestoflowSpacing.md + kPosNavbarBrandPlateInsets.horizontal + 60;
+/// The plate never takes more than this share of the title slot — the
+/// restaurant identity keeps the rest. When the wordmark plate would need
+/// more, the plate is symbol-only (the same graceful yield the typed title
+/// had), never a squeezed or clipped wordmark.
+const double kPosNavbarBrandPlateMaxShare = 0.5;
+
+/// The symbol-only plate: the symbol alone inside the compact insets.
+double posNavbarSymbolPlateWidth(double markSize) =>
+    markSize + kPosNavbarBrandPlateCompactInsets.horizontal;
 
 /// The resolved top-bar metrics for a viewport [width]: bar height, symbol
-/// side and whether the English wordmark artwork is shown beside the symbol.
-typedef PosTopBarMetrics = ({double height, double markSize, bool wordmark});
+/// side, the step's wordmark-plate width and whether the English wordmark
+/// artwork may be shown beside the symbol at all (it still needs its share of
+/// the title slot — see [posNavbarBrandPlateFor]).
+typedef PosTopBarMetrics = ({
+  double height,
+  double markSize,
+  double plateWidth,
+  bool wordmark,
+});
 
 PosTopBarMetrics posTopBarMetricsFor(double width) {
   final wordmark = width >= 480; // == kPosCompactAppBarWidth (pos_palette)
@@ -436,6 +456,7 @@ PosTopBarMetrics posTopBarMetricsFor(double width) {
     return (
       height: kPosTopBarHeightWide,
       markSize: kPosNavbarBrandMarkWide,
+      plateWidth: kPosNavbarBrandPlateWidthWide,
       wordmark: wordmark,
     );
   }
@@ -443,14 +464,35 @@ PosTopBarMetrics posTopBarMetricsFor(double width) {
     return (
       height: kPosTopBarHeightTwoPane,
       markSize: kPosNavbarBrandMarkTwoPane,
+      plateWidth: kPosNavbarBrandPlateWidthTwoPane,
       wordmark: wordmark,
     );
   }
   return (
     height: kPosTopBarHeightCompact,
     markSize: kPosNavbarBrandMarkCompact,
+    plateWidth: kPosNavbarBrandPlateWidthCompact,
     wordmark: wordmark,
   );
+}
+
+/// The plate the title slot ([slotWidth] px — what is left between the bar's
+/// start inset and the action cluster) actually gets: the step's wordmark
+/// plate when the step allows a wordmark AND that plate fits inside
+/// [kPosNavbarBrandPlateMaxShare] of the slot; otherwise the symbol-only
+/// plate. Never wider than the slot itself, so the Row that carries it cannot
+/// overflow at any width.
+({double width, bool wordmark}) posNavbarBrandPlateFor(
+  PosTopBarMetrics metrics,
+  double slotWidth,
+) {
+  final wordmark =
+      metrics.wordmark &&
+      metrics.plateWidth <= slotWidth * kPosNavbarBrandPlateMaxShare;
+  final width = wordmark
+      ? metrics.plateWidth
+      : posNavbarSymbolPlateWidth(metrics.markSize);
+  return (width: width < slotWidth ? width : slotWidth, wordmark: wordmark);
 }
 
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).
