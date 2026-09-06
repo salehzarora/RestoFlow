@@ -97,7 +97,7 @@ class PosMenuScreen extends StatelessWidget {
                 SizedBox(
                   width: plate.width,
                   child: _PosBrandPlate(
-                    markSize: metrics.markSize,
+                    markSize: plate.markSize,
                     wordmark: plate.wordmark,
                     tagline: l10n.posBrandTagline,
                   ),
@@ -287,6 +287,12 @@ class _PosBrandPlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A slot too narrow for even the smallest symbol: nothing is drawn (the
+    // key stays so the brand block is still addressable), never a clipped or
+    // overflowing mark.
+    if (markSize <= 0) {
+      return const SizedBox.shrink(key: Key('pos-brand-tile'));
+    }
     return Container(
       key: const Key('pos-brand-tile'),
       // The plate is a fixed-width box (posNavbarBrandPlateFor); the lockup

@@ -476,23 +476,46 @@ PosTopBarMetrics posTopBarMetricsFor(double width) {
   );
 }
 
+/// The smallest symbol worth drawing. Below it the plate hides instead of
+/// showing an unreadable dot — a band no supported bar reaches (even a 320 px
+/// phone bar leaves the 42 px symbol plate its room).
+const double kPosNavbarBrandMarkMin = 16;
+
+/// The resolved brand plate: its fixed width, the symbol side drawn inside it
+/// and whether the wordmark artwork is shown.
+typedef PosNavbarBrandPlate = ({double width, double markSize, bool wordmark});
+
 /// The plate the title slot ([slotWidth] px — what is left between the bar's
 /// start inset and the action cluster) actually gets: the step's wordmark
 /// plate when the step allows a wordmark AND that plate fits inside
 /// [kPosNavbarBrandPlateMaxShare] of the slot; otherwise the symbol-only
-/// plate. Never wider than the slot itself, so the Row that carries it cannot
-/// overflow at any width.
-({double width, bool wordmark}) posNavbarBrandPlateFor(
+/// plate, whose symbol scales down to whatever the slot leaves (graceful,
+/// aspect kept) and hides below [kPosNavbarBrandMarkMin]. Never wider than
+/// the slot itself, so the Row that carries it cannot overflow at any width.
+PosNavbarBrandPlate posNavbarBrandPlateFor(
   PosTopBarMetrics metrics,
   double slotWidth,
 ) {
   final wordmark =
       metrics.wordmark &&
       metrics.plateWidth <= slotWidth * kPosNavbarBrandPlateMaxShare;
-  final width = wordmark
-      ? metrics.plateWidth
-      : posNavbarSymbolPlateWidth(metrics.markSize);
-  return (width: width < slotWidth ? width : slotWidth, wordmark: wordmark);
+  if (wordmark) {
+    return (
+      width: metrics.plateWidth,
+      markSize: metrics.markSize,
+      wordmark: true,
+    );
+  }
+  final room = slotWidth - kPosNavbarBrandPlateCompactInsets.horizontal;
+  final markSize = metrics.markSize < room ? metrics.markSize : room;
+  if (markSize < kPosNavbarBrandMarkMin) {
+    return (width: 0, markSize: 0, wordmark: false);
+  }
+  return (
+    width: posNavbarSymbolPlateWidth(markSize),
+    markSize: markSize,
+    wordmark: false,
+  );
 }
 
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).

@@ -164,6 +164,11 @@ Finder _asset(String asset) => find.descendant(
 
 const Key _plate = Key('pos-brand-tile');
 
+/// The title Row that carries the plate and the restaurant identity.
+RenderFlex _titleRow(WidgetTester tester) => tester.renderObject<RenderFlex>(
+  find.ancestor(of: find.byKey(_plate), matching: find.byType(Row)).first,
+);
+
 void main() {
   group('bar height ladder', () {
     test('metrics: one modest step over the 68 / 62 / 56 ladder', () {
@@ -234,27 +239,61 @@ void main() {
     });
 
     test('the plate resolves against the title slot: wordmark plate within '
-        'its share, symbol-only otherwise, never wider than the slot', () {
+        'its share, symbol-only otherwise (symbol scaling down to the room), '
+        'never wider than the slot', () {
       final wide = posTopBarMetricsFor(1280);
-      expect(posNavbarBrandPlateFor(wide, 828), (width: 170.0, wordmark: true));
-      expect(posNavbarBrandPlateFor(wide, 340), (width: 170.0, wordmark: true));
-      expect(posNavbarBrandPlateFor(wide, 339), (width: 52.0, wordmark: false));
-      expect(posNavbarBrandPlateFor(wide, 30), (width: 30.0, wordmark: false));
+      expect(posNavbarBrandPlateFor(wide, 828), (
+        width: 170.0,
+        markSize: 44.0,
+        wordmark: true,
+      ));
+      expect(posNavbarBrandPlateFor(wide, 340), (
+        width: 170.0,
+        markSize: 44.0,
+        wordmark: true,
+      ));
+      expect(posNavbarBrandPlateFor(wide, 339), (
+        width: 52.0,
+        markSize: 44.0,
+        wordmark: false,
+      ));
+      // A slot narrower than the symbol plate: the symbol scales down
+      // (aspect kept — it is a square) and the plate stays inside the slot.
+      expect(posNavbarBrandPlateFor(wide, 30), (
+        width: 30.0,
+        markSize: 22.0,
+        wordmark: false,
+      ));
+      expect(posNavbarBrandPlateFor(wide, 24), (
+        width: 24.0,
+        markSize: 16.0,
+        wordmark: false,
+      ));
+      // Below the smallest legible symbol the plate hides rather than dots.
+      expect(posNavbarBrandPlateFor(wide, 23), (
+        width: 0.0,
+        markSize: 0.0,
+        wordmark: false,
+      ));
       final twoPane = posTopBarMetricsFor(900);
       expect(posNavbarBrandPlateFor(twoPane, 428), (
         width: 158.0,
+        markSize: 40.0,
         wordmark: true,
       ));
       expect(posNavbarBrandPlateFor(twoPane, 300), (
         width: 48.0,
+        markSize: 40.0,
         wordmark: false,
       ));
       final phone = posTopBarMetricsFor(430);
       expect(posNavbarBrandPlateFor(phone, 1000), (
         width: 42.0,
+        markSize: 34.0,
         wordmark: false,
       ));
       expect(posNavbarSymbolPlateWidth(34), 42);
+      expect(kPosNavbarBrandMarkMin, 16);
     });
 
     testWidgets('the rendered bar is 76 / 70 / 62 and the REAL lockup sits '
@@ -339,23 +378,32 @@ void main() {
           entry.value ? findsOneWidget : findsNothing,
           reason: 'wordmark at ${width}px',
         );
-        // The plate is the step's fixed box: the wordmark plate (the lockup's
-        // natural width) when the wordmark shows, the symbol-only plate
-        // otherwise — the Image fallbacks in this bundle cannot inflate it.
+        // The plate is the fixed box resolved from the REAL title slot (the
+        // Row's own max width): the wordmark plate when the wordmark shows,
+        // the symbol-only plate otherwise — the Image fallbacks in this
+        // bundle cannot inflate it. (This test font is far wider than any
+        // production face, so at 480 px the five actions and the full outbox
+        // label leave a slot far narrower than a real bar's — the plate
+        // still fits it, symbol scaled down, nothing overflowing.)
         final m = posTopBarMetricsFor(width);
-        final plate = tester.getSize(find.byKey(_plate));
+        final slot = _titleRow(tester).constraints.maxWidth;
+        final resolved = posNavbarBrandPlateFor(m, slot);
+        expect(resolved.wordmark, entry.value, reason: 'slot $slot @ $width');
         expect(
-          plate.width,
-          entry.value ? m.plateWidth : posNavbarSymbolPlateWidth(m.markSize),
-          reason: 'plate width at ${width}px',
+          resolved.markSize,
+          greaterThanOrEqualTo(kPosNavbarBrandMarkMin),
         );
-        // The symbol is drawn at the ladder's mark size, aspect preserved.
+        final plate = tester.getSize(find.byKey(_plate));
+        expect(plate.width, resolved.width, reason: 'plate at ${width}px');
+        expect(plate.width, lessThanOrEqualTo(slot));
+        // The symbol is drawn at the resolved mark size, aspect preserved.
         final symbol = tester.widget<Image>(
           _asset(RestoflowBrandMark.symbolAsset),
         );
-        expect(symbol.width, m.markSize);
-        expect(symbol.height, m.markSize);
+        expect(symbol.width, resolved.markSize);
+        expect(symbol.height, resolved.markSize);
         expect(symbol.fit, BoxFit.contain);
+        if (entry.value) expect(resolved.markSize, m.markSize);
         // No retired art, no temporary monogram, no VEYRO anywhere in the bar.
         expect(
           find.descendant(
@@ -413,11 +461,7 @@ void main() {
             debugPrint(flex?.toStringDeep());
           }
           expect(exception, isNull, reason: 'resize → ${width}px');
-          final row = tester.renderObject<RenderFlex>(
-            find
-                .ancestor(of: find.byKey(_plate), matching: find.byType(Row))
-                .first,
-          );
+          final row = _titleRow(tester);
           var sum = 0.0;
           row.visitChildren((child) => sum += (child as RenderBox).size.width);
           expect(sum, closeTo(row.size.width, 0.01), reason: '${width}px');
