@@ -403,11 +403,28 @@ const double kPosNavbarBrandMarkWide = 44;
 const double kPosNavbarBrandMarkTwoPane = 40;
 const double kPosNavbarBrandMarkCompact = 34;
 
-/// Insets of the Light Neutral brand plate around the lockup.
+/// Insets of the Light Neutral brand plate around the lockup (wordmark mode)
+/// and around the symbol alone (compact mode — the plate must stay as narrow
+/// as the former 38 px tile's slot allowed on a 320 px phone bar).
 const EdgeInsets kPosNavbarBrandPlateInsets = EdgeInsets.symmetric(
   horizontal: 10,
   vertical: 6,
 );
+const EdgeInsets kPosNavbarBrandPlateCompactInsets = EdgeInsets.all(4);
+
+/// The plate never takes more than this share of the title slot (the
+/// restaurant identity keeps the rest) and never more than this many px; the
+/// lockup scales down inside it (the wordmark image is `BoxFit.contain`, the
+/// tagline ellipsizes) instead of pushing the bar.
+const double kPosNavbarBrandPlateMaxShare = 0.5;
+const double kPosNavbarBrandPlateMaxWidth = 200;
+
+/// The least plate width at which the English wordmark is worth showing
+/// beside a symbol of [markSize]: symbol + the mark's gap + plate insets +
+/// 60 px of wordmark. Below it the plate is symbol-only (the same graceful
+/// yield the typed title had), never a squeezed or clipped wordmark.
+double posNavbarWordmarkMinPlateWidth(double markSize) =>
+    markSize + RestoflowSpacing.md + kPosNavbarBrandPlateInsets.horizontal + 60;
 
 /// The resolved top-bar metrics for a viewport [width]: bar height, symbol
 /// side and whether the English wordmark artwork is shown beside the symbol.

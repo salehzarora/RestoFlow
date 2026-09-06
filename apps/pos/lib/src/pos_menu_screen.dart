@@ -69,30 +69,56 @@ class PosMenuScreen extends StatelessWidget {
         iconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         actionsIconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         titleSpacing: RestoflowSpacing.lg,
-        title: Row(
-          children: [
-            // POS-NAVBAR-BRAND-LOCKUP: the official BIZBOT lockup — the
-            // shared RestoflowBrandMark (final symbol + the official English
-            // wordmark PNG, never typed) on a Light Neutral brand plate, so
-            // the charcoal `BIZ` reads on the dark device-theme bar exactly as
-            // on the identity board. Always visible, every width; below
-            // kPosCompactAppBarWidth the wordmark yields to the five
-            // operational actions (PSC-001A) and the symbol keeps the
-            // identity. Artwork is never mirrored in RTL (the mark pins
-            // matchTextDirection=false); the Row itself flips so the symbol
-            // stays at the bar's START edge in both directions.
-            _PosBrandPlate(
-              metrics: posTopBarMetricsFor(MediaQuery.sizeOf(context).width),
-              tagline: l10n.posBrandTagline,
-            ),
-            // POS-TOPBAR-RESTAURANT-IDENTITY-009: the connected restaurant's
-            // identity fills the empty middle. `Expanded` is what makes this
-            // safe — the identity can only ever use the space the left block
-            // and the actions did NOT take, so it cannot overlap either, at
-            // any width or in either text direction. The left block above is
-            // unchanged and keeps its natural size.
-            const Expanded(child: PosIdentityTitle()),
-          ],
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            final metrics = posTopBarMetricsFor(
+              MediaQuery.sizeOf(context).width,
+            );
+            // The plate is bounded by the title slot (never the unbounded
+            // Row slot), so the lockup shrinks gracefully — wordmark image
+            // contained, tagline ellipsized — instead of overflowing the bar
+            // when the five actions and their full outbox label take the
+            // room on a 480–820 px bar.
+            final plateMax = (constraints.maxWidth * kPosNavbarBrandPlateMaxShare)
+                .clamp(
+                  metrics.markSize + kPosNavbarBrandPlateCompactInsets.horizontal,
+                  kPosNavbarBrandPlateMaxWidth,
+                )
+                .toDouble();
+            final showWordmark = metrics.wordmark &&
+                plateMax >= posNavbarWordmarkMinPlateWidth(metrics.markSize);
+            return Row(
+              children: [
+                // POS-NAVBAR-BRAND-LOCKUP: the official BIZBOT lockup — the
+                // shared RestoflowBrandMark (final symbol + the official
+                // English wordmark PNG, never typed) on a Light Neutral brand
+                // plate, so the charcoal `BIZ` reads on the dark device-theme
+                // bar exactly as on the identity board. Always visible, every
+                // width; below kPosCompactAppBarWidth the wordmark yields to
+                // the five operational actions (PSC-001A) and the symbol
+                // keeps the identity. Artwork is never mirrored in RTL (the
+                // mark pins matchTextDirection=false); the Row itself flips
+                // so the symbol stays at the bar's START edge in both
+                // directions.
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: plateMax),
+                  child: _PosBrandPlate(
+                    markSize: metrics.markSize,
+                    wordmark: showWordmark,
+                    tagline: l10n.posBrandTagline,
+                  ),
+                ),
+                // POS-TOPBAR-RESTAURANT-IDENTITY-009: the connected
+                // restaurant's identity fills the empty middle. `Expanded` is
+                // what makes this safe — the identity can only ever use the
+                // space the left block and the actions did NOT take, so it
+                // cannot overlap either, at any width or in either text
+                // direction. The left block above is unchanged and keeps its
+                // natural size.
+                const Expanded(child: PosIdentityTitle()),
+              ],
+            );
+          },
         ),
         actions: [
           // The v4 action cluster: the SAME five operational actions riding
@@ -255,16 +281,23 @@ class PosMenuScreen extends StatelessWidget {
 /// the former white tile carried, so every existing top-bar test keeps
 /// finding the brand block where it always was.
 class _PosBrandPlate extends StatelessWidget {
-  const _PosBrandPlate({required this.metrics, required this.tagline});
+  const _PosBrandPlate({
+    required this.markSize,
+    required this.wordmark,
+    required this.tagline,
+  });
 
-  final PosTopBarMetrics metrics;
+  final double markSize;
+  final bool wordmark;
   final String tagline;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const Key('pos-brand-tile'),
-      padding: kPosNavbarBrandPlateInsets,
+      padding: wordmark
+          ? kPosNavbarBrandPlateInsets
+          : kPosNavbarBrandPlateCompactInsets,
       decoration: BoxDecoration(
         color: kBizbotSurface,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
@@ -277,13 +310,13 @@ class _PosBrandPlate extends StatelessWidget {
             context,
           ).colorScheme.copyWith(onSurfaceVariant: kRestoflowInk2),
         ),
-        child: metrics.wordmark
+        child: wordmark
             ? RestoflowBrandMark(
-                size: metrics.markSize,
+                size: markSize,
                 wordmark: BizbotWordmark.latin,
                 tagline: tagline,
               )
-            : RestoflowBrandMark(size: metrics.markSize),
+            : RestoflowBrandMark(size: markSize),
       ),
     );
   }

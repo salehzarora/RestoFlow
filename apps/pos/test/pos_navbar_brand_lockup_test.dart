@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_pos/src/data/order_submission.dart' show OutboxEntry;
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/pos_palette.dart' show kPosCompactAppBarWidth;
@@ -132,7 +132,12 @@ const Key _plate = Key('pos-brand-tile');
 void main() {
   group('bar height ladder', () {
     test('metrics: one modest step over the 68 / 62 / 56 ladder', () {
-      const previous = {1280.0: 68.0, 900.0: 62.0, 600.0: 56.0, 430.0: 56.0};
+      final previous = <double, double>{
+        1280: 68,
+        900: 62,
+        600: 56,
+        430: 56,
+      };
       for (final entry in previous.entries) {
         final m = posTopBarMetricsFor(entry.key);
         final ratio = m.height / entry.value;
@@ -185,10 +190,19 @@ void main() {
 
   group('official lockup', () {
     testWidgets('the OFFICIAL symbol asset renders at every width; the '
-        'OFFICIAL English wordmark artwork renders from 480px up', (
+        'OFFICIAL English wordmark artwork renders once the title slot can '
+        'host it (tablet / desktop bars) and yields on phone bars', (
       tester,
     ) async {
-      for (final width in const [320.0, 430.0, 480.0, 900.0, 1280.0]) {
+      final wordmarkExpected = <double, bool>{
+        320: false,
+        430: false,
+        480: false,
+        900: true,
+        1280: true,
+      };
+      for (final entry in wordmarkExpected.entries) {
+        final width = entry.key;
         await _pump(tester, width: width);
         expect(
           _asset(RestoflowBrandMark.symbolAsset),
@@ -201,9 +215,21 @@ void main() {
         );
         expect(
           _asset(RestoflowBrandMark.wordmarkLatinAsset),
-          width >= kPosCompactAppBarWidth ? findsOneWidget : findsNothing,
+          entry.value ? findsOneWidget : findsNothing,
           reason: 'wordmark at ${width}px',
         );
+        // The plate never exceeds its cap and, whenever the wordmark shows,
+        // is wide enough to show it undistorted.
+        final plate = tester.getSize(find.byKey(_plate));
+        expect(plate.width, lessThanOrEqualTo(kPosNavbarBrandPlateMaxWidth));
+        if (entry.value) {
+          expect(
+            plate.width,
+            greaterThanOrEqualTo(
+              posNavbarWordmarkMinPlateWidth(posTopBarMetricsFor(width).markSize),
+            ),
+          );
+        }
         // The symbol is drawn at the ladder's mark size, aspect preserved.
         final symbol = tester.widget<Image>(
           _asset(RestoflowBrandMark.symbolAsset),
