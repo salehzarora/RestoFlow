@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DevicePrinterAssignments, DevicePrinterAssignmentsFailure;
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/receipt_logo_raster_cache.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
@@ -393,11 +394,29 @@ void main() {
       await _pump(tester, width: 1280, logo: _logoAsset());
 
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      // POS-THEME-NAVBAR-POLISH-001: the single title became the STACKED
-      // wordmark — brand name over the smaller product line.
-      expect(find.text(l10n.posBrandName), findsOneWidget);
-      expect(find.text(l10n.posBrandTagline), findsOneWidget);
+      // POS-NAVBAR-BRAND-LOCKUP: the brand block is the OFFICIAL lockup —
+      // symbol + English wordmark ARTWORK over the smaller product line (the
+      // typed brand name is gone; a typed `BIZBOT` may only be the wordmark
+      // Image's errorBuilder when the package asset is absent from an app
+      // test bundle, never a sibling substitute).
       expect(find.byKey(kBrandTile), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(kBrandTile),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Image &&
+                w.image is AssetImage &&
+                (w.image as AssetImage).assetName ==
+                    RestoflowBrandMark.wordmarkLatinAsset,
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.posBrandTagline), findsOneWidget);
+      for (final typed in find.text(l10n.posBrandName).evaluate()) {
+        expect(typed.findAncestorWidgetOfExactType<Image>(), isNotNull);
+      }
       for (final neighbour in _neighbours()) {
         expect(neighbour, findsOneWidget);
       }

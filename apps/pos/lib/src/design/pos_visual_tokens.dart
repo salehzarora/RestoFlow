@@ -379,6 +379,145 @@ const Color kPosTonalAddBg = Color(0xFFEDF2F9);
 const Color kPosNavbarBed = Color(0x17FFFFFF);
 const Color kPosNavbarInk = Color(0xFFE5EBF4);
 
+/// POS-NAVBAR-BRAND-LOCKUP (2026-09-06) — the top-bar ladder and the official
+/// BIZBOT lockup that sits at the bar's START edge.
+///
+/// The bar height ladder rises one modest step over POS-THEME-NAVBAR-POLISH-001
+/// (68 / 62 / 56 → 76 / 70 / 62, +11.8 % / +12.9 % / +10.7 %) so the official
+/// symbol + English wordmark artwork get breathing room without eating the
+/// menu/cart area. The action cluster's 5px vertical margins keep every
+/// action ≥ 52dp tall on every step.
+///
+/// The lockup is the shared [RestoflowBrandMark] (official symbol + the
+/// official English wordmark PNG — never typed text), on a Light Neutral
+/// brand plate ([kBizbotSurface]) so the charcoal `BIZ` reads on the dark
+/// device-theme bar exactly as on the identity board. The plate replaces the
+/// former white tile + typed brand name; the symbol side per ladder step is
+/// [kPosNavbarBrandMarkWide] / [kPosNavbarBrandMarkTwoPane] /
+/// [kPosNavbarBrandMarkCompact]. Below [kPosCompactAppBarWidth] the wordmark
+/// yields (symbol-only plate), exactly as the typed title used to.
+const double kPosTopBarHeightWide = 76;
+const double kPosTopBarHeightTwoPane = 70;
+const double kPosTopBarHeightCompact = 62;
+const double kPosNavbarBrandMarkWide = 44;
+const double kPosNavbarBrandMarkTwoPane = 40;
+const double kPosNavbarBrandMarkCompact = 34;
+
+/// Insets of the Light Neutral brand plate around the lockup (wordmark mode)
+/// and around the symbol alone (compact mode — the plate must stay as narrow
+/// as the former 38 px tile's slot allowed on a 320 px phone bar).
+const EdgeInsets kPosNavbarBrandPlateInsets = EdgeInsets.symmetric(
+  horizontal: 10,
+  vertical: 6,
+);
+const EdgeInsets kPosNavbarBrandPlateCompactInsets = EdgeInsets.all(4);
+
+/// The wordmark plate is a FIXED box per ladder step — the lockup's natural
+/// width: plate insets + symbol + the mark's gap ([RestoflowSpacing.md]) + the
+/// official English wordmark PNG at its native 796:152 proportion when it is
+/// `symbol × 0.40` tall (the shared [RestoflowBrandMark] rule), rounded up to
+/// an even px. A fixed width means the wordmark always renders at its natural
+/// size (never squeezed, never clipped) and the title Row that carries the
+/// plate can never overflow, whatever a locale's tagline measures (the
+/// tagline ellipsizes inside). Pinned against the real PNG's IHDR in
+/// pos_navbar_brand_lockup_test.
+///
+///   wide     10 + 44 + 12 + 17.6 × 796/152 (92.2) + 10 = 168.2 → 170
+///   two-pane 10 + 40 + 12 + 16.0 × 796/152 (83.8) + 10 = 155.8 → 158
+///   compact  10 + 34 + 12 + 13.6 × 796/152 (71.2) + 10 = 137.2 → 140
+const double kPosNavbarBrandPlateWidthWide = 170;
+const double kPosNavbarBrandPlateWidthTwoPane = 158;
+const double kPosNavbarBrandPlateWidthCompact = 140;
+
+/// The plate never takes more than this share of the title slot — the
+/// restaurant identity keeps the rest. When the wordmark plate would need
+/// more, the plate is symbol-only (the same graceful yield the typed title
+/// had), never a squeezed or clipped wordmark.
+const double kPosNavbarBrandPlateMaxShare = 0.5;
+
+/// The symbol-only plate: the symbol alone inside the compact insets.
+double posNavbarSymbolPlateWidth(double markSize) =>
+    markSize + kPosNavbarBrandPlateCompactInsets.horizontal;
+
+/// The resolved top-bar metrics for a viewport [width]: bar height, symbol
+/// side, the step's wordmark-plate width and whether the English wordmark
+/// artwork may be shown beside the symbol at all (it still needs its share of
+/// the title slot — see [posNavbarBrandPlateFor]).
+typedef PosTopBarMetrics = ({
+  double height,
+  double markSize,
+  double plateWidth,
+  bool wordmark,
+});
+
+PosTopBarMetrics posTopBarMetricsFor(double width) {
+  final wordmark = width >= 480; // == kPosCompactAppBarWidth (pos_palette)
+  if (width >= 1100) {
+    return (
+      height: kPosTopBarHeightWide,
+      markSize: kPosNavbarBrandMarkWide,
+      plateWidth: kPosNavbarBrandPlateWidthWide,
+      wordmark: wordmark,
+    );
+  }
+  if (width >= RestoflowBreakpoints.posTwoPane) {
+    return (
+      height: kPosTopBarHeightTwoPane,
+      markSize: kPosNavbarBrandMarkTwoPane,
+      plateWidth: kPosNavbarBrandPlateWidthTwoPane,
+      wordmark: wordmark,
+    );
+  }
+  return (
+    height: kPosTopBarHeightCompact,
+    markSize: kPosNavbarBrandMarkCompact,
+    plateWidth: kPosNavbarBrandPlateWidthCompact,
+    wordmark: wordmark,
+  );
+}
+
+/// The smallest symbol worth drawing. Below it the plate hides instead of
+/// showing an unreadable dot — a band no supported bar reaches (even a 320 px
+/// phone bar leaves the 42 px symbol plate its room).
+const double kPosNavbarBrandMarkMin = 16;
+
+/// The resolved brand plate: its fixed width, the symbol side drawn inside it
+/// and whether the wordmark artwork is shown.
+typedef PosNavbarBrandPlate = ({double width, double markSize, bool wordmark});
+
+/// The plate the title slot ([slotWidth] px — what is left between the bar's
+/// start inset and the action cluster) actually gets: the step's wordmark
+/// plate when the step allows a wordmark AND that plate fits inside
+/// [kPosNavbarBrandPlateMaxShare] of the slot; otherwise the symbol-only
+/// plate, whose symbol scales down to whatever the slot leaves (graceful,
+/// aspect kept) and hides below [kPosNavbarBrandMarkMin]. Never wider than
+/// the slot itself, so the Row that carries it cannot overflow at any width.
+PosNavbarBrandPlate posNavbarBrandPlateFor(
+  PosTopBarMetrics metrics,
+  double slotWidth,
+) {
+  final wordmark =
+      metrics.wordmark &&
+      metrics.plateWidth <= slotWidth * kPosNavbarBrandPlateMaxShare;
+  if (wordmark) {
+    return (
+      width: metrics.plateWidth,
+      markSize: metrics.markSize,
+      wordmark: true,
+    );
+  }
+  final room = slotWidth - kPosNavbarBrandPlateCompactInsets.horizontal;
+  final markSize = metrics.markSize < room ? metrics.markSize : room;
+  if (markSize < kPosNavbarBrandMarkMin) {
+    return (width: 0, markSize: 0, wordmark: false);
+  }
+  return (
+    width: posNavbarSymbolPlateWidth(markSize),
+    markSize: markSize,
+    wordmark: false,
+  );
+}
+
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).
 const List<BoxShadow> kPosPanelFloatShadow = <BoxShadow>[
   BoxShadow(color: Color(0x1416263B), offset: Offset(0, 8), blurRadius: 28),
