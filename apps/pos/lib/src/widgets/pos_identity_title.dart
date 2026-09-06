@@ -45,6 +45,9 @@ const double kPosIdentityLogoSize = 34;
 /// free region cannot reach the midpoint it sits as close to it as it safely
 /// can.
 
+/// The chip's vertical padding around the logo box (component specs §8).
+const double kPosIdentityChipVerticalPadding = 6;
+
 /// The name's scale over the base title style (010 set 1.1;
 /// POS-THEME-NAVBAR-POLISH-001 raises it with the taller bar so the one
 /// fact a cashier verifies reads across the counter).
@@ -98,6 +101,10 @@ class PosIdentityTitle extends ConsumerWidget {
             barWidth: MediaQuery.sizeOf(context).width,
             barStartInset: barStartInset,
             direction: direction,
+            // The AppBar title slot is unbounded in height; the box takes the
+            // chip's own height (logo + 2 x 6 px padding) so it never asks
+            // for an infinite size.
+            height: logoSize + 2 * kPosIdentityChipVerticalPadding,
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kPosIdentityMaxWidth),
@@ -105,7 +112,12 @@ class PosIdentityTitle extends ConsumerWidget {
             // a firmer translucent bed with a hairline edge and roomier
             // padding, sized for the taller bar.
             child: Container(
-              padding: const EdgeInsetsDirectional.fromSTEB(9, 6, 14, 6),
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                9,
+                kPosIdentityChipVerticalPadding,
+                14,
+                kPosIdentityChipVerticalPadding,
+              ),
               // POS-CUSTOM-DEVICE-THEME-010: bed/edge/ink ride the pair —
               // identical white-wash bytes on every preset bar, a dark wash
               // when a custom pair paints the bar light.
@@ -205,11 +217,22 @@ class _BarCentredLayout extends SingleChildLayoutDelegate {
     required this.barWidth,
     required this.barStartInset,
     required this.direction,
+    required this.height,
   });
 
   final double barWidth;
   final double barStartInset;
   final TextDirection direction;
+
+  /// The box's own height when the parent leaves it unbounded (the AppBar
+  /// title slot does): the chip's height, so the bar never sees infinity.
+  final double height;
+
+  @override
+  Size getSize(BoxConstraints constraints) => Size(
+    constraints.maxWidth,
+    constraints.hasBoundedHeight ? constraints.maxHeight : height,
+  );
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
@@ -232,5 +255,6 @@ class _BarCentredLayout extends SingleChildLayoutDelegate {
   bool shouldRelayout(_BarCentredLayout oldDelegate) =>
       barWidth != oldDelegate.barWidth ||
       barStartInset != oldDelegate.barStartInset ||
-      direction != oldDelegate.direction;
+      direction != oldDelegate.direction ||
+      height != oldDelegate.height;
 }
