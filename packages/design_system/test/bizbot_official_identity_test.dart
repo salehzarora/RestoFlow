@@ -313,14 +313,67 @@ void main() {
       final manifest = File(
         '${root.path}/tools/brand/BIZBOT_BRAND_ASSETS.md',
       ).readAsStringSync();
-      // The masters are pinned by hash in the manifest...
+      // The masters are pinned by hash in the manifest: the FINAL approved
+      // symbol (App-logo/c2355a92-43d1-42a2-8dbf-aa13e0121514.png, installed
+      // 2026-09-06) and the unchanged wordmarks...
+      const finalSymbolMaster =
+          'b09550aa9b283b43c7f3791e2b6b46cbf06584838a875a3d673832a9add651ef';
+      const retiredSymbolMaster =
+          'd3cafcf6e3bdfbdbd22948d39b6cb6da035af39302348a8ffa7581600813b339';
+      const retiredSymbolAsset =
+          'a74ffc9b55075377c066942ea85d6c5ab8a598b582c5eeba7f0ea158b257a557';
+      expect(
+        manifest,
+        contains(finalSymbolMaster),
+        reason: 'symbol master hash',
+      );
       expect(
         manifest,
         contains(
-          'd3cafcf6e3bdfbdbd22948d39b6cb6da035af39302348a8ffa7581600813b339',
+          '486f3aaaff6fc1e8a3b9fad2c62164e5944939d974818f8b8d13713974795c2b',
         ),
-        reason: 'symbol master hash',
+        reason: 'EN wordmark master unchanged',
       );
+      expect(
+        manifest,
+        contains(
+          '7d68c76cceeeb397f172019ad32140ab1c6c2cb8dc8d0bb3c92a742eae7b12c8',
+        ),
+        reason: 'AR wordmark master unchanged',
+      );
+      expect(
+        manifest,
+        contains(
+          '9b817af0d163535bab9db7369a19007098147288fda374329ae0b5702a7c576c',
+        ),
+        reason: 'EN wordmark asset unchanged by the symbol swap',
+      );
+      expect(
+        manifest,
+        contains(
+          'b92c4417df36878da9e917943eea331c42182b8da692e3e91f5d756b3e3aaf2a',
+        ),
+        reason: 'AR wordmark asset unchanged by the symbol swap',
+      );
+      // ...the retired first symbol is gone from the manifest, the generator
+      // and the canonical asset (BIZBOT-SYMBOL-SWAP, 2026-09-06)...
+      expect(manifest, isNot(contains(retiredSymbolMaster)));
+      expect(manifest, isNot(contains(retiredSymbolAsset)));
+      final generator = File(
+        '${root.path}/tools/brand/generate_bizbot_official_icons.py',
+      ).readAsStringSync();
+      expect(generator, contains(finalSymbolMaster));
+      expect(generator, contains('"bizbot_symbol_master.png"'));
+      expect(generator, isNot(contains(retiredSymbolMaster)));
+      final canonicalSymbol = crypto.sha256
+          .convert(
+            File(
+              '${root.path}/packages/design_system/assets/brand/bizbot/'
+              'bizbot_symbol.png',
+            ).readAsBytesSync(),
+          )
+          .toString();
+      expect(canonicalSymbol, isNot(retiredSymbolAsset));
       // ...and every committed derivative matches the hash the generator
       // recorded for it (so nothing was hand-edited or left over from the
       // temporary generator).
@@ -339,9 +392,17 @@ void main() {
       }
       final masters = Directory('${root.path}/tools/brand/masters/bizbot');
       expect(masters.existsSync(), isTrue);
+      final symbolMaster = File('${masters.path}/bizbot_symbol_master.png');
+      expect(symbolMaster.existsSync(), isTrue);
+      expect(
+        crypto.sha256.convert(symbolMaster.readAsBytesSync()).toString(),
+        finalSymbolMaster,
+        reason: 'the pinned master is the byte-identical owner original',
+      );
       expect(
         File('${masters.path}/bizbot_symbol_master.jpg').existsSync(),
-        isTrue,
+        isFalse,
+        reason: 'the retired symbol master must not stay in the tree',
       );
     });
   });
