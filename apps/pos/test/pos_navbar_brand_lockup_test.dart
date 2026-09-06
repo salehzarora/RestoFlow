@@ -413,10 +413,9 @@ void main() {
           }
           expect(exception, isNull, reason: 'resize → ${width}px');
           final row = tester.renderObject<RenderFlex>(
-            find.ancestor(
-              of: find.byKey(_plate),
-              matching: find.byType(Row),
-            ).first,
+            find
+                .ancestor(of: find.byKey(_plate), matching: find.byType(Row))
+                .first,
           );
           var sum = 0.0;
           row.visitChildren((child) => sum += (child as RenderBox).size.width);
