@@ -379,6 +379,63 @@ const Color kPosTonalAddBg = Color(0xFFEDF2F9);
 const Color kPosNavbarBed = Color(0x17FFFFFF);
 const Color kPosNavbarInk = Color(0xFFE5EBF4);
 
+/// POS-NAVBAR-BRAND-LOCKUP (2026-09-06) — the top-bar ladder and the official
+/// BIZBOT lockup that sits at the bar's START edge.
+///
+/// The bar height ladder rises one modest step over POS-THEME-NAVBAR-POLISH-001
+/// (68 / 62 / 56 → 76 / 70 / 62, +11.8 % / +12.9 % / +10.7 %) so the official
+/// symbol + English wordmark artwork get breathing room without eating the
+/// menu/cart area. The action cluster's 5px vertical margins keep every
+/// action ≥ 52dp tall on every step.
+///
+/// The lockup is the shared [RestoflowBrandMark] (official symbol + the
+/// official English wordmark PNG — never typed text), on a Light Neutral
+/// brand plate ([kBizbotSurface]) so the charcoal `BIZ` reads on the dark
+/// device-theme bar exactly as on the identity board. The plate replaces the
+/// former white tile + typed brand name; the symbol side per ladder step is
+/// [kPosNavbarBrandMarkWide] / [kPosNavbarBrandMarkTwoPane] /
+/// [kPosNavbarBrandMarkCompact]. Below [kPosCompactAppBarWidth] the wordmark
+/// yields (symbol-only plate), exactly as the typed title used to.
+const double kPosTopBarHeightWide = 76;
+const double kPosTopBarHeightTwoPane = 70;
+const double kPosTopBarHeightCompact = 62;
+const double kPosNavbarBrandMarkWide = 44;
+const double kPosNavbarBrandMarkTwoPane = 40;
+const double kPosNavbarBrandMarkCompact = 34;
+
+/// Insets of the Light Neutral brand plate around the lockup.
+const EdgeInsets kPosNavbarBrandPlateInsets = EdgeInsets.symmetric(
+  horizontal: 10,
+  vertical: 6,
+);
+
+/// The resolved top-bar metrics for a viewport [width]: bar height, symbol
+/// side and whether the English wordmark artwork is shown beside the symbol.
+typedef PosTopBarMetrics = ({double height, double markSize, bool wordmark});
+
+PosTopBarMetrics posTopBarMetricsFor(double width) {
+  final wordmark = width >= 480; // == kPosCompactAppBarWidth (pos_palette)
+  if (width >= 1100) {
+    return (
+      height: kPosTopBarHeightWide,
+      markSize: kPosNavbarBrandMarkWide,
+      wordmark: wordmark,
+    );
+  }
+  if (width >= RestoflowBreakpoints.posTwoPane) {
+    return (
+      height: kPosTopBarHeightTwoPane,
+      markSize: kPosNavbarBrandMarkTwoPane,
+      wordmark: wordmark,
+    );
+  }
+  return (
+    height: kPosTopBarHeightCompact,
+    markSize: kPosNavbarBrandMarkCompact,
+    wordmark: wordmark,
+  );
+}
+
 /// Floating panel shadow — the borderless two-surface shell (tokens §8).
 const List<BoxShadow> kPosPanelFloatShadow = <BoxShadow>[
   BoxShadow(color: Color(0x1416263B), offset: Offset(0, 8), blurRadius: 28),

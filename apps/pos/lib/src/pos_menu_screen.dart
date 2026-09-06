@@ -42,7 +42,6 @@ class PosMenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
 
     return Scaffold(
       // POS-PREMIUM-VISUAL-POLISH-001: the menu canvas is the one warm note
@@ -51,14 +50,19 @@ class PosMenuScreen extends StatelessWidget {
       backgroundColor: kPosIvorySurface,
       // POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — the approved CONNECTED brand
       // navbar (component specs §8): one full-bleed primary bar carrying the
-      // white brand tile, the centered restaurant-identity chip and the
-      // action cluster on a translucent bed. Same five action widgets, same
-      // order, same behaviors — only the clothing changed.
+      // brand plate at the start edge, the centered restaurant-identity chip
+      // and the action cluster on a translucent bed. Same five action
+      // widgets, same order, same behaviors — only the clothing changed.
+      // POS-NAVBAR-BRAND-LOCKUP: the plate now carries the OFFICIAL BIZBOT
+      // symbol + English wordmark artwork and the bar is one step taller
+      // (ladder in pos_visual_tokens.dart).
       appBar: AppBar(
         backgroundColor: PosThemePair.of(context).primary,
         surfaceTintColor: PosThemePair.of(context).primary,
         scrolledUnderElevation: 0,
-        toolbarHeight: _posTopBarHeight(MediaQuery.sizeOf(context).width),
+        toolbarHeight: posTopBarMetricsFor(
+          MediaQuery.sizeOf(context).width,
+        ).height,
         // POS-CUSTOM-DEVICE-THEME-010: the navbar chrome ink rides the pair —
         // byte-identical kPosNavbarInk on every preset, a derived dark ink
         // when a CUSTOM pair picks a light primary bar.
@@ -67,61 +71,20 @@ class PosMenuScreen extends StatelessWidget {
         titleSpacing: RestoflowSpacing.lg,
         title: Row(
           children: [
-            // The brand tile — WHITE with the action-colored POS mark (v4),
-            // always visible, every width.
-            Container(
-              key: const Key('pos-brand-tile'),
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(
-                Icons.point_of_sale,
-                color: PosThemePair.of(context).action,
-                size: RestoflowIconSizes.md,
-              ),
+            // POS-NAVBAR-BRAND-LOCKUP: the official BIZBOT lockup — the
+            // shared RestoflowBrandMark (final symbol + the official English
+            // wordmark PNG, never typed) on a Light Neutral brand plate, so
+            // the charcoal `BIZ` reads on the dark device-theme bar exactly as
+            // on the identity board. Always visible, every width; below
+            // kPosCompactAppBarWidth the wordmark yields to the five
+            // operational actions (PSC-001A) and the symbol keeps the
+            // identity. Artwork is never mirrored in RTL (the mark pins
+            // matchTextDirection=false); the Row itself flips so the symbol
+            // stays at the bar's START edge in both directions.
+            _PosBrandPlate(
+              metrics: posTopBarMetricsFor(MediaQuery.sizeOf(context).width),
+              tagline: l10n.posBrandTagline,
             ),
-            // PSC-001A compact app bar: on narrow phones the TEXT brand yields
-            // its width to the five operational actions (the brand tile keeps
-            // the identity); wider bars carry the STACKED wordmark
-            // (POS-THEME-NAVBAR-POLISH-001): the brand name over a smaller
-            // product line, deliberate and uncrowded.
-            if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) ...[
-              const SizedBox(width: 10),
-              Flexible(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.posBrandName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        height: 1.1,
-                        color: PosThemePair.of(context).onPrimary,
-                      ),
-                    ),
-                    Text(
-                      l10n.posBrandTagline,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 10.5,
-                        height: 1.2,
-                        letterSpacing: 0,
-                        color: PosThemePair.of(context).actionSoft,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             // POS-TOPBAR-RESTAURANT-IDENTITY-009: the connected restaurant's
             // identity fills the empty middle. `Expanded` is what makes this
             // safe — the identity can only ever use the space the left block
@@ -285,14 +248,46 @@ class PosMenuScreen extends StatelessWidget {
   }
 }
 
-/// The top-bar height ladder. POS-THEME-NAVBAR-POLISH-001 raises it a step
-/// (68 / 62 / 56) so the stacked brand and the identity chip breathe; the
-/// action cluster's 5px vertical margins keep every action ≥46dp tall.
-double _posTopBarHeight(double width) => width >= 1100
-    ? 68
-    : width >= RestoflowBreakpoints.posTwoPane
-    ? 62
-    : 56;
+/// POS-NAVBAR-BRAND-LOCKUP — the brand plate at the bar's start edge: the
+/// shared [RestoflowBrandMark] (official symbol; + the official English
+/// wordmark artwork over the localized product line when the bar is wide
+/// enough) on a Light Neutral plate. Keyed `pos-brand-tile` — the same key
+/// the former white tile carried, so every existing top-bar test keeps
+/// finding the brand block where it always was.
+class _PosBrandPlate extends StatelessWidget {
+  const _PosBrandPlate({required this.metrics, required this.tagline});
+
+  final PosTopBarMetrics metrics;
+  final String tagline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('pos-brand-tile'),
+      padding: kPosNavbarBrandPlateInsets,
+      decoration: BoxDecoration(
+        color: kBizbotSurface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      // The plate is the light identity surface; the lockup's tagline ink
+      // must read on IT, not on whatever the device-theme bar is.
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(
+            context,
+          ).colorScheme.copyWith(onSurfaceVariant: kRestoflowInk2),
+        ),
+        child: metrics.wordmark
+            ? RestoflowBrandMark(
+                size: metrics.markSize,
+                wordmark: BizbotWordmark.latin,
+                tagline: tagline,
+              )
+            : RestoflowBrandMark(size: metrics.markSize),
+      ),
+    );
+  }
+}
 
 /// POS-DESIGN-HANDOFF-IMPLEMENTATION-004 — one floating rounded white surface
 /// of the two-plane shell. BORDERLESS per the approved v4 panels: r18 on a
