@@ -464,12 +464,7 @@ void main() {
           'midpoint (not the free region\'s) and stands as tall as the brand '
           'mark', (tester) async {
         for (final width in const [1280.0, 1920.0]) {
-          await _pump(
-            tester,
-            width: width,
-            locale: locale,
-            logo: _logoAsset(),
-          );
+          await _pump(tester, width: width, locale: locale, logo: _logoAsset());
           expect(tester.takeException(), isNull);
           final chip = tester.getRect(find.byKey(kIdentity));
           expect(
