@@ -241,7 +241,7 @@ html[lang='en'] .hero h1 { max-width: 15ch; letter-spacing: -.02em; font-size: c
   transform: rotate(-1.5deg); transform-origin: bottom center;
   display: flex; flex-direction: column; gap: 9%; direction: ltr;
 }
-.paper .paper-brand { font-family: 'Inter', 'Rubik', sans-serif; font-weight: 800; font-size: clamp(6px, .9vw, 11px); letter-spacing: .04em; color: var(--charcoal); line-height: 1; }
+.paper .paper-brand { font-family: 'Rubik', 'Inter', sans-serif; font-weight: 800; font-size: clamp(6px, .9vw, 11px); letter-spacing: .04em; color: var(--charcoal); line-height: 1; }
 .paper .paper-brand::first-letter { color: var(--charcoal); }
 .paper .paper-title { font-size: clamp(4px, .6vw, 7px); color: var(--muted); line-height: 1; }
 .paper i { display: block; height: 3px; border-radius: 2px; background: #cfd4da; }

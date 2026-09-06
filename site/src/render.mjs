@@ -160,7 +160,7 @@ function hero(t) {
       </div>
       <ul class="trust reveal" data-d="5">${trust}</ul>
     </div>
-    <div class="hero-visual reveal" data-d="2" aria-hidden="false">
+    <div class="hero-visual reveal" data-d="2">
       <div class="cluster">
         <div class="float float-kds">${devKds(shot('kds-1', t.hero.kdsAlt, '(max-width: 720px) 60vw, 360px'))}</div>
         <div class="float float-pos">${devPos(shot('pos-1', t.hero.deviceAlt, '(max-width: 720px) 92vw, 620px', { eager: true }), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'lg' })}</div>
