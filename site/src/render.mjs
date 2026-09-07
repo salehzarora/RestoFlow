@@ -33,10 +33,10 @@ export function shot(name, alt, sizes, opts = {}) {
   const [w, h] = SHOT_DIMS[k];
   const src = `/assets/shots/${name}-${widths[widths.length - 2]}.webp`;
   const srcset = widths.map((x) => `/assets/shots/${name}-${x}.webp ${x}w`).join(', ');
-  const eager = opts.eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"';
+  const eager = opts.eager ? ' loading="eager" fetchpriority="high" decoding="sync"' : ' loading="lazy" decoding="async"';
   const cls = opts.cls ? ` class="${opts.cls}"` : '';
   const extra = opts.attrs || '';
-  return `<img${cls} src="${src}" srcset="${srcset}" sizes="${sizes}" width="${w}" height="${h}" alt="${esc(alt)}" decoding="async"${eager}${extra}>`;
+  return `<img${cls} src="${src}" srcset="${srcset}" sizes="${sizes}" width="${w}" height="${h}" alt="${esc(alt)}"${eager}${extra}>`;
 }
 
 /* ---------- environment plates (procedural, decorative) ---------- */
@@ -653,6 +653,7 @@ export function renderPage(t, ctx) {
   <link rel="manifest" href="/site.webmanifest">
   ${preload}
   <link rel="preload" as="image" href="/assets/shots/pos-1-1200.webp" imagesrcset="/assets/shots/pos-1-800.webp 800w, /assets/shots/pos-1-1200.webp 1200w, /assets/shots/pos-1-1600.webp 1600w" imagesizes="(max-width: 720px) 88vw, (max-width: 1100px) 60vw, 560px">
+  <link rel="preload" as="image" href="/assets/env/env-counter-dark-960.webp" imagesrcset="/assets/env/env-counter-dark-960.webp 960w, /assets/env/env-counter-dark-1600.webp 1600w" imagesizes="(max-width: 960px) 100vw, 760px">
   <link rel="stylesheet" href="/assets/${assets.css}">
   ${jsonLd(t, cfg, locales)}
 </head>
