@@ -255,14 +255,36 @@ function sectionHead(s, light = false) {
   </div>`;
 }
 
+// A short emerald thread at the top of a section: the page reads as one connected story.
+function flowLink(dark = false) {
+  return `<span class="flow-link${dark ? ' flow-link-dark' : ''} reveal" aria-hidden="true"><i></i><b></b></span>`;
+}
+
 function journey(t) {
   const j = t.journey;
+  // KDS focus frame: an overlay that rides the real capture's ticket columns (new → preparing → ready)
+  const kdsFocus = '<span class="jkds-focus" aria-hidden="true"><i></i></span>';
+  const receipt = `<div class="jreceipt-wrap" aria-hidden="true"><div class="jreceipt">
+          <span class="jr-head"><b>BIZBOT</b><span>${esc(t.hero.receiptTitle)}</span></span>
+          <i class="jr-cut"></i>
+          <span class="jr-row"><i class="jr-name"></i><i class="jr-amt"></i></span>
+          <span class="jr-row"><i class="jr-name jr-w2"></i><i class="jr-amt"></i></span>
+          <span class="jr-row"><i class="jr-name jr-w3"></i><i class="jr-amt"></i></span>
+          <i class="jr-cut"></i>
+          <span class="jr-row jr-total"><span>${esc(j.total)}</span><i class="jr-amt jr-amt-strong"></i></span>
+          <span class="jr-paid">${icon('check')}<span>${esc(j.paid)}</span></span>
+        </div></div>`;
+  const pickup = `<div class="jpickup" aria-hidden="true"><span class="jp-ic">${icon('check')}</span><span class="jp-text"><b>${esc(j.pickup)}</b><small>${esc(j.pickupSub)}</small></span></div>`;
+  const impact = `<ul class="jimpact" aria-hidden="true">
+          <li class="jimpact-line"><svg class="jgrowth" viewBox="0 0 64 26" focusable="false"><path class="jgrowth-track" d="M2 22 C 12 20 16 12 24 14 S 38 8 46 9 S 56 4 62 3"/><path class="jgrowth-lit" pathLength="1" d="M2 22 C 12 20 16 12 24 14 S 38 8 46 9 S 56 4 62 3"/></svg></li>
+          ${j.impact.map((x, i) => `<li class="jimpact-chip" data-i="${i + 1}">${icon('check')}<span>${esc(x)}</span></li>`).join('')}
+        </ul>`;
   const mini = {
     kiosk: () => devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="lazy" decoding="async">`, { standing: true }),
     pos: () => devPos(shot('pos-1', '', '(max-width: 1024px) 60vw, 1px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'sm', drawer: true, drawerAlt: t.hero.drawerAlt }),
-    kds: () => devKds(shot('kds-1', '', '(max-width: 1024px) 60vw, 1px'), { mounted: true }),
-    ready: () => `<span class="jready-badge">${icon('check')}</span>`,
-    dashboard: () => devTablet(shot('dash-1', '', '(max-width: 1024px) 60vw, 1px')),
+    kds: () => devKds(shot('kds-1', '', '(max-width: 1024px) 60vw, 1px') + kdsFocus, { mounted: true }),
+    ready: () => pickup,
+    dashboard: () => devTablet(shot('dash-1', '', '(max-width: 1024px) 60vw, 1px')) + impact,
   };
   const steps = j.steps
     .map(
@@ -284,7 +306,10 @@ function journey(t) {
   // glow = a wide translucent stroke under the lit line (cheaper than a drop-shadow filter that re-rasterises every frame)
   const seg = (d, n) => `<path class="jtrack" d="${d}"/><path class="jglow jlit-${n}" pathLength="1" d="${d}"/><path class="jlit jlit-${n}" pathLength="1" d="${d}"/>`;
   const token = (d, n) => `<g class="jtoken jtoken-${n}"><circle class="jtoken-halo" r="18"/><circle class="jtoken-core" r="7"/></g>`;
+  // the POS → kitchen token is the printed kitchen ticket itself (no text, so the RTL mirror is harmless)
+  const ticket = `<g class="jtoken jtoken-2 jticket"><circle class="jtoken-halo" r="20"/><rect class="jticket-bg" x="-17" y="-12" width="34" height="24" rx="3.5"/><rect class="jticket-bar" x="-12" y="-7" width="24" height="3.5" rx="1.75"/><rect class="jticket-line" x="-12" y="0" width="17" height="2.4" rx="1.2"/><rect class="jticket-line" x="-12" y="5" width="12" height="2.4" rx="1.2"/></g>`;
   return `<section class="journey" id="journey" data-scroll="journey" aria-labelledby="journey-title">
+  ${flowLink(true)}
   <div class="journey-sticky">
     <div class="container journey-grid">
       <div class="journey-copy">
@@ -299,14 +324,16 @@ function journey(t) {
         <span class="scene-haze"></span>
         <div class="jo jo-kiosk">${devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="lazy" decoding="async">`, { standing: true })}</div>
         <div class="jo jo-pos">${devPos(shot('pos-1', '', '(max-width: 1024px) 1px, 240px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'sm', drawer: true, drawerAlt: t.hero.drawerAlt })}</div>
-        <div class="jo jo-kds">${devKds(shot('kds-1', '', '(max-width: 1024px) 1px, 230px'), { mounted: true })}<ul class="jkds">${kds}</ul></div>
+        <div class="jo jo-kds">${devKds(shot('kds-1', '', '(max-width: 1024px) 1px, 230px') + kdsFocus, { mounted: true })}<ul class="jkds">${kds}</ul></div>
         <div class="jo jo-dash">${devTablet(shot('dash-1', '', '(max-width: 1024px) 1px, 210px'))}</div>
+        ${receipt}
         <svg class="jlines" viewBox="0 0 1000 620" preserveAspectRatio="none" focusable="false">
           ${seg(P1, 1)}${seg(P2, 2)}${seg(P3, 3)}
           ${JOURNEY_PORTS.map(([x, y], i) => `<circle class="jport jport-${i + 1}" cx="${x}" cy="${y}" r="6"/>`).join('')}
-          ${token(P1, 1)}${token(P2, 2)}${token(P3, 3)}
+          ${token(P1, 1)}${ticket}${token(P3, 3)}
         </svg>
-        <span class="jbadge jbadge-ready">${icon('check')}<span>${esc(j.steps[3].state)}</span></span>
+        ${pickup}
+        ${impact}
         <span class="jbadge jbadge-final">${icon('check')}<span>${esc(j.final)}</span></span>
         <span class="jveil"></span>
       </div>
@@ -374,6 +401,7 @@ function story(t) {
     .map((s) => `<li><span class="story-bullet">${icon('check')}</span><span><strong>${esc(s.solution)}</strong><small>${esc(s.tag)}</small></span></li>`)
     .join('');
   return `<section class="section story" id="story">
+  ${flowLink(true)}
   <div class="container">
     ${sectionHead(t.story)}
     <div class="story-shift reveal" data-d="1">
@@ -403,6 +431,7 @@ function features(t) {
     .join('');
   const promises = t.statement.lines.map((line) => `<span>${esc(line)}</span>`).join('');
   return `<section class="section benefits" id="features">
+  ${flowLink(true)}
   <div class="benefits-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="grid"></span></div>
   <div class="container benefits-layout">
     <div class="benefits-copy reveal">
@@ -445,6 +474,7 @@ function business(t) {
     )
     .join('');
   return `<section class="section business" id="business">
+  ${flowLink(false)}
   <div class="container">
     ${sectionHead(t.business)}
     <ul class="bgrid">${cards}</ul>
@@ -501,6 +531,7 @@ function showcase(t) {
     .join('');
 
   return `<section class="section showcase" id="showcase">
+  ${flowLink(true)}
   <div class="showcase-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="grid"></span></div>
   <div class="container">
     ${sectionHead(t.showcase, true)}
@@ -530,6 +561,7 @@ function why(t) {
 function pricing(t) {
   const inc = t.pricing.includes.map((x) => `<li>${icon('check')}<span>${esc(x)}</span></li>`).join('');
   return `<section class="section pricing" id="pricing">
+  ${flowLink(false)}
   <div class="container">
     <div class="price-card reveal">
       <div class="price-copy">
@@ -563,6 +595,7 @@ function contact(t, cfg) {
     : '';
   const perks = t.contact.perks.map((p) => `<li>${icon('check')}<span>${esc(p)}</span></li>`).join('');
   return `<section class="section contact" id="contact">
+  ${flowLink(true)}
   <div class="contact-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span></div>
   <div class="container contact-grid">
     <div class="contact-copy reveal">

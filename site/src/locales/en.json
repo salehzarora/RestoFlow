@@ -129,6 +129,16 @@
     "subtitle": "Scroll and follow a single order from the moment it is placed until it reaches the dashboard.",
     "hint": "Scroll to follow the order",
     "final": "Everything is connected",
+    "paid": "Paid",
+    "total": "Total",
+    "handoff": "To the kitchen",
+    "pickup": "Ready for pickup",
+    "pickupSub": "Order complete",
+    "impact": [
+      "Clearer operations",
+      "Better follow-up",
+      "Fewer mistakes"
+    ],
     "kdsStates": [
       "New",
       "Preparing",

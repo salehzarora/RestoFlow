@@ -176,7 +176,8 @@ test('lead form contract is unchanged by visual V3', () => {
 
 /* ---------- Visual V4 guards: scroll story + mobile clarity ---------- */
 
-const css4 = () => readFileSync(join(dist, 'assets', html.ar.match(/\/assets\/(site\.[a-f0-9]{10}\.css)/)[1]), 'utf8');
+// structural V4 assertions read the source stylesheet (the shipped file drops comments/indentation only)
+const css4 = () => readFileSync(join(process.cwd(), 'src', 'styles.css'), 'utf8');
 const js4 = () => readFileSync(join(dist, 'assets', html.ar.match(/\/assets\/(site\.[a-f0-9]{10}\.js)/)[1]), 'utf8');
 
 test('V4 order journey: five steps, KDS states, real captures and a final connected state in every locale', () => {
@@ -232,3 +233,29 @@ test('V4 scroll: normal document scrolling only — no wheel/touch interception,
   for (const code of LOCALES) JOURNEY_PATHS.forEach((d) => assert.ok(html[code].includes(`d="${d}"`), `${code} connector drawn: ${d.slice(0, 12)}…`));
   assert.doesNotMatch(css, /animation[^;{}]*\binfinite\b/i, 'no infinite loops added by V4');
 });
+
+test('V4.1 story beats exist in every locale: receipt, kitchen ticket, KDS focus, pickup card, qualitative dashboard finish, section threads', () => {
+  for (const code of LOCALES) {
+    const doc = html[code];
+    const t = locale(code);
+    const section = doc.match(/<section class="journey"[\s\S]*?<\/section>/)[0];
+    assert.ok(section.includes('class="jreceipt"') && section.includes(`>${t.journey.paid}<`) && section.includes(`>${t.journey.total}<`), `${code} receipt with paid/total labels`);
+    assert.equal((section.match(/class="jr-row"/g) || []).length, 3, `${code} three generic receipt lines (bars, no invented prices)`);
+    assert.ok(section.includes('class="jtoken jtoken-2 jticket"'), `${code} the POS → kitchen token is a printed ticket`);
+    assert.equal((section.match(/class="jkds-focus"/g) || []).length, 2, `${code} KDS focus frame on the stage and the mini-scene`);
+    assert.ok(section.includes(`>${t.journey.pickup}<`) && section.includes(`>${t.journey.pickupSub}<`), `${code} pickup card copy`);
+    assert.equal(t.journey.impact.length, 3, `${code} three qualitative impact chips`);
+    for (const x of t.journey.impact) {
+      assert.ok(section.includes(`>${x}<`), `${code} impact chip rendered: ${x}`);
+      assert.doesNotMatch(x, /[\d%+٪]/, `${code} impact copy stays qualitative: ${x}`);
+    }
+    assert.ok(section.includes('class="jgrowth"'), `${code} decorative growth line (no axes, no numbers)`);
+    assert.ok(!/class="jgrowth"[\s\S]*?<text/.test(section.match(/<svg class="jgrowth"[\s\S]*?<\/svg>/)[0]), `${code} growth line carries no text`);
+    assert.equal((doc.match(/class="flow-link(?: flow-link-dark)? reveal"/g) || []).length, 7, `${code} seven section threads`);
+  }
+  const css = css4();
+  assert.ok(css.includes('.jo-pos .drawer-front { transform: translateY(calc(var(--o) * 22%)); will-change: transform; }'), 'cash drawer settles by transform only');
+  assert.match(css, /prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.jkds-focus, \.jmini-kds \.jkds-focus \{ opacity: 1; transform: translateX\(-209\.8%\)/, 'reduced motion rests the KDS focus on the ready ticket');
+  assert.ok(css.includes('.no-js .journey .jpickup, .no-js .journey .jimpact-chip { opacity: 1; transform: none; }'), 'no-JS shows the pickup card and impact chips');
+});
+

@@ -18,6 +18,12 @@ const PUBLIC = join(ROOT, 'public');
 
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
+const stripCssComments = (text) =>
+  text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim() + '\n';
 
 export function build({ quiet = false } = {}) {
   // Resolved per call (not at import time) so a test file can point its own build
@@ -31,7 +37,9 @@ export function build({ quiet = false } = {}) {
 
   // Static files first (assets, favicon), then hashed bundles.
   if (existsSync(PUBLIC)) cpSync(PUBLIC, DIST, { recursive: true });
-  const css = readFileSync(join(SRC, 'styles.css'));
+  // Shipped CSS drops comments, indentation and blank lines only — every declaration keeps its
+  // exact source spelling, so structural tests can still grep the built file.
+  const css = Buffer.from(stripCssComments(readFileSync(join(SRC, 'styles.css'), 'utf8')));
   const js = readFileSync(join(SRC, 'main.js'));
   const assets = { css: `site.${hash(css)}.css`, js: `site.${hash(js)}.js` };
   writeFileSync(join(DIST, 'assets', assets.css), css);
