@@ -1,0 +1,49 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo skip-install",
+  "buildCommand": "node scripts/build.mjs",
+  "outputDirectory": "dist",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- .",
+  "trailingSlash": false,
+  "cleanUrls": true,
+  "functions": { "api/lead.js": { "maxDuration": 10, "memory": 256 } },
+  "redirects": [
+    { "source": "/:path*", "has": [{ "type": "host", "value": "www.bizbot.systems" }], "destination": "https://bizbot.systems/:path*", "permanent": true },
+    { "source": "/pos", "destination": "https://app.bizbot.systems/pos", "permanent": false },
+    { "source": "/pos/:path*", "destination": "https://app.bizbot.systems/pos/:path*", "permanent": false },
+    { "source": "/kds", "destination": "https://app.bizbot.systems/kds", "permanent": false },
+    { "source": "/kds/:path*", "destination": "https://app.bizbot.systems/kds/:path*", "permanent": false },
+    { "source": "/kiosk", "destination": "https://app.bizbot.systems/kiosk", "permanent": false },
+    { "source": "/kiosk/:path*", "destination": "https://app.bizbot.systems/kiosk/:path*", "permanent": false },
+    { "source": "/dashboard", "destination": "https://app.bizbot.systems/", "permanent": false },
+    { "source": "/dashboard/:path*", "destination": "https://app.bizbot.systems/:path*", "permanent": false },
+    { "source": "/app", "destination": "https://app.bizbot.systems/", "permanent": false },
+    { "source": "/app/:path*", "destination": "https://app.bizbot.systems/:path*", "permanent": false },
+    { "source": "/login", "destination": "https://app.bizbot.systems/", "permanent": false },
+    { "source": "/auth/:path*", "destination": "https://app.bizbot.systems/auth/:path*", "permanent": false },
+    { "source": "/ar", "destination": "/", "permanent": true },
+    { "source": "/ar/:path*", "destination": "/:path*", "permanent": true }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/(.*)\\.html",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+    }
+  ]
+}
