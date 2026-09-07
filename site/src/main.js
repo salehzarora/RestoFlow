@@ -165,12 +165,12 @@
     });
   }
   var draf = 0;
-  function frame() {
+  function frame(all) {
     draf = 0;
     var y = window.pageYOffset || root.scrollTop;
     var vh = window.innerHeight || 1;
     drivers.forEach(function (d) {
-      if (!d.active) return;
+      if (!d.active && all !== true) return; // off-screen scenes skip work; init/load/resize settle every scene once
       var p = d.kind === 'hero' ? clamp01(y / Math.max(1, d.height * 0.4)) : clamp01((y - d.top) / Math.max(1, d.height - vh));
       if (p !== d.last) { d.last = p; d.apply(p); }
     });
@@ -221,10 +221,10 @@
     window.addEventListener('scroll', requestFrame, { passive: true });
     var rraf = 0;
     window.addEventListener('resize', function () {
-      if (!rraf) rraf = requestAnimationFrame(function () { rraf = 0; measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(); });
+      if (!rraf) rraf = requestAnimationFrame(function () { rraf = 0; measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(true); });
     });
-    window.addEventListener('load', function () { measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); requestFrame(); });
-    requestFrame();
+    window.addEventListener('load', function () { measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(true); });
+    frame(true); // a mid-page refresh lands with every scene already in its correct state
   }
 
   /* ---------- active nav link ---------- */

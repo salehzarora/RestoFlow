@@ -950,10 +950,26 @@ html[lang='he'] .hero h1 { max-width: 16ch; }
   .journey[data-scroll] .jtext p { max-height: 0; margin-top: 0; opacity: 0; overflow: hidden; transition: max-height .4s var(--ease), opacity .3s, margin-top .3s; }
   .journey[data-scroll] .jstep.is-on .jtext p { max-height: 64px; margin-top: 3px; opacity: 1; }
 }
+@media (min-width: 1025px) and (max-height: 680px) {
+  /* 1366×768 laptops with browser chrome (~620px viewport): titles + state chips only, everything stays inside the pinned frame */
+  .journey-copy .eyebrow { display: none; }
+  .journey-copy h2 { font-size: clamp(22px, 2vw, 28px); margin-top: 0; }
+  .jsteps { gap: 3px; margin-top: 12px; }
+  .jstep { grid-template-columns: 32px 1fr; column-gap: 9px; padding: 5px 9px; border-radius: 12px; }
+  .jmark { width: 32px; height: 32px; border-radius: 10px; }
+  .jnum { font-size: 13px; }
+  .jtext h3 { font-size: 14.5px; }
+  .journey[data-scroll] .jtext p { display: none; }
+  .jstate { margin-top: 4px; font-size: 11px; padding: 2px 7px 2px 4px; }
+  .jhint { display: none; }
+  .journey-stage { justify-self: center; width: min(100%, calc((100vh - var(--header-h) - 40px) * 1000 / 620)); }
+}
 /* without a scroll driver (no JS, reduced motion) the scene is not pinned — it reads as one static, fully connected section */
 .no-js .journey { min-height: 0; }
 .no-js .journey-sticky { position: static; height: auto; padding: clamp(56px, 7vw, 90px) 0; }
-.no-js .journey .jtext p { max-height: none; opacity: 1; }
+.no-js .journey .jtext p { display: block; max-height: none; opacity: 1; }
+.no-js .journey-copy .eyebrow { display: inline-flex; }
+.no-js .journey-stage { width: 100%; }
 
 /* the stage */
 .journey-stage { position: relative; aspect-ratio: 1000 / 620; border-radius: 26px; overflow: hidden; isolation: isolate; background: #071915; box-shadow: 0 40px 90px -36px rgba(0, 0, 0, .9), 0 0 0 1px rgba(167, 243, 208, .12); }
@@ -1098,6 +1114,8 @@ html[lang='he'] .hero h1 { max-width: 16ch; }
   .journey { --p: 1; min-height: 0; }
   .journey-sticky { position: static; height: auto; padding: clamp(56px, 7vw, 90px) 0; }
   .journey .jtext p, .journey-copy .sub { display: block; max-height: none; opacity: 1; }
+  .journey-copy .eyebrow { display: inline-flex; }
+  .journey-stage { width: 100%; }
   .journey .jo, .journey .jo::after { opacity: 1; }
   .journey .jo::after { opacity: .7; }
   .journey .jlit { stroke-dashoffset: 0; }
