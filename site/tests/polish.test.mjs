@@ -27,11 +27,19 @@ test('polished hardware keeps decorative supports around real product captures i
 test('POS support height is intrinsic and printer controls cannot inherit CTA sizing', () => {
   assert.match(css, /\.dev-pos \.dev-neck\s*\{[^}]*aspect-ratio:/);
   assert.match(css, /\.dev-pos \.dev-pivot\s*\{[^}]*aspect-ratio:/);
-  const printerButton = css.match(/\.printer-body \.btn\s*\{([^}]+)\}/)?.[1];
+  const printerButton = css.match(/\.printer-control\s*\{([^}]+)\}/)?.[1];
   assert.ok(printerButton, 'physical printer control has a scoped rule');
-  assert.match(printerButton, /min-width:\s*0/);
-  assert.match(printerButton, /min-height:\s*0/);
-  assert.match(printerButton, /padding:\s*0/);
+  assert.match(printerButton, /width:\s*18%/);
+  assert.match(printerButton, /aspect-ratio:\s*1/);
+  for (const locale of locales) {
+    const html = renderPage(locale, { cfg, locales, assets: { css: 'test.css', js: 'test.js' } });
+    const printers = html.match(/<div class="printer-body">[\s\S]*?<\/div>/g);
+    assert.ok(printers.length >= 4, 'check hero, product, journey and showcase printers');
+    for (const printer of printers) {
+      assert.ok(printer.includes('class="printer-control"'));
+      assert.doesNotMatch(printer, /class="[^"]*\bbtn\b/, 'decorative hardware cannot match CTA rules at any breakpoint');
+    }
+  }
 });
 
 test('final frame retires receipt, pickup and intermediate kitchen chips', () => {

@@ -202,7 +202,7 @@
   function journeyApply(p) {
     var el = this.el;
     el.style.setProperty('--p', p.toFixed(4));
-    var step = p < 0.26 ? 1 : p < 0.54 ? 2 : p < 0.72 ? 3 : p < 0.86 ? 4 : 5;
+    var step = p < 0.26 ? 1 : p < 0.56 ? 2 : p < 0.72 ? 3 : p < 0.86 ? 4 : 5;
     if (step !== this.step) {
       this.step = step;
       el.setAttribute('data-step', String(step));
@@ -211,7 +211,7 @@
         li.classList.toggle('is-done', i + 1 < step);
       });
     }
-    var kds = p < 0.54 ? 0 : p < 0.62 ? 1 : p < 0.7 ? 2 : 3;
+    var kds = p < 0.56 ? 0 : p < 0.64 ? 1 : p < 0.72 ? 2 : 3;
     if (kds !== this.kds) { this.kds = kds; if (kds) el.setAttribute('data-kds', String(kds)); else el.removeAttribute('data-kds'); }
     el.classList.toggle('is-final', p >= 0.97);
   }

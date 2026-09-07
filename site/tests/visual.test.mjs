@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from '../scripts/build.mjs';
-import { JOURNEY_PATHS } from '../src/render.mjs';
+import { JOURNEY_PATHS, JOURNEY_PORTS } from '../src/render.mjs';
 
 process.env.SITE_DIST = join(process.cwd(), '.test-dist-visual');
 const { dist } = build({ quiet: true });
@@ -257,5 +257,19 @@ test('V4.1 story beats exist in every locale: receipt, kitchen ticket, KDS focus
   assert.ok(css.includes('.jo-pos .drawer-front { transform: translateY(calc(var(--o) * 22%)); will-change: transform; }'), 'cash drawer settles by transform only');
   assert.match(css, /prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.jkds-focus, \.jmini-kds \.jkds-focus \{ opacity: 1; transform: translateX\(-209\.8%\)/, 'reduced motion rests the KDS focus on the ready ticket');
   assert.ok(css.includes('.no-js .journey .jpickup, .no-js .journey .jimpact-chip { opacity: 1; transform: none; }'), 'no-JS shows the pickup card and impact chips');
+});
+
+test('printer handoff has its own physical departure port and every connector docks at declared endpoints', () => {
+  const endpoints = JOURNEY_PATHS.map(path => {
+    const values = path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+    return [values.slice(0, 2), values.slice(-2)];
+  });
+  for (const pair of endpoints) for (const point of pair) {
+    assert.ok(JOURNEY_PORTS.some(port => port[0] === point[0] && port[1] === point[1]), `docked endpoint ${point}`);
+  }
+  assert.notDeepEqual(endpoints[0][1], endpoints[1][0], 'screen arrival and printer departure are physically distinct');
+  assert.deepEqual(endpoints[1][0], [222, 489], 'printer slot in the 1000x620 stage; browser geometry checks verify rendered tolerance');
+  assert.deepEqual(endpoints[1][1], [510, 132], 'kitchen entry remains unchanged');
+  assert.match(css4(), /\[dir='ltr'\] \.jkds\s*\{[^}]*flex-direction:\s*row-reverse/, 'English status order follows the fixed, non-mirrored real capture');
 });
 

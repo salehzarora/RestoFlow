@@ -60,13 +60,13 @@ class FakeMediaQuery {
   }
 }
 
-function boot({ width = 768, reduced = false, scroll = 0 } = {}) {
+function boot({ width = 768, height = 844, reduced = false, scroll = 0 } = {}) {
   const listeners = new Map();
   const rafs = [];
   const motionQuery = new FakeMediaQuery(reduced);
   const window = {
     innerWidth: width,
-    innerHeight: 844,
+    innerHeight: height,
     pageYOffset: scroll,
     scrollY: scroll,
     matchMedia(query) {
@@ -193,3 +193,52 @@ test('a page loaded with reduced motion can register timelines when the preferen
   assert.equal(app.journey.getAttribute('data-step'), '5');
   assert.ok(app.journey.classList.contains('is-final'));
 });
+
+const journeyThresholds = [
+  // Progress, active story step, KDS state. A kitchen ticket arrives at 0.56;
+  // Ready begins with pickup at 0.72, not while Preparing is still active.
+  [0, 1, null],
+  [0.2599, 1, null],
+  [0.26, 2, null],
+  [0.45, 2, null],
+  [0.54, 2, null],
+  [0.5599, 2, null],
+  [0.56, 3, '1'],
+  [0.62, 3, '1'],
+  [0.6399, 3, '1'],
+  [0.64, 3, '2'],
+  [0.7, 3, '2'],
+  [0.7199, 3, '2'],
+  [0.72, 4, '3'],
+  [0.8, 4, '3'],
+  [0.8599, 4, '3'],
+  [0.86, 5, '3'],
+  [0.9699, 5, '3'],
+  [0.97, 5, '3'],
+  [1, 5, '3'],
+];
+
+for (const direction of ['forward', 'reverse']) {
+  test(`journey receipt, KDS and pickup thresholds stay synchronized during ${direction} scroll`, () => {
+    // An integer 3000px travel span keeps exact boundary checks independent of
+    // floating-point subtraction from the viewport height.
+    const app = boot({ width: 1280, height: 800 });
+    const checkpoints = direction === 'forward' ? journeyThresholds : [...journeyThresholds].reverse();
+    for (const [progress, step, kds] of checkpoints) {
+      const scroll = app.journey.top + progress * (app.journey.height - app.window.innerHeight);
+      app.window.pageYOffset = scroll;
+      app.window.scrollY = scroll;
+      app.dispatch('scroll');
+      app.flushAnimationFrames();
+      const state = `${direction} at ${progress}`;
+      assert.equal(app.journey.style.getPropertyValue('--p'), progress.toFixed(4), `${state}: CSS progress`);
+      assert.equal(app.journey.getAttribute('data-step'), String(step), `${state}: active story step`);
+      assert.equal(app.journey.getAttribute('data-kds'), kds, `${state}: visible kitchen state`);
+      assert.equal(app.journey.classList.contains('is-final'), progress >= 0.97, `${state}: final frame`);
+      app.journey.steps.forEach((item, index) => {
+        assert.equal(item.classList.contains('is-on'), index + 1 === step, `${state}: step ${index + 1} emphasis`);
+        assert.equal(item.classList.contains('is-done'), index + 1 < step, `${state}: step ${index + 1} completion`);
+      });
+    }
+  });
+}

@@ -29,16 +29,17 @@ const SHOT_DIMS = { land: [1920, 1136], port: [1200, 1920] };
 // mirrored for RTL). styles.css repeats the same three paths as `offset-path`
 // for the travelling tokens — visual.test.mjs asserts they stay identical.
 export const JOURNEY_PATHS = [
-  'M105 305 C 135 225 325 240 365 330', // kiosk top → POS screen top
-  'M365 330 C 395 230 410 132 510 132', // POS → KDS (enters from the side)
+  'M105 305 C 135 225 325 248 365 339', // kiosk top → reseated POS screen top
+  'M222 489 C 155 414 410 132 510 132', // thermal-printer slot → KDS side
   'M780 132 C 875 132 820 270 820 367', // KDS (exits the other side) → tablet top
 ];
 export const JOURNEY_PORTS = [
   [105, 305],
-  [365, 330],
+  [365, 339],
   [510, 132],
   [780, 132],
   [820, 367],
+  [222, 489], // separate printer departure; screen arrival remains port 2
 ];
 
 function kind(name) {
@@ -97,7 +98,7 @@ function devPos(img, { printer = true, receiptTitle = 'Receipt', size = 'md', dr
 function devPrinter(receiptTitle) {
   return `<div class="dev dev-printer" aria-hidden="true">
     <div class="paper"><span class="paper-brand">BIZBOT</span><span class="paper-title">${esc(receiptTitle)}</span><i></i><i></i><i class="short"></i><b></b><i></i><i class="short"></i><span class="paper-check">${icon('check')}</span></div>
-    <div class="printer-body"><span class="printer-lid"><i></i></span><span class="slot"></span><span class="printer-seam"></span><span class="led"></span><span class="btn"></span><span class="printer-foot"></span></div>
+    <div class="printer-body"><span class="printer-lid"><i></i></span><span class="slot"></span><span class="printer-seam"></span><span class="led"></span><span class="printer-control"></span><span class="printer-foot"></span></div>
   </div>`;
 }
 
