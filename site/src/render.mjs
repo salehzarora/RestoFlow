@@ -1,6 +1,11 @@
 // HTML renderer for the BIZBOT marketing site. Pure function of (locale, ctx).
 // No runtime dependencies — the build script feeds it the locale JSON, the
 // site config and the hashed asset names, and writes the returned string.
+//
+// Visual V2: realistic device scenes (POS counter, kitchen KDS, floor kiosk,
+// desk tablet), a one-system flow band, a problem → solution story and a
+// darker premium treatment for the hero / showcase. Presentation only — the
+// lead form, its API contract and every product route are unchanged.
 
 import { icon } from './icons.mjs';
 
@@ -34,14 +39,33 @@ export function shot(name, alt, sizes, opts = {}) {
   return `<img${cls} src="${src}" srcset="${srcset}" sizes="${sizes}" width="${w}" height="${h}" alt="${esc(alt)}" decoding="async"${eager}${extra}>`;
 }
 
+/* ---------- environment plates (procedural, decorative) ---------- */
+
+const ENV_WIDTHS = [960, 1600];
+export function env(name, sizes = '(max-width: 960px) 100vw, 720px', opts = {}) {
+  const srcset = ENV_WIDTHS.map((w) => `/assets/env/${name}-${w}.webp ${w}w`).join(', ');
+  const eager = opts.eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"';
+  return `<img class="env" src="/assets/env/${name}-960.webp" srcset="${srcset}" sizes="${sizes}" width="1600" height="1280" alt="" aria-hidden="true" decoding="async"${eager}>`;
+}
+
 /* ---------- device frames ---------- */
 
-function devPos(img, { printer = true, receiptTitle = 'Receipt', size = 'md' } = {}) {
-  return `<div class="dev dev-pos dev-pos-${size}">
-    <div class="dev-screen">${img}</div>
+function devPos(img, { printer = true, receiptTitle = 'Receipt', size = 'md', drawer = false, drawerAlt = '' } = {}) {
+  const terminal = `<div class="dev dev-pos dev-pos-${size}">
+    <div class="dev-screen"><span class="dev-cam" aria-hidden="true"></span>${img}<span class="glare" aria-hidden="true"></span></div>
     <div class="dev-neck" aria-hidden="true"></div>
     <div class="dev-base" aria-hidden="true"></div>
-  </div>${printer ? devPrinter(receiptTitle) : ''}`;
+  </div>`;
+  if (!drawer) return `${terminal}${printer ? devPrinter(receiptTitle) : ''}`;
+  return `<div class="counter-group">
+    ${terminal}
+    <div class="dev dev-drawer" role="img" aria-label="${esc(drawerAlt)}">
+      <span class="drawer-top" aria-hidden="true"></span>
+      <span class="drawer-front" aria-hidden="true"><i class="drawer-seam"></i><i class="drawer-lock"></i><i class="drawer-slot"></i></span>
+    </div>
+    ${printer ? devPrinter(receiptTitle) : ''}
+    <span class="ground" aria-hidden="true"></span>
+  </div>`;
 }
 
 function devPrinter(receiptTitle) {
@@ -51,28 +75,28 @@ function devPrinter(receiptTitle) {
   </div>`;
 }
 
-function devKds(img) {
-  return `<div class="dev dev-kds">
-    <div class="dev-mount" aria-hidden="true"></div>
-    <div class="dev-screen">${img}</div>
+function devKds(img, { mounted = false } = {}) {
+  return `<div class="dev dev-kds${mounted ? ' dev-kds-mounted' : ''}">
+    ${mounted ? '<div class="kds-arm" aria-hidden="true"><i></i><b></b></div>' : '<div class="dev-mount" aria-hidden="true"></div>'}
+    <div class="dev-screen">${img}<span class="glare" aria-hidden="true"></span></div>
     <div class="dev-bumpbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   </div>`;
 }
 
-function devKiosk(inner) {
-  return `<div class="dev dev-kiosk">
+function devKiosk(inner, { standing = false } = {}) {
+  return `<div class="dev dev-kiosk${standing ? ' dev-kiosk-standing' : ''}">
     <div class="kiosk-body">
       <div class="kiosk-cam" aria-hidden="true"></div>
-      <div class="dev-screen">${inner}</div>
+      <div class="dev-screen">${inner}<span class="glare" aria-hidden="true"></span></div>
       <div class="kiosk-reader" aria-hidden="true"><i></i></div>
     </div>
-    <div class="kiosk-foot" aria-hidden="true"></div>
+    ${standing ? '<div class="kiosk-stand" aria-hidden="true"><i></i></div><div class="kiosk-base" aria-hidden="true"></div><span class="ground ground-kiosk" aria-hidden="true"></span>' : '<div class="kiosk-foot" aria-hidden="true"></div>'}
   </div>`;
 }
 
 function devTablet(img) {
   return `<div class="dev dev-tablet">
-    <div class="dev-screen">${img}</div>
+    <div class="dev-screen">${img}<span class="glare" aria-hidden="true"></span></div>
     <span class="tab-cam" aria-hidden="true"></span>
   </div>`;
 }
@@ -86,15 +110,25 @@ function kioskVideo(t, posterOnly = false) {
     </video>`;
 }
 
+function statusChip(text, ic = 'check', extra = '') {
+  return `<span class="chip${extra ? ' ' + extra : ''}"><span class="chip-ic">${icon(ic)}</span><span>${esc(text)}</span></span>`;
+}
+
 /* ---------- brand lockup ---------- */
+
+// Official brand bitmaps: WebP for browsers that take it, the PNG as the fallback
+// (and the canonical asset reference). Same pixels, roughly a quarter of the bytes.
+function brandImg(name, { cls = '', pic = '', w, h, alt = '', attrs = '' } = {}) {
+  return `<picture class="pic${pic ? ' ' + pic : ''}"><source srcset="/assets/brand/${name}.webp" type="image/webp"><img class="${cls}" src="/assets/brand/${name}.png" width="${w}" height="${h}" alt="${esc(alt)}"${attrs}></picture>`;
+}
 
 function lockup(t, { reverse = false, size = 'md' } = {}) {
   const primaryAr = t.code !== 'en';
   const suf = reverse ? '-reverse' : '';
-  const ar = `<img class="wm wm-ar" src="/assets/brand/bizbot-wordmark-ar${suf}.png" width="456" height="224" alt="بِزبط">`;
-  const en = `<img class="wm wm-en" src="/assets/brand/bizbot-wordmark-en${suf}.png" width="796" height="152" alt="BIZBOT">`;
+  const ar = brandImg(`bizbot-wordmark-ar${suf}`, { cls: 'wm wm-ar', pic: 'pic-ar', w: 456, h: 224, alt: 'بِزبط' });
+  const en = brandImg(`bizbot-wordmark-en${suf}`, { cls: 'wm wm-en', pic: 'pic-en', w: 796, h: 152, alt: 'BIZBOT' });
   return `<span class="lockup lockup-${size}${reverse ? ' lockup-reverse' : ''}">
-    <img class="symbol" src="/assets/brand/bizbot-symbol-256.png" width="256" height="256" alt="">
+    ${brandImg('bizbot-symbol-256', { cls: 'symbol', w: 256, h: 256 })}
     <span class="lockup-words">${primaryAr ? ar + en : en + ar}</span>
   </span>`;
 }
@@ -143,11 +177,13 @@ function header(t, cfg, locales) {
 
 function hero(t) {
   const checks = t.hero.checks.map((c) => `<li>${icon('check')}<span>${esc(c)}</span></li>`).join('');
-  const trust = t.hero.trust
-    .map((x) => `<li>${icon(x.icon)}<span>${esc(x.text)}</span></li>`)
+  const trust = t.hero.trust.map((x) => `<li>${icon(x.icon)}<span>${esc(x.text)}</span></li>`).join('');
+  const cards = t.hero.cards
+    .map((c, i) => `<li class="scard scard-${i + 1}" data-d="${i + 2}">${icon(c.icon)}<span>${esc(c.text)}</span></li>`)
     .join('');
+  const posImg = shot('pos-1', t.hero.deviceAlt, '(max-width: 720px) 88vw, (max-width: 1100px) 60vw, 560px', { eager: true });
   return `<section class="hero" id="top">
-  <div class="hero-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span><span class="grid"></span></div>
+  <div class="hero-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span><span class="grid"></span><span class="spot"></span></div>
   <div class="container hero-inner">
     <div class="hero-copy">
       <p class="eyebrow eyebrow-light reveal">${icon('spark')}<span>${esc(t.hero.eyebrow)}</span></p>
@@ -155,18 +191,25 @@ function hero(t) {
       <p class="lead reveal" data-d="2">${esc(t.hero.subtitle)}</p>
       <ul class="checks reveal" data-d="3">${checks}</ul>
       <div class="hero-cta reveal" data-d="4">
-        <a class="btn btn-primary btn-lg" href="#contact">${esc(t.hero.ctaPrimary)}${icon('arrow')}</a>
+        <a class="btn btn-primary btn-lg btn-glow" href="#contact">${esc(t.hero.ctaPrimary)}${icon('arrow')}</a>
         <a class="btn btn-outline-light btn-lg" href="#showcase">${icon('play')}${esc(t.hero.ctaSecondary)}</a>
       </div>
       <ul class="trust reveal" data-d="5">${trust}</ul>
     </div>
     <div class="hero-visual reveal" data-d="2">
-      <div class="cluster">
-        <div class="float float-kds">${devKds(shot('kds-1', t.hero.kdsAlt, '(max-width: 720px) 60vw, 360px'))}</div>
-        <div class="float float-pos">${devPos(shot('pos-1', t.hero.deviceAlt, '(max-width: 720px) 92vw, 620px', { eager: true }), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'lg' })}</div>
-        <div class="chip chip-sent float float-chip-a"><span class="chip-ic">${icon('check')}</span><span>${esc(t.hero.floatSent)}</span></div>
-        <div class="chip chip-ready float float-chip-b"><span class="chip-ring"><b>${esc(t.hero.floatReadyValue)}</b></span><span>${esc(t.hero.floatReady)}</span></div>
+      <div class="scene scene-hero" data-tilt role="img" aria-label="${esc(t.hero.sceneAlt)}">
+        ${env('env-counter-dark', '(max-width: 960px) 100vw, 760px', { eager: true })}
+        <span class="scene-haze" aria-hidden="true"></span>
+        <div class="layer layer-back" data-depth="0.35" aria-hidden="true">
+          <div class="obj obj-kiosk">${devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="eager" decoding="async">`, { standing: true })}</div>
+          <div class="obj obj-tablet">${devTablet(shot('dash-1', '', '(max-width: 960px) 40vw, 300px'))}</div>
+        </div>
+        <div class="layer layer-front" data-depth="1" aria-hidden="true">
+          ${devPos(posImg, { printer: true, receiptTitle: t.hero.receiptTitle, size: 'lg', drawer: true, drawerAlt: t.hero.drawerAlt })}
+        </div>
+        <span class="scene-rim" aria-hidden="true"></span>
       </div>
+      <ul class="scards" aria-hidden="true">${cards}</ul>
     </div>
   </div>
 </section>`;
@@ -180,31 +223,101 @@ function sectionHead(s, light = false) {
   </div>`;
 }
 
-function products(t) {
-  const visual = {
-    pos: (it) =>
-      devPos(shot('pos-1', it.alt, '(max-width: 720px) 80vw, 300px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'sm' }),
-    kds: (it) => devKds(shot('kds-1', it.alt, '(max-width: 720px) 80vw, 300px')),
-    kiosk: () => devKiosk(kioskVideo(t, true)),
-    dashboard: (it) => devTablet(shot('dash-1', it.alt, '(max-width: 720px) 80vw, 300px')),
-  };
-  const cards = t.products.items
+function flow(t) {
+  const steps = t.flow.steps
     .map(
-      (it, i) => `<article class="pcard pcard-${it.id} reveal" data-d="${i + 1}" id="product-${it.id}">
-      <div class="pcard-visual">${visual[it.id](it)}</div>
-      <div class="pcard-body">
+      (s, i) => `<li class="fstep fstep-${s.id} reveal" data-d="${i + 1}">
+      <span class="fnode"><span class="fring" aria-hidden="true"></span>${icon(s.icon)}</span>
+      <h3>${esc(s.title)}</h3>
+      <p>${esc(s.desc)}</p>
+    </li>`,
+    )
+    .join('');
+  return `<section class="flow" id="flow" aria-labelledby="flow-title">
+  <div class="container">
+    <div class="section-head section-head-light reveal">
+      <p class="eyebrow eyebrow-light">${icon('spark')}<span>${esc(t.flow.eyebrow)}</span></p>
+      <h2 id="flow-title">${rich(t.flow.title)}</h2>
+      <p class="sub">${esc(t.flow.subtitle)}</p>
+    </div>
+    <ol class="fsteps reveal" data-d="1"><span class="fline" aria-hidden="true"><i></i></span>${steps}</ol>
+  </div>
+</section>`;
+}
+
+function products(t) {
+  const tabsById = Object.fromEntries(t.showcase.tabs.map((tab) => [tab.id, tab]));
+  const scene = {
+    pos: (it) => `<div class="scene scene-pos">
+        ${env('env-counter-light')}
+        <div class="layer layer-front" data-depth="1">
+          ${devPos(shot('pos-1', it.alt, '(max-width: 960px) 80vw, 440px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'md', drawer: true, drawerAlt: t.hero.drawerAlt })}
+        </div>
+        ${statusChip(it.chip, 'check', 'chip-float chip-a')}
+      </div>`,
+    kds: (it) => `<div class="scene scene-kds">
+        ${env('env-kitchen')}
+        <div class="layer layer-front" data-depth="1">${devKds(shot('kds-1', it.alt, '(max-width: 960px) 86vw, 520px'), { mounted: true })}</div>
+        ${statusChip(it.chip, 'chef', 'chip-float chip-b chip-dark')}
+      </div>`,
+    kiosk: (it) => `<div class="scene scene-kiosk">
+        ${env('env-showroom')}
+        <div class="layer layer-front" data-depth="1">${devKiosk(kioskVideo(t), { standing: true })}</div>
+        ${statusChip(it.chip, 'touch', 'chip-float chip-c')}
+      </div>`,
+    dashboard: (it) => `<div class="scene scene-dashboard">
+        ${env('env-office')}
+        <div class="layer layer-front" data-depth="1">${devTablet(shot('dash-1', it.alt, '(max-width: 960px) 86vw, 520px'))}</div>
+        ${statusChip(it.chip, 'chart', 'chip-float chip-d')}
+      </div>`,
+  };
+  const rows = t.products.items
+    .map((it, i) => {
+      const tab = tabsById[it.id];
+      const points = (tab ? tab.points : []).slice(0, 3).map((p) => `<li>${icon('check')}<span>${esc(p)}</span></li>`).join('');
+      return `<article class="prow prow-${it.id} reveal" id="product-${it.id}">
+      <div class="prow-scene">${scene[it.id](it)}</div>
+      <div class="prow-copy">
         <span class="tag">${esc(it.tag)}</span>
         <h3>${esc(it.title)}</h3>
-        <p>${esc(it.desc)}</p>
+        <p class="prow-desc">${esc(it.desc)}</p>
+        <ul class="points">${points}</ul>
         <a class="more" href="#showcase" data-tab="${it.id}">${esc(t.products.more)}${icon('arrow')}</a>
       </div>
-    </article>`,
-    )
+    </article>`;
+    })
     .join('');
   return `<section class="section products" id="products">
   <div class="container">
     ${sectionHead(t.products)}
-    <div class="pgrid">${cards}</div>
+    <div class="prows">${rows}</div>
+  </div>
+</section>`;
+}
+
+function story(t) {
+  const items = t.story.items
+    .map(
+      (s, i) => `<li class="spair reveal" data-d="${(i % 2) + 1}">
+      <div class="sproblem">
+        <span class="slabel">${esc(t.story.problemLabel)}</span>
+        <span class="sicon">${icon(s.icon)}</span>
+        <p>${esc(s.problem)}</p>
+      </div>
+      <span class="sarrow" aria-hidden="true"><i></i>${icon('arrow')}</span>
+      <div class="ssolution">
+        <span class="slabel">${esc(t.story.solutionLabel)}</span>
+        <span class="sresolved">${icon('check')}<span>${esc(t.story.resolved)}</span></span>
+        <p>${esc(s.solution)}</p>
+        <span class="stag">${esc(s.tag)}</span>
+      </div>
+    </li>`,
+    )
+    .join('');
+  return `<section class="section story" id="story">
+  <div class="container">
+    ${sectionHead(t.story)}
+    <ol class="spairs">${items}</ol>
   </div>
 </section>`;
 }
@@ -234,8 +347,8 @@ function statement(t) {
     <div class="st-brand reveal">
       <img class="st-symbol" src="/assets/brand/bizbot-symbol-512.webp" width="512" height="512" alt="${esc(t.statement.symbolAlt)}" loading="lazy" decoding="async">
       <div class="st-words">
-        <img src="/assets/brand/bizbot-wordmark-ar.png" width="456" height="224" alt="بِزبط" loading="lazy">
-        <img src="/assets/brand/bizbot-wordmark-en.png" width="796" height="152" alt="BIZBOT" loading="lazy">
+        ${brandImg('bizbot-wordmark-ar', { cls: 'st-wm st-wm-ar', w: 456, h: 224, alt: 'بِزبط', attrs: ' loading="lazy"' })}
+        ${brandImg('bizbot-wordmark-en', { cls: 'st-wm st-wm-en', w: 796, h: 152, alt: 'BIZBOT', attrs: ' loading="lazy"' })}
         <p>${esc(t.statement.brandLine)}</p>
       </div>
     </div>
@@ -247,7 +360,8 @@ function statement(t) {
 function business(t) {
   const cards = t.business.items
     .map(
-      (b, i) => `<li class="bcard reveal" data-d="${(i % 3) + 1}">
+      (b, i) => `<li class="bcard bcard-${b.icon} reveal" data-d="${(i % 3) + 1}">
+      <span class="bscene" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="bicon">${icon(b.icon)}</span>
       <h3>${esc(b.title)}</h3>
       <p>${esc(b.desc)}</p>
@@ -258,6 +372,7 @@ function business(t) {
   <div class="container">
     ${sectionHead(t.business)}
     <ul class="bgrid">${cards}</ul>
+    <p class="bnote reveal">${esc(t.business.note)}</p>
   </div>
 </section>`;
 }
@@ -272,14 +387,15 @@ function showcase(t) {
 
   const stageFor = (tab) => {
     const first = tab.shots[0];
-    const sizes = '(max-width: 900px) 92vw, 720px';
-    if (tab.id === 'pos') return devPos(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'lg' });
-    if (tab.id === 'kds') return devKds(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }));
-    if (tab.id === 'dashboard') return devTablet(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }));
+    const sizes = '(max-width: 900px) 92vw, 680px';
+    if (tab.id === 'pos') return `${env('env-counter-dark')}<div class="layer layer-front">${devPos(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'lg', drawer: true, drawerAlt: t.hero.drawerAlt })}</div>`;
+    if (tab.id === 'kds') return `${env('env-kitchen')}<div class="layer layer-front">${devKds(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }), { mounted: true })}</div>`;
+    if (tab.id === 'dashboard') return `${env('env-office')}<div class="layer layer-front">${devTablet(shot(first.src, `${tab.label} — ${first.caption}`, sizes, { attrs: ' data-stage-img' }))}</div>`;
     // kiosk: video first, images swap in
-    return devKiosk(
+    return `${env('env-showroom')}<div class="layer layer-front">${devKiosk(
       `${kioskVideo(t)}${shot('kiosk-3', `${tab.label} — ${tab.shots[1].caption}`, '(max-width: 900px) 60vw, 300px', { attrs: ' data-stage-img hidden' })}`,
-    );
+      { standing: true },
+    )}</div>`;
   };
 
   const panels = t.showcase.tabs
@@ -296,10 +412,10 @@ function showcase(t) {
         .join('');
       return `<div class="panel" role="tabpanel" id="panel-${tab.id}" aria-labelledby="tab-${tab.id}"${i === 0 ? '' : ' hidden'} data-kind="${tab.id}">
       <div class="show-grid">
-        <div class="stage stage-${tab.id}">${stageFor(tab)}</div>
+        <div class="stage scene scene-stage scene-${tab.id} stage-${tab.id}">${stageFor(tab)}</div>
         <div class="show-copy">
           <h3>${esc(tab.title)}</h3>
-          <ul class="points">${points}</ul>
+          <ul class="points points-light">${points}</ul>
           <p class="caption" data-caption>${esc(tab.shots[0].caption)}</p>
           <div class="thumbs" role="group">${thumbs}</div>
         </div>
@@ -309,8 +425,9 @@ function showcase(t) {
     .join('');
 
   return `<section class="section showcase" id="showcase">
+  <div class="showcase-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="grid"></span></div>
   <div class="container">
-    ${sectionHead(t.showcase)}
+    ${sectionHead(t.showcase, true)}
     <div class="tabs reveal" role="tablist" aria-label="${esc(t.showcase.eyebrow)}">${tabs}</div>
     <div class="panels reveal" data-d="1">${panels}</div>
   </div>
@@ -328,7 +445,7 @@ function why(t) {
     .join('');
   return `<section class="section why" id="why">
   <div class="container">
-    ${sectionHead(t.why, true)}
+    ${sectionHead(t.why)}
     <ul class="wgrid">${items}</ul>
   </div>
 </section>`;
@@ -343,7 +460,7 @@ function pricing(t) {
         <p class="eyebrow">${icon('spark')}<span>${esc(t.pricing.eyebrow)}</span></p>
         <h2>${esc(t.pricing.title)}</h2>
         <p class="sub">${esc(t.pricing.subtitle)}</p>
-        <a class="btn btn-primary btn-lg" href="#contact">${esc(t.pricing.cta)}${icon('arrow')}</a>
+        <a class="btn btn-primary btn-lg btn-glow" href="#contact">${esc(t.pricing.cta)}${icon('arrow')}</a>
         <p class="note">${esc(t.pricing.note)}</p>
       </div>
       <ul class="price-includes">${inc}</ul>
@@ -368,18 +485,22 @@ function contact(t, cfg) {
   const waRow = cfg.contact.whatsapp
     ? `<li>${icon('whatsapp')}<span><small>${esc(t.contact.whatsappLabel)}</small><a href="https://wa.me/${esc(cfg.contact.whatsapp.replace(/\D/g, ''))}" rel="noopener" dir="ltr">${esc(cfg.contact.whatsapp)}</a></span></li>`
     : '';
+  const perks = t.contact.perks.map((p) => `<li>${icon('check')}<span>${esc(p)}</span></li>`).join('');
   return `<section class="section contact" id="contact">
+  <div class="contact-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span></div>
   <div class="container contact-grid">
     <div class="contact-copy reveal">
       <p class="eyebrow eyebrow-light">${icon('spark')}<span>${esc(t.contact.eyebrow)}</span></p>
       <h2>${rich(t.contact.title)}</h2>
       <p class="sub">${esc(t.contact.subtitle)}</p>
+      <ul class="perks">${perks}</ul>
       <ul class="contact-list">
         <li>${icon('mail')}<span><small>${esc(t.contact.emailLabel)}</small><a href="mailto:${esc(cfg.contact.sales)}" dir="ltr">${esc(cfg.contact.sales)}</a></span></li>
         <li>${icon('shield')}<span><small>${esc(t.contact.supportLabel)}</small><a href="mailto:${esc(cfg.contact.support)}" dir="ltr">${esc(cfg.contact.support)}</a></span></li>
         ${phoneRow}${waRow}
         <li>${icon('login')}<span><small>${esc(t.contact.appLabel)}</small><a href="${cfg.appUrl}" rel="noopener">${esc(t.contact.appLink)}</a></span></li>
       </ul>
+      <div class="contact-visual" aria-hidden="true">${devTablet(shot('dash-1', '', '(max-width: 960px) 70vw, 380px'))}</div>
     </div>
     <form class="lead-form reveal" id="lead-form" method="post" action="/api/lead" novalidate data-d="1" data-sales="${esc(cfg.contact.sales)}">
       <div class="form-grid">
@@ -531,7 +652,7 @@ export function renderPage(t, ctx) {
   <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   ${preload}
-  <link rel="preload" as="image" href="/assets/shots/pos-1-1200.webp" imagesrcset="/assets/shots/pos-1-800.webp 800w, /assets/shots/pos-1-1200.webp 1200w, /assets/shots/pos-1-1600.webp 1600w" imagesizes="(max-width: 720px) 92vw, 620px">
+  <link rel="preload" as="image" href="/assets/shots/pos-1-1200.webp" imagesrcset="/assets/shots/pos-1-800.webp 800w, /assets/shots/pos-1-1200.webp 1200w, /assets/shots/pos-1-1600.webp 1600w" imagesizes="(max-width: 720px) 88vw, (max-width: 1100px) 60vw, 560px">
   <link rel="stylesheet" href="/assets/${assets.css}">
   ${jsonLd(t, cfg, locales)}
 </head>
@@ -540,7 +661,9 @@ export function renderPage(t, ctx) {
   ${header(t, cfg, locales)}
   <main id="main">
     ${hero(t)}
+    ${flow(t)}
     ${products(t)}
+    ${story(t)}
     ${features(t)}
     ${statement(t)}
     ${business(t)}

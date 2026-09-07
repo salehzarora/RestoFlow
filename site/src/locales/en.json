@@ -26,7 +26,7 @@
   "hero": {
     "eyebrow": "More than a POS",
     "title": "A <em>smart</em> POS and operations system for your restaurant and business",
-    "subtitle": "POS, kitchen display, self-service kiosks and reports — one system that runs on every device you own, in three languages, and keeps orders, branches and staff in sync from the first tap to the final report.",
+    "subtitle": "POS, kitchen display, self-service kiosks and reports — one system on every device you own, in three languages, from the first tap to the final report.",
     "checks": [
       "Point of Sale",
       "Kitchen Display (KDS)",
@@ -55,10 +55,66 @@
     ],
     "floatSent": "Order sent to the kitchen",
     "floatReady": "Branch ready to serve",
-    "floatReadyValue": "100%",
     "receiptTitle": "Receipt",
     "deviceAlt": "The BIZBOT point-of-sale screen showing the menu grid and the order cart",
-    "kdsAlt": "The BIZBOT kitchen display showing tickets by status"
+    "kdsAlt": "The BIZBOT kitchen display showing tickets by status",
+    "cards": [
+      {
+        "icon": "check",
+        "text": "Order sent to the kitchen"
+      },
+      {
+        "icon": "pulse",
+        "text": "Live follow-up"
+      },
+      {
+        "icon": "bolt",
+        "text": "Faster service"
+      },
+      {
+        "icon": "shield",
+        "text": "Fewer mistakes"
+      }
+    ],
+    "sceneAlt": "A BIZBOT cashier station: the POS screen on top of the cash drawer with a receipt printer, and the dashboard on a tablet beside it",
+    "drawerAlt": "Cash drawer"
+  },
+  "flow": {
+    "eyebrow": "One system",
+    "title": "From the order… <em>to the report</em>",
+    "subtitle": "Every module hands over to the next automatically, and the order stays visible at every step.",
+    "steps": [
+      {
+        "id": "kiosk",
+        "icon": "touch",
+        "title": "Customer or kiosk",
+        "desc": "Orders alone or through the cashier"
+      },
+      {
+        "id": "pos",
+        "icon": "orders",
+        "title": "Point of Sale",
+        "desc": "The order is recorded, paid and printed"
+      },
+      {
+        "id": "kds",
+        "icon": "chef",
+        "title": "Kitchen display",
+        "desc": "The ticket appears instantly for prep"
+      },
+      {
+        "id": "ready",
+        "icon": "check",
+        "title": "Ready",
+        "desc": "The order is marked ready and served"
+      },
+      {
+        "id": "dashboard",
+        "icon": "chart",
+        "title": "Reports",
+        "desc": "Everything shows up in the dashboard"
+      }
+    ]
   },
   "products": {
     "eyebrow": "Products",
@@ -71,28 +127,66 @@
         "tag": "Front counter",
         "title": "Point of Sale (POS)",
         "desc": "A fast, simple interface for orders and sales on the floor: tables, takeaway, discounts, payment and instant printing.",
-        "alt": "The point-of-sale screen inside a counter terminal next to a thermal receipt printer"
+        "alt": "The point-of-sale screen inside a counter terminal next to a thermal receipt printer",
+        "chip": "New ticket sent to the kitchen"
       },
       {
         "id": "kds",
         "tag": "Kitchen screen",
         "title": "Kitchen Display (KDS)",
         "desc": "Clear, instant organisation of kitchen orders: new, in progress, ready — with prep totals on every ticket.",
-        "alt": "The kitchen display inside a dark kitchen screen"
+        "alt": "The kitchen display inside a dark kitchen screen",
+        "chip": "New ticket in preparation"
       },
       {
         "id": "kiosk",
         "tag": "Modern self-service",
         "title": "Self-service kiosks",
         "desc": "A modern, fast self-ordering experience for your customers: pick a table, browse the menu and send the order straight to the counter and kitchen.",
-        "alt": "An upright self-service kiosk showing the welcome screen"
+        "alt": "An upright self-service kiosk showing the welcome screen",
+        "chip": "The customer orders alone"
       },
       {
         "id": "dashboard",
         "tag": "Control panel",
         "title": "Reports & operations",
         "desc": "Track sales, orders, staff and operations from one place: overview, menu, devices, tables and the activity log.",
-        "alt": "The reports dashboard inside a tablet"
+        "alt": "The reports dashboard inside a tablet",
+        "chip": "Today's report at hand"
+      }
+    ]
+  },
+  "story": {
+    "eyebrow": "Before & after",
+    "title": "Everyday operations problems… <em>solved</em>",
+    "subtitle": "This is how the working day actually changes with BIZBOT — step by step, without complexity.",
+    "problemLabel": "The problem",
+    "solutionLabel": "With BIZBOT",
+    "resolved": "Solved",
+    "items": [
+      {
+        "icon": "orders",
+        "problem": "Orders get scattered between the cashier and the kitchen",
+        "solution": "POS and KDS connect the order straight to the kitchen",
+        "tag": "One order, one screen"
+      },
+      {
+        "icon": "touch",
+        "problem": "A crowded counter slows service down",
+        "solution": "The kiosk lets customers order by themselves",
+        "tag": "Lighter queue"
+      },
+      {
+        "icon": "chart",
+        "problem": "The owner can't see the full picture",
+        "solution": "The dashboard brings orders, sales and management into one place",
+        "tag": "Full visibility"
+      },
+      {
+        "icon": "chef",
+        "problem": "Order mistakes eat the team's time",
+        "solution": "A clear flow from the order to the kitchen to ready",
+        "tag": "Fewer mistakes"
       }
     ]
   },
@@ -207,7 +301,8 @@
         "title": "And more",
         "desc": "Small shops, food trucks and any point of sale."
       }
-    ]
+    ],
+    "note": "Examples of business types BIZBOT fits — not customer logos."
   },
   "showcase": {
     "eyebrow": "See the product",
@@ -441,7 +536,12 @@
       "errorInvalid": "Please check the required fields.",
       "required": "Required",
       "select": "Select…"
-    }
+    },
+    "perks": [
+      "A live demo on your devices",
+      "We answer all your questions",
+      "A quote based on your business"
+    ]
   },
   "footer": {
     "tagline": "A POS and operations system for restaurants and businesses — from the order to the report.",

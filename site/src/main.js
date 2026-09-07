@@ -60,6 +60,76 @@
     }, 60);
   }
 
+  /* ---------- scene depth: pointer tilt (fine pointers) + scroll parallax ---------- */
+  var finePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+  var scenes = Array.prototype.slice.call(doc.querySelectorAll('.scene'));
+  if (!reduceMotion && scenes.length) {
+    if (finePointer) {
+      Array.prototype.forEach.call(doc.querySelectorAll('.scene[data-tilt]'), function (sc) {
+        var host = sc.closest('.hero') || sc;
+        var tx = 0, ty = 0, raf = 0;
+        function apply() {
+          raf = 0;
+          sc.style.setProperty('--ry', (tx * 4).toFixed(2) + 'deg');
+          sc.style.setProperty('--rx', (-ty * 3).toFixed(2) + 'deg');
+          sc.style.setProperty('--px', (tx * 12).toFixed(1) + 'px');
+          sc.style.setProperty('--py', (ty * 9).toFixed(1) + 'px');
+        }
+        host.addEventListener('pointermove', function (e) {
+          var r = sc.getBoundingClientRect();
+          if (!r.width) return;
+          tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
+          ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
+          if (!raf) raf = requestAnimationFrame(apply);
+        });
+        host.addEventListener('pointerleave', function () {
+          tx = 0; ty = 0;
+          if (!raf) raf = requestAnimationFrame(apply);
+        });
+      });
+    }
+    // Soft spotlight that follows the pointer across the hero background.
+    var heroEl = doc.querySelector('.hero');
+    if (heroEl && finePointer) {
+      var lraf = 0, lx = 0, ly = 0;
+      heroEl.addEventListener('pointermove', function (e) {
+        var r = heroEl.getBoundingClientRect();
+        lx = ((e.clientX - r.left) / r.width) * 100; ly = ((e.clientY - r.top) / r.height) * 100;
+        if (!lraf) lraf = requestAnimationFrame(function () {
+          lraf = 0;
+          heroEl.style.setProperty('--mx', lx.toFixed(1) + '%');
+          heroEl.style.setProperty('--my', ly.toFixed(1) + '%');
+          heroEl.classList.add('is-lit');
+        });
+      });
+      heroEl.addEventListener('pointerleave', function () { heroEl.classList.remove('is-lit'); });
+    }
+    // Gentle vertical parallax for device layers while a scene crosses the viewport.
+    var live = [];
+    var sraf = 0;
+    function parallax() {
+      sraf = 0;
+      var vh = window.innerHeight || 1;
+      live.forEach(function (sc) {
+        var r = sc.getBoundingClientRect();
+        var t = ((r.top + r.height / 2) - vh / 2) / vh; // -0.5 … 0.5 while visible
+        sc.style.setProperty('--sy', (Math.max(-1, Math.min(1, t)) * -18).toFixed(1) + 'px');
+      });
+    }
+    if ('IntersectionObserver' in window) {
+      var po = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          var i = live.indexOf(en.target);
+          if (en.isIntersecting && i < 0) live.push(en.target);
+          else if (!en.isIntersecting && i >= 0) live.splice(i, 1);
+        });
+        if (!sraf) sraf = requestAnimationFrame(parallax);
+      }, { threshold: 0 });
+      scenes.forEach(function (sc) { po.observe(sc); });
+      window.addEventListener('scroll', function () { if (live.length && !sraf) sraf = requestAnimationFrame(parallax); }, { passive: true });
+    }
+  }
+
   /* ---------- active nav link ---------- */
   var navLinks = Array.prototype.slice.call(doc.querySelectorAll('.main-nav a[href^="#"]'));
   var sections = navLinks.map(function (a) { return doc.querySelector(a.getAttribute('href')); }).filter(Boolean);
