@@ -3,10 +3,11 @@
 // site config and the hashed asset names, and writes the returned string.
 //
 // Visual V4 (on V3): the scroll-driven order journey, hero scroll life and a
-// mobile presentation that never hides products behind a swipe. V3 kept the
-// photographic restaurant hero, compact product bento and denser proof sections. Real BIZBOT captures remain the
-// only product UI. Presentation only — the lead form, its API contract and
-// every product route are unchanged.
+// mobile presentation that never hides products behind a swipe. The Codex
+// polish pass gives every real BIZBOT capture a more credible physical home:
+// grounded POS hardware, a mounted KDS, a serviceable kiosk shell and a docked
+// manager display. Real captures remain the only product UI. Presentation only
+// — the lead form, its API contract and every product route are unchanged.
 
 import { icon } from './icons.mjs';
 
@@ -28,16 +29,16 @@ const SHOT_DIMS = { land: [1920, 1136], port: [1200, 1920] };
 // mirrored for RTL). styles.css repeats the same three paths as `offset-path`
 // for the travelling tokens — visual.test.mjs asserts they stay identical.
 export const JOURNEY_PATHS = [
-  'M110 328 C 140 240 320 250 360 412', // kiosk top → POS screen top
-  'M360 412 C 380 300 420 140 512 140', // POS → KDS (enters from the side)
-  'M778 140 C 880 140 826 300 826 408', // KDS (exits the other side) → tablet top
+  'M105 305 C 135 225 325 240 365 330', // kiosk top → POS screen top
+  'M365 330 C 395 230 410 132 510 132', // POS → KDS (enters from the side)
+  'M780 132 C 875 132 820 270 820 367', // KDS (exits the other side) → tablet top
 ];
 export const JOURNEY_PORTS = [
-  [110, 328],
-  [360, 412],
-  [512, 140],
-  [778, 140],
-  [826, 408],
+  [105, 305],
+  [365, 330],
+  [510, 132],
+  [780, 132],
+  [820, 367],
 ];
 
 function kind(name) {
@@ -74,17 +75,21 @@ function businessImg(name) {
 function devPos(img, { printer = true, receiptTitle = 'Receipt', size = 'md', drawer = false, drawerAlt = '' } = {}) {
   const terminal = `<div class="dev dev-pos dev-pos-${size}">
     <div class="dev-screen"><span class="dev-cam" aria-hidden="true"></span>${img}<span class="glare" aria-hidden="true"></span></div>
-    <div class="dev-neck" aria-hidden="true"></div>
-    <div class="dev-base" aria-hidden="true"></div>
+    <span class="dev-pivot" aria-hidden="true"><i></i></span>
+    <div class="dev-neck" aria-hidden="true"><i></i></div>
+    <div class="dev-base" aria-hidden="true"><i></i></div>
   </div>`;
   if (!drawer) return `${terminal}${printer ? devPrinter(receiptTitle) : ''}`;
   return `<div class="counter-group">
+    <span class="counter-mat" aria-hidden="true"></span>
     ${terminal}
     <div class="dev dev-drawer" role="img" aria-label="${esc(drawerAlt)}">
       <span class="drawer-top" aria-hidden="true"></span>
-      <span class="drawer-front" aria-hidden="true"><i class="drawer-seam"></i><i class="drawer-lock"></i><i class="drawer-slot"></i></span>
+      <span class="drawer-front" aria-hidden="true"><i class="drawer-seam"></i><i class="drawer-grip"></i><i class="drawer-lock"></i><i class="drawer-slot"></i></span>
+      <span class="drawer-foot drawer-foot-a" aria-hidden="true"></span><span class="drawer-foot drawer-foot-b" aria-hidden="true"></span>
     </div>
     ${printer ? devPrinter(receiptTitle) : ''}
+    <span class="pos-cable" aria-hidden="true"></span>
     <span class="ground" aria-hidden="true"></span>
   </div>`;
 }
@@ -92,14 +97,14 @@ function devPos(img, { printer = true, receiptTitle = 'Receipt', size = 'md', dr
 function devPrinter(receiptTitle) {
   return `<div class="dev dev-printer" aria-hidden="true">
     <div class="paper"><span class="paper-brand">BIZBOT</span><span class="paper-title">${esc(receiptTitle)}</span><i></i><i></i><i class="short"></i><b></b><i></i><i class="short"></i><span class="paper-check">${icon('check')}</span></div>
-    <div class="printer-body"><span class="slot"></span><span class="led"></span><span class="btn"></span></div>
+    <div class="printer-body"><span class="printer-lid"><i></i></span><span class="slot"></span><span class="printer-seam"></span><span class="led"></span><span class="btn"></span><span class="printer-foot"></span></div>
   </div>`;
 }
 
 function devKds(img, { mounted = false } = {}) {
   return `<div class="dev dev-kds${mounted ? ' dev-kds-mounted' : ''}">
-    ${mounted ? '<div class="kds-arm" aria-hidden="true"><i></i><b></b></div>' : '<div class="dev-mount" aria-hidden="true"></div>'}
-    <div class="dev-screen">${img}<span class="glare" aria-hidden="true"></span></div>
+    ${mounted ? '<div class="kds-arm" aria-hidden="true"><span class="kds-rail"></span><i></i><b></b><em></em></div>' : '<div class="dev-mount" aria-hidden="true"></div>'}
+    <div class="dev-screen">${img}<span class="glare" aria-hidden="true"></span><span class="kds-power" aria-hidden="true"></span></div>
     <div class="dev-bumpbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   </div>`;
 }
@@ -108,17 +113,24 @@ function devKiosk(inner, { standing = false } = {}) {
   return `<div class="dev dev-kiosk${standing ? ' dev-kiosk-standing' : ''}">
     <div class="kiosk-body">
       <div class="kiosk-cam" aria-hidden="true"></div>
+      <span class="kiosk-speaker" aria-hidden="true"><i></i><i></i><i></i></span>
       <div class="dev-screen">${inner}<span class="glare" aria-hidden="true"></span></div>
       <div class="kiosk-reader" aria-hidden="true"><i></i></div>
+      <span class="kiosk-receipt" aria-hidden="true"><i></i></span>
+      <span class="kiosk-service" aria-hidden="true"><i></i></span>
     </div>
-    ${standing ? '<div class="kiosk-stand" aria-hidden="true"><i></i></div><div class="kiosk-base" aria-hidden="true"></div><span class="ground ground-kiosk" aria-hidden="true"></span>' : '<div class="kiosk-foot" aria-hidden="true"></div>'}
+    ${standing ? '<div class="kiosk-stand" aria-hidden="true"><i></i><b></b></div><div class="kiosk-base" aria-hidden="true"><i></i></div><span class="ground ground-kiosk" aria-hidden="true"></span>' : '<div class="kiosk-foot" aria-hidden="true"></div>'}
   </div>`;
 }
 
 function devTablet(img) {
   return `<div class="dev dev-tablet">
+    <span class="tablet-dock" aria-hidden="true"><i></i><b></b></span>
     <div class="dev-screen">${img}<span class="glare" aria-hidden="true"></span></div>
     <span class="tab-cam" aria-hidden="true"></span>
+    <span class="tab-key" aria-hidden="true"></span>
+    <span class="tablet-base" aria-hidden="true"><i></i></span>
+    <span class="ground ground-tablet" aria-hidden="true"></span>
   </div>`;
 }
 

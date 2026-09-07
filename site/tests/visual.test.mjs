@@ -128,7 +128,7 @@ test('motion respects user preference and depth effects require a desktop fine p
   const css = readFileSync(join(dist, 'assets', cssName), 'utf8');
   const js = readFileSync(join(dist, 'assets', jsName), 'utf8');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, 'reduced motion CSS');
-  assert.ok(css.includes('animation-play-state: paused'), 'ambient loops start paused');
+  assert.match(css, /animation-play-state\s*:\s*paused/, 'ambient loops start paused');
   assert.doesNotMatch(css, /animation[^;{}]*\binfinite\b/i, 'no continuously looping decorative animation');
   assert.ok(js.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'reduced motion JS');
   assert.ok(js.includes("matchMedia('(pointer: fine)')"), 'fine pointer check');
@@ -146,8 +146,8 @@ test('responsive hero and mobile navigation accessibility regressions stay fixed
   const css = readFileSync(join(dist, 'assets', cssName), 'utf8');
   const js = readFileSync(join(dist, 'assets', jsName), 'utf8');
 
-  const hiddenKiosk = css.lastIndexOf('.scene-hero .obj-kiosk { display: none; }');
-  const visibleKiosk = css.lastIndexOf('.scene-hero .obj-kiosk { display: block; }');
+  const hiddenKiosk = [...css.matchAll(/\.scene-hero \.obj-kiosk\s*\{\s*display\s*:\s*none\s*[;}]/g)].at(-1)?.index ?? -1;
+  const visibleKiosk = [...css.matchAll(/\.scene-hero \.obj-kiosk\s*\{\s*display\s*:\s*block\s*[;}]/g)].at(-1)?.index ?? -1;
   assert.ok(hiddenKiosk >= 0 && visibleKiosk > hiddenKiosk, 'V3 cascade restores the hero kiosk below 1280px');
   assert.ok(js.includes('if (first) first.focus()'), 'opening the mobile menu moves focus inside');
   assert.ok(js.includes('else if (focusWasInside)'), 'closing the mobile menu returns focus');

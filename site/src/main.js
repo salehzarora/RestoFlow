@@ -7,7 +7,8 @@
   var root = doc.documentElement;
   root.classList.remove('no-js');
 
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduceMotion = !!(motionQuery && motionQuery.matches);
 
   /* ---------- header ---------- */
   var header = doc.getElementById('header');
@@ -83,40 +84,56 @@
   var finePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
   var depthMotion = finePointer && window.innerWidth > 1024;
   var scenes = Array.prototype.slice.call(doc.querySelectorAll('.scene'));
-  if (!reduceMotion && scenes.length) {
-    if (depthMotion) {
-      Array.prototype.forEach.call(doc.querySelectorAll('.scene[data-tilt]'), function (sc) {
-        var host = sc.closest('.hero') || sc;
-        var tx = 0, ty = 0, raf = 0;
-        function apply() {
-          raf = 0;
-          sc.style.setProperty('--ry', (tx * 4).toFixed(2) + 'deg');
-          sc.style.setProperty('--rx', (-ty * 3).toFixed(2) + 'deg');
-          sc.style.setProperty('--px', (tx * 12).toFixed(1) + 'px');
-          sc.style.setProperty('--py', (ty * 9).toFixed(1) + 'px');
-        }
-        host.addEventListener('pointermove', function (e) {
-          var r = sc.getBoundingClientRect();
-          if (!r.width) return;
-          tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
-          ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
-          if (!raf) raf = requestAnimationFrame(apply);
-        });
-        host.addEventListener('pointerleave', function () {
-          tx = 0; ty = 0;
-          if (!raf) raf = requestAnimationFrame(apply);
-        });
-      });
+  function clearSceneMotion() {
+    scenes.forEach(function (sc) {
+      ['--ry', '--rx', '--px', '--py', '--sy'].forEach(function (name) { sc.style.removeProperty(name); });
+    });
+    var hero = doc.querySelector('.hero');
+    if (hero) {
+      hero.classList.remove('is-lit');
+      hero.style.removeProperty('--mx');
+      hero.style.removeProperty('--my');
     }
+  }
+  if (finePointer && scenes.length) {
+    Array.prototype.forEach.call(doc.querySelectorAll('.scene[data-tilt]'), function (sc) {
+      var host = sc.closest('.hero') || sc;
+      var tx = 0, ty = 0, raf = 0;
+      function apply() {
+        raf = 0;
+        if (reduceMotion || !depthMotion) {
+          ['--ry', '--rx', '--px', '--py'].forEach(function (name) { sc.style.removeProperty(name); });
+          return;
+        }
+        sc.style.setProperty('--ry', (tx * 4).toFixed(2) + 'deg');
+        sc.style.setProperty('--rx', (-ty * 3).toFixed(2) + 'deg');
+        sc.style.setProperty('--px', (tx * 12).toFixed(1) + 'px');
+        sc.style.setProperty('--py', (ty * 9).toFixed(1) + 'px');
+      }
+      host.addEventListener('pointermove', function (e) {
+        if (reduceMotion || !depthMotion) return;
+        var r = sc.getBoundingClientRect();
+        if (!r.width) return;
+        tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
+        ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
+        if (!raf) raf = requestAnimationFrame(apply);
+      });
+      host.addEventListener('pointerleave', function () {
+        tx = 0; ty = 0;
+        if (!raf) raf = requestAnimationFrame(apply);
+      });
+    });
     // Soft spotlight that follows the pointer across the hero background.
     var heroEl = doc.querySelector('.hero');
-    if (heroEl && depthMotion) {
+    if (heroEl) {
       var lraf = 0, lx = 0, ly = 0;
       heroEl.addEventListener('pointermove', function (e) {
+        if (reduceMotion || !depthMotion) return;
         var r = heroEl.getBoundingClientRect();
         lx = ((e.clientX - r.left) / r.width) * 100; ly = ((e.clientY - r.top) / r.height) * 100;
         if (!lraf) lraf = requestAnimationFrame(function () {
           lraf = 0;
+          if (reduceMotion || !depthMotion) return;
           heroEl.style.setProperty('--mx', lx.toFixed(1) + '%');
           heroEl.style.setProperty('--my', ly.toFixed(1) + '%');
           heroEl.classList.add('is-lit');
@@ -129,6 +146,10 @@
     var sraf = 0;
     function parallax() {
       sraf = 0;
+      if (reduceMotion || !depthMotion) {
+        live.forEach(function (sc) { sc.style.removeProperty('--sy'); });
+        return;
+      }
       var vh = window.innerHeight || 1;
       live.forEach(function (sc) {
         var r = sc.getBoundingClientRect();
@@ -136,7 +157,7 @@
         sc.style.setProperty('--sy', (Math.max(-1, Math.min(1, t)) * -18).toFixed(1) + 'px');
       });
     }
-    if (depthMotion && 'IntersectionObserver' in window) {
+    if ('IntersectionObserver' in window) {
       var po = new IntersectionObserver(function (entries) {
         entries.forEach(function (en) {
           var i = live.indexOf(en.target);
@@ -146,7 +167,7 @@
         if (!sraf) sraf = requestAnimationFrame(parallax);
       }, { threshold: 0 });
       scenes.forEach(function (sc) { po.observe(sc); });
-      window.addEventListener('scroll', function () { if (live.length && !sraf) sraf = requestAnimationFrame(parallax); }, { passive: true });
+      window.addEventListener('scroll', function () { if (!reduceMotion && depthMotion && live.length && !sraf) sraf = requestAnimationFrame(parallax); }, { passive: true });
     }
   }
 
@@ -155,6 +176,7 @@
        :root    --hp  0→1 while the hero scrolls out (station settles, order state flips, connector grows)
        .journey --p   0→1 across the pinned scene + data-step / data-kds / is-final for discrete states
      Normal document scrolling only — no wheel/touch interception, no scroll hijacking. */
+  var scrollEls = Array.prototype.slice.call(doc.querySelectorAll('[data-scroll]'));
   var drivers = [];
   function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
   function measureDrivers() {
@@ -193,39 +215,69 @@
     if (kds !== this.kds) { this.kds = kds; if (kds) el.setAttribute('data-kds', String(kds)); else el.removeAttribute('data-kds'); }
     el.classList.toggle('is-final', p >= 0.97);
   }
-  var storyDesktop = window.innerWidth > 1024;
-  if (!reduceMotion) {
-    Array.prototype.forEach.call(doc.querySelectorAll('[data-scroll]'), function (el) {
-      var kind = el.getAttribute('data-scroll');
-      if (kind === 'journey' && !storyDesktop) return;
-      var d = { el: el, kind: kind, top: 0, height: 0, active: false, last: -1, step: 0, kds: -1 };
-      d.apply = kind === 'hero' ? heroApply : journeyApply;
-      if (kind === 'journey') d.steps = Array.prototype.slice.call(el.querySelectorAll('.jstep'));
-      drivers.push(d);
-    });
-  }
-  if (drivers.length) {
-    measureDrivers();
-    if ('IntersectionObserver' in window) {
-      var dio = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) {
-          var d = drivers.filter(function (x) { return x.el === en.target; })[0];
-          if (d) d.active = en.isIntersecting;
-        });
-        requestFrame();
-      }, { rootMargin: '10% 0px 10% 0px', threshold: 0 });
-      drivers.forEach(function (d) { dio.observe(d.el); });
-    } else {
-      drivers.forEach(function (d) { d.active = true; });
+  function clearDriverState(d) {
+    d.last = -1; d.step = 0; d.kds = -1;
+    if (d.kind === 'hero') {
+      root.style.removeProperty('--hp');
+      return;
     }
-    window.addEventListener('scroll', requestFrame, { passive: true });
-    var rraf = 0;
-    window.addEventListener('resize', function () {
-      if (!rraf) rraf = requestAnimationFrame(function () { rraf = 0; measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(true); });
-    });
-    window.addEventListener('load', function () { measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(true); });
-    frame(true); // a mid-page refresh lands with every scene already in its correct state
+    d.el.style.removeProperty('--p');
+    d.el.removeAttribute('data-step');
+    d.el.removeAttribute('data-kds');
+    d.el.classList.remove('is-final');
+    d.steps.forEach(function (li) { li.classList.remove('is-on', 'is-done'); });
   }
+  var dio = null;
+  if ('IntersectionObserver' in window) {
+    dio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var d = drivers.filter(function (x) { return x.el === en.target; })[0];
+        if (d) d.active = en.isIntersecting;
+      });
+      requestFrame();
+    }, { rootMargin: '10% 0px 10% 0px', threshold: 0 });
+  }
+  function reconcileDrivers() {
+    var storyDesktop = window.innerWidth > 1024;
+    var wanted = [];
+    if (!reduceMotion) {
+      scrollEls.forEach(function (el) {
+        var kind = el.getAttribute('data-scroll');
+        if (kind === 'journey' && !storyDesktop) return;
+        wanted.push(el);
+      });
+    }
+    drivers.slice().forEach(function (d) {
+      if (wanted.indexOf(d.el) >= 0) return;
+      if (dio) dio.unobserve(d.el);
+      clearDriverState(d);
+      drivers.splice(drivers.indexOf(d), 1);
+    });
+    wanted.forEach(function (el) {
+      if (drivers.some(function (d) { return d.el === el; })) return;
+      var kind = el.getAttribute('data-scroll');
+      var d = { el: el, kind: kind, top: 0, height: 0, active: !dio, last: -1, step: 0, kds: -1 };
+      d.apply = kind === 'hero' ? heroApply : journeyApply;
+      d.steps = kind === 'journey' ? Array.prototype.slice.call(el.querySelectorAll('.jstep')) : [];
+      drivers.push(d);
+      if (dio) dio.observe(el);
+    });
+    measureDrivers();
+    drivers.forEach(function (d) { d.last = -1; });
+    frame(true); // resize, preference changes and mid-page loads settle every scene immediately
+  }
+  reconcileDrivers();
+  window.addEventListener('scroll', requestFrame, { passive: true });
+  var rraf = 0;
+  window.addEventListener('resize', function () {
+    if (!rraf) rraf = requestAnimationFrame(function () {
+      rraf = 0;
+      depthMotion = finePointer && window.innerWidth > 1024;
+      if (!depthMotion || reduceMotion) clearSceneMotion();
+      reconcileDrivers();
+    });
+  });
+  window.addEventListener('load', reconcileDrivers);
 
   /* ---------- active nav link ---------- */
   var navLinks = Array.prototype.slice.call(doc.querySelectorAll('.main-nav a[href^="#"]'));
@@ -330,7 +382,8 @@
     if (pr && pr.catch) pr.catch(function () {});
   }
   function pauseVideo(scope) {
-    var v = scope.querySelector ? scope.querySelector('video') : scope;
+    var isVideo = scope && scope.matches && scope.matches('video');
+    var v = isVideo ? scope : scope && scope.querySelector ? scope.querySelector('video') : scope;
     if (v && !v.paused) v.pause();
   }
   var videos = Array.prototype.slice.call(doc.querySelectorAll('video'));
@@ -341,6 +394,20 @@
       });
     }, { threshold: 0.25 });
     videos.forEach(function (v) { vo.observe(v); });
+  }
+  function onMotionPreferenceChange(e) {
+    reduceMotion = !!e.matches;
+    depthMotion = finePointer && window.innerWidth > 1024;
+    if (reduceMotion) {
+      reveals.forEach(function (el) { el.classList.add('in'); });
+      clearSceneMotion();
+      videos.forEach(pauseVideo);
+    }
+    reconcileDrivers();
+  }
+  if (motionQuery) {
+    if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotionPreferenceChange);
+    else if (motionQuery.addListener) motionQuery.addListener(onMotionPreferenceChange);
   }
 
   /* ---------- lead form ---------- */
