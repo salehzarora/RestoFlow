@@ -2,8 +2,9 @@
 // No runtime dependencies — the build script feeds it the locale JSON, the
 // site config and the hashed asset names, and writes the returned string.
 //
-// Visual V3: a photographic restaurant hero, compact product bento, connected
-// operation story and denser proof sections. Real BIZBOT captures remain the
+// Visual V4 (on V3): the scroll-driven order journey, hero scroll life and a
+// mobile presentation that never hides products behind a swipe. V3 kept the
+// photographic restaurant hero, compact product bento and denser proof sections. Real BIZBOT captures remain the
 // only product UI. Presentation only — the lead form, its API contract and
 // every product route are unchanged.
 
@@ -22,6 +23,22 @@ const rich = (s) => esc(s).replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/
 
 const SHOT_WIDTHS = { land: [480, 800, 1200, 1600], port: [360, 600, 900] };
 const SHOT_DIMS = { land: [1920, 1136], port: [1200, 1920] };
+
+// Order-journey connectors in the stage's 1000×620 box (LTR; the SVG overlay is
+// mirrored for RTL). styles.css repeats the same three paths as `offset-path`
+// for the travelling tokens — visual.test.mjs asserts they stay identical.
+export const JOURNEY_PATHS = [
+  'M110 328 C 140 240 320 250 360 412', // kiosk top → POS screen top
+  'M360 412 C 380 300 420 140 512 140', // POS → KDS (enters from the side)
+  'M778 140 C 880 140 826 300 826 408', // KDS (exits the other side) → tablet top
+];
+export const JOURNEY_PORTS = [
+  [110, 328],
+  [360, 412],
+  [512, 140],
+  [778, 140],
+  [826, 408],
+];
 
 function kind(name) {
   return name.startsWith('kiosk') ? 'port' : 'land';
@@ -182,14 +199,19 @@ function header(t, cfg, locales) {
 function hero(t) {
   const checks = t.hero.checks.map((c) => `<li>${icon('check')}<span>${esc(c)}</span></li>`).join('');
   const trust = t.hero.trust.map((x) => `<li>${icon(x.icon)}<span>${esc(x.text)}</span></li>`).join('');
+  const states = t.hero.orderStates;
   const cards = t.hero.cards
-    .map((c, i) => `<li class="scard scard-${i + 1}" data-d="${i + 2}">${icon(c.icon)}<span>${esc(c.text)}</span></li>`)
+    .map((c, i) =>
+      i === 0
+        ? `<li class="scard scard-1 scard-state" data-d="2">${icon('check')}<span class="st-stack"><span class="st-a">${esc(states[0])}</span><span class="st-b">${esc(states[1])}</span></span></li>`
+        : `<li class="scard scard-${i + 1}" data-d="${i + 2}">${icon(c.icon)}<span>${esc(c.text)}</span></li>`,
+    )
     .join('');
   const values = t.hero.cards
     .map((c) => `<li><span class="hvalue-icon">${icon(c.icon)}</span><span>${esc(c.text)}</span></li>`)
     .join('');
   const posImg = shot('pos-1', t.hero.deviceAlt, '(max-width: 720px) 88vw, (max-width: 1100px) 60vw, 560px', { eager: true });
-  return `<section class="hero" id="top">
+  return `<section class="hero" id="top" data-scroll="hero">
   <div class="hero-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span><span class="grid"></span><span class="spot"></span></div>
   <div class="container hero-inner">
     <div class="hero-copy">
@@ -221,6 +243,7 @@ function hero(t) {
     </div>
   </div>
   <div class="container"><ul class="hero-value-strip reveal" data-d="5">${values}</ul></div>
+  <span class="hero-link" aria-hidden="true"><i></i></span>
 </section>`;
 }
 
@@ -232,24 +255,62 @@ function sectionHead(s, light = false) {
   </div>`;
 }
 
-function flow(t) {
-  const steps = t.flow.steps
+function journey(t) {
+  const j = t.journey;
+  const mini = {
+    kiosk: () => devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="lazy" decoding="async">`, { standing: true }),
+    pos: () => devPos(shot('pos-1', '', '(max-width: 1024px) 60vw, 1px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'sm', drawer: true, drawerAlt: t.hero.drawerAlt }),
+    kds: () => devKds(shot('kds-1', '', '(max-width: 1024px) 60vw, 1px'), { mounted: true }),
+    ready: () => `<span class="jready-badge">${icon('check')}</span>`,
+    dashboard: () => devTablet(shot('dash-1', '', '(max-width: 1024px) 60vw, 1px')),
+  };
+  const steps = j.steps
     .map(
-      (s, i) => `<li class="fstep fstep-${s.id} reveal" data-d="${i + 1}">
-      <span class="fnode"><span class="fring" aria-hidden="true"></span>${icon(s.icon)}</span>
-      <h3>${esc(s.title)}</h3>
-      <p>${esc(s.desc)}</p>
-    </li>`,
+      (st, i) => `<li class="jstep jstep-${st.id} reveal" data-step="${i + 1}" data-d="${(i % 3) + 1}">
+        <span class="jmark" aria-hidden="true"><i class="jnum">${i + 1}</i><span class="jdot"></span></span>
+        <figure class="jmini jmini-${st.id}" aria-hidden="true">${mini[st.id]()}</figure>
+        <div class="jtext">
+          <h3>${esc(st.title)}</h3>
+          <p>${esc(st.desc)}</p>
+          <span class="jstate">${icon(st.icon)}<span>${esc(st.state)}</span></span>
+        </div>
+      </li>`,
     )
     .join('');
-  return `<section class="flow" id="flow" aria-labelledby="flow-title">
-  <div class="container">
-    <div class="section-head section-head-light reveal">
-      <p class="eyebrow eyebrow-light">${icon('spark')}<span>${esc(t.flow.eyebrow)}</span></p>
-      <h2 id="flow-title">${rich(t.flow.title)}</h2>
-      <p class="sub">${esc(t.flow.subtitle)}</p>
+  const kds = j.kdsStates.map((k, i) => `<li data-k="${i + 1}">${esc(k)}</li>`).join('');
+  // Connector geometry in a 1000×620 box (LTR); the whole overlay is mirrored for RTL.
+  // Ports sit on the device bezels: kiosk top → POS screen top → KDS side in/out → tablet top.
+  const [P1, P2, P3] = JOURNEY_PATHS;
+  // glow = a wide translucent stroke under the lit line (cheaper than a drop-shadow filter that re-rasterises every frame)
+  const seg = (d, n) => `<path class="jtrack" d="${d}"/><path class="jglow jlit-${n}" pathLength="1" d="${d}"/><path class="jlit jlit-${n}" pathLength="1" d="${d}"/>`;
+  const token = (d, n) => `<g class="jtoken jtoken-${n}"><circle class="jtoken-halo" r="18"/><circle class="jtoken-core" r="7"/></g>`;
+  return `<section class="journey" id="journey" data-scroll="journey" aria-labelledby="journey-title">
+  <div class="journey-sticky">
+    <div class="container journey-grid">
+      <div class="journey-copy">
+        <p class="eyebrow eyebrow-light reveal">${icon('spark')}<span>${esc(j.eyebrow)}</span></p>
+        <h2 id="journey-title" class="reveal" data-d="1">${rich(j.title)}</h2>
+        <p class="sub reveal" data-d="2">${esc(j.subtitle)}</p>
+        <ol class="jsteps">${steps}</ol>
+        <p class="jhint" aria-hidden="true">${icon('arrow')}<span>${esc(j.hint)}</span></p>
+      </div>
+      <div class="journey-stage" aria-hidden="true">
+        ${env('env-counter-dark', '(max-width: 1024px) 1px, 780px')}
+        <span class="scene-haze"></span>
+        <div class="jo jo-kiosk">${devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="lazy" decoding="async">`, { standing: true })}</div>
+        <div class="jo jo-pos">${devPos(shot('pos-1', '', '(max-width: 1024px) 1px, 240px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'sm', drawer: true, drawerAlt: t.hero.drawerAlt })}</div>
+        <div class="jo jo-kds">${devKds(shot('kds-1', '', '(max-width: 1024px) 1px, 230px'), { mounted: true })}<ul class="jkds">${kds}</ul></div>
+        <div class="jo jo-dash">${devTablet(shot('dash-1', '', '(max-width: 1024px) 1px, 210px'))}</div>
+        <svg class="jlines" viewBox="0 0 1000 620" preserveAspectRatio="none" focusable="false">
+          ${seg(P1, 1)}${seg(P2, 2)}${seg(P3, 3)}
+          ${JOURNEY_PORTS.map(([x, y], i) => `<circle class="jport jport-${i + 1}" cx="${x}" cy="${y}" r="6"/>`).join('')}
+          ${token(P1, 1)}${token(P2, 2)}${token(P3, 3)}
+        </svg>
+        <span class="jbadge jbadge-ready">${icon('check')}<span>${esc(j.steps[3].state)}</span></span>
+        <span class="jbadge jbadge-final">${icon('check')}<span>${esc(j.final)}</span></span>
+        <span class="jveil"></span>
+      </div>
     </div>
-    <ol class="fsteps reveal" data-d="1"><span class="fline" aria-hidden="true"><i></i></span>${steps}</ol>
   </div>
 </section>`;
 }
@@ -267,17 +328,17 @@ function products(t) {
       </div>`,
     kds: (it) => `<div class="scene scene-kds">
         ${env('env-kitchen')}
-        <div class="layer layer-front" data-depth="1">${devKds(shot('kds-1', it.alt, '(max-width: 960px) 86vw, 520px'), { mounted: true })}</div>
+        <div class="layer layer-front" data-depth="1">${devKds(shot('kds-1', it.alt, '(max-width: 960px) 86vw, 520px'), { mounted: true })}<span class="kds-ping" aria-hidden="true"></span></div>
         ${statusChip(it.chip, 'chef', 'chip-float chip-b chip-dark')}
       </div>`,
     kiosk: (it) => `<div class="scene scene-kiosk">
         ${env('env-showroom')}
-        <div class="layer layer-front" data-depth="1">${devKiosk(kioskVideo(t, true), { standing: true })}</div>
+        <div class="layer layer-front" data-depth="1">${devKiosk(kioskVideo(t, true) + '<span class="kiosk-wake" aria-hidden="true"></span>', { standing: true })}</div>
         ${statusChip(it.chip, 'touch', 'chip-float chip-c')}
       </div>`,
     dashboard: (it) => `<div class="scene scene-dashboard">
         ${env('env-office')}
-        <div class="layer layer-front" data-depth="1">${devTablet(shot('dash-1', it.alt, '(max-width: 960px) 86vw, 520px'))}</div>
+        <div class="layer layer-front" data-depth="1">${devTablet(shot('dash-1', it.alt, '(max-width: 960px) 86vw, 520px') + '<span class="dash-scan" aria-hidden="true"></span>')}</div>
         ${statusChip(it.chip, 'chart', 'chip-float chip-d')}
       </div>`,
   };
@@ -306,14 +367,6 @@ function products(t) {
 }
 
 function story(t) {
-  const flowSteps = t.flow.steps
-    .map(
-      (s, i) => `<li class="v3-flow-step reveal" data-d="${i + 1}">
-        <span class="v3-flow-node">${icon(s.icon)}</span>
-        <span><strong>${esc(s.title)}</strong><small>${esc(s.desc)}</small></span>
-      </li>`,
-    )
-    .join('');
   const problems = t.story.items
     .map((s) => `<li><span class="story-bullet story-bullet-muted">${icon(s.icon)}</span><span>${esc(s.problem)}</span></li>`)
     .join('');
@@ -323,18 +376,7 @@ function story(t) {
   return `<section class="section story" id="story">
   <div class="container">
     ${sectionHead(t.story)}
-    <div class="v3-flow reveal" id="flow" aria-labelledby="flow-title">
-      <div class="flow-intro reveal">
-        <p class="eyebrow">${icon('spark')}<span>${esc(t.flow.eyebrow)}</span></p>
-        <h3 id="flow-title">${rich(t.flow.title)}</h3>
-        <p>${esc(t.flow.subtitle)}</p>
-      </div>
-      <div class="v3-flow-track">
-        <span class="v3-flow-line" aria-hidden="true"><i></i></span>
-        <ol class="v3-flow-steps">${flowSteps}</ol>
-      </div>
-    </div>
-    <div class="story-shift reveal" data-d="2">
+    <div class="story-shift reveal" data-d="1">
       <div class="story-side story-before">
         <span class="story-label">${esc(t.story.problemLabel)}</span>
         <ul>${problems}</ul>
@@ -697,6 +739,7 @@ export function renderPage(t, ctx) {
   <main id="main">
     ${hero(t)}
     ${products(t)}
+    ${journey(t)}
     ${story(t)}
     ${business(t)}
     ${features(t)}

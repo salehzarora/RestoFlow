@@ -150,6 +150,83 @@
     }
   }
 
+  /* ---------- scroll-driven story (V4): one rAF, cached geometry, only while on screen ----------
+     Writes CSS custom properties the stylesheet maps to transforms/opacity:
+       :root    --hp  0→1 while the hero scrolls out (station settles, order state flips, connector grows)
+       .journey --p   0→1 across the pinned scene + data-step / data-kds / is-final for discrete states
+     Normal document scrolling only — no wheel/touch interception, no scroll hijacking. */
+  var drivers = [];
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function measureDrivers() {
+    var y = window.pageYOffset || root.scrollTop;
+    drivers.forEach(function (d) {
+      var r = d.el.getBoundingClientRect();
+      d.top = r.top + y; d.height = r.height;
+    });
+  }
+  var draf = 0;
+  function frame() {
+    draf = 0;
+    var y = window.pageYOffset || root.scrollTop;
+    var vh = window.innerHeight || 1;
+    drivers.forEach(function (d) {
+      if (!d.active) return;
+      var p = d.kind === 'hero' ? clamp01(y / Math.max(1, d.height * 0.4)) : clamp01((y - d.top) / Math.max(1, d.height - vh));
+      if (p !== d.last) { d.last = p; d.apply(p); }
+    });
+  }
+  function requestFrame() { if (!draf) draf = requestAnimationFrame(frame); }
+  function heroApply(p) { root.style.setProperty('--hp', p.toFixed(3)); } // on <html>: the connector continues into the next section
+  function journeyApply(p) {
+    var el = this.el;
+    el.style.setProperty('--p', p.toFixed(4));
+    var step = p < 0.26 ? 1 : p < 0.54 ? 2 : p < 0.72 ? 3 : p < 0.86 ? 4 : 5;
+    if (step !== this.step) {
+      this.step = step;
+      el.setAttribute('data-step', String(step));
+      this.steps.forEach(function (li, i) {
+        li.classList.toggle('is-on', i + 1 === step);
+        li.classList.toggle('is-done', i + 1 < step);
+      });
+    }
+    var kds = p < 0.54 ? 0 : p < 0.62 ? 1 : p < 0.7 ? 2 : 3;
+    if (kds !== this.kds) { this.kds = kds; if (kds) el.setAttribute('data-kds', String(kds)); else el.removeAttribute('data-kds'); }
+    el.classList.toggle('is-final', p >= 0.97);
+  }
+  var storyDesktop = window.innerWidth > 1024;
+  if (!reduceMotion) {
+    Array.prototype.forEach.call(doc.querySelectorAll('[data-scroll]'), function (el) {
+      var kind = el.getAttribute('data-scroll');
+      if (kind === 'journey' && !storyDesktop) return;
+      var d = { el: el, kind: kind, top: 0, height: 0, active: false, last: -1, step: 0, kds: -1 };
+      d.apply = kind === 'hero' ? heroApply : journeyApply;
+      if (kind === 'journey') d.steps = Array.prototype.slice.call(el.querySelectorAll('.jstep'));
+      drivers.push(d);
+    });
+  }
+  if (drivers.length) {
+    measureDrivers();
+    if ('IntersectionObserver' in window) {
+      var dio = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          var d = drivers.filter(function (x) { return x.el === en.target; })[0];
+          if (d) d.active = en.isIntersecting;
+        });
+        requestFrame();
+      }, { rootMargin: '10% 0px 10% 0px', threshold: 0 });
+      drivers.forEach(function (d) { dio.observe(d.el); });
+    } else {
+      drivers.forEach(function (d) { d.active = true; });
+    }
+    window.addEventListener('scroll', requestFrame, { passive: true });
+    var rraf = 0;
+    window.addEventListener('resize', function () {
+      if (!rraf) rraf = requestAnimationFrame(function () { rraf = 0; measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); frame(); });
+    });
+    window.addEventListener('load', function () { measureDrivers(); drivers.forEach(function (d) { d.last = -1; }); requestFrame(); });
+    requestFrame();
+  }
+
   /* ---------- active nav link ---------- */
   var navLinks = Array.prototype.slice.call(doc.querySelectorAll('.main-nav a[href^="#"]'));
   var sections = navLinks.map(function (a) { return doc.querySelector(a.getAttribute('href')); }).filter(Boolean);

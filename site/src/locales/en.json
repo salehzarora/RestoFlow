@@ -77,43 +77,10 @@
       }
     ],
     "sceneAlt": "A BIZBOT restaurant workstation showing the point-of-sale station and connected service devices",
-    "drawerAlt": "Cash drawer"
-  },
-  "flow": {
-    "eyebrow": "One system",
-    "title": "From the order… <em>to the report</em>",
-    "subtitle": "Every module hands over to the next automatically, and the order stays visible at every step.",
-    "steps": [
-      {
-        "id": "kiosk",
-        "icon": "touch",
-        "title": "Customer or kiosk",
-        "desc": "Orders alone or through the cashier"
-      },
-      {
-        "id": "pos",
-        "icon": "orders",
-        "title": "Point of Sale",
-        "desc": "The order is recorded, paid and printed"
-      },
-      {
-        "id": "kds",
-        "icon": "chef",
-        "title": "Kitchen display",
-        "desc": "The ticket appears instantly for prep"
-      },
-      {
-        "id": "ready",
-        "icon": "check",
-        "title": "Ready",
-        "desc": "The order is marked ready and served"
-      },
-      {
-        "id": "dashboard",
-        "icon": "chart",
-        "title": "Reports",
-        "desc": "Everything shows up in the dashboard"
-      }
+    "drawerAlt": "Cash drawer",
+    "orderStates": [
+      "Order received",
+      "Sent to the kitchen"
     ]
   },
   "products": {
@@ -153,6 +120,55 @@
         "desc": "Sales, orders, staff and devices in one dashboard that gives management a clearer view.",
         "alt": "The reports dashboard inside a tablet",
         "chip": "Today's report at hand"
+      }
+    ]
+  },
+  "journey": {
+    "eyebrow": "The order journey",
+    "title": "Watch an order move <em>through BIZBOT</em>",
+    "subtitle": "Scroll and follow a single order from the moment it is placed until it reaches the dashboard.",
+    "hint": "Scroll to follow the order",
+    "final": "Everything is connected",
+    "kdsStates": [
+      "New",
+      "Preparing",
+      "Ready"
+    ],
+    "steps": [
+      {
+        "id": "kiosk",
+        "icon": "touch",
+        "title": "The customer orders",
+        "desc": "At the kiosk on their own, or through the cashier at the POS.",
+        "state": "New order"
+      },
+      {
+        "id": "pos",
+        "icon": "orders",
+        "title": "The POS takes it",
+        "desc": "The order is recorded, paid when needed, and the receipt and kitchen ticket print.",
+        "state": "Received"
+      },
+      {
+        "id": "kds",
+        "icon": "chef",
+        "title": "The kitchen prepares",
+        "desc": "The ticket appears on the kitchen screen right away and moves between states.",
+        "state": "Preparing"
+      },
+      {
+        "id": "ready",
+        "icon": "check",
+        "title": "The order is ready",
+        "desc": "The ticket is marked ready and the order is handed to the customer.",
+        "state": "Ready"
+      },
+      {
+        "id": "dashboard",
+        "icon": "chart",
+        "title": "Management sees the picture",
+        "desc": "The order and the sales show up in the dashboard as they happen.",
+        "state": "In the reports"
       }
     ]
   },

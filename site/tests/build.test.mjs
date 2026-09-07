@@ -33,8 +33,8 @@ test('every page carries hreflang alternates, canonical and OG tags', () => {
   }
 });
 
-test('the eight V3 sections render once, in order, with the production lead form', () => {
-  const ids = ['top', 'products', 'story', 'business', 'features', 'showcase', 'pricing', 'contact'];
+test('the nine V4 sections render once, in order, with the production lead form', () => {
+  const ids = ['top', 'products', 'journey', 'story', 'business', 'features', 'showcase', 'pricing', 'contact'];
   for (const exp of Object.values(expectPage)) {
     const html = readFileSync(join(dist, exp.file), 'utf8');
     const positions = ids.map((id) => {
