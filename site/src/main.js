@@ -21,9 +21,16 @@
   var mobile = doc.getElementById('mobile-menu');
   function setMenu(open) {
     if (!toggle || !mobile) return;
+    var focusWasInside = mobile.contains(doc.activeElement);
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     mobile.hidden = !open;
     doc.body.style.overflow = open ? 'hidden' : '';
+    if (open) {
+      var first = mobile.querySelector('a, button, [tabindex]:not([tabindex="-1"])');
+      if (first) first.focus();
+    } else if (focusWasInside) {
+      toggle.focus();
+    }
   }
   if (toggle && mobile) {
     toggle.addEventListener('click', function () {
@@ -33,10 +40,22 @@
       if (e.target.closest('a')) setMenu(false);
     });
     doc.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') setMenu(false);
+      if (mobile.hidden) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMenu(false);
+        return;
+      }
+      if (e.key === 'Tab') {
+        var items = [toggle].concat(Array.prototype.slice.call(mobile.querySelectorAll('a, button, [tabindex]:not([tabindex="-1"])')));
+        var first = items[0];
+        var last = items[items.length - 1];
+        if (e.shiftKey && doc.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && doc.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     });
     window.addEventListener('resize', function () {
-      if (window.innerWidth > 1060) setMenu(false);
+      if (window.innerWidth > 1120) setMenu(false);
     });
   }
 
@@ -62,9 +81,10 @@
 
   /* ---------- scene depth: pointer tilt (fine pointers) + scroll parallax ---------- */
   var finePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+  var depthMotion = finePointer && window.innerWidth > 1024;
   var scenes = Array.prototype.slice.call(doc.querySelectorAll('.scene'));
   if (!reduceMotion && scenes.length) {
-    if (finePointer) {
+    if (depthMotion) {
       Array.prototype.forEach.call(doc.querySelectorAll('.scene[data-tilt]'), function (sc) {
         var host = sc.closest('.hero') || sc;
         var tx = 0, ty = 0, raf = 0;
@@ -90,7 +110,7 @@
     }
     // Soft spotlight that follows the pointer across the hero background.
     var heroEl = doc.querySelector('.hero');
-    if (heroEl && finePointer) {
+    if (heroEl && depthMotion) {
       var lraf = 0, lx = 0, ly = 0;
       heroEl.addEventListener('pointermove', function (e) {
         var r = heroEl.getBoundingClientRect();
@@ -116,7 +136,7 @@
         sc.style.setProperty('--sy', (Math.max(-1, Math.min(1, t)) * -18).toFixed(1) + 'px');
       });
     }
-    if ('IntersectionObserver' in window) {
+    if (depthMotion && 'IntersectionObserver' in window) {
       var po = new IntersectionObserver(function (entries) {
         entries.forEach(function (en) {
           var i = live.indexOf(en.target);
@@ -159,8 +179,7 @@
     panels.forEach(function (p) {
       var on = p.id === 'panel-' + id;
       p.hidden = !on;
-      if (on) syncVideo(p);
-      else pauseVideo(p);
+      if (!on) pauseVideo(p);
     });
   }
   tabs.forEach(function (t, i) {
@@ -227,7 +246,7 @@
     });
   });
 
-  /* ---------- video: play only while visible ---------- */
+  /* ---------- video: user-initiated, and paused when hidden/off-screen ---------- */
   function playVideo(v) {
     if (!v || v.hidden || reduceMotion) return;
     var pr = v.play();
@@ -237,17 +256,11 @@
     var v = scope.querySelector ? scope.querySelector('video') : scope;
     if (v && !v.paused) v.pause();
   }
-  function syncVideo(scope) {
-    var v = scope.querySelector('video');
-    if (!v) return;
-    var r = v.getBoundingClientRect();
-    if (r.top < window.innerHeight && r.bottom > 0) playVideo(v);
-  }
   var videos = Array.prototype.slice.call(doc.querySelectorAll('video'));
   if ('IntersectionObserver' in window) {
     var vo = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
-        if (en.isIntersecting) playVideo(en.target); else pauseVideo(en.target);
+        if (!en.isIntersecting) pauseVideo(en.target);
       });
     }, { threshold: 0.25 });
     videos.forEach(function (v) { vo.observe(v); });

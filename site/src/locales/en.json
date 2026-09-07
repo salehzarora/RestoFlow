@@ -24,9 +24,9 @@
     "langLabel": "Language"
   },
   "hero": {
-    "eyebrow": "More than a POS",
-    "title": "A <em>smart</em> POS and operations system for your restaurant and business",
-    "subtitle": "POS, kitchen display, self-service kiosks and reports — one system on every device you own, in three languages, from the first tap to the final report.",
+    "eyebrow": "Connected restaurant operations",
+    "title": "Smarter restaurant operations, faster service and <em>clearer visibility</em>",
+    "subtitle": "From order to kitchen to reporting, POS, KDS, kiosk and dashboard work as one connected system.",
     "checks": [
       "Point of Sale",
       "Kitchen Display (KDS)",
@@ -61,22 +61,22 @@
     "cards": [
       {
         "icon": "check",
-        "text": "Order sent to the kitchen"
+        "text": "One connected order flow"
       },
       {
         "icon": "pulse",
-        "text": "Live follow-up"
+        "text": "Clear kitchen handoff"
       },
       {
         "icon": "bolt",
-        "text": "Faster service"
+        "text": "Fewer avoidable mistakes"
       },
       {
         "icon": "shield",
-        "text": "Fewer mistakes"
+        "text": "Manager visibility at a glance"
       }
     ],
-    "sceneAlt": "A BIZBOT cashier station: the POS screen on top of the cash drawer with a receipt printer, and the dashboard on a tablet beside it",
+    "sceneAlt": "A BIZBOT restaurant workstation showing the point-of-sale station and connected service devices",
     "drawerAlt": "Cash drawer"
   },
   "flow": {
@@ -119,14 +119,14 @@
   "products": {
     "eyebrow": "Products",
     "title": "Four modules. One system.",
-    "subtitle": "From the cashier to the kitchen to the customer to the reports — every module is built to work with the others in real time.",
+    "subtitle": "Four modules move each order through one flow, from customer to management.",
     "more": "Discover more",
     "items": [
       {
         "id": "pos",
         "tag": "Front counter",
         "title": "Point of Sale (POS)",
-        "desc": "A fast, simple interface for orders and sales on the floor: tables, takeaway, discounts, payment and instant printing.",
+        "desc": "Orders, tables, takeaway, payment and printing in one clear counter interface.",
         "alt": "The point-of-sale screen inside a counter terminal next to a thermal receipt printer",
         "chip": "New ticket sent to the kitchen"
       },
@@ -134,7 +134,7 @@
         "id": "kds",
         "tag": "Kitchen screen",
         "title": "Kitchen Display (KDS)",
-        "desc": "Clear, instant organisation of kitchen orders: new, in progress, ready — with prep totals on every ticket.",
+        "desc": "Kitchen tickets organised by status, with clearer prep details and totals for the team.",
         "alt": "The kitchen display inside a dark kitchen screen",
         "chip": "New ticket in preparation"
       },
@@ -142,7 +142,7 @@
         "id": "kiosk",
         "tag": "Modern self-service",
         "title": "Self-service kiosks",
-        "desc": "A modern, fast self-ordering experience for your customers: pick a table, browse the menu and send the order straight to the counter and kitchen.",
+        "desc": "Visual self-ordering with table or takeaway selection, sent directly into the system.",
         "alt": "An upright self-service kiosk showing the welcome screen",
         "chip": "The customer orders alone"
       },
@@ -150,7 +150,7 @@
         "id": "dashboard",
         "tag": "Control panel",
         "title": "Reports & operations",
-        "desc": "Track sales, orders, staff and operations from one place: overview, menu, devices, tables and the activity log.",
+        "desc": "Sales, orders, staff and devices in one dashboard that gives management a clearer view.",
         "alt": "The reports dashboard inside a tablet",
         "chip": "Today's report at hand"
       }
@@ -158,8 +158,8 @@
   },
   "story": {
     "eyebrow": "Before & after",
-    "title": "Everyday operations problems… <em>solved</em>",
-    "subtitle": "This is how the working day actually changes with BIZBOT — step by step, without complexity.",
+    "title": "From scattered handoffs to <em>connected operations</em>",
+    "subtitle": "BIZBOT connects the order, kitchen, readiness and management in one clearer flow for the team.",
     "problemLabel": "The problem",
     "solutionLabel": "With BIZBOT",
     "resolved": "Solved",
@@ -193,7 +193,7 @@
   "features": {
     "eyebrow": "Features",
     "title": "Features that make the difference",
-    "subtitle": "Built to help you run your business more efficiently and grow faster — without the complexity.",
+    "subtitle": "Everything the team needs for a clearer flow, sharper oversight and easier daily operations.",
     "items": [
       {
         "icon": "orders",
@@ -268,8 +268,8 @@
   },
   "business": {
     "eyebrow": "Who it's for",
-    "title": "Built for many kinds of businesses",
-    "subtitle": "BIZBOT isn't only for restaurants — any business that needs a point of sale and organised operations fits right in.",
+    "title": "Built for different food businesses",
+    "subtitle": "Restaurants, cafés, sweets, fast food and cloud kitchens — one system shaped around how you work.",
     "items": [
       {
         "icon": "restaurant",
@@ -307,7 +307,7 @@
   "showcase": {
     "eyebrow": "See the product",
     "title": "Real screens from inside BIZBOT",
-    "subtitle": "Actual captures of the system as the cashier, the kitchen, the customer and the manager see it.",
+    "subtitle": "See real BIZBOT screens across the order journey, from counter and kitchen to kiosk and management.",
     "tabs": [
       {
         "id": "pos",
@@ -414,7 +414,7 @@
   "why": {
     "eyebrow": "Why BIZBOT?",
     "title": "Built for the busiest day of the week",
-    "subtitle": "Clear engineering decisions that make the system dependable in daily operation — not just in a demo.",
+    "subtitle": "Reliability, permissions, printing and resilient operation designed for real restaurant work, not just a demo.",
     "items": [
       {
         "icon": "offline",
@@ -450,8 +450,8 @@
   },
   "pricing": {
     "eyebrow": "Pricing",
-    "title": "Clear pricing that fits the size of your business",
-    "subtitle": "A clear quote based on the number of devices, branches and modules you need. Tell us about your business and we'll send a tailored quote.",
+    "title": "A quote shaped around what you need",
+    "subtitle": "Get a tailored quote based on the devices, branches and modules your business needs.",
     "includes": [
       "POS, kitchen display and the dashboard",
       "Self-service kiosks when you need them",
@@ -463,8 +463,8 @@
   },
   "contact": {
     "eyebrow": "Contact",
-    "title": "Ready to see how BIZBOT <em>fits</em> your business?",
-    "subtitle": "Leave your details and we'll get in touch for a live demo on your devices — or write to us directly.",
+    "title": "Ready for <em>clearer operations</em>?",
+    "subtitle": "Tell us about your business and we’ll show BIZBOT on your devices, focused on what your team needs.",
     "emailLabel": "Email",
     "supportLabel": "Support",
     "whatsappLabel": "WhatsApp",

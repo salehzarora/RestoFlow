@@ -2,10 +2,10 @@
 // No runtime dependencies — the build script feeds it the locale JSON, the
 // site config and the hashed asset names, and writes the returned string.
 //
-// Visual V2: realistic device scenes (POS counter, kitchen KDS, floor kiosk,
-// desk tablet), a one-system flow band, a problem → solution story and a
-// darker premium treatment for the hero / showcase. Presentation only — the
-// lead form, its API contract and every product route are unchanged.
+// Visual V3: a photographic restaurant hero, compact product bento, connected
+// operation story and denser proof sections. Real BIZBOT captures remain the
+// only product UI. Presentation only — the lead form, its API contract and
+// every product route are unchanged.
 
 import { icon } from './icons.mjs';
 
@@ -45,7 +45,11 @@ const ENV_WIDTHS = [960, 1600];
 export function env(name, sizes = '(max-width: 960px) 100vw, 720px', opts = {}) {
   const srcset = ENV_WIDTHS.map((w) => `/assets/env/${name}-${w}.webp ${w}w`).join(', ');
   const eager = opts.eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"';
-  return `<img class="env" src="/assets/env/${name}-960.webp" srcset="${srcset}" sizes="${sizes}" width="1600" height="1280" alt="" aria-hidden="true" decoding="async"${eager}>`;
+  return `<img class="env" src="/assets/env/${name}-960.webp" srcset="${srcset}" sizes="${sizes}" width="1600" height="1067" alt="" aria-hidden="true" decoding="async"${eager}>`;
+}
+
+function businessImg(name) {
+  return `<img class="bphoto" src="/assets/business/business-${name}-720.webp" width="720" height="480" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
 }
 
 /* ---------- device frames ---------- */
@@ -105,7 +109,7 @@ function kioskVideo(t, posterOnly = false) {
   if (posterOnly) {
     return `<img class="kiosk-poster" src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="${esc(t.products.items[2].alt)}" loading="lazy" decoding="async">`;
   }
-  return `<video class="kiosk-video" playsinline muted loop preload="none" poster="/assets/video/kiosk-attract-poster.webp" width="540" height="864" aria-label="${esc(t.showcase.tabs[2].shots[0].caption)}">
+  return `<video class="kiosk-video" playsinline muted loop controls preload="none" poster="/assets/video/kiosk-attract-poster.webp" width="540" height="864" aria-label="${esc(t.showcase.tabs[2].shots[0].caption)}">
       <source src="/assets/video/kiosk-attract.mp4" type="video/mp4">
     </video>`;
 }
@@ -139,8 +143,8 @@ function header(t, cfg, locales) {
   const links = [
     ['#top', t.nav.home],
     ['#products', t.nav.products],
-    ['#features', t.nav.features],
     ['#business', t.nav.business],
+    ['#features', t.nav.features],
     ['#pricing', t.nav.pricing],
     ['#contact', t.nav.contact],
   ];
@@ -153,11 +157,11 @@ function header(t, cfg, locales) {
     .join('');
   return `<header class="site-header" id="header">
   <div class="container header-inner">
-    <a class="brand" href="${t.path}" aria-label="${esc(t.code === 'en' ? 'BIZBOT — home' : 'بِزبط BIZBOT — ' + t.nav.home)}">${lockup(t)}</a>
+    <a class="brand" href="${t.path}" aria-label="${esc(t.code === 'en' ? 'BIZBOT — home' : 'بِزبط BIZBOT — ' + t.nav.home)}">${lockup(t, { reverse: true })}</a>
     <nav class="main-nav" aria-label="${esc(t.nav.menu)}"><ul>${nav}</ul></nav>
     <div class="header-actions">
       <div class="lang-switch" role="group" aria-label="${esc(t.nav.langLabel)}">${langs}</div>
-      <a class="link-login" href="${cfg.appUrl}" rel="noopener">${icon('login')}<span>${esc(t.nav.login)}</span></a>
+      <a class="link-login" href="${cfg.appUrl}" rel="noopener" aria-label="${esc(t.nav.login)}">${icon('login')}<span>${esc(t.nav.login)}</span></a>
       <a class="btn btn-primary btn-sm" href="#contact">${esc(t.nav.cta)}</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="${esc(t.nav.menu)}">${icon('menu', 'ic-menu')}${icon('close', 'ic-close')}</button>
     </div>
@@ -181,6 +185,9 @@ function hero(t) {
   const cards = t.hero.cards
     .map((c, i) => `<li class="scard scard-${i + 1}" data-d="${i + 2}">${icon(c.icon)}<span>${esc(c.text)}</span></li>`)
     .join('');
+  const values = t.hero.cards
+    .map((c) => `<li><span class="hvalue-icon">${icon(c.icon)}</span><span>${esc(c.text)}</span></li>`)
+    .join('');
   const posImg = shot('pos-1', t.hero.deviceAlt, '(max-width: 720px) 88vw, (max-width: 1100px) 60vw, 560px', { eager: true });
   return `<section class="hero" id="top">
   <div class="hero-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="glow glow-b"></span><span class="grid"></span><span class="spot"></span></div>
@@ -201,7 +208,8 @@ function hero(t) {
         ${env('env-counter-dark', '(max-width: 960px) 100vw, 760px', { eager: true })}
         <span class="scene-haze" aria-hidden="true"></span>
         <div class="layer layer-back" data-depth="0.35" aria-hidden="true">
-          <div class="obj obj-kiosk">${devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="eager" decoding="async">`, { standing: true })}</div>
+          <div class="obj obj-kiosk">${devKiosk(`<img src="/assets/video/kiosk-attract-poster.webp" width="540" height="864" alt="" loading="lazy" decoding="async">`, { standing: true })}</div>
+          <div class="obj obj-kds">${devKds(shot('kds-1', '', '(max-width: 960px) 34vw, 260px'), { mounted: true })}</div>
           <div class="obj obj-tablet">${devTablet(shot('dash-1', '', '(max-width: 960px) 40vw, 300px'))}</div>
         </div>
         <div class="layer layer-front" data-depth="1" aria-hidden="true">
@@ -212,6 +220,7 @@ function hero(t) {
       <ul class="scards" aria-hidden="true">${cards}</ul>
     </div>
   </div>
+  <div class="container"><ul class="hero-value-strip reveal" data-d="5">${values}</ul></div>
 </section>`;
 }
 
@@ -249,7 +258,8 @@ function products(t) {
   const tabsById = Object.fromEntries(t.showcase.tabs.map((tab) => [tab.id, tab]));
   const scene = {
     pos: (it) => `<div class="scene scene-pos">
-        ${env('env-counter-light')}
+        ${env('env-counter-dark')}
+        <span class="scene-haze" aria-hidden="true"></span>
         <div class="layer layer-front" data-depth="1">
           ${devPos(shot('pos-1', it.alt, '(max-width: 960px) 80vw, 440px'), { printer: true, receiptTitle: t.hero.receiptTitle, size: 'md', drawer: true, drawerAlt: t.hero.drawerAlt })}
         </div>
@@ -262,7 +272,7 @@ function products(t) {
       </div>`,
     kiosk: (it) => `<div class="scene scene-kiosk">
         ${env('env-showroom')}
-        <div class="layer layer-front" data-depth="1">${devKiosk(kioskVideo(t), { standing: true })}</div>
+        <div class="layer layer-front" data-depth="1">${devKiosk(kioskVideo(t, true), { standing: true })}</div>
         ${statusChip(it.chip, 'touch', 'chip-float chip-c')}
       </div>`,
     dashboard: (it) => `<div class="scene scene-dashboard">
@@ -274,13 +284,13 @@ function products(t) {
   const rows = t.products.items
     .map((it, i) => {
       const tab = tabsById[it.id];
-      const points = (tab ? tab.points : []).slice(0, 3).map((p) => `<li>${icon('check')}<span>${esc(p)}</span></li>`).join('');
-      return `<article class="prow prow-${it.id} reveal" id="product-${it.id}">
-      <div class="prow-scene">${scene[it.id](it)}</div>
-      <div class="prow-copy">
+      const points = (tab ? tab.points : []).slice(0, 2).map((p) => `<li>${icon('check')}<span>${esc(p)}</span></li>`).join('');
+      return `<article class="product-card product-card-${it.id} reveal" id="product-${it.id}" data-d="${(i % 2) + 1}">
+      <div class="product-media">${scene[it.id](it)}</div>
+      <div class="product-copy">
         <span class="tag">${esc(it.tag)}</span>
         <h3>${esc(it.title)}</h3>
-        <p class="prow-desc">${esc(it.desc)}</p>
+        <p class="product-desc">${esc(it.desc)}</p>
         <ul class="points">${points}</ul>
         <a class="more" href="#showcase" data-tab="${it.id}">${esc(t.products.more)}${icon('arrow')}</a>
       </div>
@@ -290,52 +300,77 @@ function products(t) {
   return `<section class="section products" id="products">
   <div class="container">
     ${sectionHead(t.products)}
-    <div class="prows">${rows}</div>
+    <div class="product-grid">${rows}</div>
   </div>
 </section>`;
 }
 
 function story(t) {
-  const items = t.story.items
+  const flowSteps = t.flow.steps
     .map(
-      (s, i) => `<li class="spair reveal" data-d="${(i % 2) + 1}">
-      <div class="sproblem">
-        <span class="slabel">${esc(t.story.problemLabel)}</span>
-        <span class="sicon">${icon(s.icon)}</span>
-        <p>${esc(s.problem)}</p>
-      </div>
-      <span class="sarrow" aria-hidden="true"><i></i>${icon('arrow')}</span>
-      <div class="ssolution">
-        <span class="slabel">${esc(t.story.solutionLabel)}</span>
-        <span class="sresolved">${icon('check')}<span>${esc(t.story.resolved)}</span></span>
-        <p>${esc(s.solution)}</p>
-        <span class="stag">${esc(s.tag)}</span>
-      </div>
-    </li>`,
+      (s, i) => `<li class="v3-flow-step reveal" data-d="${i + 1}">
+        <span class="v3-flow-node">${icon(s.icon)}</span>
+        <span><strong>${esc(s.title)}</strong><small>${esc(s.desc)}</small></span>
+      </li>`,
     )
+    .join('');
+  const problems = t.story.items
+    .map((s) => `<li><span class="story-bullet story-bullet-muted">${icon(s.icon)}</span><span>${esc(s.problem)}</span></li>`)
+    .join('');
+  const solutions = t.story.items
+    .map((s) => `<li><span class="story-bullet">${icon('check')}</span><span><strong>${esc(s.solution)}</strong><small>${esc(s.tag)}</small></span></li>`)
     .join('');
   return `<section class="section story" id="story">
   <div class="container">
     ${sectionHead(t.story)}
-    <ol class="spairs">${items}</ol>
+    <div class="v3-flow reveal" id="flow" aria-labelledby="flow-title">
+      <div class="flow-intro reveal">
+        <p class="eyebrow">${icon('spark')}<span>${esc(t.flow.eyebrow)}</span></p>
+        <h3 id="flow-title">${rich(t.flow.title)}</h3>
+        <p>${esc(t.flow.subtitle)}</p>
+      </div>
+      <div class="v3-flow-track">
+        <span class="v3-flow-line" aria-hidden="true"><i></i></span>
+        <ol class="v3-flow-steps">${flowSteps}</ol>
+      </div>
+    </div>
+    <div class="story-shift reveal" data-d="2">
+      <div class="story-side story-before">
+        <span class="story-label">${esc(t.story.problemLabel)}</span>
+        <ul>${problems}</ul>
+      </div>
+      <div class="story-transition" aria-hidden="true"><span>${icon('arrow')}</span><i></i></div>
+      <div class="story-side story-after">
+        <span class="story-label">${esc(t.story.solutionLabel)}</span>
+        <ul>${solutions}</ul>
+      </div>
+    </div>
   </div>
 </section>`;
 }
 
 function features(t) {
-  const tiles = t.features.items
+  const selected = [t.features.items[4], t.features.items[7], t.why.items[0], t.why.items[1], t.why.items[3], t.why.items[5]];
+  const tiles = selected
     .map(
-      (f, i) => `<li class="ftile reveal" data-d="${(i % 4) + 1}">
-      <span class="ficon">${icon(f.icon)}</span>
-      <h3>${esc(f.title)}</h3>
-      <p>${esc(f.desc)}</p>
+      (f, i) => `<li class="benefit-card reveal" data-d="${(i % 3) + 1}">
+      <span class="benefit-icon">${icon(f.icon)}</span>
+      <div><h3>${esc(f.title)}</h3><p>${esc(f.desc)}</p></div>
     </li>`,
     )
     .join('');
-  return `<section class="section features" id="features">
-  <div class="container">
-    ${sectionHead(t.features)}
-    <ul class="fgrid">${tiles}</ul>
+  const promises = t.statement.lines.map((line) => `<span>${esc(line)}</span>`).join('');
+  return `<section class="section benefits" id="features">
+  <div class="benefits-bg" aria-hidden="true"><span class="glow glow-a"></span><span class="grid"></span></div>
+  <div class="container benefits-layout">
+    <div class="benefits-copy reveal">
+      <img src="/assets/brand/bizbot-symbol-512.webp" width="512" height="512" alt="" aria-hidden="true" loading="lazy" decoding="async">
+      <p class="eyebrow eyebrow-light">${icon('spark')}<span>${esc(t.features.eyebrow)}</span></p>
+      <h2>${esc(t.statement.brandLine)}</h2>
+      <p>${esc(t.features.subtitle)}</p>
+      <div class="promise-line">${promises}</div>
+    </div>
+    <ul class="benefit-grid">${tiles}</ul>
   </div>
 </section>`;
 }
@@ -358,13 +393,12 @@ function statement(t) {
 }
 
 function business(t) {
+  const photoName = { restaurant: 'restaurant', cafe: 'cafe', sweets: 'sweets', fastfood: 'fastfood', cloud: 'cloud', more: 'more' };
   const cards = t.business.items
     .map(
       (b, i) => `<li class="bcard bcard-${b.icon} reveal" data-d="${(i % 3) + 1}">
-      <span class="bscene" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="bicon">${icon(b.icon)}</span>
-      <h3>${esc(b.title)}</h3>
-      <p>${esc(b.desc)}</p>
+      <div class="bscene">${businessImg(photoName[b.icon] || 'more')}<i aria-hidden="true"></i></div>
+      <div class="bcopy"><span class="bicon">${icon(b.icon)}</span><div><h3>${esc(b.title)}</h3><p>${esc(b.desc)}</p></div></div>
     </li>`,
     )
     .join('');
@@ -531,8 +565,8 @@ function footer(t, cfg, locales) {
     .join('');
   const links = [
     ['#top', t.nav.home],
-    ['#features', t.nav.features],
     ['#business', t.nav.business],
+    ['#features', t.nav.features],
     ['#pricing', t.nav.pricing],
     ['#contact', t.nav.contact],
   ]
@@ -662,14 +696,11 @@ export function renderPage(t, ctx) {
   ${header(t, cfg, locales)}
   <main id="main">
     ${hero(t)}
-    ${flow(t)}
     ${products(t)}
     ${story(t)}
-    ${features(t)}
-    ${statement(t)}
     ${business(t)}
+    ${features(t)}
     ${showcase(t)}
-    ${why(t)}
     ${pricing(t)}
     ${contact(t, cfg)}
   </main>
