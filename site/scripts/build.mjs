@@ -15,12 +15,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, '..');
 const SRC = join(ROOT, 'src');
 const PUBLIC = join(ROOT, 'public');
-const DIST = process.env.SITE_DIST ? resolve(process.env.SITE_DIST) : join(ROOT, 'dist');
 
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
 
 export function build({ quiet = false } = {}) {
+  // Resolved per call (not at import time) so a test file can point its own build
+  // at a private directory before calling build() — two test files never race on dist/.
+  const DIST = process.env.SITE_DIST ? resolve(process.env.SITE_DIST) : join(ROOT, 'dist');
   const cfg = readJson(join(SRC, 'site.config.json'));
   const locales = ['ar', 'en', 'he'].map((c) => readJson(join(SRC, 'locales', `${c}.json`)));
 
