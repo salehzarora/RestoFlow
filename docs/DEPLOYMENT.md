@@ -1156,3 +1156,30 @@ authorization, the first-Preview hosted gate above, and a refreshed explicitly
 approved deployment-ID manifest preserving Production, rollback, aliases and
 release evidence. Fixing future build decisions does not remove retained
 output or reverse historical storage usage.
+
+### Interpreting the per-project baseline evidence
+
+For each docs-only proof, preserve a separate evidence row for `bizbot-site`
+and `resto-flow`: project and branch, proof commit/HEAD, baseline source and
+SHA, `fetched`, decision/reason, deployment ID, the Ignored Build Step
+cancellation and empty Resources. When `baselineSource` is `previous_success`,
+match the baseline SHA to that project/branch's last READY deployment. Do not
+assume the two projects always share a baseline or use the immediately
+preceding Git commit.
+
+For example, if commit A built successfully and commits B and C were ignored,
+candidate D must still compare A's tree with D's tree. Comparing C with D would
+silently discard any relevant differences that remain since A. A canceled
+record or completed GitHub success check for C is not a successful deployed
+baseline. With no previous-success value on a first Preview, record the
+verified current main SHA returned by the bounded fetch instead and identify
+`production_main` explicitly; a pre-existing local `origin/main` ref may be stale.
+
+An IGNORE decision requires both an Ignored Build Step cancellation and no
+output resources; a generic cancellation, “2 Projects” label or successful
+GitHub status is insufficient. A missing object that was fetched successfully
+and a locally available previous-success object are both valid outcomes.
+`fetched: true` records an attempt, not success: verify its reason and baseline.
+A fetch/acquisition failure must appear as BUILD and cannot count as proof that
+filtering worked. Record the actual observed outcome; this checklist alone is
+not evidence that either hosted gate has passed.
