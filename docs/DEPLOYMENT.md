@@ -1142,6 +1142,13 @@ docs-only branch must separately prove `production_main` + `unaffected_changes`
 and No Resources on both projects before Phase 2B cleanup can proceed. PR #277
 remains the failed historical verification, unmerged until separately directed.
 
+**2026-09-12 R3 verification checkpoint:** a same-branch docs-only cancellation
+checks the `previous_success` path only. A first Preview that reports
+`untrusted_origin` with a null baseline remains blocked even when its resulting
+build and GitHub CI succeed. Record these outcomes separately, resolve the
+origin prerequisite, and complete the new-branch first-Preview gate before
+authorizing Phase 2B cleanup.
+
 R2 uses the existing `fix/vercel-monorepo-deployment-filter` branch and PR #276.
 The focused R2 implementation commit may BUILD both projects because the
 shared engine changes. Check the exact commit's CI and review state, then
