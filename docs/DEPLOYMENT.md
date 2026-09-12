@@ -932,7 +932,7 @@ drifts into the public build; keep that guard green.
 
 ---
 
-## 15. Monorepo deployment filtering (VERCEL-FILTER-PHASE2A)
+## 15. Monorepo deployment filtering (VERCEL-FILTER-PHASE2A R2)
 
 ### Canonical commands and unchanged project boundaries
 
@@ -955,12 +955,14 @@ if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi
 if node ../tools/vercel/ignore-build.mjs marketing; then exit 0; else exit 1; fi
 ```
 
-Vercel's exit convention is **0 = IGNORE, 1 = BUILD**. The shell wrappers also
-map a missing Node interpreter, missing helper or syntax error to BUILD.
-No package installation, credentials or hosted API calls are required by the
-helper. Do not change dashboard Ignored Build Step settings merely to mirror
-these commands. If hosted logs show a different effective command, stop and
-investigate before changing any setting.
+Vercel's exit convention is **0 = IGNORE, nonzero = BUILD**; the helper uses
+exit 1 for BUILD. The shell wrappers also map a missing Node interpreter,
+missing helper or syntax error to BUILD. The helper installs no packages and
+calls no hosted API. Its only permitted network operation is bounded Git
+baseline acquisition from the configured `origin`, described below. Do not
+change dashboard Ignored Build Step settings merely to mirror these commands.
+If hosted logs show a different effective command, stop and investigate before
+changing any setting.
 
 ### Source inputs
 
@@ -975,9 +977,12 @@ investigate before changing any setting.
 | Internal Admin or unreferenced package source with unchanged, validated graph | IGNORE | IGNORE |
 | Exact shared `tools/vercel/ignore-build.mjs` control, or real inputs of both projects | BUILD | BUILD |
 | Only `tools/vercel/ignore-build.test.mjs` or this deployment document | IGNORE | IGNORE |
-| Any shallow Git checkout, even with a visible previous SHA | BUILD | BUILD |
 | Unknown project-local input/configuration | BUILD if in marketing scope | BUILD if in product scope |
-| Untrustworthy comparison, unsupported required graph, helper/parse/Git failure | BUILD | BUILD |
+| Required baseline cannot be acquired/verified, unsupported graph, helper/parse/Git failure | BUILD | BUILD |
+
+These decisions require verified baseline and HEAD trees. A shallow checkout
+is supported and does not itself select BUILD. Failure to obtain the exact
+required comparison still selects BUILD.
 
 The current product graph has four deployed apps and 16 reachable shared
 packages: `auth_identity`, `core`, `currency`, `data_local`, `data_remote`,
@@ -1001,74 +1006,153 @@ must build marketing. A Flutter asset declared under a test-looking directory
 must build product. Generated Dart/l10n production source is also an input;
 backend migrations have their own separately authorized release process.
 
-### Complete comparison and safe failure
+### Authoritative baseline and complete tree comparison
 
-Use [`VERCEL_GIT_PREVIOUS_SHA`](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_git_previous_sha)
-as Vercel's last **successful deployment** for this project and branch, after
-validating its SHA, commit/tree availability and ancestry. Compare the complete
-baseline tree with HEAD using NUL-delimited paths and no rename detection;
-a move therefore includes both deletion and addition. Never substitute `HEAD^`,
-a commit message, the latest attempted deployment or a GitHub success status.
-The helper writes no baseline state: ignored attempts cannot advance a locally
-invented successful-deployment marker. Its previous-success identity relies on
-Vercel's documented system variable, not an authenticated API lookup.
+Vercel [normally clones ten commits](https://vercel.com/docs/builds/configure-a-build).
+R2 supports that normal checkout by obtaining the required commit/tree objects,
+without requiring complete ancestry history.
 
-**Every shallow repository BUILDs**, including when the previous SHA is visible
-and its ancestry could be proved locally. This is the explicitly approved
-Phase 2A rule. Vercel [normally clones ten commits](https://vercel.com/docs/builds/configure-a-build),
-so ordinary hosted checkouts can build both projects for site-only, app-only or
-CI/docs-only changes. The selective decisions in the input table require a
-non-shallow checkout and a trustworthy baseline. Do not claim that these filters
-prevent unnecessary hosted builds when the diagnostic is `shallow_history`.
-The helper does not deepen the clone or make an exception for a complete visible
-comparison segment. Changing this rule requires a separate owner decision.
+When [`VERCEL_GIT_PREVIOUS_SHA`](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_git_previous_sha)
+is present, validate exactly 40 hexadecimal characters and treat the verified
+commit as Vercel's authoritative last **successful deployment for this project
+and branch**. Use the exact commit/tree if available locally. If it is missing
+in a shallow checkout, acquire that exact SHA using the bounded fetch contract
+below, then re-resolve and verify it without peeling a different object into a
+substitute commit. An invalid value, unavailable object in a non-shallow
+checkout, failed fetch or unverifiable commit/tree means BUILD; it must not
+silently fall back to another baseline.
 
-An absent previous SHA may use a feature-branch merge base only with a proven
-complete local history and trustworthy branch/base context. Otherwise BUILD.
-Malformed or non-ancestor previous SHAs, missing objects, ambiguous history,
-unsupported parsing, wrong working directory and Git errors BUILD. The helper
-does not fetch history. It prints only decision/reason, validated SHAs and path
-category counts, never supplied raw values or credentials.
+Compare the complete **baseline tree directly with the HEAD tree**. The
+previous-success SHA need not be an ancestor: a valid non-ancestor baseline
+still describes the deployed content that this candidate would replace.
+NUL-delimited paths and disabled rename detection include both deletion and
+addition for a move. Multi-commit changes are included even when the last
+commit only edits documentation. Never substitute `HEAD^`, a merge base, a
+commit message, the latest attempted deployment or a GitHub success status.
 
-### Local and hosted verification
+For a **first Preview with no previous-success SHA**, always refresh the exact
+`refs/heads/main` from configured `origin` into `FETCH_HEAD`, even if a local
+`origin/main` ref already exists. This prevents a stale remote-tracking ref from
+hiding newer production inputs. Verify the returned commit/tree and compare
+that current main tree directly with Preview HEAD; do not move `origin/main`
+or another branch ref. A Preview behind main may conservatively BUILD because
+the direct comparison also includes main's changes absent from the Preview.
+Do not substitute an older merge base to make the branch appear unaffected.
+
+The fallback requires `VERCEL_ENV=preview` and valid feature-branch context;
+a pull-request ID is not required. The helper checks the exact supported
+`.github/workflows/ci.yml` event topology at **both** Preview HEAD and the
+fetched main revision: `pull_request` and pushes only to `main`. Unsupported
+or changed topology selects BUILD. Both Vercel projects were separately
+reviewed as using Production Branch `main`; this live setting is an explicit
+operational assumption, not something a CI trigger can prove. The helper uses
+no hosting API and cannot detect a later dashboard-only production-branch
+change. Review the helper's production-branch constant, source guard, tests and
+this contract as part of any separately authorized production-branch change.
+
+**Production with no previous-success SHA BUILDs.** No local marker advances
+the baseline after an ignored attempt: the helper relies on Vercel's documented
+previous-success variable. A sequence of ignored candidates must continue to
+compare against the last successful deployment for that same project/branch.
+
+### Bounded Git acquisition and diagnostics
+
+The only permitted remote source is the repository's configured `origin`.
+Fetch only the validated exact previous-success SHA or the exact production
+branch `refs/heads/main`; never fetch a user-supplied URL, arbitrary branch or
+full history. Each acquisition performs at most one fetch, with these fixed
+options and one of those two validated targets:
+
+```sh
+git -c core.hooksPath=/dev/null fetch --no-tags --depth=1 \
+  --no-recurse-submodules --no-auto-maintenance --no-write-commit-graph \
+  --no-prune --no-prune-tags --refmap= origin <EXACT_SHA_OR_refs/heads/main>
+```
+
+Each fetch has a **10-second timeout**. The empty refmap suppresses configured
+remote-tracking updates; explicit no-prune options prevent inherited pruning.
+Hooks, submodule recursion, automatic maintenance and commit-graph writes are
+disabled. The helper also disables interactive credential prompts and implicit
+lazy fetching by other Git reads. It does not check out/reset anything or move
+HEAD, local refs, remote-tracking refs, the index or working-tree files.
+Acquired Git objects, shallow metadata and `FETCH_HEAD` are permitted acquisition
+effects. The helper verifies a single expected fetch receipt and then the exact
+commit/tree before comparison. It installs nothing, uses no GitHub/Vercel API,
+and prints neither remote URLs nor credentials. Network denial, authentication
+failure, timeout, missing objects, malformed Git output or failed
+re-verification selects BUILD.
+
+Diagnostics contain only `decision`, `reason`, public validated `baseline` and
+`head` SHAs, `baselineSource`, `fetched`, and fixed `categories` counts.
+`baselineSource` is `previous_success`, `production_main` or `null` when no
+source was selected. **`fetched: true` means a fetch was attempted**, including
+a failed or timed-out attempt; it does not by itself mean acquisition succeeded.
+`fetched: false` means no fetch was attempted, including validation failures
+before fetching. Read it together with the decision/reason and verified
+baseline. Never echo raw supplied values, a command containing credentials,
+environment variables or Git error output.
+
+### Local verification and required hosted proof
 
 Run `node --test tools/vercel/ignore-build.test.mjs` from the repository root.
-The suite invokes the real CLI in synthetic local Git repositories, checks both
-root and site working directories, and validates the current deployment graph.
-It covers isolated/mixed inputs, workspace changes, complete multi-commit and
-merge histories, previous-success handling, deletions/renames, first deployment,
-missing history, parser failures and safe shell exit mapping. Tests contact no
-network or hosted database and use no secrets. The suite belongs to the
-**existing required `validate` job**, alongside preserved ONB-CI-001 coverage;
+The suite invokes the actual root/site CLI in synthetic Git repositories and
+uses **local bare remotes** for fetch tests: no external network, hosted
+database or real credentials are required. It covers shallow available/missing
+baselines, successful and failed bounded acquisition, valid non-ancestor tree
+comparison, first-Preview main fallback, Production without previous success,
+preservation of HEAD/branch/worktree, redacted diagnostics and the existing
+dependency/path matrix. Independent false-IGNORE probes, both JSON configs,
+`dart analyze .` and `git diff --check` must also pass. The suite remains in the
+**existing required `validate` job** alongside preserved ONB-CI-001 coverage;
 the separate pgTAP job is unchanged.
 
-For the filter PR itself, both projects may legitimately build once because the
-shared decision engine and both deployment configurations change. Verify the
-exact PR commit's GitHub validate/pgTAP results, review threads, and each Vercel
-Preview's effective ignore command, diagnostic, build result and Resources.
-Do not create additional hosted test branches/PRs in Phase 2A. A READY product
-preview proves build completion, not that its backend configuration is present;
-do not copy Production values or send a lead/payment to perform this check.
+R2 uses the existing `fix/vercel-monorepo-deployment-filter` branch and PR #276.
+The focused R2 implementation commit may BUILD both projects because the
+shared engine changes. Check the exact commit's CI and review state, then
+verify **both** Vercel Previews are READY and record their deployment IDs,
+effective ignore command and safe baseline diagnostic. A READY product Preview
+proves build completion, not backend configuration. Do not copy Production
+values or send a lead/payment as part of this check.
+
+Only after both R2 Previews succeed, create **one meaningful documentation-only
+follow-up commit touching only `docs/DEPLOYMENT.md` on the same PR branch**.
+Both projects must be canceled specifically by the Ignored Build Step, with
+**no output resources**. Record the exact proof commit, each deployment ID,
+decision/reason, baseline source and SHA, HEAD SHA, fetch-attempt yes/no, ignored status
+and Resources evidence. If either project fully BUILDs for this follow-up,
+stop before merge and diagnose/fix within the filter scope. Green GitHub
+checks alone do not satisfy this hosted proof.
 
 **“2 Projects” means two linked project records/checks, not necessarily two full
 builds.** An ignored build can produce a completed GitHub success status while
-its Vercel record is CANCELED with no output resources. It still uses a deployment
-quota/concurrency slot. Record creation, ignore decision, full build and output
-resources separately. A site's current Production SHA may differ from product
-when intervening commits do not change its inputs.
+its Vercel record is CANCELED with no output resources. Record creation, ignore
+decision, full build and output resources separately. A site's Production SHA
+may differ from product when intervening commits do not change its inputs.
+
+The same-branch hosted proof verifies previous-success behavior in Vercel's
+shallow checkout. R2 proves the **first-Preview `origin/main` fallback locally**;
+do not create an additional hosted first-Preview branch before merge. After
+eventual separately approved merge, require one tiny docs-only **first-Preview
+branch** as a hosted gate: both projects must be ignored with no resources
+before storage cleanup can proceed. Until then, first-Preview behavior on
+Vercel remains the explicitly unproven hosted item.
 
 ### Rollback and separate cleanup
 
-Under a separately authorized release, revert the filter commit to restore the
-previous source-controlled ignore behavior; the safe emergency decision is
-BUILD. Do not change roots, build commands, app/marketing domains, aliases,
-environment scopes or values as part of filter rollback. Older branches without
-the source command retain their old behavior; deployment verification must pin
-the commit whose configuration was actually used.
+An authorized R2 rollback reverts the focused baseline-acquisition change and
+its matching tests/documentation to reviewed R1 behavior, which conservatively
+BUILDs shallow checkouts. That restores the safe decision while giving up R2's
+hosted filtering benefit. A broader authorized filter rollback restores the
+previous source-controlled ignore behavior. Keep project roots, build commands,
+app/marketing domains, aliases, environment scopes and values unchanged.
+Older branches retain the helper/configuration committed on those branches;
+pin the exact commit whose configuration was used when verifying a deployment.
 
-Phase 2A stops with a reviewed, green PR and Preview evidence **before merge**.
-Deployment deletion and retention changes are **not included**. Storage cleanup
-is Phase 2B after merge authorization and a refreshed, explicitly approved
-deployment-ID manifest preserving Production, rollback, aliases and release
-evidence. Fixing future build decisions does not itself remove retained output
-or reverse historical storage usage.
+Phase 2A R2 stops **before merge** after local tests/review and PR checks are
+green, both R2 Previews are READY, and the same-branch docs-only follow-up is
+ignored by both projects with no resources. Deployment deletion and retention
+changes are not included. Storage cleanup is Phase 2B, after merge
+authorization, the first-Preview hosted gate above, and a refreshed explicitly
+approved deployment-ID manifest preserving Production, rollback, aliases and
+release evidence. Fixing future build decisions does not remove retained
+output or reverse historical storage usage.

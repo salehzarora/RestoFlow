@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 // Vercel's contract is inverted: 0 cancels an unaffected build; 1 builds.
-// No network, package installation, checkout, or deployment state is mutated.
+// Only bounded baseline Git fetches are allowed; refs and working files stay put.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SHA = /^[a-f0-9]{40}$/i;
+// Absolute end assertion: JavaScript's $ alone also accepts a final newline.
+const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
 const BUILD_SCRIPT_HASH = '9ea4df7bef84320e65d416c490cd5562d97c6542f01c2c50ca965f52a51cac49';
 const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c5d995f0d15e';
 const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
+// Both linked projects use main. First-preview fallback also checks the source
+// CI policy; changing the hosted production branch requires reviewing this map.
+const PRODUCTION_BRANCH = 'main';
+const FETCH_TIMEOUT_MS = 10000;
 const fail = (reason) => { throw new Error(reason); };
 const hash = (value) => createHash('sha256').update(value.replace(/\r\n/g, '\n')).digest('hex');
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -25,7 +30,7 @@ function git(repo, args, { allowOne = false, input, buffer = false } = {}) {
   const result = spawnSync('git', ['-C', repo, ...args], {
     encoding: null, input, maxBuffer: 64 * 1024 * 1024,
     timeout: 15000, windowsHide: true,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' },
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0' },
   });
   if (result.error || (result.status !== 0 && !(allowOne && result.status === 1))) fail('git_error');
   return { text: buffer ? result.stdout : decode(result.stdout), status: result.status };
@@ -34,7 +39,9 @@ function git(repo, args, { allowOne = false, input, buffer = false } = {}) {
 function commit(repo, value) {
   if (!SHA.test(value)) fail('invalid_sha');
   const resolved = git(repo, ['rev-parse', '--verify', `${value}^{commit}`]).text.trim();
-  if (!SHA.test(resolved)) fail('git_error');
+  // An annotated tag object must not silently peel into a different commit.
+  if (!SHA.test(resolved) || resolved.toLowerCase() !== value.toLowerCase()) fail('invalid_sha');
+  git(repo, ['cat-file', '-e', `${resolved}^{tree}`]);
   return resolved.toLowerCase();
 }
 
@@ -382,32 +389,77 @@ function inspectMarketing(repo, revision) {
   }
 }
 
-function selectBaseline(repo, head, env) {
-  // Owner contract: ALL shallow history currently builds. Isolated here so a
-  // future explicit approval can permit a proven complete ancestor segment.
-  const shallow = git(repo, ['rev-parse', '--is-shallow-repository']).text.trim();
-  if (shallow !== 'false') fail(shallow === 'true' ? 'shallow_history' : 'git_error');
+function fetchBaseline(repo, spec, acquisition) {
+  if (!SHA.test(spec) && spec !== `refs/heads/${PRODUCTION_BRANCH}`) fail('invalid_fetch_target');
+  // Empty refmap suppresses configured remote-tracking updates. Explicit
+  // no-prune flags override inherited config. Only objects/shallow/FETCH_HEAD
+  // metadata may change; no local or remote-tracking branch is moved.
+  acquisition.fetched = true; // attempted, including failures/timeouts
+  const result = spawnSync('git', ['-C', repo, '-c', 'core.hooksPath=/dev/null',
+    'fetch', '--no-tags', '--depth=1', '--no-recurse-submodules',
+    '--no-auto-maintenance', '--no-write-commit-graph', '--no-prune',
+    '--no-prune-tags', '--refmap=', 'origin', spec], {
+    encoding: null, maxBuffer: 1024 * 1024, timeout: FETCH_TIMEOUT_MS,
+    killSignal: 'SIGKILL', windowsHide: true,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1',
+      GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' },
+  });
+  // Git stderr may contain an origin URL with credentials. Never forward it.
+  if (result.error || result.status !== 0) fail('baseline_fetch_failed');
+  const receiptPath = git(repo, ['rev-parse', '--git-path', 'FETCH_HEAD']).text.trim();
+  const receipts = readFileSync(path.resolve(repo, receiptPath), 'utf8').trimEnd().split('\n');
+  if (receipts.length !== 1) fail('invalid_fetch_result');
+  const receipt = /^([a-f0-9]{40})\t\t([^\r\n]+)\r?$/.exec(receipts[0]);
+  if (!receipt || (SHA.test(spec) && receipt[1].toLowerCase() !== spec.toLowerCase())) fail('invalid_fetch_result');
+  if (!SHA.test(spec) && !receipt[2].startsWith(`branch '${PRODUCTION_BRANCH}' of `)) fail('invalid_fetch_result');
+  return commit(repo, receipt[1]);
+}
+
+function verifyProductionBranch(repo, revision) {
+  // The checked-in CI trigger establishes the source's main-only production
+  // policy. Unsupported/ambiguous syntax BUILDs instead of guessing a branch.
+  const source = read(repo, revision, '.github/workflows/ci.yml').replace(/\r\n/g, '\n');
+  const events = [...source.matchAll(/^(?:on|'on'|"on"):[^\n]*$/gm)];
+  if (events.length !== 1 || events[0][0] !== 'on:') fail('production_branch_unproven');
+  const lines = [];
+  for (const line of source.slice(events[0].index + events[0][0].length).split('\n')) {
+    if (!line.trim() || line.trimStart().startsWith('#')) continue;
+    if (!line.startsWith(' ')) break;
+    lines.push(line.trimEnd());
+  }
+  if (lines.join('\n') !== `  pull_request:\n  push:\n    branches: [${PRODUCTION_BRANCH}]`) fail('production_branch_unproven');
+}
+
+function selectBaseline(repo, head, env, acquisition) {
   const previous = env.VERCEL_GIT_PREVIOUS_SHA ?? '';
   if (previous) {
+    acquisition.baselineSource = 'previous_success';
     if (!SHA.test(previous)) fail('invalid_previous_sha');
-    const baseline = commit(repo, previous);
-    const ancestor = git(repo, ['merge-base', '--is-ancestor', baseline, head], { allowOne: true });
-    if (ancestor.status !== 0) fail('nonancestor_previous_sha');
-    return { baseline, kind: 'previous_success' };
+    try { acquisition.baseline = commit(repo, previous); }
+    catch (error) {
+      if (error?.message === 'invalid_sha') throw error;
+      const shallow = git(repo, ['rev-parse', '--is-shallow-repository']).text.trim();
+      if (shallow !== 'true') fail('baseline_unavailable');
+      acquisition.baseline = fetchBaseline(repo, previous.toLowerCase(), acquisition);
+    }
+    // Vercel supplies the last success for this project AND branch. Its tree
+    // is authoritative even after a rebase or non-ancestor deployment.
+    return;
   }
-  // A first feature PR can use its complete branch delta against the known
-  // local production ref. Never guess HEAD^ or fetch history from this helper.
+  if (env.VERCEL_ENV !== 'preview') fail('missing_baseline');
+  acquisition.baselineSource = 'production_main';
   const ref = env.VERCEL_GIT_COMMIT_REF ?? '';
-  if (env.VERCEL_ENV !== 'preview' || !/^[1-9][0-9]*$/.test(env.VERCEL_GIT_PULL_REQUEST_ID ?? '') || !ref || ['main', 'master', 'HEAD'].includes(ref) || !/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(ref) || ref.includes('..')) fail('missing_baseline');
+  if (!ref || [PRODUCTION_BRANCH, 'HEAD'].includes(ref) || !/^[A-Za-z0-9][A-Za-z0-9_./-]*(?![\s\S])/.test(ref) || ref.includes('..')) fail('untrusted_feature_ref');
+  try { git(repo, ['check-ref-format', '--branch', ref]); }
+  catch { fail('untrusted_feature_ref'); }
   const currentBranch = git(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowOne: true });
   if (currentBranch.status === 0 && currentBranch.text.trim() !== ref) fail('untrusted_feature_ref');
-  const base = git(repo, ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}']).text.trim();
-  if (!SHA.test(base)) fail('missing_baseline');
-  const bases = git(repo, ['merge-base', '--all', head, base]).text.trim().split('\n');
-  if (bases.length !== 1 || !SHA.test(bases[0])) fail('ambiguous_baseline');
-  // A branch already reachable from main is not proof of a first PR delta.
-  if (bases[0] === head) fail('missing_baseline');
-  return { baseline: bases[0].toLowerCase(), kind: 'feature_merge_base' };
+  verifyProductionBranch(repo, head);
+  // origin/main can exist but be stale in a branch clone. Refresh exactly main
+  // to FETCH_HEAD without moving origin/main; compare current main's TREE,
+  // never a merge base that could hide runtime changes on main.
+  acquisition.baseline = fetchBaseline(repo, `refs/heads/${PRODUCTION_BRANCH}`, acquisition);
+  verifyProductionBranch(repo, acquisition.baseline);
 }
 
 function category(file, selector, graphs) {
@@ -446,7 +498,7 @@ function category(file, selector, graphs) {
 /** Actual CLI decision, also callable without process termination by tests. */
 export function decide({ selector, cwd = process.cwd(), env = process.env, helperFile } = {}) {
   let head = null;
-  let baseline = null;
+  const acquisition = { baseline: null, baselineSource: null, fetched: false };
   const categories = {};
   try {
     if (!['product', 'marketing'].includes(selector)) fail('invalid_selector');
@@ -458,8 +510,8 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
     if (!SHA.test(candidateHead)) fail('git_error');
     head = candidateHead;
     if (env.VERCEL_GIT_COMMIT_SHA && (!SHA.test(env.VERCEL_GIT_COMMIT_SHA) || env.VERCEL_GIT_COMMIT_SHA.toLowerCase() !== head)) fail('head_mismatch');
-    const selected = selectBaseline(repo, head, env);
-    baseline = selected.baseline;
+    selectBaseline(repo, head, env, acquisition);
+    const { baseline } = acquisition;
     const changed = git(repo, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', '--no-renames', '-z', baseline, head, '--']).text;
     if (changed && !changed.endsWith('\0')) fail('git_error');
     const files = changed ? changed.slice(0, -1).split('\0') : [];
@@ -471,10 +523,10 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
       categories[item.name] = (categories[item.name] ?? 0) + 1;
       relevant ||= item.relevant;
     }
-    return { decision: relevant ? 'BUILD' : 'IGNORE', reason: relevant ? 'relevant_changes' : files.length ? 'unaffected_changes' : 'no_changes', baseline, head, categories };
+    return { decision: relevant ? 'BUILD' : 'IGNORE', reason: relevant ? 'relevant_changes' : files.length ? 'unaffected_changes' : 'no_changes', ...acquisition, head, categories };
   } catch (error) {
-    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'nonancestor_previous_sha', 'shallow_history', 'missing_baseline', 'untrusted_feature_ref', 'ambiguous_baseline', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
-    return { decision: 'BUILD', reason: known.has(error?.message) ? error.message : 'helper_error', baseline, head, categories };
+    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'missing_baseline', 'untrusted_feature_ref', 'baseline_unavailable', 'baseline_fetch_failed', 'invalid_fetch_target', 'invalid_fetch_result', 'production_branch_unproven', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
+    return { decision: 'BUILD', reason: known.has(error?.message) ? error.message : 'helper_error', ...acquisition, head, categories };
   }
 }
 

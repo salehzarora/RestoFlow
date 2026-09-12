@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 
 // Always exercise the real sibling helper and manifests from this checkout.
@@ -26,6 +26,8 @@ Object.assign(safeEnv, {
   GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: emptyGitConfig, GIT_CONFIG_SYSTEM: emptyGitConfig,
   GIT_TERMINAL_PROMPT: '0', GIT_AUTHOR_NAME: 'Filter fixture', GIT_COMMITTER_NAME: 'Filter fixture',
   GIT_AUTHOR_EMAIL: 'filter-fixture@example.invalid', GIT_COMMITTER_EMAIL: 'filter-fixture@example.invalid',
+  // R2 may fetch baseline objects, but tests can only contact local file remotes.
+  GIT_ALLOW_PROTOCOL: 'file',
 });
 
 after(() => {
@@ -116,7 +118,7 @@ function fixture(options = {}) {
   put(repo, 'site/api/lead.js', '// fixture\n');
   put(repo, 'site/lib/lead.mjs', '// fixture\n');
   put(repo, 'docs/DEPLOYMENT.md', 'fixture docs\n');
-  put(repo, '.github/workflows/ci.yml', 'name: fixture\n');
+  put(repo, '.github/workflows/ci.yml', 'name: fixture\non:\n  pull_request:\n  push:\n    branches: [main]\n');
   put(repo, 'tools/vercel/ignore-build.test.mjs', '// fixture suite\n');
   if (options.realRuntime) {
     function copyRuntime(relativePath) {
@@ -136,6 +138,86 @@ function fixture(options = {}) {
   return { repo, base };
 }
 
+// These remotes are created inside this test process's owned scratch tree.
+// file:// is deliberate: unlike a local-path clone it honors --depth on Git.
+function attachOrigin(repo) {
+  const directory = mkdtempSync(join(scratch, 'bare-'));
+  const remote = join(directory, 'origin.git');
+  runGit(scratch, ['clone', '--quiet', '--bare', '--no-hardlinks', repo, remote]);
+  runGit(repo, ['remote', 'add', 'origin', pathToFileURL(remote).href]);
+  return remote;
+}
+
+function cloneOrigin(remote, { branch = 'feature/r2', depth = 1 } = {}) {
+  const parent = mkdtempSync(join(scratch, 'clone-'));
+  const repo = join(parent, 'checkout');
+  const args = ['clone', '--quiet', '--no-tags', '--single-branch', '--branch', branch];
+  if (depth !== null) args.push(`--depth=${depth}`);
+  runGit(parent, [...args, pathToFileURL(remote).href, repo]);
+  return repo;
+}
+
+function shallowFixture({ changes = [['docs/r2.md']], depth = 1 } = {}) {
+  const { repo: source, base } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  for (const paths of changes) {
+    for (const path of paths) {
+      if (existsSync(join(source, path))) appendFileSync(join(source, path), '\n// R2 change\n');
+      else put(source, path, '// R2 fixture change\n');
+    }
+    commit(source);
+  }
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote, { depth });
+  assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'true');
+  return { repo, source, remote, base };
+}
+
+function commitAvailable(repo, sha) {
+  const probe = spawnSync('git', ['-C', repo, 'cat-file', '-e', `${sha}^{commit}`], {
+    env: safeEnv, encoding: 'utf8', timeout: 15_000, windowsHide: true,
+  });
+  assert.equal(probe.error, undefined);
+  return probe.status === 0;
+}
+
+function traceOptions() {
+  const path = join(mkdtempSync(join(scratch, 'trace-')), 'git.log');
+  return { path, env: { GIT_TRACE: path.replace(/\\/g, '/') } };
+}
+
+function fetchCommands(trace) {
+  if (!existsSync(trace.path)) return [];
+  return readFileSync(trace.path, 'utf8').split(/\r?\n/)
+    .filter((line) => line.includes('built-in: git ') && /\sfetch\s/.test(line))
+    .map((line) => line.slice(line.indexOf(' fetch ') + 1));
+}
+
+function assertExactFetch(trace, spec) {
+  assert.deepEqual(fetchCommands(trace), [
+    `fetch --no-tags --depth=1 --no-recurse-submodules --no-auto-maintenance --no-write-commit-graph --no-prune --no-prune-tags --refmap= origin ${spec}`,
+  ], 'fetch must be one bounded request for the exact authorized object/ref');
+}
+
+function assertBaseline(output, baseline, source, fetched) {
+  assert.equal(output.baseline, baseline);
+  assert.equal(output.baselineSource, source);
+  assert.equal(output.fetched, fetched);
+}
+
+function worktreeSnapshot(repo) {
+  const status = runGit(repo, ['status', '--porcelain=v1', '--untracked-files=all']);
+  return {
+    head: runGit(repo, ['rev-parse', 'HEAD']),
+    symbolicHead: readFileSync(join(repo, '.git/HEAD'), 'utf8'),
+    refs: runGit(repo, ['for-each-ref', '--format=%(refname) %(objectname)']),
+    status,
+    index: readFileSync(join(repo, '.git/index')).toString('base64'),
+    dirty: readFileSync(join(repo, 'docs/DEPLOYMENT.md'), 'utf8'),
+    untracked: readFileSync(join(repo, 'docs/untracked-r2.md'), 'utf8'),
+  };
+}
+
 function invoke(repo, selector, previous, options = {}) {
   const head = runGit(repo, ['rev-parse', 'HEAD']);
   const branch = runGit(repo, ['branch', '--show-current']);
@@ -150,7 +232,7 @@ function invoke(repo, selector, previous, options = {}) {
     env.PATH = join(scratch, 'no-executables');
   }
   const cwd = options.cwd || (selector === 'marketing' ? join(repo, 'site') : repo);
-  const result = spawnSync(process.execPath, [join(repo, HELPER), selector], { cwd, env, encoding: 'utf8', timeout: 15_000, windowsHide: true });
+  const result = spawnSync(process.execPath, [join(repo, HELPER), selector], { cwd, env, encoding: 'utf8', timeout: 35_000, windowsHide: true });
   assert.equal(result.error, undefined, 'helper must terminate without process error');
   assert.equal(result.signal, null);
   assert.ok([0, 1].includes(result.status), 'helper must normalize every exit to IGNORE0 or BUILD1');
@@ -159,9 +241,11 @@ function invoke(repo, selector, previous, options = {}) {
   const lines = result.stdout.trim().split(/\r?\n/);
   assert.equal(lines.length, 1, 'one JSON decision per invocation');
   const output = JSON.parse(lines[0]);
-  assert.deepEqual(Object.keys(output).sort(), ['baseline', 'categories', 'decision', 'head', 'reason']);
+  assert.deepEqual(Object.keys(output).sort(), ['baseline', 'baselineSource', 'categories', 'decision', 'fetched', 'head', 'reason']);
   assert.equal(output.decision, result.status === 0 ? 'IGNORE' : 'BUILD');
   assert.match(output.reason, /^[a-zA-Z0-9_-]+$/, 'reason must be a bounded code, not error text');
+  assert.ok([null, 'previous_success', 'production_main'].includes(output.baselineSource));
+  assert.equal(typeof output.fetched, 'boolean');
   for (const key of ['baseline', 'head']) assert.ok(output[key] === null || /^[0-9a-f]{40}$/i.test(output[key]));
   assert.equal(typeof output.categories, 'object');
   assert.ok(output.categories && !Array.isArray(output.categories));
@@ -283,7 +367,7 @@ for (const [label, from, to] of [
   });
 }
 
-test('18 non-ancestor previous SHA builds, including removed former runtime input', () => {
+test('18 non-ancestor previous SHA compares both trees, including removed former runtime input', () => {
   const { repo, base } = fixture();
   runGit(repo, ['checkout', '--quiet', '-b', 'earlier-deployment']);
   put(repo, 'apps/pos/lib/earlier.dart');
@@ -292,43 +376,47 @@ test('18 non-ancestor previous SHA builds, including removed former runtime inpu
   put(repo, 'docs/rebased.md');
   commit(repo);
   assert.equal(runGit(repo, ['merge-base', nonAncestor, 'HEAD']), base);
-  expectPair(repo, nonAncestor, 'BUILD', 'BUILD');
+  expectPair(repo, nonAncestor, 'IGNORE', 'BUILD');
 });
 
-test('19 complete feature branch can use local origin/main merge-base fallback', () => {
+test('19 complete feature branch uses the exact local origin/main tree', () => {
   const { repo, base } = fixture();
   runGit(repo, ['update-ref', 'refs/remotes/origin/main', base]);
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/site-fixture']);
   put(repo, 'site/src/fallback.js');
   commit(repo);
+  attachOrigin(repo);
   expectPair(repo, undefined, 'BUILD', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
-test('19 missing prior SHA may ignore a docs-only feature branch with proven ancestry', () => {
+test('19 missing prior SHA may ignore a docs-only preview against exact origin/main', () => {
   const { repo, base } = fixture();
   runGit(repo, ['update-ref', 'refs/remotes/origin/main', base]);
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/docs-fixture']);
   put(repo, 'docs/fallback.md');
   commit(repo);
+  attachOrigin(repo);
   expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
-test('19 fallback refuses absent or malformed PR context and production/main contexts', () => {
+test('19 first-preview fallback does not depend on PR metadata and rejects non-preview contexts', () => {
   const { repo, base } = fixture();
   runGit(repo, ['update-ref', 'refs/remotes/origin/main', base]);
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/context-fixture']);
   put(repo, 'docs/fallback.md');
   commit(repo);
+  attachOrigin(repo);
   for (const context of [
     { VERCEL_GIT_PULL_REQUEST_ID: '' },
     { VERCEL_GIT_PULL_REQUEST_ID: CANARY },
     { VERCEL_GIT_PULL_REQUEST_ID: '0' },
-    { VERCEL_GIT_PULL_REQUEST_ID: '123', VERCEL_ENV: 'production' },
-    { VERCEL_GIT_PULL_REQUEST_ID: '123', VERCEL_GIT_COMMIT_REF: 'main' },
-  ]) expectPair(repo, undefined, 'BUILD', 'BUILD', { env: context });
+  ]) expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: context });
+  for (const environment of ['production', 'development', '']) {
+    expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_ENV: environment } });
+  }
 });
 
-test('19 no trusted local base ref fails without fetching', () => {
+test('19 unavailable origin/main fails safely with no configured origin', () => {
   const { repo } = fixture();
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/no-base']);
   put(repo, 'docs/only.md');
@@ -336,20 +424,20 @@ test('19 no trusted local base ref fails without fetching', () => {
   expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
-test('20 missing commit object builds without fetching', () => {
+test('20 missing previous commit in complete history builds safely', () => {
   const { repo } = fixture();
   put(repo, 'docs/only.md');
   commit(repo);
   expectPair(repo, 'a'.repeat(40), 'BUILD', 'BUILD');
 });
 
-test('20 any shallow repository builds even with comparable visible trees', () => {
+test('20 shallow repository can compare already available exact endpoint trees', () => {
   const { repo, base } = fixture();
   put(repo, 'docs/only.md');
   commit(repo);
   put(repo, '.git/shallow', base + '\n');
   assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'true');
-  expectPair(repo, base, 'BUILD', 'BUILD');
+  expectPair(repo, base, 'IGNORE', 'IGNORE');
 });
 
 test('20 Git unavailable produces a sanitized BUILD decision', () => {
@@ -682,4 +770,214 @@ test('23 removed runtime edge is visible from the baseline tree', () => {
   appendFileSync(join(repo, 'packages/money/lib/filter_fixture.dart'), '// removal affects old graph\n');
   commit(repo);
   expectDecision(repo, 'product', base, 'BUILD');
+});
+
+test('R2-01 shallow checkout uses an already available previous-success tree without fetching', () => {
+  const { repo, base } = shallowFixture({ depth: 2 });
+  assert.equal(commitAvailable(repo, base), true);
+  const trace = traceOptions();
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, base, 'IGNORE', { env: trace.env });
+    assertBaseline(output, base, 'previous_success', false);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R2-02 shallow checkout fetches only the exact missing previous-success SHA', () => {
+  const { repo, base } = shallowFixture();
+  assert.equal(commitAvailable(repo, base), false);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', base, 'IGNORE', { env: trace.env });
+  assertBaseline(output, base, 'previous_success', true);
+  assert.equal(commitAvailable(repo, base), true);
+  assertExactFetch(trace, base);
+  assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'true');
+});
+
+test('R2-03 failed exact previous-success fetch returns BUILD without another baseline', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['remote', 'set-url', 'origin', pathToFileURL(join(scratch, 'missing-origin.git')).href]);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', base, 'BUILD', { env: trace.env });
+  assert.equal(output.fetched, true, 'attempted failed fetch is still disclosed');
+  assert.equal(output.baseline, null);
+  assert.equal(commitAvailable(repo, base), false);
+  assertExactFetch(trace, base);
+});
+
+test('R2-04 invalid previous SHA is rejected before fetching or consulting main', () => {
+  const { repo, base } = shallowFixture();
+  const trace = traceOptions();
+  for (const previous of [CANARY, `${base}\n`, ` ${base}`, `${base}^{commit}`, '--all', 'a'.repeat(39)]) {
+    const output = expectDecision(repo, 'product', previous, 'BUILD', { env: trace.env });
+    assert.equal(output.fetched, false);
+  }
+  runGit(repo, ['tag', '--annotate', 'invalid-object-type', '--message', 'fixture annotated tag', 'HEAD']);
+  const tagObject = runGit(repo, ['rev-parse', 'refs/tags/invalid-object-type']);
+  assert.equal(runGit(repo, ['cat-file', '-t', tagObject]), 'tag');
+  const wrongType = expectDecision(repo, 'product', tagObject, 'BUILD', { env: trace.env });
+  assert.equal(wrongType.fetched, false, 'known local tag object is invalid, not a missing baseline');
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R2-05 non-ancestor previous success compares exact trees even after a shallow fetch', () => {
+  const { repo: source, base: common } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'previous-success']);
+  put(source, 'docs/previous.md');
+  const base = commit(source);
+  runGit(source, ['checkout', '--quiet', 'main']);
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  put(source, 'docs/rebased.md');
+  commit(source);
+  assert.equal(runGit(source, ['merge-base', base, 'HEAD']), common);
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote);
+  assert.equal(commitAvailable(repo, base), false);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', base, 'IGNORE', { env: trace.env });
+  assertBaseline(output, base, 'previous_success', true);
+  assertExactFetch(trace, base);
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+});
+
+test('R2-06 first shallow preview fetches the exact main tree with no PR-ID requirement', () => {
+  const { repo, base } = shallowFixture({ changes: [['site/src/r2.js']] });
+  assert.ok(!runGit(repo, ['for-each-ref', '--format=%(refname)']).includes('refs/remotes/origin/main'));
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', undefined, 'IGNORE', { env: trace.env });
+  assertBaseline(output, base, 'production_main', true);
+  assertExactFetch(trace, 'refs/heads/main');
+  const site = expectDecision(repo, 'marketing', undefined, 'BUILD');
+  assertBaseline(site, base, 'production_main', true);
+});
+
+test('R2-07 unavailable main or unsupported production-branch contract returns BUILD', () => {
+  const { repo, remote } = shallowFixture();
+  runGit(scratch, ['--git-dir=' + remote, 'update-ref', '-d', 'refs/heads/main']);
+  const trace = traceOptions();
+  const missing = expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env });
+  assert.equal(missing.fetched, true);
+  assert.equal(missing.baseline, null);
+  assertExactFetch(trace, 'refs/heads/main');
+
+  const guarded = shallowFixture();
+  put(guarded.repo, '.github/workflows/ci.yml', 'name: changed\non:\n  push:\n    branches: [release]\n');
+  commit(guarded.repo);
+  const guardTrace = traceOptions();
+  expectPair(guarded.repo, undefined, 'BUILD', 'BUILD', { env: guardTrace.env });
+  assert.deepEqual(fetchCommands(guardTrace), [], 'source must establish main before network acquisition');
+
+  const detached = shallowFixture();
+  runGit(detached.repo, ['checkout', '--quiet', '--detach']);
+  const refTrace = traceOptions();
+  for (const ref of ['feature/r2\n', 'main\n', 'foo//bar', 'foo.lock']) {
+    const output = expectDecision(detached.repo, 'product', undefined, 'BUILD', {
+      env: { ...refTrace.env, VERCEL_GIT_COMMIT_REF: ref },
+    });
+    assert.equal(output.fetched, false, 'invalid detached feature context must fail before fetch');
+  }
+  assert.deepEqual(fetchCommands(refTrace), []);
+});
+
+test('R2-08 production without a previous success always BUILDs without a fetch', () => {
+  const { repo } = shallowFixture();
+  const trace = traceOptions();
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, undefined, 'BUILD', { env: { ...trace.env, VERCEL_ENV: 'production' } });
+    assert.equal(output.fetched, false);
+    assert.equal(output.baseline, null);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R2-09 docs-only existing shallow branch ignores both projects', () => {
+  const { repo, base } = shallowFixture({ changes: [['docs/DEPLOYMENT.md', 'docs/audit/r2.md']] });
+  expectPair(repo, base, 'IGNORE', 'IGNORE');
+});
+
+test('R2-10 marketing-only existing shallow branch builds only marketing', () => {
+  const { repo, base } = shallowFixture({ changes: [['site/src/r2.js', 'site/public/r2.md']] });
+  expectPair(repo, base, 'BUILD', 'IGNORE');
+});
+
+test('R2-11 product-only existing shallow branch builds only product', () => {
+  const { repo, base } = shallowFixture({ changes: [['apps/pos/lib/r2.dart', 'packages/money/lib/r2.dart']] });
+  expectPair(repo, base, 'IGNORE', 'BUILD');
+});
+
+test('R2-12 multi-commit shallow branch includes earlier runtime changes in the tree delta', () => {
+  const { repo, base } = shallowFixture({ changes: [['apps/kds/lib/earlier.dart'], ['docs/middle.md'], ['docs/final.md']] });
+  expectPair(repo, base, 'IGNORE', 'BUILD');
+});
+
+test('R2-13 ignored candidates never replace the supplied previous-success baseline', () => {
+  const { repo: source, base } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  put(source, 'site/src/not-yet-successful.js');
+  commit(source);
+  put(source, 'docs/ignored-one.md');
+  const intervening = commit(source);
+  put(source, 'docs/ignored-two.md');
+  commit(source);
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote);
+  const output = expectDecision(repo, 'marketing', base, 'BUILD');
+  assertBaseline(output, base, 'previous_success', true);
+  assert.notEqual(output.baseline, intervening);
+  expectDecision(repo, 'product', base, 'IGNORE');
+});
+
+test('R2-14 exact previous and main fetches preserve all refs, HEAD, index and worktree files', () => {
+  const { repo, base } = shallowFixture();
+  appendFileSync(join(repo, 'docs/DEPLOYMENT.md'), 'uncommitted local edit\n');
+  put(repo, 'docs/untracked-r2.md', CANARY + '\n');
+  const before = worktreeSnapshot(repo);
+  const previous = expectDecision(repo, 'product', base, 'IGNORE');
+  assertBaseline(previous, base, 'previous_success', true);
+  assert.deepEqual(worktreeSnapshot(repo), before);
+  const main = expectDecision(repo, 'marketing', undefined, 'IGNORE');
+  assertBaseline(main, base, 'production_main', true);
+  assert.deepEqual(worktreeSnapshot(repo), before);
+});
+
+test('R2-15 failed credential-bearing remote never appears in output diagnostics', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['remote', 'set-url', 'origin', `https://fixture-user:${CANARY}@example.invalid/repo.git`]);
+  // GIT_ALLOW_PROTOCOL=file rejects HTTPS before any external connection.
+  const output = expectDecision(repo, 'product', base, 'BUILD');
+  assert.equal(output.fetched, true);
+  assert.equal(output.baseline, null);
+  assert.ok(!JSON.stringify(output).includes('example.invalid'));
+  assert.ok(!JSON.stringify(output).includes('fixture-user'));
+});
+
+test('R2-16 first preview behind main refreshes stale origin/main and sees runtime removals', () => {
+  const { repo: source, base } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  put(source, 'docs/preview.md');
+  commit(source);
+  runGit(source, ['checkout', '--quiet', 'main']);
+  put(source, 'apps/pos/lib/newer-main.dart');
+  const currentMain = commit(source);
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote);
+  runGit(repo, ['update-ref', 'refs/remotes/origin/main', runGit(repo, ['rev-parse', 'HEAD'])]);
+  const stale = runGit(repo, ['rev-parse', 'refs/remotes/origin/main']);
+  assert.notEqual(stale, currentMain);
+  assert.notEqual(base, currentMain);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env });
+  assertBaseline(output, currentMain, 'production_main', true);
+  assertExactFetch(trace, 'refs/heads/main');
+  assert.equal(runGit(repo, ['rev-parse', 'refs/remotes/origin/main']), stale, 'refresh must not move remote-tracking refs');
+  expectDecision(repo, 'marketing', undefined, 'IGNORE');
+});
+
+test('R2-17 shallow root and site working directories both fetch the correct baseline', () => {
+  const { repo, remote, base } = shallowFixture({ changes: [['site/src/cwd.js']] });
+  const siteRepo = cloneOrigin(remote);
+  const product = expectDecision(repo, 'product', base, 'IGNORE', { cwd: repo });
+  assertBaseline(product, base, 'previous_success', true);
+  const marketing = expectDecision(siteRepo, 'marketing', base, 'BUILD', { cwd: join(siteRepo, 'site') });
+  assertBaseline(marketing, base, 'previous_success', true);
 });
