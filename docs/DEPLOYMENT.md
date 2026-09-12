@@ -1039,8 +1039,14 @@ or another branch ref. A Preview behind main may conservatively BUILD because
 the direct comparison also includes main's changes absent from the Preview.
 Do not substitute an older merge base to make the branch appear unaffected.
 
-The fallback requires `VERCEL_ENV=preview` and valid feature-branch context;
-a pull-request ID is not required. The helper checks the exact supported
+The fallback requires `VERCEL_ENV=preview`, a valid HEAD commit, and equality
+with `VERCEL_GIT_COMMIT_SHA` when that optional value is exposed. R3 treats
+`VERCEL_GIT_COMMIT_REF` as **optional consistency metadata**: absent or empty
+is allowed; exposed values must pass conservative branch syntax validation.
+`main` and `HEAD` are rejected as contradictory feature-ref metadata. Neither
+a detached HEAD nor a different local symbolic branch name invalidates the
+tree comparison. No supplied ref, commit message or PR number selects a fetch
+target. The helper checks the exact supported
 `.github/workflows/ci.yml` event topology at **both** Preview HEAD and the
 fetched main revision: `pull_request` and pushes only to `main`. Unsupported
 or changed topology selects BUILD. Both Vercel projects were separately
@@ -1049,6 +1055,18 @@ operational assumption, not something a CI trigger can prove. The helper uses
 no hosting API and cannot detect a later dashboard-only production-branch
 change. Review the helper's production-branch constant, source guard, tests and
 this contract as part of any separately authorized production-branch change.
+
+Before the first-Preview main fetch, R3 requires exactly one configured
+`remote.origin.url` and one Git-resolved fetch URL (`git remote get-url --all
+origin`, including `insteadOf` expansion). **Both** must identify
+`github.com/salehzarora/RestoFlow`. Supported forms are HTTPS with optional
+`.git` and optional userinfo, or `git@github.com:salehzarora/RestoFlow.git`
+(optional `.git`); repository/host letter case is accepted. Credentials are
+never included in diagnostics. Wrong owners/repositories, lookalike hosts,
+ambiguous URLs, encoded/dot-segment paths, custom ports, query/fragment suffixes
+and unsupported transports select `BUILD / untrusted_origin` before fetching.
+This new origin guard applies only to first Preview; R2's authoritative
+`previous_success` acquisition and comparison are unchanged.
 
 **Production with no previous-success SHA BUILDs.** No local marker advances
 the baseline after an ignored attempt: the helper relies on Vercel's documented
@@ -1105,6 +1123,24 @@ dependency/path matrix. Independent false-IGNORE probes, both JSON configs,
 `dart analyze .` and `git diff --check` must also pass. The suite remains in the
 **existing required `validate` job** alongside preserved ONB-CI-001 coverage;
 the separate pgTAP job is unchanged.
+
+R3 adds a RED/GREEN replay of failed verification PR #277: shallow detached
+HEAD, Preview context, no previous-success SHA, absent commit-ref variable,
+and a docs-only delta must IGNORE both selectors against fetched main. Its
+local transport runs real Git upload-pack against owned bare repositories;
+Git URL rewrites retain the expected identity and no external SSH or network
+is used. The matrix also covers optional metadata, origin spoofing/rewrites,
+redaction, missing main, branch-behind-main and all R1/R2 cases.
+
+**R3 hosted gate:** the implementation changes the shared helper, so both
+projects may legitimately BUILD. After both implementation Previews are READY,
+a meaningful docs-only commit on the same R3 branch must be Ignored with
+**No Resources** on both projects, using the implementation's previous-success
+SHA. This proves the existing path has not regressed; it does **not** prove
+the first-Preview fix on Vercel. After an owner-authorized R3 merge, a brand-new
+docs-only branch must separately prove `production_main` + `unaffected_changes`
+and No Resources on both projects before Phase 2B cleanup can proceed. PR #277
+remains the failed historical verification, unmerged until separately directed.
 
 R2 uses the existing `fix/vercel-monorepo-deployment-filter` branch and PR #276.
 The focused R2 implementation commit may BUILD both projects because the

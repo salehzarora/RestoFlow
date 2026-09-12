@@ -430,6 +430,23 @@ function verifyProductionBranch(repo, revision) {
   if (lines.join('\n') !== `  pull_request:\n  push:\n    branches: [${PRODUCTION_BRANCH}]`) fail('production_branch_unproven');
 }
 
+function verifyProductionOrigin(repo) {
+  // Match raw identities, not URL-normalized paths: reject dot segments,
+  // encoded paths, ports, query/fragment suffixes and lookalike hosts. Userinfo
+  // is allowed only in HTTPS authority and is never returned or logged.
+  const expected = (value) =>
+    /^https:\/\/(?:[^\s/@?#\\]+@)?github\.com\/salehzarora\/RestoFlow(?:\.git)?(?![\s\S])/i.test(value) ||
+    /^git@github\.com:salehzarora\/RestoFlow(?:\.git)?(?![\s\S])/i.test(value);
+  try {
+    const configured = git(repo, ['config', '--null', '--get-all', 'remote.origin.url']).text.split('\0');
+    const resolved = git(repo, ['remote', 'get-url', '--all', 'origin']).text.replace(/\r?\n$/, '').split(/\r?\n/);
+    // Git expands insteadOf in get-url. Both original and effective identities
+    // must agree with the reviewed repository; ambiguous multi-URL origins fail.
+    if (configured.length !== 2 || configured[1] !== '' || resolved.length !== 1 ||
+        !expected(configured[0]) || !expected(resolved[0])) fail('untrusted_origin');
+  } catch { fail('untrusted_origin'); }
+}
+
 function selectBaseline(repo, head, env, acquisition) {
   const previous = env.VERCEL_GIT_PREVIOUS_SHA ?? '';
   if (previous) {
@@ -449,11 +466,14 @@ function selectBaseline(repo, head, env, acquisition) {
   if (env.VERCEL_ENV !== 'preview') fail('missing_baseline');
   acquisition.baselineSource = 'production_main';
   const ref = env.VERCEL_GIT_COMMIT_REF ?? '';
-  if (!ref || [PRODUCTION_BRANCH, 'HEAD'].includes(ref) || !/^[A-Za-z0-9][A-Za-z0-9_./-]*(?![\s\S])/.test(ref) || ref.includes('..')) fail('untrusted_feature_ref');
-  try { git(repo, ['check-ref-format', '--branch', ref]); }
-  catch { fail('untrusted_feature_ref'); }
-  const currentBranch = git(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowOne: true });
-  if (currentBranch.status === 0 && currentBranch.text.trim() !== ref) fail('untrusted_feature_ref');
+  // Optional consistency metadata only. Hosted HEAD may be detached or use a
+  // local branch name unrelated to Vercel's ref. Neither chooses our baseline.
+  if (ref) {
+    if ([PRODUCTION_BRANCH, 'HEAD'].includes(ref) || !/^[A-Za-z0-9][A-Za-z0-9_./-]*(?![\s\S])/.test(ref) || ref.includes('..')) fail('untrusted_feature_ref');
+    try { git(repo, ['check-ref-format', '--branch', ref]); }
+    catch { fail('untrusted_feature_ref'); }
+  }
+  verifyProductionOrigin(repo);
   verifyProductionBranch(repo, head);
   // origin/main can exist but be stale in a branch clone. Refresh exactly main
   // to FETCH_HEAD without moving origin/main; compare current main's TREE,
@@ -525,7 +545,7 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
     }
     return { decision: relevant ? 'BUILD' : 'IGNORE', reason: relevant ? 'relevant_changes' : files.length ? 'unaffected_changes' : 'no_changes', ...acquisition, head, categories };
   } catch (error) {
-    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'missing_baseline', 'untrusted_feature_ref', 'baseline_unavailable', 'baseline_fetch_failed', 'invalid_fetch_target', 'invalid_fetch_result', 'production_branch_unproven', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
+    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'missing_baseline', 'untrusted_feature_ref', 'untrusted_origin', 'baseline_unavailable', 'baseline_fetch_failed', 'invalid_fetch_target', 'invalid_fetch_result', 'production_branch_unproven', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
     return { decision: 'BUILD', reason: known.has(error?.message) ? error.message : 'helper_error', ...acquisition, head, categories };
   }
 }

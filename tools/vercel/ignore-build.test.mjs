@@ -16,6 +16,8 @@ const scratchParent = realpathSync(tmpdir());
 const scratch = mkdtempSync(join(scratchParent, 'restoflow-vercel-filter-test-'));
 const emptyGitConfig = join(scratch, 'empty-git-config');
 writeFileSync(emptyGitConfig, '');
+const fixtureTransports = new Map();
+const EXPECTED_ORIGIN = 'https://github.com/salehzarora/RestoFlow.git';
 
 // No inherited credentials, Git configuration, proxy settings, or NODE_OPTIONS.
 const safeEnv = {};
@@ -145,6 +147,7 @@ function attachOrigin(repo) {
   const remote = join(directory, 'origin.git');
   runGit(scratch, ['clone', '--quiet', '--bare', '--no-hardlinks', repo, remote]);
   runGit(repo, ['remote', 'add', 'origin', pathToFileURL(remote).href]);
+  configureTrustedOrigin(repo, remote);
   return remote;
 }
 
@@ -154,7 +157,26 @@ function cloneOrigin(remote, { branch = 'feature/r2', depth = 1 } = {}) {
   const args = ['clone', '--quiet', '--no-tags', '--single-branch', '--branch', branch];
   if (depth !== null) args.push(`--depth=${depth}`);
   runGit(parent, [...args, pathToFileURL(remote).href, repo]);
+  configureTrustedOrigin(repo, remote);
   return repo;
+}
+
+// Exercise the real Git fetch/object protocol against owned local bare repos.
+// Both configured and Git-resolved URLs retain the expected repository identity.
+// HTTPS is rewritten to its equivalent SSH identity, whose transport runs only
+// local git upload-pack. No helper bypass, external SSH or network is involved.
+function configureTrustedOrigin(repo, remote, origin = EXPECTED_ORIGIN) {
+  runGit(repo, ['remote', 'set-url', 'origin', origin]);
+  runGit(repo, ['config', 'url.git@github.com:salehzarora/RestoFlow.git.insteadOf', origin]);
+  const transport = join(mkdtempSync(join(scratch, 'transport-')), 'local-upload-pack.mjs');
+  writeFileSync(transport, `import { spawnSync } from 'node:child_process';\n` +
+    `const result = spawnSync('git', ['upload-pack', ${JSON.stringify(remote)}], { stdio: 'inherit', windowsHide: true });\n` +
+    `process.exit(result.error ? 1 : result.status ?? 1);\n`);
+  const quote = (value) => "'" + value.replace(/'/g, "'\\''") + "'";
+  fixtureTransports.set(repo, {
+    GIT_ALLOW_PROTOCOL: 'file:ssh', GIT_SSH_VARIANT: 'simple',
+    GIT_SSH_COMMAND: `${quote(process.execPath.replace(/\\/g, '/'))} ${quote(transport.replace(/\\/g, '/'))}`,
+  });
 }
 
 function shallowFixture({ changes = [['docs/r2.md']], depth = 1 } = {}) {
@@ -222,11 +244,12 @@ function invoke(repo, selector, previous, options = {}) {
   const head = runGit(repo, ['rev-parse', 'HEAD']);
   const branch = runGit(repo, ['branch', '--show-current']);
   const env = {
-    ...safeEnv, VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: branch,
+    ...safeEnv, ...fixtureTransports.get(repo), VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: branch,
     VERCEL_GIT_COMMIT_SHA: head, VERCEL_GIT_PREVIOUS_SHA: previous || '',
     RESTOFLOW_SUPABASE_ANON_KEY: CANARY, RESEND_API_KEY: CANARY, VERCEL_TOKEN: CANARY,
     ...options.env,
   };
+  for (const name of options.absentEnv || []) delete env[name];
   if (options.noGit) {
     for (const key of Object.keys(env)) if (/^path$/i.test(key)) delete env[key];
     env.PATH = join(scratch, 'no-executables');
@@ -980,4 +1003,209 @@ test('R2-17 shallow root and site working directories both fetch the correct bas
   assertBaseline(product, base, 'previous_success', true);
   const marketing = expectDecision(siteRepo, 'marketing', base, 'BUILD', { cwd: join(siteRepo, 'site') });
   assertBaseline(marketing, base, 'previous_success', true);
+});
+
+test('R3-21 failed PR #277 replay: missing ref, detached shallow docs-only first Preview', () => {
+  const { repo, base } = shallowFixture({ changes: [['docs/DEPLOYMENT.md']] });
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  assert.equal(runGit(repo, ['branch', '--show-current']), '');
+  for (const selector of ['marketing', 'product']) {
+    const trace = traceOptions();
+    const output = expectDecision(repo, selector, undefined, 'IGNORE', {
+      absentEnv: ['VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_PREVIOUS_SHA'], env: trace.env,
+    });
+    assert.equal(output.reason, 'unaffected_changes');
+    assertBaseline(output, base, 'production_main', true);
+    assertExactFetch(trace, 'refs/heads/main');
+  }
+});
+
+test('R3-01 missing optional ref uses main even when HEAD is attached', () => {
+  const { repo, base } = shallowFixture();
+  const output = expectDecision(repo, 'product', undefined, 'IGNORE', { absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+  assertBaseline(output, base, 'production_main', true);
+});
+
+test('R3-02 detached HEAD with empty optional ref uses main', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  const output = expectDecision(repo, 'product', undefined, 'IGNORE');
+  assertBaseline(output, base, 'production_main', true);
+});
+
+test('R3-03 valid optional ref does not require a matching local symbolic branch', () => {
+  const { repo, base } = shallowFixture();
+  const options = { env: { VERCEL_GIT_COMMIT_REF: 'verify/vercel-first-preview-docs-only' } };
+  assertBaseline(expectDecision(repo, 'product', undefined, 'IGNORE', options), base, 'production_main', true);
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  assertBaseline(expectDecision(repo, 'marketing', undefined, 'IGNORE', options), base, 'production_main', true);
+});
+
+test('R3-04 matching or absent optional exposed SHA allows verified HEAD', () => {
+  const { repo, base } = shallowFixture();
+  assertBaseline(expectDecision(repo, 'product', undefined, 'IGNORE'), base, 'production_main', true);
+  assertBaseline(expectDecision(repo, 'marketing', undefined, 'IGNORE', {
+    absentEnv: ['VERCEL_GIT_COMMIT_SHA', 'VERCEL_GIT_COMMIT_REF'],
+  }), base, 'production_main', true);
+});
+
+test('R3-05 mismatched or malformed exposed SHA BUILDs before fetch', () => {
+  const { repo, base } = shallowFixture();
+  const trace = traceOptions();
+  for (const sha of [base, CANARY, '--all', `${base}\n`]) {
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: { ...trace.env, VERCEL_GIT_COMMIT_SHA: sha } });
+    assert.equal(output.reason, 'head_mismatch');
+    assert.equal(output.fetched, false);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R3-06 malformed or contradictory optional refs BUILD without choosing fetch targets', () => {
+  const { repo } = shallowFixture();
+  const trace = traceOptions();
+  for (const ref of ['main', 'HEAD', '--all', '../main', 'foo//bar', 'foo.lock', 'x\n', 'x\r', 'x@{1}', 'x y']) {
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: { ...trace.env, VERCEL_GIT_COMMIT_REF: ref } });
+    assert.equal(output.reason, 'untrusted_feature_ref');
+    assert.equal(output.fetched, false);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+for (const [id, label, origin] of [
+  ['07', 'HTTPS', 'https://github.com/salehzarora/RestoFlow'],
+  ['08', 'HTTPS .git', EXPECTED_ORIGIN],
+  ['09', 'SSH', 'git@github.com:salehzarora/RestoFlow.git'],
+  ['11', 'credential-bearing HTTPS', `https://fixture-user:${CANARY}@github.com/salehzarora/RestoFlow.git`],
+]) {
+  test(`R3-${id} ${label} origin permits only the exact main fetch and redacts credentials`, () => {
+    const { repo, remote, base } = shallowFixture();
+    configureTrustedOrigin(repo, remote, origin);
+    const trace = traceOptions();
+    const output = expectDecision(repo, 'product', undefined, 'IGNORE', { env: trace.env, absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+    assertBaseline(output, base, 'production_main', true);
+    assertExactFetch(trace, 'refs/heads/main');
+    assert.ok(!JSON.stringify(output).includes('fixture-user'));
+    assert.ok(!JSON.stringify(output).includes('github.com'));
+  });
+}
+
+test('R3-10 wrong or ambiguous origin identity BUILDs before fetch', () => {
+  const { repo } = shallowFixture();
+  const trace = traceOptions();
+  const origins = [
+    'https://github.com/another-owner/RestoFlow.git',
+    'https://github.com/salehzarora/another-repo.git',
+    'git@github.com:another-owner/RestoFlow.git',
+    'https://github.com.example.invalid/salehzarora/RestoFlow.git',
+    'https://github.com@evil.invalid/salehzarora/RestoFlow.git',
+    'https://github.com/salehzarora/other/../RestoFlow.git',
+    'https://github.com/salehzarora/%52estoFlow.git',
+    'https://github.com:443/salehzarora/RestoFlow.git',
+    'https://github.com/salehzarora/RestoFlow.git?x=y',
+    'https://github.com/salehzarora/RestoFlow.git#main',
+    'https://github.com/salehzarora/RestoFlow.git/',
+    EXPECTED_ORIGIN + '\n', EXPECTED_ORIGIN + '\r',
+    'https://github.com\\@evil.invalid/salehzarora/RestoFlow.git',
+    'file:///github.com/salehzarora/RestoFlow.git',
+  ];
+  for (const origin of origins) {
+    runGit(repo, ['remote', 'set-url', 'origin', origin]);
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env });
+    assert.equal(output.reason, 'untrusted_origin');
+    assert.equal(output.fetched, false);
+  }
+  runGit(repo, ['remote', 'set-url', 'origin', EXPECTED_ORIGIN]);
+  runGit(repo, ['config', '--add', 'remote.origin.url', EXPECTED_ORIGIN]);
+  assert.equal(expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env }).reason, 'untrusted_origin');
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R3-10 URL rewrites must preserve expected identity in both directions', () => {
+  const { repo } = shallowFixture();
+  const trace = traceOptions();
+  runGit(repo, ['config', '--unset-all', 'url.git@github.com:salehzarora/RestoFlow.git.insteadOf']);
+  runGit(repo, ['config', 'url.https://evil.invalid/spoof.git.insteadOf', EXPECTED_ORIGIN]);
+  assert.equal(expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env }).reason, 'untrusted_origin');
+  runGit(repo, ['remote', 'set-url', 'origin', 'https://evil.invalid/spoof.git']);
+  runGit(repo, ['config', 'url.git@github.com:salehzarora/RestoFlow.git.insteadOf', 'https://evil.invalid/spoof.git']);
+  assert.equal(expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env }).reason, 'untrusted_origin');
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+for (const [id, name, paths, site, product] of [
+  ['12', 'docs-only', ['docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE'],
+  ['13', 'marketing-only', ['site/src/r3.js'], 'BUILD', 'IGNORE'],
+  ['14', 'product-only', ['apps/pos/lib/r3.dart'], 'IGNORE', 'BUILD'],
+  ['15', 'mixed', ['site/src/r3.js', 'apps/pos/lib/r3.dart'], 'BUILD', 'BUILD'],
+]) {
+  test(`R3-${id} first Preview ${name} uses direct main-to-HEAD trees without ref env`, () => {
+    const { repo, base } = shallowFixture({ changes: [paths] });
+    for (const [selector, expected] of [['marketing', site], ['product', product]]) {
+      const output = expectDecision(repo, selector, undefined, expected, { absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+      assertBaseline(output, base, 'production_main', true);
+      assert.equal(output.reason, expected === 'IGNORE' ? 'unaffected_changes' : 'relevant_changes');
+    }
+  });
+}
+
+test('R3-16 failed main acquisition BUILDs without using a stale local ref', () => {
+  const { repo, remote } = shallowFixture();
+  runGit(repo, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+  runGit(scratch, ['--git-dir=' + remote, 'update-ref', '-d', 'refs/heads/main']);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env, absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+  assert.equal(output.reason, 'baseline_fetch_failed');
+  assertBaseline(output, null, 'production_main', true);
+  assertExactFetch(trace, 'refs/heads/main');
+});
+
+test('R3-17 detached Preview behind main sees runtime changes absent from HEAD', () => {
+  const { repo: source } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  put(source, 'docs/r3-behind.md');
+  commit(source);
+  runGit(source, ['checkout', '--quiet', 'main']);
+  put(source, 'apps/pos/lib/main-only.dart');
+  put(source, 'site/src/main-only.js');
+  const base = commit(source);
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote);
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  for (const selector of ['marketing', 'product']) {
+    assertBaseline(expectDecision(repo, selector, undefined, 'BUILD', { absentEnv: ['VERCEL_GIT_COMMIT_REF'] }), base, 'production_main', true);
+  }
+});
+
+test('R3-18 previous success stays authoritative regardless of optional first-Preview metadata', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  const output = expectDecision(repo, 'product', base, 'IGNORE', { env: { VERCEL_GIT_COMMIT_REF: '--invalid', VERCEL_ENV: 'production' } });
+  assertBaseline(output, base, 'previous_success', true);
+  runGit(repo, ['remote', 'set-url', 'origin', 'https://example.invalid/wrong.git']);
+  assertBaseline(expectDecision(repo, 'marketing', base, 'IGNORE'), base, 'previous_success', false);
+});
+
+test('R3-19 first Production without ref or previous success always BUILDs', () => {
+  const { repo } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, undefined, 'BUILD', {
+      env: { VERCEL_ENV: 'production' }, absentEnv: ['VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_PREVIOUS_SHA'],
+    });
+    assert.equal(output.reason, 'missing_baseline');
+    assertBaseline(output, null, null, false);
+  }
+});
+
+test('R3-20 rejected origin and fetch stderr disclose no supplied credentials or environment', () => {
+  const { repo, remote } = shallowFixture();
+  runGit(repo, ['remote', 'set-url', 'origin', `https://fixture-user:${CANARY}@example.invalid/wrong.git`]);
+  assert.equal(expectDecision(repo, 'product', undefined, 'BUILD').reason, 'untrusted_origin');
+  configureTrustedOrigin(repo, remote, `https://fixture-user:${CANARY}@github.com/salehzarora/RestoFlow.git`);
+  const reject = join(scratch, 'reject-transport.mjs');
+  writeFileSync(reject, `process.stderr.write(${JSON.stringify('fixture-user:' + CANARY)}); process.exit(1);\n`);
+  const command = `"${process.execPath.replace(/\\/g, '/')}" "${reject.replace(/\\/g, '/')}"`;
+  const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: { GIT_SSH_COMMAND: command } });
+  assert.equal(output.reason, 'baseline_fetch_failed');
+  assert.ok(!JSON.stringify(output).includes('fixture-user'));
 });
