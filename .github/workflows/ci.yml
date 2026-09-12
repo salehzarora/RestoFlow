@@ -109,6 +109,23 @@ jobs:
       - name: Tests — data_local (RF-018)
         run: dart test packages/data_local
 
+      # ONB-CI-001: these existing suites were not in the explicit test list.
+      # Keep them in the required validate check. They use fake transports and
+      # ephemeral loopback sockets, never production services or real printers.
+      - name: Tests — data_remote (RPC transport + invalidation)
+        run: dart test packages/data_remote
+
+      - name: Tests — sync (pull coordination + retry)
+        run: dart test packages/sync
+
+      # Some printing tests import flutter_test and require the Flutter runner.
+      - name: Tests — printing (documents + transports)
+        run: flutter test --no-pub packages/printing
+
+      - name: Tests — print_bridge (standalone, sink + fake printer)
+        run: dart test
+        working-directory: tools/print_bridge
+
       - name: Tests — money (RF-036, integer money engine)
         run: dart test packages/money
 
@@ -184,6 +201,18 @@ jobs:
 
       - name: Tests — design_system (RF-141 shared components)
         run: flutter test packages/design_system
+
+      - name: Tests — native_printing (mocked native transport + settings)
+        run: flutter test --no-pub packages/native_printing
+
+      # ONB-CI-001: dependency-free source/mock tests, with no site build or
+      # email delivery. Explicit files keep build/visual output cleanup outside
+      # this lane. The hosted Ubuntu runner already supplies Node >=20.
+      - name: Tests — site (mocked lead + static contracts)
+        working-directory: site
+        run: |
+          node --version
+          node --test tests/claims.test.mjs tests/css-minify.test.mjs tests/lead.test.mjs tests/main-motion-behavior.test.mjs tests/polish.test.mjs
 
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh
