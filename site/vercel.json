@@ -4,7 +4,7 @@
   "installCommand": "echo skip-install",
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "dist",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- .",
+  "ignoreCommand": "if node ../tools/vercel/ignore-build.mjs marketing; then exit 0; else exit 1; fi",
   "trailingSlash": false,
   "cleanUrls": true,
   "functions": { "api/lead.js": { "maxDuration": 10, "memory": 256 } },

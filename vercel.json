@@ -4,6 +4,7 @@
   "installCommand": "if [ ! -d flutter ]; then git clone https://github.com/flutter/flutter.git --depth 1 -b 3.44.2 flutter; fi && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get",
   "buildCommand": "bash tools/vercel_build_web.sh",
   "outputDirectory": "apps/dashboard/build/web",
+  "ignoreCommand": "if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi",
   "rewrites": [
     { "source": "/pos/(.*)", "destination": "/pos/index.html" },
     { "source": "/pos", "destination": "/pos/index.html" },
