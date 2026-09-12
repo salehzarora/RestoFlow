@@ -1183,3 +1183,15 @@ and a locally available previous-success object are both valid outcomes.
 A fetch/acquisition failure must appear as BUILD and cannot count as proof that
 filtering worked. Record the actual observed outcome; this checklist alone is
 not evidence that either hosted gate has passed.
+
+### Post-merge first-Preview evidence (2026-09-12)
+
+After PR #276, verify the first-Preview fallback on a newly created docs-only
+branch from current main; reusing the pre-merge branch would exercise its
+previous-success baseline instead. Pin main when creating the branch and
+require both project logs to identify that exact SHA as `production_main`.
+Keep the verification PR unmerged and record the first candidate's deployment
+IDs, diagnostics and empty Resources outside the repository, so recording the
+result does not replace the first candidate with another push. A real build
+fails this gate and requires diagnosis. Phase 2B cleanup still needs its own
+explicit approval after both project records prove IGNORE with no resources.
