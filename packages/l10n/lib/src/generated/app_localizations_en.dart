@@ -7672,6 +7672,93 @@ class AppLocalizationsEn extends AppLocalizations {
       'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.';
 
   @override
+  String get posPaymentUnconfirmedTitle => 'Payment result not confirmed';
+
+  @override
+  String get posPaymentUnconfirmedBody =>
+      'Check the previous attempt; do not collect again. The earlier request may still be recorded by the server.';
+
+  @override
+  String get posPaymentRecoveredTitle => 'Payment is recorded';
+
+  @override
+  String get posPaymentRecoveredBody =>
+      'Recovered the existing payment. No new payment was taken.';
+
+  @override
+  String get posPaymentSettledElsewhereTitle => 'Already settled';
+
+  @override
+  String get posPaymentSettledElsewhereBody =>
+      'This order was settled by another attempt/device. No payment was recorded for this attempt.';
+
+  @override
+  String get posPaymentSaveBlockedTitle => 'Attempt not saved';
+
+  @override
+  String get posPaymentSaveBlockedBody =>
+      'Cannot safely save/recover the attempt. No new payment was sent.';
+
+  @override
+  String get posPaymentNotAppliedBody =>
+      'The request did not reach the server. Nothing was recorded — resume the same attempt.';
+
+  @override
+  String get posPaymentAuthRequiredBody =>
+      'Sign in again, then resume the same attempt. Do not collect again.';
+
+  @override
+  String get posPaymentOtherActorBody =>
+      'This attempt was started by another cashier. Only they can resume it; check its status or ask a manager.';
+
+  @override
+  String get posPaymentQuarantinedTitle => 'Stored attempt unreadable';
+
+  @override
+  String get posPaymentQuarantinedBody =>
+      'A stored payment attempt could not be read. No new payment was sent. Ask a manager.';
+
+  @override
+  String get posPaymentCheckStatus => 'Check status';
+
+  @override
+  String get posPaymentResumeAttempt => 'Resume same attempt';
+
+  @override
+  String get posPaymentCloseResumeLater => 'Close and resume later';
+
+  @override
+  String get posPaymentStatusStillPending =>
+      'The server has no record of this attempt yet and the order is still unpaid. The original request may still arrive — do not collect again.';
+
+  @override
+  String get posPaymentStatusUnavailable =>
+      'Could not check the status right now. The attempt is kept; try again later.';
+
+  @override
+  String get posPaymentReceiptUnknown =>
+      'Receipt printing was not confirmed. Use Reprint if the customer needs a receipt.';
+
+  @override
+  String posPaymentPreviousAttempt(String tender, String amount) {
+    return 'Previous attempt: $tender · $amount';
+  }
+
+  @override
+  String get posPaymentUnconfirmedChip => 'Payment unconfirmed';
+
+  @override
+  String get posPaymentDone => 'Done';
+
+  @override
+  String get posPaymentRevisionRequired =>
+      'The order total could not be confirmed. Refresh the order, then take the payment. Nothing was charged.';
+
+  @override
+  String get posPaymentActorRequired =>
+      'No signed-in cashier. Sign in, then take the payment. Nothing was charged.';
+
+  @override
   String get authForgotPassword => 'Forgot password?';
 
   @override

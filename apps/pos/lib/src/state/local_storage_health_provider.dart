@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/local_storage_health.dart';
+import '../data/payment_attempt_store.dart' show paymentAttemptStoreProvider;
 import 'draft_recovery_controller.dart' show posDraftRecoveryStoreProvider;
 import 'outbox_controller.dart' show durableOutboxStoreProvider;
 import 'pos_session.dart' show posSyncSessionProvider;
+import 'pos_sync_scope_provider.dart' show posSyncScopeProvider;
 
 /// MONEY-DURABLE-STORES-003B: what the POS knows about the health of its OWN
 /// local storage, aggregated across the durable stores that can report.
@@ -48,15 +50,27 @@ final posLocalStorageHealthProvider = Provider<PosLocalStorageHealth>((ref) {
   // re-evaluate rather than keep the previous device's verdict.
   final outbox = ref.watch(durableOutboxStoreProvider);
   final recovery = ref.watch(posDraftRecoveryStoreProvider);
+  // PAYMENT-ATTEMPT-RECOVERY-001: the durable payment attempts report here
+  // too — a refused attempt write, or a stored attempt this build cannot
+  // read (which withholds NEW payments for its order), must reach the
+  // operator's storage indicator rather than stay a silent sheet banner.
+  final attempts = ref.watch(paymentAttemptStoreProvider);
   final scopeKey = ref.watch(posSyncSessionProvider)?.deviceId ?? '';
+  final attemptScopeKey = ref.watch(posSyncScopeProvider)?.key ?? '';
 
   var refused = false;
   var unreadable = 0;
-  for (final store in <Object?>[outbox, recovery]) {
+  for (final store in <Object?>[outbox, recovery, attempts]) {
     if (store is! PosDurableStoreHealth) continue;
     if (store.isDegraded) refused = true;
     // A store keyed per device cannot answer without a scope; with no session
     // there is no durable queue to be unhealthy about yet.
+    if (identical(store, attempts)) {
+      if (attemptScopeKey.isNotEmpty) {
+        unreadable += store.unreadableRecordCount(attemptScopeKey);
+      }
+      continue;
+    }
     if (scopeKey.isNotEmpty || identical(store, recovery)) {
       unreadable += store.unreadableRecordCount(scopeKey);
     }

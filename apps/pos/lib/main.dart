@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'src/data/draft_recovery_store.dart';
 import 'src/design/pos_theme.dart';
 import 'src/data/durable_outbox_store.dart';
+import 'src/data/payment_attempt_store.dart';
 import 'src/state/addition_controller.dart' show additionJournalStoreProvider;
 import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
@@ -157,6 +158,19 @@ List<Override> _posOverrides(
   // RF-114: durable outbox + a periodic sweep so queued orders re-deliver
   // once the backend recovers (idempotent retries, D-022; no duplicates).
   durableOutboxStoreProvider.overrideWithValue(SharedPrefsOutboxStore(prefs)),
+  // PAYMENT-ATTEMPT-RECOVERY-001: the durable payment-attempt records ride the
+  // SAME boot preferences instance as every other money store, so one
+  // process sees one consistent view of what it has already sent.
+  // PDR-001: the store also gets the INDEPENDENT backing reader, which is the
+  // only thing allowed to contradict a reported write failure. Without it a
+  // failed write is final, which is safe but gives up the genuine
+  // write-landed-then-error recovery.
+  paymentAttemptStoreProvider.overrideWithValue(
+    SharedPrefsPaymentAttemptStore(
+      prefs,
+      backingReader: SharedPreferencesAsyncBackingReader(),
+    ),
+  ),
   if (includePeriodicWork)
     outboxAutoSweepIntervalProvider.overrideWithValue(
       const Duration(seconds: 25),

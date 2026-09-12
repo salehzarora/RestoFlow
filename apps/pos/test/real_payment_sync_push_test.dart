@@ -71,9 +71,22 @@ void main() {
           'status': 'applied',
           'payment_id': 'srv-pay-9',
           'order_id': 'order-uuid-1',
+          // S1 (PDR-002): `record_payment` always echoes the recorded tender,
+          // and the client no longer substitutes the requested one, so a
+          // faithful applied envelope states it.
+          'method': 'cash',
           'receipt_number': '17',
           'change_due_minor': 800,
           'idempotency_replay': false,
+          // CHANGED IN S1-R4: the complete tracked applied tuple — every key
+          // `record_payment` emits on a real application
+          // (20260716090000_..._contracts.sql:400-411).
+          'shift_id': 'shift-1',
+          'cash_drawer_session_id': 'drawer-1',
+          'payment_revision': 1,
+          'order_revision': 8,
+          'auto_completed': false,
+          'server_ts': '2026-07-04T09:00:01Z',
         }),
       );
 

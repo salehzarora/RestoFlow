@@ -7617,6 +7617,93 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا توجد وردية مفتوحة (أو درج نشط) على هذا الجهاز. افتح وردية ثم اقبض الدفعة - الطلب غير متأثر.';
 
   @override
+  String get posPaymentUnconfirmedTitle => 'نتيجة الدفع غير مؤكدة';
+
+  @override
+  String get posPaymentUnconfirmedBody =>
+      'تحقق من المحاولة السابقة ولا تحصّل المبلغ مرة أخرى. قد يكون الخادم قد سجّل الطلب السابق.';
+
+  @override
+  String get posPaymentRecoveredTitle => 'الدفعة مسجّلة';
+
+  @override
+  String get posPaymentRecoveredBody =>
+      'تم استرجاع الدفعة الموجودة. لم يتم تحصيل أي دفعة جديدة.';
+
+  @override
+  String get posPaymentSettledElsewhereTitle => 'تمت التسوية مسبقًا';
+
+  @override
+  String get posPaymentSettledElsewhereBody =>
+      'تمت تسوية هذا الطلب بمحاولة أخرى أو من جهاز آخر. لم تُسجَّل أي دفعة لهذه المحاولة.';
+
+  @override
+  String get posPaymentSaveBlockedTitle => 'لم تُحفظ المحاولة';
+
+  @override
+  String get posPaymentSaveBlockedBody =>
+      'لا يمكن حفظ المحاولة أو استرجاعها بأمان. لم تُرسَل أي دفعة جديدة.';
+
+  @override
+  String get posPaymentNotAppliedBody =>
+      'لم يصل الطلب إلى الخادم. لم يُسجَّل شيء - استأنف المحاولة نفسها.';
+
+  @override
+  String get posPaymentAuthRequiredBody =>
+      'سجّل الدخول مرة أخرى ثم استأنف المحاولة نفسها. لا تحصّل المبلغ مرة أخرى.';
+
+  @override
+  String get posPaymentOtherActorBody =>
+      'بدأ هذه المحاولة كاشير آخر. هو فقط من يستطيع استئنافها؛ تحقق من حالتها أو اسأل المدير.';
+
+  @override
+  String get posPaymentQuarantinedTitle => 'محاولة مخزّنة غير قابلة للقراءة';
+
+  @override
+  String get posPaymentQuarantinedBody =>
+      'تعذّرت قراءة محاولة دفع مخزّنة. لم تُرسَل أي دفعة جديدة. اسأل المدير.';
+
+  @override
+  String get posPaymentCheckStatus => 'التحقق من الحالة';
+
+  @override
+  String get posPaymentResumeAttempt => 'استئناف المحاولة نفسها';
+
+  @override
+  String get posPaymentCloseResumeLater => 'إغلاق والاستئناف لاحقًا';
+
+  @override
+  String get posPaymentStatusStillPending =>
+      'لا يوجد لدى الخادم سجل لهذه المحاولة بعد والطلب ما زال غير مدفوع. قد يصل الطلب الأصلي لاحقًا - لا تحصّل المبلغ مرة أخرى.';
+
+  @override
+  String get posPaymentStatusUnavailable =>
+      'تعذّر التحقق من الحالة الآن. المحاولة محفوظة؛ حاول لاحقًا.';
+
+  @override
+  String get posPaymentReceiptUnknown =>
+      'لم يتم تأكيد طباعة الإيصال. استخدم إعادة الطباعة إذا احتاج الزبون إلى إيصال.';
+
+  @override
+  String posPaymentPreviousAttempt(String tender, String amount) {
+    return 'المحاولة السابقة: $tender · $amount';
+  }
+
+  @override
+  String get posPaymentUnconfirmedChip => 'دفعة غير مؤكدة';
+
+  @override
+  String get posPaymentDone => 'تم';
+
+  @override
+  String get posPaymentRevisionRequired =>
+      'تعذّر تأكيد إجمالي الطلب. حدّث الطلب ثم اقبض الدفعة. لم يتم تحصيل أي مبلغ.';
+
+  @override
+  String get posPaymentActorRequired =>
+      'لا يوجد كاشير مسجّل الدخول. سجّل الدخول ثم اقبض الدفعة. لم يتم تحصيل أي مبلغ.';
+
+  @override
   String get authForgotPassword => 'نسيت كلمة المرور؟';
 
   @override

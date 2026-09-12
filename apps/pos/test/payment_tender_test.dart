@@ -81,6 +81,17 @@ void main() {
               'method': 'card',
               'receipt_number': '42',
               'change_due_minor': 0,
+              // CHANGED IN S1-R3: the source stamps this on every result it
+              // emits; a fixture without it blessed a shape it never produces.
+              'idempotency_replay': false,
+              // CHANGED IN S1-R4: the complete tracked applied tuple
+              // (20260716090000_..._contracts.sql:400-411).
+              'shift_id': 'shift-1',
+              'cash_drawer_session_id': 'drawer-1',
+              'payment_revision': 1,
+              'order_revision': 8,
+              'auto_completed': false,
+              'server_ts': '2026-07-04T09:00:01Z',
             },
           ],
           'server_ts': '2026-07-04T09:00:00Z',

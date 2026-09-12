@@ -17,6 +17,7 @@ import '../print/pos_kitchen_ticket_printer.dart'
         posKitchenReprintProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
+import '../state/payment_controller.dart' show paymentControllerProvider;
 import '../state/pos_order_complete_controller.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_receipt_logo.dart';
@@ -132,6 +133,25 @@ class OrderActionRow extends ConsumerWidget {
     }
 
     if (actions.canPay) {
+      // PAYMENT-ATTEMPT-RECOVERY-001: an UNRESOLVED payment attempt for this
+      // order (a lost reply, a sheet closed mid-recovery) is shown on the row
+      // itself, so a cashier sees it before reaching for the customer's money
+      // again. The button still opens the ONE sheet, which comes up in
+      // recovery mode for it.
+      final pendingAttempt = ref.watch(
+        paymentControllerProvider.select(
+          (s) => s.pendingAttemptFor(order.identity),
+        ),
+      );
+      if (pendingAttempt != null) {
+        children.add(
+          RestoflowStatusPill(
+            key: Key('$keyPrefix-payment-unconfirmed-${order.orderNumber}'),
+            label: l10n.posPaymentUnconfirmedChip,
+            tone: RestoflowTone.warning,
+          ),
+        );
+      }
       children.add(
         OrderActionButton(
           child: FilledButton.icon(
