@@ -12,22 +12,26 @@
 
 ## 1. What deploys where
 
-**One** Vercel project + **one** hosted Supabase project serve all three role apps
-as Flutter web at their own paths (LIVE-APPS-001), so restaurant tablets open each
-role separately:
+**Two Git-linked Vercel projects** share this repository. `bizbot-site` serves
+the marketing website at `bizbot.systems` from Root Directory `site` (§5.2).
+`resto-flow` serves the four public Flutter apps at `app.bizbot.systems` from the
+repository root, with the existing hosted backend. Deployment filtering (§15)
+keeps their build inputs separate; restaurant devices open each role separately:
 
 | Path | Surface | Mode | Notes |
 |---|---|---|---|
 | `/` | `apps/dashboard` (owner/manager) | **REAL** | Manager tablet. GoTrue email/password sign-in. |
 | `/pos`, `/pos/*` | `apps/pos` (cashier) | **REAL** | Cashier tablet. Anonymous device session → pairing → PIN (§8). |
 | `/kds`, `/kds/*` | `apps/kds` (kitchen) | **REAL** | Kitchen tablet. Money-free; anonymous device session → pairing → PIN (§8). |
+| `/kiosk`, `/kiosk/*` | `apps/kiosk` (customer) | **REAL configuration** | Customer surface; ordering remains subject to its existing application gate. |
 | — | `apps/admin` (platform admin) | **REAL, run locally** | **Deliberately NOT hosted yet.** A web target and its own deploy contract now exist (ADMIN-125A / 126B), but the dedicated Vercel project is **deferred** — see §14. Never `/admin` on this project. |
 
 The Vercel build ([vercel.json](../vercel.json)) clones **Flutter pinned to `3.44.2`**
 (matching CI) and runs [tools/vercel_build_web.sh](../tools/vercel_build_web.sh),
-which builds **all three** apps `--release` — dashboard with `--base-href=/`, POS
-with `--base-href=/pos/`, KDS with `--base-href=/kds/` — then copies the POS and
-KDS builds **under** the dashboard output (`apps/dashboard/build/web/{pos,kds}`).
+which builds **all four** apps `--release` — dashboard with `--base-href=/`, POS
+with `--base-href=/pos/`, KDS with `--base-href=/kds/`, Kiosk with
+`--base-href=/kiosk/` — then copies the POS, KDS and Kiosk builds **under** the
+dashboard output (`apps/dashboard/build/web/{pos,kds,kiosk}`).
 `outputDirectory` stays `apps/dashboard/build/web`. Ordered SPA rewrites give each
 subtree its own fallback so hard-refresh / deep links resolve (real static assets
 are served from the filesystem before rewrites apply):
@@ -35,6 +39,7 @@ are served from the filesystem before rewrites apply):
 ```
 /pos/(.*) → /pos/index.html      /kds/(.*) → /kds/index.html
 /pos      → /pos/index.html      /kds      → /kds/index.html
+/kiosk/(.*) → /kiosk/index.html  /kiosk    → /kiosk/index.html
 /(.*)     → /index.html          (dashboard, catch-all LAST)
 ```
 
@@ -47,14 +52,14 @@ and navigation stays base-href-relative.
 ## 2. Required environment variables (NAMES only — never commit values)
 
 Set these as **Vercel Production/Preview environment variables** — the **same
-values feed all three apps** (dashboard, POS, KDS). Values live in Vercel's env
+values feed all four apps** (dashboard, POS, KDS, Kiosk). Values live in Vercel's env
 store (or a secrets manager), **never in git**.
 
 | Env var | Value class | Required | Notes |
 |---|---|---|---|
 | `RESTOFLOW_SUPABASE_URL` | public project URL | ✅ | A public endpoint, not a secret. |
 | `RESTOFLOW_SUPABASE_ANON_KEY` | **anon / publishable key** | ✅ | **SAFE for clients** — RLS-gated, no elevated privilege. POS/KDS ride an **anonymous** device session over this key (§8), never a service-role key. |
-| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (pinned in the build script) | Pinned to `false` for all three apps by [tools/vercel_build_web.sh](../tools/vercel_build_web.sh) (invoked by vercel.json's `buildCommand`); enables the real auth gate — see §4. |
+| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (pinned in the build script) | Pinned to `false` for all four apps by [tools/vercel_build_web.sh](../tools/vercel_build_web.sh) (invoked by vercel.json's `buildCommand`); enables the real auth gate — see §4. |
 | `RESTOFLOW_AUTH_REDIRECT_URL` | public app URL | ⬜ optional | RF-LIVE-002 override for the sign-up email-confirmation redirect. Leave **unset** to derive it from the runtime web origin (correct for prod + preview); set only for a custom domain. Public URL, never a secret. See §5. |
 | `RESTOFLOW_DASHBOARD_URL` | public Dashboard URL | ⬜ optional | RF-LIVE-002 — the hosted Dashboard URL the **Admin** app's "open the Dashboard" link points at. Unset falls back to the local dev URL. Public URL, never a secret. |
 | `RESTOFLOW_PRINT_BRIDGE_URL` | — | ❌ **never on Vercel** | A per-device **LOCAL loopback** define (`http://127.0.0.1:8787`) for on-site ESC/POS printing; loopback-enforced client-side. It is a local-run concern only — **do not set it as a hosted Vercel env var** (a non-loopback value fails soft/dormant). |
@@ -96,7 +101,7 @@ render the honest "real mode unconfigured" screen.
   production build that **omits** the flag would serve the demo UI as if it were
   the product.
 - The hosted web build **must** pass `--dart-define=RESTOFLOW_DEMO_MODE=false` for
-  **all three apps** — [tools/vercel_build_web.sh](../tools/vercel_build_web.sh)
+  **all four apps** — [tools/vercel_build_web.sh](../tools/vercel_build_web.sh)
   (invoked by [vercel.json](../vercel.json)'s `buildCommand`) already does. **Never
   remove it**, and verify any alternate deploy path also sets it.
 - If real mode is selected but the URL/anon key is missing or invalid, the app
@@ -141,7 +146,8 @@ serves the SAME production deployment on two origins:
 |---|---|
 | `https://app.bizbot.systems` | **Canonical** production origin — Dashboard at `/`, `/pos`, `/kds`, `/kiosk` |
 | `https://resto-flow-phi.vercel.app` | **Legacy origin, deliberately retained** — identical deployment, never removed abruptly |
-| `https://bizbot.systems`, `https://www.bizbot.systems` | Brand root — currently a **307 (temporary) redirect** to `app.bizbot.systems`; reserved for a marketing landing page later |
+| `https://bizbot.systems` | Marketing website on the separate `bizbot-site` project (§5.2) |
+| `https://www.bizbot.systems` | **308** redirect to `https://bizbot.systems` |
 
 Why both origins stay: POS/KDS/Kiosk device pairing and the human session live in
 browser storage, which is scoped **per origin**. A device paired on the old
@@ -178,27 +184,27 @@ static HTML per locale + one Node function `api/lead.js`). It shares nothing at
 runtime with the product apps: no Flutter, no Supabase, no service key, no
 cookies. Arabic is the default document (`/`), English at `/en`, Hebrew at `/he`.
 
-Domain plan for the brand root (the app origins above are untouched):
+Current domain assignments (verified 2026-09-12; preserve the app origins above):
 
-| Origin | Today | Target |
-|---|---|---|
-| `https://bizbot.systems` | 307 → `app.bizbot.systems` (assigned to `resto-flow`) | Marketing site (assigned to `bizbot-site`) |
-| `https://www.bizbot.systems` | 307 → `app.bizbot.systems` | 308 → `https://bizbot.systems/…` (rule in `site/vercel.json`) |
-| `https://app.bizbot.systems` | canonical app origin | **unchanged** |
+| Origin | Current assignment |
+|---|---|
+| `https://bizbot.systems` | Marketing site (`bizbot-site`) |
+| `https://www.bizbot.systems` | 308 → `https://bizbot.systems/…` (`site/vercel.json`) |
+| `https://app.bizbot.systems` | Product (`resto-flow`) |
 
-Cut-over = in Vercel move the two domains `bizbot.systems` + `www.bizbot.systems`
-from `resto-flow` to `bizbot-site` (DNS at Porkbun already points both at
-Vercel, so no DNS edit is needed). `site/vercel.json` keeps every product path
-alive on the brand root during and after the move: `/pos`, `/kds`, `/kiosk`,
+The marketing cut-over is complete. `site/vercel.json` keeps every product path
+alive on the brand root: `/pos`, `/kds`, `/kiosk`,
 `/dashboard`, `/app`, `/login`, `/auth/*` → `https://app.bizbot.systems/...`.
-Rollback = move the two domains back; nothing else changes.
+Do not reconnect marketing domains to the product build to repair deployment
+filtering. Filter rollback changes the build decision only (§15); it does not
+move domains, aliases, environment variables or customer sessions.
 
 The `bizbot-site` project exists at `https://vercel.com/salehzaroras-projects/bizbot-site`
 (created 2026-09-06 through the Vercel integration, Git-linked to
 `salehzarora/RestoFlow`, Root Directory `site`; its `bizbot-site.vercel.app`
-alias serves the site). **Before the domain cut-over its Production Branch must
-be `main`** (the first deployments came from the feature branch — verify under
-Settings → Git) so that merges to `main` are what reach production.
+alias serves the site). Both projects use **Production Branch `main`**; feature
+branches produce Preview records. Keep both roots, existing build/install/output
+commands, Node 24 and domain assignments unchanged when editing filters.
 
 Lead form: `POST /api/lead` on the site project e-mails demo requests through
 Resend (domain `bizbot.systems`, already verified) to `sales@bizbot.systems`.
@@ -923,3 +929,146 @@ returns the Dashboard SPA catch-all — byte-identical to `/` and to any nonsens
 route — which is the intended behaviour, not an Admin deployment.
 `apps/admin/test/admin_web_target_125a_test.dart` fails if the console ever
 drifts into the public build; keep that guard green.
+
+---
+
+## 15. Monorepo deployment filtering (VERCEL-FILTER-PHASE2A)
+
+### Canonical commands and unchanged project boundaries
+
+Both projects remain connected to `salehzarora/RestoFlow`, with Production
+Branch `main`. `resto-flow` uses repository root and
+`bash tools/vercel_build_web.sh`; `bizbot-site` uses Root Directory `site` and
+`node scripts/build.mjs`. Output directories remain
+`apps/dashboard/build/web` and `dist`, respectively. Keep Node 24 and the site's
+**Include files outside Root Directory** enabled: its ignore command reads the
+shared helper from `../tools/vercel/` before installation.
+
+The reviewed `ignoreCommand` in each committed `vercel.json` is canonical and
+[overrides the dashboard command](https://vercel.com/docs/project-configuration/vercel-json#ignorecommand):
+
+```sh
+# Repository root: resto-flow
+if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi
+
+# Working directory site/: bizbot-site
+if node ../tools/vercel/ignore-build.mjs marketing; then exit 0; else exit 1; fi
+```
+
+Vercel's exit convention is **0 = IGNORE, 1 = BUILD**. The shell wrappers also
+map a missing Node interpreter, missing helper or syntax error to BUILD.
+No package installation, credentials or hosted API calls are required by the
+helper. Do not change dashboard Ignored Build Step settings merely to mirror
+these commands. If hosted logs show a different effective command, stop and
+investigate before changing any setting.
+
+### Source inputs
+
+| Change | bizbot-site | resto-flow |
+|---|---|---|
+| `site/src/`, all copied `site/public/`, `site/api/`, `site/lib/`, production site scripts/config/manifest | BUILD | IGNORE |
+| Dashboard/POS/KDS/Kiosk production code, web files and declared assets | IGNORE | BUILD |
+| Reachable runtime packages and their declared assets/fonts/l10n | IGNORE | BUILD |
+| Root `pubspec.yaml`, `pubspec.lock`, any workspace-member manifest | IGNORE | BUILD |
+| Root `vercel.json`, `tools/vercel_build_web.sh` | IGNORE | BUILD |
+| CI-only, deployment-irrelevant docs/audit/tests, native Android/release tooling | IGNORE | IGNORE |
+| Internal Admin or unreferenced package source with unchanged, validated graph | IGNORE | IGNORE |
+| Exact shared `tools/vercel/ignore-build.mjs` control, or real inputs of both projects | BUILD | BUILD |
+| Only `tools/vercel/ignore-build.test.mjs` or this deployment document | IGNORE | IGNORE |
+| Any shallow Git checkout, even with a visible previous SHA | BUILD | BUILD |
+| Unknown project-local input/configuration | BUILD if in marketing scope | BUILD if in product scope |
+| Untrustworthy comparison, unsupported required graph, helper/parse/Git failure | BUILD | BUILD |
+
+The current product graph has four deployed apps and 16 reachable shared
+packages: `auth_identity`, `core`, `currency`, `data_local`, `data_remote`,
+`design_system`, `domain`, `feature_admin`, `feature_auth`, `feature_kitchen`,
+`feature_menu`, `l10n`, `money`, `native_printing`, `printing`, `sync`.
+`feature_admin` is part of Dashboard even though `apps/admin` is not deployed.
+This list describes the current graph; the helper and CI validate dependencies
+against source instead of trusting an unguarded list. All 25 workspace-member
+manifests affect dependency resolution, including otherwise unused members.
+
+The graph supports the repository's current manifest syntax and build pipeline.
+Build-script hashes and supported build-configuration shapes are deliberate
+guards: when either builder gains new inputs, review those inputs and update
+the corresponding guard and tests in the same change. Do not merely refresh a
+hash to silence CI. Unsupported persistent overrides, loaders or configuration
+continue to BUILD on later commits until their dependency model is reviewed.
+
+Production asset declarations take precedence over docs/test exclusions in
+both compared trees. For example, `site/public/README.md` is copied output and
+must build marketing. A Flutter asset declared under a test-looking directory
+must build product. Generated Dart/l10n production source is also an input;
+backend migrations have their own separately authorized release process.
+
+### Complete comparison and safe failure
+
+Use [`VERCEL_GIT_PREVIOUS_SHA`](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_git_previous_sha)
+as Vercel's last **successful deployment** for this project and branch, after
+validating its SHA, commit/tree availability and ancestry. Compare the complete
+baseline tree with HEAD using NUL-delimited paths and no rename detection;
+a move therefore includes both deletion and addition. Never substitute `HEAD^`,
+a commit message, the latest attempted deployment or a GitHub success status.
+The helper writes no baseline state: ignored attempts cannot advance a locally
+invented successful-deployment marker. Its previous-success identity relies on
+Vercel's documented system variable, not an authenticated API lookup.
+
+**Every shallow repository BUILDs**, including when the previous SHA is visible
+and its ancestry could be proved locally. This is the explicitly approved
+Phase 2A rule. Vercel [normally clones ten commits](https://vercel.com/docs/builds/configure-a-build),
+so ordinary hosted checkouts can build both projects for site-only, app-only or
+CI/docs-only changes. The selective decisions in the input table require a
+non-shallow checkout and a trustworthy baseline. Do not claim that these filters
+prevent unnecessary hosted builds when the diagnostic is `shallow_history`.
+The helper does not deepen the clone or make an exception for a complete visible
+comparison segment. Changing this rule requires a separate owner decision.
+
+An absent previous SHA may use a feature-branch merge base only with a proven
+complete local history and trustworthy branch/base context. Otherwise BUILD.
+Malformed or non-ancestor previous SHAs, missing objects, ambiguous history,
+unsupported parsing, wrong working directory and Git errors BUILD. The helper
+does not fetch history. It prints only decision/reason, validated SHAs and path
+category counts, never supplied raw values or credentials.
+
+### Local and hosted verification
+
+Run `node --test tools/vercel/ignore-build.test.mjs` from the repository root.
+The suite invokes the real CLI in synthetic local Git repositories, checks both
+root and site working directories, and validates the current deployment graph.
+It covers isolated/mixed inputs, workspace changes, complete multi-commit and
+merge histories, previous-success handling, deletions/renames, first deployment,
+missing history, parser failures and safe shell exit mapping. Tests contact no
+network or hosted database and use no secrets. The suite belongs to the
+**existing required `validate` job**, alongside preserved ONB-CI-001 coverage;
+the separate pgTAP job is unchanged.
+
+For the filter PR itself, both projects may legitimately build once because the
+shared decision engine and both deployment configurations change. Verify the
+exact PR commit's GitHub validate/pgTAP results, review threads, and each Vercel
+Preview's effective ignore command, diagnostic, build result and Resources.
+Do not create additional hosted test branches/PRs in Phase 2A. A READY product
+preview proves build completion, not that its backend configuration is present;
+do not copy Production values or send a lead/payment to perform this check.
+
+**“2 Projects” means two linked project records/checks, not necessarily two full
+builds.** An ignored build can produce a completed GitHub success status while
+its Vercel record is CANCELED with no output resources. It still uses a deployment
+quota/concurrency slot. Record creation, ignore decision, full build and output
+resources separately. A site's current Production SHA may differ from product
+when intervening commits do not change its inputs.
+
+### Rollback and separate cleanup
+
+Under a separately authorized release, revert the filter commit to restore the
+previous source-controlled ignore behavior; the safe emergency decision is
+BUILD. Do not change roots, build commands, app/marketing domains, aliases,
+environment scopes or values as part of filter rollback. Older branches without
+the source command retain their old behavior; deployment verification must pin
+the commit whose configuration was actually used.
+
+Phase 2A stops with a reviewed, green PR and Preview evidence **before merge**.
+Deployment deletion and retention changes are **not included**. Storage cleanup
+is Phase 2B after merge authorization and a refreshed, explicitly approved
+deployment-ID manifest preserving Production, rollback, aliases and release
+evidence. Fixing future build decisions does not itself remove retained output
+or reverse historical storage usage.

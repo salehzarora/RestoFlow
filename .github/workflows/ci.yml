@@ -41,6 +41,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Built-in Node/Git only; synthetic histories never contact hosted services.
+      # Keep deployment-input coverage in the existing required validate check.
+      - name: Tests — Vercel deployment filtering
+        run: node --test tools/vercel/ignore-build.test.mjs
+
       - name: Set up Flutter (bundles Dart)
         uses: subosito/flutter-action@v2
         with:
