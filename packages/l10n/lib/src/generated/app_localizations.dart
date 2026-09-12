@@ -13846,6 +13846,150 @@ abstract class AppLocalizations {
   /// **'This device has no open shift (or active drawer). Open a shift, then take the payment - the order is not affected.'**
   String get posPaymentNoOpenShift;
 
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner title after a lost/unreadable reply — the server may have committed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment result not confirmed'**
+  String get posPaymentUnconfirmedTitle;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body: never re-tender; check or resume the SAME attempt.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the previous attempt; do not collect again. The earlier request may still be recorded by the server.'**
+  String get posPaymentUnconfirmedBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner title after a resumed attempt came back applied (replay).
+  ///
+  /// In en, this message translates to:
+  /// **'Payment is recorded'**
+  String get posPaymentRecoveredTitle;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body for a recovered (replayed) acceptance.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovered the existing payment. No new payment was taken.'**
+  String get posPaymentRecoveredBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner title when THIS attempt was refused and the order is paid by another attempt/device.
+  ///
+  /// In en, this message translates to:
+  /// **'Already settled'**
+  String get posPaymentSettledElsewhereTitle;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body: not our payment; no receipt/drawer for this attempt.
+  ///
+  /// In en, this message translates to:
+  /// **'This order was settled by another attempt/device. No payment was recorded for this attempt.'**
+  String get posPaymentSettledElsewhereBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner title when the durable attempt record could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempt not saved'**
+  String get posPaymentSaveBlockedTitle;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body: zero network sends without a durable record.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot safely save/recover the attempt. No new payment was sent.'**
+  String get posPaymentSaveBlockedBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body when the transport proved the request did not commit (rolled back / refused at the gateway).
+  ///
+  /// In en, this message translates to:
+  /// **'The request did not reach the server. Nothing was recorded — resume the same attempt.'**
+  String get posPaymentNotAppliedBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body when the session was refused; the attempt is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again, then resume the same attempt. Do not collect again.'**
+  String get posPaymentAuthRequiredBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body when the pending attempt belongs to another signed-in employee.
+  ///
+  /// In en, this message translates to:
+  /// **'This attempt was started by another cashier. Only they can resume it; check its status or ask a manager.'**
+  String get posPaymentOtherActorBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner title when a stored attempt record cannot be read by this build.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored attempt unreadable'**
+  String get posPaymentQuarantinedTitle;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: banner body: the record is kept, nothing is sent, manager assistance.
+  ///
+  /// In en, this message translates to:
+  /// **'A stored payment attempt could not be read. No new payment was sent. Ask a manager.'**
+  String get posPaymentQuarantinedBody;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: action: read-only status check of the pending attempt (executes nothing).
+  ///
+  /// In en, this message translates to:
+  /// **'Check status'**
+  String get posPaymentCheckStatus;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: action: re-send the SAME frozen attempt under the same identity.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume same attempt'**
+  String get posPaymentResumeAttempt;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: action: close the sheet; the attempt stays pending and is offered again on reopen.
+  ///
+  /// In en, this message translates to:
+  /// **'Close and resume later'**
+  String get posPaymentCloseResumeLater;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: status-check result: no ledger row, order unpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no record of this attempt yet and the order is still unpaid. The original request may still arrive — do not collect again.'**
+  String get posPaymentStatusStillPending;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: status-check result: the read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check the status right now. The attempt is kept; try again later.'**
+  String get posPaymentStatusUnavailable;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: note when the automatic receipt cannot be (re)fired for a resolved attempt — physical outcome unknown; manual reprint stands.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt printing was not confirmed. Use Reprint if the customer needs a receipt.'**
+  String get posPaymentReceiptUnknown;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: the frozen tender and amount of the earlier attempt shown in recovery mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous attempt: {tender} · {amount}'**
+  String posPaymentPreviousAttempt(String tender, String amount);
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: order-row chip while a payment attempt for the order is unresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment unconfirmed'**
+  String get posPaymentUnconfirmedChip;
+
+  /// PAYMENT-ATTEMPT-RECOVERY-001: closes the sheet after a recovered payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get posPaymentDone;
+
+  /// PDR-003 (PAYMENT-ATTEMPT-RECOVERY-001 / S1): no authoritative order revision, so no payment attempt was created or sent.
+  ///
+  /// In en, this message translates to:
+  /// **'The order total could not be confirmed. Refresh the order, then take the payment. Nothing was charged.'**
+  String get posPaymentRevisionRequired;
+
+  /// PDR-007 (PAYMENT-ATTEMPT-RECOVERY-001 / S1): no identifiable employee, so no payment attempt was created or sent.
+  ///
+  /// In en, this message translates to:
+  /// **'No signed-in cashier. Sign in, then take the payment. Nothing was charged.'**
+  String get posPaymentActorRequired;
+
   /// AUTH-256: opens the password-reset request from the sign-in form.
   ///
   /// In en, this message translates to:

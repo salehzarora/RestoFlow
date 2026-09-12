@@ -7567,6 +7567,93 @@ class AppLocalizationsHe extends AppLocalizations {
       'אין משמרת פתוחה (או מגירה פעילה) במכשיר זה. פתחו משמרת ואז קבלו את התשלום - ההזמנה לא מושפעת.';
 
   @override
+  String get posPaymentUnconfirmedTitle => 'תוצאת התשלום לא אושרה';
+
+  @override
+  String get posPaymentUnconfirmedBody =>
+      'בדקו את הניסיון הקודם; אל תגבו שוב. ייתכן שהשרת כבר רשם את הבקשה הקודמת.';
+
+  @override
+  String get posPaymentRecoveredTitle => 'התשלום נרשם';
+
+  @override
+  String get posPaymentRecoveredBody =>
+      'התשלום הקיים שוחזר. לא נגבה תשלום חדש.';
+
+  @override
+  String get posPaymentSettledElsewhereTitle => 'כבר סולק';
+
+  @override
+  String get posPaymentSettledElsewhereBody =>
+      'הזמנה זו סולקה בניסיון אחר או ממכשיר אחר. לא נרשם תשלום עבור ניסיון זה.';
+
+  @override
+  String get posPaymentSaveBlockedTitle => 'הניסיון לא נשמר';
+
+  @override
+  String get posPaymentSaveBlockedBody =>
+      'לא ניתן לשמור או לשחזר את הניסיון בבטחה. לא נשלח תשלום חדש.';
+
+  @override
+  String get posPaymentNotAppliedBody =>
+      'הבקשה לא הגיעה לשרת. דבר לא נרשם - חדשו את אותו ניסיון.';
+
+  @override
+  String get posPaymentAuthRequiredBody =>
+      'התחברו שוב ואז חדשו את אותו ניסיון. אל תגבו שוב.';
+
+  @override
+  String get posPaymentOtherActorBody =>
+      'ניסיון זה התחיל על ידי קופאי אחר. רק הוא יכול לחדש אותו; בדקו את מצבו או פנו למנהל.';
+
+  @override
+  String get posPaymentQuarantinedTitle => 'ניסיון שמור אינו קריא';
+
+  @override
+  String get posPaymentQuarantinedBody =>
+      'לא ניתן לקרוא ניסיון תשלום שמור. לא נשלח תשלום חדש. פנו למנהל.';
+
+  @override
+  String get posPaymentCheckStatus => 'בדיקת מצב';
+
+  @override
+  String get posPaymentResumeAttempt => 'חידוש אותו ניסיון';
+
+  @override
+  String get posPaymentCloseResumeLater => 'סגירה וחידוש מאוחר יותר';
+
+  @override
+  String get posPaymentStatusStillPending =>
+      'לשרת אין עדיין רישום של ניסיון זה וההזמנה עדיין לא שולמה. הבקשה המקורית עשויה עוד להגיע - אל תגבו שוב.';
+
+  @override
+  String get posPaymentStatusUnavailable =>
+      'לא ניתן לבדוק את המצב כעת. הניסיון נשמר; נסו שוב מאוחר יותר.';
+
+  @override
+  String get posPaymentReceiptUnknown =>
+      'הדפסת הקבלה לא אושרה. השתמשו בהדפסה חוזרת אם הלקוח צריך קבלה.';
+
+  @override
+  String posPaymentPreviousAttempt(String tender, String amount) {
+    return 'ניסיון קודם: $tender · $amount';
+  }
+
+  @override
+  String get posPaymentUnconfirmedChip => 'תשלום לא מאושר';
+
+  @override
+  String get posPaymentDone => 'סיום';
+
+  @override
+  String get posPaymentRevisionRequired =>
+      'לא ניתן היה לאמת את סכום ההזמנה. רעננו את ההזמנה ואז קבלו את התשלום. לא חויב דבר.';
+
+  @override
+  String get posPaymentActorRequired =>
+      'אין קופאי מחובר. התחברו ואז קבלו את התשלום. לא חויב דבר.';
+
+  @override
   String get authForgotPassword => 'שכחת סיסמה?';
 
   @override

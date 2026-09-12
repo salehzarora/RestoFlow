@@ -847,6 +847,9 @@ void main() {
         final t = _FakeTransport(
           (fn, p) => <String, Object?>{
             'ok': true,
+            // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+            // `server_ts` (20260905090001_..._002.sql:876).
+            'server_ts': '2026-09-08T12:00:01.000Z',
             'results': <Object?>[
               <String, Object?>{
                 'local_operation_id': 'op-pay-1',

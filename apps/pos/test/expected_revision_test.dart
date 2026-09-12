@@ -40,8 +40,12 @@ void main() {
     });
 
     test('A2 PAYMENT sends expected_revision', () async {
+      // S1 (PDR-002): a faithful applied payment result names its operation
+      // type and the order it settled; the client no longer infers either.
       final t = _CapturingTransport(
         _applied(<String, Object?>{
+          'operation_type': 'payment.create',
+          'order_id': 'o-1',
           'receipt_number': 'R-1',
           'payment_id': 'p-1',
           'change_due_minor': 0,
@@ -94,12 +98,25 @@ void main() {
       // sync_push classifies SQLSTATE 40001 as the stable token `conflict`. This is
       // a domain code — not a SQLSTATE we sniffed, not a message we parsed.
       final t = _CapturingTransport(<String, Object?>{
+        // The CALL succeeded; the operation inside it was refused.
+        'ok': true,
+        // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+        // `server_ts` (20260905090001_..._002.sql:876).
+        'server_ts': '2026-09-08T12:00:01.000Z',
         'results': <Object?>[
           <String, Object?>{
             'local_operation_id': 'id-1',
+            'operation_type': 'payment.create',
             'status': 'conflict',
             'ok': false,
             'error': 'conflict',
+            // CHANGED IN S1-R3: the EXACT revision-conflict tuple is
+            // error 'conflict' + SQLSTATE 40001 + the replay flag
+            // (20260905090001_..._002.sql:790-800). Without the SQLSTATE this
+            // was not a shape the source emits, and the old classifier turned
+            // every unrecognised conflict into a memoized revision refusal.
+            'sqlstate': '40001',
+            'idempotency_replay': false,
           },
         ],
       });
@@ -121,46 +138,69 @@ void main() {
       expect(t.calls, 1, reason: 'ONE attempt — a blind retry double-charges');
     });
 
-    test(
-      'B2 a conflict is NOT mistaken for a non-chargeable refusal',
-      () async {
-        final t = _CapturingTransport(<String, Object?>{
-          'results': <Object?>[
-            <String, Object?>{
-              'local_operation_id': 'id-1',
-              'status': 'rejected',
-              'ok': false,
-              'error': 'order_not_chargeable',
-            },
-          ],
-        });
-        await expectLater(
-          RealPaymentRepository(t, session, const _Ids()).recordCashPayment(
-            orderId: 'o-1',
-            orderNumber: '#O1',
-            amountMinor: 0,
-            tenderedMinor: 0,
-            currencyCode: 'ILS',
-          ),
-          throwsA(
-            isA<PaymentException>()
-                .having((e) => e.notChargeable, 'notChargeable', isTrue)
-                .having((e) => e.conflict, 'conflict', isFalse),
-          ),
-        );
-      },
-    );
+    test('B2 a conflict is NOT mistaken for a non-chargeable refusal', () async {
+      final t = _CapturingTransport(<String, Object?>{
+        'ok': true,
+        // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+        // `server_ts` (20260905090001_..._002.sql:876).
+        'server_ts': '2026-09-08T12:00:01.000Z',
+        'results': <Object?>[
+          <String, Object?>{
+            'local_operation_id': 'id-1',
+            'operation_type': 'payment.create',
+            'status': 'rejected',
+            'ok': false,
+            'error': 'order_not_chargeable',
+            // CHANGED IN S1-R3: `record_payment` RETURNS this refusal with
+            // its own replay flag (20260716090000_...sql:256-259), and
+            // sync_push merges it through verbatim.
+            // CHANGED IN S1-R4: it always names the order too (:256-258), so
+            // the binding is part of the tuple rather than optional.
+            'order_id': 'o-1',
+            'server_ts': '2026-07-04T09:00:01Z',
+            'idempotency_replay': false,
+          },
+        ],
+      });
+      await expectLater(
+        RealPaymentRepository(t, session, const _Ids()).recordCashPayment(
+          orderId: 'o-1',
+          orderNumber: '#O1',
+          amountMinor: 0,
+          tenderedMinor: 0,
+          currencyCode: 'ILS',
+        ),
+        throwsA(
+          isA<PaymentException>()
+              .having((e) => e.notChargeable, 'notChargeable', isTrue)
+              .having((e) => e.conflict, 'conflict', isFalse),
+        ),
+      );
+    });
 
     test(
       'B3 a GENERIC rejection implies neither conflict nor terminality',
       () async {
         final t = _CapturingTransport(<String, Object?>{
+          'ok': true,
+          // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+          // `server_ts` (20260905090001_..._002.sql:876).
+          'server_ts': '2026-09-08T12:00:01.000Z',
           'results': <Object?>[
             <String, Object?>{
               'local_operation_id': 'id-1',
+              // Named, so this really exercises the GENERIC-rejection branch
+              // rather than passing through the mismatched-result branch.
+              'operation_type': 'payment.create',
               'status': 'rejected',
               'ok': false,
               'error': 'rejected',
+              // CHANGED IN S1-R3: the exact caught-rejection tuple carries the
+              // SQLSTATE and the replay flag
+              // (20260905090001_..._002.sql:834-853).
+              'sqlstate': '42501',
+              'detail': null,
+              'idempotency_replay': false,
             },
           ],
         });
@@ -183,12 +223,33 @@ void main() {
   });
 }
 
+/// S1-R2: `sync_push` returns `ok: true` on its normal path even when an
+/// individual operation was refused, so every faithful reply carries it.
 Map<String, Object?> _applied(Map<String, Object?> extra) => <String, Object?>{
+  'ok': true,
+  // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+  // `server_ts` (20260905090001_..._002.sql:876).
+  'server_ts': '2026-09-08T12:00:01.000Z',
   'results': <Object?>[
     <String, Object?>{
       'local_operation_id': 'id-1',
       'status': 'applied',
       'ok': true,
+      // CHANGED IN S1-R3: `sync_push` stamps `idempotency_replay` on every
+      // result (20260905090001_..._002.sql:861-872); a fixture without it
+      // blessed a shape the deployed function never emits.
+      'idempotency_replay': false,
+      // CHANGED IN S1-R4: the COMPLETE tracked applied tuple. `record_payment`
+      // emits every one of these on a real application
+      // (20260716090000_..._contracts.sql:400-411), so a fixture without them
+      // blessed a shape the deployed function never returns. A case that wants
+      // one absent overrides it.
+      'shift_id': 'shift-1',
+      'cash_drawer_session_id': 'drawer-1',
+      'payment_revision': 1,
+      'order_revision': 8,
+      'auto_completed': false,
+      'server_ts': '2026-07-04T09:00:01Z',
       ...extra,
     },
   ],

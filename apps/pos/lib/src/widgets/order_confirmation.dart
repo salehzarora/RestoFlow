@@ -221,6 +221,14 @@ class OrderConfirmation extends ConsumerWidget {
       final paid = next.paymentFor(order.identity);
       if (paid == null) return;
       if (previous?.paymentFor(order.identity) != null) return;
+      // PAYMENT-ATTEMPT-RECOVERY-001: a payment can now APPEAR in this state
+      // without a payment having just happened — the durable attempt store is
+      // hydrated on a restart or a session change, and an already-settled
+      // order arrives here fully paid. That is not a payment edge, and paper
+      // must not come out of the printer for it. Only the ONE acceptance at
+      // which this process wrote the durable one-time effect reservation
+      // arms the automatic receipt (the manual reprint is always available).
+      if (!next.effectsArmedFor(order.identity)) return;
       // PRINT-STARTUP-REPRINT-001: the trigger no longer inspects async printer
       // state with `.valueOrNull` and return silently — that dropped the paid
       // receipt entirely on a cold start (no job, no status, no retry). It now

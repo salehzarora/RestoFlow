@@ -52,7 +52,14 @@ void main() {
         _reply(<String, Object?>{
           'ok': false,
           'error': 'order_not_chargeable',
+          // CHANGED IN S1-R5: a RETURNED domain refusal carries `server_ts`
+          // beside its `order_id` (20260716090000_..._contracts.sql:187-188,
+          // :256-258); sync_push merges the tuple through verbatim.
+          'server_ts': '2026-09-08T12:00:01.000Z',
           'status': 'rejected',
+          // CHANGED IN S1-R4: `record_payment` RETURNS this refusal and always
+          // names the order (20260716090000_..._contracts.sql:256-258).
+          'order_id': 'oid-1',
         }),
       );
 
@@ -149,6 +156,10 @@ void main() {
       _reply(<String, Object?>{
         'ok': false,
         'error': 'permission_denied',
+        // CHANGED IN S1-R5: a RETURNED domain refusal carries `server_ts`
+        // beside its `order_id` (20260716090000_..._contracts.sql:187-188,
+        // :256-258); sync_push merges the tuple through verbatim.
+        'server_ts': '2026-09-08T12:00:01.000Z',
         'detail': 'order_has_completed_payment',
         'status': 'rejected',
       }),
@@ -168,6 +179,10 @@ void main() {
       _reply(<String, Object?>{
         'ok': false,
         'error': 'permission_denied',
+        // CHANGED IN S1-R5: a RETURNED domain refusal carries `server_ts`
+        // beside its `order_id` (20260716090000_..._contracts.sql:187-188,
+        // :256-258); sync_push merges the tuple through verbatim.
+        'server_ts': '2026-09-08T12:00:01.000Z',
         'status': 'rejected',
       }),
     );
@@ -346,12 +361,29 @@ class _StubTransport implements SyncRpcTransport {
 
 const _session = SyncSession(pinSessionId: 'pin-1', deviceId: 'device-1');
 
-/// A well-formed one-op envelope carrying [op], with the repository's own op id spliced in.
+/// A well-formed one-op envelope carrying [op], with the repository's own op id
+/// spliced in.
+///
+/// PAYMENT-ATTEMPT-RECOVERY-001 / S1 (PDR-002): `app.sync_push` stamps the
+/// pushed `operation_type` onto EVERY per-op result, so a well-formed envelope
+/// carries it. It is echoed from the sent operation here rather than hardcoded,
+/// which keeps this helper correct for the void contracts too.
+/// CHANGED IN S1-R3: `app.sync_push` stamps `idempotency_replay` on EVERY
+/// result it emits — false when it decided now, true when it replays a stored
+/// terminal row (20260905090001_sync_push_precondition_detail_002.sql:402-405,
+/// 798-800, 848-853, 861-872). A reply without it is a shape the deployed
+/// function never produces, so the default belongs in the fixture. Any case
+/// that wants it absent or wrongly typed overrides it.
 _Build _reply(Map<String, Object?> op) =>
     (sent) => <String, Object?>{
       'ok': true,
+      // CHANGED IN S1-R5: a faithful `sync_push` reply also stamps its own outer
+      // `server_ts` (20260905090001_..._002.sql:876).
+      'server_ts': '2026-09-08T12:00:01.000Z',
       'results': <Object?>[
         <String, Object?>{
+          'operation_type': sent['operation_type'],
+          'idempotency_replay': false,
           ...op,
           'local_operation_id': sent['local_operation_id'],
         },
