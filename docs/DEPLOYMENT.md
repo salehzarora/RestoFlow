@@ -959,7 +959,7 @@ Vercel's exit convention is **0 = IGNORE, nonzero = BUILD**; the helper uses
 exit 1 for BUILD. The shell wrappers also map a missing Node interpreter,
 missing helper or syntax error to BUILD. The helper installs no packages and
 calls no hosted API. Its only permitted network operation is bounded Git
-baseline acquisition from the configured `origin`, described below. Do not
+baseline acquisition from the fixed public canonical repository, described below. Do not
 change dashboard Ignored Build Step settings merely to mirror these commands.
 If hosted logs show a different effective command, stop and investigate before
 changing any setting.
@@ -1015,11 +1015,11 @@ without requiring complete ancestry history.
 When [`VERCEL_GIT_PREVIOUS_SHA`](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_git_previous_sha)
 is present, validate exactly 40 hexadecimal characters and treat the verified
 commit as Vercel's authoritative last **successful deployment for this project
-and branch**. Use the exact commit/tree if available locally. If it is missing
-in a shallow checkout, acquire that exact SHA using the bounded fetch contract
-below, then re-resolve and verify it without peeling a different object into a
-substitute commit. An invalid value, unavailable object in a non-shallow
-checkout, failed fetch or unverifiable commit/tree means BUILD; it must not
+and branch**. Use the exact commit/tree if available locally. If it is missing,
+acquire that exact SHA using the bounded fetch contract below, regardless of
+checkout depth, then re-resolve and verify it without peeling a different object
+into a substitute commit. An invalid value, failed fetch or unverifiable
+commit/tree means BUILD; it must not
 silently fall back to another baseline.
 
 Compare the complete **baseline tree directly with the HEAD tree**. The
@@ -1031,7 +1031,7 @@ commit only edits documentation. Never substitute `HEAD^`, a merge base, a
 commit message, the latest attempted deployment or a GitHub success status.
 
 For a **first Preview with no previous-success SHA**, always refresh the exact
-`refs/heads/main` from configured `origin` into `FETCH_HEAD`, even if a local
+`refs/heads/main` from the fixed canonical repository into `FETCH_HEAD`, even if a local
 `origin/main` ref already exists. This prevents a stale remote-tracking ref from
 hiding newer production inputs. Verify the returned commit/tree and compare
 that current main tree directly with Preview HEAD; do not move `origin/main`
@@ -1056,17 +1056,18 @@ no hosting API and cannot detect a later dashboard-only production-branch
 change. Review the helper's production-branch constant, source guard, tests and
 this contract as part of any separately authorized production-branch change.
 
-Before the first-Preview main fetch, R3 requires exactly one configured
-`remote.origin.url` and one Git-resolved fetch URL (`git remote get-url --all
-origin`, including `insteadOf` expansion). **Both** must identify
-`github.com/salehzarora/RestoFlow`. Supported forms are HTTPS with optional
-`.git` and optional userinfo, or `git@github.com:salehzarora/RestoFlow.git`
-(optional `.git`); repository/host letter case is accepted. Credentials are
-never included in diagnostics. Wrong owners/repositories, lookalike hosts,
-ambiguous URLs, encoded/dot-segment paths, custom ports, query/fragment suffixes
-and unsupported transports select `BUILD / untrusted_origin` before fetching.
-This new origin guard applies only to first Preview; R2's authoritative
-`previous_success` acquisition and comparison are unchanged.
+**R4 source contract:** `TRUSTED_REPOSITORY_URL` is the source-controlled constant
+`https://github.com/salehzarora/RestoFlow.git`. This repository is public, and
+the filter is intentionally specific to it. The checkout's `origin` is neither
+read nor trusted for baseline acquisition: missing, internal/proxied and
+wrong-repository checkout remotes are irrelevant. R3's origin prerequisite
+returned `BUILD / untrusted_origin` on a real Vercel clone before acquisition
+and is retired. Do not guess or whitelist Vercel's internal transport URLs.
+
+Both baseline paths use the same fixed source. No environment value, feature
+ref, PR metadata, commit message or checkout remote selects it. Changing the
+constant changes the shared helper and BUILDs both projects. The optional ref,
+HEAD equality and production-main source-policy guards remain in force.
 
 **Production with no previous-success SHA BUILDs.** No local marker advances
 the baseline after an ignored attempt: the helper relies on Vercel's documented
@@ -1075,17 +1076,26 @@ compare against the last successful deployment for that same project/branch.
 
 ### Bounded Git acquisition and diagnostics
 
-The only permitted remote source is the repository's configured `origin`.
+The only permitted remote source is `https://github.com/salehzarora/RestoFlow.git`.
 Fetch only the validated exact previous-success SHA or the exact production
 branch `refs/heads/main`; never fetch a user-supplied URL, arbitrary branch or
 full history. Each acquisition performs at most one fetch, with these fixed
 options and one of those two validated targets:
 
 ```sh
-git -c core.hooksPath=/dev/null fetch --no-tags --depth=1 \
+git -c core.hooksPath=/dev/null -c credential.helper= -c http.extraHeader= \
+  -c http.followRedirects=false fetch --no-tags --depth=1 \
   --no-recurse-submodules --no-auto-maintenance --no-write-commit-graph \
-  --no-prune --no-prune-tags --refmap= origin <EXACT_SHA_OR_refs/heads/main>
+  --no-prune --no-prune-tags --refmap= \
+  https://github.com/salehzarora/RestoFlow.git <EXACT_SHA_OR_refs/heads/main>
 ```
+
+Before fetching, `git ls-remote --get-url` resolves only the literal source URL
+without network access. If Git configuration would rewrite that URL, the helper
+selects `BUILD / baseline_source_rewritten`; it never uses the substituted URL.
+This check does not query `origin` or derive an authority from `insteadOf`.
+Credential helpers and generic extra HTTP headers are cleared for the public
+fetch, and HTTP redirects are disabled. No local Git configuration is edited.
 
 Each fetch has a **10-second timeout**. The empty refmap suppresses configured
 remote-tracking updates; explicit no-prune options prevent inherited pruning.
@@ -1114,7 +1124,8 @@ environment variables or Git error output.
 
 Run `node --test tools/vercel/ignore-build.test.mjs` from the repository root.
 The suite invokes the actual root/site CLI in synthetic Git repositories and
-uses **local bare remotes** for fetch tests: no external network, hosted
+imports the same decision function with a code-only source dependency for
+**local bare remote** fetch tests: no external network, hosted
 database or real credentials are required. It covers shallow available/missing
 baselines, successful and failed bounded acquisition, valid non-ancestor tree
 comparison, first-Preview main fallback, Production without previous success,
@@ -1124,20 +1135,26 @@ dependency/path matrix. Independent false-IGNORE probes, both JSON configs,
 **existing required `validate` job** alongside preserved ONB-CI-001 coverage;
 the separate pgTAP job is unchanged.
 
-R3 adds a RED/GREEN replay of failed verification PR #277: shallow detached
+R4 preserves the replay of failed verification PR #277: shallow detached
 HEAD, Preview context, no previous-success SHA, absent commit-ref variable,
 and a docs-only delta must IGNORE both selectors against fetched main. Its
-local transport runs real Git upload-pack against owned bare repositories;
-Git URL rewrites retain the expected identity and no external SSH or network
-is used. The matrix also covers optional metadata, origin spoofing/rewrites,
-redaction, missing main, branch-behind-main and all R1/R2 cases.
+local fetches use owned file URLs injected through the imported code API, never
+environment variables or production CLI arguments. The CLI always selects the
+canonical public URL. Tests explicitly block external protocols and verify
+that environment source overrides cannot replace it. The matrix includes no
+origin, internal/wrong origin, canonical-URL rewrite rejection, optional
+metadata, redaction, missing main, branch-behind-main and relevant R1/R2/R3 cases.
 
-**R3 hosted gate:** the implementation changes the shared helper, so both
-projects may legitimately BUILD. After both implementation Previews are READY,
-a meaningful docs-only commit on the same R3 branch must be Ignored with
+**R4 hosted gate (same PR #278):** the implementation changes the shared helper,
+so both projects must reach `BUILD / relevant_changes` with a verified baseline,
+not a trust/acquisition failure. After both implementation Previews are READY
+and CI is GREEN, a meaningful docs-only commit on the same branch must be Ignored with
 **No Resources** on both projects, using the implementation's previous-success
 SHA. This proves the existing path has not regressed; it does **not** prove
-the first-Preview fix on Vercel. After an owner-authorized R3 merge, a brand-new
+the first-Preview fix on Vercel. This branch already has successful R3 Previews,
+so the R4 implementation may also use `previous_success`; record the actual
+baseline source and do not claim a hosted `production_main` proof from it.
+After an owner-authorized merge, a brand-new
 docs-only branch must separately prove `production_main` + `unaffected_changes`
 and No Resources on both projects before Phase 2B cleanup can proceed. PR #277
 remains the failed historical verification, unmerged until separately directed.

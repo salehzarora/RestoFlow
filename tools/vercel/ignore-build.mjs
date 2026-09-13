@@ -16,6 +16,8 @@ const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
 // Both linked projects use main. First-preview fallback also checks the source
 // CI policy; changing the hosted production branch requires reviewing this map.
 const PRODUCTION_BRANCH = 'main';
+// Reviewed public source, independent of Vercel's internal checkout remote.
+const TRUSTED_REPOSITORY_URL = 'https://github.com/salehzarora/RestoFlow.git';
 const FETCH_TIMEOUT_MS = 10000;
 const fail = (reason) => { throw new Error(reason); };
 const hash = (value) => createHash('sha256').update(value.replace(/\r\n/g, '\n')).digest('hex');
@@ -389,22 +391,27 @@ function inspectMarketing(repo, revision) {
   }
 }
 
-function fetchBaseline(repo, spec, acquisition) {
+function fetchBaseline(repo, spec, acquisition, repositoryUrl) {
   if (!SHA.test(spec) && spec !== `refs/heads/${PRODUCTION_BRANCH}`) fail('invalid_fetch_target');
+  // Resolve this literal URL without a network request. Never accept an
+  // insteadOf/config rewrite as an alternative authority (or inspect origin).
+  const effective = git(repo, ['ls-remote', '--get-url', repositoryUrl]).text.replace(/\r?\n$/, '');
+  if (effective !== repositoryUrl) fail('baseline_source_rewritten');
   // Empty refmap suppresses configured remote-tracking updates. Explicit
   // no-prune flags override inherited config. Only objects/shallow/FETCH_HEAD
   // metadata may change; no local or remote-tracking branch is moved.
   acquisition.fetched = true; // attempted, including failures/timeouts
   const result = spawnSync('git', ['-C', repo, '-c', 'core.hooksPath=/dev/null',
+    '-c', 'credential.helper=', '-c', 'http.extraHeader=', '-c', 'http.followRedirects=false',
     'fetch', '--no-tags', '--depth=1', '--no-recurse-submodules',
     '--no-auto-maintenance', '--no-write-commit-graph', '--no-prune',
-    '--no-prune-tags', '--refmap=', 'origin', spec], {
+    '--no-prune-tags', '--refmap=', repositoryUrl, spec], {
     encoding: null, maxBuffer: 1024 * 1024, timeout: FETCH_TIMEOUT_MS,
     killSignal: 'SIGKILL', windowsHide: true,
     env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1',
       GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' },
   });
-  // Git stderr may contain an origin URL with credentials. Never forward it.
+  // Git stderr may contain transport/config details. Never forward it.
   if (result.error || result.status !== 0) fail('baseline_fetch_failed');
   const receiptPath = git(repo, ['rev-parse', '--git-path', 'FETCH_HEAD']).text.trim();
   const receipts = readFileSync(path.resolve(repo, receiptPath), 'utf8').trimEnd().split('\n');
@@ -430,24 +437,7 @@ function verifyProductionBranch(repo, revision) {
   if (lines.join('\n') !== `  pull_request:\n  push:\n    branches: [${PRODUCTION_BRANCH}]`) fail('production_branch_unproven');
 }
 
-function verifyProductionOrigin(repo) {
-  // Match raw identities, not URL-normalized paths: reject dot segments,
-  // encoded paths, ports, query/fragment suffixes and lookalike hosts. Userinfo
-  // is allowed only in HTTPS authority and is never returned or logged.
-  const expected = (value) =>
-    /^https:\/\/(?:[^\s/@?#\\]+@)?github\.com\/salehzarora\/RestoFlow(?:\.git)?(?![\s\S])/i.test(value) ||
-    /^git@github\.com:salehzarora\/RestoFlow(?:\.git)?(?![\s\S])/i.test(value);
-  try {
-    const configured = git(repo, ['config', '--null', '--get-all', 'remote.origin.url']).text.split('\0');
-    const resolved = git(repo, ['remote', 'get-url', '--all', 'origin']).text.replace(/\r?\n$/, '').split(/\r?\n/);
-    // Git expands insteadOf in get-url. Both original and effective identities
-    // must agree with the reviewed repository; ambiguous multi-URL origins fail.
-    if (configured.length !== 2 || configured[1] !== '' || resolved.length !== 1 ||
-        !expected(configured[0]) || !expected(resolved[0])) fail('untrusted_origin');
-  } catch { fail('untrusted_origin'); }
-}
-
-function selectBaseline(repo, head, env, acquisition) {
+function selectBaseline(repo, head, env, acquisition, repositoryUrl) {
   const previous = env.VERCEL_GIT_PREVIOUS_SHA ?? '';
   if (previous) {
     acquisition.baselineSource = 'previous_success';
@@ -455,9 +445,7 @@ function selectBaseline(repo, head, env, acquisition) {
     try { acquisition.baseline = commit(repo, previous); }
     catch (error) {
       if (error?.message === 'invalid_sha') throw error;
-      const shallow = git(repo, ['rev-parse', '--is-shallow-repository']).text.trim();
-      if (shallow !== 'true') fail('baseline_unavailable');
-      acquisition.baseline = fetchBaseline(repo, previous.toLowerCase(), acquisition);
+      acquisition.baseline = fetchBaseline(repo, previous.toLowerCase(), acquisition, repositoryUrl);
     }
     // Vercel supplies the last success for this project AND branch. Its tree
     // is authoritative even after a rebase or non-ancestor deployment.
@@ -473,12 +461,11 @@ function selectBaseline(repo, head, env, acquisition) {
     try { git(repo, ['check-ref-format', '--branch', ref]); }
     catch { fail('untrusted_feature_ref'); }
   }
-  verifyProductionOrigin(repo);
   verifyProductionBranch(repo, head);
   // origin/main can exist but be stale in a branch clone. Refresh exactly main
   // to FETCH_HEAD without moving origin/main; compare current main's TREE,
   // never a merge base that could hide runtime changes on main.
-  acquisition.baseline = fetchBaseline(repo, `refs/heads/${PRODUCTION_BRANCH}`, acquisition);
+  acquisition.baseline = fetchBaseline(repo, `refs/heads/${PRODUCTION_BRANCH}`, acquisition, repositoryUrl);
   verifyProductionBranch(repo, acquisition.baseline);
 }
 
@@ -515,8 +502,8 @@ function category(file, selector, graphs) {
   return { relevant: true, name: 'unknown_input' };
 }
 
-/** Actual CLI decision, also callable without process termination by tests. */
-export function decide({ selector, cwd = process.cwd(), env = process.env, helperFile } = {}) {
+/** Tests may inject an owned local source via code, never via env/CLI options. */
+export function decide({ selector, cwd = process.cwd(), env = process.env, helperFile } = {}, { repositoryUrl = TRUSTED_REPOSITORY_URL } = {}) {
   let head = null;
   const acquisition = { baseline: null, baselineSource: null, fetched: false };
   const categories = {};
@@ -530,7 +517,7 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
     if (!SHA.test(candidateHead)) fail('git_error');
     head = candidateHead;
     if (env.VERCEL_GIT_COMMIT_SHA && (!SHA.test(env.VERCEL_GIT_COMMIT_SHA) || env.VERCEL_GIT_COMMIT_SHA.toLowerCase() !== head)) fail('head_mismatch');
-    selectBaseline(repo, head, env, acquisition);
+    selectBaseline(repo, head, env, acquisition, repositoryUrl);
     const { baseline } = acquisition;
     const changed = git(repo, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', '--no-renames', '-z', baseline, head, '--']).text;
     if (changed && !changed.endsWith('\0')) fail('git_error');
@@ -545,7 +532,7 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
     }
     return { decision: relevant ? 'BUILD' : 'IGNORE', reason: relevant ? 'relevant_changes' : files.length ? 'unaffected_changes' : 'no_changes', ...acquisition, head, categories };
   } catch (error) {
-    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'missing_baseline', 'untrusted_feature_ref', 'untrusted_origin', 'baseline_unavailable', 'baseline_fetch_failed', 'invalid_fetch_target', 'invalid_fetch_result', 'production_branch_unproven', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
+    const known = new Set(['git_error', 'invalid_selector', 'invalid_cwd', 'invalid_helper_location', 'head_mismatch', 'invalid_sha', 'invalid_previous_sha', 'missing_baseline', 'untrusted_feature_ref', 'baseline_source_rewritten', 'baseline_fetch_failed', 'invalid_fetch_target', 'invalid_fetch_result', 'production_branch_unproven', 'unsupported_manifest', 'unsupported_graph', 'unsupported_build_contract', 'undeclared_workspace_import', 'unsupported_encoding', 'unsupported_file_mode']);
     return { decision: 'BUILD', reason: known.has(error?.message) ? error.message : 'helper_error', ...acquisition, head, categories };
   }
 }
