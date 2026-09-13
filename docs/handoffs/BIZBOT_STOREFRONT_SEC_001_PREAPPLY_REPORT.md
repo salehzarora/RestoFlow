@@ -372,13 +372,14 @@ code, any Vercel/DNS/env, Supabase Auth, hosted anything.
 ## Branch
 
 `feat/STOREFRONT-SEC-001-public-surface-hardening` from `origin/main` `fc8969ed`, worktree
-`…\worktrees\storefront-sec-001`. Commit: `fix(security): harden public Supabase anon surface [STOREFRONT-SEC-001]`.
+`…\worktrees\storefront-sec-001`. Commit `bf98d852` — `fix(security): harden public Supabase anon surface [STOREFRONT-SEC-001]` (pushed).
 
 ## PR
 
-`fix(security): harden BIZBOT public anon surface [STOREFRONT-SEC-001]` — preparation only; hosted
-migration NOT applied; production unchanged; explicit owner approval required before apply; not to be
-merged by the agent. (URL recorded in the final response.)
+**https://github.com/salehzarora/RestoFlow/pull/280** — `fix(security): harden BIZBOT public anon surface [STOREFRONT-SEC-001]`; preparation only; hosted
+migration NOT applied; production unchanged (final hosted check after push: `anon_exec = 78 / 118`,
+migrations `139`, head `20260905090001`); explicit owner approval required before apply; not to be
+merged by the agent.
 
 ## Explicit Non-Changes
 
