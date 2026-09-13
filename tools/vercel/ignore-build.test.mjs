@@ -16,6 +16,8 @@ const scratchParent = realpathSync(tmpdir());
 const scratch = mkdtempSync(join(scratchParent, 'restoflow-vercel-filter-test-'));
 const emptyGitConfig = join(scratch, 'empty-git-config');
 writeFileSync(emptyGitConfig, '');
+const fixtureSources = new Map();
+const CANONICAL_SOURCE = 'https://github.com/salehzarora/RestoFlow.git';
 
 // No inherited credentials, Git configuration, proxy settings, or NODE_OPTIONS.
 const safeEnv = {};
@@ -145,6 +147,7 @@ function attachOrigin(repo) {
   const remote = join(directory, 'origin.git');
   runGit(scratch, ['clone', '--quiet', '--bare', '--no-hardlinks', repo, remote]);
   runGit(repo, ['remote', 'add', 'origin', pathToFileURL(remote).href]);
+  fixtureSources.set(repo, pathToFileURL(remote).href);
   return remote;
 }
 
@@ -154,9 +157,12 @@ function cloneOrigin(remote, { branch = 'feature/r2', depth = 1 } = {}) {
   const args = ['clone', '--quiet', '--no-tags', '--single-branch', '--branch', branch];
   if (depth !== null) args.push(`--depth=${depth}`);
   runGit(parent, [...args, pathToFileURL(remote).href, repo]);
+  fixtureSources.set(repo, pathToFileURL(remote).href);
   return repo;
 }
 
+// Acquisition tests inject owned file URLs through the imported code API only.
+// The actual CLI has no source option and always uses the canonical public URL.
 function shallowFixture({ changes = [['docs/r2.md']], depth = 1 } = {}) {
   const { repo: source, base } = fixture();
   runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
@@ -193,10 +199,14 @@ function fetchCommands(trace) {
     .map((line) => line.slice(line.indexOf(' fetch ') + 1));
 }
 
-function assertExactFetch(trace, spec) {
-  assert.deepEqual(fetchCommands(trace), [
-    `fetch --no-tags --depth=1 --no-recurse-submodules --no-auto-maintenance --no-write-commit-graph --no-prune --no-prune-tags --refmap= origin ${spec}`,
-  ], 'fetch must be one bounded request for the exact authorized object/ref');
+function assertExactFetch(trace, spec, source) {
+  const commands = fetchCommands(trace);
+  assert.equal(commands.length, 1, 'exactly one acquisition fetch');
+  const prefix = 'fetch --no-tags --depth=1 --no-recurse-submodules --no-auto-maintenance --no-write-commit-graph --no-prune --no-prune-tags --refmap= ';
+  assert.ok(commands[0].startsWith(prefix) && commands[0].endsWith(' ' + spec));
+  const actual = commands[0].slice(prefix.length, -spec.length - 1);
+  if (source) assert.equal(actual, source);
+  else assert.ok([...fixtureSources.values()].includes(actual), 'only a code-injected owned bare repository');
 }
 
 function assertBaseline(output, baseline, source, fetched) {
@@ -227,12 +237,21 @@ function invoke(repo, selector, previous, options = {}) {
     RESTOFLOW_SUPABASE_ANON_KEY: CANARY, RESEND_API_KEY: CANARY, VERCEL_TOKEN: CANARY,
     ...options.env,
   };
+  for (const name of options.absentEnv || []) delete env[name];
   if (options.noGit) {
     for (const key of Object.keys(env)) if (/^path$/i.test(key)) delete env[key];
     env.PATH = join(scratch, 'no-executables');
   }
   const cwd = options.cwd || (selector === 'marketing' ? join(repo, 'site') : repo);
-  const result = spawnSync(process.execPath, [join(repo, HELPER), selector], { cwd, env, encoding: 'utf8', timeout: 35_000, windowsHide: true });
+  const helperFile = join(repo, HELPER);
+  const repositoryUrl = options.productionCli ? undefined : fixtureSources.get(repo);
+  // Source injection is a literal JS dependency in this child, never env or a
+  // production CLI argument. All other paths continue to exercise the CLI.
+  const args = repositoryUrl === undefined ? [helperFile, selector] : ['--input-type=module', '-e',
+    'import { decide } from ' + JSON.stringify(pathToFileURL(helperFile).href) + ';' +
+    'const result = decide(' + JSON.stringify({ selector, helperFile }) + ',' + JSON.stringify({ repositoryUrl }) + ');' +
+    'process.stdout.write(JSON.stringify(result) + "\\n"); process.exitCode = result.decision === "IGNORE" ? 0 : 1;'];
+  const result = spawnSync(process.execPath, args, { cwd, env, encoding: 'utf8', timeout: 35_000, windowsHide: true });
   assert.equal(result.error, undefined, 'helper must terminate without process error');
   assert.equal(result.signal, null);
   assert.ok([0, 1].includes(result.status), 'helper must normalize every exit to IGNORE0 or BUILD1');
@@ -796,7 +815,7 @@ test('R2-02 shallow checkout fetches only the exact missing previous-success SHA
 
 test('R2-03 failed exact previous-success fetch returns BUILD without another baseline', () => {
   const { repo, base } = shallowFixture();
-  runGit(repo, ['remote', 'set-url', 'origin', pathToFileURL(join(scratch, 'missing-origin.git')).href]);
+  fixtureSources.set(repo, pathToFileURL(join(scratch, 'missing-source.git')).href);
   const trace = traceOptions();
   const output = expectDecision(repo, 'product', base, 'BUILD', { env: trace.env });
   assert.equal(output.fetched, true, 'attempted failed fetch is still disclosed');
@@ -940,10 +959,11 @@ test('R2-14 exact previous and main fetches preserve all refs, HEAD, index and w
   assert.deepEqual(worktreeSnapshot(repo), before);
 });
 
-test('R2-15 failed credential-bearing remote never appears in output diagnostics', () => {
+test('R2-15 failed source and credential-bearing checkout origin are redacted', () => {
   const { repo, base } = shallowFixture();
   runGit(repo, ['remote', 'set-url', 'origin', `https://fixture-user:${CANARY}@example.invalid/repo.git`]);
-  // GIT_ALLOW_PROTOCOL=file rejects HTTPS before any external connection.
+  fixtureSources.set(repo, pathToFileURL(join(scratch, CANARY + '-missing.git')).href);
+  // The missing owned file source fails; the checkout origin is irrelevant.
   const output = expectDecision(repo, 'product', base, 'BUILD');
   assert.equal(output.fetched, true);
   assert.equal(output.baseline, null);
@@ -980,4 +1000,264 @@ test('R2-17 shallow root and site working directories both fetch the correct bas
   assertBaseline(product, base, 'previous_success', true);
   const marketing = expectDecision(siteRepo, 'marketing', base, 'BUILD', { cwd: join(siteRepo, 'site') });
   assertBaseline(marketing, base, 'previous_success', true);
+});
+
+test('R3-21 failed PR #277 replay: missing ref, detached shallow docs-only first Preview', () => {
+  const { repo, base } = shallowFixture({ changes: [['docs/DEPLOYMENT.md']] });
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  assert.equal(runGit(repo, ['branch', '--show-current']), '');
+  for (const selector of ['marketing', 'product']) {
+    const trace = traceOptions();
+    const output = expectDecision(repo, selector, undefined, 'IGNORE', {
+      absentEnv: ['VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_PREVIOUS_SHA'], env: trace.env,
+    });
+    assert.equal(output.reason, 'unaffected_changes');
+    assertBaseline(output, base, 'production_main', true);
+    assertExactFetch(trace, 'refs/heads/main');
+  }
+});
+
+test('R3-01 missing optional ref uses main even when HEAD is attached', () => {
+  const { repo, base } = shallowFixture();
+  const output = expectDecision(repo, 'product', undefined, 'IGNORE', { absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+  assertBaseline(output, base, 'production_main', true);
+});
+
+test('R3-02 detached HEAD with empty optional ref uses main', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  const output = expectDecision(repo, 'product', undefined, 'IGNORE');
+  assertBaseline(output, base, 'production_main', true);
+});
+
+test('R3-03 valid optional ref does not require a matching local symbolic branch', () => {
+  const { repo, base } = shallowFixture();
+  const options = { env: { VERCEL_GIT_COMMIT_REF: 'verify/vercel-first-preview-docs-only' } };
+  assertBaseline(expectDecision(repo, 'product', undefined, 'IGNORE', options), base, 'production_main', true);
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  assertBaseline(expectDecision(repo, 'marketing', undefined, 'IGNORE', options), base, 'production_main', true);
+});
+
+test('R3-04 matching or absent optional exposed SHA allows verified HEAD', () => {
+  const { repo, base } = shallowFixture();
+  assertBaseline(expectDecision(repo, 'product', undefined, 'IGNORE'), base, 'production_main', true);
+  assertBaseline(expectDecision(repo, 'marketing', undefined, 'IGNORE', {
+    absentEnv: ['VERCEL_GIT_COMMIT_SHA', 'VERCEL_GIT_COMMIT_REF'],
+  }), base, 'production_main', true);
+});
+
+test('R3-05 mismatched or malformed exposed SHA BUILDs before fetch', () => {
+  const { repo, base } = shallowFixture();
+  const trace = traceOptions();
+  for (const sha of [base, CANARY, '--all', `${base}\n`]) {
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: { ...trace.env, VERCEL_GIT_COMMIT_SHA: sha } });
+    assert.equal(output.reason, 'head_mismatch');
+    assert.equal(output.fetched, false);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+test('R3-06 malformed or contradictory optional refs BUILD without choosing fetch targets', () => {
+  const { repo } = shallowFixture();
+  const trace = traceOptions();
+  for (const ref of ['main', 'HEAD', '--all', '../main', 'foo//bar', 'foo.lock', 'x\n', 'x\r', 'x@{1}', 'x y']) {
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: { ...trace.env, VERCEL_GIT_COMMIT_REF: ref } });
+    assert.equal(output.reason, 'untrusted_feature_ref');
+    assert.equal(output.fetched, false);
+  }
+  assert.deepEqual(fetchCommands(trace), []);
+});
+
+for (const [id, name, paths, site, product] of [
+  ['12', 'docs-only', ['docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE'],
+  ['13', 'marketing-only', ['site/src/r3.js'], 'BUILD', 'IGNORE'],
+  ['14', 'product-only', ['apps/pos/lib/r3.dart'], 'IGNORE', 'BUILD'],
+  ['15', 'mixed', ['site/src/r3.js', 'apps/pos/lib/r3.dart'], 'BUILD', 'BUILD'],
+]) {
+  test(`R3-${id} first Preview ${name} uses direct main-to-HEAD trees without ref env`, () => {
+    const { repo, base } = shallowFixture({ changes: [paths] });
+    for (const [selector, expected] of [['marketing', site], ['product', product]]) {
+      const output = expectDecision(repo, selector, undefined, expected, { absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+      assertBaseline(output, base, 'production_main', true);
+      assert.equal(output.reason, expected === 'IGNORE' ? 'unaffected_changes' : 'relevant_changes');
+    }
+  });
+}
+
+test('R3-16 failed main acquisition BUILDs without using a stale local ref', () => {
+  const { repo, remote } = shallowFixture();
+  runGit(repo, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+  runGit(scratch, ['--git-dir=' + remote, 'update-ref', '-d', 'refs/heads/main']);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', undefined, 'BUILD', { env: trace.env, absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+  assert.equal(output.reason, 'baseline_fetch_failed');
+  assertBaseline(output, null, 'production_main', true);
+  assertExactFetch(trace, 'refs/heads/main');
+});
+
+test('R3-17 detached Preview behind main sees runtime changes absent from HEAD', () => {
+  const { repo: source } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  put(source, 'docs/r3-behind.md');
+  commit(source);
+  runGit(source, ['checkout', '--quiet', 'main']);
+  put(source, 'apps/pos/lib/main-only.dart');
+  put(source, 'site/src/main-only.js');
+  const base = commit(source);
+  const remote = attachOrigin(source);
+  const repo = cloneOrigin(remote);
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  for (const selector of ['marketing', 'product']) {
+    assertBaseline(expectDecision(repo, selector, undefined, 'BUILD', { absentEnv: ['VERCEL_GIT_COMMIT_REF'] }), base, 'production_main', true);
+  }
+});
+
+test('R3-18 previous success stays authoritative regardless of optional first-Preview metadata', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  const output = expectDecision(repo, 'product', base, 'IGNORE', { env: { VERCEL_GIT_COMMIT_REF: '--invalid', VERCEL_ENV: 'production' } });
+  assertBaseline(output, base, 'previous_success', true);
+  runGit(repo, ['remote', 'set-url', 'origin', 'https://example.invalid/wrong.git']);
+  assertBaseline(expectDecision(repo, 'marketing', base, 'IGNORE'), base, 'previous_success', false);
+});
+
+test('R3-19 first Production without ref or previous success always BUILDs', () => {
+  const { repo } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, undefined, 'BUILD', {
+      env: { VERCEL_ENV: 'production' }, absentEnv: ['VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_PREVIOUS_SHA'],
+    });
+    assert.equal(output.reason, 'missing_baseline');
+    assertBaseline(output, null, null, false);
+  }
+});
+
+
+for (const [id, origin] of [
+  ['01', null],
+  ['02', 'https://vercel-internal.invalid/clone/project-token'],
+  ['03', 'https://github.com/another-owner/another-repo.git'],
+]) {
+  test('R4-' + id + ' first Preview docs ignores both independently of checkout origin', () => {
+    const { repo, base } = shallowFixture();
+    if (origin === null) runGit(repo, ['remote', 'remove', 'origin']);
+    else runGit(repo, ['remote', 'set-url', 'origin', origin]);
+    for (const selector of ['marketing', 'product']) {
+      const trace = traceOptions();
+      const output = expectDecision(repo, selector, undefined, 'IGNORE', { env: trace.env });
+      assertBaseline(output, base, 'production_main', true);
+      assert.equal(output.reason, 'unaffected_changes');
+      assertExactFetch(trace, 'refs/heads/main', fixtureSources.get(repo));
+      const log = readFileSync(trace.path, 'utf8');
+      assert.ok(!/remote get-url|remote\.origin\.url/.test(log), 'no origin reads');
+    }
+  });
+}
+
+test('R4-04 non-shallow missing previous success also acquires the exact object', () => {
+  const { repo: source } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'previous']);
+  put(source, 'docs/previous.md');
+  const base = commit(source);
+  runGit(source, ['checkout', '--quiet', 'main']);
+  const { repo } = fixture();
+  const remote = attachOrigin(source);
+  fixtureSources.set(repo, pathToFileURL(remote).href);
+  assert.equal(commitAvailable(repo, base), false);
+  assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'false');
+  const trace = traceOptions();
+  assertBaseline(expectDecision(repo, 'product', base, 'IGNORE', { env: trace.env }), base, 'previous_success', true);
+  assertExactFetch(trace, base);
+});
+
+test('R4-19 first Preview runtime deletion and rename stay relevant', () => {
+  const { repo: source } = fixture();
+  runGit(source, ['checkout', '--quiet', '-b', 'feature/r2']);
+  unlinkSync(join(source, 'site/api/lead.js'));
+  renameSync(join(source, 'apps/pos/lib/filter_fixture.dart'), join(source, 'docs/moved.dart'));
+  commit(source);
+  const repo = cloneOrigin(attachOrigin(source));
+  expectPair(repo, undefined, 'BUILD', 'BUILD');
+});
+
+test('R4-20 Git stderr and credential-bearing origin never escape on failed fetch', () => {
+  const { repo } = shallowFixture();
+  const origin = 'https://fixture-user:' + CANARY + '@internal.invalid/wrong.git';
+  runGit(repo, ['remote', 'set-url', 'origin', origin]);
+  // Git itself emits the canary from this missing local URL to its captured
+  // stderr. No network or substitute Git executable is involved.
+  const missing = pathToFileURL(join(scratch, CANARY + '-stderr.git')).href;
+  fixtureSources.set(repo, missing);
+  const raw = spawnSync('git', ['-C', repo, 'fetch', missing, 'refs/heads/main'], { env: safeEnv, encoding: 'utf8', windowsHide: true });
+  assert.notEqual(raw.status, 0);
+  assert.ok(raw.stderr.includes(CANARY));
+  const result = invoke(repo, 'product');
+  assert.equal(result.output.reason, 'baseline_fetch_failed');
+  assert.ok(!result.stdout.includes('internal.invalid') && !result.stdout.includes('fixture-user'));
+});
+
+test('R4-21 PR #277 replay: detached first Preview, missing ref, docs-only', () => {
+  const { repo, base } = shallowFixture();
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  runGit(repo, ['remote', 'remove', 'origin']);
+  for (const selector of ['marketing', 'product']) {
+    assertBaseline(expectDecision(repo, selector, undefined, 'IGNORE', {
+      absentEnv: ['VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_PREVIOUS_SHA'],
+    }), base, 'production_main', true);
+  }
+});
+
+test('R4-22 R3 internal-origin blocker replay reaches shared-engine classification', () => {
+  const { repo, base } = shallowFixture({ changes: [[HELPER]] });
+  runGit(repo, ['checkout', '--quiet', '--detach']);
+  runGit(repo, ['remote', 'set-url', 'origin', 'https://internal.invalid/' + CANARY]);
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, undefined, 'BUILD', { absentEnv: ['VERCEL_GIT_COMMIT_REF'] });
+    assert.equal(output.reason, 'relevant_changes');
+    assert.equal(output.categories.shared_engine, 1);
+    assertBaseline(output, base, 'production_main', true);
+  }
+});
+
+test('R4-23 canonical URL constant changes build both projects', () => {
+  const { repo, base } = fixture();
+  const text = readFileSync(join(repo, HELPER), 'utf8');
+  assert.ok(text.includes("const TRUSTED_REPOSITORY_URL = '" + CANONICAL_SOURCE + "';"));
+  put(repo, HELPER, text.replace(CANONICAL_SOURCE, 'https://github.com/reviewed/source-change.git'));
+  commit(repo);
+  for (const selector of ['marketing', 'product']) {
+    const output = expectDecision(repo, selector, base, 'BUILD');
+    assert.equal(output.categories.shared_engine, 1);
+  }
+});
+
+test('R4 CLI ignores env source overrides and fetches only the canonical URL', () => {
+  const { repo } = shallowFixture();
+  runGit(repo, ['remote', 'remove', 'origin']);
+  const trace = traceOptions();
+  const output = expectDecision(repo, 'product', undefined, 'BUILD', { productionCli: true, env: {
+    ...trace.env, TRUSTED_REPOSITORY_URL: fixtureSources.get(repo),
+    VERCEL_GIT_REPO_URL: fixtureSources.get(repo), VERCEL_GIT_REPO_SLUG: CANARY,
+  } });
+  // HTTPS is forbidden by the fixture protocol allowlist, so this cannot
+  // contact GitHub; a source override would incorrectly make it IGNORE.
+  assert.equal(output.reason, 'baseline_fetch_failed');
+  assertExactFetch(trace, 'refs/heads/main', CANONICAL_SOURCE);
+});
+
+test('R4 canonical URL cannot be redirected by checkout or environment Git rewrites', () => {
+  const { repo } = shallowFixture();
+  for (const mode of ['local', 'environment']) {
+    const trace = traceOptions();
+    const key = 'url.' + fixtureSources.get(repo) + '.insteadOf';
+    const env = { ...trace.env };
+    if (mode === 'local') runGit(repo, ['config', key, CANONICAL_SOURCE]);
+    else Object.assign(env, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: key, GIT_CONFIG_VALUE_0: CANONICAL_SOURCE });
+    const output = expectDecision(repo, 'product', undefined, 'BUILD', { productionCli: true, env });
+    assert.equal(output.reason, 'baseline_source_rewritten');
+    assert.equal(output.fetched, false);
+    assert.deepEqual(fetchCommands(trace), []);
+    if (mode === 'local') runGit(repo, ['config', '--unset-all', key]);
+  }
 });
