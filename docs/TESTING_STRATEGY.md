@@ -69,6 +69,7 @@ Additional deny-by-default isolation assertions (same fixture):
 - A `manager` scoped to B-A1a cannot read/modify B-A2a data unless an explicit branch-scoped membership grants it.
 - An `accountant` (if shipped — **Q-017**) is **strictly read-only** (**DECISION D-028**): **any** mutating RPC is denied — including `close_shift` and `reconcile_shift`, void, discount, and grant changes — and no state changes (see T-011 below and Section 7).
 - Audit-event tables reject UPDATE/DELETE from all application roles (**DECISION D-013**).
+- The Postgres role `anon` (publishable key, no session) can execute **no** `public` function outside the explicit allowlist (**empty** at Phase 1A — **DECISION D-037**), reads **no** row from any `public` table or view (refused at the grant layer, before RLS), and cannot use schema `app`; asserted as the **real** role (`set local role anon`), never via faked JWT claims (T-016).
 
 **Platform-plane separation tests (mandatory gate, T-008..T-011 — owned by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md) Section 14, **DECISION D-026/D-028**).** This gate enumerates and runs the four canonical platform/accountant cases (the SECURITY document owns their full definitions; restated here as concrete tests):
 - **T-008 — Membership cannot grant platform-admin.** No tenant membership (any role, any scope, any combination) confers platform-admin authority; a principal holding only org memberships cannot invoke the platform-admin path. (**DECISION D-026**)
@@ -155,6 +156,7 @@ State-machine guard tests are pure **unit** tests; their integration counterpart
 - **Deny-by-default assertions**: for every tenant-scoped table, assert (a) in-scope rows are visible, (b) out-of-scope rows return **zero rows** on SELECT, (c) cross-tenant INSERT/UPDATE/DELETE are blocked, (d) IDOR-by-id returns nothing. A newly added table with no policy must **fail** the harness (default-deny presence check), preventing accidentally unguarded tables.
 - **Constraint backstop (layer 4)**: tests confirm DB constraints reject malformed/cross-tenant rows even if a higher layer were bypassed (e.g. `organization_id` mismatch between parent and child rows).
 - **Audit immutability**: assert `audit_events` is append-only for app roles (no UPDATE/DELETE) (**DECISION D-013**).
+- **Anon surface** (T-016): run as the real `anon` role and assert that the set of anon-executable `public` functions equals the allowlist (**DECISION D-037**), that `anon` holds no `public` table/view/sequence privilege and no `app` USAGE, and that the migration-owner default privileges in `public` grant `anon` nothing (`supabase/tests/public_surface_acl_remediation_001_test.sql`).
 
 ---
 
@@ -162,7 +164,7 @@ State-machine guard tests are pure **unit** tests; their integration counterpart
 
 [API_CONTRACT.md](API_CONTRACT.md) owns the RPC signatures; contract tests pin each sensitive-mutation RPC (**DECISION D-011/D-012**). For **every** RPC, assert:
 
-1. **Authorization**: callers without the required membership/role/scope are denied; callers with it succeed (deny-by-default).
+1. **Authorization**: callers without the required membership/role/scope are denied; callers with it succeed (deny-by-default); the Postgres role `anon` is denied at the grant layer unless the RPC is on the D-037 allowlist (T-016).
 2. **Input/output shape**: request and response match the documented contract, including money as integer `_minor` and enums from **DECISION D-018**.
 3. **Idempotency (D-022)**: passing the same `device_id` + `local_operation_id` twice yields one effect and a consistent response.
 4. **Error contract**: documented error codes/reasons returned for invalid input, forbidden action, conflict, and not-found (IDOR → not-found, never leak existence).

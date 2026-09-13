@@ -1251,3 +1251,26 @@ separately for each project.
 A fetch/acquisition failure must appear as BUILD and cannot count as proof that
 filtering worked. Record the actual observed outcome; this checklist alone is
 not evidence that either hosted gate has passed.
+
+---
+
+## 16. Public-surface ACL posture — hosted PRE/POST verification (STOREFRONT-SEC-001)
+
+**Decision:** D-037. **Migration:** `supabase/migrations/20260913164029_public_surface_acl_remediation_001.sql` — revokes every unintended `anon` grant in schema `public` (118 function signatures, 49 tables, 6 views, schema-wide catch-alls) and removes `anon` from the `postgres` default privileges in `public`; it changes nothing for `authenticated` / `service_role`, no function body, no policy, no data. **Local proof:** `supabase/tests/public_surface_acl_remediation_001_test.sql` (T-016). **Recovery:** `supabase/recovery/sec001_restore_prior_anon_privileges.sql` (evidence-derived, never `GRANT ALL`). **Pre-apply report:** `docs/handoffs/BIZBOT_STOREFRONT_SEC_001_PREAPPLY_REPORT.md`.
+
+Preflight is the §13 procedure (confirm `supabase/.temp/project-ref` = `oqmevrndtivqxgyvcmwy` — RestoFlow, eu-west-1; `supabase migration list --linked` shows exactly this one file pending; no `db reset`, no seed, no `--include-all`). Run the read-only queries below with `supabase db query --linked` **before** the apply (record every value) and **after** it; the right column is the expected AFTER state.
+
+| # | Query (read-only) | Expected AFTER |
+|---|---|---|
+| 1 | `select count(*) filter (where has_function_privilege('anon', p.oid, 'EXECUTE')) as anon_exec, count(*) as total from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f';` | `anon_exec = 0`; `total` unchanged (118 on 2026-09-13) |
+| 2 | `select count(*) filter (where not has_function_privilege('authenticated', p.oid, 'EXECUTE')) as auth_missing from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f';` | `0` |
+| 3 | `select string_agg(c.relname, ', ') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p','v','m') and (has_table_privilege('anon', c.oid, 'SELECT') or has_table_privilege('anon', c.oid, 'INSERT') or has_table_privilege('anon', c.oid, 'UPDATE') or has_table_privilege('anon', c.oid, 'DELETE') or has_table_privilege('anon', c.oid, 'TRUNCATE') or has_table_privilege('anon', c.oid, 'REFERENCES') or has_table_privilege('anon', c.oid, 'TRIGGER'));` | `NULL` (no table or view) |
+| 4 | `select string_agg(c.relname, ', ') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'S' and (has_sequence_privilege('anon', c.oid, 'USAGE') or has_sequence_privilege('anon', c.oid, 'SELECT') or has_sequence_privilege('anon', c.oid, 'UPDATE'));` | `NULL` (no sequences exist today) |
+| 5 | `select has_schema_privilege('anon','app','USAGE') as anon_app, has_schema_privilege('anon','public','USAGE') as anon_public, has_schema_privilege('authenticated','app','USAGE') as auth_app;` | `false, true, true` |
+| 6 | `select pg_get_userbyid(d.defaclrole) as owner, coalesce(n.nspname, '<global>') as scope, d.defaclobjtype, d.defaclacl::text from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace where (n.nspname = 'public' or d.defaclnamespace = 0) and pg_get_userbyid(d.defaclrole) = 'postgres' order by 2, 3;` | no `anon=` token in any row; no `<global>` row at all (none existed PRE); `authenticated` / `service_role` tokens unchanged |
+| 7 | `select count(*) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relforcerowsecurity;` | `1` (`plans`, pre-existing, unchanged) |
+| 8 | `supabase migration list --linked` | `20260913164029` applied; nothing pending |
+
+Any AFTER value other than the expected one = **STOP**: do not improvise; run the recovery script only with explicit owner approval, re-run the queries, and record the outcome.
+
+**Drift watch.** The `supabase_admin` default-privilege entries in `public` also contain `anon` but cannot be altered by `postgres` and do not apply to migration-created objects; a Supabase platform upgrade may re-apply the legacy `postgres` default. Re-run queries 1, 3 and 6 after every platform upgrade and before every Storefront ticket that adds an anon-callable RPC (D-037 allowlist).
