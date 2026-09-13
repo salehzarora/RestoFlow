@@ -1251,3 +1251,11 @@ separately for each project.
 A fetch/acquisition failure must appear as BUILD and cannot count as proof that
 filtering worked. Record the actual observed outcome; this checklist alone is
 not evidence that either hosted gate has passed.
+
+**2026-09-13 R4 post-merge first-Preview gate:** R4 is merged in PR #278.
+This verification uses a brand-new docs-only branch from current main to test
+the first-Preview `production_main` path. Both projects must fetch that exact
+main baseline, report `IGNORE` / `unaffected_changes`, and be canceled by the
+Ignored Build Step with No Resources and no install or build started.
+Phase 2B remains blocked until both project records prove these results;
+keep the verification PR unmerged and request separate cleanup approval.
