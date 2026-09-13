@@ -1240,6 +1240,14 @@ output resources; a generic cancellation, “2 Projects” label or successful
 GitHub status is insufficient. A missing object that was fetched successfully
 and a locally available previous-success object are both valid outcomes.
 `fetched: true` records an attempt, not success: verify its reason and baseline.
+
+**2026-09-13 R4 same-branch checkpoint:** for a docs-only candidate, inspect
+the earliest deployment logs as well as Resources. Cloning and running the
+Ignored Build Step are expected; `vercel build`, dependency installation or
+application build commands mean this storage gate failed, even if later
+cancellation leaves no resources. Preserve the decision and baseline SHA
+separately for each project.
+
 A fetch/acquisition failure must appear as BUILD and cannot count as proof that
 filtering worked. Record the actual observed outcome; this checklist alone is
 not evidence that either hosted gate has passed.
