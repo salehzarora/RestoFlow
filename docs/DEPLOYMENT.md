@@ -1003,14 +1003,46 @@ static-export shape (`framework: nextjs`, `installCommand: npm ci`,
 `buildCommand: npm run build`, no functions, no rewrites/redirects), a private
 manifest whose runtime dependencies are only `next`/`react`/`react-dom` at exact
 versions, a present lockfile, a `next.config.mjs` pinned by the exported
-`STOREFRONT_CONFIG_HASH`, tsconfig paths that cannot reach outside
-`storefront/`, module specifiers that resolve inside the storefront runtime
-roots or are allowlisted bare imports, and `public/` assets limited to a small
-static type list at ≤ 256 KB each. `public/` sizes are read with
-`cat-file --batch-check` and its contents are never decoded, because a binary
-asset would otherwise fail the engine's fatal UTF-8 decode and BUILD on every
-run. Any guard failure is a BUILD: an input this engine does not understand must
-never be silently ignored.
+`STOREFRONT_CONFIG_HASH`, an `outputDirectory` of exactly `out` and an
+`ignoreCommand` that invokes this engine with the `storefront` selector, the
+TypeScript build-graph boundary described below, module specifiers that resolve
+inside the storefront runtime roots or are allowlisted bare imports, and
+`public/` assets limited to a small static type list at ≤ 256 KB each.
+`public/` sizes are read with `cat-file --batch-check` and its contents are
+never decoded, because a binary asset would otherwise fail the engine's fatal
+UTF-8 decode and BUILD on every run. Any guard failure is a BUILD: an input this
+engine does not understand must never be silently ignored.
+
+#### Why ignoring `storefront/tests|docs|review|scripts` is safe
+
+These four roots are irrelevant to **every** selector, and that is *enforced*
+rather than asserted in a comment. A TypeScript program is
+`files ∪ (include − exclude) ∪ transitive imports ∪ ambient type roots`,
+inheritable through `extends`, and `next build` type-checks exactly that
+program. Guard step 7 therefore refuses `extends`, `files` and `references`
+through a top-level key allowlist; **requires** `include`, because TypeScript's
+default is `**/*` and that does type-check the tests; refuses any `include`
+entry overlapping an ignored root in either direction (`.` contains
+`storefront/tests`, `tests/unit` is contained by it); refuses `types`,
+`typeRoots` and `rootDirs`, which pull in declarations with no import; and pins
+`compilerOptions.paths` to the single `@/*` → `./src/*` mapping that step 8
+resolves. `exclude` is validated but never relied upon — it can only subtract
+from `include`. Widen the tsconfig and inspection fails, which BUILDs: the
+unsafe contract can never be silently ignored, and a tests-only change under it
+can never return IGNORE.
+
+Step 8 independently keeps the ignored roots out of the import graph, and the
+set of files it scans is *derived* from the runtime roots rather than listed
+separately — otherwise a runtime root that app code may import becomes an
+unscanned bridge into `storefront/tests`. `public/` is the single exclusion,
+and only because its type allowlist admits no module and its blobs are never
+decoded.
+
+The Vercel project's **Node.js Version** setting is authoritative for the
+storefront runtime. `storefront/package.json#engines` and `storefront/.nvmrc`
+are shape-bounded only and are never read to decide relevance; both classify as
+`storefront_runtime`, so editing either one BUILDs the storefront whatever it
+says.
 
 A future shared JavaScript package is deliberately **not** understood yet. Under
 `apps/`/`packages/` it BUILDs `resto-flow` (`unknown_product_input`); imported

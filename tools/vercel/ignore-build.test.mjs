@@ -31,6 +31,19 @@ const nextConfig = {
 export default nextConfig;
 `;
 
+// Hoisted so the Stage 7 cases can derive one-key variants of the approved
+// contract instead of restating it, which is how a variant stays a variant.
+const json = (value) => JSON.stringify(value, null, 2) + '\n';
+const STOREFRONT_TSCONFIG = {
+  compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
+  include: ['app', 'src'], exclude: ['tests'],
+};
+const STOREFRONT_VERCEL = {
+  framework: 'nextjs', installCommand: 'npm ci', buildCommand: 'npm run build',
+  outputDirectory: 'out',
+  ignoreCommand: 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi',
+};
+
 const STOREFRONT_FILES = {
   'storefront/package.json': JSON.stringify({
     name: 'storefront', version: '0.0.0', private: true,
@@ -39,15 +52,8 @@ const STOREFRONT_FILES = {
   }, null, 2) + '\n',
   'storefront/package-lock.json': JSON.stringify({ name: 'storefront', lockfileVersion: 3, packages: {} }, null, 2) + '\n',
   'storefront/next.config.mjs': STOREFRONT_NEXT_CONFIG,
-  'storefront/tsconfig.json': JSON.stringify({
-    compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
-    include: ['app', 'src'], exclude: ['tests'],
-  }, null, 2) + '\n',
-  'storefront/vercel.json': JSON.stringify({
-    framework: 'nextjs', installCommand: 'npm ci', buildCommand: 'npm run build',
-    outputDirectory: 'out',
-    ignoreCommand: 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi',
-  }, null, 2) + '\n',
+  'storefront/tsconfig.json': json(STOREFRONT_TSCONFIG),
+  'storefront/vercel.json': json(STOREFRONT_VERCEL),
   'storefront/app/page.tsx': "import { hello } from '@/lib/hello';\nexport default function Page() { return hello; }\n",
   'storefront/src/lib/hello.ts': "export const hello = 'fixture';\n",
   'storefront/messages/en.json': '{ "hello": "fixture" }\n',
@@ -328,6 +334,23 @@ function expectAll(repo, base, marketing, product, storefront, options) {
   expectDecision(repo, 'marketing', base, marketing, options);
   expectDecision(repo, 'product', base, product, options);
   expectDecision(repo, 'storefront', base, storefront, options);
+}
+
+// A guard violation present in BOTH compared trees, with docs/ as the only
+// changed path. The classifier's own answer there is IGNORE, so a BUILD can
+// only have come from inspectStorefront. Asserting the guard REASON is what
+// separates a real guard proof from a case that merely touched a runtime file
+// and collected relevant_changes.
+function guardOnly(mutate, label) {
+  const { repo, base } = fixture({ seed: mutate });
+  put(repo, 'docs/guard-probe.md', `# ${label}\n`);
+  commit(repo);
+  const { output, stdout } = invoke(repo, 'storefront', base);
+  assert.equal(output.decision, 'BUILD', `guard-only ${label}: ${stdout}`);
+  assert.ok(['unsupported_build_contract', 'unsupported_graph'].includes(output.reason),
+    `guard-only ${label}: expected a guard reason, got ${output.reason}`);
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  return output;
 }
 
 function pathCase(name, paths, marketing, product, storefront) {
@@ -1361,7 +1384,17 @@ test('24 storefront guard failures all fail safe to BUILD', () => {
     ['escaping relative import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from '../../site/src/main.js';\nexport default function P() { return x; }\n")],
     ['disallowed bare import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from 'lodash';\nexport default function P() { return x; }\n")],
     ['dynamic import', (repo) => put(repo, 'storefront/app/page.tsx', "export default async function P() { return import('./other'); }\n")],
-    ['tsconfig path escaping the root', (repo) => put(repo, 'storefront/tsconfig.json', JSON.stringify({ compilerOptions: { paths: { '@/*': ['../site/src/*'] } } }, null, 2) + '\n')],
+    // Pre-fix this passed inspection outright: safeRelative normalises
+    // storefront + ../site/src to site/src, which is not an escape, so only the
+    // alias pin catches an alias aimed at another project.
+    ['tsconfig alias escaping the root', (repo) => put(repo, 'storefront/tsconfig.json', json({ ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', paths: { '@/*': ['../site/src/*'] } } }))],
+    // storefront/styles is a runtime root that an app module may import, so its
+    // OWN imports have to be scanned as well, or it is an unchecked bridge from
+    // the build graph into storefront/tests.
+    ['a runtime root bridging into tests', (repo) => {
+      put(repo, 'storefront/styles/theme.ts', "export { fixture } from '../tests/fixtures/data';\n");
+      put(repo, 'storefront/app/page.tsx', "import { fixture } from '../styles/theme';\nexport default function P() { return fixture; }\n");
+    }],
     ['oversized public asset', (repo) => put(repo, 'storefront/public/big.png', 'x'.repeat(300 * 1024))],
     ['video in public', (repo) => put(repo, 'storefront/public/clip.mp4', 'fixture\n')],
   ];
@@ -1372,7 +1405,127 @@ test('24 storefront guard failures all fail safe to BUILD', () => {
     // The storefront fails safe; the other two are unaffected by storefront/.
     expectDecision(repo, 'storefront', base, 'BUILD', { message: label });
     expectDecision(repo, 'marketing', base, 'IGNORE', { message: label });
+    // Every file mutated above is itself a storefront runtime input, so the
+    // classifier alone already answers BUILD and the assertions above would hold
+    // with inspectStorefront deleted. Re-run each case where only the guard can
+    // produce the BUILD.
+    guardOnly(mutate, label);
   }
+});
+
+// STAGE 7 BLOCKER. Reported sequence: a tsconfig change puts storefront/tests
+// into TypeScript's build graph and correctly BUILDs on its own commit, then a
+// LATER tests-only .ts change is classified storefront_tests_docs and IGNOREd
+// while `next build` still type-checks it. Pre-fix, every shape below passed
+// inspection and returned IGNORE at step 3: a false IGNORE. The contract is now
+// enforced, so the unsafe configuration cannot be silently ignored.
+test('24 REGRESSION a tests-widening tsconfig cannot produce a tests-only IGNORE', () => {
+  const unsafe = [
+    // TypeScript's own default when include is omitted, written out.
+    ['default **/* include', { ...STOREFRONT_TSCONFIG, include: ['**/*.ts', '**/*.tsx'] }],
+    ['include omitted entirely', { compilerOptions: STOREFRONT_TSCONFIG.compilerOptions, exclude: ['tests'] }],
+    ['whole Root Directory included', { ...STOREFRONT_TSCONFIG, include: ['.'] }],
+    ['tests named in include', { ...STOREFRONT_TSCONFIG, include: ['app', 'src', 'tests'] }],
+    ['a tests subdirectory included', { ...STOREFRONT_TSCONFIG, include: ['app', 'src', 'tests/unit'] }],
+    // exclude is the only thing the fixture relied on, and it only subtracts.
+    ['tests exclusion removed from a broad include', { ...STOREFRONT_TSCONFIG, include: ['.'], exclude: [] }],
+    // files[] adds to the program independently of include.
+    ['files[] naming a test setup', { ...STOREFRONT_TSCONFIG, files: ['tests/setup.ts'] }],
+    // extends can inherit an include this parser never sees.
+    ['include inherited through extends', { extends: './tests/tsconfig.base.json', include: ['app', 'src'] }],
+    ['project references', { ...STOREFRONT_TSCONFIG, references: [{ path: './tests' }] }],
+    // Ambient declarations enter the program without any import.
+    ['typeRoots inside tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', typeRoots: ['./tests/types'] } }],
+    ['types inside tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', types: ['./tests/globals'] } }],
+    ['rootDirs reaching tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', rootDirs: ['./src', './tests'] } }],
+    // The alias step 8 resolves as storefront/src, aimed at tests instead.
+    ['alias remapped into tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', paths: { '@/*': ['./tests/*'] } } }],
+  ];
+  for (const [label, tsconfig] of unsafe) {
+    const { repo } = fixture();
+    // 1-2. The widening is committed. tsconfig.json is a storefront runtime
+    //      input, so that commit BUILDs on its own, as the report describes.
+    put(repo, 'storefront/tsconfig.json', json(tsconfig));
+    const widened = commit(repo);
+    // 3. A later commit changes ONLY a TypeScript file under storefront/tests.
+    put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
+    commit(repo);
+    // 4. Classification alone says IGNORE here; inspection must override it.
+    const result = expectDecision(repo, 'storefront', widened, 'BUILD');
+    assert.ok(['unsupported_build_contract', 'unsupported_graph'].includes(result.reason),
+      `${label}: expected the unsafe tsconfig to fail inspection, got ${result.reason}`);
+    // The unsafe storefront contract must not leak into the other two projects.
+    expectDecision(repo, 'marketing', widened, 'IGNORE');
+    expectDecision(repo, 'product', widened, 'IGNORE');
+  }
+});
+
+// The other half of the blocker, and the reason the fix is a proof rather than
+// "BUILD on anything tsconfig-shaped": under a contract that provably excludes
+// them, ignored storefront paths must still be ignored. Without this case,
+// classifying storefront/tests as BUILD would also satisfy the regression above.
+test('24 safe tsconfig shapes still ignore a tests-only TypeScript change', () => {
+  const safe = [
+    ['bare directories', ['app', 'src']],
+    ['explicitly relative directories', ['./app', './src']],
+    ['trailing globs under a safe root', ['app/**/*.tsx', 'src/**/*.ts']],
+    // What `next build` writes back into tsconfig.json; both are generated,
+    // neither overlaps an ignored root.
+    ['next generated entries', ['next-env.d.ts', '.next/types/**/*.ts', 'app', 'src']],
+  ];
+  for (const [label, include] of safe) {
+    const { repo } = fixture();
+    put(repo, 'storefront/tsconfig.json', json({ ...STOREFRONT_TSCONFIG, include }));
+    // A marker keeps the configuring commit non-empty: the first shape is
+    // byte-identical to the fixture, and an empty commit aborts git.
+    put(repo, 'docs/tsconfig-case.md', `# ${label}
+`);
+    const configured = commit(repo);
+    put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
+    put(repo, 'storefront/docs/notes.md', '# fixture\n');
+    commit(repo);
+    expectAll(repo, configured, 'IGNORE', 'IGNORE', 'IGNORE', { message: label });
+  }
+});
+
+// Stage 7 hardening 1: allowed keys were not checked for approved VALUES. A
+// foreign ignoreCommand means the project is filtered by something other than
+// this engine; `exit 0` would make it never build at all.
+test('24 storefront deployment values are pinned, not merely allowed', () => {
+  const { outputDirectory, ignoreCommand, ...withoutBoth } = STOREFRONT_VERCEL;
+  const cases = [
+    ['a different outputDirectory', { ...STOREFRONT_VERCEL, outputDirectory: 'dist' }],
+    ['outputDirectory omitted', { ...withoutBoth, ignoreCommand }],
+    ['an always-ignore ignoreCommand', { ...STOREFRONT_VERCEL, ignoreCommand: 'exit 0' }],
+    ['the marketing selector', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('storefront', 'marketing') }],
+    ['a different engine path', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('../tools', '../other') }],
+    ['ignoreCommand omitted', { ...withoutBoth, outputDirectory }],
+  ];
+  for (const [label, config] of cases) {
+    guardOnly((repo) => put(repo, 'storefront/vercel.json', json(config)), label);
+  }
+});
+
+// Stage 7 hardening 2: the runtime pin. No approved Node value exists to
+// validate at 001A, so the Vercel project's Node.js Version setting stays
+// authoritative (DEPLOYMENT.md §15) and the engine only bounds the shape. What
+// matters for correctness is that neither file is ever read to decide relevance:
+// both are storefront_runtime, so any edit BUILDs whatever it says.
+test('24 the storefront Node pin is shape-bounded and never trusted for relevance', () => {
+  const manifest = JSON.parse(STOREFRONT_FILES['storefront/package.json']);
+  for (const [label, engines] of [
+    ['a non-string node value', { node: 22 }],
+    ['an unrecognised engine key', { node: '22.x', npm: '10.x' }],
+    ['an array instead of an object', ['22.x']],
+  ]) {
+    guardOnly((repo) => put(repo, 'storefront/package.json', json({ ...manifest, engines })), label);
+  }
+  // A well-formed pin passes, and changing either file BUILDs the storefront
+  // alone by classification — the value itself is never interpreted.
+  const { repo, base } = fixture({ seed: (target) => put(target, 'storefront/package.json', json({ ...manifest, engines: { node: '22.x' } })) });
+  put(repo, 'storefront/.nvmrc', '22\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'BUILD');
 });
 
 test('24 a baseline without storefront fails the storefront safe', () => {
