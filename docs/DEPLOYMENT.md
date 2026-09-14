@@ -1051,6 +1051,9 @@ engine about it is its own reviewed change.
 
 001A previews (shared-engine change, both projects correctly BUILD):
 `resto-flow 8XwPxvB1hAzHn7Easq9qTw4dBSMM`, `bizbot-site 26R9vtmATuUFFQEK8nR5i5UgHWHT`.
+The Stage 7 correction `790a97e7` is also a shared-engine change and also
+correctly BUILDs both: `resto-flow 2kMojerbN5JMpdTLGWSKrfbhPeEV`,
+`bizbot-site Br9jw51W2yNqHQB72gXhndjng9Sv`.
 This commit is the docs-only counter-proof on the same branch: both projects must
 IGNORE it with Resources = No Resources.
 
