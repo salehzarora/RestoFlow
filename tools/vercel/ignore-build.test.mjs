@@ -1550,32 +1550,187 @@ test('24 the storefront Node pin is shape-bounded and never trusted for relevanc
   expectAll(repo, base, 'IGNORE', 'IGNORE', 'BUILD');
 });
 
-// STAGE 7 R2 BLOCKER. Proving a path is outside TypeScript's type-check graph does
-// not prove it is outside the BUILD's dependency graph: a runtime module can read
-// it with node:fs while `next build` runs, and the engine does not model filesystem
-// reads. The contract here is fully VALID — inspection passes — so the BUILD can
-// only come from classification, which is exactly the R2 rule under test.
-test('24 REGRESSION a build-time fs read under a storefront-local root cannot IGNORE', () => {
-  const { repo } = fixture();
-  // 1-2. A valid storefront contract whose runtime module reads a tests fixture at
-  //      build time through an allowlisted node: import.
-  put(repo, 'storefront/tests/fixture.json', json({ headline: 'before' }));
-  put(repo, 'storefront/app/page.tsx',
-    "import { readFileSync } from 'node:fs';\n"
-    + "const data = JSON.parse(readFileSync('../tests/fixture.json', 'utf8'));\n"
-    + "export default function Page() { return data.headline; }\n");
-  const wired = commit(repo);
-  // 3. A later commit changes ONLY that fixture.
+// STAGE 7 R2. Under a fully VALID contract the BUILD can only come from
+// classification, which is precisely the R2 rule: every storefront-local path is
+// relevant to the storefront. This originally wired the fixture into the build
+// with node:fs to motivate consumption; R3 forbids that import, and the rule never
+// depended on proving consumption in the first place — it holds because the engine
+// does not model filesystem reads at all.
+test('24 REGRESSION a storefront-local change BUILDs by classification', () => {
+  const { repo, base } = fixture({ seed: (target) => put(target, 'storefront/tests/fixture.json', json({ headline: 'before' })) });
+  // The ONLY change is a storefront-local file under a valid contract.
   put(repo, 'storefront/tests/fixture.json', json({ headline: 'after' }));
   commit(repo);
-  // 4. BUILD, and specifically a CLASSIFICATION build. A guard reason here would
-  //    mean the test proved node:fs is rejected, not that the root is build-relevant.
-  const result = expectDecision(repo, 'storefront', wired, 'BUILD');
+  const result = expectDecision(repo, 'storefront', base, 'BUILD');
+  // A guard reason here would mean inspection rejected the contract, not that the
+  // root is build-relevant — the assertion that keeps this test about R2.
   assert.equal(result.reason, 'relevant_changes');
   assert.deepEqual(result.categories, { storefront_local: 1 });
-  // 5. And it must not fan out: that is the whole point of the three-way filter.
-  expectDecision(repo, 'marketing', wired, 'IGNORE');
-  expectDecision(repo, 'product', wired, 'IGNORE');
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  expectDecision(repo, 'product', base, 'IGNORE');
+});
+
+// STAGE 7 R3 BLOCKER. R2 made everything under storefront/ relevant, which leaves
+// the mirror-image hole: storefront build-time code reading a repository path
+// OUTSIDE storefront/, where a later change is correctly irrelevant to the
+// storefront classifier. Vercel's checkout contains those files (Include files
+// outside Root Directory is enabled so the ignore command can read ../tools/
+// vercel/), so this is reachable. R3 closes it at the source contract instead of
+// analysing filesystem reads: a static export needs no Node builtin, so importing
+// one is an unsupported contract and BUILDs.
+test('24 R3 REGRESSION storefront source reading an external repo path cannot IGNORE it', () => {
+  const external = 'docs/storefront-build-input.json';
+  // Seeded into BOTH compared trees, so the unsafe source is not itself the change.
+  const { repo, base } = fixture({
+    seed: (target) => {
+      put(target, external, json({ headline: 'before' }));
+      put(target, 'storefront/app/page.tsx', "import { readFileSync } from 'node:fs';\nconst input = JSON.parse(readFileSync('../../docs/storefront-build-input.json', 'utf8'));\nexport default function Page() { return input.headline; }\n");
+    },
+  });
+  // The ONLY change is the external path the storefront build reads.
+  put(repo, external, json({ headline: 'after' }));
+  commit(repo);
+  const result = expectDecision(repo, 'storefront', base, 'BUILD');
+  assert.equal(result.reason, 'unsupported_graph');
+  // The category map must NOT be what saved this: docs/ is irrelevant to every
+  // selector, so classification alone returns IGNORE. An empty map proves
+  // inspection rejected the contract BEFORE the classification loop ran.
+  assert.deepEqual(result.categories, {});
+  // And the unsafe storefront contract must not drag the other two projects in.
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  expectDecision(repo, 'product', base, 'IGNORE');
+});
+
+// Each case is seeded into both trees with only docs/ changed, so the classifier's
+// own answer is IGNORE and only inspection can produce the BUILD.
+test('24 R3 Node builtin imports fail storefront inspection', () => {
+  for (const builtin of ['node:fs', 'node:fs/promises', 'node:child_process', 'node:module',
+    'node:worker_threads', 'node:vm', 'node:process', 'node:os', 'fs', 'child_process']) {
+    guardOnly((target) => put(target, 'storefront/app/page.tsx',
+      `import x from '${builtin}';\nexport default function P() { return x; }\n`), `builtin ${builtin}`);
+  }
+});
+
+// Next's default pageExtensions include .jsx, and TypeScript also builds .mts and
+// .cts. A module the scan never reads is an escape hatch whatever the contract
+// says, so the contract must cover every extension the build can execute.
+test('24 R3 the module scan covers every executable storefront extension', () => {
+  for (const ext of ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts']) {
+    guardOnly((target) => put(target, `storefront/app/probe.${ext}`,
+      "import { readFileSync } from 'node:fs';\nexport const probe = readFileSync;\n"), `extension .${ext}`);
+  }
+});
+
+// An adversarial review of the R3 contract found four more escape hatches, each
+// reachable in ORDINARY front-end or monorepo code rather than by deliberate
+// circumvention, plus the false BUILD that closing them naively causes. All five
+// are pinned below; each was observed failing before the fix.
+
+// The other direction first: scanning storefront/ by default must NOT hold lint
+// and test tooling to the front-end import contract. Those configs legitimately
+// import devDependencies, so a naive widening BUILDs the storefront on EVERY run.
+test('24 R3 tooling config does not permanently BUILD the storefront', () => {
+  const { repo, base } = fixture({ seed: (target) => {
+    put(target, 'storefront/eslint.config.mjs', "import js from '@eslint/js';\nexport default [js.configs.recommended];\n");
+    put(target, 'storefront/vitest.config.ts', "import { defineConfig } from 'vitest/config';\nexport default defineConfig({});\n");
+  }});
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+// npm runs pre/post hooks around `npm ci` and `npm run build` itself, so a
+// lifecycle entry is arbitrary code inside the build and outside the contract.
+test('24 R3 npm lifecycle scripts fail storefront inspection', () => {
+  const manifest = JSON.parse(STOREFRONT_FILES['storefront/package.json']);
+  for (const [label, scripts] of [
+    ['prebuild hook', { build: 'next build', prebuild: 'node ../tools/gen.mjs' }],
+    ['postinstall hook', { build: 'next build', postinstall: 'node ./scripts/fetch.mjs' }],
+    ['prepare hook', { build: 'next build', prepare: 'node ./scripts/fetch.mjs' }],
+  ]) {
+    guardOnly((target) => put(target, 'storefront/package.json', json({ ...manifest, scripts })), `scripts ${label}`);
+  }
+});
+
+// storefront/pages is a first-class Next router that `next build` compiles with no
+// config change, yet it sat outside the enumerated module roots. Enumerating code
+// directories is the bug; the scan now starts from the storefront root.
+test('24 R3 the pages router is scanned like any other storefront module', () => {
+  guardOnly((target) => put(target, 'storefront/pages/index.jsx',
+    "import { readFileSync } from 'node:fs';\nexport default function P() { return readFileSync; }\n"), 'pages router');
+});
+
+// Root-level config modules execute during the build and were likewise unread.
+test('24 R3 root-level storefront config modules are scanned', () => {
+  guardOnly((target) => put(target, 'storefront/postcss.config.mjs',
+    "import { readFileSync } from 'node:fs';\nexport default { plugins: [], probe: readFileSync };\n"), 'postcss config');
+  guardOnly((target) => put(target, 'storefront/instrumentation.ts',
+    "import { readFileSync } from 'node:fs';\nexport function register() { return readFileSync; }\n"), 'instrumentation');
+});
+
+// The same safeRelative blind spot R1 found in `paths`, still open in `include`:
+// '../docs' normalises to 'docs', which is inside the repository and therefore not
+// an escape by that test. Containment has to be asserted positively.
+test('24 R3 tsconfig entries may not reach outside the Root Directory', () => {
+  for (const [label, include] of [
+    ['parent docs', ['app', 'src', '../docs']],
+    ['sibling site source', ['app', 'src', '../site/src']],
+  ]) {
+    guardOnly((target) => put(target, 'storefront/tsconfig.json',
+      json({ ...STOREFRONT_TSCONFIG, include })), `tsconfig ${label}`);
+  }
+});
+
+test('24 R3 direct Node builtin acquisition fails storefront inspection', () => {
+  const cases = [
+    ['getBuiltinModule', "const fs = process.getBuiltinModule('fs');\nexport default function P() { return fs; }\n"],
+    ['optional-chained getBuiltinModule', "const fs = process?.getBuiltinModule?.('fs');\nexport default function P() { return fs; }\n"],
+    ['quoted index', "const fs = process['getBuiltinModule']('fs');\nexport default function P() { return fs; }\n"],
+    ['mainModule', "const m = process.mainModule;\nexport default function P() { return m; }\n"],
+    ['binding', "const b = process.binding('fs');\nexport default function P() { return b; }\n"],
+    ['_linkedBinding', "const b = process._linkedBinding('fs');\nexport default function P() { return b; }\n"],
+  ];
+  for (const [label, source] of cases) {
+    guardOnly((target) => put(target, 'storefront/app/page.tsx', source), `acquisition ${label}`);
+  }
+});
+
+// The other half: the contract must still ADMIT a real front-end. A storefront
+// IGNORE here can only happen if inspection passed, because every guard failure
+// BUILDs — so this is what stops R3 from being "reject everything".
+test('24 R3 safe front-end imports pass inspection and ignore unrelated docs', () => {
+  const { repo, base } = fixture({
+    seed: (target) => {
+      put(target, 'storefront/components/shell.ts', "export const shell = 'fixture';\n");
+      put(target, 'storefront/app/page.tsx', "import React from 'react';\nimport ReactDOM from 'react-dom';\nimport Link from 'next/link';\nimport { hello } from '@/lib/hello';\nimport { shell } from '../components/shell';\nexport default function Page() { return [React, ReactDOM, Link, hello, shell]; }\n");
+    },
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+// process.env is how a Next front end reads build-time configuration; the handle
+// guard must not collide with it.
+// And a storefront built on the pages router must still pass: the widened scan
+// must reject the contract, not the router.
+test('24 R3 a pages-router storefront still passes inspection', () => {
+  const { repo, base } = fixture({
+    seed: (target) => put(target, 'storefront/pages/index.tsx', "import Link from 'next/link';\nimport { hello } from '@/lib/hello';\nexport default function Home() { return [Link, hello]; }\n"),
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 R3 process.env stays allowed in storefront source', () => {
+  const { repo, base } = fixture({
+    seed: (target) => put(target, 'storefront/app/page.tsx',
+      "export default function Page() { return process.env.NEXT_PUBLIC_SITE_NAME; }\n"),
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 // Structural: ONE relevance expression governs the entire storefront subtree, so no

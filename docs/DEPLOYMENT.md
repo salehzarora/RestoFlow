@@ -1006,8 +1006,9 @@ versions, a present lockfile, a `next.config.mjs` pinned by the exported
 `STOREFRONT_CONFIG_HASH`, an `outputDirectory` of exactly `out` and an
 `ignoreCommand` that invokes this engine with the `storefront` selector, the
 TypeScript build-graph boundary described below, module specifiers that resolve
-inside the storefront runtime roots or are allowlisted bare imports, and
-`public/` assets limited to a small static type list at ≤ 256 KB each.
+inside the storefront runtime roots or are one of exactly four allowlisted
+front-end bare imports (`react`, `react-dom`, `next`, `next/*`), and `public/`
+assets limited to a small static type list at ≤ 256 KB each.
 `public/` sizes are read with `cat-file --batch-check` and its contents are
 never decoded, because a binary asset would otherwise fail the engine's fatal
 UTF-8 decode and BUILD on every run. Any guard failure is a BUILD: an input this
@@ -1025,13 +1026,17 @@ false IGNORE. The category name is diagnostic only and decides nothing.
 The earlier rationale — that guard step 7 proves those roots sit outside the
 tsconfig `next build` type-checks — was too weak. Proving a path is outside
 TypeScript's *type-check* graph does not prove it is outside the *build's*
-dependency graph: a module executed during `next build` can read any file under
-the Root Directory with `node:fs`, and this engine deliberately does not model
-filesystem reads. `eslint.config.*` is not even hypothetical — `next build` runs
-ESLint when it is a devDependency, and devDependencies are unrestricted by the
-manifest guard. A false BUILD costs one storefront deployment; a false IGNORE
-serves stale customer-facing output, so within `storefront/` the engine always
-BUILDs.
+dependency graph, and this engine does not model build-time file reads at all.
+
+R3 has since closed the specific `node:fs` route (below), but the rule stands on
+its own and is kept as an independent layer. `eslint.config.*` needs no file read
+to matter: `next build` runs ESLint when it is a devDependency, and
+`devDependencies` are only shape-checked by the manifest guard. The engine is an
+integrity guard for trusted source, not a sandbox, so it never *proves* a
+storefront-local file is unconsumed — it declines to guess. And if a later phase
+admits a Node builtin for a BFF, this layer still holds the line inside
+`storefront/` without needing to be rediscovered. A false BUILD costs one
+storefront deployment; a false IGNORE serves stale customer-facing output.
 
 This is a Storefront-local cost only. The point of the three-way filter is to
 stop cross-project rebuild fan-out, not to eliminate every storefront build:
@@ -1059,22 +1064,90 @@ unscanned bridge out of the reviewed graph. `public/` is the single exclusion,
 and only because its type allowlist admits no module and its blobs are never
 decoded.
 
-**Known residual, deliberately out of scope for 001A.** The same `node:fs`
-mechanism could read a path *outside* `storefront/` — `../site/`, `../docs/`,
-`../apps/` — which the storefront selector still ignores. Module containment
-already prevents *importing* across that boundary, so only a raw filesystem read
-remains, and a general filesystem analyzer is explicitly not part of this phase.
-It is reachable rather than theoretical: **Include files outside Root Directory**
-is enabled precisely so the ignore command can read `../tools/vercel/`, so the
-whole repository is on disk while `next build` runs.
+#### Static-shell module contract: no Node built-ins (STAGE 7 R3)
 
-Recorded as a follow-up. The cheapest narrow fix is to stop allowing every
-`node:` bare import in a storefront module and admit only non-IO builtins, so a
-`node:fs` import fails `unsupported_graph` and BUILDs until reviewed — a one-
-expression change, not an analyzer. Note it would invert the meaning of the
-`node:fs` regression test, which deliberately relies on that import being
-allowed; whoever takes the follow-up must re-specify that test rather than
-treat its failure as a break.
+R2 made every path *inside* `storefront/` build the storefront. That leaves the
+mirror image: storefront code executed during `next build` reading a repository
+path *outside* `storefront/` — `../site/`, `../docs/`, `../apps/` — where a later
+change is correctly irrelevant to the storefront classifier and would therefore
+be a false IGNORE. It is reachable, not theoretical: **Include files outside Root
+Directory** is enabled precisely so the ignore command can read
+`../tools/vercel/`, so the whole repository is on disk while the build runs.
+
+R3 closes it at the **source contract** rather than by analysing filesystem
+reads. During the INFRA static-export phase the storefront has no BFF and no
+server runtime, so Node built-in capability is unnecessary; importing one is an
+input this engine does not understand, and unsupported inputs BUILD. The only
+bare specifiers storefront source may import are:
+
+| Allowed | Rejected |
+|---|---|
+| `react`, `react-dom`, `next`, `next/*` | every `node:*` builtin (`node:fs`, `node:fs/promises`, `node:child_process`, `node:module`, `node:worker_threads`, `node:vm`, `node:process`, …) |
+| contained relative imports inside the runtime roots | bare equivalents `fs`, `child_process`, … |
+| the pinned `@/*` → `./src/*` alias | every other bare dependency |
+
+Dynamic `import()` and `require()` were already refused, and relative and aliased
+specifiers were already contained, so removing the Node built-ins closes the last
+route out. The obvious no-import handles are refused in the same scan:
+`process.getBuiltinModule`, `process.mainModule`, `process.binding` and
+`process._linkedBinding`, in their dot, optional-chaining and quoted-index forms.
+`process.env` is untouched — it is how a Next front end reads build-time
+configuration.
+
+**The scan reads storefront/ by default.** A contract only binds the files it is
+applied to, so the module scan starts from the Root Directory and subtracts, it
+never enumerates code directories. Enumerating had left `storefront/pages` — a
+first-class Next router that `next build` compiles with no configuration change —
+and every root-level config module unread, so the contract simply did not apply
+there. Every extension the build can execute is spelled out (`.jsx` is a *default*
+Next `pageExtension`; `.mts`/`.cts` are valid TypeScript).
+
+Three subtractions, each with a reason:
+
+| Not scanned | Why |
+|---|---|
+| `storefront/public/**` | assets, not modules; its blobs must never be decoded |
+| storefront-local support files — `tests/`, `docs/`, `review/`, `scripts/`, README, and the lint/format/test configs | `next build` does not execute them, and they legitimately use Node and devDependencies. Holding them to the front-end contract would BUILD the storefront on **every** run. They still BUILD it when they change |
+| `next.config.*` | pinned by hash at step 6, and its JSDoc `import('next')` annotation would otherwise trip the dynamic-import test forever |
+
+One definition of "storefront-local" (`storefrontLocal()`) serves both the
+classifier and this subtraction, so the two can never drift apart.
+
+The npm lifecycle is closed at step 4 rather than in the scan: `npm ci` and
+`npm run build` run `pre*`/`post*`/`prepare` hooks by themselves, so a `prebuild`
+entry is arbitrary code executing inside the build and outside this contract —
+ordinary monorepo practice, not a bypass. `package.json#scripts` may therefore
+contain only `build`, `dev`, `start`, `lint`, `typecheck` and `test`, none of
+which npm runs on its own.
+
+tsconfig `include`/`exclude` entries must now be proven *inside* `storefront/`.
+`safeRelative` only rejects a normalised `../` result, and `../docs` normalises to
+`docs` — inside the repository, so not an escape by that test. This is the same
+blind spot R1 found in `compilerOptions.paths` and closed by pinning the alias;
+containment has to be asserted positively, never inferred from the absence of a
+`../` prefix.
+
+**Threat model, stated explicitly.** This filter is a *dependency-integrity guard
+for trusted repository source*, **not a hostile-code sandbox**. It inspects static
+ESM specifiers and a short list of direct built-in handles; it does not and will
+not chase obfuscation, `eval`, generated code or arbitrary dataflow. INFRA-001
+storefront code is therefore *prohibited* from deliberately circumventing the
+inspected import contract to read repository files. Source that does so is a
+review failure, not something the engine is expected to detect.
+
+**Residual, bounded and stated.** Two classes remain open by design. A string
+literal that is not an import specifier — `new URL('../../docs/x.json',
+import.meta.url)`, or a `next/font/local` `src` pointing outside the Root
+Directory — is not inspected, because chasing arbitrary string literals is the
+dataflow analysis this phase excludes and would false-BUILD on ordinary copy. And
+a stylesheet `@import` crossing the project root is not inspected either. Both
+need deliberate intent rather than ordinary practice, and both are SEC-002 /
+READ-001 material.
+
+**This contract must be re-reviewed before any server-side storefront code
+lands.** A BFF or route handler may legitimately need Node built-ins; READ-001 /
+SEC-002 owns that decision, and admitting any builtin also reopens the
+external-read question this section closes.
 
 The Vercel project's **Node.js Version** setting is authoritative for the
 storefront runtime. `storefront/package.json#engines` and `storefront/.nvmrc`

@@ -17,17 +17,39 @@ const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c
 // until this pin is reviewed: that file decides what the build reads.
 export const STOREFRONT_CONFIG_HASH = '4aa433d21dba5868d85a1829de513eb1a7475125ac2c2dba0b287eaab471fd16';
 const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
-// DERIVED, never a second literal list: any runtime root an app module may
-// import must have its own imports scanned, or it is an unchecked bridge out of
-// the build graph. public/ is the one exception, and only because its type
-// allowlist admits no module and its blobs are deliberately never decoded.
-const STOREFRONT_MODULE_ROOTS = STOREFRONT_RUNTIME_ROOTS.filter((root) => root !== 'storefront/public');
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
+// STAGE 7 R3 static-shell module contract: the ONLY bare specifiers storefront
+// source may import. Node builtins are deliberately absent. A static export has
+// no server runtime, so filesystem/process capability is unnecessary here, and
+// allowing it would let build-time code read repository paths this engine does
+// not track. Adding a BFF must re-review this list (SEC-002 / READ-001).
+const STOREFRONT_BARE_IMPORTS = ['react', 'react-dom', 'next'];
+// npm runs pre/post hooks around `npm ci` and `npm run build` on its own, so a
+// lifecycle entry is arbitrary code executing inside the build and outside this
+// contract — `prebuild` reading ../docs is ordinary monorepo practice, not a
+// bypass. Only these keys may appear, and none of them is auto-run.
+const STOREFRONT_SCRIPT_KEYS = ['build', 'dev', 'start', 'lint', 'typecheck', 'test'];
+// Direct, no-import handles to a Node builtin. Syntactic only: dot, optional
+// chaining and quoted index. This is a dependency-integrity guard for trusted
+// source, NOT a hostile-code sandbox — see the threat model in DEPLOYMENT.md §15.
+const STOREFRONT_BUILTIN_HANDLES = /\bprocess\s*(?:\?\.|\.|\[\s*["'])\s*(?:getBuiltinModule|mainModule|binding|_linkedBinding)\b/;
 // Storefront-local support roots. As of STAGE 7 R2 these are NOT ignored: they
 // BUILD the storefront like any other storefront path (see category()). The
 // constant survives because guard step 7 still keeps them out of the TypeScript
 // program, which is now build-graph containment rather than a licence to ignore.
 const STOREFRONT_LOCAL_ROOTS = ['storefront/tests', 'storefront/docs', 'storefront/review', 'storefront/scripts'];
+// Storefront support files: the four local roots plus repository metadata and the
+// lint/format/test tooling configs. ONE definition, used by the classifier (where
+// they still BUILD the storefront like every storefront path) and by the module
+// scan (where the application import contract does not apply to them). `next
+// build` does not execute them — the npm lifecycle hooks that could are refused at
+// step 4 — and they legitimately depend on Node and on devDependencies, so holding
+// them to the front-end contract would BUILD the storefront on every single run.
+function storefrontLocal(file) {
+  return STOREFRONT_LOCAL_ROOTS.some((dir) => below(file, dir))
+    || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
+    || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file);
+}
 // Approved static-export deployment values. `out` is Next's export target;
 // the ignore command must invoke THIS engine with the storefront selector.
 const STOREFRONT_OUTPUT_DIRECTORY = 'out';
@@ -43,6 +65,7 @@ const fail = (reason) => { throw new Error(reason); };
 const hash = (value) => createHash('sha256').update(value.replace(/\r\n/g, '\n')).digest('hex');
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const below = (file, directory) => file.startsWith(`${directory}/`);
+const insideStorefront = (target) => target === 'storefront' || below(target, 'storefront');
 const decode = (bytes) => {
   try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
   catch { fail('unsupported_encoding'); }
@@ -480,6 +503,7 @@ function inspectStorefront(repo, revision) {
   const manifest = JSON.parse(files.get('storefront/package.json'));
   if (!object(manifest) || Object.keys(manifest).some((key) => !['name', 'version', 'private', 'description', 'engines', 'scripts', 'dependencies', 'devDependencies'].includes(key))) fail('unsupported_build_contract');
   if (manifest.private !== true || !object(manifest.scripts) || manifest.scripts.build !== 'next build') fail('unsupported_build_contract');
+  if (Object.keys(manifest.scripts).some((key) => !STOREFRONT_SCRIPT_KEYS.includes(key))) fail('unsupported_build_contract');
   if (manifest.dependencies != null && (!object(manifest.dependencies) || Object.keys(manifest.dependencies).some((name) => !['next', 'react', 'react-dom'].includes(name)))) fail('unsupported_build_contract');
   if (manifest.devDependencies != null && !object(manifest.devDependencies)) fail('unsupported_build_contract');
   // The Vercel project's Node.js Version setting is authoritative for the runtime
@@ -527,6 +551,11 @@ function inspectStorefront(repo, revision) {
   if (!Array.isArray(tsconfig.include) || !tsconfig.include.length) fail('unsupported_build_contract');
   for (const entry of tsconfig.include) {
     const root = safeRelative('storefront', tsconfigGraphRoot(entry));
+    // safeRelative only rejects a NORMALISED '../' result, and '../docs' normalises
+    // to 'docs' — inside the repository, so not an escape by that test. Containment
+    // must be asserted positively or the TypeScript program can reach another
+    // project's source, which the storefront selector then ignores.
+    if (!insideStorefront(root)) fail('unsupported_build_contract');
     // Overlap in EITHER direction: '.' contains storefront/tests, and
     // 'tests/unit' is contained by it. Both widen the program past the runtime roots.
     if (STOREFRONT_LOCAL_ROOTS.some((dir) => root === dir || below(root, dir) || below(dir, root))) fail('unsupported_build_contract');
@@ -535,17 +564,32 @@ function inspectStorefront(repo, revision) {
   // it still may not name a path outside the Root Directory.
   if (tsconfig.exclude != null) {
     if (!Array.isArray(tsconfig.exclude)) fail('unsupported_build_contract');
-    for (const entry of tsconfig.exclude) safeRelative('storefront', tsconfigGraphRoot(entry));
+    for (const entry of tsconfig.exclude) { if (!insideStorefront(safeRelative('storefront', tsconfigGraphRoot(entry)))) fail('unsupported_build_contract'); }
   }
-  // 8. Module containment: every specifier resolves inside the runtime roots,
-  // or is an allowlisted bare import. A future shared JS package therefore
-  // BUILDs until the engine is taught about it.
-  const moduleFiles = treeFiles(repo, revision, STOREFRONT_MODULE_ROOTS).filter((file) => /\.(?:tsx?|m?js|cjs|json)(?![\s\S])/.test(file) && !below(file, 'storefront/public'));
+  // 8. Module containment: every specifier resolves inside the runtime roots, or
+  // is one of the allowlisted front-end bare imports. A future shared JS package
+  // therefore BUILDs until the engine is taught about it. STAGE 7 R3 removed the
+  // blanket `node:` allowance: with dynamic import()/require() already refused and
+  // relative/alias specifiers already contained, dropping Node builtins closes the
+  // last route by which storefront build-time code could read a repository path
+  // outside storefront/ and make a later change to it a false IGNORE.
+  // Scanned by DEFAULT: the file set is the storefront ROOT minus STOREFRONT_UNSCANNED,
+  // never an enumeration of code directories. Enumerating is what left
+  // storefront/pages and every root-level config module unread, and a module the
+  // scan never opens is an escape hatch whatever the contract above says. Extensions
+  // are spelled out because .jsx is a DEFAULT Next pageExtension and .mts/.cts are
+  // valid TypeScript. next.config is excluded because it is pinned by hash at step 6
+  // and its JSDoc `import('next')` annotation would trip the dynamic-import test
+  // forever; .json is excluded because it declares no imports and reading the
+  // lockfile here would be pure cost.
+  const moduleFiles = treeFiles(repo, revision, ['storefront']).filter((file) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)(?![\s\S])/.test(file)
+    && !below(file, 'storefront/public') && !storefrontLocal(file)
+    && !/^storefront\/next\.config\.(?:mjs|js|ts)(?![\s\S])/.test(file));
   if (moduleFiles.length) {
     const sources = readBatch(repo, revision, moduleFiles);
     for (const [filename, source] of sources) {
-      if (filename.endsWith('.json')) continue;
       if (/\b(?:import|require)\s*\(/.test(source)) fail('unsupported_graph');
+      if (STOREFRONT_BUILTIN_HANDLES.test(source)) fail('unsupported_graph');
       for (const match of source.matchAll(/(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g)) {
         const uri = match[1];
         if (/[\\%#?$\r\n]/.test(uri)) fail('unsupported_graph');
@@ -555,7 +599,7 @@ function inspectStorefront(repo, revision) {
         } else if (uri.startsWith('@/')) {
           const target = safeRelative('storefront/src', uri.slice(2));
           if (!below(target, 'storefront/src')) fail('unsupported_graph');
-        } else if (!['react', 'react-dom', 'next'].includes(uri) && !uri.startsWith('next/') && !uri.startsWith('node:')) {
+        } else if (!STOREFRONT_BARE_IMPORTS.includes(uri) && !uri.startsWith('next/')) {
           fail('unsupported_graph');
         }
       }
@@ -658,9 +702,7 @@ function storefrontCategory(file) {
     || /^storefront\/next\.config\.(?:mjs|js|ts)(?![\s\S])/.test(file)
     || /^storefront\/postcss\.config\.[^/]+(?![\s\S])/.test(file)
     || /^storefront\/(?:src\/)?(?:middleware|proxy|instrumentation)\.[^/]+(?![\s\S])/.test(file)) return 'storefront_runtime';
-  if (STOREFRONT_LOCAL_ROOTS.some((dir) => below(file, dir))
-    || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
-    || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file)) return 'storefront_local';
+  if (storefrontLocal(file)) return 'storefront_local';
   return 'unknown_storefront_input';
 }
 
@@ -688,12 +730,14 @@ function category(file, selector, graphs) {
   //
   // Why nothing here may be ignored: proving a path is outside TypeScript's
   // type-check graph (guard step 7) does not prove it is outside the BUILD's
-  // dependency graph. A module executed during `next build` can read any file under
-  // the Root Directory with node:fs, and this engine deliberately does not model
-  // filesystem reads. `eslint.config.*` is not even hypothetical: `next build` runs
-  // ESLint when it is a devDependency, and devDependencies are unrestricted here.
-  // A false BUILD costs one storefront deployment; a false IGNORE serves stale
-  // customer-facing output. There are therefore no exceptions inside storefront/.
+  // dependency graph, and this engine does not model build-time file reads at all.
+  // R3's module contract has since closed the node:fs route, but this stays as an
+  // INDEPENDENT layer: `eslint.config.*` needs no file read to matter (next build
+  // runs ESLint when it is a devDependency, and devDependencies are only
+  // shape-checked), the engine guards trusted source rather than sandboxing it so
+  // it never proves a file unconsumed, and a later BFF phase that admits a builtin
+  // must not silently reopen this. A false BUILD costs one storefront deployment;
+  // a false IGNORE serves stale customer-facing output. No exceptions here.
   if (file.startsWith('storefront/')) return { relevant: selector === 'storefront', name: storefrontCategory(file) };
   if (/^(?:apps|packages)\//.test(file)) {
     if (selector !== 'product') return { relevant: false, name: 'product_only' };
