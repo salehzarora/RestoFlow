@@ -1017,6 +1017,11 @@ A future shared JavaScript package is deliberately **not** understood yet. Under
 from the storefront it BUILDs the storefront (`unsupported_graph`). Teaching the
 engine about it is its own reviewed change.
 
+001A previews (shared-engine change, both projects correctly BUILD):
+`resto-flow 8XwPxvB1hAzHn7Easq9qTw4dBSMM`, `bizbot-site 26R9vtmATuUFFQEK8nR5i5UgHWHT`.
+This commit is the docs-only counter-proof on the same branch: both projects must
+IGNORE it with Resources = No Resources.
+
 These decisions require verified baseline and HEAD trees. A shallow checkout
 is supported and does not itself select BUILD. Failure to obtain the exact
 required comparison still selects BUILD.
