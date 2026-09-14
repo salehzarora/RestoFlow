@@ -16,6 +16,45 @@ const scratchParent = realpathSync(tmpdir());
 const scratch = mkdtempSync(join(scratchParent, 'restoflow-vercel-filter-test-'));
 const emptyGitConfig = join(scratch, 'empty-git-config');
 writeFileSync(emptyGitConfig, '');
+// PLAN §14 canonical text. STOREFRONT_CONFIG_HASH pins this byte-for-byte, so a
+// stray edit here turns every storefront case into a fail-safe BUILD. Written
+// from INLINE literals because SOURCE_ROOT has no storefront/ at 001A.
+const STOREFRONT_NEXT_CONFIG = `/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  images: { unoptimized: true },
+  reactStrictMode: true,
+  poweredByHeader: false,
+  trailingSlash: false,
+};
+
+export default nextConfig;
+`;
+
+const STOREFRONT_FILES = {
+  'storefront/package.json': JSON.stringify({
+    name: 'storefront', version: '0.0.0', private: true,
+    scripts: { build: 'next build' },
+    dependencies: { next: '16.3.5', react: '19.2.0', 'react-dom': '19.2.0' },
+  }, null, 2) + '\n',
+  'storefront/package-lock.json': JSON.stringify({ name: 'storefront', lockfileVersion: 3, packages: {} }, null, 2) + '\n',
+  'storefront/next.config.mjs': STOREFRONT_NEXT_CONFIG,
+  'storefront/tsconfig.json': JSON.stringify({
+    compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
+    include: ['app', 'src'], exclude: ['tests'],
+  }, null, 2) + '\n',
+  'storefront/vercel.json': JSON.stringify({
+    framework: 'nextjs', installCommand: 'npm ci', buildCommand: 'npm run build',
+    outputDirectory: 'out',
+    ignoreCommand: 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi',
+  }, null, 2) + '\n',
+  'storefront/app/page.tsx': "import { hello } from '@/lib/hello';\nexport default function Page() { return hello; }\n",
+  'storefront/src/lib/hello.ts': "export const hello = 'fixture';\n",
+  'storefront/messages/en.json': '{ "hello": "fixture" }\n',
+  'storefront/public/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>\n',
+  'storefront/tests/shell.test.mjs': '// fixture suite\n',
+};
+
 const fixtureSources = new Map();
 const CANONICAL_SOURCE = 'https://github.com/salehzarora/RestoFlow.git';
 
@@ -122,6 +161,7 @@ function fixture(options = {}) {
   put(repo, 'docs/DEPLOYMENT.md', 'fixture docs\n');
   put(repo, '.github/workflows/ci.yml', 'name: fixture\non:\n  pull_request:\n  push:\n    branches: [main]\n');
   put(repo, 'tools/vercel/ignore-build.test.mjs', '// fixture suite\n');
+  for (const [file, text] of Object.entries(STOREFRONT_FILES)) put(repo, file, text);
   if (options.realRuntime) {
     function copyRuntime(relativePath) {
       const source = join(SOURCE_ROOT, relativePath);
@@ -242,7 +282,8 @@ function invoke(repo, selector, previous, options = {}) {
     for (const key of Object.keys(env)) if (/^path$/i.test(key)) delete env[key];
     env.PATH = join(scratch, 'no-executables');
   }
-  const cwd = options.cwd || (selector === 'marketing' ? join(repo, 'site') : repo);
+  const cwd = options.cwd || (selector === 'product' ? repo
+    : join(repo, selector === 'marketing' ? 'site' : 'storefront'));
   const helperFile = join(repo, HELPER);
   const repositoryUrl = options.productionCli ? undefined : fixtureSources.get(repo);
   // Source injection is a literal JS dependency in this child, never env or a
@@ -281,12 +322,15 @@ function expectDecision(repo, selector, base, expected, options) {
   return result.output;
 }
 
-function expectPair(repo, base, marketing, product, options) {
+// Every call site states all THREE expectations explicitly: a default would
+// make the storefront column vacuous exactly where it matters most.
+function expectAll(repo, base, marketing, product, storefront, options) {
   expectDecision(repo, 'marketing', base, marketing, options);
   expectDecision(repo, 'product', base, product, options);
+  expectDecision(repo, 'storefront', base, storefront, options);
 }
 
-function pathCase(name, paths, marketing, product) {
+function pathCase(name, paths, marketing, product, storefront) {
   test(name, () => {
     const { repo, base } = fixture();
     for (const path of paths) {
@@ -294,29 +338,29 @@ function pathCase(name, paths, marketing, product) {
       else put(repo, path);
     }
     commit(repo);
-    expectPair(repo, base, marketing, product);
+    expectAll(repo, base, marketing, product, storefront);
   });
 }
 
-pathCase('01 marketing source only', ['site/src/main.js'], 'BUILD', 'IGNORE');
-pathCase('02 POS runtime source only', ['apps/pos/lib/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('03 reachable Flutter package', ['packages/money/lib/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('04 marketing API and lead production inputs', ['site/api/lead.js', 'site/lib/lead.mjs'], 'BUILD', 'IGNORE');
-pathCase('05 root Flutter lockfile', ['pubspec.lock'], 'IGNORE', 'BUILD');
-pathCase('07 CI only', ['.github/workflows/ci.yml'], 'IGNORE', 'IGNORE');
-pathCase('08 documentation and audit only', ['docs/DEPLOYMENT.md', 'docs/audit/review.md'], 'IGNORE', 'IGNORE');
-pathCase('09 marketing tests and README only', ['site/tests/example.test.mjs', 'site/README.md'], 'IGNORE', 'IGNORE');
-pathCase('10 product tests only', ['apps/pos/test/example_test.dart', 'packages/money/test/example_test.dart'], 'IGNORE', 'IGNORE');
-pathCase('11 shared engine changes', [HELPER], 'BUILD', 'BUILD');
-pathCase('12 engine tests and documentation only', ['tools/vercel/ignore-build.test.mjs', 'docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE');
-pathCase('13 mixed marketing and product', ['site/src/main.js', 'apps/kds/lib/filter_fixture.dart'], 'BUILD', 'BUILD');
-pathCase('copied marketing assets named README and test files remain production inputs', ['site/public/README.md', 'site/public/test/example.test.js'], 'BUILD', 'IGNORE');
-pathCase('declared POS font asset', ['apps/pos/assets/fonts/Rubik-Regular.ttf'], 'IGNORE', 'BUILD');
-pathCase('localized runtime source', ['packages/l10n/lib/src/generated/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('native Android and release tooling only', ['apps/pos/android/app/src/main/AndroidManifest.xml', 'tools/android_release/fixture.ps1'], 'IGNORE', 'IGNORE');
-pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixture.dart', 'packages/feature_reporting/lib/filter_fixture.dart'], 'IGNORE', 'IGNORE');
-pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD');
-pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD');
+pathCase('01 marketing source only', ['site/src/main.js'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('02 POS runtime source only', ['apps/pos/lib/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('03 reachable Flutter package', ['packages/money/lib/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('04 marketing API and lead production inputs', ['site/api/lead.js', 'site/lib/lead.mjs'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('05 root Flutter lockfile', ['pubspec.lock'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('07 CI only', ['.github/workflows/ci.yml'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('08 documentation and audit only', ['docs/DEPLOYMENT.md', 'docs/audit/review.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('09 marketing tests and README only', ['site/tests/example.test.mjs', 'site/README.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('10 product tests only', ['apps/pos/test/example_test.dart', 'packages/money/test/example_test.dart'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('11 shared engine changes', [HELPER], 'BUILD', 'BUILD', 'BUILD');
+pathCase('12 engine tests and documentation only', ['tools/vercel/ignore-build.test.mjs', 'docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('13 mixed marketing and product', ['site/src/main.js', 'apps/kds/lib/filter_fixture.dart'], 'BUILD', 'BUILD', 'IGNORE');
+pathCase('copied marketing assets named README and test files remain production inputs', ['site/public/README.md', 'site/public/test/example.test.js'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('declared POS font asset', ['apps/pos/assets/fonts/Rubik-Regular.ttf'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('localized runtime source', ['packages/l10n/lib/src/generated/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('native Android and release tooling only', ['apps/pos/android/app/src/main/AndroidManifest.xml', 'tools/android_release/fixture.ps1'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixture.dart', 'packages/feature_reporting/lib/filter_fixture.dart'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD', 'BUILD');
+pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD', 'BUILD');
 
 test('04 marketing JSON config and package manifest', () => {
   const { repo, base } = fixture();
@@ -324,14 +368,14 @@ test('04 marketing JSON config and package manifest', () => {
   config.cleanUrls = !config.cleanUrls;
   put(repo, 'site/vercel.json', JSON.stringify(config));
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('05 root Flutter manifest', () => {
   const { repo, base } = fixture();
   appendFileSync(join(repo, 'pubspec.yaml'), '\n# valid manifest change\n');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('06 every current workspace manifest affects resolution', () => {
@@ -351,26 +395,26 @@ test('14 earlier relevant commit survives docs-only final commit', () => {
   commit(repo, 'earlier marketing change');
   put(repo, 'docs/final.md');
   commit(repo, 'final docs change');
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('15 successful baseline spans intervening ignored and failed candidates', () => {
   const { repo, base } = fixture();
   put(repo, 'docs/ignored.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
   put(repo, 'apps/pos/lib/earlier.dart');
   commit(repo, 'candidate that was not successfully deployed');
   put(repo, 'docs/final.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('16 deletion of relevant input', () => {
   const { repo, base } = fixture();
   unlinkSync(join(repo, 'apps/pos/lib/filter_fixture.dart'));
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 for (const [label, from, to] of [
@@ -382,7 +426,7 @@ for (const [label, from, to] of [
     mkdirSync(dirname(join(repo, to)), { recursive: true });
     renameSync(join(repo, from), join(repo, to));
     commit(repo);
-    expectPair(repo, base, 'IGNORE', 'BUILD');
+    expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
   });
 }
 
@@ -395,7 +439,7 @@ test('18 non-ancestor previous SHA compares both trees, including removed former
   put(repo, 'docs/rebased.md');
   commit(repo);
   assert.equal(runGit(repo, ['merge-base', nonAncestor, 'HEAD']), base);
-  expectPair(repo, nonAncestor, 'IGNORE', 'BUILD');
+  expectAll(repo, nonAncestor, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('19 complete feature branch uses the exact local origin/main tree', () => {
@@ -405,7 +449,7 @@ test('19 complete feature branch uses the exact local origin/main tree', () => {
   put(repo, 'site/src/fallback.js');
   commit(repo);
   attachOrigin(repo);
-  expectPair(repo, undefined, 'BUILD', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'BUILD', 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('19 missing prior SHA may ignore a docs-only preview against exact origin/main', () => {
@@ -415,7 +459,7 @@ test('19 missing prior SHA may ignore a docs-only preview against exact origin/m
   put(repo, 'docs/fallback.md');
   commit(repo);
   attachOrigin(repo);
-  expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'IGNORE', 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('19 first-preview fallback does not depend on PR metadata and rejects non-preview contexts', () => {
@@ -429,9 +473,9 @@ test('19 first-preview fallback does not depend on PR metadata and rejects non-p
     { VERCEL_GIT_PULL_REQUEST_ID: '' },
     { VERCEL_GIT_PULL_REQUEST_ID: CANARY },
     { VERCEL_GIT_PULL_REQUEST_ID: '0' },
-  ]) expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: context });
+  ]) expectAll(repo, undefined, 'IGNORE', 'IGNORE', 'IGNORE', { env: context });
   for (const environment of ['production', 'development', '']) {
-    expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_ENV: environment } });
+    expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_ENV: environment } });
   }
 });
 
@@ -440,14 +484,14 @@ test('19 unavailable origin/main fails safely with no configured origin', () => 
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/no-base']);
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('20 missing previous commit in complete history builds safely', () => {
   const { repo } = fixture();
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, 'a'.repeat(40), 'BUILD', 'BUILD');
+  expectAll(repo, 'a'.repeat(40), 'BUILD', 'BUILD', 'BUILD');
 });
 
 test('20 shallow repository can compare already available exact endpoint trees', () => {
@@ -456,17 +500,17 @@ test('20 shallow repository can compare already available exact endpoint trees',
   commit(repo);
   put(repo, '.git/shallow', base + '\n');
   assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'true');
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('20 Git unavailable produces a sanitized BUILD decision', () => {
   const { repo, base } = fixture();
-  expectPair(repo, base, 'BUILD', 'BUILD', { noGit: true });
+  expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD', { noGit: true });
 });
 
 test('21 first production deployment has no trustworthy fallback', () => {
   const { repo } = fixture();
-  expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_ENV: 'production' } });
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_ENV: 'production' } });
 });
 
 test('22 marketing executes correctly from site Root Directory', () => {
@@ -493,6 +537,7 @@ test('source wrappers normalize missing helper and missing Node to BUILD1', { sk
   const commands = [
     { path: 'vercel.json', cwd: repo },
     { path: 'site/vercel.json', cwd: join(repo, 'site') },
+    { path: 'storefront/vercel.json', cwd: join(repo, 'storefront') },
   ].map(({ path, cwd }) => ({ cwd, command: JSON.parse(readFileSync(join(repo, path), 'utf8')).ignoreCommand }));
   for (const { command } of commands) assert.match(command, /^if node .+; then exit 0; else exit 1; fi$/);
   for (const { command, cwd } of commands) {
@@ -523,7 +568,7 @@ test('invalid previous SHA forms are never accepted or echoed', () => {
   put(repo, 'docs/only.md');
   commit(repo);
   for (const previous of [CANARY, ` ${base}`, `${base}\n`, 'HEAD^', `${base}^{tree}`, '--help']) {
-    expectPair(repo, previous, 'BUILD', 'BUILD');
+    expectAll(repo, previous, 'BUILD', 'BUILD', 'BUILD');
   }
 });
 
@@ -532,13 +577,13 @@ test('invalid or mismatched advertised HEAD never silently skips', () => {
   put(repo, 'docs/only.md');
   commit(repo);
   for (const advertised of [CANARY, base, 'a'.repeat(40)]) {
-    expectPair(repo, base, 'BUILD', 'BUILD', { env: { VERCEL_GIT_COMMIT_SHA: advertised } });
+    expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_GIT_COMMIT_SHA: advertised } });
   }
 });
 
 test('equal previous and HEAD is a complete empty diff', () => {
   const { repo, base } = fixture();
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('missing or malformed workspace manifest never silently omits dependencies', () => {
@@ -582,7 +627,7 @@ test('CRLF manifests and whitespace filenames preserve classification', () => {
   } });
   put(repo, 'site/public/a space README.md');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('NUL-safe diff supports newline and tab filenames', { skip: process.platform === 'win32' ? 'Windows filesystem disallows these POSIX filename characters' : false }, () => {
@@ -590,7 +635,7 @@ test('NUL-safe diff supports newline and tab filenames', { skip: process.platfor
   put(repo, 'site/public/a\nREADME.md');
   put(repo, 'site/public/b\ttest.js');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('invalid UTF-8 path bytes fail safely', { skip: process.platform === 'win32' ? 'POSIX raw filename byte case' : false }, () => {
@@ -598,7 +643,7 @@ test('invalid UTF-8 path bytes fail safely', { skip: process.platform === 'win32
   const filename = Buffer.concat([Buffer.from(join(repo, 'site/public/') + '/'), Buffer.from([0xff]), Buffer.from('.txt')]);
   writeFileSync(filename, 'fixture');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'BUILD');
+  expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD');
 });
 
 test('declared Flutter asset directories override docs and test exclusions', () => {
@@ -608,7 +653,7 @@ test('declared Flutter asset directories override docs and test exclusions', () 
   put(repo, 'apps/kiosk/assets/fixtures/README.md');
   put(repo, 'apps/kiosk/assets/fixtures/test/data.json');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('new declared test-directory asset takes priority after its manifest baseline', () => {
@@ -619,7 +664,7 @@ test('new declared test-directory asset takes priority after its manifest baseli
   } });
   appendFileSync(join(repo, 'apps/pos/test/deploy_assets/README.md'), 'changed\n');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('declared shared marketing asset affects both projects', () => {
@@ -629,7 +674,7 @@ test('declared shared marketing asset affects both projects', () => {
   } });
   appendFileSync(join(repo, 'site/public/license.md'), 'changed\n');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'BUILD');
+  expectAll(repo, base, 'BUILD', 'BUILD', 'IGNORE');
 });
 
 test('23 actual build roots and full runtime graph remain covered', () => {
@@ -652,7 +697,7 @@ test('23 actual production imports participate in graph validation', () => {
   const { repo, base } = fixture({ realRuntime: true });
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('23 undeclared workspace import cannot hide behind an ignored package', () => {
@@ -883,7 +928,7 @@ test('R2-07 unavailable main or unsupported production-branch contract returns B
   put(guarded.repo, '.github/workflows/ci.yml', 'name: changed\non:\n  push:\n    branches: [release]\n');
   commit(guarded.repo);
   const guardTrace = traceOptions();
-  expectPair(guarded.repo, undefined, 'BUILD', 'BUILD', { env: guardTrace.env });
+  expectAll(guarded.repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: guardTrace.env });
   assert.deepEqual(fetchCommands(guardTrace), [], 'source must establish main before network acquisition');
 
   const detached = shallowFixture();
@@ -911,22 +956,22 @@ test('R2-08 production without a previous success always BUILDs without a fetch'
 
 test('R2-09 docs-only existing shallow branch ignores both projects', () => {
   const { repo, base } = shallowFixture({ changes: [['docs/DEPLOYMENT.md', 'docs/audit/r2.md']] });
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('R2-10 marketing-only existing shallow branch builds only marketing', () => {
   const { repo, base } = shallowFixture({ changes: [['site/src/r2.js', 'site/public/r2.md']] });
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('R2-11 product-only existing shallow branch builds only product', () => {
   const { repo, base } = shallowFixture({ changes: [['apps/pos/lib/r2.dart', 'packages/money/lib/r2.dart']] });
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('R2-12 multi-commit shallow branch includes earlier runtime changes in the tree delta', () => {
   const { repo, base } = shallowFixture({ changes: [['apps/kds/lib/earlier.dart'], ['docs/middle.md'], ['docs/final.md']] });
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('R2-13 ignored candidates never replace the supplied previous-success baseline', () => {
@@ -1178,7 +1223,7 @@ test('R4-19 first Preview runtime deletion and rename stay relevant', () => {
   renameSync(join(source, 'apps/pos/lib/filter_fixture.dart'), join(source, 'docs/moved.dart'));
   commit(source);
   const repo = cloneOrigin(attachOrigin(source));
-  expectPair(repo, undefined, 'BUILD', 'BUILD');
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'IGNORE');
 });
 
 test('R4-20 Git stderr and credential-bearing origin never escape on failed fetch', () => {
@@ -1260,4 +1305,97 @@ test('R4 canonical URL cannot be redirected by checkout or environment Git rewri
     assert.deepEqual(fetchCommands(trace), []);
     if (mode === 'local') runGit(repo, ['config', '--unset-all', key]);
   }
+});
+
+
+// ---------------------------------------------------------------------------
+// STOREFRONT-INFRA-001A — three-way filter. The storefront project does not
+// exist yet; these cases are the contract it will be created against.
+// ---------------------------------------------------------------------------
+
+test('24 storefront executes correctly from storefront Root Directory', () => {
+  const { repo, base } = fixture();
+  put(repo, 'storefront/app/changed.tsx', 'export default function C() { return null; }\n');
+  commit(repo);
+  expectDecision(repo, 'storefront', base, 'BUILD', { cwd: join(repo, 'storefront') });
+  // The repo root is the product Root Directory, so the storefront selector
+  // there is invalid_cwd -> BUILD, never a silent IGNORE.
+  expectDecision(repo, 'storefront', base, 'BUILD', { cwd: repo });
+  expectDecision(repo, 'product', base, 'IGNORE', { cwd: repo });
+});
+
+pathCase('24 storefront runtime source only', ['storefront/app/page.tsx'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront aliased src module only', ['storefront/src/lib/hello.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront messages only', ['storefront/messages/en.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront public asset only', ['storefront/public/icon.svg'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront lockfile only', ['storefront/package-lock.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront deployment config only', ['storefront/vercel.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront node pin only', ['storefront/.nvmrc'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront tests and docs only ignore everywhere', ['storefront/tests/shell.test.mjs', 'storefront/README.md', 'storefront/.gitignore'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('24 storefront audit script only ignores everywhere', ['storefront/scripts/audit-output.mjs'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('24 unknown storefront input builds the storefront only', ['storefront/whatever.cfg'], 'IGNORE', 'IGNORE', 'BUILD');
+
+test('24 supabase-only changes ignore all three projects', () => {
+  const { repo, base } = fixture();
+  put(repo, 'supabase/migrations/20260101000000_fixture.sql', '-- fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 ci.yml step-only edits ignore all three on both baseline paths', () => {
+  const previousSuccess = fixture();
+  put(previousSuccess.repo, '.github/workflows/ci.yml', 'name: changed\non:\n  pull_request:\n  push:\n    branches: [main]\n');
+  commit(previousSuccess.repo);
+  expectAll(previousSuccess.repo, previousSuccess.base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 storefront guard failures all fail safe to BUILD', () => {
+  // Each mutation is a separate fixture so one failure cannot mask another.
+  const cases = [
+    ['request-time entrypoint', (repo) => put(repo, 'storefront/middleware.ts', 'export function middleware() {}\n')],
+    ['checkout override', (repo) => put(repo, 'storefront/.vercelignore', 'out\n')],
+    ['changed next.config', (repo) => put(repo, 'storefront/next.config.mjs', STOREFRONT_NEXT_CONFIG.replace('export', 'standalone'))],
+    ['missing lockfile', (repo) => unlinkSync(join(repo, 'storefront/package-lock.json'))],
+    ['floating dependency range', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '^16.3.5' } }, null, 2) + '\n')],
+    ['unlisted runtime dependency', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '16.3.5', lodash: '4.17.21' } }, null, 2) + '\n')],
+    ['escaping relative import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from '../../site/src/main.js';\nexport default function P() { return x; }\n")],
+    ['disallowed bare import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from 'lodash';\nexport default function P() { return x; }\n")],
+    ['dynamic import', (repo) => put(repo, 'storefront/app/page.tsx', "export default async function P() { return import('./other'); }\n")],
+    ['tsconfig path escaping the root', (repo) => put(repo, 'storefront/tsconfig.json', JSON.stringify({ compilerOptions: { paths: { '@/*': ['../site/src/*'] } } }, null, 2) + '\n')],
+    ['oversized public asset', (repo) => put(repo, 'storefront/public/big.png', 'x'.repeat(300 * 1024))],
+    ['video in public', (repo) => put(repo, 'storefront/public/clip.mp4', 'fixture\n')],
+  ];
+  for (const [label, mutate] of cases) {
+    const { repo, base } = fixture();
+    mutate(repo);
+    commit(repo);
+    // The storefront fails safe; the other two are unaffected by storefront/.
+    expectDecision(repo, 'storefront', base, 'BUILD', { message: label });
+    expectDecision(repo, 'marketing', base, 'IGNORE', { message: label });
+  }
+});
+
+test('24 a baseline without storefront fails the storefront safe', () => {
+  // The very first storefront Preview evaluated against a pre-001B main. It
+  // cannot happen in the Option B sequence; pinned here rather than discovered
+  // hosted.
+  const { repo } = fixture();
+  for (const file of Object.keys(STOREFRONT_FILES)) unlinkSync(join(repo, file));
+  const withoutStorefront = commit(repo);
+  for (const [file, text] of Object.entries(STOREFRONT_FILES)) put(repo, file, text);
+  commit(repo);
+  const result = expectDecision(repo, 'storefront', withoutStorefront, 'BUILD');
+  assert.equal(result.reason, 'unsupported_build_contract');
+});
+
+test('24 same-tree storefront self-check ignores', () => {
+  const { repo } = fixture();
+  const head = runGit(repo, ['rev-parse', 'HEAD']);
+  const result = expectDecision(repo, 'storefront', head, 'IGNORE');
+  assert.equal(result.reason, 'no_changes');
+});
+
+test('24 misspelled storefront selector is an invalid selector', () => {
+  const { repo, base } = fixture();
+  expectDecision(repo, 'storefrnt', base, 'BUILD');
 });

@@ -953,6 +953,11 @@ if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi
 
 # Working directory site/: bizbot-site
 if node ../tools/vercel/ignore-build.mjs marketing; then exit 0; else exit 1; fi
+
+# Working directory storefront/: bizbot-storefront (STOREFRONT-INFRA-001A;
+# the selector exists in the engine now, the project is created in a later
+# ticket — until then this line is the contract it will be created against)
+if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi
 ```
 
 Vercel's exit convention is **0 = IGNORE, nonzero = BUILD**; the helper uses
@@ -966,19 +971,51 @@ changing any setting.
 
 ### Source inputs
 
-| Change | bizbot-site | resto-flow |
-|---|---|---|
-| `site/src/`, all copied `site/public/`, `site/api/`, `site/lib/`, production site scripts/config/manifest | BUILD | IGNORE |
-| Dashboard/POS/KDS/Kiosk production code, web files and declared assets | IGNORE | BUILD |
-| Reachable runtime packages and their declared assets/fonts/l10n | IGNORE | BUILD |
-| Root `pubspec.yaml`, `pubspec.lock`, any workspace-member manifest | IGNORE | BUILD |
-| Root `vercel.json`, `tools/vercel_build_web.sh` | IGNORE | BUILD |
-| CI-only, deployment-irrelevant docs/audit/tests, native Android/release tooling | IGNORE | IGNORE |
-| Internal Admin or unreferenced package source with unchanged, validated graph | IGNORE | IGNORE |
-| Exact shared `tools/vercel/ignore-build.mjs` control, or real inputs of both projects | BUILD | BUILD |
-| Only `tools/vercel/ignore-build.test.mjs` or this deployment document | IGNORE | IGNORE |
-| Unknown project-local input/configuration | BUILD if in marketing scope | BUILD if in product scope |
-| Required baseline cannot be acquired/verified, unsupported graph, helper/parse/Git failure | BUILD | BUILD |
+| Change | bizbot-site | resto-flow | bizbot-storefront |
+|---|---|---|---|
+| `site/src/`, all copied `site/public/`, `site/api/`, `site/lib/`, production site scripts/config/manifest | BUILD | IGNORE | IGNORE |
+| Dashboard/POS/KDS/Kiosk production code, web files and declared assets | IGNORE | BUILD | IGNORE |
+| Reachable runtime packages and their declared assets/fonts/l10n | IGNORE | BUILD | IGNORE |
+| Root `pubspec.yaml`, `pubspec.lock`, any workspace-member manifest | IGNORE | BUILD | IGNORE |
+| Root `vercel.json`, `tools/vercel_build_web.sh` | IGNORE | BUILD | IGNORE |
+| CI-only, deployment-irrelevant docs/audit/tests, native Android/release tooling | IGNORE | IGNORE | IGNORE |
+| Internal Admin or unreferenced package source with unchanged, validated graph | IGNORE | IGNORE | IGNORE |
+| Exact shared `tools/vercel/ignore-build.mjs` control, or real inputs of both projects | BUILD | BUILD | BUILD (the engine is shared by all three) |
+| Only `tools/vercel/ignore-build.test.mjs` or this deployment document | IGNORE | IGNORE | IGNORE |
+| `storefront/app/`, `storefront/src/`, `storefront/components/`, `storefront/lib/`, `storefront/styles/`, `storefront/messages/`, `storefront/public/` | IGNORE | IGNORE | BUILD |
+| `storefront/package.json`, its lockfile, `next.config.mjs`, `tsconfig.json`, `storefront/vercel.json`, `.nvmrc`, `.npmrc`, `postcss.config.*` | IGNORE | IGNORE | BUILD |
+| `storefront/tests/`, `storefront/docs/`, `storefront/scripts/`, `storefront/README*`, `.gitignore`, lint/format/test configs | IGNORE | IGNORE | IGNORE |
+| Unknown file anywhere under `storefront/` | IGNORE | IGNORE | BUILD (fail-safe) |
+| `supabase/**` migrations, tests, recovery SQL | IGNORE | IGNORE | IGNORE |
+| Unknown project-local input/configuration | BUILD if in marketing scope | BUILD if in product scope | BUILD if in storefront scope |
+| Required baseline cannot be acquired/verified, unsupported graph, helper/parse/Git failure | BUILD | BUILD | BUILD |
+
+### Third selector: `storefront` (STOREFRONT-INFRA-001A)
+
+The engine understands three selectors. `storefront` runs from Root Directory
+`storefront/` and, like `marketing`, its Root Directory is asserted — a
+storefront invocation from the repository root is `invalid_cwd` and therefore
+BUILD, never a silent IGNORE.
+
+`inspectStorefront` is a guarded input contract evaluated at **both** the
+baseline and the head revision, mirroring `inspectMarketing`. It requires the
+static-export shape (`framework: nextjs`, `installCommand: npm ci`,
+`buildCommand: npm run build`, no functions, no rewrites/redirects), a private
+manifest whose runtime dependencies are only `next`/`react`/`react-dom` at exact
+versions, a present lockfile, a `next.config.mjs` pinned by the exported
+`STOREFRONT_CONFIG_HASH`, tsconfig paths that cannot reach outside
+`storefront/`, module specifiers that resolve inside the storefront runtime
+roots or are allowlisted bare imports, and `public/` assets limited to a small
+static type list at ≤ 256 KB each. `public/` sizes are read with
+`cat-file --batch-check` and its contents are never decoded, because a binary
+asset would otherwise fail the engine's fatal UTF-8 decode and BUILD on every
+run. Any guard failure is a BUILD: an input this engine does not understand must
+never be silently ignored.
+
+A future shared JavaScript package is deliberately **not** understood yet. Under
+`apps/`/`packages/` it BUILDs `resto-flow` (`unknown_product_input`); imported
+from the storefront it BUILDs the storefront (`unsupported_graph`). Teaching the
+engine about it is its own reviewed change.
 
 These decisions require verified baseline and HEAD trees. A shallow checkout
 is supported and does not itself select BUILD. Failure to obtain the exact

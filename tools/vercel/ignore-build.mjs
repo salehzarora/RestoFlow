@@ -12,8 +12,15 @@ const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
 const BUILD_SCRIPT_HASH = '9ea4df7bef84320e65d416c490cd5562d97c6542f01c2c50ca965f52a51cac49';
 const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c5d995f0d15e';
+// Exported so storefront/tests/config-hash.test.mjs can pin the file it
+// describes without exposing hash(). A changed next.config always BUILDs
+// until this pin is reviewed: that file decides what the build reads.
+export const STOREFRONT_CONFIG_HASH = '4aa433d21dba5868d85a1829de513eb1a7475125ac2c2dba0b287eaab471fd16';
+const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
+const STOREFRONT_MODULE_ROOTS = ['storefront/app', 'storefront/src', 'storefront/components', 'storefront/lib', 'storefront/messages'];
+const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
 const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
-// Both linked projects use main. First-preview fallback also checks the source
+// Three linked projects use main. First-preview fallback also checks the source
 // CI policy; changing the hosted production branch requires reviewing this map.
 const PRODUCTION_BRANCH = 'main';
 // Reviewed public source, independent of Vercel's internal checkout remote.
@@ -70,6 +77,25 @@ function readBatch(repo, revision, files) {
     offset += size + 1;
   }
   if (offset !== bytes.length) fail('git_error');
+  return result;
+}
+
+// Sizes only, never contents. storefront/public holds binary assets whose
+// fatal UTF-8 decode in readBatch would classify every one of them as
+// unsupported_encoding and BUILD on every single run.
+function blobSizes(repo, revision, files) {
+  if (!SHA.test(revision) || files.some((file) => /[\0\r\n]/.test(file))) fail('unsupported_graph');
+  const listing = git(repo, ['cat-file', '--batch-check'], {
+    input: files.map((file) => `${revision}:${file}\n`).join(''),
+  }).text.split('\n');
+  const result = new Map();
+  files.forEach((file, index) => {
+    const header = /^([a-f0-9]{40}) blob ([0-9]+)$/.exec(listing[index] ?? '');
+    if (!header) fail('unsupported_graph');
+    const size = Number(header[2]);
+    if (!Number.isSafeInteger(size)) fail('unsupported_graph');
+    result.set(file, size);
+  });
   return result;
 }
 
@@ -391,6 +417,91 @@ function inspectMarketing(repo, revision) {
   }
 }
 
+// Guarded input contract for the static-export storefront, run at BOTH the
+// baseline and the head revision like inspectMarketing. Every failure BUILDs:
+// an input this engine does not understand must never be silently ignored.
+function inspectStorefront(repo, revision) {
+  const controls = git(repo, ['ls-tree', '-r', '-z', '--name-only', revision, '--', '.vercelignore', 'storefront']).text.split('\0');
+  // 1-2. No checkout override, and no request-time entrypoint: an exported
+  // site has none, so adding one must be a reviewed engine change.
+  if (controls.some((file) => ['.vercelignore', 'storefront/.vercelignore'].includes(file) || unsupportedEntrypoint(file, 'storefront/', false))) fail('unsupported_build_contract');
+  // 5. Pre-check existence: without it cat-file --batch prints "<spec> missing",
+  // the header regex fails, and the reason degrades to unsupported_graph.
+  for (const required of ['storefront/package.json', 'storefront/package-lock.json', 'storefront/vercel.json', 'storefront/next.config.mjs', 'storefront/tsconfig.json']) {
+    if (!controls.includes(required)) fail('unsupported_build_contract');
+  }
+  const files = readBatch(repo, revision, ['storefront/vercel.json', 'storefront/package.json', 'storefront/next.config.mjs', 'storefront/tsconfig.json']);
+  // 3. Deployment config.
+  const config = JSON.parse(files.get('storefront/vercel.json'));
+  if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'outputDirectory', 'ignoreCommand', 'trailingSlash', 'cleanUrls', 'headers', 'redirects', 'rewrites'].includes(key))) fail('unsupported_build_contract');
+  if (config.framework !== 'nextjs' || config.installCommand !== 'npm ci' || config.buildCommand !== 'npm run build' || config.functions) fail('unsupported_build_contract');
+  for (const key of ['rewrites', 'redirects']) {
+    if (config[key] != null && (!Array.isArray(config[key]) || config[key].length)) fail('unsupported_build_contract');
+  }
+  // 4. Package manifest: private, exact versions, allowlisted runtime deps.
+  const manifest = JSON.parse(files.get('storefront/package.json'));
+  if (!object(manifest) || Object.keys(manifest).some((key) => !['name', 'version', 'private', 'description', 'engines', 'scripts', 'dependencies', 'devDependencies'].includes(key))) fail('unsupported_build_contract');
+  if (manifest.private !== true || !object(manifest.scripts) || manifest.scripts.build !== 'next build') fail('unsupported_build_contract');
+  if (manifest.dependencies != null && (!object(manifest.dependencies) || Object.keys(manifest.dependencies).some((name) => !['next', 'react', 'react-dom'].includes(name)))) fail('unsupported_build_contract');
+  if (manifest.devDependencies != null && !object(manifest.devDependencies)) fail('unsupported_build_contract');
+  for (const group of [manifest.dependencies, manifest.devDependencies]) {
+    for (const value of Object.values(group ?? {})) {
+      if (typeof value !== 'string' || !/^\d+\.\d+\.\d+(?![\s\S])/.test(value)) fail('unsupported_build_contract');
+    }
+  }
+  // 6. The config that decides what the build reads is pinned by hash.
+  if (hash(files.get('storefront/next.config.mjs')) !== STOREFRONT_CONFIG_HASH) fail('unsupported_build_contract');
+  // 7. TypeScript paths must not reach outside the Root Directory.
+  const tsconfig = JSON.parse(files.get('storefront/tsconfig.json'));
+  if (!object(tsconfig) || tsconfig.references) fail('unsupported_build_contract');
+  const compiler = tsconfig.compilerOptions;
+  if (compiler != null && !object(compiler)) fail('unsupported_build_contract');
+  if (compiler?.baseUrl != null && compiler.baseUrl !== '.') fail('unsupported_build_contract');
+  const aliases = compiler?.paths;
+  if (aliases != null && !object(aliases)) fail('unsupported_build_contract');
+  for (const targets of Object.values(aliases ?? {})) {
+    if (!Array.isArray(targets)) fail('unsupported_build_contract');
+    for (const target of targets) safeRelative('storefront', String(target).replace(/\*$/, ''));
+  }
+  for (const key of ['include', 'exclude']) {
+    if (tsconfig[key] == null) continue;
+    if (!Array.isArray(tsconfig[key])) fail('unsupported_build_contract');
+    for (const entry of tsconfig[key]) safeRelative('storefront', String(entry).replace(/\*+$/, '').replace(/\/$/, '') || '.');
+  }
+  // 8. Module containment: every specifier resolves inside the runtime roots,
+  // or is an allowlisted bare import. A future shared JS package therefore
+  // BUILDs until the engine is taught about it.
+  const moduleFiles = treeFiles(repo, revision, STOREFRONT_MODULE_ROOTS).filter((file) => /\.(?:tsx?|m?js|cjs|json)(?![\s\S])/.test(file) && !below(file, 'storefront/public'));
+  if (moduleFiles.length) {
+    const sources = readBatch(repo, revision, moduleFiles);
+    for (const [filename, source] of sources) {
+      if (filename.endsWith('.json')) continue;
+      if (/\b(?:import|require)\s*\(/.test(source)) fail('unsupported_graph');
+      for (const match of source.matchAll(/(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g)) {
+        const uri = match[1];
+        if (/[\\%#?$\r\n]/.test(uri)) fail('unsupported_graph');
+        if (uri.startsWith('.')) {
+          const target = safeRelative(path.posix.dirname(filename), uri);
+          if (!STOREFRONT_RUNTIME_ROOTS.some((root) => below(target, root))) fail('unsupported_graph');
+        } else if (uri.startsWith('@/')) {
+          const target = safeRelative('storefront/src', uri.slice(2));
+          if (!below(target, 'storefront/src')) fail('unsupported_graph');
+        } else if (!['react', 'react-dom', 'next'].includes(uri) && !uri.startsWith('next/') && !uri.startsWith('node:')) {
+          fail('unsupported_graph');
+        }
+      }
+    }
+  }
+  // 9. public/ is the engine-level enforcement of "reference videos = ZERO".
+  const publicFiles = treeFiles(repo, revision, ['storefront/public']).filter((file) => below(file, 'storefront/public'));
+  if (publicFiles.some((file) => !STOREFRONT_PUBLIC_TYPES.includes(path.posix.extname(file).toLowerCase()))) fail('unsupported_build_contract');
+  if (publicFiles.length) {
+    for (const size of blobSizes(repo, revision, publicFiles).values()) {
+      if (size > 256 * 1024) fail('unsupported_build_contract');
+    }
+  }
+}
+
 function fetchBaseline(repo, spec, acquisition, repositoryUrl) {
   if (!SHA.test(spec) && spec !== `refs/heads/${PRODUCTION_BRANCH}`) fail('invalid_fetch_target');
   // Resolve this literal URL without a network request. Never accept an
@@ -486,8 +597,22 @@ function category(file, selector, graphs) {
     if (['site/tests', 'site/review', 'site/docs'].some((dir) => below(file, dir)) || /^site\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore)$/.test(file) || file === 'site/scripts/dev.mjs') return { relevant: false, name: 'tests_docs' };
     return { relevant: selector === 'marketing', name: 'unknown_marketing_input' };
   }
+  if (file.startsWith('storefront/')) {
+    const runtime = STOREFRONT_RUNTIME_ROOTS.some((dir) => below(file, dir))
+      || ['storefront/package.json', 'storefront/package-lock.json', 'storefront/npm-shrinkwrap.json', 'storefront/pnpm-lock.yaml', 'storefront/yarn.lock', 'storefront/.npmrc', 'storefront/.nvmrc', 'storefront/tsconfig.json', 'storefront/vercel.json', 'storefront/.vercelignore'].includes(file)
+      || /^storefront\/next\.config\.(?:mjs|js|ts)(?![\s\S])/.test(file)
+      || /^storefront\/postcss\.config\.[^/]+(?![\s\S])/.test(file)
+      || /^storefront\/(?:src\/)?(?:middleware|proxy|instrumentation)\.[^/]+(?![\s\S])/.test(file);
+    if (runtime) return { relevant: selector === 'storefront', name: 'storefront_runtime' };
+    // Tests/docs are irrelevant to EVERY selector: they live outside the
+    // tsconfig that next build type-checks and are never read by the build.
+    if (['storefront/tests', 'storefront/docs', 'storefront/review', 'storefront/scripts'].some((dir) => below(file, dir))
+      || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
+      || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file)) return { relevant: false, name: 'storefront_tests_docs' };
+    return { relevant: selector === 'storefront', name: 'unknown_storefront_input' };
+  }
   if (/^(?:apps|packages)\//.test(file)) {
-    if (selector === 'marketing') return { relevant: false, name: 'product_only' };
+    if (selector !== 'product') return { relevant: false, name: 'product_only' };
     const member = file.split('/').slice(0, 2).join('/');
     if (!graphs.some((g) => g.members.includes(member))) return { relevant: true, name: 'unknown_product_input' };
     const suffix = file.slice(member.length + 1);
@@ -498,7 +623,7 @@ function category(file, selector, graphs) {
   if (['docs', '.github', 'e2e', 'supabase', 'test', 'tests', 'dist'].some((dir) => below(file, dir)) || file === `${ENGINE.slice(0, -4)}.test.mjs` || /^tools\/vercel\/(?:README(?:\.[^/]*)?|docs\/.*)$/.test(file)) return { relevant: false, name: 'tests_docs' };
   if (file.startsWith('tools/') && !file.startsWith('tools/vercel/')) return { relevant: false, name: 'unconsumed_tools' };
   if (/^(?:README(?:\.[^/]*)?|AGENTS\.md|CLAUDE\.md|GEMINI\.md|LICENSE(?:\.[^/]*)?|CHANGELOG\.md|analysis_options\.yaml|melos\.yaml|\.gitignore|\.gitattributes|\.editorconfig)$/.test(file)) return { relevant: false, name: 'repository_metadata' };
-  if (selector === 'marketing' && ['pubspec.yaml', 'pubspec.lock', 'pubspec_overrides.yaml', 'vercel.json'].includes(file)) return { relevant: false, name: 'product_only' };
+  if (selector !== 'product' && ['pubspec.yaml', 'pubspec.lock', 'pubspec_overrides.yaml', 'vercel.json'].includes(file)) return { relevant: false, name: 'product_only' };
   return { relevant: true, name: 'unknown_input' };
 }
 
@@ -508,9 +633,9 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
   const acquisition = { baseline: null, baselineSource: null, fetched: false };
   const categories = {};
   try {
-    if (!['product', 'marketing'].includes(selector)) fail('invalid_selector');
+    if (!['product', 'marketing', 'storefront'].includes(selector)) fail('invalid_selector');
     const repo = git(cwd, ['rev-parse', '--show-toplevel']).text.trim();
-    const expected = selector === 'marketing' ? path.join(repo, 'site') : repo;
+    const expected = selector === 'product' ? repo : path.join(repo, selector === 'marketing' ? 'site' : 'storefront');
     if (realpathSync(cwd) !== realpathSync(expected)) fail('invalid_cwd');
     if (helperFile && realpathSync(helperFile) !== realpathSync(path.join(repo, ENGINE))) fail('invalid_helper_location');
     const candidateHead = git(repo, ['rev-parse', '--verify', 'HEAD^{commit}']).text.trim().toLowerCase();
@@ -524,6 +649,7 @@ export function decide({ selector, cwd = process.cwd(), env = process.env, helpe
     const files = changed ? changed.slice(0, -1).split('\0') : [];
     const graphs = selector === 'product' ? [inspectGraph(repo, baseline), inspectGraph(repo, head)] : [];
     if (selector === 'marketing') { inspectMarketing(repo, baseline); inspectMarketing(repo, head); }
+    if (selector === 'storefront') { inspectStorefront(repo, baseline); inspectStorefront(repo, head); }
     let relevant = false;
     for (const file of files) {
       const item = category(file, selector, graphs);
