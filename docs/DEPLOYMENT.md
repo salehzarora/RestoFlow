@@ -1166,7 +1166,9 @@ The Stage 7 R1 correction `790a97e7` is also a shared-engine change and also
 correctly BUILDs both: `resto-flow 2kMojerbN5JMpdTLGWSKrfbhPeEV`,
 `bizbot-site Br9jw51W2yNqHQB72gXhndjng9Sv`. So is the R2 correction `47bc9c79`:
 `resto-flow 84sAq6DD1ExUDAG1vjBUYxjqo4r7`,
-`bizbot-site HCpHacJhuY3LQdjbrjtk1rj1BRCZ`.
+`bizbot-site HCpHacJhuY3LQdjbrjtk1rj1BRCZ`. And the R3 correction `68699d96`:
+`resto-flow D58LgCaCqPnSESERpETt1DzXYDPf`,
+`bizbot-site EKSeS4AAZjC8TnrDoSbxBumNqrrV`.
 This commit is the docs-only counter-proof on the same branch: both projects must
 IGNORE it with Resources = No Resources.
 
