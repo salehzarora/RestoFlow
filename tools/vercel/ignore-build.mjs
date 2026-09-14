@@ -23,10 +23,11 @@ const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefron
 // allowlist admits no module and its blobs are deliberately never decoded.
 const STOREFRONT_MODULE_ROOTS = STOREFRONT_RUNTIME_ROOTS.filter((root) => root !== 'storefront/public');
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
-// Single source of truth for the roots the classifier calls irrelevant to
-// every selector. Guard step 7 proves nothing under them can enter the
-// TypeScript program, so the classification is enforced, not asserted.
-const STOREFRONT_IGNORED_ROOTS = ['storefront/tests', 'storefront/docs', 'storefront/review', 'storefront/scripts'];
+// Storefront-local support roots. As of STAGE 7 R2 these are NOT ignored: they
+// BUILD the storefront like any other storefront path (see category()). The
+// constant survives because guard step 7 still keeps them out of the TypeScript
+// program, which is now build-graph containment rather than a licence to ignore.
+const STOREFRONT_LOCAL_ROOTS = ['storefront/tests', 'storefront/docs', 'storefront/review', 'storefront/scripts'];
 // Approved static-export deployment values. `out` is Next's export target;
 // the ignore command must invoke THIS engine with the storefront selector.
 const STOREFRONT_OUTPUT_DIRECTORY = 'out';
@@ -493,18 +494,20 @@ function inspectStorefront(repo, revision) {
   }
   // 6. The config that decides what the build reads is pinned by hash.
   if (hash(files.get('storefront/next.config.mjs')) !== STOREFRONT_CONFIG_HASH) fail('unsupported_build_contract');
-  // 7. TypeScript build-graph boundary. This is what turns the classifier's
-  // "storefront tests/docs/review/scripts are irrelevant to every selector" into
-  // a proven property instead of a comment. A TypeScript program is
+  // 7. TypeScript build-graph boundary. STAGE 7 R2 moved this from load-bearing
+  // to defence in depth: the classifier no longer ignores anything under
+  // storefront/, so this no longer licenses an IGNORE. It still earns its keep by
+  // holding the build graph inside the reviewed runtime roots, which is what makes
+  // changes OUTSIDE storefront/ safe to ignore for the storefront, and by keeping
+  // the contract small enough to review. A TypeScript program is
   // files ∪ (include − exclude) ∪ transitive imports ∪ ambient type roots, all
   // inheritable through extends, and `next build` type-checks exactly that
   // program. Only `include` and the import graph can add repository paths to it,
   // so: extends/files/references are refused by the top-level key allowlist;
   // `include` is REQUIRED because its default is **/* (which DOES type-check the
-  // tests); no include entry may overlap an ignored root in either direction; the
+  // tests); no include entry may overlap a storefront-local root in either direction;
   // ambient-declaration keys are refused; and `paths` is pinned to the single
-  // mapping step 8 resolves. Under those conditions no path classified
-  // storefront_tests_docs can be read by the build, so ignoring it is safe.
+  // mapping step 8 resolves. Widening it fails inspection, which BUILDs.
   const tsconfig = JSON.parse(files.get('storefront/tsconfig.json'));
   if (!object(tsconfig) || Object.keys(tsconfig).some((key) => !['$schema', 'compilerOptions', 'include', 'exclude'].includes(key))) fail('unsupported_build_contract');
   const compiler = tsconfig.compilerOptions;
@@ -525,8 +528,8 @@ function inspectStorefront(repo, revision) {
   for (const entry of tsconfig.include) {
     const root = safeRelative('storefront', tsconfigGraphRoot(entry));
     // Overlap in EITHER direction: '.' contains storefront/tests, and
-    // 'tests/unit' is contained by it. Both put ignored files in the program.
-    if (STOREFRONT_IGNORED_ROOTS.some((dir) => root === dir || below(root, dir) || below(dir, root))) fail('unsupported_build_contract');
+    // 'tests/unit' is contained by it. Both widen the program past the runtime roots.
+    if (STOREFRONT_LOCAL_ROOTS.some((dir) => root === dir || below(root, dir) || below(dir, root))) fail('unsupported_build_contract');
   }
   // exclude only ever subtracts from include, so it cannot widen the program;
   // it still may not name a path outside the Root Directory.
@@ -646,6 +649,21 @@ function selectBaseline(repo, head, env, acquisition, repositoryUrl) {
   verifyProductionBranch(repo, acquisition.baseline);
 }
 
+// Diagnostic only. Every storefront path is relevant to the storefront selector
+// whatever this returns; the name exists so `categories` stays readable in the
+// decision JSON and in hosted evidence. Do not make a decision from it.
+function storefrontCategory(file) {
+  if (STOREFRONT_RUNTIME_ROOTS.some((dir) => below(file, dir))
+    || ['storefront/package.json', 'storefront/package-lock.json', 'storefront/npm-shrinkwrap.json', 'storefront/pnpm-lock.yaml', 'storefront/yarn.lock', 'storefront/.npmrc', 'storefront/.nvmrc', 'storefront/tsconfig.json', 'storefront/vercel.json', 'storefront/.vercelignore'].includes(file)
+    || /^storefront\/next\.config\.(?:mjs|js|ts)(?![\s\S])/.test(file)
+    || /^storefront\/postcss\.config\.[^/]+(?![\s\S])/.test(file)
+    || /^storefront\/(?:src\/)?(?:middleware|proxy|instrumentation)\.[^/]+(?![\s\S])/.test(file)) return 'storefront_runtime';
+  if (STOREFRONT_LOCAL_ROOTS.some((dir) => below(file, dir))
+    || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
+    || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file)) return 'storefront_local';
+  return 'unknown_storefront_input';
+}
+
 function category(file, selector, graphs) {
   if (file === ENGINE) return { relevant: true, name: 'shared_engine' };
   if (file === '.gitattributes' || file === '.vercelignore') return { relevant: true, name: 'checkout_config' };
@@ -663,22 +681,20 @@ function category(file, selector, graphs) {
     if (['site/tests', 'site/review', 'site/docs'].some((dir) => below(file, dir)) || /^site\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore)$/.test(file) || file === 'site/scripts/dev.mjs') return { relevant: false, name: 'tests_docs' };
     return { relevant: selector === 'marketing', name: 'unknown_marketing_input' };
   }
-  if (file.startsWith('storefront/')) {
-    const runtime = STOREFRONT_RUNTIME_ROOTS.some((dir) => below(file, dir))
-      || ['storefront/package.json', 'storefront/package-lock.json', 'storefront/npm-shrinkwrap.json', 'storefront/pnpm-lock.yaml', 'storefront/yarn.lock', 'storefront/.npmrc', 'storefront/.nvmrc', 'storefront/tsconfig.json', 'storefront/vercel.json', 'storefront/.vercelignore'].includes(file)
-      || /^storefront\/next\.config\.(?:mjs|js|ts)(?![\s\S])/.test(file)
-      || /^storefront\/postcss\.config\.[^/]+(?![\s\S])/.test(file)
-      || /^storefront\/(?:src\/)?(?:middleware|proxy|instrumentation)\.[^/]+(?![\s\S])/.test(file);
-    if (runtime) return { relevant: selector === 'storefront', name: 'storefront_runtime' };
-    // Irrelevant to EVERY selector, and guard step 7 ENFORCES why: no tsconfig
-    // include entry may overlap these roots and step 8 keeps them out of the
-    // import graph, so next build cannot read a file classified here. Widening
-    // the tsconfig fails inspection and BUILDs instead of ignoring silently.
-    if (STOREFRONT_IGNORED_ROOTS.some((dir) => below(file, dir))
-      || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
-      || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file)) return { relevant: false, name: 'storefront_tests_docs' };
-    return { relevant: selector === 'storefront', name: 'unknown_storefront_input' };
-  }
+  // STAGE 7 R2. Exactly ONE relevance expression governs the whole storefront
+  // subtree: every path under storefront/ is relevant to the storefront and to no
+  // other project. storefrontCategory() names the path for diagnostics and decides
+  // nothing, so no later edit to those patterns can reintroduce a false IGNORE.
+  //
+  // Why nothing here may be ignored: proving a path is outside TypeScript's
+  // type-check graph (guard step 7) does not prove it is outside the BUILD's
+  // dependency graph. A module executed during `next build` can read any file under
+  // the Root Directory with node:fs, and this engine deliberately does not model
+  // filesystem reads. `eslint.config.*` is not even hypothetical: `next build` runs
+  // ESLint when it is a devDependency, and devDependencies are unrestricted here.
+  // A false BUILD costs one storefront deployment; a false IGNORE serves stale
+  // customer-facing output. There are therefore no exceptions inside storefront/.
+  if (file.startsWith('storefront/')) return { relevant: selector === 'storefront', name: storefrontCategory(file) };
   if (/^(?:apps|packages)\//.test(file)) {
     if (selector !== 'product') return { relevant: false, name: 'product_only' };
     const member = file.split('/').slice(0, 2).join('/');

@@ -1354,8 +1354,17 @@ pathCase('24 storefront public asset only', ['storefront/public/icon.svg'], 'IGN
 pathCase('24 storefront lockfile only', ['storefront/package-lock.json'], 'IGNORE', 'IGNORE', 'BUILD');
 pathCase('24 storefront deployment config only', ['storefront/vercel.json'], 'IGNORE', 'IGNORE', 'BUILD');
 pathCase('24 storefront node pin only', ['storefront/.nvmrc'], 'IGNORE', 'IGNORE', 'BUILD');
-pathCase('24 storefront tests and docs only ignore everywhere', ['storefront/tests/shell.test.mjs', 'storefront/README.md', 'storefront/.gitignore'], 'IGNORE', 'IGNORE', 'IGNORE');
-pathCase('24 storefront audit script only ignores everywhere', ['storefront/scripts/audit-output.mjs'], 'IGNORE', 'IGNORE', 'IGNORE');
+// R2: storefront-local support files BUILD the storefront and nothing else.
+pathCase('24 storefront tests and metadata build the storefront only', ['storefront/tests/shell.test.mjs', 'storefront/README.md', 'storefront/.gitignore'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront audit script builds the storefront only', ['storefront/scripts/audit-output.mjs'], 'IGNORE', 'IGNORE', 'BUILD');
+// One representative source-like file under each remaining storefront-local root.
+pathCase('24 R2 storefront tests fixture builds the storefront only', ['storefront/tests/fixture.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront docs module builds the storefront only', ['storefront/docs/tokens.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront review module builds the storefront only', ['storefront/review/checklist.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront build script builds the storefront only', ['storefront/scripts/generate-content.mjs'], 'IGNORE', 'IGNORE', 'BUILD');
+// `next build` runs ESLint when it is a devDependency, and devDependencies are
+// unrestricted by the manifest guard, so lint config is build-consumed in fact.
+pathCase('24 R2 storefront lint and tooling config builds the storefront only', ['storefront/eslint.config.mjs', 'storefront/.prettierrc', 'storefront/vitest.config.ts', 'storefront/playwright.config.ts', 'storefront/AGENTS.md', 'storefront/.env.example'], 'IGNORE', 'IGNORE', 'BUILD');
 pathCase('24 unknown storefront input builds the storefront only', ['storefront/whatever.cfg'], 'IGNORE', 'IGNORE', 'BUILD');
 
 test('24 supabase-only changes ignore all three projects', () => {
@@ -1413,12 +1422,12 @@ test('24 storefront guard failures all fail safe to BUILD', () => {
   }
 });
 
-// STAGE 7 BLOCKER. Reported sequence: a tsconfig change puts storefront/tests
-// into TypeScript's build graph and correctly BUILDs on its own commit, then a
-// LATER tests-only .ts change is classified storefront_tests_docs and IGNOREd
-// while `next build` still type-checks it. Pre-fix, every shape below passed
-// inspection and returned IGNORE at step 3: a false IGNORE. The contract is now
-// enforced, so the unsafe configuration cannot be silently ignored.
+// STAGE 7 (R1) BLOCKER, kept as the tsconfig-boundary regression. Historically a
+// widened tsconfig passed inspection and a later tests-only change then IGNOREd.
+// R2 independently makes that change BUILD by classification, so what this test
+// still proves is narrower and explicit: an unsupported tsconfig must fail
+// INSPECTION. The reason assertion is what keeps it honest — a classification
+// BUILD would report relevant_changes and fail here.
 test('24 REGRESSION a tests-widening tsconfig cannot produce a tests-only IGNORE', () => {
   const unsafe = [
     // TypeScript's own default when include is omitted, written out.
@@ -1450,21 +1459,29 @@ test('24 REGRESSION a tests-widening tsconfig cannot produce a tests-only IGNORE
     // 3. A later commit changes ONLY a TypeScript file under storefront/tests.
     put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
     commit(repo);
-    // 4. Classification alone says IGNORE here; inspection must override it.
+    // 4. Inspection must reject the contract. Guards run before classification in
+    //    decide(), so a guard reason here proves the guard, not the R2 rule.
     const result = expectDecision(repo, 'storefront', widened, 'BUILD');
     assert.ok(['unsupported_build_contract', 'unsupported_graph'].includes(result.reason),
       `${label}: expected the unsafe tsconfig to fail inspection, got ${result.reason}`);
+    // Under R2 the changed tests file is relevant, so classification could answer
+    // BUILD by itself. An empty categories map proves the guard threw FIRST and the
+    // classification loop never ran, which is the only thing this test claims.
+    assert.deepEqual(result.categories, {}, `${label}: guard must short-circuit classification`);
     // The unsafe storefront contract must not leak into the other two projects.
     expectDecision(repo, 'marketing', widened, 'IGNORE');
     expectDecision(repo, 'product', widened, 'IGNORE');
   }
 });
 
-// The other half of the blocker, and the reason the fix is a proof rather than
-// "BUILD on anything tsconfig-shaped": under a contract that provably excludes
-// them, ignored storefront paths must still be ignored. Without this case,
-// classifying storefront/tests as BUILD would also satisfy the regression above.
-test('24 safe tsconfig shapes still ignore a tests-only TypeScript change', () => {
+// The other half of the blocker, and the reason the tsconfig fix is a boundary
+// proof rather than "BUILD on anything tsconfig-shaped": a legitimate include
+// shape must PASS inspection. Under R2 a storefront-local change BUILDs the
+// storefront by classification, so the discriminator is the REASON: a safe shape
+// must yield relevant_changes, never a guard reason. The other two projects must
+// still be untouched, which is the cross-project fan-out this ticket exists to
+// prevent.
+test('24 safe tsconfig shapes pass inspection and never fan out', () => {
   const safe = [
     ['bare directories', ['app', 'src']],
     ['explicitly relative directories', ['./app', './src']],
@@ -1484,7 +1501,12 @@ test('24 safe tsconfig shapes still ignore a tests-only TypeScript change', () =
     put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
     put(repo, 'storefront/docs/notes.md', '# fixture\n');
     commit(repo);
-    expectAll(repo, configured, 'IGNORE', 'IGNORE', 'IGNORE', { message: label });
+    const { output, stdout } = invoke(repo, 'storefront', configured);
+    assert.equal(output.decision, 'BUILD', `${label}: ${stdout}`);
+    // relevant_changes, NOT a guard reason: the safe shape passed inspection.
+    assert.equal(output.reason, 'relevant_changes', `${label}: ${stdout}`);
+    expectDecision(repo, 'marketing', configured, 'IGNORE');
+    expectDecision(repo, 'product', configured, 'IGNORE');
   }
 });
 
@@ -1526,6 +1548,73 @@ test('24 the storefront Node pin is shape-bounded and never trusted for relevanc
   put(repo, 'storefront/.nvmrc', '22\n');
   commit(repo);
   expectAll(repo, base, 'IGNORE', 'IGNORE', 'BUILD');
+});
+
+// STAGE 7 R2 BLOCKER. Proving a path is outside TypeScript's type-check graph does
+// not prove it is outside the BUILD's dependency graph: a runtime module can read
+// it with node:fs while `next build` runs, and the engine does not model filesystem
+// reads. The contract here is fully VALID — inspection passes — so the BUILD can
+// only come from classification, which is exactly the R2 rule under test.
+test('24 REGRESSION a build-time fs read under a storefront-local root cannot IGNORE', () => {
+  const { repo } = fixture();
+  // 1-2. A valid storefront contract whose runtime module reads a tests fixture at
+  //      build time through an allowlisted node: import.
+  put(repo, 'storefront/tests/fixture.json', json({ headline: 'before' }));
+  put(repo, 'storefront/app/page.tsx',
+    "import { readFileSync } from 'node:fs';\n"
+    + "const data = JSON.parse(readFileSync('../tests/fixture.json', 'utf8'));\n"
+    + "export default function Page() { return data.headline; }\n");
+  const wired = commit(repo);
+  // 3. A later commit changes ONLY that fixture.
+  put(repo, 'storefront/tests/fixture.json', json({ headline: 'after' }));
+  commit(repo);
+  // 4. BUILD, and specifically a CLASSIFICATION build. A guard reason here would
+  //    mean the test proved node:fs is rejected, not that the root is build-relevant.
+  const result = expectDecision(repo, 'storefront', wired, 'BUILD');
+  assert.equal(result.reason, 'relevant_changes');
+  assert.deepEqual(result.categories, { storefront_local: 1 });
+  // 5. And it must not fan out: that is the whole point of the three-way filter.
+  expectDecision(repo, 'marketing', wired, 'IGNORE');
+  expectDecision(repo, 'product', wired, 'IGNORE');
+});
+
+// Structural: ONE relevance expression governs the entire storefront subtree, so no
+// path under storefront/ can be ignored by the storefront selector and none of them
+// can reach the other two projects. A defaulted or per-pattern rule would drift.
+test('24 R2 every storefront path builds the storefront and only the storefront', () => {
+  const paths = [
+    ['storefront/tests/fixture.json', 'storefront_local'],
+    ['storefront/tests/nested/deep/case.spec.ts', 'storefront_local'],
+    ['storefront/docs/tokens.ts', 'storefront_local'],
+    ['storefront/docs/brief.md', 'storefront_local'],
+    ['storefront/review/checklist.ts', 'storefront_local'],
+    ['storefront/scripts/generate-content.mjs', 'storefront_local'],
+    ['storefront/README.md', 'storefront_local'],
+    ['storefront/AGENTS.md', 'storefront_local'],
+    ['storefront/.gitignore', 'storefront_local'],
+    ['storefront/.env.example', 'storefront_local'],
+    ['storefront/eslint.config.mjs', 'storefront_local'],
+    ['storefront/.eslintrc.json', 'storefront_local'],
+    ['storefront/.prettierrc', 'storefront_local'],
+    ['storefront/vitest.config.ts', 'storefront_local'],
+    ['storefront/playwright.config.ts', 'storefront_local'],
+    ['storefront/app/page.tsx', 'storefront_runtime'],
+    ['storefront/styles/theme.css', 'storefront_runtime'],
+    ['storefront/.nvmrc', 'storefront_runtime'],
+    ['storefront/whatever.cfg', 'unknown_storefront_input'],
+    ['storefront/nested/unknown/thing.bin', 'unknown_storefront_input'],
+  ];
+  for (const [path, expected] of paths) {
+    const { repo, base } = fixture();
+    if (existsSync(join(repo, path))) appendFileSync(join(repo, path), '\n// R2 change\n');
+    else put(repo, path);
+    commit(repo);
+    const result = expectDecision(repo, 'storefront', base, 'BUILD');
+    assert.equal(result.reason, 'relevant_changes', `${path}: ${JSON.stringify(result)}`);
+    assert.deepEqual(result.categories, { [expected]: 1 }, `${path} category`);
+    expectDecision(repo, 'marketing', base, 'IGNORE');
+    expectDecision(repo, 'product', base, 'IGNORE');
+  }
 });
 
 test('24 a baseline without storefront fails the storefront safe', () => {

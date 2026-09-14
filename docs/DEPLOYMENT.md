@@ -978,13 +978,13 @@ changing any setting.
 | Reachable runtime packages and their declared assets/fonts/l10n | IGNORE | BUILD | IGNORE |
 | Root `pubspec.yaml`, `pubspec.lock`, any workspace-member manifest | IGNORE | BUILD | IGNORE |
 | Root `vercel.json`, `tools/vercel_build_web.sh` | IGNORE | BUILD | IGNORE |
-| CI-only, deployment-irrelevant docs/audit/tests, native Android/release tooling | IGNORE | IGNORE | IGNORE |
+| CI-only, deployment-irrelevant docs/audit/tests **outside `storefront/`**, native Android/release tooling | IGNORE | IGNORE | IGNORE |
 | Internal Admin or unreferenced package source with unchanged, validated graph | IGNORE | IGNORE | IGNORE |
 | Exact shared `tools/vercel/ignore-build.mjs` control, or real inputs of both projects | BUILD | BUILD | BUILD (the engine is shared by all three) |
 | Only `tools/vercel/ignore-build.test.mjs` or this deployment document | IGNORE | IGNORE | IGNORE |
 | `storefront/app/`, `storefront/src/`, `storefront/components/`, `storefront/lib/`, `storefront/styles/`, `storefront/messages/`, `storefront/public/` | IGNORE | IGNORE | BUILD |
 | `storefront/package.json`, its lockfile, `next.config.mjs`, `tsconfig.json`, `storefront/vercel.json`, `.nvmrc`, `.npmrc`, `postcss.config.*` | IGNORE | IGNORE | BUILD |
-| `storefront/tests/`, `storefront/docs/`, `storefront/scripts/`, `storefront/README*`, `.gitignore`, lint/format/test configs | IGNORE | IGNORE | IGNORE |
+| `storefront/tests/`, `storefront/docs/`, `storefront/review/`, `storefront/scripts/`, `storefront/README*`, `.gitignore`, lint/format/test configs | IGNORE | IGNORE | BUILD |
 | Unknown file anywhere under `storefront/` | IGNORE | IGNORE | BUILD (fail-safe) |
 | `supabase/**` migrations, tests, recovery SQL | IGNORE | IGNORE | IGNORE |
 | Unknown project-local input/configuration | BUILD if in marketing scope | BUILD if in product scope | BUILD if in storefront scope |
@@ -1013,30 +1013,68 @@ never decoded, because a binary asset would otherwise fail the engine's fatal
 UTF-8 decode and BUILD on every run. Any guard failure is a BUILD: an input this
 engine does not understand must never be silently ignored.
 
-#### Why ignoring `storefront/tests|docs|review|scripts` is safe
+#### Storefront-local paths BUILD the storefront (STAGE 7 R2)
 
-These four roots are irrelevant to **every** selector, and that is *enforced*
-rather than asserted in a comment. A TypeScript program is
+Everything under `storefront/` — including `tests/`, `docs/`, `review/`,
+`scripts/`, the README and the lint/format/test configuration — is relevant to
+the `storefront` selector and to no other project. There are **no exceptions
+inside `storefront/`**, and `category()` holds exactly one relevance expression
+for the whole subtree, so no later edit to a naming pattern can reintroduce a
+false IGNORE. The category name is diagnostic only and decides nothing.
+
+The earlier rationale — that guard step 7 proves those roots sit outside the
+tsconfig `next build` type-checks — was too weak. Proving a path is outside
+TypeScript's *type-check* graph does not prove it is outside the *build's*
+dependency graph: a module executed during `next build` can read any file under
+the Root Directory with `node:fs`, and this engine deliberately does not model
+filesystem reads. `eslint.config.*` is not even hypothetical — `next build` runs
+ESLint when it is a devDependency, and devDependencies are unrestricted by the
+manifest guard. A false BUILD costs one storefront deployment; a false IGNORE
+serves stale customer-facing output, so within `storefront/` the engine always
+BUILDs.
+
+This is a Storefront-local cost only. The point of the three-way filter is to
+stop cross-project rebuild fan-out, not to eliminate every storefront build:
+`resto-flow` and `bizbot-site` still IGNORE every one of these paths.
+
+The TypeScript build-graph boundary is retained in full, with a different job.
+It no longer licenses an IGNORE; it holds the storefront's build graph inside
+the reviewed runtime roots — which is what makes changes **outside**
+`storefront/` safe to ignore for the storefront — and it keeps the contract
+small enough to review. A TypeScript program is
 `files ∪ (include − exclude) ∪ transitive imports ∪ ambient type roots`,
-inheritable through `extends`, and `next build` type-checks exactly that
-program. Guard step 7 therefore refuses `extends`, `files` and `references`
-through a top-level key allowlist; **requires** `include`, because TypeScript's
-default is `**/*` and that does type-check the tests; refuses any `include`
-entry overlapping an ignored root in either direction (`.` contains
-`storefront/tests`, `tests/unit` is contained by it); refuses `types`,
-`typeRoots` and `rootDirs`, which pull in declarations with no import; and pins
-`compilerOptions.paths` to the single `@/*` → `./src/*` mapping that step 8
-resolves. `exclude` is validated but never relied upon — it can only subtract
-from `include`. Widen the tsconfig and inspection fails, which BUILDs: the
-unsafe contract can never be silently ignored, and a tests-only change under it
-can never return IGNORE.
+inheritable through `extends`, so guard step 7 refuses `extends`, `files` and
+`references` through a top-level key allowlist; **requires** `include`, because
+TypeScript's default is `**/*`; refuses any `include` entry overlapping a
+storefront-local root in either direction (`.` contains `storefront/tests`,
+`tests/unit` is contained by it); refuses `types`, `typeRoots` and `rootDirs`,
+which pull in declarations with no import; and pins `compilerOptions.paths` to
+the single `@/*` → `./src/*` mapping that step 8 resolves. `exclude` is
+validated but never relied upon — it can only subtract from `include`. Widening
+the tsconfig fails inspection, which BUILDs.
 
-Step 8 independently keeps the ignored roots out of the import graph, and the
-set of files it scans is *derived* from the runtime roots rather than listed
-separately — otherwise a runtime root that app code may import becomes an
-unscanned bridge into `storefront/tests`. `public/` is the single exclusion,
+Step 8 scans a file set *derived* from the runtime roots rather than a second
+literal list, so a runtime root that app code may import cannot become an
+unscanned bridge out of the reviewed graph. `public/` is the single exclusion,
 and only because its type allowlist admits no module and its blobs are never
 decoded.
+
+**Known residual, deliberately out of scope for 001A.** The same `node:fs`
+mechanism could read a path *outside* `storefront/` — `../site/`, `../docs/`,
+`../apps/` — which the storefront selector still ignores. Module containment
+already prevents *importing* across that boundary, so only a raw filesystem read
+remains, and a general filesystem analyzer is explicitly not part of this phase.
+It is reachable rather than theoretical: **Include files outside Root Directory**
+is enabled precisely so the ignore command can read `../tools/vercel/`, so the
+whole repository is on disk while `next build` runs.
+
+Recorded as a follow-up. The cheapest narrow fix is to stop allowing every
+`node:` bare import in a storefront module and admit only non-IO builtins, so a
+`node:fs` import fails `unsupported_graph` and BUILDs until reviewed — a one-
+expression change, not an analyzer. Note it would invert the meaning of the
+`node:fs` regression test, which deliberately relies on that import being
+allowed; whoever takes the follow-up must re-specify that test rather than
+treat its failure as a break.
 
 The Vercel project's **Node.js Version** setting is authoritative for the
 storefront runtime. `storefront/package.json#engines` and `storefront/.nvmrc`
