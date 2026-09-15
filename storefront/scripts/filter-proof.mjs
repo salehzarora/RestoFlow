@@ -11,6 +11,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, ex
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EXPECTATIONS, evaluateCell, evaluateDiff } from './filter-expectations.mjs';
 
 const STOREFRONT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(STOREFRONT, '..');
@@ -117,23 +118,19 @@ const SCENARIOS = [
   {
     id: 'A', label: 'product-only change, valid shell in BOTH snapshots',
     mutate: (root) => writeFileSync(path.join(root, 'apps/dashboard/lib/fixture.dart'), '// changed\n'),
-    expect: { marketing: 'IGNORE', product: 'BUILD', storefront: 'IGNORE' },
   },
   {
     id: 'B', label: 'marketing-only change, valid shell in BOTH snapshots',
     mutate: (root) => writeFileSync(path.join(root, 'site/src/main.js'), '// changed\n'),
-    expect: { marketing: 'BUILD', product: 'IGNORE', storefront: 'IGNORE' },
   },
   {
     id: 'C', label: 'repository docs-only change, valid shell in BOTH snapshots',
     mutate: (root) => writeFileSync(path.join(root, 'docs/NOTE.md'), '# changed\n'),
-    expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'IGNORE' },
   },
   {
     id: 'D1', label: 'storefront application source change',
     mutate: (root) => writeFileSync(path.join(root, 'storefront/src/theme/tokens.ts'),
       'export const TOKENS = { colorText: "#fff" } as const;\n'),
-    expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'BUILD' },
   },
   {
     id: 'D2', label: 'storefront config change (vercel.json)',
@@ -144,18 +141,15 @@ const SCENARIOS = [
       config.headers[1].headers[0].value = 'public, max-age=31536000, immutable, stale-while-revalidate=60';
       writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
     },
-    expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'BUILD' },
   },
   {
     id: 'D3', label: 'storefront test change (a support root)',
     mutate: (root) => writeFileSync(path.join(root, 'storefront/tests/locales.test.mjs'),
       "import { test } from 'node:test';\ntest('changed', () => {});\n"),
-    expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'BUILD' },
   },
   {
     id: 'D4', label: 'storefront docs change (a support root)',
     mutate: (root) => writeFileSync(path.join(root, 'storefront/README.md'), '# changed\n'),
-    expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'BUILD' },
   },
 ];
 
@@ -173,16 +167,30 @@ for (const s of SCENARIOS) {
     git(root, ['add', '--all']);
     git(root, ['commit', '--quiet', '--no-verify', '-m', `fixture: ${s.id}`]);
 
+    const head = git(root, ['rev-parse', 'HEAD']);
+    // A scenario whose trees are identical exercises no decision at all.
+    for (const problem of evaluateDiff({ scenario: s.id, baseline: base, head })) {
+      failures++; console.error(`FAIL ${problem}`);
+    }
+
     const got = {};
     for (const selector of ['marketing', 'product', 'storefront']) {
       const result = run(root, selector, base);
       got[selector] = { decision: result.decision, reason: result.reason, categories: result.categories };
-      if (result.decision !== s.expect[selector]) {
+      const expected = EXPECTATIONS[s.id]?.[selector];
+      if (!expected) {
         failures++;
-        console.error(`FAIL ${s.id} ${selector}: expected ${s.expect[selector]}, got ${result.decision} (${result.reason})`);
+        console.error(`FAIL ${s.id} ${selector}: no expectation declared`);
+        continue;
+      }
+      // Assert the MECHANISM, not just the outcome: a fail-safe BUILD with an
+      // empty category map must never satisfy a cell meant to prove
+      // classification against a valid graph.
+      for (const problem of evaluateCell({ scenario: s.id, selector, expected, actual: result })) {
+        failures++; console.error(`FAIL ${problem}`);
       }
     }
-    rows.push({ id: s.id, label: s.label, expect: s.expect, got });
+    rows.push({ id: s.id, label: s.label, got });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -191,7 +199,7 @@ for (const s of SCENARIOS) {
 for (const r of rows) {
   if (r.skipped) { console.log(`${r.id}  SKIPPED - ${r.skipped}`); continue; }
   const line = ['marketing', 'product', 'storefront']
-    .map((s) => `${s}=${r.got[s].decision}/${r.got[s].reason}`).join('  ');
+    .map((s) => `${s}=${r.got[s].decision}/${r.got[s].reason}/${JSON.stringify(r.got[s].categories)}`).join('  ');
   console.log(`${r.id}  ${r.label}\n    ${line}`);
 }
 
