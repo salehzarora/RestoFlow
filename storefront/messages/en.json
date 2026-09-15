@@ -1,0 +1,15 @@
+{
+  "brand": "BIZBOT",
+  "title": "Coming soon",
+  "tagline": "The digital ordering surface for restaurants.",
+  "status": "This is a placeholder. No menu or ordering is available yet.",
+  "languageLabel": "Choose a language",
+  "languageNames": {
+    "ar": "العربية",
+    "en": "English",
+    "he": "עברית"
+  },
+  "notFoundTitle": "Page not found",
+  "notFoundBody": "That page could not be found.",
+  "homeLink": "Back to the home page"
+}
