@@ -1,0 +1,4 @@
+# The INFRA shell is deliberately not indexable. This is a crawler directive,
+# not access control.
+User-agent: *
+Disallow: /

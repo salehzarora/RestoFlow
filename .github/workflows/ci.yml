@@ -36,7 +36,9 @@ jobs:
   validate:
     name: format · bootstrap · analyze · test · guardrails
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30 minutes: the storefront static-export lane is additive to an already
+    # ~15-minute job. Reviewed under STOREFRONT-INFRA-001B.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -218,6 +220,53 @@ jobs:
         run: |
           node --version
           node --test tests/claims.test.mjs tests/css-minify.test.mjs tests/lead.test.mjs tests/main-motion-behavior.test.mjs tests/polish.test.mjs
+
+      # STOREFRONT-INFRA-001B. Node 24 here is the AUTHORITATIVE build; a local
+      # Node 22 build is corroborating only. npm ci enforces the committed
+      # lockfile. The audit and proof helpers are invoked as direct node commands
+      # because the deployment filter forbids npm lifecycle hooks in the
+      # storefront manifest.
+      - name: Set up Node for the storefront
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+
+      - name: Storefront — install (locked)
+        working-directory: storefront
+        run: |
+          node --version
+          npm ci
+
+      - name: Storefront — contract, config-hash, locale and header tests
+        working-directory: storefront
+        run: npm test
+
+      - name: Storefront — type check
+        working-directory: storefront
+        run: npm run typecheck
+
+      - name: Storefront — build-input containment audit
+        working-directory: storefront
+        run: node scripts/audit-inputs.mjs
+
+      - name: Storefront — static export
+        working-directory: storefront
+        run: npm run build
+
+      - name: Storefront — output budgets and emitted lang/dir
+        working-directory: storefront
+        run: |
+          node scripts/audit-output.mjs
+          node --test tests/output/output.test.mjs
+
+      - name: Storefront — three-project filter proof (real shell, different trees)
+        working-directory: storefront
+        run: node scripts/filter-proof.mjs
+
+      - name: Storefront — generated files did not mutate tracked sources
+        run: git diff --exit-code -- storefront
 
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh

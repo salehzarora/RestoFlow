@@ -1029,9 +1029,14 @@ TypeScript's *type-check* graph does not prove it is outside the *build's*
 dependency graph, and this engine does not model build-time file reads at all.
 
 R3 has since closed the specific `node:fs` route (below), but the rule stands on
-its own and is kept as an independent layer. `eslint.config.*` needs no file read
-to matter: `next build` runs ESLint when it is a devDependency, and
-`devDependencies` are only shape-checked by the manifest guard. The engine is an
+its own and is kept as an independent layer. **Correction (STOREFRONT-INFRA-001B):**
+an earlier revision of this section argued that `eslint.config.*` matters because
+"`next build` runs ESLint when it is a devDependency". That is **false for the
+pinned Next.js 16.3.5** — the official v16 upgrade guide states "`next build` no
+longer runs linting" and removes the `eslint` configuration option. The superseded
+sentence is recorded here rather than erased, because it appears in the merged R2
+reasoning. `devDependencies` are indeed only shape-checked by the manifest guard,
+never name-restricted. The engine is an
 integrity guard for trusted source, not a sandbox, so it never *proves* a
 storefront-local file is unconsumed — it declines to guess. And if a later phase
 admits a Node builtin for a BFF, this layer still holds the line inside
@@ -1075,10 +1080,16 @@ Directory** is enabled precisely so the ignore command can read
 `../tools/vercel/`, so the whole repository is on disk while the build runs.
 
 R3 closes it at the **source contract** rather than by analysing filesystem
-reads. During the INFRA static-export phase the storefront has no BFF and no
-server runtime, so Node built-in capability is unnecessary; importing one is an
-input this engine does not understand, and unsupported inputs BUILD. The only
-bare specifiers storefront source may import are:
+reads. During the INFRA static-export phase the storefront needs no *request-time*
+server, so Node built-in capability is unnecessary for this phase; importing one
+is an input this engine does not understand, and unsupported inputs BUILD.
+
+Note what "no server runtime" does and does not mean. A static export still
+**executes code at build time** — the official static-exports guide states
+"Server Components consumed inside the `app` directory will run during the
+build". The no-Node-builtins rule is therefore this phase's *chosen source
+contract*, not a general property of static Next projects. The only bare
+specifiers storefront source may import are:
 
 | Allowed | Rejected |
 |---|---|
@@ -1088,7 +1099,11 @@ bare specifiers storefront source may import are:
 
 Dynamic `import()` and `require()` were already refused, and relative and aliased
 specifiers were already contained, so removing the Node built-ins closes the last
-route out. The obvious no-import handles are refused in the same scan:
+route out **that this engine inspects: the static import graph**. Non-specifier
+routes stay uninspected — a `new URL(…, import.meta.url)` or `next/font/local`
+path, a stylesheet `@import` or `url()`, and any future build mechanism. See
+*Residual, bounded and stated* below; those classes are INFRA-001B acceptance
+checks against the actual shell, not deferrals. The obvious no-import handles are refused in the same scan:
 `process.getBuiltinModule`, `process.mainModule`, `process.binding` and
 `process._linkedBinding`, in their dot, optional-chaining and quoted-index forms.
 `process.env` is untouched — it is how a Next front end reads build-time
@@ -1148,6 +1163,24 @@ READ-001 material.
 lands.** A BFF or route handler may legitimately need Node built-ins; READ-001 /
 SEC-002 owns that decision, and admitting any builtin also reopens the
 external-read question this section closes.
+
+#### Storefront shell CSP (STOREFRONT-INFRA-001B)
+
+`storefront/vercel.json` serves a restrictive header set with `default-src
+'self'`, `object-src 'none'`, `frame-ancestors 'none'`, `media-src 'none'` and
+`X-Robots-Tag: noindex, nofollow`. It carries **one accepted exception**:
+`script-src 'self' 'unsafe-inline'`, because Next emits inline hydration scripts
+(`self.__next_f.push(...)`) and a static export cannot mint a per-request nonce.
+
+State it accurately. This is **not a strict CSP**, and it does not block all
+inline script injection. Nor is `'unsafe-inline'` *unavoidable* for static output
+in general — hash-based policies exist; this phase deliberately does not add a
+hash-generation pipeline, because that would conflict with the hash-pinned
+`next.config.mjs` and the pinned build script. It is a bounded trade-off for a
+placeholder with no tenant content, no customer data and no ordering, and it
+**must be re-reviewed before any of those are introduced**. `'unsafe-eval'` never
+appears in the served policy. `noindex` is a crawler directive, not access
+control.
 
 The Vercel project's **Node.js Version** setting is authoritative for the
 storefront runtime. `storefront/package.json#engines` and `storefront/.nvmrc`
