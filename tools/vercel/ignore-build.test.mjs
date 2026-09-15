@@ -16,6 +16,51 @@ const scratchParent = realpathSync(tmpdir());
 const scratch = mkdtempSync(join(scratchParent, 'restoflow-vercel-filter-test-'));
 const emptyGitConfig = join(scratch, 'empty-git-config');
 writeFileSync(emptyGitConfig, '');
+// PLAN §14 canonical text. STOREFRONT_CONFIG_HASH pins this byte-for-byte, so a
+// stray edit here turns every storefront case into a fail-safe BUILD. Written
+// from INLINE literals because SOURCE_ROOT has no storefront/ at 001A.
+const STOREFRONT_NEXT_CONFIG = `/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  images: { unoptimized: true },
+  reactStrictMode: true,
+  poweredByHeader: false,
+  trailingSlash: false,
+};
+
+export default nextConfig;
+`;
+
+// Hoisted so the Stage 7 cases can derive one-key variants of the approved
+// contract instead of restating it, which is how a variant stays a variant.
+const json = (value) => JSON.stringify(value, null, 2) + '\n';
+const STOREFRONT_TSCONFIG = {
+  compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
+  include: ['app', 'src'], exclude: ['tests'],
+};
+const STOREFRONT_VERCEL = {
+  framework: 'nextjs', installCommand: 'npm ci', buildCommand: 'npm run build',
+  outputDirectory: 'out',
+  ignoreCommand: 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi',
+};
+
+const STOREFRONT_FILES = {
+  'storefront/package.json': JSON.stringify({
+    name: 'storefront', version: '0.0.0', private: true,
+    scripts: { build: 'next build' },
+    dependencies: { next: '16.3.5', react: '19.2.0', 'react-dom': '19.2.0' },
+  }, null, 2) + '\n',
+  'storefront/package-lock.json': JSON.stringify({ name: 'storefront', lockfileVersion: 3, packages: {} }, null, 2) + '\n',
+  'storefront/next.config.mjs': STOREFRONT_NEXT_CONFIG,
+  'storefront/tsconfig.json': json(STOREFRONT_TSCONFIG),
+  'storefront/vercel.json': json(STOREFRONT_VERCEL),
+  'storefront/app/page.tsx': "import { hello } from '@/lib/hello';\nexport default function Page() { return hello; }\n",
+  'storefront/src/lib/hello.ts': "export const hello = 'fixture';\n",
+  'storefront/messages/en.json': '{ "hello": "fixture" }\n',
+  'storefront/public/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>\n',
+  'storefront/tests/shell.test.mjs': '// fixture suite\n',
+};
+
 const fixtureSources = new Map();
 const CANONICAL_SOURCE = 'https://github.com/salehzarora/RestoFlow.git';
 
@@ -122,6 +167,7 @@ function fixture(options = {}) {
   put(repo, 'docs/DEPLOYMENT.md', 'fixture docs\n');
   put(repo, '.github/workflows/ci.yml', 'name: fixture\non:\n  pull_request:\n  push:\n    branches: [main]\n');
   put(repo, 'tools/vercel/ignore-build.test.mjs', '// fixture suite\n');
+  for (const [file, text] of Object.entries(STOREFRONT_FILES)) put(repo, file, text);
   if (options.realRuntime) {
     function copyRuntime(relativePath) {
       const source = join(SOURCE_ROOT, relativePath);
@@ -242,7 +288,8 @@ function invoke(repo, selector, previous, options = {}) {
     for (const key of Object.keys(env)) if (/^path$/i.test(key)) delete env[key];
     env.PATH = join(scratch, 'no-executables');
   }
-  const cwd = options.cwd || (selector === 'marketing' ? join(repo, 'site') : repo);
+  const cwd = options.cwd || (selector === 'product' ? repo
+    : join(repo, selector === 'marketing' ? 'site' : 'storefront'));
   const helperFile = join(repo, HELPER);
   const repositoryUrl = options.productionCli ? undefined : fixtureSources.get(repo);
   // Source injection is a literal JS dependency in this child, never env or a
@@ -281,12 +328,32 @@ function expectDecision(repo, selector, base, expected, options) {
   return result.output;
 }
 
-function expectPair(repo, base, marketing, product, options) {
+// Every call site states all THREE expectations explicitly: a default would
+// make the storefront column vacuous exactly where it matters most.
+function expectAll(repo, base, marketing, product, storefront, options) {
   expectDecision(repo, 'marketing', base, marketing, options);
   expectDecision(repo, 'product', base, product, options);
+  expectDecision(repo, 'storefront', base, storefront, options);
 }
 
-function pathCase(name, paths, marketing, product) {
+// A guard violation present in BOTH compared trees, with docs/ as the only
+// changed path. The classifier's own answer there is IGNORE, so a BUILD can
+// only have come from inspectStorefront. Asserting the guard REASON is what
+// separates a real guard proof from a case that merely touched a runtime file
+// and collected relevant_changes.
+function guardOnly(mutate, label) {
+  const { repo, base } = fixture({ seed: mutate });
+  put(repo, 'docs/guard-probe.md', `# ${label}\n`);
+  commit(repo);
+  const { output, stdout } = invoke(repo, 'storefront', base);
+  assert.equal(output.decision, 'BUILD', `guard-only ${label}: ${stdout}`);
+  assert.ok(['unsupported_build_contract', 'unsupported_graph'].includes(output.reason),
+    `guard-only ${label}: expected a guard reason, got ${output.reason}`);
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  return output;
+}
+
+function pathCase(name, paths, marketing, product, storefront) {
   test(name, () => {
     const { repo, base } = fixture();
     for (const path of paths) {
@@ -294,29 +361,29 @@ function pathCase(name, paths, marketing, product) {
       else put(repo, path);
     }
     commit(repo);
-    expectPair(repo, base, marketing, product);
+    expectAll(repo, base, marketing, product, storefront);
   });
 }
 
-pathCase('01 marketing source only', ['site/src/main.js'], 'BUILD', 'IGNORE');
-pathCase('02 POS runtime source only', ['apps/pos/lib/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('03 reachable Flutter package', ['packages/money/lib/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('04 marketing API and lead production inputs', ['site/api/lead.js', 'site/lib/lead.mjs'], 'BUILD', 'IGNORE');
-pathCase('05 root Flutter lockfile', ['pubspec.lock'], 'IGNORE', 'BUILD');
-pathCase('07 CI only', ['.github/workflows/ci.yml'], 'IGNORE', 'IGNORE');
-pathCase('08 documentation and audit only', ['docs/DEPLOYMENT.md', 'docs/audit/review.md'], 'IGNORE', 'IGNORE');
-pathCase('09 marketing tests and README only', ['site/tests/example.test.mjs', 'site/README.md'], 'IGNORE', 'IGNORE');
-pathCase('10 product tests only', ['apps/pos/test/example_test.dart', 'packages/money/test/example_test.dart'], 'IGNORE', 'IGNORE');
-pathCase('11 shared engine changes', [HELPER], 'BUILD', 'BUILD');
-pathCase('12 engine tests and documentation only', ['tools/vercel/ignore-build.test.mjs', 'docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE');
-pathCase('13 mixed marketing and product', ['site/src/main.js', 'apps/kds/lib/filter_fixture.dart'], 'BUILD', 'BUILD');
-pathCase('copied marketing assets named README and test files remain production inputs', ['site/public/README.md', 'site/public/test/example.test.js'], 'BUILD', 'IGNORE');
-pathCase('declared POS font asset', ['apps/pos/assets/fonts/Rubik-Regular.ttf'], 'IGNORE', 'BUILD');
-pathCase('localized runtime source', ['packages/l10n/lib/src/generated/filter_fixture.dart'], 'IGNORE', 'BUILD');
-pathCase('native Android and release tooling only', ['apps/pos/android/app/src/main/AndroidManifest.xml', 'tools/android_release/fixture.ps1'], 'IGNORE', 'IGNORE');
-pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixture.dart', 'packages/feature_reporting/lib/filter_fixture.dart'], 'IGNORE', 'IGNORE');
-pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD');
-pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD');
+pathCase('01 marketing source only', ['site/src/main.js'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('02 POS runtime source only', ['apps/pos/lib/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('03 reachable Flutter package', ['packages/money/lib/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('04 marketing API and lead production inputs', ['site/api/lead.js', 'site/lib/lead.mjs'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('05 root Flutter lockfile', ['pubspec.lock'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('07 CI only', ['.github/workflows/ci.yml'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('08 documentation and audit only', ['docs/DEPLOYMENT.md', 'docs/audit/review.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('09 marketing tests and README only', ['site/tests/example.test.mjs', 'site/README.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('10 product tests only', ['apps/pos/test/example_test.dart', 'packages/money/test/example_test.dart'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('11 shared engine changes', [HELPER], 'BUILD', 'BUILD', 'BUILD');
+pathCase('12 engine tests and documentation only', ['tools/vercel/ignore-build.test.mjs', 'docs/DEPLOYMENT.md'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('13 mixed marketing and product', ['site/src/main.js', 'apps/kds/lib/filter_fixture.dart'], 'BUILD', 'BUILD', 'IGNORE');
+pathCase('copied marketing assets named README and test files remain production inputs', ['site/public/README.md', 'site/public/test/example.test.js'], 'BUILD', 'IGNORE', 'IGNORE');
+pathCase('declared POS font asset', ['apps/pos/assets/fonts/Rubik-Regular.ttf'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('localized runtime source', ['packages/l10n/lib/src/generated/filter_fixture.dart'], 'IGNORE', 'BUILD', 'IGNORE');
+pathCase('native Android and release tooling only', ['apps/pos/android/app/src/main/AndroidManifest.xml', 'tools/android_release/fixture.ps1'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixture.dart', 'packages/feature_reporting/lib/filter_fixture.dart'], 'IGNORE', 'IGNORE', 'IGNORE');
+pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD', 'BUILD');
+pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD', 'BUILD');
 
 test('04 marketing JSON config and package manifest', () => {
   const { repo, base } = fixture();
@@ -324,14 +391,14 @@ test('04 marketing JSON config and package manifest', () => {
   config.cleanUrls = !config.cleanUrls;
   put(repo, 'site/vercel.json', JSON.stringify(config));
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('05 root Flutter manifest', () => {
   const { repo, base } = fixture();
   appendFileSync(join(repo, 'pubspec.yaml'), '\n# valid manifest change\n');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('06 every current workspace manifest affects resolution', () => {
@@ -351,26 +418,26 @@ test('14 earlier relevant commit survives docs-only final commit', () => {
   commit(repo, 'earlier marketing change');
   put(repo, 'docs/final.md');
   commit(repo, 'final docs change');
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('15 successful baseline spans intervening ignored and failed candidates', () => {
   const { repo, base } = fixture();
   put(repo, 'docs/ignored.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
   put(repo, 'apps/pos/lib/earlier.dart');
   commit(repo, 'candidate that was not successfully deployed');
   put(repo, 'docs/final.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('16 deletion of relevant input', () => {
   const { repo, base } = fixture();
   unlinkSync(join(repo, 'apps/pos/lib/filter_fixture.dart'));
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 for (const [label, from, to] of [
@@ -382,7 +449,7 @@ for (const [label, from, to] of [
     mkdirSync(dirname(join(repo, to)), { recursive: true });
     renameSync(join(repo, from), join(repo, to));
     commit(repo);
-    expectPair(repo, base, 'IGNORE', 'BUILD');
+    expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
   });
 }
 
@@ -395,7 +462,7 @@ test('18 non-ancestor previous SHA compares both trees, including removed former
   put(repo, 'docs/rebased.md');
   commit(repo);
   assert.equal(runGit(repo, ['merge-base', nonAncestor, 'HEAD']), base);
-  expectPair(repo, nonAncestor, 'IGNORE', 'BUILD');
+  expectAll(repo, nonAncestor, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('19 complete feature branch uses the exact local origin/main tree', () => {
@@ -405,7 +472,7 @@ test('19 complete feature branch uses the exact local origin/main tree', () => {
   put(repo, 'site/src/fallback.js');
   commit(repo);
   attachOrigin(repo);
-  expectPair(repo, undefined, 'BUILD', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'BUILD', 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('19 missing prior SHA may ignore a docs-only preview against exact origin/main', () => {
@@ -415,7 +482,7 @@ test('19 missing prior SHA may ignore a docs-only preview against exact origin/m
   put(repo, 'docs/fallback.md');
   commit(repo);
   attachOrigin(repo);
-  expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'IGNORE', 'IGNORE', 'IGNORE', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('19 first-preview fallback does not depend on PR metadata and rejects non-preview contexts', () => {
@@ -429,9 +496,9 @@ test('19 first-preview fallback does not depend on PR metadata and rejects non-p
     { VERCEL_GIT_PULL_REQUEST_ID: '' },
     { VERCEL_GIT_PULL_REQUEST_ID: CANARY },
     { VERCEL_GIT_PULL_REQUEST_ID: '0' },
-  ]) expectPair(repo, undefined, 'IGNORE', 'IGNORE', { env: context });
+  ]) expectAll(repo, undefined, 'IGNORE', 'IGNORE', 'IGNORE', { env: context });
   for (const environment of ['production', 'development', '']) {
-    expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_ENV: environment } });
+    expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_ENV: environment } });
   }
 });
 
@@ -440,14 +507,14 @@ test('19 unavailable origin/main fails safely with no configured origin', () => 
   runGit(repo, ['checkout', '--quiet', '-b', 'feature/no-base']);
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_GIT_PULL_REQUEST_ID: '123' } });
 });
 
 test('20 missing previous commit in complete history builds safely', () => {
   const { repo } = fixture();
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, 'a'.repeat(40), 'BUILD', 'BUILD');
+  expectAll(repo, 'a'.repeat(40), 'BUILD', 'BUILD', 'BUILD');
 });
 
 test('20 shallow repository can compare already available exact endpoint trees', () => {
@@ -456,17 +523,17 @@ test('20 shallow repository can compare already available exact endpoint trees',
   commit(repo);
   put(repo, '.git/shallow', base + '\n');
   assert.equal(runGit(repo, ['rev-parse', '--is-shallow-repository']), 'true');
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('20 Git unavailable produces a sanitized BUILD decision', () => {
   const { repo, base } = fixture();
-  expectPair(repo, base, 'BUILD', 'BUILD', { noGit: true });
+  expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD', { noGit: true });
 });
 
 test('21 first production deployment has no trustworthy fallback', () => {
   const { repo } = fixture();
-  expectPair(repo, undefined, 'BUILD', 'BUILD', { env: { VERCEL_ENV: 'production' } });
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_ENV: 'production' } });
 });
 
 test('22 marketing executes correctly from site Root Directory', () => {
@@ -493,6 +560,7 @@ test('source wrappers normalize missing helper and missing Node to BUILD1', { sk
   const commands = [
     { path: 'vercel.json', cwd: repo },
     { path: 'site/vercel.json', cwd: join(repo, 'site') },
+    { path: 'storefront/vercel.json', cwd: join(repo, 'storefront') },
   ].map(({ path, cwd }) => ({ cwd, command: JSON.parse(readFileSync(join(repo, path), 'utf8')).ignoreCommand }));
   for (const { command } of commands) assert.match(command, /^if node .+; then exit 0; else exit 1; fi$/);
   for (const { command, cwd } of commands) {
@@ -523,7 +591,7 @@ test('invalid previous SHA forms are never accepted or echoed', () => {
   put(repo, 'docs/only.md');
   commit(repo);
   for (const previous of [CANARY, ` ${base}`, `${base}\n`, 'HEAD^', `${base}^{tree}`, '--help']) {
-    expectPair(repo, previous, 'BUILD', 'BUILD');
+    expectAll(repo, previous, 'BUILD', 'BUILD', 'BUILD');
   }
 });
 
@@ -532,13 +600,13 @@ test('invalid or mismatched advertised HEAD never silently skips', () => {
   put(repo, 'docs/only.md');
   commit(repo);
   for (const advertised of [CANARY, base, 'a'.repeat(40)]) {
-    expectPair(repo, base, 'BUILD', 'BUILD', { env: { VERCEL_GIT_COMMIT_SHA: advertised } });
+    expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD', { env: { VERCEL_GIT_COMMIT_SHA: advertised } });
   }
 });
 
 test('equal previous and HEAD is a complete empty diff', () => {
   const { repo, base } = fixture();
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('missing or malformed workspace manifest never silently omits dependencies', () => {
@@ -582,7 +650,7 @@ test('CRLF manifests and whitespace filenames preserve classification', () => {
   } });
   put(repo, 'site/public/a space README.md');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('NUL-safe diff supports newline and tab filenames', { skip: process.platform === 'win32' ? 'Windows filesystem disallows these POSIX filename characters' : false }, () => {
@@ -590,7 +658,7 @@ test('NUL-safe diff supports newline and tab filenames', { skip: process.platfor
   put(repo, 'site/public/a\nREADME.md');
   put(repo, 'site/public/b\ttest.js');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('invalid UTF-8 path bytes fail safely', { skip: process.platform === 'win32' ? 'POSIX raw filename byte case' : false }, () => {
@@ -598,7 +666,7 @@ test('invalid UTF-8 path bytes fail safely', { skip: process.platform === 'win32
   const filename = Buffer.concat([Buffer.from(join(repo, 'site/public/') + '/'), Buffer.from([0xff]), Buffer.from('.txt')]);
   writeFileSync(filename, 'fixture');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'BUILD');
+  expectAll(repo, base, 'BUILD', 'BUILD', 'BUILD');
 });
 
 test('declared Flutter asset directories override docs and test exclusions', () => {
@@ -608,7 +676,7 @@ test('declared Flutter asset directories override docs and test exclusions', () 
   put(repo, 'apps/kiosk/assets/fixtures/README.md');
   put(repo, 'apps/kiosk/assets/fixtures/test/data.json');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('new declared test-directory asset takes priority after its manifest baseline', () => {
@@ -619,7 +687,7 @@ test('new declared test-directory asset takes priority after its manifest baseli
   } });
   appendFileSync(join(repo, 'apps/pos/test/deploy_assets/README.md'), 'changed\n');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('declared shared marketing asset affects both projects', () => {
@@ -629,7 +697,7 @@ test('declared shared marketing asset affects both projects', () => {
   } });
   appendFileSync(join(repo, 'site/public/license.md'), 'changed\n');
   commit(repo);
-  expectPair(repo, base, 'BUILD', 'BUILD');
+  expectAll(repo, base, 'BUILD', 'BUILD', 'IGNORE');
 });
 
 test('23 actual build roots and full runtime graph remain covered', () => {
@@ -652,7 +720,7 @@ test('23 actual production imports participate in graph validation', () => {
   const { repo, base } = fixture({ realRuntime: true });
   put(repo, 'docs/only.md');
   commit(repo);
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('23 undeclared workspace import cannot hide behind an ignored package', () => {
@@ -883,7 +951,7 @@ test('R2-07 unavailable main or unsupported production-branch contract returns B
   put(guarded.repo, '.github/workflows/ci.yml', 'name: changed\non:\n  push:\n    branches: [release]\n');
   commit(guarded.repo);
   const guardTrace = traceOptions();
-  expectPair(guarded.repo, undefined, 'BUILD', 'BUILD', { env: guardTrace.env });
+  expectAll(guarded.repo, undefined, 'BUILD', 'BUILD', 'BUILD', { env: guardTrace.env });
   assert.deepEqual(fetchCommands(guardTrace), [], 'source must establish main before network acquisition');
 
   const detached = shallowFixture();
@@ -911,22 +979,22 @@ test('R2-08 production without a previous success always BUILDs without a fetch'
 
 test('R2-09 docs-only existing shallow branch ignores both projects', () => {
   const { repo, base } = shallowFixture({ changes: [['docs/DEPLOYMENT.md', 'docs/audit/r2.md']] });
-  expectPair(repo, base, 'IGNORE', 'IGNORE');
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
 });
 
 test('R2-10 marketing-only existing shallow branch builds only marketing', () => {
   const { repo, base } = shallowFixture({ changes: [['site/src/r2.js', 'site/public/r2.md']] });
-  expectPair(repo, base, 'BUILD', 'IGNORE');
+  expectAll(repo, base, 'BUILD', 'IGNORE', 'IGNORE');
 });
 
 test('R2-11 product-only existing shallow branch builds only product', () => {
   const { repo, base } = shallowFixture({ changes: [['apps/pos/lib/r2.dart', 'packages/money/lib/r2.dart']] });
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('R2-12 multi-commit shallow branch includes earlier runtime changes in the tree delta', () => {
   const { repo, base } = shallowFixture({ changes: [['apps/kds/lib/earlier.dart'], ['docs/middle.md'], ['docs/final.md']] });
-  expectPair(repo, base, 'IGNORE', 'BUILD');
+  expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
 });
 
 test('R2-13 ignored candidates never replace the supplied previous-success baseline', () => {
@@ -1178,7 +1246,7 @@ test('R4-19 first Preview runtime deletion and rename stay relevant', () => {
   renameSync(join(source, 'apps/pos/lib/filter_fixture.dart'), join(source, 'docs/moved.dart'));
   commit(source);
   const repo = cloneOrigin(attachOrigin(source));
-  expectPair(repo, undefined, 'BUILD', 'BUILD');
+  expectAll(repo, undefined, 'BUILD', 'BUILD', 'IGNORE');
 });
 
 test('R4-20 Git stderr and credential-bearing origin never escape on failed fetch', () => {
@@ -1260,4 +1328,471 @@ test('R4 canonical URL cannot be redirected by checkout or environment Git rewri
     assert.deepEqual(fetchCommands(trace), []);
     if (mode === 'local') runGit(repo, ['config', '--unset-all', key]);
   }
+});
+
+
+// ---------------------------------------------------------------------------
+// STOREFRONT-INFRA-001A — three-way filter. The storefront project does not
+// exist yet; these cases are the contract it will be created against.
+// ---------------------------------------------------------------------------
+
+test('24 storefront executes correctly from storefront Root Directory', () => {
+  const { repo, base } = fixture();
+  put(repo, 'storefront/app/changed.tsx', 'export default function C() { return null; }\n');
+  commit(repo);
+  expectDecision(repo, 'storefront', base, 'BUILD', { cwd: join(repo, 'storefront') });
+  // The repo root is the product Root Directory, so the storefront selector
+  // there is invalid_cwd -> BUILD, never a silent IGNORE.
+  expectDecision(repo, 'storefront', base, 'BUILD', { cwd: repo });
+  expectDecision(repo, 'product', base, 'IGNORE', { cwd: repo });
+});
+
+pathCase('24 storefront runtime source only', ['storefront/app/page.tsx'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront aliased src module only', ['storefront/src/lib/hello.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront messages only', ['storefront/messages/en.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront public asset only', ['storefront/public/icon.svg'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront lockfile only', ['storefront/package-lock.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront deployment config only', ['storefront/vercel.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront node pin only', ['storefront/.nvmrc'], 'IGNORE', 'IGNORE', 'BUILD');
+// R2: storefront-local support files BUILD the storefront and nothing else.
+pathCase('24 storefront tests and metadata build the storefront only', ['storefront/tests/shell.test.mjs', 'storefront/README.md', 'storefront/.gitignore'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 storefront audit script builds the storefront only', ['storefront/scripts/audit-output.mjs'], 'IGNORE', 'IGNORE', 'BUILD');
+// One representative source-like file under each remaining storefront-local root.
+pathCase('24 R2 storefront tests fixture builds the storefront only', ['storefront/tests/fixture.json'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront docs module builds the storefront only', ['storefront/docs/tokens.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront review module builds the storefront only', ['storefront/review/checklist.ts'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 R2 storefront build script builds the storefront only', ['storefront/scripts/generate-content.mjs'], 'IGNORE', 'IGNORE', 'BUILD');
+// `next build` runs ESLint when it is a devDependency, and devDependencies are
+// unrestricted by the manifest guard, so lint config is build-consumed in fact.
+pathCase('24 R2 storefront lint and tooling config builds the storefront only', ['storefront/eslint.config.mjs', 'storefront/.prettierrc', 'storefront/vitest.config.ts', 'storefront/playwright.config.ts', 'storefront/AGENTS.md', 'storefront/.env.example'], 'IGNORE', 'IGNORE', 'BUILD');
+pathCase('24 unknown storefront input builds the storefront only', ['storefront/whatever.cfg'], 'IGNORE', 'IGNORE', 'BUILD');
+
+test('24 supabase-only changes ignore all three projects', () => {
+  const { repo, base } = fixture();
+  put(repo, 'supabase/migrations/20260101000000_fixture.sql', '-- fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 ci.yml step-only edits ignore all three on both baseline paths', () => {
+  const previousSuccess = fixture();
+  put(previousSuccess.repo, '.github/workflows/ci.yml', 'name: changed\non:\n  pull_request:\n  push:\n    branches: [main]\n');
+  commit(previousSuccess.repo);
+  expectAll(previousSuccess.repo, previousSuccess.base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 storefront guard failures all fail safe to BUILD', () => {
+  // Each mutation is a separate fixture so one failure cannot mask another.
+  const cases = [
+    ['request-time entrypoint', (repo) => put(repo, 'storefront/middleware.ts', 'export function middleware() {}\n')],
+    ['checkout override', (repo) => put(repo, 'storefront/.vercelignore', 'out\n')],
+    ['changed next.config', (repo) => put(repo, 'storefront/next.config.mjs', STOREFRONT_NEXT_CONFIG.replace('export', 'standalone'))],
+    ['missing lockfile', (repo) => unlinkSync(join(repo, 'storefront/package-lock.json'))],
+    ['floating dependency range', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '^16.3.5' } }, null, 2) + '\n')],
+    ['unlisted runtime dependency', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '16.3.5', lodash: '4.17.21' } }, null, 2) + '\n')],
+    ['escaping relative import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from '../../site/src/main.js';\nexport default function P() { return x; }\n")],
+    ['disallowed bare import', (repo) => put(repo, 'storefront/app/page.tsx', "import x from 'lodash';\nexport default function P() { return x; }\n")],
+    ['dynamic import', (repo) => put(repo, 'storefront/app/page.tsx', "export default async function P() { return import('./other'); }\n")],
+    // Pre-fix this passed inspection outright: safeRelative normalises
+    // storefront + ../site/src to site/src, which is not an escape, so only the
+    // alias pin catches an alias aimed at another project.
+    ['tsconfig alias escaping the root', (repo) => put(repo, 'storefront/tsconfig.json', json({ ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', paths: { '@/*': ['../site/src/*'] } } }))],
+    // storefront/styles is a runtime root that an app module may import, so its
+    // OWN imports have to be scanned as well, or it is an unchecked bridge from
+    // the build graph into storefront/tests.
+    ['a runtime root bridging into tests', (repo) => {
+      put(repo, 'storefront/styles/theme.ts', "export { fixture } from '../tests/fixtures/data';\n");
+      put(repo, 'storefront/app/page.tsx', "import { fixture } from '../styles/theme';\nexport default function P() { return fixture; }\n");
+    }],
+    ['oversized public asset', (repo) => put(repo, 'storefront/public/big.png', 'x'.repeat(300 * 1024))],
+    ['video in public', (repo) => put(repo, 'storefront/public/clip.mp4', 'fixture\n')],
+  ];
+  for (const [label, mutate] of cases) {
+    const { repo, base } = fixture();
+    mutate(repo);
+    commit(repo);
+    // The storefront fails safe; the other two are unaffected by storefront/.
+    expectDecision(repo, 'storefront', base, 'BUILD', { message: label });
+    expectDecision(repo, 'marketing', base, 'IGNORE', { message: label });
+    // Every file mutated above is itself a storefront runtime input, so the
+    // classifier alone already answers BUILD and the assertions above would hold
+    // with inspectStorefront deleted. Re-run each case where only the guard can
+    // produce the BUILD.
+    guardOnly(mutate, label);
+  }
+});
+
+// STAGE 7 (R1) BLOCKER, kept as the tsconfig-boundary regression. Historically a
+// widened tsconfig passed inspection and a later tests-only change then IGNOREd.
+// R2 independently makes that change BUILD by classification, so what this test
+// still proves is narrower and explicit: an unsupported tsconfig must fail
+// INSPECTION. The reason assertion is what keeps it honest — a classification
+// BUILD would report relevant_changes and fail here.
+test('24 REGRESSION a tests-widening tsconfig cannot produce a tests-only IGNORE', () => {
+  const unsafe = [
+    // TypeScript's own default when include is omitted, written out.
+    ['default **/* include', { ...STOREFRONT_TSCONFIG, include: ['**/*.ts', '**/*.tsx'] }],
+    ['include omitted entirely', { compilerOptions: STOREFRONT_TSCONFIG.compilerOptions, exclude: ['tests'] }],
+    ['whole Root Directory included', { ...STOREFRONT_TSCONFIG, include: ['.'] }],
+    ['tests named in include', { ...STOREFRONT_TSCONFIG, include: ['app', 'src', 'tests'] }],
+    ['a tests subdirectory included', { ...STOREFRONT_TSCONFIG, include: ['app', 'src', 'tests/unit'] }],
+    // exclude is the only thing the fixture relied on, and it only subtracts.
+    ['tests exclusion removed from a broad include', { ...STOREFRONT_TSCONFIG, include: ['.'], exclude: [] }],
+    // files[] adds to the program independently of include.
+    ['files[] naming a test setup', { ...STOREFRONT_TSCONFIG, files: ['tests/setup.ts'] }],
+    // extends can inherit an include this parser never sees.
+    ['include inherited through extends', { extends: './tests/tsconfig.base.json', include: ['app', 'src'] }],
+    ['project references', { ...STOREFRONT_TSCONFIG, references: [{ path: './tests' }] }],
+    // Ambient declarations enter the program without any import.
+    ['typeRoots inside tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', typeRoots: ['./tests/types'] } }],
+    ['types inside tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', types: ['./tests/globals'] } }],
+    ['rootDirs reaching tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', rootDirs: ['./src', './tests'] } }],
+    // The alias step 8 resolves as storefront/src, aimed at tests instead.
+    ['alias remapped into tests', { ...STOREFRONT_TSCONFIG, compilerOptions: { baseUrl: '.', paths: { '@/*': ['./tests/*'] } } }],
+  ];
+  for (const [label, tsconfig] of unsafe) {
+    const { repo } = fixture();
+    // 1-2. The widening is committed. tsconfig.json is a storefront runtime
+    //      input, so that commit BUILDs on its own, as the report describes.
+    put(repo, 'storefront/tsconfig.json', json(tsconfig));
+    const widened = commit(repo);
+    // 3. A later commit changes ONLY a TypeScript file under storefront/tests.
+    put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
+    commit(repo);
+    // 4. Inspection must reject the contract. Guards run before classification in
+    //    decide(), so a guard reason here proves the guard, not the R2 rule.
+    const result = expectDecision(repo, 'storefront', widened, 'BUILD');
+    assert.ok(['unsupported_build_contract', 'unsupported_graph'].includes(result.reason),
+      `${label}: expected the unsafe tsconfig to fail inspection, got ${result.reason}`);
+    // Under R2 the changed tests file is relevant, so classification could answer
+    // BUILD by itself. An empty categories map proves the guard threw FIRST and the
+    // classification loop never ran, which is the only thing this test claims.
+    assert.deepEqual(result.categories, {}, `${label}: guard must short-circuit classification`);
+    // The unsafe storefront contract must not leak into the other two projects.
+    expectDecision(repo, 'marketing', widened, 'IGNORE');
+    expectDecision(repo, 'product', widened, 'IGNORE');
+  }
+});
+
+// The other half of the blocker, and the reason the tsconfig fix is a boundary
+// proof rather than "BUILD on anything tsconfig-shaped": a legitimate include
+// shape must PASS inspection. Under R2 a storefront-local change BUILDs the
+// storefront by classification, so the discriminator is the REASON: a safe shape
+// must yield relevant_changes, never a guard reason. The other two projects must
+// still be untouched, which is the cross-project fan-out this ticket exists to
+// prevent.
+test('24 safe tsconfig shapes pass inspection and never fan out', () => {
+  const safe = [
+    ['bare directories', ['app', 'src']],
+    ['explicitly relative directories', ['./app', './src']],
+    ['trailing globs under a safe root', ['app/**/*.tsx', 'src/**/*.ts']],
+    // What `next build` writes back into tsconfig.json; both are generated,
+    // neither overlaps an ignored root.
+    ['next generated entries', ['next-env.d.ts', '.next/types/**/*.ts', 'app', 'src']],
+  ];
+  for (const [label, include] of safe) {
+    const { repo } = fixture();
+    put(repo, 'storefront/tsconfig.json', json({ ...STOREFRONT_TSCONFIG, include }));
+    // A marker keeps the configuring commit non-empty: the first shape is
+    // byte-identical to the fixture, and an empty commit aborts git.
+    put(repo, 'docs/tsconfig-case.md', `# ${label}
+`);
+    const configured = commit(repo);
+    put(repo, 'storefront/tests/shell.spec.ts', 'export const probe = 1;\n');
+    put(repo, 'storefront/docs/notes.md', '# fixture\n');
+    commit(repo);
+    const { output, stdout } = invoke(repo, 'storefront', configured);
+    assert.equal(output.decision, 'BUILD', `${label}: ${stdout}`);
+    // relevant_changes, NOT a guard reason: the safe shape passed inspection.
+    assert.equal(output.reason, 'relevant_changes', `${label}: ${stdout}`);
+    expectDecision(repo, 'marketing', configured, 'IGNORE');
+    expectDecision(repo, 'product', configured, 'IGNORE');
+  }
+});
+
+// Stage 7 hardening 1: allowed keys were not checked for approved VALUES. A
+// foreign ignoreCommand means the project is filtered by something other than
+// this engine; `exit 0` would make it never build at all.
+test('24 storefront deployment values are pinned, not merely allowed', () => {
+  const { outputDirectory, ignoreCommand, ...withoutBoth } = STOREFRONT_VERCEL;
+  const cases = [
+    ['a different outputDirectory', { ...STOREFRONT_VERCEL, outputDirectory: 'dist' }],
+    ['outputDirectory omitted', { ...withoutBoth, ignoreCommand }],
+    ['an always-ignore ignoreCommand', { ...STOREFRONT_VERCEL, ignoreCommand: 'exit 0' }],
+    ['the marketing selector', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('storefront', 'marketing') }],
+    ['a different engine path', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('../tools', '../other') }],
+    ['ignoreCommand omitted', { ...withoutBoth, outputDirectory }],
+  ];
+  for (const [label, config] of cases) {
+    guardOnly((repo) => put(repo, 'storefront/vercel.json', json(config)), label);
+  }
+});
+
+// Stage 7 hardening 2: the runtime pin. No approved Node value exists to
+// validate at 001A, so the Vercel project's Node.js Version setting stays
+// authoritative (DEPLOYMENT.md §15) and the engine only bounds the shape. What
+// matters for correctness is that neither file is ever read to decide relevance:
+// both are storefront_runtime, so any edit BUILDs whatever it says.
+test('24 the storefront Node pin is shape-bounded and never trusted for relevance', () => {
+  const manifest = JSON.parse(STOREFRONT_FILES['storefront/package.json']);
+  for (const [label, engines] of [
+    ['a non-string node value', { node: 22 }],
+    ['an unrecognised engine key', { node: '22.x', npm: '10.x' }],
+    ['an array instead of an object', ['22.x']],
+  ]) {
+    guardOnly((repo) => put(repo, 'storefront/package.json', json({ ...manifest, engines })), label);
+  }
+  // A well-formed pin passes, and changing either file BUILDs the storefront
+  // alone by classification — the value itself is never interpreted.
+  const { repo, base } = fixture({ seed: (target) => put(target, 'storefront/package.json', json({ ...manifest, engines: { node: '22.x' } })) });
+  put(repo, 'storefront/.nvmrc', '22\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'BUILD');
+});
+
+// STAGE 7 R2. Under a fully VALID contract the BUILD can only come from
+// classification, which is precisely the R2 rule: every storefront-local path is
+// relevant to the storefront. This originally wired the fixture into the build
+// with node:fs to motivate consumption; R3 forbids that import, and the rule never
+// depended on proving consumption in the first place — it holds because the engine
+// does not model filesystem reads at all.
+test('24 REGRESSION a storefront-local change BUILDs by classification', () => {
+  const { repo, base } = fixture({ seed: (target) => put(target, 'storefront/tests/fixture.json', json({ headline: 'before' })) });
+  // The ONLY change is a storefront-local file under a valid contract.
+  put(repo, 'storefront/tests/fixture.json', json({ headline: 'after' }));
+  commit(repo);
+  const result = expectDecision(repo, 'storefront', base, 'BUILD');
+  // A guard reason here would mean inspection rejected the contract, not that the
+  // root is build-relevant — the assertion that keeps this test about R2.
+  assert.equal(result.reason, 'relevant_changes');
+  assert.deepEqual(result.categories, { storefront_local: 1 });
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  expectDecision(repo, 'product', base, 'IGNORE');
+});
+
+// STAGE 7 R3 BLOCKER. R2 made everything under storefront/ relevant, which leaves
+// the mirror-image hole: storefront build-time code reading a repository path
+// OUTSIDE storefront/, where a later change is correctly irrelevant to the
+// storefront classifier. Vercel's checkout contains those files (Include files
+// outside Root Directory is enabled so the ignore command can read ../tools/
+// vercel/), so this is reachable. R3 closes it at the source contract instead of
+// analysing filesystem reads: a static export needs no Node builtin, so importing
+// one is an unsupported contract and BUILDs.
+test('24 R3 REGRESSION storefront source reading an external repo path cannot IGNORE it', () => {
+  const external = 'docs/storefront-build-input.json';
+  // Seeded into BOTH compared trees, so the unsafe source is not itself the change.
+  const { repo, base } = fixture({
+    seed: (target) => {
+      put(target, external, json({ headline: 'before' }));
+      put(target, 'storefront/app/page.tsx', "import { readFileSync } from 'node:fs';\nconst input = JSON.parse(readFileSync('../../docs/storefront-build-input.json', 'utf8'));\nexport default function Page() { return input.headline; }\n");
+    },
+  });
+  // The ONLY change is the external path the storefront build reads.
+  put(repo, external, json({ headline: 'after' }));
+  commit(repo);
+  const result = expectDecision(repo, 'storefront', base, 'BUILD');
+  assert.equal(result.reason, 'unsupported_graph');
+  // The category map must NOT be what saved this: docs/ is irrelevant to every
+  // selector, so classification alone returns IGNORE. An empty map proves
+  // inspection rejected the contract BEFORE the classification loop ran.
+  assert.deepEqual(result.categories, {});
+  // And the unsafe storefront contract must not drag the other two projects in.
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  expectDecision(repo, 'product', base, 'IGNORE');
+});
+
+// Each case is seeded into both trees with only docs/ changed, so the classifier's
+// own answer is IGNORE and only inspection can produce the BUILD.
+test('24 R3 Node builtin imports fail storefront inspection', () => {
+  for (const builtin of ['node:fs', 'node:fs/promises', 'node:child_process', 'node:module',
+    'node:worker_threads', 'node:vm', 'node:process', 'node:os', 'fs', 'child_process']) {
+    guardOnly((target) => put(target, 'storefront/app/page.tsx',
+      `import x from '${builtin}';\nexport default function P() { return x; }\n`), `builtin ${builtin}`);
+  }
+});
+
+// Next's default pageExtensions include .jsx, and TypeScript also builds .mts and
+// .cts. A module the scan never reads is an escape hatch whatever the contract
+// says, so the contract must cover every extension the build can execute.
+test('24 R3 the module scan covers every executable storefront extension', () => {
+  for (const ext of ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts']) {
+    guardOnly((target) => put(target, `storefront/app/probe.${ext}`,
+      "import { readFileSync } from 'node:fs';\nexport const probe = readFileSync;\n"), `extension .${ext}`);
+  }
+});
+
+// An adversarial review of the R3 contract found four more escape hatches, each
+// reachable in ORDINARY front-end or monorepo code rather than by deliberate
+// circumvention, plus the false BUILD that closing them naively causes. All five
+// are pinned below; each was observed failing before the fix.
+
+// The other direction first: scanning storefront/ by default must NOT hold lint
+// and test tooling to the front-end import contract. Those configs legitimately
+// import devDependencies, so a naive widening BUILDs the storefront on EVERY run.
+test('24 R3 tooling config does not permanently BUILD the storefront', () => {
+  const { repo, base } = fixture({ seed: (target) => {
+    put(target, 'storefront/eslint.config.mjs', "import js from '@eslint/js';\nexport default [js.configs.recommended];\n");
+    put(target, 'storefront/vitest.config.ts', "import { defineConfig } from 'vitest/config';\nexport default defineConfig({});\n");
+  }});
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+// npm runs pre/post hooks around `npm ci` and `npm run build` itself, so a
+// lifecycle entry is arbitrary code inside the build and outside the contract.
+test('24 R3 npm lifecycle scripts fail storefront inspection', () => {
+  const manifest = JSON.parse(STOREFRONT_FILES['storefront/package.json']);
+  for (const [label, scripts] of [
+    ['prebuild hook', { build: 'next build', prebuild: 'node ../tools/gen.mjs' }],
+    ['postinstall hook', { build: 'next build', postinstall: 'node ./scripts/fetch.mjs' }],
+    ['prepare hook', { build: 'next build', prepare: 'node ./scripts/fetch.mjs' }],
+  ]) {
+    guardOnly((target) => put(target, 'storefront/package.json', json({ ...manifest, scripts })), `scripts ${label}`);
+  }
+});
+
+// storefront/pages is a first-class Next router that `next build` compiles with no
+// config change, yet it sat outside the enumerated module roots. Enumerating code
+// directories is the bug; the scan now starts from the storefront root.
+test('24 R3 the pages router is scanned like any other storefront module', () => {
+  guardOnly((target) => put(target, 'storefront/pages/index.jsx',
+    "import { readFileSync } from 'node:fs';\nexport default function P() { return readFileSync; }\n"), 'pages router');
+});
+
+// Root-level config modules execute during the build and were likewise unread.
+test('24 R3 root-level storefront config modules are scanned', () => {
+  guardOnly((target) => put(target, 'storefront/postcss.config.mjs',
+    "import { readFileSync } from 'node:fs';\nexport default { plugins: [], probe: readFileSync };\n"), 'postcss config');
+  guardOnly((target) => put(target, 'storefront/instrumentation.ts',
+    "import { readFileSync } from 'node:fs';\nexport function register() { return readFileSync; }\n"), 'instrumentation');
+});
+
+// The same safeRelative blind spot R1 found in `paths`, still open in `include`:
+// '../docs' normalises to 'docs', which is inside the repository and therefore not
+// an escape by that test. Containment has to be asserted positively.
+test('24 R3 tsconfig entries may not reach outside the Root Directory', () => {
+  for (const [label, include] of [
+    ['parent docs', ['app', 'src', '../docs']],
+    ['sibling site source', ['app', 'src', '../site/src']],
+  ]) {
+    guardOnly((target) => put(target, 'storefront/tsconfig.json',
+      json({ ...STOREFRONT_TSCONFIG, include })), `tsconfig ${label}`);
+  }
+});
+
+test('24 R3 direct Node builtin acquisition fails storefront inspection', () => {
+  const cases = [
+    ['getBuiltinModule', "const fs = process.getBuiltinModule('fs');\nexport default function P() { return fs; }\n"],
+    ['optional-chained getBuiltinModule', "const fs = process?.getBuiltinModule?.('fs');\nexport default function P() { return fs; }\n"],
+    ['quoted index', "const fs = process['getBuiltinModule']('fs');\nexport default function P() { return fs; }\n"],
+    ['mainModule', "const m = process.mainModule;\nexport default function P() { return m; }\n"],
+    ['binding', "const b = process.binding('fs');\nexport default function P() { return b; }\n"],
+    ['_linkedBinding', "const b = process._linkedBinding('fs');\nexport default function P() { return b; }\n"],
+  ];
+  for (const [label, source] of cases) {
+    guardOnly((target) => put(target, 'storefront/app/page.tsx', source), `acquisition ${label}`);
+  }
+});
+
+// The other half: the contract must still ADMIT a real front-end. A storefront
+// IGNORE here can only happen if inspection passed, because every guard failure
+// BUILDs — so this is what stops R3 from being "reject everything".
+test('24 R3 safe front-end imports pass inspection and ignore unrelated docs', () => {
+  const { repo, base } = fixture({
+    seed: (target) => {
+      put(target, 'storefront/components/shell.ts', "export const shell = 'fixture';\n");
+      put(target, 'storefront/app/page.tsx', "import React from 'react';\nimport ReactDOM from 'react-dom';\nimport Link from 'next/link';\nimport { hello } from '@/lib/hello';\nimport { shell } from '../components/shell';\nexport default function Page() { return [React, ReactDOM, Link, hello, shell]; }\n");
+    },
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+// process.env is how a Next front end reads build-time configuration; the handle
+// guard must not collide with it.
+// And a storefront built on the pages router must still pass: the widened scan
+// must reject the contract, not the router.
+test('24 R3 a pages-router storefront still passes inspection', () => {
+  const { repo, base } = fixture({
+    seed: (target) => put(target, 'storefront/pages/index.tsx', "import Link from 'next/link';\nimport { hello } from '@/lib/hello';\nexport default function Home() { return [Link, hello]; }\n"),
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('24 R3 process.env stays allowed in storefront source', () => {
+  const { repo, base } = fixture({
+    seed: (target) => put(target, 'storefront/app/page.tsx',
+      "export default function Page() { return process.env.NEXT_PUBLIC_SITE_NAME; }\n"),
+  });
+  put(repo, 'docs/unrelated-note.md', '# fixture\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+// Structural: ONE relevance expression governs the entire storefront subtree, so no
+// path under storefront/ can be ignored by the storefront selector and none of them
+// can reach the other two projects. A defaulted or per-pattern rule would drift.
+test('24 R2 every storefront path builds the storefront and only the storefront', () => {
+  const paths = [
+    ['storefront/tests/fixture.json', 'storefront_local'],
+    ['storefront/tests/nested/deep/case.spec.ts', 'storefront_local'],
+    ['storefront/docs/tokens.ts', 'storefront_local'],
+    ['storefront/docs/brief.md', 'storefront_local'],
+    ['storefront/review/checklist.ts', 'storefront_local'],
+    ['storefront/scripts/generate-content.mjs', 'storefront_local'],
+    ['storefront/README.md', 'storefront_local'],
+    ['storefront/AGENTS.md', 'storefront_local'],
+    ['storefront/.gitignore', 'storefront_local'],
+    ['storefront/.env.example', 'storefront_local'],
+    ['storefront/eslint.config.mjs', 'storefront_local'],
+    ['storefront/.eslintrc.json', 'storefront_local'],
+    ['storefront/.prettierrc', 'storefront_local'],
+    ['storefront/vitest.config.ts', 'storefront_local'],
+    ['storefront/playwright.config.ts', 'storefront_local'],
+    ['storefront/app/page.tsx', 'storefront_runtime'],
+    ['storefront/styles/theme.css', 'storefront_runtime'],
+    ['storefront/.nvmrc', 'storefront_runtime'],
+    ['storefront/whatever.cfg', 'unknown_storefront_input'],
+    ['storefront/nested/unknown/thing.bin', 'unknown_storefront_input'],
+  ];
+  for (const [path, expected] of paths) {
+    const { repo, base } = fixture();
+    if (existsSync(join(repo, path))) appendFileSync(join(repo, path), '\n// R2 change\n');
+    else put(repo, path);
+    commit(repo);
+    const result = expectDecision(repo, 'storefront', base, 'BUILD');
+    assert.equal(result.reason, 'relevant_changes', `${path}: ${JSON.stringify(result)}`);
+    assert.deepEqual(result.categories, { [expected]: 1 }, `${path} category`);
+    expectDecision(repo, 'marketing', base, 'IGNORE');
+    expectDecision(repo, 'product', base, 'IGNORE');
+  }
+});
+
+test('24 a baseline without storefront fails the storefront safe', () => {
+  // The very first storefront Preview evaluated against a pre-001B main. It
+  // cannot happen in the Option B sequence; pinned here rather than discovered
+  // hosted.
+  const { repo } = fixture();
+  for (const file of Object.keys(STOREFRONT_FILES)) unlinkSync(join(repo, file));
+  const withoutStorefront = commit(repo);
+  for (const [file, text] of Object.entries(STOREFRONT_FILES)) put(repo, file, text);
+  commit(repo);
+  const result = expectDecision(repo, 'storefront', withoutStorefront, 'BUILD');
+  assert.equal(result.reason, 'unsupported_build_contract');
+});
+
+test('24 same-tree storefront self-check ignores', () => {
+  const { repo } = fixture();
+  const head = runGit(repo, ['rev-parse', 'HEAD']);
+  const result = expectDecision(repo, 'storefront', head, 'IGNORE');
+  assert.equal(result.reason, 'no_changes');
+});
+
+test('24 misspelled storefront selector is an invalid selector', () => {
+  const { repo, base } = fixture();
+  expectDecision(repo, 'storefrnt', base, 'BUILD');
 });
