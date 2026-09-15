@@ -7,7 +7,7 @@
 // and the head so the storefront guard passes and the decision comes from
 // classification, not from a fail-safe guard failure.
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +27,10 @@ function seedFixture() {
   // The real engine, the real product/marketing control files, and the REAL shell.
   const copy = [
     ENGINE, 'vercel.json', 'pubspec.yaml', 'pubspec.lock',
+    // Hash-pinned by inspectGraph (BUILD_SCRIPT_HASH). Omitting it makes the
+    // product selector fail safe to unsupported_graph, which looks like a
+    // decision but proves nothing.
+    'tools/vercel_build_web.sh',
     'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs',
   ];
   for (const rel of copy) {
@@ -135,13 +139,12 @@ const SCENARIOS = [
     id: 'D2', label: 'storefront config change (vercel.json)',
     mutate: (root) => {
       const file = path.join(root, 'storefront/vercel.json');
-      const config = JSON.parse(execFileSync('node', ['-e', `process.stdout.write(require('fs').readFileSync(${JSON.stringify(file)},'utf8'))`], { encoding: 'utf8' }));
-      config.trailingSlash = false;
-      config.cleanUrls = true;
+      const config = JSON.parse(readFileSync(file, 'utf8'));
+      // A genuinely textual config change: tighten a cache header value.
+      config.headers[1].headers[0].value = 'public, max-age=31536000, immutable, stale-while-revalidate=60';
       writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
     },
     expect: { marketing: 'IGNORE', product: 'IGNORE', storefront: 'BUILD' },
-    skipIfUnchanged: true,
   },
   {
     id: 'D3', label: 'storefront test change (a support root)',

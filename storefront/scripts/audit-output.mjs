@@ -92,6 +92,19 @@ export function auditOutput(outDir = OUT) {
       }
     }
   }
+  // No icon may be referenced while the text-only fallback is in force: a broken
+  // or unapproved icon URL must fail rather than 404 quietly in a browser.
+  for (const f of files) {
+    if (path.extname(f.path).toLowerCase() !== '.html') continue;
+    const html = readFileSync(f.path, 'utf8');
+    for (const m of html.matchAll(/<link[^>]+rel="[^"]*icon[^"]*"[^>]*>/gi)) {
+      problems.push(`${rel(f.path)} references an icon while the text-only fallback applies: ${m[0]}`);
+    }
+  }
+  if (existsSync(path.join(outDir, 'favicon.svg')) || existsSync(path.join(outDir, 'favicon.ico'))) {
+    problems.push('a favicon is present although the text-only fallback applies');
+  }
+
   // Evidence, not an assertion: documentation hosts referenced inside chunk text.
   const docHosts = new Set();
   for (const f of files) {

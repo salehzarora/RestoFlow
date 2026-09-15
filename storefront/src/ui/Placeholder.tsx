@@ -22,6 +22,10 @@ export function Placeholder({ locale }: { locale: Locale }) {
                 <Link
                   className="langLink"
                   href={pathOf(code)}
+                  // Sibling root layouts mean crossing locales is a full document
+                  // load, so an RSC prefetch is fetched and never used. Turning it
+                  // off removes speculative traffic the shell cannot benefit from.
+                  prefetch={false}
                   hrefLang={code}
                   lang={code}
                   dir={dirOf(code)}

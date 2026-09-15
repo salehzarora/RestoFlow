@@ -261,9 +261,21 @@ jobs:
           node scripts/audit-output.mjs
           node --test tests/output/output.test.mjs
 
+      # Dual-axis first-load gate, per direct-load route. A CI measurement that
+      # exceeds a ceiling is NOT authorised to re-baseline itself: the step fails,
+      # and the difference is reported for review.
+      - name: Storefront — first-load JS budget (uncompressed and Brotli)
+        working-directory: storefront
+        run: node scripts/measure-firstload.mjs
+
       - name: Storefront — three-project filter proof (real shell, different trees)
         working-directory: storefront
         run: node scripts/filter-proof.mjs
+
+      # The browser suite (tests/browser) and the isolated-copy comparison
+      # (scripts/isolated-build.mjs) are deliberately LOCAL gates: the first
+      # needs a downloaded browser, the second a second npm ci. Both are run
+      # before publication and recorded in the implementation report.
 
       - name: Storefront — generated files did not mutate tracked sources
         run: git diff --exit-code -- storefront

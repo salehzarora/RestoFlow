@@ -47,6 +47,13 @@ test('the CSP is restrictive where it can be, with only the recorded exceptions'
   assert.deepEqual(directives['img-src'], ["'self'", 'data:']);
   assert.ok('upgrade-insecure-requests' in directives);
 
+  // D5 RESOLVED WITH EVIDENCE: the real exported output needs no style
+  // exception. The plan proposed style-src 'self' 'unsafe-inline'; a Chromium
+  // run against the actual output with the committed headers reported zero
+  // style violations, and a deliberate style-src 'none' probe proved the
+  // detector fails when it should. So the tighter policy ships.
+  assert.deepEqual(directives['style-src'], ["'self'"]);
+
   // The single accepted script exception: Next emits inline hydration scripts
   // (self.__next_f.push) and a static export cannot mint a per-request nonce.
   // This is a bounded trade-off for a placeholder with no user content - NOT a
