@@ -6,12 +6,197 @@
   "outputDirectory": "apps/dashboard/build/web",
   "ignoreCommand": "if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi",
   "rewrites": [
-    { "source": "/pos/(.*)", "destination": "/pos/index.html" },
-    { "source": "/pos", "destination": "/pos/index.html" },
-    { "source": "/kds/(.*)", "destination": "/kds/index.html" },
-    { "source": "/kds", "destination": "/kds/index.html" },
-    { "source": "/kiosk/(.*)", "destination": "/kiosk/index.html" },
-    { "source": "/kiosk", "destination": "/kiosk/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/pos/(.*)",
+      "destination": "/pos/index.html"
+    },
+    {
+      "source": "/pos",
+      "destination": "/pos/index.html"
+    },
+    {
+      "source": "/kds/(.*)",
+      "destination": "/kds/index.html"
+    },
+    {
+      "source": "/kds",
+      "destination": "/kds/index.html"
+    },
+    {
+      "source": "/kiosk/(.*)",
+      "destination": "/kiosk/index.html"
+    },
+    {
+      "source": "/kiosk",
+      "destination": "/kiosk/index.html"
+    },
+    {
+      "source": "/((?!canvaskit/|canvaskit$).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/canvaskit.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/canvaskit.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/canvaskit.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/chromium/canvaskit.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/chromium/canvaskit.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/chromium/canvaskit.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/experimental_webparagraph/canvaskit.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/experimental_webparagraph/canvaskit.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/experimental_webparagraph/canvaskit.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm_heavy.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm_heavy.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/skwasm_heavy.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/wimp.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/wimp.js.symbols",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/wimp.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
   ]
 }

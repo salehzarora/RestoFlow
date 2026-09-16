@@ -32,6 +32,10 @@ function seedFixture() {
     // product selector fail safe to unsupported_graph, which looks like a
     // decision but proves nothing.
     'tools/vercel_build_web.sh',
+    // Consumed by the build tail, pinned by CANVASKIT_ASSEMBLER_HASH, and required
+    // to EXIST by inspectGraph. Omitting it fails the product selector closed the
+    // same way, so the fixture would prove nothing.
+    'tools/assemble_web_canvaskit.mjs',
     'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs',
   ];
   for (const rel of copy) {

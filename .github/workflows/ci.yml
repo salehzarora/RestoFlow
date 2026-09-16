@@ -48,6 +48,20 @@ jobs:
       - name: Tests — Vercel deployment filtering
         run: node --test tools/vercel/ignore-build.test.mjs
 
+      # The product build tail delegates to tools/assemble_web_canvaskit.mjs. The
+      # Node-only steps below run on the runner's built-in Node, use only the
+      # standard library, and contact nothing. No existing job, gate or timeout is
+      # weakened or replaced.
+      - name: Tests — CanvasKit engine assembly
+        run: node --test tools/assemble_web_canvaskit.test.mjs
+
+      # Controls for the release coupling checker itself, including the four
+      # false-pass cases an independent review demonstrated. Hermetic: every case
+      # builds a disposable copy plus a small SYNTHETIC pinned-SDK reference, so
+      # this runs on a source-only checkout and contacts nothing.
+      - name: Tests — CanvasKit release checker controls
+        run: node --test tools/canvaskit_release_check.test.mjs
+
       - name: Set up Flutter (bundles Dart)
         uses: subosito/flutter-action@v2
         with:
@@ -59,6 +73,26 @@ jobs:
         run: |
           flutter --version
           dart --version
+
+      # The engine revision and the CanvasKit distribution must agree with the
+      # PINNED SDK, not merely with themselves. That reference only exists once
+      # the SDK's own web artifacts are present, so this gate runs AFTER the
+      # setup above rather than on a bare checkout.
+      #
+      # `precache --web` fetches the already-pinned 3.44.2 SDK's own web
+      # artifacts; it is not an SDK upgrade, a new dependency or a web build, and
+      # the setup action caches it. A full four-app build is deliberately NOT run
+      # for this guard.
+      #
+      # An earlier revision of this gate ran on a bare checkout and could report
+      # a clean pass while doing no coupling work at all. It now fails closed:
+      # `--mode required` treats a missing authoritative reference as INCOMPLETE.
+      - name: Guardrail — CanvasKit revision and config agree
+        run: |
+          flutter precache --web
+          SDK="${FLUTTER_ROOT:-$(dirname "$(dirname "$(command -v flutter)")")}"
+          echo "authoritative reference SDK: $SDK"
+          node tools/canvaskit_release_check.mjs --mode required --sdk "$SDK"
 
       # Resolve the whole pub workspace (incl. the local `melos` dev-dependency
       # and the Flutter-SDK members) so `dart run melos ...` works on a fresh

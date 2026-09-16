@@ -64,4 +64,24 @@ cp -r apps/pos/build/web apps/dashboard/build/web/pos
 cp -r apps/kds/build/web apps/dashboard/build/web/kds
 cp -r apps/kiosk/build/web apps/dashboard/build/web/kiosk
 
+# 6. Publish ONE engine-revision-addressed CanvasKit distribution.
+#
+#    Each app build above emits its own complete copy of the CanvasKit engine,
+#    so the assembled output would otherwise ship four byte-identical 38 MB
+#    distributions. The authored apps/*/web/flutter_bootstrap.js templates point
+#    all four roles at /canvaskit/<engineRevision>/ instead, where the revision is
+#    read at run time from the SDK's own generated build config.
+#
+#    The helper PROVES the four distributions are byte-identical before removing
+#    anything and fails closed on any doubt, so a failure here aborts the build
+#    rather than publishing a partial engine. It is pinned by
+#    CANVASKIT_ASSEMBLER_HASH in tools/vercel/ignore-build.mjs and classified
+#    there as a product build input, so editing it can never be a false IGNORE.
+#
+#    Node is already required by this project on the product build path: the
+#    vercel.json ignoreCommand runs `node tools/vercel/ignore-build.mjs product`.
+#    The helper uses the Node standard library only - no package.json, no
+#    lockfile, no node_modules, and nothing from storefront/.
+node tools/assemble_web_canvaskit.mjs apps/dashboard/build/web
+
 echo "web build assembled: / (dashboard), /pos (POS), /kds (KDS), /kiosk (Kiosk)"
