@@ -40,15 +40,39 @@ void main() {
         expect(r.dest, '/kiosk/index.html', reason: r.source);
       }
 
-      // Ordering: every app-specific rewrite precedes the final catch-all, and
-      // the catch-all is LAST (otherwise it shadows every subtree).
-      expect(sources.last, '/(.*)');
+      // Ordering: every app-specific rewrite precedes the final dashboard
+      // fallback, and that fallback is LAST (otherwise it shadows every
+      // subtree). The fallback is identified by its DESTINATION rather than by
+      // a literal source pattern, because the source legitimately evolves — it
+      // currently carves out the /canvaskit engine namespace — and that
+      // namespace contract is owned by the CanvasKit coupling gate, not here.
+      final fallbackIndexes = <int>[
+        for (var i = 0; i < rewrites.length; i++)
+          if (rewrites[i].dest == '/index.html') i,
+      ];
+      expect(
+        fallbackIndexes,
+        hasLength(1),
+        reason: 'exactly one dashboard fallback rewrite must exist',
+      );
+      final fallbackIndex = fallbackIndexes.single;
+      expect(
+        fallbackIndex,
+        rewrites.length - 1,
+        reason: 'the dashboard fallback must be the LAST rewrite',
+      );
       expect(
         sources.indexOf('/kiosk/(.*)'),
         lessThan(sources.indexOf('/kiosk')),
         reason: 'deep-link rewrite must precede the exact match',
       );
-      expect(sources.indexOf('/kiosk'), lessThan(sources.indexOf('/(.*)')));
+      for (final source in ['/kiosk/(.*)', '/kiosk']) {
+        expect(
+          sources.indexOf(source),
+          lessThan(fallbackIndex),
+          reason: '$source must precede the dashboard fallback',
+        );
+      }
 
       // The existing three-app surface is preserved untouched.
       expect(sources, containsAll(['/pos', '/pos/(.*)', '/kds', '/kds/(.*)']));
