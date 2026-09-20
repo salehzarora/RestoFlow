@@ -1,0 +1,100 @@
+/* Language disclosure. No JavaScript: <details> does the open/close. */
+
+.wrap {
+  position: relative;
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--glassLine);
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  color: var(--onhero);
+  font: 800 13px / 1 var(--font);
+  cursor: pointer;
+  list-style: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Remove the native disclosure triangle in every engine. */
+.control::-webkit-details-marker {
+  display: none;
+}
+
+.control::marker {
+  content: '';
+}
+
+.glyph {
+  white-space: nowrap;
+}
+
+/* Chevron drawn in CSS so it needs no extra SVG node. */
+.caret {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--d-standard) var(--e-standard);
+}
+
+.wrap[open] .caret {
+  transform: rotate(225deg) translateY(-2px);
+}
+
+.menu {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 6;
+  min-width: 168px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--glassLine);
+  border-radius: var(--r-control);
+  background: var(--glassDock, var(--sf));
+  box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: sfUp var(--d-standard) var(--e-standard) both;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--tx);
+  font: 700 14px / 1.2 var(--font);
+  text-decoration: none;
+}
+
+.itemActive {
+  background: var(--accs);
+  color: var(--acct);
+}
+
+.check {
+  display: inline-flex;
+  color: var(--acct);
+}
+
+.check svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

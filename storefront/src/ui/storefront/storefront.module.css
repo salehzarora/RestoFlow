@@ -1,0 +1,214 @@
+/*
+ * Storefront foundations: non-colour design tokens, base rules and the shared
+ * keyframe set from TOKENS.json.
+ *
+ * COLOUR tokens are NOT declared here. They are derived per tenant by
+ * src/theme/buildTheme.ts and applied to this element with CSSOM
+ * setProperty (proven compatible with `style-src 'self'` by PG-1/U-8).
+ * Neutral fallbacks below keep the first paint legible before that runs, and
+ * they are BIZBOT platform colours, never a tenant's.
+ */
+
+.root {
+  /* --- neutral first-paint fallbacks (platform, not tenant) --- */
+  --bg: #101816;
+  --sf: #172320;
+  --sf2: #1f302b;
+  --tx: #fff4e6;
+  --tx2: #d8cec2;
+  --tx3: #a79c90;
+  --hair: rgba(255, 244, 230, 0.1);
+  --hair2: rgba(255, 244, 230, 0.2);
+  --hero: #13322a;
+  --onhero: #ffffff;
+  --onhero2: rgba(255, 255, 255, 0.78);
+  --acc: #e07b2c;
+  --onacc: #0b1512;
+  --acct: #e07b2c;
+  --ring: #e07b2c;
+  --accA: rgba(224, 123, 44, 0.16);
+  --accB: rgba(224, 123, 44, 0.45);
+  --ok: #43e3ac;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --cta: linear-gradient(135deg, #e5904e 0%, #e07b2c 52%, #b86524 100%);
+  --ctaSh: 0 12px 28px -8px rgba(224, 123, 44, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --glow: 0 0 14px rgba(224, 123, 44, 0.55);
+  --heroGlow: radial-gradient(90% 70% at 50% 108%, rgba(224, 123, 44, 0.4), transparent 72%);
+  --glass: rgba(19, 50, 42, 0.74); /* NEUTRAL_PRIMARY #13322a at 74% */
+  --glassLine: rgba(255, 255, 255, 0.14);
+
+  /* --- radii --- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-control: 12px;
+  --r-card: 14px;
+  --r-surface: 18px;
+  --r-module: 20px;
+  --r-story: 24px;
+  --r-pill: 999px;
+
+  /* --- spacing --- */
+  --gutter: 16px;
+
+  /* --- motion (TOKENS.json -> motion) --- */
+  --d-micro: 120ms;
+  --d-standard: 200ms;
+  --d-emphasis: 300ms;
+  --d-reveal: 460ms;
+  --d-pop: 560ms;
+  --d-sheen: 4200ms;
+  --d-halo: 2600ms;
+  --d-ken: 24000ms;
+  --e-standard: cubic-bezier(0.22, 0.9, 0.26, 1);
+  --e-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --e-sheen: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- type --- */
+  /* The fallback inside var() matters: without it, an undefined --sf-font
+     makes every `font:` shorthand that references it INVALID, and the browser
+     drops the whole declaration including its size and weight. */
+  --font: var(--sf-font, 'Segoe UI'), Tahoma, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Focus: 3px ring at 2px offset on every interactive element. */
+.root :focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* LTR islands inside RTL text: prices, codes, phones, times. */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- keyframes (TOKENS.json -> motion.keyframes) --- */
+@keyframes sfRise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sfPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sfPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes sfDot {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 1;
+  }
+}
+
+@keyframes sfHalo {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes sfKen {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+/*
+ * prefers-reduced-motion overrides all three authored motion modes to a single
+ * frame, exactly as TOKENS.json specifies.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+  }
+}
