@@ -14,22 +14,32 @@ import { storefrontMessages } from '@/i18n/storefront';
 import { CheckIcon } from './icons';
 import styles from './LanguageMenu.module.css';
 
-const GLYPH: Readonly<Record<Locale, string>> = { ar: 'عربي', he: 'עברית', en: 'EN' };
+/** The wide trigger used on the intro screen. */
+const WORD: Readonly<Record<Locale, string>> = { ar: 'عربي', he: 'עברית', en: 'EN' };
+/** The compact circular trigger used in the hero header (38-42px per the handoff). */
+const GLYPH: Readonly<Record<Locale, string>> = { ar: 'ع', he: 'עב', en: 'EN' };
 
 export function LanguageMenu({
   locale,
   hrefFor,
+  variant = 'wide',
 }: {
   locale: Locale;
   hrefFor: (target: Locale) => string;
+  /** `wide` on the intro; `circle` in the hero header, where space is fixed. */
+  variant?: 'wide' | 'circle';
 }) {
   const m = storefrontMessages(locale);
+  const circle = variant === 'circle';
 
   return (
     <details className={styles.wrap}>
-      <summary className={styles.control} aria-label={m.langLabel}>
-        <span className={styles.glyph}>{GLYPH[locale]}</span>
-        <span className={styles.caret} aria-hidden="true" />
+      <summary
+        className={circle ? `${styles.control} ${styles.controlCircle}` : styles.control}
+        aria-label={m.langLabel}
+      >
+        <span className={styles.glyph}>{circle ? GLYPH[locale] : WORD[locale]}</span>
+        {circle ? null : <span className={styles.caret} aria-hidden="true" />}
       </summary>
       <ul className={styles.menu}>
         {LOCALES.map((code) => {

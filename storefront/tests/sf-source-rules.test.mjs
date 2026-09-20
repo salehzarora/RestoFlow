@@ -5,7 +5,8 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,11 +37,22 @@ function code(file) {
     .replace(/(^|[^:])\/\/.*/gm, '$1 ');
 }
 const ALL = [...walk(path.join(ROOT, 'app')), ...walk(path.join(ROOT, 'src'))];
+// The locale dictionaries are the likeliest place for an invisible bidi
+// character to hide, because they are the only files that legitimately contain
+// right-to-left text. They live in messages/, outside app/ and src/, so the
+// source-hygiene guard below scans them explicitly (Phase A review, MINOR-2).
+const DICTIONARIES = walk(path.join(ROOT, 'messages')).filter((f) => f.endsWith('.json'));
+const PUBLIC_JSON = walk(path.join(ROOT, 'public')).filter((f) => f.endsWith('.json'));
 const TSX = ALL.filter((f) => /\.tsx?$/.test(f));
 const CSS = ALL.filter((f) => f.endsWith('.css'));
 
 // The demo tenant's data legitimately contains its own brand colours.
-const FIXTURE_LAYER = ['src/source/fixtures.ts'];
+const FIXTURE_LAYER = [
+  'src/source/fixtures.ts',
+  'src/source/home.ts',
+  'src/source/menu-fixture.ts',
+  'src/source/scenarios.ts',
+];
 
 test('no app file emits an inline style attribute or style prop', () => {
   // `style-src 'self'` has no 'unsafe-inline': an inline style is silently
@@ -98,7 +110,7 @@ test('no Maps Burger derived colour is hard-coded in the UI or stylesheets', () 
 test('the fixture scenario switch never leaves the fixture layer', () => {
   for (const f of [...TSX, ...CSS]) {
     if (FIXTURE_LAYER.includes(rel(f))) continue;
-    const src = readFileSync(f, 'utf8');
+    const src = code(f);
     assert.ok(!/\bfx=/.test(src), `${rel(f)}: ?fx= outside the fixture layer`);
     assert.ok(!/applyScenario|FIXTURE_SCENARIOS/.test(src), `${rel(f)}: scenario API leaked`);
   }
@@ -157,24 +169,94 @@ test('every storefront stylesheet is a CSS Module', () => {
   }
 });
 
-test('no source file contains a literal control or bidi-override character', () => {
-  // Writing these as escape sequences is one edit away from writing them as the
-  // characters themselves. That makes the file BINARY to git - unreviewable in a
-  // diff - and a stray bidi override can reorder how the source itself reads.
-  // Found for real in this phase, in sanitize.ts and its own test.
-  const offending = (cp) =>
-    (cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) ||
-    cp === 0x7f ||
-    (cp >= 0x202a && cp <= 0x202e) ||
-    (cp >= 0x2066 && cp <= 0x2069);
-  for (const f of [...TSX, ...CSS, ...ALL.filter((x) => x.endsWith('.json'))]) {
-    const text = readFileSync(f, 'utf8');
-    for (let i = 0; i < text.length; i += 1) {
-      const cp = text.codePointAt(i);
-      assert.ok(
-        !offending(cp),
-        `${rel(f)}: literal U+${cp.toString(16).padStart(4, '0').toUpperCase()} at offset ${i}`,
+/**
+ * Characters that must never appear LITERALLY in source.
+ *
+ * Writing them as escape sequences is one careless edit away from writing the
+ * characters themselves: that makes a file BINARY to git, so its diff cannot be
+ * reviewed, and a stray bidi override can reorder how the surrounding source
+ * reads. Both happened for real in Phase A.
+ */
+function offendingCodePoint(cp) {
+  return (
+    (cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) || // C0, keeping tab/LF/CR
+    cp === 0x7f || // DEL
+    (cp >= 0x202a && cp <= 0x202e) || // bidi embeddings and overrides
+    (cp >= 0x2066 && cp <= 0x2069) || // bidi isolates
+    cp === 0x200e || // LRM
+    cp === 0x200f || // RLM
+    cp === 0xfeff // BOM / zero-width no-break space
+  );
+}
+
+/** Every literal offender in one file, as {codePoint, offset}. */
+function scanFile(file) {
+  const text = readFileSync(file, 'utf8');
+  const hits = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const cp = text.codePointAt(i);
+    if (offendingCodePoint(cp)) hits.push({ codePoint: cp, offset: i });
+  }
+  return hits;
+}
+
+const HYGIENE_SCOPE = [...TSX, ...CSS, ...DICTIONARIES, ...PUBLIC_JSON,
+  ...ALL.filter((x) => x.endsWith('.json'))];
+
+test('the source-hygiene guard actually covers the locale dictionaries', () => {
+  // Guards against the Phase A MINOR-2 regression: the scope must include the
+  // RTL dictionaries, or the check is vacuous exactly where it matters most.
+  assert.ok(DICTIONARIES.length >= 6, `expected the locale dictionaries, found ${DICTIONARIES.length}`);
+  const covered = new Set(HYGIENE_SCOPE.map(rel));
+  for (const code of ['ar', 'he', 'en']) {
+    assert.ok(covered.has(`messages/${code}.json`), `messages/${code}.json must be scanned`);
+    assert.ok(covered.has(`messages/storefront.${code}.json`), `messages/storefront.${code}.json must be scanned`);
+  }
+  assert.ok(HYGIENE_SCOPE.length >= 45, `scope looks too small: ${HYGIENE_SCOPE.length}`);
+});
+
+test('no source file or dictionary contains a literal control or bidi character', () => {
+  for (const f of HYGIENE_SCOPE) {
+    for (const hit of scanFile(f)) {
+      assert.fail(
+        `${rel(f)}: literal U+${hit.codePoint.toString(16).padStart(4, '0').toUpperCase()} at offset ${hit.offset}`,
       );
     }
+  }
+});
+
+test('NEGATIVE CONTROL: the guard fails on an injected bad dictionary', () => {
+  // A clean run only means something if the scanner can see a dirty file. The
+  // fixture is BUILT AT RUNTIME from code points, so this repository never
+  // contains the literal characters it is testing for, and it is removed again
+  // immediately.
+  const dir = mkdtempSync(path.join(tmpdir(), 'sf-hygiene-'));
+  const ch = (cp) => String.fromCharCode(cp);
+  try {
+    const cases = [
+      ['rlo', 0x202e, 'bidi override'],
+      ['lri', 0x2066, 'bidi isolate'],
+      ['nul', 0x0000, 'C0 control'],
+      ['del', 0x007f, 'DEL'],
+      ['rlm', 0x200f, 'right-to-left mark'],
+      ['bom', 0xfeff, 'zero-width no-break space'],
+    ];
+    for (const [name, cp, label] of cases) {
+      const file = path.join(dir, `bad-${name}.json`);
+      // Written as RAW text, not via JSON.stringify: stringify escapes C0
+      // controls back into escape sequences, which would leave this fixture
+      // clean and the negative control vacuous. The guard is a character scan,
+      // so the character has to actually be present in the bytes.
+      writeFileSync(file, `{"welcome":"a${ch(cp)}b"}`, 'utf8');
+      const hits = scanFile(file);
+      assert.ok(hits.length > 0, `guard MISSED ${label} (U+${cp.toString(16)})`);
+      assert.equal(hits[0].codePoint, cp);
+    }
+    // ...and a clean dictionary with real RTL text must NOT be flagged.
+    const good = path.join(dir, 'good.json');
+    writeFileSync(good, '{"ar":"مفتوح الآن","he":"פתוח עכשיו","en":"Open now"}', 'utf8');
+    assert.deepEqual(scanFile(good), [], 'real Arabic/Hebrew text must not be flagged');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

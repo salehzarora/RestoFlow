@@ -34,6 +34,20 @@
   white-space: nowrap;
 }
 
+/*
+ * The hero header gives each side group a fixed 84px so the brand lockup stays
+ * optically centred. The language trigger there is therefore a circle with the
+ * current-language glyph, not the intro's wider word pill.
+ */
+.controlCircle {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  justify-content: center;
+  font-size: 14px;
+}
+
 /* Chevron drawn in CSS so it needs no extra SVG node. */
 .caret {
   width: 8px;

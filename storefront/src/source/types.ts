@@ -65,3 +65,113 @@ export interface StorefrontSource {
   /** Slugs that must be statically pre-rendered. Empty for a live source. */
   staticSlugs(): readonly string[];
 }
+
+/** Presentation settings a restaurant controls; never customer controls. */
+export type CardMode = 'list' | 'grid';
+export type MotionMode = 'calm' | 'full' | 'lively';
+
+/** The optional home modules. Their ORDER is fixed in UI-001 and is not data. */
+export type OptionalModule = 'announce' | 'promo' | 'popular' | 'story';
+
+export interface Category {
+  readonly id: string;
+  readonly name: string;
+  /** Representative photo, or null to fall back to the outlined icon. */
+  readonly image: string | null;
+  /** 24-grid outlined SVG path, assignable per restaurant from the dashboard. */
+  readonly iconPath: string;
+  readonly blurb: string | null;
+}
+
+export type ItemBadge = 'new' | 'deal';
+
+export interface MenuItem {
+  readonly id: string;
+  readonly categoryId: string;
+  readonly name: string;
+  readonly description: string;
+  readonly priceMinor: Minor;
+  readonly image: string | null;
+  /** Featured items render as the large card at the top of their section. */
+  readonly featured: boolean;
+  /** Signature items are the ones eligible for the popular rail. */
+  readonly signature: boolean;
+  readonly badge: ItemBadge | null;
+  readonly soldOut: boolean;
+  /** True when the item has option groups, so its price is a STARTING price. */
+  readonly hasOptions: boolean;
+}
+
+export interface AnnouncementModule {
+  readonly text: string;
+}
+
+export interface CampaignModule {
+  readonly title: string;
+  readonly subline: string;
+}
+
+export interface PromoModule {
+  readonly kicker: string;
+  readonly title: string;
+  readonly body: string;
+  readonly image: string;
+  readonly priceMinor: Minor;
+  readonly itemId: string;
+}
+
+export interface StoryModule {
+  readonly kicker: string;
+  readonly title: string;
+  readonly body: string;
+  readonly image: string;
+  /** Owner-written statements about their own operation, never platform stats. */
+  readonly facts: readonly string[];
+}
+
+export interface HomeModules {
+  readonly announcement: AnnouncementModule | null;
+  readonly campaign: CampaignModule;
+  readonly promo: PromoModule | null;
+  readonly story: StoryModule | null;
+  /**
+   * `ready` governs the popular rail's TRUTH, not its styling: false removes
+   * every rank claim and relabels the rail. The threshold that decides it is a
+   * backend concern and is fixture-driven in UI-001.
+   */
+  readonly popular: { readonly enabled: boolean; readonly ready: boolean };
+}
+
+/**
+ * A PRESENTATIONAL cart summary. Phase B renders the dock and the wide aside
+ * from this shape; there is no store, no persistence and no mutation anywhere.
+ * Real cart behaviour arrives in its own phase.
+ */
+export interface CartLineView {
+  readonly lineId: string;
+  readonly name: string;
+  readonly image: string | null;
+  readonly quantity: number;
+  readonly lineTotalMinor: Minor;
+  readonly optionSummary: string;
+}
+
+export interface CartView {
+  readonly lines: readonly CartLineView[];
+  readonly itemCount: number;
+  readonly subtotalMinor: Minor;
+  readonly taxMinor: Minor;
+  readonly totalMinor: Minor;
+  /** The configured rate, rendered as its own line. Configuration, not law. */
+  readonly taxRate: number;
+}
+
+export interface HomeView {
+  readonly tenant: Tenant;
+  readonly modules: HomeModules;
+  readonly categories: readonly Category[];
+  readonly items: readonly MenuItem[];
+  readonly cardMode: CardMode;
+  readonly motion: MotionMode;
+  readonly cart: CartView;
+}

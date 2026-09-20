@@ -29,6 +29,11 @@ export const ROUTES = [
   { route: '/ar/s/maps-burger', file: 'ar/s/maps-burger.html' },
   { route: '/en/s/maps-burger', file: 'en/s/maps-burger.html' },
   { route: '/he/s/maps-burger', file: 'he/s/maps-burger.html' },
+  // STOREFRONT-UI-001 Phase B: the home surface, measured in every locale root.
+  { route: '/s/maps-burger/menu', file: 's/maps-burger/menu.html' },
+  { route: '/ar/s/maps-burger/menu', file: 'ar/s/maps-burger/menu.html' },
+  { route: '/en/s/maps-burger/menu', file: 'en/s/maps-burger/menu.html' },
+  { route: '/he/s/maps-burger/menu', file: 'he/s/maps-burger/menu.html' },
 ];
 
 export const MEDIA_EXTENSIONS = ['.jpg', '.jpeg', '.gif', '.mp4', '.webm', '.mov'];
