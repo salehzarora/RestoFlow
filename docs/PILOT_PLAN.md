@@ -179,7 +179,7 @@ Detailed rules are owned by [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md).
 - **On-site support.** Saleh (human owner) on-site for the entire live day with the runbook, spare hardware, and
   the rollback plan. Acts as the privileged operator for void/discount approvals and shift reconciliation.
 - **Escalation.** A short incident log is kept; any security/isolation anomaly halts the pilot immediately
-  (**RISK R-003**). Issue tickets are filed in Jira against the relevant RF-0xx ticket (D-015).
+  (**RISK R-003**). Issues are recorded in Git (incident log / follow-up Work IDs) against the relevant RF-0xx ticket (D-015 as amended by D-038).
 
 ---
 
@@ -213,7 +213,7 @@ If RestoFlow cannot safely continue mid-service, fall back **without data loss o
    process, preserve all RestoFlow data (do **not** reset or delete — per **DECISION D-016** guardrails:
    no `reset --hard`, no database reset, no deletion of real data), capture logs and the audit trail, and treat the
    day as a NO-GO.
-4. **Post-rollback.** Reconcile manual transactions against whatever RestoFlow captured; file Jira issues; root-cause
+4. **Post-rollback.** Reconcile manual transactions against whatever RestoFlow captured; record follow-up issues in Git (D-038); root-cause
    before any re-attempt.
 
 > **SECURITY REQUIREMENT.** A hard rollback never involves disabling RLS or deleting audit/data to "clean up".
@@ -224,12 +224,12 @@ If RestoFlow cannot safely continue mid-service, fall back **without data loss o
 ## 9. Go / no-go decision and exit to M4
 
 - **Decision owner.** Human (Saleh) makes the final go/no-go call (**DECISION D-016**; ticket **RF-076** is
-  human-owned with Claude Code as reviewer). The decision is recorded in Jira (**DECISION D-015**).
+  human-owned with Claude Code as reviewer). The decision is recorded in Git (**DECISION D-015** as amended by **D-038**).
 - **GO criteria.** All Section 5 success criteria met (S1–S13), with special weight on **S10** (no cross-tenant /
   security incident, **RISK R-003**) and **S11** (sync recovery, **RISK R-002**). A GO authorizes starting M4
   (RF-090 self-serve signup, RF-091 platform admin, RF-092 dashboards, RF-093 billing, RF-094 hardening).
 - **NO-GO.** Any security/isolation incident, money/rounding error, or data loss is an automatic NO-GO regardless
-  of other results. NO-GO produces a prioritized fix list (Jira) and a re-pilot date; M4 does not start.
+  of other results. NO-GO produces a prioritized fix list (recorded in Git) and a re-pilot date; M4 does not start.
 - **CONDITIONAL GO.** Minor, non-security defects may yield a conditional GO with tracked fixes carried into early
   M4, at the human owner's discretion — never for security, money, or data-integrity defects.
 

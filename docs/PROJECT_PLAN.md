@@ -2,7 +2,7 @@
 
 > **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-> **Scope of this document.** This file owns the **milestones, timeline, and ownership** view of RestoFlow. It describes *milestones*, not individual tickets. The authoritative per-ticket backlog lives in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) (human-readable) and [JIRA_IMPORT.csv](JIRA_IMPORT.csv) (import file). Decisions are owned by [DECISIONS.md](DECISIONS.md); open questions by [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md); risks by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md). This document cites those IDs; it never redefines them.
+> **Scope of this document.** This file owns the **milestones, timeline, and ownership** view of RestoFlow. It describes *milestones*, not individual tickets. The authoritative per-ticket backlog lives in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) (human-readable); [JIRA_IMPORT.csv](JIRA_IMPORT.csv) is retained as a historical export only (**DECISION D-038**, GOV-001). Decisions are owned by [DECISIONS.md](DECISIONS.md); open questions by [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md); risks by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md). This document cites those IDs; it never redefines them.
 
 ---
 
@@ -27,7 +27,7 @@ The build method is **documentation-and-architecture-first** ("freeze before cod
 
 ## 2. Milestones (DECISION D-019)
 
-Indicative dates are **PROPOSED** (carried from the v1.0 plan) and may change at the freeze gate. Sequencing and dependencies are authoritative; calendar dates are not. The full ticket breakdown per milestone is in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) / [JIRA_IMPORT.csv](JIRA_IMPORT.csv).
+Indicative dates are **PROPOSED** (carried from the v1.0 plan) and may change at the freeze gate. Sequencing and dependencies are authoritative; calendar dates are not. The full ticket breakdown per milestone is in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) ([JIRA_IMPORT.csv](JIRA_IMPORT.csv) is a historical export of the same original breakdown).
 
 ### M0A — Documentation & Architecture Baseline (FROZEN at RF-004)
 
@@ -109,7 +109,7 @@ The team is **1 human owner (Saleh) + 3 AI agents**. Permissions and guardrails 
 Detailed agent capabilities, prohibitions, and worktree rules live in [AGENTS.md](../AGENTS.md). Summary of the binding guardrails (**DECISION D-016**):
 
 - Claude Code and Codex must **not** edit the same working tree simultaneously; Codex reviews **read-only** by default.
-- Parallel implementation requires **separate branches + worktrees**; one active ticket per worktree; every task has a ticket ID.
+- Parallel implementation requires **separate branches + worktrees**; one active ticket per worktree; every task has an approved Work ID (**DECISION D-038**).
 - Shared-package and API-contract changes need **dedicated tickets**.
 - **No agent may push without human approval.** No force push. No `reset --hard`. No database reset. No deletion of real data. No production changes. No secret disclosure. No silent scope expansion (**RISK R-004**).
 - **SECURITY REQUIREMENT:** no service-role credentials in Flutter clients; no shared restaurant password (**DECISION D-011**, **DECISION D-004**).
@@ -118,12 +118,16 @@ Detailed agent capabilities, prohibitions, and worktree rules live in [AGENTS.md
 
 ## 5. Sources of Truth (DECISION D-015)
 
-- **Jira (project key RF)** — official source of truth for **task status**.
-- **Git** — official source of truth for **code and change history**.
-- **Architecture documents (`docs/`)** — official source of truth for **technical decisions and contracts**.
-- **[TASK_TRACKER.md](TASK_TRACKER.md)** — the single tracker, located at `docs/TASK_TRACKER.md`; **only** a concise current-session resume file; **not** a duplicate backlog. The master task list lives in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + [JIRA_IMPORT.csv](JIRA_IMPORT.csv). This plan describes milestones, not tickets.
+> **GOV-001 amendment (2026-09-20, owner-approved — DECISION D-038).** Jira is no longer used and **no external tracker is required**. The list below is D-015 as amended.
 
-Recommended Jira workflow states: Backlog → Ready → In Progress → Code Review → Changes Requested → Ready for Merge → Done; plus Blocked, Deferred, Cancelled.
+- **Git** — official source of truth for **code and change history**.
+- **GitHub PR / branch state** — official source of truth for the **execution, review and merge status** of active changes.
+- **[IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md)** — the human-readable **planned/backlog work list**; it may reference historical `RF-*` IDs and new Work IDs and needs no synchronization with any tracker.
+- **Architecture documents (`docs/`)** — official source of truth for **technical decisions and contracts**.
+- **[TASK_TRACKER.md](TASK_TRACKER.md)** — the single tracker, located at `docs/TASK_TRACKER.md`; **only** a concise current-session resume file; **not** a duplicate backlog. The master task list lives in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md). This plan describes milestones, not tickets.
+- **Jira import / Jira-specific backlog artifacts** ([JIRA_IMPORT.csv](JIRA_IMPORT.csv), `M6_JIRA_IMPORT.csv`, `M6_JIRA_BACKLOG.md`) — **historical / compatibility exports only**; not required for future execution.
+
+Workflow states (tool-neutral vocabulary — carried by the approved plan, then by the GitHub branch / PR state; see [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) §2.2): Backlog → Ready → In Progress → Code Review → Changes Requested → Ready for Merge → Done; plus Blocked, Deferred, Cancelled.
 
 ---
 

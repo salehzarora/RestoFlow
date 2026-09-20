@@ -2,7 +2,7 @@
 
 > **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-> **Ownership.** This document is the single authoritative source for **what is IN and OUT of the RestoFlow MVP**. It owns the in-scope / deferred boundary and the scope guardrail. It does **not** redefine decisions ([DECISIONS.md](DECISIONS.md)), open questions ([OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), product vision/personas ([PRODUCT_SPEC.md](PRODUCT_SPEC.md)), milestones/timeline ([PROJECT_PLAN.md](PROJECT_PLAN.md)), or the ticket backlog ([IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + JIRA_IMPORT.csv). Those topics are referenced, not restated.
+> **Ownership.** This document is the single authoritative source for **what is IN and OUT of the RestoFlow MVP**. It owns the in-scope / deferred boundary and the scope guardrail. It does **not** redefine decisions ([DECISIONS.md](DECISIONS.md)), open questions ([OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), product vision/personas ([PRODUCT_SPEC.md](PRODUCT_SPEC.md)), milestones/timeline ([PROJECT_PLAN.md](PROJECT_PLAN.md)), or the ticket backlog ([IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md); `JIRA_IMPORT.csv` is a historical export only — **DECISION D-038**). Those topics are referenced, not restated.
 >
 > **Scope governance.** This scope boundary is part of the architecture-baseline set proposed for the **RF-004 architecture freeze** under milestone **M0A** (**DECISION D-019**, RF-001), approved into the frozen M0A baseline (RF-004); the freeze occurred at RF-004. Changes require a new decision in [DECISIONS.md](DECISIONS.md) and human approval per the agent workflow (**DECISION D-016**).
 
@@ -91,7 +91,7 @@ Each item is **DEFERRED**. Target milestone is **M4 or later / none** (**DECISIO
 
 ## 4. IN-SCOPE → ticket-family / DEFERRED → milestone cross-check
 
-The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + JIRA_IMPORT.csv. This table is a **traceability cross-check only**: every IN-SCOPE item maps to at least one M1–M3 ticket family; every DEFERRED item maps to M4 or later/none.
+The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) (`JIRA_IMPORT.csv` is a historical export only — **DECISION D-038**). This table is a **traceability cross-check only**: every IN-SCOPE item maps to at least one M1–M3 ticket family; every DEFERRED item maps to M4 or later/none.
 
 | IN-SCOPE item | Ticket family (indicative) | Milestone |
 |---|---|---|

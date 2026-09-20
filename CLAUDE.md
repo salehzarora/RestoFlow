@@ -62,7 +62,7 @@ Each topic has exactly **one owning document**. **Reference** the owner with a r
 | Product vision / personas / surfaces | [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md) |
 | In / out of MVP scope | [docs/MVP_SCOPE.md](docs/MVP_SCOPE.md) |
 | Milestones / timeline / ownership | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) |
-| Task backlog | [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) + [docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv) |
+| Task backlog | [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) ([docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv) is a historical export only — **DECISION D-038**) |
 | Ops / backup / incident | [docs/OPERATIONS_AND_RECOVERY.md](docs/OPERATIONS_AND_RECOVERY.md) |
 | M3 pilot | [docs/PILOT_PLAN.md](docs/PILOT_PLAN.md) |
 | Agent workflow / Definition of Ready & Done | [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) |
@@ -70,11 +70,13 @@ Each topic has exactly **one owning document**. **Reference** the owner with a r
 
 > **ASSUMPTION**: the documents above live under `docs/` and the listed filenames are stable. If a path differs, fix the link rather than duplicating content.
 
-**Sources of truth (DECISION D-015):**
-- **Jira** (project key `RF`) = official source of truth for **task status**.
+**Sources of truth (DECISION D-015, as amended by DECISION D-038 / GOV-001):**
 - **Git** = official source of truth for **code and change history**.
+- **GitHub PR / branch state** = official source of truth for the **execution, review and merge status** of active changes. **No external tracker is required** — not Jira, GitHub Issues, Linear, Trello or any other: an approved Work ID + approved plan + Git branch/PR is sufficient.
+- **[docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md)** = the human-readable **planned/backlog work list** (historical `RF-*` IDs and new Work IDs); it needs no synchronization with any tracker.
 - **Architecture documents (`docs/`)** = official source of truth for **technical decisions and contracts**.
-- `docs/TASK_TRACKER.md` = **only** a concise current-session resume file; never a duplicate backlog. Do not copy the Jira backlog into it.
+- `docs/TASK_TRACKER.md` = **only** a concise current-session resume file; never a duplicate backlog. Do not copy the backlog into it.
+- **Jira import / Jira-specific backlog artifacts** (`docs/JIRA_IMPORT.csv`, `docs/M6_JIRA_IMPORT.csv`, `docs/M6_JIRA_BACKLOG.md`) = **historical / compatibility exports only**; not required for any future work.
 
 ---
 
@@ -91,10 +93,10 @@ These take effect in **M0B and later**. In M0A no code exists yet (see Section 5
 - Sync columns: `device_id`, `local_operation_id`, `revision`/`version`, client/server timestamps.
 - Tenant membership role keys (exact): `org_owner`, `restaurant_owner`, `manager`, `cashier`, `kitchen_staff`, `accountant` (read-only; ships-or-not is **OPEN QUESTION Q-017**). Platform administration is **not** a membership role: `platform_admin` is a separate, privileged, audited grant (`platform_admin_grants`) carrying no `organization_id` (**DECISION D-026**).
 
-### Branches & commits (DECISION D-017)
-- Tickets: `RF-<number>`.
-- Branch: `<type>/RF-<id>-<slug>`, where `<type>` ∈ `{feat, fix, chore, docs, refactor, test, infra}`.
-- Commit (Conventional Commits): `<type>(<scope>): <summary> [RF-<id>]`.
+### Work IDs, branches & commits (DECISION D-017, amended by DECISION D-038)
+- Work IDs (**DECISION D-038**, GOV-001): every task has **one unique, owner/planner-approved Work ID** before the tree is touched, e.g. `STOREFRONT-UI-001`, `STOREFRONT-INFRA-001B`, `PROD-SAFETY-SCALE-001`, `SEC-002`. No Jira-generated number is required; never reuse an ID for unrelated work. Historical `RF-<number>` IDs remain valid and are **never renumbered**.
+- Branch: `<type>/<WORK-ID>-<slug>`, where `<type>` ∈ `{feat, fix, chore, docs, refactor, test, infra}`.
+- Commit (Conventional Commits): `<type>(<scope>): <summary> [<WORK-ID>]`. PR and review evidence reference the same Work ID.
 
 ### Markers in documents (use the exact bold labels)
 `**DECISION D-xxx**`, `**ASSUMPTION**`, `**OPEN QUESTION Q-xxx**`, `**DEFERRED**`, `**RISK R-xxx**`, `**SECURITY REQUIREMENT**`. Cite the matching ID from the owning register. **Never hide an unresolved issue behind a silent assumption** — if something is unknown, mark it **OPEN QUESTION** and add it to [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
@@ -106,7 +108,7 @@ These take effect in **M0B and later**. In M0A no code exists yet (see Section 5
 Pipeline: **ChatGPT planning -> Human approval -> Claude Code implementation -> Tests -> Codex independent review -> Claude Code fixes -> Human approval -> Merge.**
 
 **Always:**
-- Have a **ticket ID** (`RF-<number>`) for every task before you touch the tree.
+- Have an approved **Work ID** for every task before you touch the tree — recorded in the approved plan / execution packet and carried by the branch, commits, reports and PR (**DECISION D-038**). Below, "ticket" means that unit of work; no Jira issue or other external tracker entry is required.
 - Work **one active ticket per worktree**.
 - Run on a **dedicated branch** named per Section 3; parallel implementation requires **separate branches + worktrees**.
 - Give **shared-package changes** and **API-contract changes** ([docs/API_CONTRACT.md](docs/API_CONTRACT.md)) their **own dedicated ticket** — never fold them into an unrelated feature ticket.
@@ -149,6 +151,6 @@ Milestones (**DECISION D-019**): **M0A** Documentation & Architecture baseline (
 
 ## 6. Definition of Ready / Definition of Done
 
-The authoritative Definition of Ready and Definition of Done, the Jira workflow states (`Backlog -> Ready -> In Progress -> Code Review -> Changes Requested -> Ready for Merge -> Done`, plus `Blocked`, `Deferred`, `Cancelled`), and the full agent pipeline are owned by **[docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)**. Consult it before starting and before declaring a ticket done. Do not duplicate its checklists here.
+The authoritative Definition of Ready and Definition of Done, the workflow states (`Backlog -> Ready -> In Progress -> Code Review -> Changes Requested -> Ready for Merge -> Done`, plus `Blocked`, `Deferred`, `Cancelled`), and the full agent pipeline are owned by **[docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)**. Consult it before starting and before declaring a ticket done. Do not duplicate its checklists here.
 
 In short: a ticket is **Ready** only with a clear scope, a ticket ID, and resolved blocking decisions; it is **Done** only when code + tests are in, Codex review has passed, and the human has approved the merge. When in doubt, **ask the human** rather than expanding scope.

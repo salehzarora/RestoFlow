@@ -3,11 +3,11 @@
 > **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 > Concise session-resume file only. **NOT** a backlog. The master task list lives in
-> [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) and [JIRA_IMPORT.csv](JIRA_IMPORT.csv).
+> [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) ([JIRA_IMPORT.csv](JIRA_IMPORT.csv) is a historical export only — **DECISION D-038**).
 
 | Field | Value |
 | --- | --- |
-| Jira project key | RF |
+| Work-ID scheme | Approved Work IDs (**DECISION D-038**, GOV-001). Jira is no longer used; `RF` is the historical ticket prefix and is never renumbered. |
 | Current milestone | M7 real-wiring → **product-rescue sprint** (visible local MVP) |
 | Active ticket | Product-rescue sprint (owner-directed, unticketed by owner instruction): visible dashboard/POS/KDS MVP over the RF-150..161 foundation |
 | Status | Sprint implemented on `feature/product-rescue-visible-mvp` — launch fix (supabase_flutter passkeys crash), setup center + Printers/Staff surfaces, staff/PIN provisioning (bcrypt production verifier), device-originated PIN sign-in, real POS menu/order/payment loop, KDS order.status persistence, sales_summary Overview, CI coverage expansion |
@@ -22,7 +22,7 @@
 
 - [PROJECT_PLAN.md](PROJECT_PLAN.md)
 - [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md)
-- [JIRA_IMPORT.csv](JIRA_IMPORT.csv)
+- [JIRA_IMPORT.csv](JIRA_IMPORT.csv) — historical export only (**DECISION D-038**)
 - [DECISIONS.md](DECISIONS.md)
 - [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md)
@@ -30,4 +30,4 @@
 
 ---
 
-**Reminder:** Per **DECISION D-015**, Jira (project key RF) is the source of truth for task status; this file is only a resume pointer.
+**Reminder:** Per **DECISION D-015** as amended by **DECISION D-038** (GOV-001), the GitHub PR / branch state is the source of truth for the status of active work and [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) is the planned-work list; this file is only a resume pointer and never a duplicate backlog.

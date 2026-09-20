@@ -31,9 +31,14 @@ mandate. No actor may silently assume another's authority.
 | **Codex** (reviewer) | Independent, **read-only by default** review of Claude Code's changes. May execute a *separate* assigned task **on its own branch + worktree** when explicitly ticketed. Produces a review report. | Edit Claude Code's active worktree; approve its own merge; push or merge. |
 | **Git** | Final arbiter and **source of truth for code and change history** (**DECISION D-015**). | — |
 
-Supporting sources of truth (**DECISION D-015**): **Jira** (project key `RF`) =
-task status; **architecture docs in `docs/`** = technical decisions and contracts;
-[docs/TASK_TRACKER.md](docs/TASK_TRACKER.md) = concise current-session resume only (never a duplicate backlog).
+Supporting sources of truth (**DECISION D-015**, as amended by **DECISION D-038** /
+GOV-001): **GitHub PR / branch state** = execution, review and merge status of active
+changes; [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) = the
+human-readable planned/backlog work list; **architecture docs in `docs/`** = technical
+decisions and contracts; [docs/TASK_TRACKER.md](docs/TASK_TRACKER.md) = concise
+current-session resume only (never a duplicate backlog). **No external tracker is
+required** (not Jira, GitHub Issues, Linear, Trello or any other); the Jira import CSVs
+and Jira-specific backlog documents are historical exports only.
 
 ---
 
@@ -50,7 +55,8 @@ Ordered, every ticket follows it:
 7. **Human approval** — Saleh reviews; **RLS/security sign-off** where relevant.
 8. **Merge** — Saleh merges. Only the human merges.
 
-Jira state flow (recommended): `Backlog -> Ready -> In Progress -> Code Review ->
+Work-state vocabulary (tool-neutral — carried by the approved plan, then by the GitHub
+branch / PR state; **DECISION D-038**): `Backlog -> Ready -> In Progress -> Code Review ->
 Changes Requested -> Ready for Merge -> Done`; plus `Blocked`, `Deferred`,
 `Cancelled`.
 
@@ -64,8 +70,8 @@ Mirrors the v1.0 plan. Applies to **both** AI agents unless stated.
 - Read any repo file; edit files **within the active ticket's scope**.
 - Run tests, static analysis, type checks, formatters, and local builds.
 - Create local commits on the **ticket's own branch** (Conventional Commits:
-  `<type>(<scope>): <summary> [RF-<id>]`, per **DECISION D-017**).
-- Create the ticket branch: `<type>/RF-<id>-<slug>`, `type ∈ {feat,fix,chore,docs,refactor,test,infra}`.
+  `<type>(<scope>): <summary> [<WORK-ID>]`, per **DECISION D-017** as amended by **D-038**).
+- Create the ticket branch: `<type>/<WORK-ID>-<slug>`, `type ∈ {feat,fix,chore,docs,refactor,test,infra}`.
 
 ### Ask-first (requires human approval before acting)
 - Add or upgrade a **dependency** / package.
@@ -105,12 +111,17 @@ Mirrors the v1.0 plan. Applies to **both** AI agents unless stated.
 
 ---
 
-## 5. Every task needs a ticket ID
+## 5. Every task needs an approved Work ID
 
-No work — code, migration, contract edit, or doc change — happens without a
-**ticket `RF-<number>`** (this M0A documentation set, frozen as the M0A architecture baseline at RF-004 approved into the frozen M0A baseline (RF-004), is **RF-001**). Branches,
-commits, and reports all carry the ticket ID. Shared-package and API-contract
-changes get their **own dedicated tickets** (Section 3, ask-first).
+No work — code, migration, contract edit, or doc change — happens without one unique,
+owner/planner-approved **Work ID** (**DECISION D-038**, GOV-001), recorded in the approved
+plan / execution packet **before the tree is touched** — e.g. `STOREFRONT-UI-001`,
+`SEC-002`. No Jira issue, GitHub Issue or other external tracker entry is required, and
+an ID is never reused for unrelated work. Historical `RF-<number>` IDs remain valid and
+are never renumbered (this M0A documentation set, frozen as the M0A architecture baseline at RF-004 approved into the frozen M0A baseline (RF-004), is **RF-001**). Branches,
+commits, reports and PRs all carry the Work ID. Shared-package and API-contract
+changes get their **own dedicated Work IDs** (Section 3, ask-first). In this file
+"ticket" means the unit of work identified by a Work ID.
 
 ---
 

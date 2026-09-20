@@ -117,7 +117,7 @@ Legend: **READY** (tested, usable) · **SIMULATED** (logic done, in-memory/local
 
 ---
 
-## 8. Future companion tickets needed (IDs assigned in Jira — not invented here)
+## 8. Future companion tickets needed (Work IDs approved by the owner — not invented here; DECISION D-038)
 
 1. **Real printer/drawer transport** behind the RF-070 adapter (network/USB/Bluetooth), replacing
    `UnsupportedTransportException`; gated by Q-006/Q-015. (B1)

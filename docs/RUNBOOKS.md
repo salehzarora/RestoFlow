@@ -39,7 +39,7 @@ SEV-1** and is reviewed against the canonical isolation suite before closure (SE
 
 **Common incident skeleton (every runbook follows it):** Detect → Declare severity → Contain → Diagnose
 → Recover (forward-only / restore; **never reset prod**) → Verify → Postmortem (blameless; stored in
-Git/Jira, **D-015**).
+Git, **D-015** as amended by **D-038**).
 
 ---
 
@@ -196,7 +196,7 @@ queries + expected results instead. Prints **PASS/FAIL**.
 - **Verification:** outbox drains to `applied`; **zero duplicate** orders/payments; revisions converge;
   receipt sequences (**D-021**) neither regress nor duplicate; money integer `_minor` intact.
 - **Postmortem:** blameless write-up — timeline, root cause, blast radius by `organization_id`,
-  corrective actions, follow-up tickets (Git/Jira, **D-015**).
+  corrective actions, follow-up tickets (Git, **D-015** as amended by **D-038**).
 - **Sync concepts:** owned by [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md) (outbox/inbox, idempotency,
   ordering/`depends_on`, conflict resolution, revocation-while-offline, tombstones).
 
@@ -299,7 +299,7 @@ queries + expected results instead. Prints **PASS/FAIL**.
 - **Recovery:** once rotated/invalidated and history is clean, restore normal operation. If tenant data
   may have been accessed, follow §4 for blast-radius + notification (gated by **Q-005**).
 - **Postmortem:** blameless write-up — what leaked, how, blast radius, rotation timeline, and a
-  prevention follow-up (e.g. tighten the guard or pre-commit hook). File in Git/Jira (**D-015**).
+  prevention follow-up (e.g. tighten the guard or pre-commit hook). File in Git (**D-015** as amended by **D-038**).
 
 ---
 

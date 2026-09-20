@@ -154,10 +154,10 @@ What this ticket actually produced and how to verify it locally (no remote, no s
 
 ---
 
-## 8. Recommended follow-ups (human/infra — do NOT auto-create Jira tickets)
+## 8. Recommended follow-ups (human/infra — do NOT auto-create tickets)
 
 These are the real go-live steps; they are **human/infra work or human decisions**, not code this
-ticket may do. **IDs are assigned by Saleh in Jira — this document does not create them.**
+ticket may do. **Work IDs are approved by Saleh (DECISION D-038) — this document does not create them.**
 
 1. **Production infra ticket** — provision a dedicated prod Supabase project; wire the managed secret
    store (service-role key server/CI only — **D-011**); configure forward-only migration promotion
@@ -173,7 +173,7 @@ ticket may do. **IDs are assigned by Saleh in Jira — this document does not cr
 6. **Human RLS / security sign-off** — record the mandatory sign-off (**RISK R-003**) before serving
    any real tenant data.
 
-> **Do not create these Jira tickets automatically.** They are listed for Saleh to triage and assign.
+> **Do not create these tickets automatically.** They are listed for Saleh to triage and assign.
 
 ---
 

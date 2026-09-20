@@ -2,9 +2,9 @@
 
 > **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** M0A FROZEN baseline (authored RF-001; approved at RF-004). **Owner of this document:** this file (`IMPLEMENTATION_CHECKLIST.md`) together with [JIRA_IMPORT.csv](JIRA_IMPORT.csv) is the frozen, human-readable MASTER task backlog per **DECISION D-015**.
+**Status:** M0A FROZEN baseline (authored RF-001; approved at RF-004). **Owner of this document:** this file (`IMPLEMENTATION_CHECKLIST.md`) together with [JIRA_IMPORT.csv](JIRA_IMPORT.csv) is the frozen, human-readable MASTER task backlog per **DECISION D-015**. **GOV-001 amendment (2026-09-20 — DECISION D-038):** from GOV-001 onward this file **alone** is the human-readable planned/backlog work list; `JIRA_IMPORT.csv` is retained byte-for-byte as a **historical export** of the original 48 tasks and is no longer maintained or required. Work added after GOV-001 is identified by an approved **Work ID** — see [Work planned after GOV-001](#work-planned-after-gov-001-work-ids).
 
-> **DECISION D-015** — Sources of truth: Jira (project key `RF`) = task *status*; Git = code/history; `docs/` = technical decisions/contracts; [TASK_TRACKER.md](TASK_TRACKER.md) = concise session-resume file only. This checklist and `JIRA_IMPORT.csv` are the only two full backlogs. **[TASK_TRACKER.md](TASK_TRACKER.md) must NOT duplicate this list.** [PROJECT_PLAN.md](PROJECT_PLAN.md) describes milestones, not individual tickets.
+> **DECISION D-015, as amended by DECISION D-038 (GOV-001)** — Sources of truth: Git = code/history; GitHub PR / branch state = execution, review and merge *status* of active changes (Jira is no longer used and no external tracker is required); `docs/` = technical decisions/contracts; [TASK_TRACKER.md](TASK_TRACKER.md) = concise session-resume file only. This checklist is the only maintained full backlog; `JIRA_IMPORT.csv` is a historical export. **[TASK_TRACKER.md](TASK_TRACKER.md) must NOT duplicate this list.** [PROJECT_PLAN.md](PROJECT_PLAN.md) describes milestones, not individual tickets.
 
 This document is **M0A documentation only**. It plans work; it does not create code, migrations, package manifests, or CI. Forward-looking design text describing *future* tasks is intentional.
 
@@ -16,7 +16,7 @@ Each task is rendered as a self-contained block with the following fields:
 
 | Field | Meaning |
 |---|---|
-| **ID** | Stable ticket id `RF-<number>`. Never reused or renumbered. |
+| **ID** | Stable ticket id. The original backlog below uses `RF-<number>`; **never reused or renumbered**. Work added after GOV-001 uses an approved **Work ID** (e.g. `STOREFRONT-UI-001`; **DECISION D-038**), equally never reused. |
 | **Title** | Canonical task title (semantically matches `JIRA_IMPORT.csv`; the CSV omits internal commas in some titles). |
 | **Milestone** | One of M0A, M0B, M1, M2, M3, M4 (**DECISION D-019**). |
 | **Workstream** | Lane for parallelization/ownership grouping. |
@@ -57,9 +57,9 @@ Each task is rendered as a self-contained block with the following fields:
 
 Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.md) (M0 ~Jul 2026 → M4 Oct–Dec 2026). Scope in/out is owned by [MVP_SCOPE.md](MVP_SCOPE.md).
 
-**Backlog totals: 6 epics + 48 tasks** (one epic per milestone M0A..M4 — note M0 spans two epics, `RF-EPIC-M0A` and `RF-EPIC-M0B`; 48 individual tickets RF-001..RF-004, RF-010..RF-021, RF-030..RF-037, RF-050..RF-061, RF-070..RF-076, RF-090..RF-094). [JIRA_IMPORT.csv](JIRA_IMPORT.csv) contains exactly the same 6 epics + 48 tasks. The two files MUST stay in sync.
+**Backlog totals: 6 epics + 48 tasks** (one epic per milestone M0A..M4 — note M0 spans two epics, `RF-EPIC-M0A` and `RF-EPIC-M0B`; 48 individual tickets RF-001..RF-004, RF-010..RF-021, RF-030..RF-037, RF-050..RF-061, RF-070..RF-076, RF-090..RF-094). [JIRA_IMPORT.csv](JIRA_IMPORT.csv) contains exactly the same 6 epics + 48 tasks and is frozen as a **historical export** (**DECISION D-038**, GOV-001): the former "the two files MUST stay in sync" rule no longer applies — new work is added to this file only, and the CSV is not edited.
 
-> **Jira field-mapping note (guidance, NOT a blocker; do not run a Jira import in M0A):** For Jira Free / team-managed projects, the CSV columns may not map automatically. Expect to set **Issue Type** (Epic/Story/Task), **Epic Link** (the `RF-EPIC-*` parent), **Labels**, and **Components** manually or via the import field-mapping step. The `Blocked By` column maps to the "is blocked by" link type. This is import-tooling guidance only and does not gate any ticket.
+> **Legacy — Jira is no longer used (DECISION D-038); kept for provenance only. Jira field-mapping note (guidance, NOT a blocker; do not run a Jira import in M0A):** For Jira Free / team-managed projects, the CSV columns may not map automatically. Expect to set **Issue Type** (Epic/Story/Task), **Epic Link** (the `RF-EPIC-*` parent), **Labels**, and **Components** manually or via the import field-mapping step. The `Blocked By` column maps to the "is blocked by" link type. This is import-tooling guidance only and does not gate any ticket.
 
 > **DEFERRED scope check:** Tips (**Q-011**), refunds (Payment `refunded` state), multi-currency-per-order, and subscription billing logic beyond a basic plan are **DEFERRED**. None of these appear as an M1–M3 deliverable below. Billing appears only at M4 (RF-093) and is explicitly "basic" (**Q-016**). The Payment state machine's `refunded` state is **DEFERRED** per **DECISION D-018** and is not implemented by any task here.
 
@@ -807,3 +807,16 @@ Per [MVP_SCOPE.md](MVP_SCOPE.md), the following are **DEFERRED** and intentional
 - **Advanced subscription/billing** (**Q-016**) — only a *basic* plan at M4 (RF-093); nothing earlier.
 
 No DEFERRED feature appears as an MVP/M1–M3 deliverable.
+
+---
+
+## Work planned after GOV-001 (Work IDs)
+
+> **DECISION D-038 (GOV-001, 2026-09-20).** Work started after GOV-001 is identified by an owner/planner-approved **Work ID**, not by a Jira-generated `RF-<number>`. This section is the human-readable list of such planned work. It is a **planning aid only**: the execution, review and merge status of any item lives in its Git branch / GitHub PR, and the detail of an item lives in its approved plan / execution packet — do not duplicate either here, and do not mirror this list into [TASK_TRACKER.md](TASK_TRACKER.md). The 48 `RF-*` tasks above are unchanged and are never renumbered.
+
+| Work ID | Title | Notes |
+|---|---|---|
+| `GOV-001` | Remove Jira as a required workflow dependency | The change that introduced this section. Docs/governance only (**DECISION D-038**). |
+| `STOREFRONT-UI-001` | Storefront customer UI from the approved design handoff | First planned work item after GOV-001, named by the owner at GOV-001 approval; not started when GOV-001 was written. Its implementation plan is a separate, already-reviewed execution packet; GOV-001 does not start, edit or reopen it. |
+
+No status column is kept here on purpose: whether an item is in progress, in review or merged is read from its branch / PR.
