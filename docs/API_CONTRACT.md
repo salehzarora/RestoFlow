@@ -118,7 +118,7 @@ Every RPC returns errors in a single consistent shape. Errors are **typed** by a
 
 ### 3.2 Change procedure (binding)
 Per **DECISION D-016** and the agent workflow:
-1. Any change to this document or to a contract requires a **dedicated ticket** (`RF-<number>`); shared-package and API-contract changes always get their own ticket (no piggy-backing).
+1. Any change to this document or to a contract requires a **dedicated ticket** (its own approved Work ID — historically `RF-<number>`; **DECISION D-038**); shared-package and API-contract changes always get their own ticket (no piggy-backing).
 2. ChatGPT planning → human approval → Claude Code implements on its own branch/worktree.
 3. **Codex** performs an independent, read-only review.
 4. Claude Code applies fixes; **human approval** is required before merge.

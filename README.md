@@ -65,7 +65,7 @@ All documents (the frozen M0A architecture baseline, approved at RF-004) live in
 | --- | --- |
 | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Milestones (M0A…M4), timeline, and ownership. |
 | [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) | The master human-readable task backlog. |
-| [docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv) | The same backlog as a free-Jira-compatible import. |
+| [docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv) | Historical export of the original M0A backlog (Jira-compatible CSV). Archive only — Jira is no longer used (**DECISION D-038**). |
 | [docs/OPERATIONS_AND_RECOVERY.md](docs/OPERATIONS_AND_RECOVERY.md) | Ops, backup, and incident handling. |
 | [docs/PILOT_PLAN.md](docs/PILOT_PLAN.md) | The M3 hardware pilot plan. |
 
@@ -93,11 +93,12 @@ One human owner (Saleh) plus three AI agents: ChatGPT (planning), Claude Code (i
 
 ## 7. Sources of Truth
 
-Per **DECISION D-015**:
+Per **DECISION D-015**, as amended by **DECISION D-038** (GOV-001 — Jira is no longer used and no external tracker is required):
 
-- **Jira** (project key `RF`) — official source of truth for **task status**.
 - **Git** — official source of truth for **code** and change history.
+- **GitHub PR / branch state** — official source of truth for the **execution, review and merge status** of active changes.
+- **[docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md)** — the human-readable **planned/backlog work list** (historical `RF-*` IDs and new Work IDs).
 - **`docs/`** — official source of truth for **technical decisions and contracts**.
 - **[docs/TASK_TRACKER.md](docs/TASK_TRACKER.md)** — only a concise current-session resume file, never a duplicate backlog.
 
-The master task list lives in [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) and [docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv); [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) describes milestones, not individual tickets.
+The master task list lives in [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) ([docs/JIRA_IMPORT.csv](docs/JIRA_IMPORT.csv) is a historical export only); [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) describes milestones, not individual tickets.

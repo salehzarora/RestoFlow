@@ -18,7 +18,7 @@ This document defines WHAT must be tested, WHERE each test lives, and WHICH test
 
 ## 0. Principles
 
-- **DECISION D-016**: every test is associated with a ticket (RF-`<number>`); Codex reviews are read-only; Claude Code and Codex never edit the same working tree simultaneously. Test code follows the same branch/worktree rules as production code.
+- **DECISION D-016**: every test is associated with a ticket — an approved Work ID (historically RF-`<number>`; **DECISION D-038**); Codex reviews are read-only; Claude Code and Codex never edit the same working tree simultaneously. Test code follows the same branch/worktree rules as production code.
 - **SECURITY REQUIREMENT**: the tenant-isolation and permission suite (Section 2) is a **hard merge gate**. A red isolation test blocks merge with no override by an agent; only the human owner may waive, and a waiver is itself an audited event.
 - **Deny-by-default**: tests assert that the absence of an explicit grant produces denial, never accidental access. This applies to RLS, RPC authorization, and membership/scope checks alike (the four layers of **DECISION D-012**).
 - **No floating point anywhere** (**DECISION D-007**): money tests assert integer minor-unit arithmetic end to end; a test that introduces a `double`/`float` for money is itself a defect.
@@ -184,7 +184,7 @@ RPC families to cover (final list owned by [API_CONTRACT.md](API_CONTRACT.md)): 
 
 ## 8. CI gates and coverage expectations
 
-**DECISION D-009** (GitHub Actions CI), **DECISION D-015** (Git = source of truth for code; Jira = task status), **DECISION D-016** (workflow/guardrails).
+**DECISION D-009** (GitHub Actions CI), **DECISION D-015** (Git = source of truth for code; GitHub PR / branch state = execution status — as amended by **DECISION D-038**), **DECISION D-016** (workflow/guardrails).
 
 ### Hard gates — a red result BLOCKS merge
 1. **Tenant-isolation & permission suite (Section 2)** — non-negotiable; **SECURITY REQUIREMENT**; only the human owner may waive, audited (**RISK R-003**). Includes `iso_idempotency_replay_reject` (replay/duplicate rejection, cross-linked to **SECURITY TH-4**).

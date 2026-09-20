@@ -116,7 +116,7 @@ Owner of schema content is [DOMAIN_MODEL](DOMAIN_MODEL.md). This section owns th
 
 ### 4.2 Procedure (per change)
 
-1. Author migration on a branch (`<type>/RF-<id>-<slug>`, type in {feat,fix,chore,docs,refactor,test,infra}) tied to a ticket.
+1. Author migration on a branch (`<type>/<WORK-ID>-<slug>` — **DECISION D-038**; type in {feat,fix,chore,docs,refactor,test,infra}) tied to a ticket.
 2. Apply on `local`, then `dev` (resettable). Run isolation/permission tests and the canonical isolation set from [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).
 3. Codex independent review (read-only) per **DECISION D-016**.
 4. Human approval -> apply on `staging` (no reset) -> validate.
@@ -229,12 +229,12 @@ On shared (`staging`) and `prod`:
 
 **Runbook skeleton (per incident)**:
 1. Detect (alert/report) and declare severity.
-2. Assign human on-call; open incident record (ticket RF-<number>).
+2. Assign human on-call; open incident record (a dedicated approved Work ID — **DECISION D-038**).
 3. Contain — stop the bleed (rotate secret, disable affected path, halt writes). For suspected cross-tenant leak, prioritize isolation verification (**R-003**).
 4. Diagnose using logs (§7.1), metrics (§7.2), and `audit_events`.
 5. Recover — apply fix forward-only (§4) and/or restore (§5); never reset prod.
 6. Verify — isolation tests, money integrity (integer `_minor`), receipt sequence integrity (**D-021**), sync reconciliation (**D-022**).
-7. **Postmortem** — blameless write-up: timeline, root cause, blast radius (which `organization_id`s affected), corrective actions, follow-up tickets. Stored in Git/Jira (**DECISION D-015**).
+7. **Postmortem** — blameless write-up: timeline, root cause, blast radius (which `organization_id`s affected), corrective actions, follow-up tickets. Stored in Git (**DECISION D-015** as amended by **DECISION D-038**).
 
 **SECURITY REQUIREMENT**: any incident touching cross-tenant access, secrets, or platform-admin paths is automatically SEV-1 and reviewed against the canonical isolation tests before closure.
 

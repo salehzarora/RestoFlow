@@ -121,7 +121,7 @@ Capture for each step / success criterion (S1–S13):
 | **Printer failure** | Soft rollback: continue on RestoFlow with a hand-written chit for that station; reprint (audited, RF-071) once restored. |
 | **Drawer failure** | Open drawer manually; record; do not re-issue kicks (at-most-once). |
 | **Sync failure** | Continue offline by design (**D-010**); do not force-retry payments; let the outbox drain on reconnect. |
-| **Wrong report total** | Halt reporting use; preserve data; reconcile manually; file a Jira issue against RF-075; do not edit data to "fix" it. |
+| **Wrong report total** | Halt reporting use; preserve data; reconcile manually; record an issue in Git against RF-075 (D-038); do not edit data to "fix" it. |
 | **Suspected cross-tenant access** | **HALT THE PILOT IMMEDIATELY** (**RISK R-003**); preserve audit trail; capture evidence; NO-GO. |
 | **Device lost / revoked** | Revoke the device identity; confirm it cannot sync new ops (RF-061); continue on remaining devices. |
 
@@ -134,7 +134,7 @@ Capture for each step / success criterion (S1–S13):
 
 ## 12. Go / no-go decision
 
-- **Decision owner:** Saleh (human), recorded in Jira (**D-015/D-016**); Claude Code is reviewer only.
+- **Decision owner:** Saleh (human), recorded in Git (**D-015/D-016** as amended by **D-038**); Claude Code is reviewer only.
 - **GO** — all PILOT_PLAN §5 success criteria (S1–S13) met, with special weight on **S10** (no cross-tenant/security incident) and **S11** (sync recovery). Authorizes M4 (RF-090..094).
 - **CONDITIONAL GO** — only minor, non-security defects, tracked into early M4 — never for security, money, or data-integrity defects.
 - **NO-GO** — any security/isolation incident, money/rounding error, or data loss → automatic NO-GO; produces a prioritized fix list + re-pilot date; M4 does not start.
@@ -144,5 +144,5 @@ Capture for each step / success criterion (S1–S13):
 
 - **Success metrics** — record S1–S13 outcomes + the agreed thresholds (0 money errors, 0 security incidents, ≤2 recoverable print retries/service, drawer variance fully explained).
 - **Issues list** — every defect/anomaly with severity; security/money/data issues are blockers.
-- **Follow-up tickets** — file in Jira against the relevant RF-0xx; include the [PILOT_READINESS.md](PILOT_READINESS.md) §8 companion tickets if still open.
+- **Follow-up tickets** — record in Git as approved Work IDs (**D-038**), cross-referencing the relevant RF-0xx; include the [PILOT_READINESS.md](PILOT_READINESS.md) §8 companion tickets if still open.
 - **M4 readiness** — only on a GO; otherwise schedule a re-pilot after the fix list closes.

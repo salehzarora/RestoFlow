@@ -2,9 +2,11 @@
 
 > **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-> **Ownership.** This document is the single authoritative source for the **RestoFlow agent workflow and engineering process**: the delivery pipeline, Definition of Ready, Definition of Done, branch/commit naming, the implementation- and review-report formats, merge gates, the architecture-change procedure, and the concurrency/worktree rules plus forbidden-actions list. `AGENTS.md` (repo root) is the **concise pointer** to this document, not a second source of truth. This document implements and elaborates **DECISION D-016** (agent workflow pipeline + guardrails); it does **not** redefine the decision log ([DECISIONS.md](DECISIONS.md)), the open-question register ([OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), naming conventions beyond what process requires (**DECISION D-017**), the test strategy ([TESTING_STRATEGY.md](TESTING_STRATEGY.md)), security/isolation tests ([SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md)), or the task backlog ([IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + JIRA_IMPORT.csv). Those topics are referenced, not restated.
+> **Ownership.** This document is the single authoritative source for the **RestoFlow agent workflow and engineering process**: the delivery pipeline, Definition of Ready, Definition of Done, branch/commit naming, the implementation- and review-report formats, merge gates, the architecture-change procedure, and the concurrency/worktree rules plus forbidden-actions list. `AGENTS.md` (repo root) is the **concise pointer** to this document, not a second source of truth. This document implements and elaborates **DECISION D-016** (agent workflow pipeline + guardrails); it does **not** redefine the decision log ([DECISIONS.md](DECISIONS.md)), the open-question register ([OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), naming conventions beyond what process requires (**DECISION D-017**), the test strategy ([TESTING_STRATEGY.md](TESTING_STRATEGY.md)), security/isolation tests ([SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md)), or the task backlog ([IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md); `JIRA_IMPORT.csv` is a historical export only). Those topics are referenced, not restated.
 >
 > **Status.** Drafted as part of milestone **M0A** (**DECISION D-019**, ticket **RF-001**); frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004). Changes to this process require a new decision in [DECISIONS.md](DECISIONS.md) and human approval (see §8 and §10).
+>
+> **GOV-001 amendment (2026-09-20, owner-approved — DECISION D-038).** Jira is **no longer a required dependency** of this workflow, and **no other external tracker replaces it** (not GitHub Issues, Linear, Trello or any other). Where this document says **ticket**, read "the unit of work identified by an approved **Work ID**" (§3 item 1, §5.0). Execution/review/merge status lives in the GitHub PR / branch state; the planned-work list is [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md). **Unchanged by GOV-001:** the pipeline and every stage gate (§2), the Definition of Ready and Definition of Done (§3–§4), both report formats (§6–§7), every merge gate (§8), the architecture-change procedure (§9), the concurrency/worktree rules and every forbidden action (§10). Historical `RF-<number>` IDs remain valid and are never renumbered.
 
 ---
 
@@ -44,20 +46,20 @@ ChatGPT planning
 
 | # | Stage | Performed by | Input gate | Output artifact |
 | --- | --- | --- | --- | --- |
-| 1 | **Planning** | ChatGPT + human | A need exists (milestone, bug, contract change) | A ticket (RF-`<id>`) with scope + acceptance criteria + dependency + architecture/security-impact note, recorded in Jira (**DECISION D-015**) and traceable to [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) |
-| 2 | **Plan approval** | Human owner | Ticket drafted | Ticket meets **Definition of Ready** (§3); moved to **Ready** in Jira |
+| 1 | **Planning** | ChatGPT + human | A need exists (milestone, bug, contract change) | A ticket — an approved **Work ID** (§5.0; **DECISION D-038**) with scope + acceptance criteria + dependency + architecture/security-impact note, recorded in the approved plan / execution packet and traceable to [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) |
+| 2 | **Plan approval** | Human owner | Ticket drafted | Ticket meets **Definition of Ready** (§3); the human owner's explicit approval of the plan makes it **Ready** |
 | 3 | **Implementation** | Claude Code | Ticket is Ready; branch + worktree assigned | Code + migrations (where in milestone scope; **never in M0A**, §9) on the ticket branch |
 | 4 | **Tests** | Claude Code | Implementation drafted | Tests written and passing, including **mandatory isolation/permission tests** where relevant ([SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md), [TESTING_STRATEGY.md](TESTING_STRATEGY.md)); the **implementation report** (§5) |
 | 5 | **Independent review** | Codex | Implementation report exists; branch pushed to a review location with human approval, or reviewed in a read-only worktree | The **review report** (§6) with a verdict |
 | 6 | **Fixes** | Claude Code | Review report = changes-requested | Updated code/tests + an updated implementation report; loops back to stage 5 until verdict = approve |
 | 7 | **Merge approval** | Human owner | Review verdict = approve; all **merge gates** (§7) green | Human authorization to merge |
-| 8 | **Merge** | Human owner (Saleh) | Merge approved | Merged to `main`; ticket -> **Done** in Jira; branch retired |
+| 8 | **Merge** | Human owner (Saleh) | Merge approved | Merged to `main` — the merged PR is the record that the ticket is **Done**; branch retired |
 
 > **ASSUMPTION.** The default working branch is `main` (repo state at M0A). The protected target branch for merges is `main` unless a release-branch model is later adopted via a new decision in [DECISIONS.md](DECISIONS.md).
 
-### 2.2 Jira workflow states (recommended mapping)
+### 2.2 Workflow states (tool-neutral vocabulary)
 
-The pipeline maps to the Jira state machine (**DECISION D-015**; CSV import must work on free Jira, no paid-only features):
+The pipeline uses the state vocabulary below. It is **not tied to any tool** (**DECISION D-038**): before implementation starts, a ticket's state is carried by the approved plan / [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md); from the first commit onward it is carried by the GitHub branch / PR state (**DECISION D-015** as amended):
 
 ```
 Backlog -> Ready -> In Progress -> Code Review -> Changes Requested -> Ready for Merge -> Done
@@ -92,7 +94,7 @@ Blockers are scoped — they do **not** all halt the same thing:
 
 A ticket may **start** (move to In Progress) **only if ALL** of the following are true. This is a hard gate; Claude Code must refuse to begin work on a ticket that fails any item and flag it back to planning.
 
-1. **Ticket ID exists** — a Jira RF-`<id>` issue exists and is the single unit of work (one active ticket per worktree, §8). Every task has a ticket ID (**DECISION D-016**).
+1. **Work ID exists** — one unique, owner/planner-approved **Work ID** (§5.0; **DECISION D-038**) is recorded in the approved plan / execution packet **before the tree is touched**, and is the single unit of work (one active ticket per worktree, §10). Every task has a Work ID (**DECISION D-016**). No Jira issue, GitHub Issue or other external tracker entry is required.
 2. **Scope is defined** — what is in and out of this ticket is written down and does not silently expand beyond it (**RISK R-004**; scope boundary owned by [MVP_SCOPE.md](MVP_SCOPE.md)).
 3. **Acceptance criteria are defined** — testable, unambiguous criteria that the Definition of Done (§4) can be checked against.
 4. **Dependencies are done** — prerequisite tickets are merged (Done) or explicitly stubbed; ordering of dependent work is respected. Sync/dependent-operation ordering rules live in [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md). Per the blocker classification (§2.3, **DECISION D-027**), an open question blocks **only** the tickets that depend on its answer; a ticket is not blocked by an unrelated or **Accepted Open** question, and any blocking Q-xxx is recorded here.
@@ -119,21 +121,31 @@ A ticket is **Done** (eligible for merge approval) **only if ALL** of the follow
 
 ---
 
-## 5. Branch and commit naming (DECISION D-016, DECISION D-017)
+## 5. Work IDs, branch and commit naming (DECISION D-016, DECISION D-017, amended by DECISION D-038)
+
+### 5.0 Work IDs (DECISION D-038, GOV-001)
+
+- **Every task has one unique Work ID, approved by the human owner (or by the planner and then the owner) BEFORE the tree is touched.** The Work ID is recorded in the approved plan / execution packet and is carried by the branch, every commit, the implementation and review reports, and the PR.
+- A Work ID is a short, descriptive, upper-case identifier with a numeric suffix (an optional trailing letter marks a phase), for example `STOREFRONT-UI-001`, `STOREFRONT-INFRA-001B`, `PROD-SAFETY-SCALE-001`, `SEC-002`.
+- **No Jira-generated numeric ID is required**, and no Jira issue, GitHub Issue or entry in any other external tracker is required to plan, start, review or merge work. A Work ID + approved plan + Git branch/PR is sufficient.
+- **Never reuse a Work ID for unrelated work.** Uniqueness is checked against Git history (branch names and `[...]` commit tags) and `docs/` before the ID is approved.
+- **Historical `RF-<number>` IDs remain valid** for the work they identify and must **never be renumbered, renamed or reused**. They stay as written in commits, PRs, migrations, tests and documents.
 
 ### 5.1 Branch naming
 
 ```
-<type>/RF-<id>-<slug>
+<type>/<WORK-ID>-<slug>
 ```
 
 - `<type>` is one of: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `infra`.
-- `RF-<id>` is the Jira ticket ID (e.g. `RF-001`).
+- `<WORK-ID>` is the approved Work ID (§5.0), e.g. `STOREFRONT-UI-001`. Branches created before GOV-001 carry their historical `RF-<id>` ticket ID (e.g. `RF-001`) and are not renamed.
 - `<slug>` is a short kebab-case description.
 
-Examples:
+Examples (the first two use descriptive Work IDs — both are real branches; the `RF-` examples are historical and remain valid):
 
 ```
+feat/STOREFRONT-INFRA-001B-static-shell
+docs/GOV-001-remove-jira-dependency
 docs/RF-001-m0a-architecture-freeze
 infra/RF-014-melos-monorepo-bootstrap
 feat/RF-052-order-state-machine
@@ -144,17 +156,18 @@ test/RF-090-rls-isolation-suite
 ### 5.2 Commit naming (Conventional Commits)
 
 ```
-<type>(<scope>): <summary> [RF-<id>]
+<type>(<scope>): <summary> [<WORK-ID>]
 ```
 
 - `<type>` from the same set as branch type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `infra`).
 - `<scope>` is a short area, e.g. `pos`, `kds`, `sync`, `auth`, `rls`, `money`, `docs`.
 - `<summary>` is imperative, lower-case, no trailing period.
-- `[RF-<id>]` ties the commit to its ticket (traceability for **DECISION D-015**).
+- `[<WORK-ID>]` ties the commit to its ticket (traceability for **DECISION D-015**); PR and review evidence reference the same Work ID. Commits made before GOV-001 keep their historical `[RF-<id>]` tag.
 
-Examples:
+Examples (the first uses a descriptive Work ID; the `RF-` examples are historical and remain valid):
 
 ```
+docs(governance): remove mandatory Jira dependency [GOV-001]
 docs(workflow): add agent workflow document [RF-001]
 feat(sync): add idempotency key on mutating ops [RF-052]
 fix(money): store discount in integer minor units [RF-036]
@@ -170,12 +183,12 @@ test(rls): org A cannot read org B orders [RF-090]
 Claude Code produces this report at stage 4–6 of the pipeline and updates it after each fix loop. It accompanies the branch and is the primary input to Codex review.
 
 ```markdown
-# Implementation Report — RF-<id>
+# Implementation Report — <WORK-ID>
 
 ## Ticket
-- ID: RF-<id>
+- ID: <WORK-ID>
 - Title: <ticket title>
-- Branch: <type>/RF-<id>-<slug>
+- Branch: <type>/<WORK-ID>-<slug>
 - Milestone: <M0A|M0B|M1|M2|M3|M4>
 
 ## Summary
@@ -219,11 +232,11 @@ Claude Code produces this report at stage 4–6 of the pipeline and updates it a
 Codex reviews **read-only by default** (§9) and produces this report at stage 5. Findings are graded by severity; the verdict gates the merge.
 
 ```markdown
-# Review Report — RF-<id>
+# Review Report — <WORK-ID>
 
 ## Ticket
-- ID: RF-<id>
-- Branch reviewed: <type>/RF-<id>-<slug>
+- ID: <WORK-ID>
+- Branch reviewed: <type>/<WORK-ID>-<slug>
 - Commit / revision reviewed: <sha or revision>
 
 ## Scope reviewed
@@ -260,7 +273,7 @@ Codex reviews **read-only by default** (§9) and produces this report at stage 5
 
 A change may be merged **only when ALL** gates are green. The human owner verifies these at stage 7; Claude Code/Codex must not merge without explicit per-merge human authorization (§9).
 
-1. **Ticket is real and Ready/in-review** — RF-`<id>` exists; DoR (§3) was satisfied at start.
+1. **Ticket is real and Ready/in-review** — an approved Work ID exists (§3 item 1, §5.0) and the branch, commits, reports and PR all carry it; DoR (§3) was satisfied at start.
 2. **Definition of Done met** — every DoD item (§4) is satisfied, including docs/contract updates.
 3. **CI green** — all tests pass in GitHub Actions (**DECISION D-009**), including the mandatory isolation/permission suite where relevant (**RISK R-003**).
 4. **Codex review = APPROVE** — review report (§7) has no open Blocker/Major findings.
@@ -278,12 +291,14 @@ A change to a **frozen architecture document** (any file in `docs/` listed under
 
 Procedure:
 
-1. **Dedicated ticket** — open a separate RF-`<id>` for the architecture/contract change; do not fold it into a feature ticket.
+1. **Dedicated ticket** — the architecture/contract change gets its **own approved Work ID** (§5.0); do not fold it into a feature ticket.
 2. **ChatGPT + human design** — produce a written design proposal; the human owner approves the direction before implementation.
 3. **DECISIONS.md entry before code** — record the new or amended frozen choice as a **DECISION D-xxx** in [DECISIONS.md](DECISIONS.md) (with context/alternatives/consequences). If the change resolves or raises an unknown, update [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) (Q-xxx). No conflicting parallel IDs may be invented (ID ownership: [DECISIONS.md](DECISIONS.md) owns D-xxx, [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) owns Q-xxx).
 4. **Codex review** — the architecture/contract change is reviewed independently (§7) like code.
 5. **Human approval + merge** — merge gates (§7) apply.
 6. **Downstream tickets unblock** — only after the contract is merged may dependent implementation tickets move to Ready.
+
+> **GOV-001 (DECISION D-038) relaxes nothing here.** Removing Jira removes no gate. Every frozen-baseline, contract or shared-package architecture change still requires, in order: (1) a dedicated Work ID; (2) ChatGPT / architecture planning; (3) explicit human-owner approval **before** implementation; (4) an isolated branch + worktree; (5) the relevant tests; (6) independent read-only review; (7) fixes if needed; (8) explicit human approval **before** merge.
 
 > **DECISION D-003 / D-018 guard.** No change may regress the tenancy model — that Organization is the tenant and `organization_id` is the primary isolation boundary is an **RF-001 INVARIANT (binding requirement)** (**DECISION D-001**) — or alter a state enumeration (PROPOSED, pending review/approval; once frozen) without an explicit superseding decision in [DECISIONS.md](DECISIONS.md). Silent contradiction of the SHARED CANON is forbidden.
 
@@ -296,7 +311,7 @@ Procedure:
 - **One active ticket per worktree.** Each in-progress ticket has its own branch and its own worktree.
 - **Claude Code and Codex must NOT edit the same working tree simultaneously.** Codex reviews **read-only by default**; if Codex needs to run code, it does so in its own checkout/worktree, never the implementer's live tree.
 - **Parallel implementation requires separate branches + worktrees.** Two implementation efforts never share a working directory.
-- **Every task has a ticket ID.** No off-ticket work.
+- **Every task has an approved Work ID** (§5.0). No off-ticket work.
 - **Shared-package and API-contract changes need dedicated tickets** and follow §8.
 - Use the worktree tooling to enter/leave isolated trees rather than switching branches in a shared directory.
 
@@ -314,7 +329,7 @@ The following are **forbidden** for any AI agent unless the human owner explicit
 - **No silent scope expansion** — no work beyond the ticket without a new/updated ticket and human approval (**RISK R-004**).
 - **No creating a remote, committing, or pushing during M0A** (§11).
 
-> **DECISION D-013 / D-016.** Platform-admin actions and any sensitive mutation follow the explicitly audited path; the workflow itself is audited through Git history (**DECISION D-015**) and Jira state. Bypassing review or human approval is a process violation, not a shortcut.
+> **DECISION D-013 / D-016.** Platform-admin actions and any sensitive mutation follow the explicitly audited path; the workflow itself is audited through Git history and the GitHub PR / review record (**DECISION D-015** as amended by **DECISION D-038**). Bypassing review or human approval is a process violation, not a shortcut.
 
 ---
 
@@ -338,5 +353,5 @@ This document is authored during milestone **M0A** (**DECISION D-019**), whose c
 - Sync (**DECISION D-010**, **D-020**, **D-021**, **D-022**): [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md)
 - API/RPC contracts: [API_CONTRACT.md](API_CONTRACT.md)
 - System structure: [ARCHITECTURE.md](ARCHITECTURE.md)
-- Backlog: [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + JIRA_IMPORT.csv
+- Backlog: [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) (`JIRA_IMPORT.csv` is a historical export only — **DECISION D-038**)
 - Concise pointer to this process: `AGENTS.md` (repo root)
