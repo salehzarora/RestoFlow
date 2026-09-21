@@ -14,5 +14,5 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   const { slug } = await params;
   const tenant = fixtureSource.getTenant(slug);
   if (tenant === null) notFound();
-  return <StorefrontScreen tenant={tenant} locale="ar" />;
+  return <StorefrontScreen tenant={tenant} locale="ar" slug={slug} />;
 }

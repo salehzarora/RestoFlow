@@ -313,10 +313,31 @@ test('B1-M5n NEGATIVE CONTROL: without reduced motion those scrolls animate', as
 
 // ---------------------------------------------------------------- MAJOR-6
 
+// Both Phase A/B surfaces: the menu route consumes 4 keyframes, the INTRO
+// route consumes the other 8 (B1 review MINOR-3 - proving only the menu route
+// left the bulk of the co-location fix unexercised).
+// INTRO FIRST, deliberately: loading the menu writes sf:v1:seen:<slug>, and the
+// intro route then correctly skips itself - so the menu-first order silently
+// measured the menu twice and never exercised the 8 Intro keyframes.
+// The lively route is the ONLY place sfFloat is reachable: it is gated on
+// `.motionLively`, a preset no canonical route uses. Evidence routes cost the
+// shipped export nothing, so the 13th keyframe gets real coverage rather than
+// a documented gap.
+const ANIMATED_ROUTES = ['/s/maps-burger', '/s/maps-burger/menu', '/s/demo-lively/menu'];
+
 test('B1-M6 every consumed animation resolves to a real keyframe', async ({ page }) => {
   const w = watch(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${BASE}/s/maps-burger/menu`, { waitUntil: 'networkidle' });
+  const union = { defined: new Set<string>(), used: new Set<string>(), unresolved: [] as string[] };
+
+  for (const route of ANIMATED_ROUTES) {
+  await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' });
+  // The language disclosure animates only while open.
+  const disclosure = page.locator('details').first();
+  if (await disclosure.count()) {
+    await disclosure.locator('summary').click().catch(() => undefined);
+    await page.waitForTimeout(300);
+  }
 
   const report = await page.evaluate(() => {
     const defined = new Set<string>();
@@ -350,10 +371,26 @@ test('B1-M6 every consumed animation resolves to a real keyframe', async ({ page
     };
   });
 
-  expect(report.used.length, 'the home surface must animate something at all').toBeGreaterThan(0);
-  expect(report.unresolved, 'every animation-name must have a matching @keyframes').toEqual([]);
+  expect(report.used.length, `${route} must animate something at all`).toBeGreaterThan(0);
+  expect(report.unresolved, `${route}: every animation-name needs a matching @keyframes`).toEqual([]);
+  for (const d of report.defined) union.defined.add(d);
+  for (const u of report.used) union.used.add(u);
+  union.unresolved.push(...report.unresolved);
+  }
 
-  RESULTS['B1-M6'] = report;
+  // ALL 13 consumed Phase A/B animations, across both surfaces.
+  expect(union.unresolved, 'no unresolved animation anywhere').toEqual([]);
+  expect(union.used.size, 'every consumed keyframe across Phase A + Phase B').toBe(13);
+  expect([...union.used].every((u) => union.defined.has(u))).toBe(true);
+  // The Intro's own set must genuinely be among them.
+  const intro = [...union.used].filter((u) => u.includes('Intro-module'));
+  expect(intro.length, 'the Intro keyframes must be exercised, not just the home ones').toBe(8);
+
+  RESULTS['B1-M6'] = {
+    defined: [...union.defined].sort(),
+    used: [...union.used].sort(),
+    unresolved: union.unresolved,
+  };
   assertClean('B1-M6', w, await overflow(page));
 });
 
@@ -396,11 +433,12 @@ for (const [id, route, width] of [
     await page.evaluate(() => document.fonts.ready);
 
     const metrics = await page.evaluate(() => {
-      const out: { clipped: number; count: number; stateRowHeight: number; lineHeight: number } = {
+      const out = {
         clipped: 0,
         count: 0,
         stateRowHeight: 0,
         lineHeight: 0,
+        whiteSpace: '',
       };
       for (const el of Array.from(document.querySelectorAll('[class*="serviceMeta"]'))) {
         out.count += 1;
@@ -409,13 +447,27 @@ for (const [id, route, width] of [
       const row = document.querySelector('[class*="stateRow"]') as HTMLElement | null;
       if (row) {
         out.stateRowHeight = row.getBoundingClientRect().height;
-        out.lineHeight = parseFloat(getComputedStyle(row).fontSize) * 1.25;
+        // Line height from the element that actually lays the text out.
+        const meta = row.closest('[class*="serviceMeta"]') as HTMLElement | null;
+        const cs = getComputedStyle(meta ?? row);
+        const lh = parseFloat(cs.lineHeight);
+        out.lineHeight = Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.25;
+        out.whiteSpace = cs.whiteSpace;
       }
       return out;
     });
 
     expect(metrics.count, 'all three service cells must be present').toBe(3);
     expect(metrics.clipped, 'no service cell may clip its text').toBe(0);
+    // B1 review MINOR-4: assert the WRAP, not merely the absence of clipping.
+    // A cell that shrank its type, or truncated silently, would also report
+    // clipped === 0. The status must occupy more than one line box at 360.
+    expect(
+      metrics.stateRowHeight,
+      'the status must WRAP to at least two lines at 360, not shrink or truncate',
+    ).toBeGreaterThan(metrics.lineHeight * 1.5);
+    // ...and it must not have been achieved by suppressing wrapping.
+    expect(metrics.whiteSpace, 'wrapping must stay enabled').not.toBe('nowrap');
 
     RESULTS[`B1-M7-${id}`] = metrics;
     assertClean(`B1-M7-${id}`, w, await overflow(page));
@@ -468,7 +520,7 @@ test('B1-M9 POPULAR_READY=true shows a localized rank, not a bare #n', async ({ 
   const popular = page.locator('[data-sf-module="popular"]');
   await expect(popular).toBeVisible();
   await expect(popular.getByRole('heading')).toHaveText('Most ordered');
-  const badges = popular.locator('[class*="badge"]');
+  const badges = popular.locator('[data-sf-badge="popularity"]');
   const texts = await badges.allInnerTexts();
   expect(texts.length, 'the ranked rail must carry badges').toBeGreaterThan(0);
   expect(texts[0]).toBe('#1 most ordered');
@@ -488,9 +540,12 @@ test('B1-M9 POPULAR_READY=false makes no rank claim and says kitchen pick', asyn
   const popular = page.locator('[data-sf-module="popular"]');
   await expect(popular).toBeVisible();
   await expect(popular.getByRole('heading')).toHaveText('Chosen by the kitchen');
-  const texts = await popular.locator('[class*="badge"]').allInnerTexts();
+  const texts = await popular.locator('[data-sf-badge="popularity"]').allInnerTexts();
   expect(texts.length, 'the unranked rail still carries a badge').toBeGreaterThan(0);
   for (const t of texts) expect(t).toBe('Kitchen pick');
+  // The item-truth slot is asserted in the B2 suite; here just prove the two
+  // slots are distinct so this assertion cannot be satisfied by either alone.
+  expect(await popular.locator('[data-sf-badge="item"]').count()).toBeGreaterThan(0);
 
   const body = await popular.innerText();
   expect(body, 'no rank number may appear').not.toMatch(/#\d/);

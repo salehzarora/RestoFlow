@@ -7,6 +7,7 @@ import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { PromoModule, ServiceState, StoryModule, Tenant } from '@/source/types';
 import { ChevronIcon, ClockIcon, DeliveryIcon, MapMotif, StoreIcon } from '../icons';
+import { TenantText } from '../TenantText';
 import styles from './home.module.css';
 
 /** Price, always an LTR island with tabular figures even inside RTL copy. */
@@ -143,8 +144,8 @@ export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: Storefron
           </span>
           <span className={styles.serviceText}>
             <span className={styles.serviceLabel}>{m.pickupShort}</span>
-            <span className={styles.serviceMeta} dir="auto">
-              {service.pickupEnabled ? tenant.city : m.unavailableNow}
+            <span className={styles.serviceMeta}>
+              <TenantText>{service.pickupEnabled ? tenant.city : m.unavailableNow}</TenantText>
             </span>
           </span>
         </div>
@@ -205,10 +206,12 @@ export function StateNotice({
       </span>
       <span>
         <span className={styles.noticeTitle}>{closed ? m.closedTitle : m.pausedTitle}</span>
-        <span className={styles.noticeBody} dir="auto">
-          {closed
-            ? fill(m.closedBody, { t: tenant.hours.opens })
-            : fill(m.pausedBody, { r: tenant.displayName })}
+        <span className={styles.noticeBody}>
+          <TenantText>
+            {closed
+              ? fill(m.closedBody, { t: tenant.hours.opens })
+              : fill(m.pausedBody, { r: tenant.displayName })}
+          </TenantText>
         </span>
       </span>
     </div>
@@ -273,14 +276,14 @@ export function StoryCard({ story }: { story: StoryModule }) {
         <div className={styles.storyFade} />
       </div>
       <div className={styles.storyBody}>
-        <p className={styles.storyKicker} dir="auto">
-          {story.kicker}
+        <p className={styles.storyKicker}>
+          <TenantText>{story.kicker}</TenantText>
         </p>
-        <h2 className={styles.storyTitle} id="sf-story-title" dir="auto">
-          {story.title}
+        <h2 className={styles.storyTitle} id="sf-story-title">
+          <TenantText>{story.title}</TenantText>
         </h2>
-        <p className={styles.storyText} dir="auto">
-          {story.body}
+        <p className={styles.storyText}>
+          <TenantText>{story.body}</TenantText>
         </p>
         <ul className={styles.facts}>
           {story.facts.slice(0, 3).map((fact) => (
@@ -298,8 +301,8 @@ export function StoryCard({ story }: { story: StoryModule }) {
 export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
   return (
     <footer className={styles.footer} data-sf-module="footer">
-      <div className={styles.footerRow} dir="auto">
-        {tenant.address}
+      <div className={styles.footerRow}>
+        <TenantText>{tenant.address}</TenantText>
       </div>
       <div className={styles.footerRow}>
         <span>{m.hours}</span>

@@ -1147,6 +1147,22 @@
   -webkit-backdrop-filter: blur(8px);
 }
 
+/*
+ * The ITEM-truth slot on a popular card. The popularity badge owns the
+ * inline-START corner (the approved prototype slot), so an item's own new/deal
+ * badge takes the OPPOSITE CORNER and the two truths coexist - neither can
+ * overwrite the other. The opposite BLOCK edge, not merely the opposite inline
+ * edge: "#1 most ordered" plus "New" is wider than a ~173px popular card at
+ * 390, so side by side they would collide. Logical properties throughout, so
+ * the pair mirrors correctly in RTL with no direction branch.
+ */
+.badgeItem {
+  inset-block-start: auto;
+  inset-inline-start: auto;
+  inset-block-end: 10px;
+  inset-inline-end: 10px;
+}
+
 .badgeSoldOut {
   background: var(--bad);
   color: var(--onBad, #fff);

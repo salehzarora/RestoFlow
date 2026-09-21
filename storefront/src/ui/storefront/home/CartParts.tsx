@@ -11,6 +11,7 @@ import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { CartView, ServiceState } from '@/source/types';
 import { ChevronIcon } from '../icons';
+import { TenantText } from '../TenantText';
 import styles from './home.module.css';
 
 function countLabel(cart: CartView, m: StorefrontMessages): string {
@@ -64,8 +65,12 @@ export function CartDock({
 
       <span className={styles.dockText}>
         <span className={styles.dockItems}>{countLabel(cart, m)}</span>
+        {/* The dock carries the running SUBTOTAL, not the total: the approved
+            anatomy is "item count + running subtotal in accent"
+            (DESIGN_HANDOFF.md:76, COMPONENT_INVENTORY.md:102). The full
+            subtotal/fee/tax/total breakdown belongs to the cart aside. */}
         <span className={`${styles.dockTotal} ${styles.ltr}`} dir="ltr">
-          {formatMoney(cart.totalMinor)}
+          {formatMoney(cart.subtotalMinor)}
         </span>
       </span>
 
@@ -111,11 +116,11 @@ export function CartAside({
           <li className={styles.asideLine} key={line.lineId}>
             <div className={styles.asideLineTop}>
               <span>
-                <span className={styles.asideLineName} dir="auto">
-                  {line.name}
+                <span className={styles.asideLineName}>
+                  <TenantText>{line.name}</TenantText>
                 </span>
-                <span className={styles.asideLineOpts} dir="auto">
-                  {line.optionSummary}
+                <span className={styles.asideLineOpts}>
+                  <TenantText>{line.optionSummary}</TenantText>
                 </span>
               </span>
               <span className={`${styles.price} ${styles.ltr}`} dir="ltr">

@@ -23,6 +23,7 @@ import {
 import type { StorefrontMessages } from '@/i18n/storefront';
 import type { Category, Tenant } from '@/source/types';
 import { ChevronIcon, CloseIcon, SearchIcon, SendIcon } from '../icons';
+import { TenantText } from '../TenantText';
 import styles from './home.module.css';
 
 /** The design's threshold: the compact header appears past 200px of scroll. */
@@ -214,8 +215,8 @@ export function HomeChrome({
           <span className={styles.announceGlyph} aria-hidden="true">
             <SendIcon />
           </span>
-          <span className={styles.announceText} dir="auto">
-            {announcement}
+          <span className={styles.announceText}>
+            <TenantText>{announcement}</TenantText>
           </span>
           <button
             className={styles.announceClose}

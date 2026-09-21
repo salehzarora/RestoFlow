@@ -20,11 +20,16 @@ import shell from './storefront.module.css';
 export function StorefrontScreen({
   tenant,
   locale,
+  slug,
   preset = 'dark',
   motion = 'full',
 }: {
   tenant: Tenant;
   locale: Locale;
+  /** The ROUTE slug. The menu route writes the session flag with the route slug
+      (a scenario slug resolves to the canonical tenant, so tenant.slug is NOT
+      the same string there); the intro route must READ it with the same one. */
+  slug: string;
   preset?: Preset;
   motion?: MotionMode;
 }) {
@@ -35,7 +40,7 @@ export function StorefrontScreen({
 
   return (
     <ThemeScope tokens={tokens} className={`${shell.root} ${rubik.variable}`} dir={dirOf(locale)}>
-      <IntroGate slug={tenant.slug} homeHref={`${storefrontPath(locale, tenant.slug)}/menu`}>
+      <IntroGate slug={slug} homeHref={`${storefrontPath(locale, slug)}/menu`}>
         <Intro tenant={tenant} locale={locale} motion={motion} />
       </IntroGate>
     </ThemeScope>

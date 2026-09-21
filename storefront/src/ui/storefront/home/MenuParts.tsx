@@ -9,6 +9,7 @@
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import type { CardMode, Category, MenuItem } from '@/source/types';
 import { PlusIcon, ChevronIcon, FlameIcon } from '../icons';
+import { TenantText } from '../TenantText';
 import { Price } from './HomeParts';
 import styles from './home.module.css';
 
@@ -32,17 +33,19 @@ function Media({
         : shape === 'grid'
           ? styles.cardMediaGrid
           : styles.rowMedia;
-  // The popular card carries EXACTLY ONE badge and it is the spotlight label
-  // (prototype/Storefront.dc.html:211); new/deal badges belong to the featured,
-  // list and grid cards (:237, :255, :278). Same slot, same token, start side.
-  const badgeText =
-    rankLabel !== undefined
-      ? rankLabel
-      : item.badge === 'new'
-        ? m.badgeNew
-        : item.badge === 'deal'
-          ? m.badgeDeal
-          : null;
+  // TWO DISTINCT SLOTS, so one truth can never delete the other.
+  //   popularity truth -> inline-START, the approved prototype slot (:211)
+  //   item truth       -> the opposite corner, but ONLY on a popular card
+  // On every other card shape the item badge keeps the approved inline-START
+  // slot exactly as before, so category sections are unchanged.
+  const itemBadgeText = item.soldOut
+    ? m.soldOut
+    : item.badge === 'new'
+      ? m.badgeNew
+      : item.badge === 'deal'
+        ? m.badgeDeal
+        : null;
+  const ranked = rankLabel !== undefined;
 
   return (
     <div className={cls}>
@@ -62,10 +65,20 @@ function Media({
           decoding="async"
         />
       )}
-      {item.soldOut ? (
-        <span className={`${styles.badge} ${styles.badgeSoldOut}`}>{m.soldOut}</span>
-      ) : badgeText === null ? null : (
-        <span className={styles.badge}>{badgeText}</span>
+      {ranked ? (
+        <span className={styles.badge} data-sf-badge="popularity">
+          {rankLabel}
+        </span>
+      ) : null}
+      {itemBadgeText === null ? null : (
+        <span
+          className={`${styles.badge}${item.soldOut ? ` ${styles.badgeSoldOut}` : ''}${
+            ranked ? ` ${styles.badgeItem}` : ''
+          }`}
+          data-sf-badge="item"
+        >
+          {itemBadgeText}
+        </span>
       )}
     </div>
   );
@@ -97,11 +110,11 @@ export function FeaturedCard({ item, m }: { item: MenuItem; m: StorefrontMessage
     >
       <Media item={item} shape="featured" m={m} />
       <div className={styles.cardBody}>
-        <p className={styles.cardName} dir="auto">
-          {item.name}
+        <p className={styles.cardName}>
+          <TenantText>{item.name}</TenantText>
         </p>
-        <p className={styles.cardDesc} dir="auto">
-          {item.description}
+        <p className={styles.cardDesc}>
+          <TenantText>{item.description}</TenantText>
         </p>
         <div className={styles.cardFoot}>
           {priceOf(item, m)}
@@ -126,11 +139,11 @@ export function PopularCard({
     <div className={styles.card}>
       <Media item={item} shape="popular" m={m} rankLabel={rankLabel} />
       <div className={styles.cardBody}>
-        <p className={`${styles.cardName} ${styles.cardNameSmall}`} dir="auto">
-          {item.name}
+        <p className={`${styles.cardName} ${styles.cardNameSmall}`}>
+          <TenantText>{item.name}</TenantText>
         </p>
-        <p className={styles.cardDesc} dir="auto">
-          {item.description}
+        <p className={styles.cardDesc}>
+          <TenantText>{item.description}</TenantText>
         </p>
         <div className={styles.cardFoot}>
           {priceOf(item, m)}
@@ -149,8 +162,8 @@ export function GridCard({ item, m }: { item: MenuItem; m: StorefrontMessages })
     >
       <Media item={item} shape="grid" m={m} />
       <div className={styles.cardBody}>
-        <p className={`${styles.cardName} ${styles.cardNameSmall}`} dir="auto">
-          {item.name}
+        <p className={`${styles.cardName} ${styles.cardNameSmall}`}>
+          <TenantText>{item.name}</TenantText>
         </p>
         <div className={styles.cardFoot}>
           {priceOf(item, m)}
@@ -168,11 +181,11 @@ export function ListRow({ item, m }: { item: MenuItem; m: StorefrontMessages }) 
       aria-disabled={item.soldOut ? 'true' : undefined}
     >
       <div className={styles.rowBody}>
-        <p className={styles.cardName} dir="auto">
-          {item.name}
+        <p className={styles.cardName}>
+          <TenantText>{item.name}</TenantText>
         </p>
-        <p className={styles.cardDesc} dir="auto">
-          {item.description}
+        <p className={styles.cardDesc}>
+          <TenantText>{item.description}</TenantText>
         </p>
         <div className={styles.cardFoot}>
           {priceOf(item, m)}
@@ -256,13 +269,13 @@ export function MenuSection({
     <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={titleId} data-sf-module="sections">
       <div className={styles.sectionHead}>
         <span className={styles.sectionBar} aria-hidden="true" />
-        <h2 className={styles.sectionTitle} id={titleId} dir="auto">
-          {category.name}
+        <h2 className={styles.sectionTitle} id={titleId}>
+          <TenantText>{category.name}</TenantText>
         </h2>
       </div>
       {category.blurb === null ? null : (
-        <p className={styles.sectionBlurb} dir="auto">
-          {category.blurb}
+        <p className={styles.sectionBlurb}>
+          <TenantText>{category.blurb}</TenantText>
         </p>
       )}
       {featured.length === 0 ? null : (

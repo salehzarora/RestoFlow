@@ -521,3 +521,117 @@ test('NEGATIVE CONTROL: the logical-CSS guard catches every physical form', () =
     'the exception must NOT leak to another stylesheet',
   );
 });
+
+// ----------------------------------------------- structural bidi isolation
+
+/**
+ * `dir="auto"` on a BLOCK-level element is a layout defect, not a text feature.
+ *
+ * It resolves direction from the first strong character, so the element's
+ * `text-align: start` then resolves against its OWN direction and the text
+ * jumps to the opposite edge from every direction-fixed neighbour - the accent
+ * rule beside a heading, the price row under a card name, the sibling rows in a
+ * footer. Menu content is single-language in MVP (CONTENT_AND_LOCALIZATION.md:3),
+ * so Arabic copy on an English page is the DESIGNED case and the split is
+ * plainly visible. 57 such instances shipped before this guard existed.
+ *
+ * The isolation run itself is fine and must NOT be banned: a bare inline
+ * `<span dir="auto">` (what `TenantText` renders) is the approved pattern
+ * (prototype Storefront.dc.html:140/:142, CONTENT_AND_LOCALIZATION.md:223).
+ */
+const TENANT_TEXT_RUN = /<span dir="auto">/g;
+
+/**
+ * Classes whose element is alignment-NEUTRAL, so `dir="auto"` on it cannot move
+ * anything: each sits in a centred container or shrink-wraps to its content.
+ * Every entry names the rule that neutralises it, and the test below proves
+ * that rule still exists - a stale exemption fails instead of quietly widening
+ * the guard.
+ */
+const NEUTRAL_BIDI_BLOCKS = [
+  { cls: 'brandName', sheet: 'home.module.css', neutraliser: '.lockupText', why: 'centred lockup' },
+  { cls: 'brandCity', sheet: 'home.module.css', neutraliser: '.lockupText', why: 'centred lockup' },
+  { cls: 'chipLabel', sheet: 'home.module.css', neutraliser: '.chip', why: 'inline-flex chip, shrink-wrapped' },
+  { cls: 'orbLabel', sheet: 'home.module.css', neutraliser: '.orbLabel', why: 'own text-align: center' },
+  { cls: 'emptyBody', sheet: 'home.module.css', neutraliser: '.empty', why: 'centred empty card' },
+  { cls: 'fact', sheet: 'home.module.css', neutraliser: '.fact', why: 'inline-flex pill, shrink-wrapped' },
+  { cls: 'name', sheet: 'Intro.module.css', neutraliser: '.centre', why: 'centred intro block' },
+  { cls: 'tagline', sheet: 'Intro.module.css', neutraliser: '.centre', why: 'centred intro block' },
+];
+
+/** Every `dir="auto"` that is NOT a bare isolation run, as [file, snippet]. */
+function structuralBidiSites(files) {
+  const found = [];
+  for (const f of files) {
+    const src = code(f).replace(TENANT_TEXT_RUN, ' ');
+    for (const m of src.matchAll(/<(\w+)[^>]*\sdir="auto"[^>]*>/g)) {
+      found.push({ file: rel(f), tag: m[1], snippet: m[0].replace(/\s+/g, ' ').trim() });
+    }
+  }
+  return found;
+}
+
+test('dir="auto" never sits on a structural block', () => {
+  const sites = structuralBidiSites(TSX);
+  const offenders = sites.filter(
+    (s) => !NEUTRAL_BIDI_BLOCKS.some((n) => s.snippet.includes(`styles.${n.cls}`)),
+  );
+  assert.deepEqual(
+    offenders.map((o) => `${o.file}: ${o.snippet}`),
+    [],
+    'move dir="auto" onto an inner run - use <TenantText> - so the block keeps the page direction',
+  );
+
+  // Non-vacuity: the approved isolation pattern must actually be in use, or
+  // this guard would pass on a tree that had simply deleted all bidi handling.
+  const runs = TSX.map((f) => (code(f).match(TENANT_TEXT_RUN) ?? []).length).reduce((a, b) => a + b, 0);
+  assert.ok(runs >= 1, 'the TenantText isolation run must exist');
+  const users = TSX.filter((f) => code(f).includes('<TenantText>'));
+  assert.ok(users.length >= 4, `expected TenantText across the card/section/story/footer surfaces, got ${users.length}`);
+
+  // Every documented exemption must still be neutralised by a real CSS rule.
+  for (const n of NEUTRAL_BIDI_BLOCKS) {
+    const sheet = CSS.find((f) => rel(f).endsWith(n.sheet));
+    assert.ok(sheet, `${n.sheet} must be in scope`);
+    const css = readFileSync(sheet, 'utf8');
+    const rule = new RegExp('\\' + n.neutraliser + '\\s*\\{[^}]*(text-align:\\s*center|align-items:\\s*center|display:\\s*inline-flex)');
+    assert.match(css, rule, `${n.cls}: ${n.neutraliser} no longer neutralises alignment (${n.why})`);
+  }
+});
+
+test('NEGATIVE CONTROL: the structural-bidi guard catches a block-level dir="auto"', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sf-bidi-'));
+  try {
+    const write = (name, body) => {
+      const f = path.join(dir, name);
+      writeFileSync(f, body, 'utf8');
+      return f;
+    };
+
+    // The approved pattern must pass.
+    const ok = write(
+      'ok.tsx',
+      'export const A = () => (\n  <p className={styles.cardName}>\n    <span dir="auto">{item.name}</span>\n  </p>\n);\n',
+    );
+    assert.deepEqual(structuralBidiSites([ok]), [], 'an inner isolation run must be allowed');
+
+    // Each of these is the defect and must be caught.
+    const bad = [
+      ['heading', '<h2 className={styles.sectionTitle} dir="auto">{x}</h2>'],
+      ['paragraph', '<p className={styles.cardDesc} dir="auto">{x}</p>'],
+      ['wrapper', '<div className={styles.footerRow} dir="auto">{x}</div>'],
+      ['template className', '<p className={`${styles.cardName} ${styles.cardNameSmall}`} dir="auto">{x}</p>'],
+      ['span with a layout class', '<span className={styles.announceText} dir="auto">{x}</span>'],
+    ];
+    for (const [label, jsx] of bad) {
+      const f = write(`bad-${label.replace(/\s/g, '-')}.tsx`, `export const A = () => (\n  ${jsx}\n);\n`);
+      assert.ok(structuralBidiSites([f]).length > 0, `the guard MISSED a ${label}`);
+    }
+
+    // A comment naming the pattern is prose, not code.
+    const prose = write('prose.tsx', '// never put dir="auto" on a block\nexport const A = 1;\n');
+    assert.deepEqual(structuralBidiSites([prose]), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

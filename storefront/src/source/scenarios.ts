@@ -14,12 +14,12 @@
  * 20-item menu in every scenario costs more build time than the evidence is
  * worth. The canonical `maps-burger` route keeps the full menu.
  *
- * NOT every state gets a route. Each scenario document costs roughly 170 KB of
- * the 4 MiB output budget, and the budget is a hard ceiling this phase may not
- * raise. So the slugs below cover the states that REQUIRE a screenshot, while
- * `popular: ready=false` and `motion: lively` - which the packet classifies as
- * unscreenshotted state evidence - are proven by tests/sf-home.test.mjs against
- * the real `buildHome` output and the real stylesheet instead.
+ * Every state now gets a route. While these were SHIPPED documents each cost
+ * roughly 170 KB of a hard 4 MiB ceiling, so `popular: ready=false` and
+ * `motion: lively` were proven by unit assertions instead. Gating them behind
+ * SF_EVIDENCE_ROUTES made evidence routes free, so both are now proven in a
+ * real rendered document - which is what finally exercises `sfFloat`, the one
+ * keyframe reachable only under the lively preset.
  *
  * This entire module disappears with the fixtures when a live adapter lands.
  */
@@ -87,10 +87,20 @@ export const SCENARIOS: readonly Scenario[] = [
     options: { items: [] },
   },
   {
-    slug: 'demo-popular-off',
-    proves: 'H05 POPULAR_READY=false - kitchen picks, no rank claim',
+    slug: 'demo-lively',
+    proves: 'H04 lively motion - the popular-card float, the only lively-only effect',
     preset: 'dark',
-    options: trimmed({ modules: { popular: { enabled: true, ready: false } } }),
+    options: trimmed({ motion: 'lively' as MotionMode }),
+  },
+  {
+    slug: 'demo-popular-off',
+    proves: 'H05 POPULAR_READY=false - kitchen picks, no rank claim, badges kept',
+    preset: 'dark',
+    // Deliberately NOT trimmed: the unranked state must be proven across the
+    // FULL canonical popular set, including the items that carry their own
+    // new/deal badge, so badge coexistence is visible in both ready states.
+    // Evidence-build only, so the full menu costs the shipped export nothing.
+    options: { modules: { popular: { enabled: true, ready: false } } },
   },
   {
     slug: 'demo-light',
