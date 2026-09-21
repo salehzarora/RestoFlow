@@ -14,6 +14,8 @@ import { storefrontMessages } from '@/i18n/storefront';
 import { rubik } from '@/fonts/rubik';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
+import { searchPath } from '@/routes/routes';
+import { MENU_VERSION, TAX_RATE } from '@/source/menu-fixture';
 import type { HomeView } from '@/source/types';
 import { LanguageMenu } from '../LanguageMenu';
 import { ThemeScope } from '../ThemeScope';
@@ -31,7 +33,9 @@ import {
 } from './HomeParts';
 import { MenuSection, PopularSection } from './MenuParts';
 import { CartAside, CartDock } from './CartParts';
+import { AsideSlot, DockSlot } from '../cart/CartRuntime';
 import { HomeChrome } from './HomeChrome';
+import { StorefrontRuntime } from '../StorefrontRuntime';
 import styles from './home.module.css';
 
 const MOTION_CLASS = {
@@ -60,6 +64,7 @@ export function Home({
     accent: sanitizeAccent(tenant.brand.accent, preset),
   });
   const empty = items.length === 0;
+  const searchHref = searchPath(locale, slug);
   const firstCategoryId = categories[0] === undefined ? '' : `sf-cat-${categories[0].id}`;
 
   // The hero's own header row: menu button on the start side, the brand lockup
@@ -85,9 +90,9 @@ export function Home({
       </div>
       <BrandLockup tenant={tenant} />
       <div className={`${styles.heroSide} ${styles.heroSideEnd}`}>
-        <button className={styles.iconBtn} type="button" aria-label={m.search} disabled>
+        <a className={styles.iconBtn} href={searchHref} aria-label={m.search}>
           <SearchIcon />
-        </button>
+        </a>
         <LanguageMenu locale={locale} hrefFor={hrefFor} variant="circle" />
       </div>
     </div>
@@ -99,79 +104,128 @@ export function Home({
       className={`${shell.root} ${rubik.variable} ${MOTION_CLASS[view.motion]}`}
       dir={dirOf(locale)}
     >
-      <div className={styles.shell}>
-        <main className={styles.page}>
-          {/*
-            FIXED ORDER. HomeChrome renders, in this order: the announcement,
-            the compact header, the hero, the service strip, the closed/paused
-            notice and the category rail.
-          */}
-          <HomeChrome
-            tenant={tenant}
-            m={m}
-            categories={categories}
-            slug={slug}
-            announcement={
-              // The announcement is auto-suppressed while closed or paused.
-              modules.announcement === null || tenant.service.state !== 'open'
-                ? null
-                : modules.announcement.text
-            }
-            searchLabel={m.search}
-            hero={
-              <CampaignHero
-                tenant={tenant}
+      {/*
+        The cart scope wraps the WHOLE shell: the dock slot must stay inside
+        <main> to keep its sticky positioning, and the aside slot must stay a
+        SIBLING of <main> because the wide layout is `main + .aside`. One
+        provider, two slots, neither moved out of its layout parent.
+      */}
+      <StorefrontRuntime
+        slug={slug}
+        menuVersion={MENU_VERSION}
+        items={items}
+        m={m}
+        motion={view.motion}
+        state={tenant.service.state}
+        opensAt={tenant.hours.opens}
+      >
+        <div className={styles.shell}>
+          <main className={styles.page}>
+            {/*
+              FIXED ORDER. HomeChrome renders, in this order: the announcement,
+              the compact header, the hero, the service strip, the closed/paused
+              notice and the category rail.
+            */}
+            <HomeChrome
+              tenant={tenant}
+              m={m}
+              categories={categories}
+              slug={slug}
+              announcement={
+                // The announcement is auto-suppressed while closed or paused.
+                modules.announcement === null || tenant.service.state !== 'open'
+                  ? null
+                  : modules.announcement.text
+              }
+              searchLabel={m.search}
+              searchHref={searchHref}
+              hero={
+                <CampaignHero
+                  tenant={tenant}
+                  m={m}
+                  title={modules.campaign.title}
+                  subline={modules.campaign.subline}
+                >
+                  {heroHeader}
+                </CampaignHero>
+              }
+              service={<ServiceStatusStrip tenant={tenant} m={m} />}
+              notice={
+                tenant.service.state === 'open' ? null : (
+                  <StateNotice state={tenant.service.state} tenant={tenant} m={m} />
+                )
+              }
+            />
+
+            {empty ? (
+              <EmptyMenu tenant={tenant} m={m} />
+            ) : (
+              <>
+                {modules.promo === null ? null : <PromoBanner promo={modules.promo} m={m} />}
+
+                {modules.popular.enabled ? (
+                  <PopularSection
+                    items={items}
+                    m={m}
+                    ready={modules.popular.ready}
+                    menuId={firstCategoryId}
+                  />
+                ) : null}
+
+                {categories.map((category) => (
+                  <MenuSection
+                    key={category.id}
+                    category={category}
+                    items={items.filter((item) => item.categoryId === category.id)}
+                    cardMode={cardMode}
+                    m={m}
+                  />
+                ))}
+
+                {modules.story === null ? null : <StoryCard story={modules.story} />}
+              </>
+            )}
+
+            <SiteFooter tenant={tenant} m={m} />
+
+            {/*
+              The PRERENDERED dock is passed as a child and shown until the
+              visitor's own cart has been read, so the static document and the
+              first client render are byte-identical. CartParts stays inert.
+            */}
+            {/* Each slot renders the PRERENDERED child until the visitor's
+                own cart has been read, so the static document and the first
+                client render are identical. */}
+            <DockSlot
+              m={m}
+              motion={view.motion}
+              state={tenant.service.state}
+              opensAt={tenant.hours.opens}
+            >
+              <CartDock
+                cart={cart}
                 m={m}
-                title={modules.campaign.title}
-                subline={modules.campaign.subline}
-              >
-                {heroHeader}
-              </CampaignHero>
-            }
-            service={<ServiceStatusStrip tenant={tenant} m={m} />}
-            notice={
-              tenant.service.state === 'open' ? null : (
-                <StateNotice state={tenant.service.state} tenant={tenant} m={m} />
-              )
-            }
-          />
+                state={tenant.service.state}
+                opensAt={tenant.hours.opens}
+              />
+            </DockSlot>
+          </main>
 
-          {empty ? (
-            <EmptyMenu tenant={tenant} m={m} />
-          ) : (
-            <>
-              {modules.promo === null ? null : <PromoBanner promo={modules.promo} m={m} />}
-
-              {modules.popular.enabled ? (
-                <PopularSection
-                  items={items}
-                  m={m}
-                  ready={modules.popular.ready}
-                  menuId={firstCategoryId}
-                />
-              ) : null}
-
-              {categories.map((category) => (
-                <MenuSection
-                  key={category.id}
-                  category={category}
-                  items={items.filter((item) => item.categoryId === category.id)}
-                  cardMode={cardMode}
-                  m={m}
-                />
-              ))}
-
-              {modules.story === null ? null : <StoryCard story={modules.story} />}
-            </>
-          )}
-
-          <SiteFooter tenant={tenant} m={m} />
-
-          <CartDock cart={cart} m={m} state={tenant.service.state} opensAt={tenant.hours.opens} />
-        </main>
-
-        <CartAside cart={cart} m={m} state={tenant.service.state} opensAt={tenant.hours.opens} />
-      </div>
+          <AsideSlot
+            m={m}
+            state={tenant.service.state}
+            opensAt={tenant.hours.opens}
+            taxRate={TAX_RATE}
+          >
+            <CartAside
+              cart={cart}
+              m={m}
+              state={tenant.service.state}
+              opensAt={tenant.hours.opens}
+            />
+          </AsideSlot>
+        </div>
+      </StorefrontRuntime>
       <span className={styles.srOnly} data-slug={slug} />
     </ThemeScope>
   );

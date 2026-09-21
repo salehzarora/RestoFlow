@@ -70,6 +70,10 @@ export function PlusIcon() {
   return <Icon d="M12 5v14M5 12h14" />;
 }
 
+export function MinusIcon() {
+  return <Icon d="M5 12h14" />;
+}
+
 export function CloseIcon() {
   return <Icon d="M6 6l12 12M18 6L6 18" />;
 }

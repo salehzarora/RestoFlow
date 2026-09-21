@@ -68,6 +68,23 @@ export interface StorefrontMessages {
   readonly callRestaurant: string;
   readonly menuLabel: string;
   readonly compactMenuLabel: string;
+  readonly searchPh: string;
+  readonly noResults: string;
+  readonly tryOther: string;
+  readonly required: string;
+  readonly optional: string;
+  readonly chooseOne: string;
+  readonly upTo: string;
+  readonly included: string;
+  readonly notes: string;
+  readonly notesHint: string;
+  readonly addToCart: string;
+  readonly updateItem: string;
+  readonly chooseToContinue: string;
+  readonly requiredError: string;
+  readonly maxReached: string;
+  readonly decrease: string;
+  readonly increase: string;
   readonly languageNames: Readonly<Record<Locale, string>>;
 }
 

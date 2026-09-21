@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { fill, storefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
-import { storefrontPath } from '@/routes/routes';
+import { searchPath, storefrontPath } from '@/routes/routes';
 import type { MotionMode, Tenant } from '@/source/types';
 import { LanguageMenu } from './LanguageMenu';
 import { ChevronIcon, DeliveryIcon, SearchIcon, StoreIcon } from './icons';
@@ -73,9 +73,13 @@ export function Intro({
             locale={locale}
             hrefFor={(target) => storefrontPath(target, tenant.slug)}
           />
-          <button className={styles.glassBtn} type="button" aria-label={m.search} disabled>
+          <a
+            className={styles.glassBtn}
+            href={searchPath(locale, tenant.slug)}
+            aria-label={m.search}
+          >
             <SearchIcon />
-          </button>
+          </a>
         </div>
 
         <div className={styles.centre}>

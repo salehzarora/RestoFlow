@@ -107,6 +107,9 @@ export function FeaturedCard({ item, m }: { item: MenuItem; m: StorefrontMessage
     <div
       className={`${styles.card} ${item.soldOut ? styles.cardSoldOut : ''}`}
       aria-disabled={item.soldOut ? 'true' : undefined}
+      role="button"
+      tabIndex={item.soldOut ? -1 : 0}
+      data-sf-item={item.id}
     >
       <Media item={item} shape="featured" m={m} />
       <div className={styles.cardBody}>
@@ -136,7 +139,7 @@ export function PopularCard({
   rankLabel: string;
 }) {
   return (
-    <div className={styles.card}>
+    <div className={styles.card} role="button" tabIndex={0} data-sf-item={item.id}>
       <Media item={item} shape="popular" m={m} rankLabel={rankLabel} />
       <div className={styles.cardBody}>
         <p className={`${styles.cardName} ${styles.cardNameSmall}`}>
@@ -159,6 +162,9 @@ export function GridCard({ item, m }: { item: MenuItem; m: StorefrontMessages })
     <div
       className={`${styles.card} ${item.soldOut ? styles.cardSoldOut : ''}`}
       aria-disabled={item.soldOut ? 'true' : undefined}
+      role="button"
+      tabIndex={item.soldOut ? -1 : 0}
+      data-sf-item={item.id}
     >
       <Media item={item} shape="grid" m={m} />
       <div className={styles.cardBody}>
@@ -179,6 +185,9 @@ export function ListRow({ item, m }: { item: MenuItem; m: StorefrontMessages }) 
     <div
       className={`${styles.row} ${item.soldOut ? styles.cardSoldOut : ''}`}
       aria-disabled={item.soldOut ? 'true' : undefined}
+      role="button"
+      tabIndex={item.soldOut ? -1 : 0}
+      data-sf-item={item.id}
     >
       <div className={styles.rowBody}>
         <p className={styles.cardName}>

@@ -72,6 +72,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "2",
@@ -85,6 +86,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: "new",
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "4",
@@ -98,6 +100,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "5",
@@ -111,6 +114,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: true,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "6",
@@ -124,6 +128,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "3",
@@ -137,6 +142,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "19",
@@ -150,6 +156,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "extras", "remove"],
   },
   {
     id: "7",
@@ -163,6 +170,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["sauce"],
   },
   {
     id: "8",
@@ -176,6 +184,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["sauce"],
   },
   {
     id: "9",
@@ -189,6 +198,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "11",
@@ -202,6 +212,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["sauce"],
   },
   {
     id: "12",
@@ -215,6 +226,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: "new",
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "13",
@@ -228,6 +240,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "14",
@@ -241,6 +254,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "15",
@@ -254,6 +268,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "20",
@@ -267,6 +282,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "21",
@@ -280,6 +296,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: false,
+    groupIds: [],
   },
   {
     id: "16",
@@ -293,6 +310,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: "deal",
     soldOut: false,
     hasOptions: true,
+    groupIds: ["bun", "meal"],
   },
   {
     id: "17",
@@ -306,6 +324,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["meal"],
   },
   {
     id: "22",
@@ -319,6 +338,7 @@ export const MENU_ITEMS: readonly MenuItem[] = [
     badge: null,
     soldOut: false,
     hasOptions: true,
+    groupIds: ["meal"],
   },
 ];
 
@@ -344,4 +364,12 @@ export const HOME_MODULES: HomeModules = {
 };
 
 /** Configured VAT rate. Configuration, not a legal decision by any component. */
+/**
+ * Identifies THIS menu's id-space. A persisted cart stores item, group and
+ * option IDS, so it is only meaningful against the menu those ids came from -
+ * bump this whenever an id is reused for different content, and every stored
+ * cart for the old menu is discarded instead of resolving to the wrong thing.
+ */
+export const MENU_VERSION = 'mb-1';
+
 export const TAX_RATE = 0.18;

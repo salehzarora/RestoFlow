@@ -91,6 +91,7 @@ export function HomeChrome({
   service,
   notice,
   searchLabel,
+  searchHref,
 }: {
   tenant: Tenant;
   /** The ROUTE slug, not tenant.slug: every demo scenario resolves to the same
@@ -103,6 +104,7 @@ export function HomeChrome({
   service: ReactNode;
   notice: ReactNode;
   searchLabel: string;
+  searchHref: string;
 }) {
   const [dismissed, setDismissed] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -255,9 +257,9 @@ export function HomeChrome({
           <span className={styles.compactName}>
             <span dir="auto">{tenant.displayName}</span>
           </span>
-          <button className={styles.compactBtn} type="button" aria-label={searchLabel} disabled>
+          <a className={styles.compactBtn} href={searchHref} aria-label={searchLabel}>
             <SearchIcon />
-          </button>
+          </a>
         </div>
         {categories.length === 0 ? null : (
           <nav className={styles.chipRail} ref={chipRail} aria-label={m.compactMenuLabel}>

@@ -152,9 +152,27 @@ test('money never touches a float', () => {
  */
 const UI_SESSION_MODULE = 'src/session/uiSession.ts';
 
-/** Banned in EVERY app/ and src/ file, the allowlisted module included. */
+/**
+ * The ONE module allowed to touch the LONG-LIVED store, added for Phase C.
+ *
+ * WIDENED DELIBERATELY, not routed around. `localStorage` was previously in
+ * BANNED_EVERYWHERE because nothing was allowed to persist. Phase C's approved
+ * contract requires a per-slug cart at the exact key `sf:v1:cart:<slug>`, so
+ * the ban becomes a second EXACT allowlist entry rather than a hole: the two
+ * stores are confined independently, and neither module may reach the other's
+ * store (proved by the negative control below).
+ */
+const CART_STORAGE_MODULE = 'src/cart/cartStorage.ts';
+
+/** The store each module owns. Every other file may touch neither. */
+const STORE_OWNERS = [
+  ['sessionStorage', UI_SESSION_MODULE],
+  ['localStorage', CART_STORAGE_MODULE],
+];
+
+/** Banned in EVERY app/ and src/ file, the allowlisted modules included. */
 const BANNED_EVERYWHERE = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
-  'localStorage', 'indexedDB', 'document.cookie'];
+  'indexedDB', 'document.cookie'];
 
 /**
  * The rule as a pure function of (path, text), so the negative controls below
@@ -168,22 +186,25 @@ function storageOffence(relPath, source) {
   for (const api of BANNED_EVERYWHERE) {
     if (src.includes(api)) return `${relPath}: ${api} is not permitted anywhere`;
   }
-  if (relPath !== UI_SESSION_MODULE && src.includes('sessionStorage')) {
-    return `${relPath}: sessionStorage is allowed ONLY in ${UI_SESSION_MODULE}`;
+  for (const [api, owner] of STORE_OWNERS) {
+    if (relPath !== owner && src.includes(api)) {
+      return `${relPath}: ${api} is allowed ONLY in ${owner}`;
+    }
   }
   return null;
 }
 
-test('browser storage is confined to the one allowlisted UI-session module', () => {
+test('each browser store is confined to its own allowlisted module', () => {
   for (const f of TSX) {
     assert.equal(storageOffence(rel(f), readFileSync(f, 'utf8')), null);
   }
-  // Non-vacuity: the allowlisted file must exist AND must actually use the API,
-  // or the allowlist is guarding nothing.
-  const helper = TSX.find((f) => rel(f) === UI_SESSION_MODULE);
-  assert.ok(helper, `${UI_SESSION_MODULE} must exist`);
-  assert.ok(code(helper).includes('sessionStorage'),
-    `${UI_SESSION_MODULE} must actually use sessionStorage`);
+  // Non-vacuity: each allowlisted file must exist AND must actually use the API
+  // it is allowlisted for, or that allowlist entry is guarding nothing.
+  for (const [api, owner] of STORE_OWNERS) {
+    const helper = TSX.find((f) => rel(f) === owner);
+    assert.ok(helper, `${owner} must exist`);
+    assert.ok(code(helper).includes(api), `${owner} must actually use ${api}`);
+  }
 });
 
 test('the UI-session module stores only the two approved boolean flags', () => {
@@ -229,12 +250,33 @@ test('NEGATIVE CONTROL: the storage rule fails on an unauthorised FILE and an un
     assert.ok(caughtFile !== null, 'the rule MISSED sessionStorage in an unauthorised file');
     assert.match(caughtFile, /sessionStorage is allowed ONLY/);
 
-    // The allowlist covers sessionStorage ONLY: a long-lived store in the SAME
-    // file is still a failure.
+    // The two allowlists are SEPARATE. The session module may not reach the
+    // long-lived store...
     writeFileSync(helperCopy,
       readFileSync(helperCopy, 'utf8') + '\nconst leak = localStorage.getItem("x");\n', 'utf8');
-    assert.ok(storageOffence(relOf(helperCopy), readFileSync(helperCopy, 'utf8')) !== null,
-      'the allowlist must NOT extend to a long-lived store');
+    const crossed = storageOffence(relOf(helperCopy), readFileSync(helperCopy, 'utf8'));
+    assert.ok(crossed !== null, 'the session allowlist must NOT extend to a long-lived store');
+    assert.match(crossed, /localStorage is allowed ONLY/);
+
+    // ...and the cart module may not reach the session store.
+    const cartCopy = copy(CART_STORAGE_MODULE);
+    assert.equal(storageOffence(relOf(cartCopy), readFileSync(cartCopy, 'utf8')), null,
+      'the cart storage module must be allowed its own store');
+    writeFileSync(cartCopy,
+      readFileSync(cartCopy, 'utf8') + '\nconst leak = sessionStorage.getItem("x");\n', 'utf8');
+    const crossedBack = storageOffence(relOf(cartCopy), readFileSync(cartCopy, 'utf8'));
+    assert.ok(crossedBack !== null, 'the cart allowlist must NOT extend to the session store');
+    assert.match(crossedBack, /sessionStorage is allowed ONLY/);
+
+    // An unauthorised file using the LONG-LIVED store must be caught too.
+    const thirdCopy = copy('src/ui/storefront/home/CartParts.tsx');
+    assert.equal(storageOffence(relOf(thirdCopy), readFileSync(thirdCopy, 'utf8')), null);
+    writeFileSync(thirdCopy,
+      readFileSync(thirdCopy, 'utf8') + '\nconst leak = localStorage.getItem("sf:v1:cart:x");\n',
+      'utf8');
+    const caughtLong = storageOffence(relOf(thirdCopy), readFileSync(thirdCopy, 'utf8'));
+    assert.ok(caughtLong !== null, 'the rule MISSED localStorage in an unauthorised file');
+    assert.match(caughtLong, /localStorage is allowed ONLY/);
 
     // ...and naming the API in prose is not an offence.
     assert.equal(

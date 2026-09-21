@@ -1723,3 +1723,74 @@
     transform: translateX(120%);
   }
 }
+
+/*
+ * DOCK HALO - DESIGN_HANDOFF.md:76 "A halo pulses while the cart has items and
+ * motion is not `calm`", named `sfHalo` at TOKENS.json:403 with the 2600ms
+ * duration at :383. It is a decorative overlay ring, never a box-shadow on the
+ * dock itself, so it cannot enlarge the dock's hit area.
+ *
+ * Only reachable once the cart is live, which is why Phase B had no consumer
+ * for it: `.dockHalo` is rendered by the hydrated dock alone.
+ */
+.dockHalo {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-module);
+  box-shadow: 0 0 0 5px var(--accB);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.motionFull .dockHalo,
+.motionLively .dockHalo {
+  /* The easing is authored in the prototype (Storefront.dc.html:328) and has
+     no TOKENS.json name, so it is written out here rather than mis-attributed
+     to --e-standard, which is a different curve. */
+  animation: sfHalo var(--d-halo) cubic-bezier(0.2, 0.6, 0.3, 1) 900ms infinite;
+}
+
+@keyframes sfHalo {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  70%,
+  100% {
+    transform: scale(1.04, 1.24);
+    opacity: 0;
+  }
+}
+
+/*
+ * COUNT BUMP - INTERACTIONS.md:69 "the cart dock count bumps 1 -> 1.25 -> 1
+ * over 200ms". The prototype instead holds 1.25 for the toast's whole 2200ms
+ * life (Storefront.dc.html:703/:796); the handoff text is followed here and the
+ * divergence is recorded in the Phase C report.
+ */
+.motionFull .dockBump,
+.motionLively .dockBump {
+  animation: sfBump var(--d-standard) var(--e-overshoot) 1;
+}
+
+@keyframes sfBump {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* No-image cart line: the initial on the shared surface-to-accent wash, the
+   same fallback every other card uses (COMPONENT_INVENTORY.md:92). */
+.dockThumbNone {
+  display: grid;
+  place-items: center;
+  font: 900 15px / 1 var(--font);
+  color: var(--acct);
+  background: linear-gradient(135deg, var(--sf2), var(--accA));
+}

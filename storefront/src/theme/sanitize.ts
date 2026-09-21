@@ -90,15 +90,26 @@ export function normaliseHex(hex: string): Hex {
  */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
-export function isValidSlug(value: string): boolean {
-  return SLUG.test(value);
+/**
+ * The `typeof` check is NOT redundant with the type annotation.
+ *
+ * `RegExp.prototype.test` COERCES its argument, so `SLUG.test(null)` tests the
+ * string "null" - which matches this pattern - and the function returned true
+ * for null, undefined, 7 and true. Types are erased at runtime, and both
+ * callers of this are trust boundaries that build a STORAGE KEY from the
+ * result, so the check has to exist in the code, not only in the annotation.
+ * Returning a type predicate makes that guarantee usable by callers.
+ */
+export function isValidSlug(value: unknown): value is string {
+  return typeof value === 'string' && SLUG.test(value);
 }
 
 /** Request references are short, upper-case and dash-separated, e.g. MB-2487. */
 const REF = /^[A-Z0-9]{1,8}-[A-Z0-9]{1,12}$/;
 
-export function isValidRef(value: string): boolean {
-  return REF.test(value);
+/** Same coercion hazard as isValidSlug; guarded the same way. */
+export function isValidRef(value: unknown): value is string {
+  return typeof value === 'string' && REF.test(value);
 }
 
 /**

@@ -81,3 +81,60 @@ test('alternates name every locale exactly once', () => {
   assert.deepEqual(Object.keys(alt).sort(), [...LOCALES].sort());
   assert.equal(new Set(Object.values(alt)).size, LOCALES.length, 'alternates must be distinct');
 });
+
+// ------------------------------------------------ the deeper storefront screens
+
+test('menu and search have builders, and they compose off storefrontPath', () => {
+  for (const locale of LOCALES) {
+    const base = r.storefrontPath(locale, 'maps-burger');
+    assert.equal(r.menuPath(locale, 'maps-burger'), `${base}/menu`);
+    assert.equal(r.searchPath(locale, 'maps-burger'), `${base}/search`);
+  }
+  assert.equal(r.searchPath('ar', 'maps-burger'), '/s/maps-burger/search');
+  assert.equal(r.searchPath('en', 'maps-burger'), '/en/s/maps-burger/search');
+});
+
+test('a 3-segment storefront path parses, so the language switcher does not silently fail', () => {
+  // Before Phase C these returned `unknown`, which makes switchLocalePath
+  // return null - the switcher would quietly refuse to move between locales on
+  // the menu and search screens.
+  for (const locale of LOCALES) {
+    assert.deepEqual(r.parseRoute(r.menuPath(locale, 'maps-burger')),
+      { locale, kind: 'menu', slug: 'maps-burger' });
+    assert.deepEqual(r.parseRoute(r.searchPath(locale, 'maps-burger')),
+      { locale, kind: 'search', slug: 'maps-burger' });
+  }
+});
+
+test('only the two named leaves parse; any other third segment stays unknown', () => {
+  for (const p of ['/s/maps-burger/checkout', '/s/maps-burger/cart', '/s/maps-burger/menu/extra',
+                   '/s/Bad Slug/search', '/s/maps-burger/MENU']) {
+    assert.equal(r.parseRoute(p).kind, 'unknown', `${p} must not parse`);
+  }
+  // A trailing slash is NOT a third segment: empty segments are filtered, and
+  // the committed vercel.json sets trailingSlash: false, so `/s/x/` is the same
+  // resource as `/s/x` and must keep parsing as the storefront.
+  assert.equal(r.parseRoute('/s/maps-burger/').kind, 'storefront');
+  assert.equal(r.parseRoute('/s/maps-burger/search/').kind, 'search');
+});
+
+test('switching locale on menu and search keeps the SAME screen', () => {
+  assert.equal(r.switchLocalePath('/s/maps-burger/search', 'en'), '/en/s/maps-burger/search');
+  assert.equal(r.switchLocalePath('/he/s/maps-burger/menu', 'ar'), '/s/maps-burger/menu');
+  assert.equal(r.switchLocalePath('/en/s/maps-burger/search', 'he'), '/he/s/maps-burger/search');
+  // ...and never swaps one screen for another.
+  assert.notEqual(r.switchLocalePath('/s/maps-burger/search', 'en'), '/en/s/maps-burger/menu');
+});
+
+test('switching is still an involution on the deeper screens', () => {
+  for (const build of [r.menuPath, r.searchPath]) {
+    for (const from of LOCALES) {
+      const start = build(from, 'maps-burger');
+      for (const to of LOCALES) {
+        const moved = r.switchLocalePath(start, to);
+        assert.equal(moved, build(to, 'maps-burger'));
+        assert.equal(r.switchLocalePath(moved, from), start, `${from} -> ${to} -> ${from}`);
+      }
+    }
+  }
+});

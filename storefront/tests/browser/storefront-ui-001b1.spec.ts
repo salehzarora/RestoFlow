@@ -323,11 +323,51 @@ test('B1-M5n NEGATIVE CONTROL: without reduced motion those scrolls animate', as
 // `.motionLively`, a preset no canonical route uses. Evidence routes cost the
 // shipped export nothing, so the 13th keyframe gets real coverage rather than
 // a documented gap.
+/**
+ * PHASE C CHANGED WHAT "THE DOCK" MEANS.
+ *
+ * In Phase B the dock and the aside rendered a build-time fixture cart, so they
+ * were present on every load. Phase C makes both surfaces LIVE: they now show
+ * the visitor's own cart, and an empty cart correctly renders no dock at all
+ * (DESIGN_HANDOFF.md:76 "Hidden when the cart is empty").
+ *
+ * So a test that wants a dock has to be a visitor who HAS one. Seeding the
+ * approved storage key is the honest way to do that - it is exactly the state a
+ * visitor reaches by adding an item, and it keeps the assertion below about
+ * what the dock SHOWS rather than about whether a fixture happens to exist.
+ */
+async function seedCart(page: Page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem(
+        'sf:v1:cart:maps-burger',
+        JSON.stringify({
+          schema: 1,
+          slug: 'maps-burger',
+          menuVersion: 'mb-1',
+          lines: [
+            { lineId: 'l1aaa', itemId: '1', qty: 1, selections: { bun: ['brioche'] }, note: '' },
+            { lineId: 'l2bbb', itemId: '7', qty: 2, selections: { sauce: ['bbq'] }, note: '' },
+          ],
+        }),
+      );
+      // Deliberately NOT the `seen` flag: setting it makes the INTRO route skip
+      // itself, which silently removes the intro's 8 keyframes from any
+      // measurement that walks both surfaces.
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 const ANIMATED_ROUTES = ['/s/maps-burger', '/s/maps-burger/menu', '/s/demo-lively/menu'];
 
 test('B1-M6 every consumed animation resolves to a real keyframe', async ({ page }) => {
   const w = watch(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  // A cart, so the DOCK renders: Phase C hides it when the cart is empty, and
+  // the dock is where the sheen and the halo keyframes are consumed.
+  await seedCart(page);
   const union = { defined: new Set<string>(), used: new Set<string>(), unresolved: [] as string[] };
 
   for (const route of ANIMATED_ROUTES) {
@@ -378,9 +418,19 @@ test('B1-M6 every consumed animation resolves to a real keyframe', async ({ page
   union.unresolved.push(...report.unresolved);
   }
 
-  // ALL 13 consumed Phase A/B animations, across both surfaces.
+  // ALL consumed animations across both surfaces: 13 from Phase A/B plus the
+  // Phase C dock halo, which only becomes reachable once the cart is live (it
+  // is gated on the cart having items, so Phase B had no consumer for it).
   expect(union.unresolved, 'no unresolved animation anywhere').toEqual([]);
-  expect(union.used.size, 'every consumed keyframe across Phase A + Phase B').toBe(13);
+  expect(union.used.size, 'every consumed keyframe across Phase A + Phase B + C').toBe(14);
+  // Named, not just counted: a bare total would stay green if one keyframe
+  // stopped being consumed while another started. NOTE there are TWO sfHalo
+  // keyframes - the Intro CTA has had one since Phase A, and CSS Modules scope
+  // keyframe names per FILE - so the home/dock one must be named specifically.
+  const halo = [...union.used].filter((u) => /home-module.*sfHalo/.test(u));
+  expect(halo.length, 'the Phase C dock halo must be consumed on the menu route').toBe(1);
+  expect([...union.used].filter((u) => /Intro-module.*sfHalo/.test(u)).length,
+    "the Intro's own halo must still be consumed").toBe(1);
   expect([...union.used].every((u) => union.defined.has(u))).toBe(true);
   // The Intro's own set must genuinely be among them.
   const intro = [...union.used].filter((u) => u.includes('Intro-module'));

@@ -21,6 +21,20 @@ export function storefrontPath(locale: Locale, slug: string): string {
   return `${localePrefix(locale)}/s/${slug}`;
 }
 
+/**
+ * The menu screen. This build splits the handoff's single `/s/:slug` into two
+ * static documents - the intro at `/s/:slug` and the menu at `/s/:slug/menu` -
+ * so every builder that means "the menu" has to say so explicitly.
+ */
+export function menuPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/menu`;
+}
+
+/** SCREEN_MAP.json:113 `routeIntent: "/s/:slug/search"`. */
+export function searchPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/search`;
+}
+
 export function requestPath(locale: Locale, ref: string): string {
   return `${localePrefix(locale)}/r/${ref}`;
 }
@@ -31,9 +45,20 @@ export function localeHomePath(locale: Locale): string {
 
 export interface ParsedRoute {
   readonly locale: Locale;
-  readonly kind: 'storefront' | 'request' | 'localeHome' | 'unknown';
+  readonly kind: 'storefront' | 'menu' | 'search' | 'request' | 'localeHome' | 'unknown';
   readonly slug?: string;
   readonly ref?: string;
+}
+
+/**
+ * The only leaf segments `/s/:slug/...` has. Whitelisted rather than pattern
+ * matched, so a third screen cannot start parsing by accident: adding one is an
+ * edit here, a builder above and a case in `switchLocalePath` below.
+ */
+const STOREFRONT_LEAVES = { menu: 'menu', search: 'search' } as const;
+
+function isLeaf(segment: string | undefined): segment is keyof typeof STOREFRONT_LEAVES {
+  return segment !== undefined && Object.hasOwn(STOREFRONT_LEAVES, segment);
 }
 
 /**
@@ -54,6 +79,9 @@ export function parseRoute(pathname: string): ParsedRoute {
   if (rest.length === 2 && rest[0] === 's' && isValidSlug(rest[1])) {
     return { locale, kind: 'storefront', slug: rest[1] };
   }
+  if (rest.length === 3 && rest[0] === 's' && isValidSlug(rest[1]) && isLeaf(rest[2])) {
+    return { locale, kind: rest[2], slug: rest[1] };
+  }
   if (rest.length === 2 && rest[0] === 'r' && isValidRef(rest[1])) {
     return { locale, kind: 'request', ref: rest[1] };
   }
@@ -70,6 +98,10 @@ export function switchLocalePath(pathname: string, target: Locale): string | nul
   switch (parsed.kind) {
     case 'storefront':
       return parsed.slug ? storefrontPath(target, parsed.slug) : null;
+    case 'menu':
+      return parsed.slug ? menuPath(target, parsed.slug) : null;
+    case 'search':
+      return parsed.slug ? searchPath(target, parsed.slug) : null;
     case 'request':
       return parsed.ref ? requestPath(target, parsed.ref) : null;
     case 'localeHome':

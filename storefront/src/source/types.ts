@@ -100,6 +100,73 @@ export interface MenuItem {
   readonly soldOut: boolean;
   /** True when the item has option groups, so its price is a STARTING price. */
   readonly hasOptions: boolean;
+  /**
+   * Modifier groups this item offers, in display order. Empty for an item that
+   * is ordered as-is; `hasOptions` is exactly `groupIds.length > 0`.
+   */
+  readonly groupIds: readonly string[];
+}
+
+/**
+ * One choice inside a modifier group.
+ *
+ * `priceDeltaMinor` is an INTEGER number of agorot added to the item's base
+ * price when the option is selected. Zero is the common case and renders as the
+ * approved "included" copy (or as nothing at all in a removal group).
+ */
+export interface ModifierOption {
+  readonly id: string;
+  readonly name: string;
+  readonly priceDeltaMinor: Minor;
+}
+
+/**
+ * A modifier group, exactly as the approved prototype models it
+ * (prototype/storefront-data.js GROUPS).
+ *
+ * `required` means AT LEAST ONE selection - the prototype's own rule is
+ * `required && selections.length === 0` is unmet, for single and multi alike.
+ * `single` replaces the selection; a multi group accumulates up to `max`.
+ * `removal` marks a group whose options take things OFF the item: its zero
+ * deltas render blank rather than as "included".
+ */
+export interface ModifierGroup {
+  readonly id: string;
+  readonly name: string;
+  readonly required: boolean;
+  readonly single: boolean;
+  /** Only meaningful for a multi group. Absent means unbounded. */
+  readonly max?: number;
+  readonly removal?: boolean;
+  readonly options: readonly ModifierOption[];
+}
+
+/** Selected option ids, keyed by group id. */
+export type ModifierSelections = Readonly<Record<string, readonly string[]>>;
+
+/**
+ * One configured line in the cart.
+ *
+ * This is the PERSISTED shape (see src/cart/cartStorage.ts). It carries ids and
+ * primitives only - never a resolved name, price or image, because those come
+ * from the menu and must not be trusted from storage.
+ */
+export interface CartLine {
+  readonly lineId: string;
+  readonly itemId: string;
+  /** 1..20, integer. */
+  readonly qty: number;
+  readonly selections: ModifierSelections;
+  /** Kitchen note, at most 140 characters after sanitising. */
+  readonly note: string;
+}
+
+/** The persisted cart. `schema` is checked on every read. */
+export interface CartState {
+  readonly schema: 1;
+  readonly slug: string;
+  readonly menuVersion: string;
+  readonly lines: readonly CartLine[];
 }
 
 export interface AnnouncementModule {

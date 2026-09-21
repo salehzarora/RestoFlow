@@ -1,0 +1,251 @@
+/*
+ * Search - screen 3 of the approved handoff.
+ *
+ * Canonical proof: search__ar__dark__results__390x844.png (query "برجر", four
+ * rows) and search__ar__dark__no-results__390x844.png (query "سوشي"). Every
+ * number below is measured from those two files at 390x844 CSS px and matches
+ * prototype/Storefront.dc.html:343-360.
+ *
+ * ARITHMETIC CHECK for the header, which is a pure logical flex row with
+ * nothing positioned physically: 390 - 8 (start pad) - 44 (chevron) - 6 (gap)
+ * - 8 (end pad) = 324 = the measured field width.
+ *
+ * The result row is NOT a variant of home's ListRow. They share only padding,
+ * gap and radius; the thumb size, type scale, second line (CATEGORY, not
+ * description), price position, price COLOUR and the absence of an add control
+ * all differ. Reusing ListRow would have silently diverged from the canonical
+ * screenshot.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* --- sticky header -------------------------------------------------------- */
+
+/* "Sticky" in the handoff's sense: the header is pinned by being the non-
+   growing child of a full-height column whose sibling scrolls. */
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--sf);
+}
+
+.back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.back svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The chevron points back along the reading direction, so it mirrors. */
+.back:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  border: 1.5px solid var(--acc);
+  background: var(--bg);
+}
+
+/* The magnifier. `SearchIcon` takes no className, so it is reached by
+   position - it is the field's only leading svg. */
+.field > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--tx3);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  /* `font: inherit` on purpose: a bare font-size leaves the control on the UA
+     form font, which renders Arabic in a different face from the rest of the
+     screen (visible in the canonical PNG). */
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--tx3);
+}
+
+.clear {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--sf2);
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.clear svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* --- results -------------------------------------------------------------- */
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 40px;
+}
+
+/* 10 + 56 + 10 + 2 = 78px tall. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--hair);
+  background: var(--sf);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rowSoldOut {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.thumb {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--sf2);
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* A flat --sf2 bed with the initial in accent at 20/900. Deliberately NOT
+   home's .cardNoImage, whose 26px type and gradient wash are drawn for a much
+   larger tile. */
+.thumbNone {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--acct);
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowName {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The CATEGORY name, not the description. */
+.rowCat {
+  display: block;
+  font-size: 12.5px;
+  color: var(--tx3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Primary ink, NOT accent: home's <Price> is accent and would diverge here. */
+.rowPrice {
+  flex: none;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+/* --- no results ----------------------------------------------------------- */
+
+/* Title and body only. COMPONENT_INVENTORY.md:177 describes a shared EmptyState
+   with a 64px icon tile and an optional action, but the canonical screenshot
+   named in DESIGN_HANDOFF.md:88 has neither, and neither does the prototype.
+   The named proof wins; the divergence is recorded in the Phase C report. */
+.empty {
+  padding: 48px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.emptyBody {
+  font-size: 14px;
+  color: var(--tx2);
+}

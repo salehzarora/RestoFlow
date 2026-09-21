@@ -402,6 +402,43 @@ test('B2-B3 the structural alignments the flip used to break', async ({ page }) 
   assertClean('B2-B3', w, await overflow(page));
 });
 
+/**
+ * PHASE C CHANGED WHAT "THE DOCK" MEANS.
+ *
+ * In Phase B the dock and the aside rendered a build-time fixture cart, so they
+ * were present on every load. Phase C makes both surfaces LIVE: they now show
+ * the visitor's own cart, and an empty cart correctly renders no dock at all
+ * (DESIGN_HANDOFF.md:76 "Hidden when the cart is empty").
+ *
+ * So a test that wants a dock has to be a visitor who HAS one. Seeding the
+ * approved storage key is the honest way to do that - it is exactly the state a
+ * visitor reaches by adding an item, and it keeps the assertion below about
+ * what the dock SHOWS rather than about whether a fixture happens to exist.
+ */
+async function seedCart(page: Page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem(
+        'sf:v1:cart:maps-burger',
+        JSON.stringify({
+          schema: 1,
+          slug: 'maps-burger',
+          menuVersion: 'mb-1',
+          lines: [
+            { lineId: 'l1aaa', itemId: '1', qty: 1, selections: { bun: ['brioche'] }, note: '' },
+            { lineId: 'l2bbb', itemId: '7', qty: 2, selections: { sauce: ['bbq'] }, note: '' },
+          ],
+        }),
+      );
+      // Deliberately NOT the `seen` flag: setting it makes the INTRO route skip
+      // itself, which silently removes the intro's 8 keyframes from any
+      // measurement that walks both surfaces.
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 // ------------------------------------------------------------- MINOR-6
 
 test('B2-M6 the cart dock shows the running subtotal, not the total', async ({ page }) => {
@@ -409,7 +446,10 @@ test('B2-M6 the cart dock shows the running subtotal, not the total', async ({ p
   // lets the dock be cross-checked against the page's own numbers rather than
   // against a literal a future fixture change would silently invalidate.
   await page.setViewportSize({ width: 1280, height: 900 });
+  await seedCart(page);
   await page.goto(`${BASE}/en/s/maps-burger/menu`, { waitUntil: 'networkidle' });
+  // Wait for hydration to swap the prerendered surfaces for the live ones.
+  await page.locator('[data-sf-dock="live"]').waitFor({ state: 'attached' });
 
   const money = await page.evaluate(() => {
     const dock = document.querySelector('[class*="dockTotal"]')?.textContent?.trim() ?? '';

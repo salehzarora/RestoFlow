@@ -4,7 +4,7 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -268,13 +268,71 @@ test('motion classes map calm to no extra class', () => {
 
 // --------------------------------------------------------------- cart is inert
 
+/**
+ * THE INERT/LIVE DOCK BOUNDARY, named explicitly.
+ *
+ * Phase B proved the dock's layout with a presentational component. Phase C
+ * needs a dock that moves, and the honest way to add one is to NAME the new
+ * boundary here rather than quietly add a second dock this guard does not know
+ * about. So: CartParts.tsx stays inert - the Phase B assertion below is
+ * unchanged and still enforced - and exactly ONE other file may be a live dock.
+ *
+ * Both files are read RAW, not comment-stripped, on purpose: a banned API must
+ * not appear at all, not even in prose, so nobody can document their way past
+ * the rule.
+ */
+const INERT_DOCK = 'src/ui/storefront/home/CartParts.tsx';
+const LIVE_DOCK = 'src/ui/storefront/cart/LiveCartDock.tsx';
+
+/** Every .tsx under src/, as repo-relative POSIX paths. */
+function sourceFiles() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const next = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(next);
+      else if (next.endsWith('.tsx')) out.push(next);
+    }
+  };
+  walk('src');
+  return out;
+}
+
 test('the cart is presentational only - no store, no persistence, no mutation', () => {
-  const cartSource = read('src/ui/storefront/home/CartParts.tsx');
+  const cartSource = read(INERT_DOCK);
   for (const banned of ['useState', 'useReducer', 'localStorage', 'sessionStorage', 'onClick', 'dispatch']) {
     assert.ok(!cartSource.includes(banned), `CartParts must not contain ${banned}`);
   }
   // Every control is explicitly disabled.
   assert.ok((cartSource.match(/disabled/g) ?? []).length >= 2);
+  // It must also stay a SERVER component: a 'use client' here would ship every
+  // dock and aside string as JavaScript.
+  assert.ok(!cartSource.includes("'use client'"), 'CartParts must stay a server component');
+});
+
+test('exactly one live dock exists, and it is the named one', () => {
+  const live = read(LIVE_DOCK);
+  // Non-vacuity: the named file must exist and must actually BE the live dock,
+  // or this allowlist entry is guarding nothing.
+  assert.ok(live.includes("'use client'"), `${LIVE_DOCK} must be the client dock`);
+  assert.ok(live.includes('useState'), `${LIVE_DOCK} must actually hold state`);
+
+  // The live dock still may not reach a browser store directly: persistence
+  // belongs to the one allowlisted cart-storage module.
+  for (const banned of ['localStorage', 'sessionStorage']) {
+    assert.ok(!live.includes(banned), `${LIVE_DOCK} must not touch ${banned}`);
+  }
+
+  // Its CTA stays disabled: the only approved destination is the cart route,
+  // which is Phase D. A dock that looks active and goes nowhere would be a lie.
+  assert.ok(live.includes('aria-disabled="true"'), 'the live dock CTA must be aria-disabled');
+
+  // And no THIRD dock may appear: any other component rendering a dock class is
+  // a duplicate the boundary does not cover.
+  const others = sourceFiles()
+    .filter((r) => r !== INERT_DOCK && r !== LIVE_DOCK)
+    .filter((r) => /\b\w+\.dockCta\b/.test(read(r)));
+  assert.deepEqual(others, [], 'a dock exists outside the two named files');
 });
 
 test('cart totals are integer minor units and tax is configuration', () => {

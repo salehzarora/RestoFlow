@@ -17,7 +17,10 @@
  * the intervening frame is the tenant canvas, never a white flash.
  *
  * Route role per DESIGN_HANDOFF.md:27 ("returning visitors skip straight to
- * home") and INTERACTIONS.md:10.
+ * home") and INTERACTIONS.md:10. The SAME line puts deep links in that class -
+ * "Deep links (`?item=`, `/r/:code`) and returning visitors skip straight to
+ * home" - so an `?item=` visitor skips the intro even on a first visit, and the
+ * query is carried across so the sheet still opens on the menu.
  */
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -36,11 +39,15 @@ export function IntroGate({
   const [skip, setSkip] = useState(false);
 
   useLayoutEffect(() => {
-    if (!hasSeenIntro(slug)) return;
+    // A deep link to an item is not a visit to the intro, whether or not this
+    // tab has been here before.
+    const search = window.location.search;
+    const deepLink = new URLSearchParams(search).has('item');
+    if (!deepLink && !hasSeenIntro(slug)) return;
     setSkip(true);
     // `replace`, not `push`: the intro must not become a history entry the back
     // button lands on only to be skipped again.
-    router.replace(homeHref);
+    router.replace(deepLink ? `${homeHref}${search}` : homeHref);
   }, [slug, homeHref, router]);
 
   return skip ? null : <>{children}</>;
