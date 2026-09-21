@@ -29,7 +29,13 @@
   height: 100%;
   object-fit: cover;
   object-position: 50% 45%;
-  /* Ken Burns 1 -> 1.08 over 24s. */
+}
+
+/* Ken Burns 1 -> 1.08 over 24s, in `full`/`lively` only (DESIGN_HANDOFF.md:32).
+   These classes are declared in THIS file on purpose: CSS Modules scope class
+   names per file, so home.module.css's .motionFull cannot reach the Intro. */
+.motionFull .mediaImg,
+.motionLively .mediaImg {
   animation: sfKen var(--d-ken) var(--e-standard) forwards;
 }
 
@@ -216,8 +222,10 @@
   background: currentColor;
 }
 
-/* Only an OPEN restaurant pulses; a closed or paused dot is steady. */
-.toneOk .dot {
+/* Only an OPEN restaurant pulses; a closed or paused dot is steady - and only
+   in `full`/`lively`, matching the identical home dot (home.module.css). */
+.motionFull .toneOk .dot,
+.motionLively .toneOk .dot {
   animation: sfDot 2000ms var(--e-standard) infinite;
 }
 
@@ -279,7 +287,6 @@
     rgba(255, 255, 255, 0.28) 50%,
     transparent 70%
   );
-  animation: sfSheen var(--d-sheen) var(--e-sheen) infinite;
 }
 
 /* halo, three cycles */
@@ -289,7 +296,6 @@
   inset: 0;
   border-radius: inherit;
   box-shadow: 0 0 0 2px var(--accB);
-  animation: sfHalo var(--d-halo) var(--e-standard) 3;
   pointer-events: none;
 }
 
@@ -355,4 +361,110 @@
   direction: ltr;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * KEYFRAMES, co-located on purpose.
+ *
+ * CSS Modules scope keyframe names PER FILE, exactly like class names. A
+ * keyframe defined in storefront.module.css compiles to a scoped identifier
+ * that NOTHING in this file can reference, so every `animation:` here used to
+ * name a keyframe that did not exist and silently did nothing. There is no
+ * `composes` for keyframes and `:global` is forbidden by the source rules, so
+ * each consuming module carries its own copy. Bodies are identical to
+ * TOKENS.json -> motion.keyframes; change them together.
+ */
+@keyframes sfKen {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes sfPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sfRise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sfDot {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 1;
+  }
+}
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes sfHalo {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+@keyframes sfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* sheen - INTERACTIONS.md:124 and STATE_MATRIX.json:104 both put sheen sweeps outside calm */
+.motionFull .cta::before,
+.motionLively .cta::before {
+  animation: sfSheen var(--d-sheen) var(--e-sheen) infinite;
+}
+
+/* halo - a finite decorative flourish, not an entrance; calm is "entrance transitions only" */
+.motionFull .cta::after,
+.motionLively .cta::after {
+  animation: sfHalo var(--d-halo) var(--e-standard) 3;
 }

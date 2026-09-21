@@ -98,106 +98,19 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- keyframes (TOKENS.json -> motion.keyframes) --- */
-@keyframes sfRise {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes sfUp {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes sfFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes sfPop {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  70% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes sfPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-@keyframes sfDot {
-  0% {
-    box-shadow: 0 0 0 0 currentColor;
-    opacity: 0.9;
-  }
-  100% {
-    box-shadow: 0 0 0 5px transparent;
-    opacity: 1;
-  }
-}
-
-@keyframes sfHalo {
-  0% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  70% {
-    opacity: 0;
-    transform: scale(1.24);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.24);
-  }
-}
-
-@keyframes sfSheen {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes sfKen {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(1.08);
-  }
-}
+/*
+ * KEYFRAMES LIVE WITH THEIR CONSUMERS, NOT HERE.
+ *
+ * CSS Modules scope keyframe names per file. Nine were defined here and
+ * consumed only from Intro.module.css, LanguageMenu.module.css and
+ * home.module.css - so every one of those references resolved to an undefined
+ * name and applied no animation at all. Each consuming module now defines what
+ * it uses. `sfPulse` was consumed by nothing anywhere and is gone.
+ *
+ * The reduced-motion override below still applies to all of them: it is a
+ * `.root *` DESCENDANT selector, so it reaches elements whatever module their
+ * classes and animations come from.
+ */
 
 /*
  * prefers-reduced-motion overrides all three authored motion modes to a single

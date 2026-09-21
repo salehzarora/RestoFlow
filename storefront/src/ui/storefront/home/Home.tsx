@@ -68,9 +68,20 @@ export function Home({
   const heroHeader = (
     <div className={styles.heroRow}>
       <div className={styles.heroSide}>
-        <a className={styles.iconBtn} href={`#${firstCategoryId}`} aria-label={m.menuLabel}>
-          <MenuIcon />
-        </a>
+        {/* With no menu section there is nothing to jump to. The control stays
+            in the approved three-column row (COMPONENT_INVENTORY.md:22) but is
+            inert rather than an anchor to "#", the same honesty the search
+            button and the promo CTA already use. The prototype's own menu
+            button does nothing under emptyMenu (Storefront.dc.html:119 + :716). */}
+        {firstCategoryId === '' ? (
+          <button className={styles.iconBtn} type="button" aria-label={m.menuLabel} disabled>
+            <MenuIcon />
+          </button>
+        ) : (
+          <a className={styles.iconBtn} href={`#${firstCategoryId}`} aria-label={m.menuLabel}>
+            <MenuIcon />
+          </a>
+        )}
       </div>
       <BrandLockup tenant={tenant} />
       <div className={`${styles.heroSide} ${styles.heroSideEnd}`}>
@@ -99,6 +110,7 @@ export function Home({
             tenant={tenant}
             m={m}
             categories={categories}
+            slug={slug}
             announcement={
               // The announcement is auto-suppressed while closed or paused.
               modules.announcement === null || tenant.service.state !== 'open'
@@ -112,7 +124,6 @@ export function Home({
                 m={m}
                 title={modules.campaign.title}
                 subline={modules.campaign.subline}
-                showMotif={view.motion !== 'calm'}
               >
                 {heroHeader}
               </CampaignHero>

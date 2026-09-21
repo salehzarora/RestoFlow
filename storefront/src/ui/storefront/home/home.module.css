@@ -128,7 +128,7 @@
 .heroMotif {
   position: absolute;
   inset-block-start: 8px;
-  inset-inline-end: 0;
+  inset-inline-start: 0;
   z-index: 1;
   width: 190px;
   height: 120px;
@@ -344,9 +344,15 @@
   margin: 0;
   font: 600 11px / 1.25 var(--font);
   color: var(--onDock2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wraps rather than truncating, like .serviceLabel above: the approved 360
+     canonical puts the status word on two lines, and the paused word on three.
+     The previous `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
+     clipped MID-WORD with no indicator, because the hours cell's only child is a
+     block-level .stateRow and text-overflow only ellipsizes inline content.
+     `anywhere` (not `break-word`) also drops the cell's min-content floor, so
+     the 1fr grid columns keep their even split instead of being blown out by a
+     long tenant city or a wide locale string. */
+  overflow-wrap: anywhere;
 }
 
 /* The state word uses the surface-calibrated tone so it passes on both docks. */
@@ -402,10 +408,13 @@
   background: var(--sf);
 }
 
-.noticeClosed {
-  border-color: var(--bad);
-  background: var(--badbg);
-}
+/*
+ * CLOSED is deliberately NOT a danger tone. The approved prototype
+ * (Storefront.dc.html:801) gives closed the neutral dock surface --sf with --tx
+ * ink and a --hair2 hairline - i.e. exactly the base .notice rule above - and
+ * makes PAUSED the only warning-toned state. A closed restaurant is a normal
+ * condition, not an error. Do not reintroduce a .noticeClosed override.
+ */
 
 .noticePaused {
   border-color: var(--warn);
@@ -613,17 +622,27 @@
   border-block-end: 1px solid transparent;
   opacity: 0;
   pointer-events: none;
-  /* Collapsed to zero height while inactive so it reserves NO layout space -
-     a hidden-but-laid-out sticky header leaves a band of empty canvas above
-     the hero. Only opacity and max-height animate, so there is no jump. */
+  /* The zero height that keeps this out of flow lives on .compactHost, not
+     here. visibility, not opacity alone: an opacity-0 header is still FOCUSABLE
+     and still in the accessibility tree, so its chip rail was tabbable while
+     invisible. visibility:hidden removes both - and unlike display:none it
+     still generates a box, which the "centre the active chip in BOTH rails"
+     effect depends on and which keeps the zero-height host jump-free.
+     It is in the transition list on purpose: CSS interpolates visibility as
+     `visible` across the whole of (0,1) whenever one endpoint is visible, and
+     that is what lets the EXIT fade finish before the header leaves the tree.
+     Drop it from the list and the header vanishes instantly on the way out. */
+  visibility: hidden;
   transform: translateY(-100%);
   transition:
     opacity var(--d-standard) var(--e-standard),
-    transform var(--d-standard) var(--e-standard);
+    transform var(--d-standard) var(--e-standard),
+    visibility var(--d-standard) var(--e-standard);
 }
 
 .compactOn {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0);
   border-block-end-color: var(--hair);
   pointer-events: auto;
@@ -693,6 +712,22 @@
   display: none;
 }
 
+/*
+ * Reduced motion: the rails drop their own smooth scrolling too.
+ *
+ * `behavior: 'auto'` from HomeChrome DEFERS to this property, so leaving
+ * `scroll-behavior: smooth` here would silently keep animating both rails even
+ * after the script asked for auto. It also covers the one path the script
+ * cannot reach at all: the user agent's own scroll-into-view when a chip is
+ * focused from the keyboard.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .railTrack,
+  .chipRail {
+    scroll-behavior: auto;
+  }
+}
+
 .chip {
   flex: none;
   display: inline-flex;
@@ -742,7 +777,7 @@
 
 .promo {
   display: grid;
-  grid-template-columns: 42% 1fr;
+  grid-template-columns: 1fr 42%;
   margin: 16px var(--gutter) 0;
   border-radius: var(--r-banner, 22px);
   overflow: hidden;
@@ -752,6 +787,11 @@
 }
 
 .promoMediaWrap {
+  /* Inline-END pane in both directions: the approved band is text-then-photo
+     (prototype Storefront.dc.html:189/:195). Pinned explicitly so a future DOM
+     reorder cannot silently invert the composition again. Grid line numbers
+     resolve against the INLINE axis, so this is logical, not physical. */
+  grid-column: 2;
   position: relative;
   min-height: 150px;
 }
@@ -765,7 +805,7 @@
 .promoPrice {
   position: absolute;
   inset-block-end: 10px;
-  inset-inline-start: 10px;
+  inset-inline-end: 10px;
   padding: 5px 10px;
   border-radius: var(--r-pill);
   background: rgba(17, 24, 39, 0.82);
@@ -774,6 +814,8 @@
 }
 
 .promoBody {
+  grid-column: 1;
+  min-width: 0;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1109,21 +1151,6 @@
   background: var(--bad);
   color: var(--onBad, #fff);
   border-color: transparent;
-}
-
-.rankBadge {
-  position: absolute;
-  inset-block-start: 10px;
-  inset-inline-end: 10px;
-  min-width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  background: var(--acc);
-  color: var(--onacc);
-  font: 900 11px / 1 var(--font);
 }
 
 /* `lively` adds a slow float to popular cards, and nothing else. */
@@ -1640,5 +1667,43 @@
   }
   50% {
     transform: translateY(-5px);
+  }
+}
+
+/*
+ * KEYFRAMES, co-located on purpose.
+ *
+ * CSS Modules scope keyframe names PER FILE, exactly like class names. A
+ * keyframe defined in storefront.module.css compiles to a scoped identifier
+ * that NOTHING in this file can reference, so every `animation:` here used to
+ * name a keyframe that did not exist and silently did nothing. There is no
+ * `composes` for keyframes and `:global` is forbidden by the source rules, so
+ * each consuming module carries its own copy. Bodies are identical to
+ * TOKENS.json -> motion.keyframes; change them together.
+ */
+@keyframes sfKen {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes sfDot {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 1;
+  }
+}
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
   }
 }

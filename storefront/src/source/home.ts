@@ -147,7 +147,28 @@ export function resolveHome(slug: string): HomeResolution | null {
   };
 }
 
-/** Slugs the home route pre-renders under the default locale root. */
-export function homeSlugs(): readonly string[] {
-  return [...fixtureSource.staticSlugs(), ...SCENARIO_SLUGS];
+/**
+ * True only for a LOCAL evidence build started with `SF_EVIDENCE_ROUTES=1`.
+ *
+ * Deliberately NOT a `NEXT_PUBLIC_` name, and read INSIDE the function rather
+ * than at module scope, so it never reaches a client bundle and a test can
+ * prove the gate in both directions. The deployed build never sets it.
+ */
+export function evidenceRoutes(): boolean {
+  return process.env.SF_EVIDENCE_ROUTES === '1';
+}
+
+/**
+ * Slugs a home route pre-renders.
+ *
+ * The SHIPPED export carries the canonical tenant and nothing else. Each demo
+ * scenario document costs roughly 170 KB of a 4 MiB output ceiling this phase
+ * may NOT raise, and the seven of them consumed 1,306,346 bytes - a third of
+ * the whole budget - leaving only 264,944 bytes of headroom. They are EVIDENCE
+ * fixtures now: emitted only by a local evidence build, and `evidence` names
+ * the ones that locale root needs.
+ */
+export function homeSlugs(evidence: readonly string[] = SCENARIO_SLUGS): readonly string[] {
+  const canonical = fixtureSource.staticSlugs();
+  return evidenceRoutes() ? [...canonical, ...evidence] : [...canonical];
 }

@@ -112,3 +112,25 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/*
+ * KEYFRAMES, co-located on purpose.
+ *
+ * CSS Modules scope keyframe names PER FILE, exactly like class names. A
+ * keyframe defined in storefront.module.css compiles to a scoped identifier
+ * that NOTHING in this file can reference, so every `animation:` here used to
+ * name a keyframe that did not exist and silently did nothing. There is no
+ * `composes` for keyframes and `:global` is forbidden by the source rules, so
+ * each consuming module carries its own copy. Bodies are identical to
+ * TOKENS.json -> motion.keyframes; change them together.
+ */
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

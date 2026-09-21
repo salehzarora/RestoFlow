@@ -5,7 +5,7 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -141,13 +141,109 @@ test('money never touches a float', () => {
   }
 });
 
-test('the app layer makes no network call and reads no browser storage', () => {
+/**
+ * The ONE module allowed to touch a browser store, named by the same POSIX
+ * relative path `rel()` produces, because that is what the file walk yields.
+ *
+ * The blanket ban this replaces was a Phase A convention, not an approved rule:
+ * the handoff REQUIRES a real per-slug session flag (DESIGN_HANDOFF.md:27,
+ * INTERACTIONS.md:10 "Nature: product behaviour", COMPONENT_INVENTORY.md:9), so
+ * the guard is narrowed to an exact allowlist rather than the design degraded.
+ */
+const UI_SESSION_MODULE = 'src/session/uiSession.ts';
+
+/** Banned in EVERY app/ and src/ file, the allowlisted module included. */
+const BANNED_EVERYWHERE = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
+  'localStorage', 'indexedDB', 'document.cookie'];
+
+/**
+ * The rule as a pure function of (path, text), so the negative controls below
+ * can run the SAME logic over files that are not in the repository. Comments are
+ * stripped first: these rules are about CODE, not prose.
+ */
+function storageOffence(relPath, source) {
+  const src = source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*/gm, '$1 ');
+  for (const api of BANNED_EVERYWHERE) {
+    if (src.includes(api)) return `${relPath}: ${api} is not permitted anywhere`;
+  }
+  if (relPath !== UI_SESSION_MODULE && src.includes('sessionStorage')) {
+    return `${relPath}: sessionStorage is allowed ONLY in ${UI_SESSION_MODULE}`;
+  }
+  return null;
+}
+
+test('browser storage is confined to the one allowlisted UI-session module', () => {
   for (const f of TSX) {
-    const src = code(f);
-    for (const api of ['fetch(', 'XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
-      'localStorage', 'sessionStorage', 'indexedDB', 'document.cookie']) {
-      assert.ok(!src.includes(api), `${rel(f)}: ${api} is not part of Phase A`);
-    }
+    assert.equal(storageOffence(rel(f), readFileSync(f, 'utf8')), null);
+  }
+  // Non-vacuity: the allowlisted file must exist AND must actually use the API,
+  // or the allowlist is guarding nothing.
+  const helper = TSX.find((f) => rel(f) === UI_SESSION_MODULE);
+  assert.ok(helper, `${UI_SESSION_MODULE} must exist`);
+  assert.ok(code(helper).includes('sessionStorage'),
+    `${UI_SESSION_MODULE} must actually use sessionStorage`);
+});
+
+test('the UI-session module stores only the two approved boolean flags', () => {
+  const src = code(path.join(ROOT, UI_SESSION_MODULE));
+  // Exactly two key shapes, one namespace, one value, and no generic accessor.
+  assert.match(src, /const NAMESPACE = 'sf:v1:';/);
+  assert.match(src, /type Flag = 'seen' \| 'announcement-dismissed';/);
+  assert.match(src, /const TRUE_VALUE = '1';/);
+  // setItem is called in exactly one place, and never with a caller-supplied value.
+  assert.equal((src.match(/\.setItem\(/g) ?? []).length, 1);
+  assert.match(src, /found\.setItem\(key, TRUE_VALUE\)/);
+  // No JSON payload can be smuggled through this module.
+  assert.ok(!src.includes('JSON.stringify'), 'no JSON payload may be stored');
+  assert.ok(!src.includes('JSON.parse'), 'no JSON payload may be read back');
+  // The slug is validated, never trusted.
+  assert.match(src, /isValidSlug\(slug\)/);
+});
+
+test('NEGATIVE CONTROL: the storage rule fails on an unauthorised FILE and an unauthorised STORE', () => {
+  // Copies in a temp tree. The committed source is never written to.
+  const dir = mkdtempSync(path.join(tmpdir(), 'sf-storage-'));
+  try {
+    const copy = (relPath) => {
+      const dest = path.join(dir, relPath);
+      mkdirSync(path.dirname(dest), { recursive: true });
+      writeFileSync(dest, readFileSync(path.join(ROOT, relPath), 'utf8'), 'utf8');
+      return dest;
+    };
+    const relOf = (f) => path.relative(dir, f).split(path.sep).join('/');
+    const helperCopy = copy(UI_SESSION_MODULE);
+    const otherCopy = copy('src/ui/storefront/Intro.tsx');
+
+    // Verbatim copies behave exactly as the real tree does.
+    assert.equal(storageOffence(relOf(helperCopy), readFileSync(helperCopy, 'utf8')), null,
+      'the allowlisted module must be allowed');
+    assert.equal(storageOffence(relOf(otherCopy), readFileSync(otherCopy, 'utf8')), null);
+
+    // An unauthorised FILE using the allowlisted API must be caught.
+    writeFileSync(otherCopy,
+      readFileSync(otherCopy, 'utf8') + '\nconst leak = sessionStorage.getItem("sf:v1:seen:x");\n',
+      'utf8');
+    const caughtFile = storageOffence(relOf(otherCopy), readFileSync(otherCopy, 'utf8'));
+    assert.ok(caughtFile !== null, 'the rule MISSED sessionStorage in an unauthorised file');
+    assert.match(caughtFile, /sessionStorage is allowed ONLY/);
+
+    // The allowlist covers sessionStorage ONLY: a long-lived store in the SAME
+    // file is still a failure.
+    writeFileSync(helperCopy,
+      readFileSync(helperCopy, 'utf8') + '\nconst leak = localStorage.getItem("x");\n', 'utf8');
+    assert.ok(storageOffence(relOf(helperCopy), readFileSync(helperCopy, 'utf8')) !== null,
+      'the allowlist must NOT extend to a long-lived store');
+
+    // ...and naming the API in prose is not an offence.
+    assert.equal(
+      storageOffence('src/ui/storefront/Intro.tsx',
+        '// this file deliberately does not use sessionStorage\nexport const a = 1;\n'),
+      null,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -259,4 +355,169 @@ test('NEGATIVE CONTROL: the guard fails on an injected bad dictionary', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ------------------------------------------------- logical properties in CSS
+
+/**
+ * Physical, direction-sensitive CSS. One tree serves ar/he RTL and en LTR, so a
+ * physical inline side is a mirroring bug waiting to happen.
+ *
+ * This guard replaces one that scanned home.module.css ALONE - 1 of 5
+ * stylesheets - and matched only seven property names. It missed shorthands,
+ * physical VALUES, and every other sheet. LanguageMenu.module.css carries a
+ * real physical declaration that the old guard could never have seen.
+ */
+const PHYSICAL_PATTERNS = [
+  ['margin-left/right', /(?<![-\w])margin-(?:left|right)\s*:/],
+  ['padding-left/right', /(?<![-\w])padding-(?:left|right)\s*:/],
+  ['border-left/right', /(?<![-\w])border-(?:left|right)\s*:/],
+  ['bare left/right offset', /(?<![-\w])(?:left|right)\s*:\s*[^;]+;/],
+  ['text-align: left|right', /text-align\s*:\s*(?:left|right)\b/],
+  ['float|clear: left|right', /(?:float|clear)\s*:\s*(?:left|right)\b/],
+  ['background-position left|right', /background-position\s*:[^;]*(?<![-\w])(?:left|right)\b/],
+  ['scroll-padding/margin l|r', /scroll-(?:padding|margin)-(?:left|right)\s*:/],
+];
+
+/**
+ * Documented, deliberate exceptions. Each entry must STILL MATCH something, so
+ * a stale exemption fails instead of quietly widening the guard. An over-strict
+ * guard that has to be suppressed everywhere is a failed guard; an unaudited
+ * exemption list is worse. Keep this short and justified.
+ */
+const PHYSICAL_EXCEPTIONS = [
+  {
+    file: 'src/ui/storefront/LanguageMenu.module.css',
+    snippet: 'border-right: 2px solid currentColor;',
+    why:
+      'The caret is a SHAPE, not a layout offset: an 8x8 box with its right and ' +
+      'bottom borders, rotated 45deg, draws a chevron pointing DOWN. A down ' +
+      'chevron is identical under mirroring, and switching to border-inline-end ' +
+      'would rotate the glyph sideways in RTL - a regression, not a fix.',
+  },
+];
+
+/** Split a shorthand on top-level whitespace, so env(a, b) stays one value. */
+function shorthandValues(value) {
+  const out = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of value) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (depth === 0 && /\s/.test(ch)) {
+      if (current) out.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+/** All physical-CSS problems in one stylesheet, comments stripped. */
+function physicalProblems(relPath, source) {
+  let text = source.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  for (const e of PHYSICAL_EXCEPTIONS) {
+    if (e.file === relPath) text = text.split(e.snippet).join(' /* allowed */ ');
+  }
+  const problems = [];
+  for (const [name, rx] of PHYSICAL_PATTERNS) {
+    if (rx.test(text)) problems.push(`${relPath}: physical ${name}`);
+  }
+  // A four-value margin/padding/inset whose INLINE sides differ is
+  // direction-sensitive even though every part is physical-by-design.
+  for (const prop of ['margin', 'padding', 'inset']) {
+    const rx = new RegExp('(?<![-\\w])' + prop + '\\s*:\\s*([^;{}]+);', 'g');
+    for (const m of text.matchAll(rx)) {
+      const parts = shorthandValues(m[1].trim());
+      if (parts.length === 4 && parts[1] !== parts[3]) {
+        problems.push(`${relPath}: asymmetric 4-value ${prop}: ${m[1].trim()}`);
+      }
+    }
+  }
+  return problems;
+}
+
+test('every storefront stylesheet uses logical properties, not physical sides', () => {
+  // COVERAGE FIRST. The Phase A dictionary guard passed while matching zero
+  // files; a scan whose scope can silently fall to zero proves nothing.
+  const sheets = CSS.map(rel).sort();
+  assert.ok(sheets.length >= 5, `expected at least 5 stylesheets, scanned ${sheets.length}`);
+  for (const expected of [
+    'src/ui/storefront/Intro.module.css',
+    'src/ui/storefront/LanguageMenu.module.css',
+    'src/ui/storefront/Unknown.module.css',
+    'src/ui/storefront/home/home.module.css',
+    'src/ui/storefront/storefront.module.css',
+  ]) {
+    assert.ok(sheets.includes(expected), `${expected} must be in scope`);
+  }
+
+  const problems = [];
+  for (const f of CSS) problems.push(...physicalProblems(rel(f), readFileSync(f, 'utf8')));
+  assert.deepEqual(problems, [], problems.join('\n'));
+
+  // Every exception must still be real, or it is rot.
+  for (const e of PHYSICAL_EXCEPTIONS) {
+    const src = readFileSync(path.join(ROOT, e.file), 'utf8');
+    assert.ok(src.includes(e.snippet), `stale exception: ${e.file} no longer has ${e.snippet}`);
+    assert.ok(e.why.length > 40, 'every exception must carry a justification');
+  }
+
+  // And the logical vocabulary is genuinely in use.
+  const all = CSS.map((f) => readFileSync(f, 'utf8')).join('\n');
+  for (const logical of ['inset-inline', 'margin-inline', 'padding-inline', 'border-inline-start']) {
+    assert.ok(all.includes(logical), `expected logical property ${logical}`);
+  }
+});
+
+test('NEGATIVE CONTROL: the logical-CSS guard catches every physical form', () => {
+  const clean = '.a {\n  margin-inline: 4px;\n  inset-inline-start: 0;\n}\n';
+  assert.deepEqual(physicalProblems('x.css', clean), [], 'a clean sheet must pass');
+
+  const offenders = [
+    '.a { margin-left: 4px; }',
+    '.a { padding-right: 4px; }',
+    '.a { border-left: 1px solid red; }',
+    '.a { position: absolute; left: 0; }',
+    '.a { text-align: left; }',
+    '.a { float: right; }',
+    '.a { background-position: left center; }',
+    '.a { scroll-padding-left: 4px; }',
+    '.a { margin: 1px 2px 3px 4px; }',
+    '.a { inset: 0 8px 0 0; }',
+  ];
+  for (const css of offenders) {
+    assert.ok(
+      physicalProblems('x.css', css).length > 0,
+      `the guard MISSED: ${css}`,
+    );
+  }
+
+  // Symmetric shorthands and function values must NOT be flagged.
+  for (const ok of [
+    '.a { margin: 8px 0; }',
+    '.a { padding: 0 var(--gutter) env(safe-area-inset-bottom, 0); }',
+    '.a { margin: 1px 2px 3px 2px; }',
+    '.a { inset: 0; }',
+  ]) {
+    assert.deepEqual(physicalProblems('x.css', ok), [], `false positive on: ${ok}`);
+  }
+
+  // A comment naming a physical property is prose, not code.
+  assert.deepEqual(physicalProblems('x.css', '/* never use margin-left here */\n.a { margin-inline: 0; }'), []);
+
+  // The exception applies ONLY to its own file.
+  const caret = 'border-right: 2px solid currentColor;';
+  assert.deepEqual(
+    physicalProblems('src/ui/storefront/LanguageMenu.module.css', `.caret { ${caret} }`),
+    [],
+    'the documented caret exception must hold',
+  );
+  assert.ok(
+    physicalProblems('src/ui/storefront/home/home.module.css', `.caret { ${caret} }`).length > 0,
+    'the exception must NOT leak to another stylesheet',
+  );
 });

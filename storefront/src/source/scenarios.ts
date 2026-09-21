@@ -3,13 +3,16 @@
  *
  * Each slug renders the home surface in one approved presentation state so it
  * can be screenshotted from the real built output rather than from a mocked
- * DOM. They are ordinary static routes, so no client-side `?fx=` reader is
- * needed and the default route stays fully server-rendered.
+ * DOM. They are ordinary static routes - so no client-side `?fx=` reader is
+ * needed and the default route stays fully server-rendered - but they are
+ * EVIDENCE-BUILD ONLY: `homeSlugs()` emits them solely when a local build sets
+ * SF_EVIDENCE_ROUTES=1. The SHIPPED export carries `maps-burger` and nothing
+ * else, and tests/output/output.test.mjs fails if a demo slug creeps back in.
  *
  * Scenario slugs deliberately carry a TRIMMED menu (the first category,
  * five items): the states they prove are STRUCTURAL, and repeating the full
- * 20-item menu in nine scenarios costs more of the output budget than the
- * evidence is worth. The canonical `maps-burger` route keeps the full menu.
+ * 20-item menu in every scenario costs more build time than the evidence is
+ * worth. The canonical `maps-burger` route keeps the full menu.
  *
  * NOT every state gets a route. Each scenario document costs roughly 170 KB of
  * the 4 MiB output budget, and the budget is a hard ceiling this phase may not
@@ -59,7 +62,7 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     slug: 'demo-calm',
-    proves: 'G08 calm motion - no sheen, Ken Burns or motif',
+    proves: 'G08 calm motion - no sheen or Ken Burns; the motif stays, undrawn',
     preset: 'dark',
     options: trimmed({ motion: 'calm' as MotionMode }),
   },
@@ -82,6 +85,12 @@ export const SCENARIOS: readonly Scenario[] = [
     proves: 'H02 emptyMenu',
     preset: 'dark',
     options: { items: [] },
+  },
+  {
+    slug: 'demo-popular-off',
+    proves: 'H05 POPULAR_READY=false - kitchen picks, no rank claim',
+    preset: 'dark',
+    options: trimmed({ modules: { popular: { enabled: true, ready: false } } }),
   },
   {
     slug: 'demo-light',

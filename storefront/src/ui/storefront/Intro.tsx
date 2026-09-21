@@ -17,12 +17,27 @@ import { dirOf, type Locale } from '@/i18n/locales';
 import { fill, storefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import { storefrontPath } from '@/routes/routes';
-import type { Tenant } from '@/source/types';
+import type { MotionMode, Tenant } from '@/source/types';
 import { LanguageMenu } from './LanguageMenu';
 import { ChevronIcon, DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './Intro.module.css';
 
-export function Intro({ tenant, locale }: { tenant: Tenant; locale: Locale }) {
+/** Mirrors Home.tsx: calm adds no class, so only entrances survive. */
+const MOTION_CLASS = {
+  calm: '',
+  full: styles.motionFull,
+  lively: `${styles.motionFull} ${styles.motionLively}`,
+} as const;
+
+export function Intro({
+  tenant,
+  locale,
+  motion = 'full',
+}: {
+  tenant: Tenant;
+  locale: Locale;
+  motion?: MotionMode;
+}) {
   const m = storefrontMessages(locale);
   const dir = dirOf(locale);
   const { service, hours } = tenant;
@@ -37,7 +52,7 @@ export function Intro({ tenant, locale }: { tenant: Tenant; locale: Locale }) {
         : styles.toneWarn;
 
   return (
-    <div className={styles.screen}>
+    <div className={`${styles.screen} ${MOTION_CLASS[motion]}`}>
       <div className={styles.media}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

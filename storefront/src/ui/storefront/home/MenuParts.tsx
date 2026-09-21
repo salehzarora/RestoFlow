@@ -16,12 +16,13 @@ function Media({
   item,
   shape,
   m,
-  rank,
+  rankLabel,
 }: {
   item: MenuItem;
   shape: 'featured' | 'popular' | 'grid' | 'row';
   m: StorefrontMessages;
-  rank?: number;
+  /** Popular-rail spotlight text: the localized rankN string, or "kitchen pick". */
+  rankLabel?: string;
 }) {
   const cls =
     shape === 'featured'
@@ -31,8 +32,17 @@ function Media({
         : shape === 'grid'
           ? styles.cardMediaGrid
           : styles.rowMedia;
+  // The popular card carries EXACTLY ONE badge and it is the spotlight label
+  // (prototype/Storefront.dc.html:211); new/deal badges belong to the featured,
+  // list and grid cards (:237, :255, :278). Same slot, same token, start side.
   const badgeText =
-    item.badge === 'new' ? m.badgeNew : item.badge === 'deal' ? m.badgeDeal : null;
+    rankLabel !== undefined
+      ? rankLabel
+      : item.badge === 'new'
+        ? m.badgeNew
+        : item.badge === 'deal'
+          ? m.badgeDeal
+          : null;
 
   return (
     <div className={cls}>
@@ -56,11 +66,6 @@ function Media({
         <span className={`${styles.badge} ${styles.badgeSoldOut}`}>{m.soldOut}</span>
       ) : badgeText === null ? null : (
         <span className={styles.badge}>{badgeText}</span>
-      )}
-      {rank === undefined ? null : (
-        <span className={styles.rankBadge} aria-hidden="true">
-          #{rank}
-        </span>
       )}
     </div>
   );
@@ -110,15 +115,16 @@ export function FeaturedCard({ item, m }: { item: MenuItem; m: StorefrontMessage
 export function PopularCard({
   item,
   m,
-  rank,
+  rankLabel,
 }: {
   item: MenuItem;
   m: StorefrontMessages;
-  rank?: number;
+  /** Required, not optional: a popular card without its spotlight label is a defect. */
+  rankLabel: string;
 }) {
   return (
     <div className={styles.card}>
-      <Media item={item} shape="popular" m={m} rank={rank} />
+      <Media item={item} shape="popular" m={m} rankLabel={rankLabel} />
       <div className={styles.cardBody}>
         <p className={`${styles.cardName} ${styles.cardNameSmall}`} dir="auto">
           {item.name}
@@ -180,8 +186,9 @@ export function ListRow({ item, m }: { item: MenuItem; m: StorefrontMessages }) 
 
 /**
  * The popular rail. `ready` changes what the rail CLAIMS, not merely how it
- * looks: without it there is no ranking, no "#n" badge and no "most ordered"
- * heading, because no count exists to justify them.
+ * looks: without it there is no rank number and no "most ordered" heading,
+ * because no count exists to justify them. The one badge slot then carries the
+ * honest alternative instead - "kitchen pick" (COMPONENT_INVENTORY.md:74).
  */
 export function PopularSection({
   items,
@@ -199,7 +206,7 @@ export function PopularSection({
   if (shown.length === 0) return null;
 
   return (
-    <section className={styles.section} aria-labelledby="sf-popular-title">
+    <section className={styles.section} aria-labelledby="sf-popular-title" data-sf-module="popular">
       <div className={styles.sectionHead}>
         <span className={styles.flameTile} aria-hidden="true">
           <FlameIcon />
@@ -217,7 +224,12 @@ export function PopularSection({
       </div>
       <div className={styles.popularGrid}>
         {shown.map((item, index) => (
-          <PopularCard key={item.id} item={item} m={m} rank={ready ? index + 1 : undefined} />
+          <PopularCard
+            key={item.id}
+            item={item}
+            m={m}
+            rankLabel={ready ? rankLabel(m, index + 1) : m.chefPick}
+          />
         ))}
       </div>
     </section>
@@ -241,7 +253,7 @@ export function MenuSection({
   const titleId = `sf-cat-title-${category.id}`;
 
   return (
-    <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={titleId}>
+    <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={titleId} data-sf-module="sections">
       <div className={styles.sectionHead}>
         <span className={styles.sectionBar} aria-hidden="true" />
         <h2 className={styles.sectionTitle} id={titleId} dir="auto">

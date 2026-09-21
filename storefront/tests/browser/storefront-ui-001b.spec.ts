@@ -151,7 +151,7 @@ for (const c of CASES) {
       await expect(page.locator('section[id^="sf-cat-"]').first()).toBeVisible();
     }
     if (c.id === 'G08') {
-      // calm removes the sheen, the Ken Burns pan and the motif.
+      // calm removes the sheen and the Ken Burns pan; the motif STAYS, undrawn.
       const anims = await page.evaluate(() =>
         Array.from(document.querySelectorAll('*'))
           .map((el) => getComputedStyle(el).animationName)
@@ -161,7 +161,12 @@ for (const c of CASES) {
       expect(anims.some((n) => n.includes('sfKen')), 'calm must not pan the hero').toBe(false);
       expect(anims.some((n) => n.includes('sfSheen')), 'calm must not sweep a sheen').toBe(false);
       info.motif = await page.locator('[class*="heroMotif"]').count();
-      expect(info.motif, 'calm must not draw the motif').toBe(0);
+      expect(info.motif, 'calm must keep the motif').toBe(1);
+      const motifAnim = await page
+        .locator('[class*="heroMotif"] svg')
+        .first()
+        .evaluate((el) => getComputedStyle(el).animationName);
+      expect(motifAnim, 'calm must not animate the motif').toBe('none');
     }
     if (c.id === 'G09' || c.id === 'G10') {
       const notice = page.locator('[class*="notice"]').first();
@@ -253,7 +258,10 @@ test('tapping a category scrolls to its section and marks it current', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE}/s/maps-burger/menu`, { waitUntil: 'networkidle' });
 
-  const orbs = page.locator('nav[aria-label] button[data-category]');
+  // The ORB rail only. The compact rail is also a labelled <nav> and precedes
+  // this one in document order, but it is visibility:hidden until the compact
+  // header appears - so an unscoped selector resolves to an unclickable chip.
+  const orbs = page.locator('[data-sf-module="categories"] > div button[data-category]');
   const target = orbs.nth(2);
   const id = await target.getAttribute('data-category');
   await target.click();
@@ -284,14 +292,27 @@ test('the rails are navigation, not a tablist, in the rendered DOM', async ({ pa
     tab: document.querySelectorAll('[role="tab"]').length,
     tabpanel: document.querySelectorAll('[role="tabpanel"]').length,
     nav: document.querySelectorAll('nav[aria-label]').length,
+    namedNavs: Array.from(document.querySelectorAll('nav')).filter(
+      (n) => (n.getAttribute('aria-label') ?? '').trim().length > 0,
+    ).length,
     current: document.querySelectorAll('[aria-current="true"]').length,
+    // Scoped to the rails: LanguageMenu marks the active locale with its own
+    // aria-current, which is correct and must not be folded into this count.
+    currentChips: document.querySelectorAll('button[data-category][aria-current="true"]').length,
+    chips: document.querySelectorAll('button[data-category]').length,
   }));
   RESULTS.railSemantics = roles;
   expect(roles.tablist).toBe(0);
   expect(roles.tab).toBe(0);
   expect(roles.tabpanel).toBe(0);
-  expect(roles.nav).toBeGreaterThan(0);
-  expect(roles.current).toBeGreaterThan(0);
+  // EXACT counts, not "> 0": a count assertion that passes for any nonzero
+  // value cannot distinguish "both rails render" from "one silently vanished".
+  // 7 fixture categories, two rails (orb + compact), one current chip in each.
+  expect(roles.nav, 'the orb rail and the compact rail are both named navs').toBe(2);
+  expect(roles.currentChips, 'exactly one chip is current in each rail').toBe(2);
+  expect(roles.current, 'the two rails plus the language menu').toBe(3);
+  expect(roles.chips, '7 categories rendered in each of the two rails').toBe(14);
+  expect(roles.namedNavs, 'an unnamed nav landmark is worse than none').toBe(roles.nav);
 });
 
 test('every interactive control reaches a 44x44 effective target', async ({ page }) => {

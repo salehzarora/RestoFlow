@@ -67,6 +67,7 @@ export interface StorefrontMessages {
   readonly orderingPaused: string;
   readonly callRestaurant: string;
   readonly menuLabel: string;
+  readonly compactMenuLabel: string;
   readonly languageNames: Readonly<Record<Locale, string>>;
 }
 

@@ -16,13 +16,18 @@ const code = (rel) =>
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/(^|[^:])\/\/.*/gm, '$1 ');
 
-const { buildHome, homeOptionsFor, HOME_SCENARIO_NAMES } = await import('../src/source/home.ts');
+const { buildHome, homeOptionsFor, HOME_SCENARIO_NAMES, homeSlugs } = await import('../src/source/home.ts');
 const { SCENARIOS, SCENARIO_SLUGS } = await import('../src/source/scenarios.ts');
 const { fixtureSource } = await import('../src/source/fixtures.ts');
+const { storefrontMessages, fill } = await import('../src/i18n/storefront.ts');
+const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, LOCKED_MODULE_ORDER } = await import(
+  '../scripts/module-order.mjs'
+);
 const { CATEGORIES, MENU_ITEMS, TAX_RATE } = await import('../src/source/menu-fixture.ts');
 
 const tenant = fixtureSource.getTenant('maps-burger');
 const homeSource = read('src/ui/storefront/home/Home.tsx');
+const partsSource = read('src/ui/storefront/home/HomeParts.tsx');
 const css = read('src/ui/storefront/home/home.module.css');
 
 test('the fixture tenant and menu load', () => {
@@ -35,24 +40,52 @@ test('the fixture tenant and menu load', () => {
 // ---------------------------------------------------------------- module order
 
 test('module order is FIXED and expressed once, in source order', () => {
-  // announce -> hero -> service -> categories -> promo -> popular -> sections
-  // -> story -> footer. The first four are emitted by HomeChrome in that order.
+  // The previous version of this test scanned RAW source with a monotonic
+  // indexOf, so 'announce' matched a JSDoc line and 'PromoBanner' matched an
+  // import. Moving PromoBanner below Popular still passed. Every anchor below
+  // is real markup, and anchorOrder() demands EXACTLY ONE occurrence of each -
+  // a token that also matches prose or an import now fails loudly.
   const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
-  const chromeOrder = ['announce', 'compact', '{hero}', '{service}', '{notice}', 'styles.rail'];
-  let at = -1;
-  for (const token of chromeOrder) {
-    const next = chrome.indexOf(token, at + 1);
-    assert.ok(next > at, `HomeChrome: ${token} must follow the previous module`);
-    at = next;
-  }
+  assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
+  assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
+});
 
-  const pageOrder = ['HomeChrome', 'PromoBanner', 'PopularSection', 'MenuSection', 'StoryCard', 'SiteFooter'];
-  let cursor = -1;
-  for (const token of pageOrder) {
-    const next = homeSource.indexOf(token, cursor + 1);
-    assert.ok(next > cursor, `Home.tsx: ${token} must come after the previous module`);
-    cursor = next;
-  }
+test('NEGATIVE CONTROL: the module-order check catches a real reorder', () => {
+  // Mutants are built in memory. The committed source is never written to.
+  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
+
+  // (1) The exact mutation that used to pass: PromoBanner moved below the menu
+  //     sections. Cutting the <PromoBanner .../> element and re-inserting it
+  //     after <StoryCard violates the locked order.
+  const promo = /\{modules\.promo === null \? null : <PromoBanner promo=\{modules\.promo\} m=\{m\} \/>\}/;
+  assert.match(homeSource, promo, 'the promo line must exist for this control to mean anything');
+  const moved = homeSource
+    .replace(promo, '')
+    .replace('<SiteFooter', '<PromoBanner /><SiteFooter');
+  const movedProblems = anchorOrder(moved, PAGE_ANCHORS);
+  assert.ok(movedProblems.length > 0, 'a reordered PromoBanner MUST be caught');
+
+  // (2) A module deleted outright.
+  const deleted = homeSource.replace('<StoryCard', '<NotAModule');
+  assert.ok(anchorOrder(deleted, PAGE_ANCHORS).length > 0, 'a missing module MUST be caught');
+
+  // (3) The ROOT CAUSE of the reviewed defect: an anchor that matches more than
+  //     once (an import line, a comment, a prop) must fail rather than silently
+  //     resolving to the wrong occurrence.
+  const duplicated = chrome.replace(
+    'data-sf-module="announce"',
+    'data-sf-module="announce" title="data-sf-module=\u0022announce\u0022"',
+  );
+  const dupProblems = anchorOrder(duplicated, CHROME_ANCHORS);
+  assert.ok(
+    dupProblems.some((x) => x.includes('occurs 2x')),
+    'a duplicated anchor MUST fail, not resolve to the first hit',
+  );
+
+  // (4) Sanity: the real, unmutated sources still pass, so the control is
+  //     discriminating rather than simply always-failing.
+  assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
+  assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
 });
 
 test('no module-order data or reorder mechanism exists', () => {
@@ -101,13 +134,29 @@ test('an empty menu suppresses every module and every category', () => {
 // ------------------------------------------------------------- POPULAR_READY
 
 test('POPULAR_READY governs the rail CLAIM, not merely its styling', () => {
-  const menu = read('src/ui/storefront/home/MenuParts.tsx');
-  // Ranked heading and the rank badge are BOTH behind `ready`.
-  assert.match(menu, /ready \? m\.mostOrdered : m\.chefPicks/);
-  assert.match(menu, /ready \? <span className=\{styles\.sectionSub\}>\{m\.last30\}<\/span> : null/);
-  assert.match(menu, /rank=\{ready \? index \+ 1 : undefined\}/);
-  // The rank badge only renders when a rank was supplied.
-  assert.match(menu, /rank === undefined \? null :/);
+  // Asserted against the REAL view model and the REAL localized strings, not
+  // against the source text of the component that implements them. A regex over
+  // MenuParts.tsx passes whether or not the rail ever renders.
+  const on = buildHome(tenant, homeOptionsFor([]));
+  const off = buildHome(tenant, homeOptionsFor(['popular-off']));
+  assert.equal(on.modules.popular.enabled, true);
+  assert.equal(on.modules.popular.ready, true);
+  assert.equal(off.modules.popular.enabled, true, 'the rail stays; only the claim changes');
+  assert.equal(off.modules.popular.ready, false);
+
+  for (const locale of ['ar', 'he', 'en']) {
+    const m = storefrontMessages(locale);
+    // The two headings are genuinely different claims in every locale.
+    assert.notEqual(m.mostOrdered, m.chefPicks, `${locale}: the two rail claims must differ`);
+    // The ranked badge is a localized STRING carrying the number, never a bare "#n".
+    const ranked = fill(m.rankN, { n: '1' });
+    assert.ok(ranked.includes('1'), `${locale}: rankN must carry the rank`);
+    assert.ok(!ranked.includes('{n}'), `${locale}: rankN placeholder must be substituted`);
+    assert.notEqual(ranked, '#1', `${locale}: the badge must not be an untranslated #n`);
+    // The unranked badge exists and is not the ranked one.
+    assert.ok(m.chefPick.length > 0, `${locale}: chefPick must exist`);
+    assert.notEqual(m.chefPick, ranked);
+  }
 });
 
 test('popular:off keeps the rail but removes every ranking claim', () => {
@@ -169,7 +218,7 @@ test('category rails are navigation, never a fake tablist', () => {
     assert.ok(!chrome.includes(banned), `the rail must not use ${banned}`);
   }
   // It is a <nav> with a label, and current state is aria-current.
-  assert.match(chrome, /<nav className=\{styles\.rail\} aria-label=\{m\.menuLabel\}>/);
+  assert.match(chrome, /<nav className=\{styles\.rail\} aria-label=\{m\.menuLabel\} data-sf-module="categories">/);
   assert.ok((chrome.match(/aria-current=\{category\.id === active \? 'true' : undefined\}/g) ?? []).length === 2,
     'both rails mark the current category with aria-current');
 });
@@ -195,24 +244,11 @@ test('the compact header neither reserves space nor shifts the document', () => 
 
 // ------------------------------------------------------------------- styling
 
-test('layout uses logical properties, not physical sides', () => {
-  const physical = [
-    /(^|[^-\w])margin-left\s*:/m,
-    /(^|[^-\w])margin-right\s*:/m,
-    /(^|[^-\w])padding-left\s*:/m,
-    /(^|[^-\w])padding-right\s*:/m,
-    /(^|[^-\w])border-left\s*:/m,
-    /(^|[^-\w])border-right\s*:/m,
-    /(^|[^-\w])(left|right)\s*:\s*[-0-9]/m,
-  ];
-  for (const rx of physical) {
-    assert.ok(!rx.test(css), `home.module.css uses a physical property: ${rx}`);
-  }
-  // And it does use the logical ones.
-  for (const logical of ['inset-inline', 'margin-inline', 'padding-inline', 'border-inline-start']) {
-    assert.ok(css.includes(logical), `expected logical property ${logical}`);
-  }
-});
+// The physical-CSS guard lives in tests/sf-source-rules.test.mjs. It used to be
+// here and scanned home.module.css ALONE - 1 of 5 stylesheets - and only seven
+// property names. The replacement scans EVERY storefront stylesheet, covers
+// shorthands and physical values, asserts its own coverage, and carries a
+// negative control. Do not reinstate a narrower copy here.
 
 test('motion modes gate exactly the approved effects', () => {
   // calm = entrances only: no sheen, no Ken Burns, no motif, no float.
@@ -220,8 +256,10 @@ test('motion modes gate exactly the approved effects', () => {
   assert.match(css, /\.motionFull \.dockCta::before,\s*\n\s*\.motionLively \.dockCta::before/);
   // lively adds the popular-card float, and only that.
   assert.match(css, /\.motionLively \.popularGrid \.card \{\s*\n\s*animation: sfFloat/);
-  // the motif is suppressed in calm from the component side
-  assert.match(homeSource, /showMotif=\{view\.motion !== 'calm'\}/);
+  // INTERACTIONS.md:124 / STATE_MATRIX.json:104 - calm suppresses the motif DRAW,
+  // not the motif. The hero renders it unconditionally.
+  assert.ok(!homeSource.includes('showMotif'), 'the motif must not be gated on motion');
+  assert.match(partsSource, /<div className=\{styles\.heroMotif\}>/);
 });
 
 test('motion classes map calm to no extra class', () => {
@@ -322,17 +360,17 @@ test('H04 lively adds only the popular float, and reduced motion overrides it', 
 });
 
 test('H05 popular:off keeps the rail, drops the rank and relabels it', () => {
-  // Also routeless for budget; proven against the real view and the real JSX.
+  // The DATA contract. The RENDERED contract is asserted in the browser suite
+  // against /s/demo-popular-off/menu, which the evidence build emits - a real
+  // document, not a regex over the component that would render it.
   const off = buildHome(tenant, homeOptionsFor(['popular-off']));
   assert.equal(off.modules.popular.enabled, true);
   assert.equal(off.modules.popular.ready, false);
-  const menu = read('src/ui/storefront/home/MenuParts.tsx');
-  // With ready=false there is no rank prop, so the badge cannot render...
-  assert.match(menu, /rank=\{ready \? index \+ 1 : undefined\}/);
-  assert.match(menu, /\{rank === undefined \? null : \(/);
-  // ...and the heading and sub-label both change.
-  assert.match(menu, /ready \? m\.mostOrdered : m\.chefPicks/);
-  assert.match(menu, /\{ready \? <span className=\{styles\.sectionSub\}>\{m\.last30\}<\/span> : null\}/);
+  // The scenario that carries the rendered evidence exists and says so.
+  const scenario = SCENARIOS.find((s) => s.slug === 'demo-popular-off');
+  assert.ok(scenario, 'demo-popular-off must exist to evidence H05');
+  assert.equal(scenario.options.modules.popular.ready, false);
+  assert.equal(scenario.options.modules.popular.enabled, true);
 });
 
 test('H06 light x grid is a real, reachable combination', () => {
@@ -344,5 +382,34 @@ test('H06 light x grid is a real, reachable combination', () => {
 test('every scenario slug states what it proves', () => {
   for (const scenario of SCENARIOS) {
     assert.ok(scenario.proves.length > 8, `${scenario.slug} must say what it evidences`);
+  }
+});
+
+// ------------------------------------------- the shipped vs evidence slug gate
+
+test('the SHIPPED build pre-renders the canonical tenant and no demo slug', () => {
+  const previous = process.env.SF_EVIDENCE_ROUTES;
+  delete process.env.SF_EVIDENCE_ROUTES;
+  try {
+    assert.deepEqual([...homeSlugs()], ['maps-burger']);
+    for (const slug of SCENARIO_SLUGS) {
+      assert.ok(!homeSlugs().includes(slug), `${slug} must not ship`);
+    }
+  } finally {
+    if (previous !== undefined) process.env.SF_EVIDENCE_ROUTES = previous;
+  }
+});
+
+test('NEGATIVE CONTROL: the gate is not vacuous - an evidence build DOES emit them', () => {
+  // Without this the test above would pass just as well if homeSlugs() had been
+  // gutted to a constant, and the screenshots could never be reproduced.
+  const previous = process.env.SF_EVIDENCE_ROUTES;
+  process.env.SF_EVIDENCE_ROUTES = '1';
+  try {
+    assert.deepEqual([...homeSlugs()], ['maps-burger', ...SCENARIO_SLUGS]);
+    assert.deepEqual([...homeSlugs(['demo-light'])], ['maps-burger', 'demo-light']);
+  } finally {
+    if (previous === undefined) delete process.env.SF_EVIDENCE_ROUTES;
+    else process.env.SF_EVIDENCE_ROUTES = previous;
   }
 });

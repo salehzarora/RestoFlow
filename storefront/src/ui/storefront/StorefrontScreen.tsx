@@ -10,8 +10,10 @@ import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
-import type { Tenant } from '@/source/types';
+import type { MotionMode, Tenant } from '@/source/types';
+import { storefrontPath } from '@/routes/routes';
 import { Intro } from './Intro';
+import { IntroGate } from './IntroGate';
 import { ThemeScope } from './ThemeScope';
 import shell from './storefront.module.css';
 
@@ -19,10 +21,12 @@ export function StorefrontScreen({
   tenant,
   locale,
   preset = 'dark',
+  motion = 'full',
 }: {
   tenant: Tenant;
   locale: Locale;
   preset?: Preset;
+  motion?: MotionMode;
 }) {
   const tokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
@@ -31,7 +35,9 @@ export function StorefrontScreen({
 
   return (
     <ThemeScope tokens={tokens} className={`${shell.root} ${rubik.variable}`} dir={dirOf(locale)}>
-      <Intro tenant={tenant} locale={locale} />
+      <IntroGate slug={tenant.slug} homeHref={`${storefrontPath(locale, tenant.slug)}/menu`}>
+        <Intro tenant={tenant} locale={locale} motion={motion} />
+      </IntroGate>
     </ThemeScope>
   );
 }
