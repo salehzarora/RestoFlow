@@ -15,7 +15,7 @@ import { rubik } from '@/fonts/rubik';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import { searchPath } from '@/routes/routes';
-import { MENU_VERSION, TAX_RATE } from '@/source/menu-fixture';
+import { MENU_VERSION } from '@/source/menu-fixture';
 import type { HomeView } from '@/source/types';
 import { LanguageMenu } from '../LanguageMenu';
 import { ThemeScope } from '../ThemeScope';
@@ -32,8 +32,8 @@ import {
   StoryCard,
 } from './HomeParts';
 import { MenuSection, PopularSection } from './MenuParts';
-import { CartAside, CartDock } from './CartParts';
-import { AsideSlot, DockSlot } from '../cart/CartRuntime';
+import { CartAside } from './CartParts';
+import { DockSlot } from '../cart/CartRuntime';
 import { HomeChrome } from './HomeChrome';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import styles from './home.module.css';
@@ -58,7 +58,9 @@ export function Home({
   hrefFor: (target: Locale) => string;
 }) {
   const m = storefrontMessages(locale);
-  const { tenant, modules, categories, items, cardMode, cart } = view;
+  // `view.cart` is DELIBERATELY not destructured: the fixture cart is test and
+  // evidence data only, and nothing on this screen may render it.
+  const { tenant, modules, categories, items, cardMode } = view;
   const tokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
     accent: sanitizeAccent(tenant.brand.accent, preset),
@@ -105,10 +107,15 @@ export function Home({
       dir={dirOf(locale)}
     >
       {/*
-        The cart scope wraps the WHOLE shell: the dock slot must stay inside
-        <main> to keep its sticky positioning, and the aside slot must stay a
-        SIBLING of <main> because the wide layout is `main + .aside`. One
-        provider, two slots, neither moved out of its layout parent.
+        The cart scope wraps the WHOLE shell so the dock slot can stay inside
+        <main> and keep its sticky positioning.
+
+        THE STATIC DOCUMENT CARRIES NO CART. Every route here is a static
+        document: the bytes are identical for every visitor, so any cart in them
+        is a cart nobody owns. A first visit has an EMPTY cart, and an empty
+        cart renders no dock at all - so the prerendered document contains no
+        dock, no count, no line and no money. Only a validated cart read from
+        this visitor's own storage, after hydration, can put one there.
       */}
       <StorefrontRuntime
         slug={slug}
@@ -188,42 +195,25 @@ export function Home({
 
             <SiteFooter tenant={tenant} m={m} />
 
-            {/*
-              The PRERENDERED dock is passed as a child and shown until the
-              visitor's own cart has been read, so the static document and the
-              first client render are byte-identical. CartParts stays inert.
-            */}
-            {/* Each slot renders the PRERENDERED child until the visitor's
-                own cart has been read, so the static document and the first
-                client render are identical. */}
+            {/* Renders NOTHING until this visitor's own cart has been read,
+                so the static document and the first client render agree and
+                neither contains a cart. */}
             <DockSlot
               m={m}
               motion={view.motion}
               state={tenant.service.state}
               opensAt={tenant.hours.opens}
-            >
-              <CartDock
-                cart={cart}
-                m={m}
-                state={tenant.service.state}
-                opensAt={tenant.hours.opens}
-              />
-            </DockSlot>
+            />
           </main>
 
-          <AsideSlot
-            m={m}
-            state={tenant.service.state}
-            opensAt={tenant.hours.opens}
-            taxRate={TAX_RATE}
-          >
-            <CartAside
-              cart={cart}
-              m={m}
-              state={tenant.service.state}
-              opensAt={tenant.hours.opens}
-            />
-          </AsideSlot>
+          {/*
+            THE WIDE SEAM, DELIBERATELY NON-FUNCTIONAL IN PHASE C.
+            It is a plain server component that never sees the cart store: no
+            lines, no count, no subtotal, no tax, no total, and a checkout CTA
+            that is disabled because its route is Phase D. It renders the same
+            bytes for every visitor and does not change when a real cart exists.
+          */}
+          <CartAside m={m} state={tenant.service.state} opensAt={tenant.hours.opens} />
         </div>
       </StorefrontRuntime>
       <span className={styles.srOnly} data-slug={slug} />

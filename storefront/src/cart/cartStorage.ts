@@ -26,8 +26,26 @@ import type { CartLine, CartState } from '@/source/types';
 
 const NAMESPACE = 'sf:v1:cart:';
 
-/** Refuse anything larger than this before parsing. */
+/** Refuse anything larger than this before parsing. Measured in UTF-8 BYTES. */
 const MAX_BYTES = 64 * 1024;
+
+/**
+ * The payload's size in UTF-8 BYTES.
+ *
+ * `String.prototype.length` counts UTF-16 code units, which is NOT the stored
+ * size: one Arabic or Hebrew character is a single code unit but two UTF-8
+ * bytes, and most emoji are two code units but four bytes. Measuring by length
+ * therefore admitted payloads far over the documented 64 KiB ceiling.
+ *
+ * `TextEncoder` is a browser global (and standard in Node), so this stays a
+ * client-safe module with no Node-only API. It is constructed lazily and reused
+ * because a stored cart is read on every page load.
+ */
+let encoder: TextEncoder | null = null;
+function utf8Bytes(text: string): number {
+  if (encoder === null) encoder = new TextEncoder();
+  return encoder.encode(text).length;
+}
 /** Bounds so a crafted payload cannot exhaust memory or the render tree. */
 export const MAX_LINES = 50;
 const MAX_GROUPS_PER_LINE = 12;
@@ -45,6 +63,17 @@ function isSafeId(value: unknown): value is string {
 }
 
 /** Own, enumerable, non-forbidden keys only. */
+/**
+ * True when the object carries an OWN property whose key is one a prototype
+ * chain reserves. `JSON.parse` creates these as real own properties - unlike an
+ * object LITERAL, where `__proto__:` is a prototype assignment and no own key
+ * exists at all - so this is reachable only from parsed input, which is exactly
+ * the untrusted path.
+ */
+function hasForbiddenKey(value: object): boolean {
+  return Object.keys(value).some((key) => FORBIDDEN_KEYS.has(key));
+}
+
 function safeEntries(value: object): Array<[string, unknown]> {
   const out: Array<[string, unknown]> = [];
   for (const key of Object.getOwnPropertyNames(value)) {
@@ -87,6 +116,8 @@ export function emptyCart(slug: string, menuVersion: string): CartState {
 function parseLine(raw: unknown): CartLine | null {
   if (!isPlainObject(raw)) return null;
 
+  if (hasForbiddenKey(raw)) return null;
+
   const { lineId, itemId, qty, selections, note } = raw as Record<string, unknown>;
   if (!isSafeId(lineId) || !isSafeId(itemId)) return null;
   if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < MIN_QTY || qty > MAX_QTY) {
@@ -96,6 +127,10 @@ function parseLine(raw: unknown): CartLine | null {
   if (typeof note === 'string' && note.length > MAX_NOTE * 4) return null;
 
   if (!isPlainObject(selections)) return null;
+  // A forbidden own key REJECTS the line. Dropping it and keeping the rest
+  // would hand back a partly-trusted cart - the very thing this module refuses
+  // - and would under-price it without telling the visitor.
+  if (hasForbiddenKey(selections)) return null;
   const groupEntries = safeEntries(selections);
   if (groupEntries.length > MAX_GROUPS_PER_LINE) return null;
 
@@ -134,7 +169,7 @@ function parseLine(raw: unknown): CartLine | null {
 export function parseCart(rawText: unknown, slug: string, menuVersion: string): CartState {
   const empty = emptyCart(slug, menuVersion);
   if (typeof rawText !== 'string' || rawText.length === 0) return empty;
-  if (rawText.length > MAX_BYTES) return empty;
+  if (utf8Bytes(rawText) > MAX_BYTES) return empty;
 
   let parsed: unknown;
   try {
@@ -143,6 +178,8 @@ export function parseCart(rawText: unknown, slug: string, menuVersion: string): 
     return empty;
   }
   if (!isPlainObject(parsed)) return empty;
+
+  if (hasForbiddenKey(parsed)) return empty;
 
   const { schema, slug: storedSlug, menuVersion: storedVersion, lines } = parsed as Record<
     string,
@@ -213,7 +250,7 @@ export function saveCart(state: CartState): void {
   const found = store();
   if (found === null) return;
   const text = serialiseCart(state);
-  if (text.length > MAX_BYTES) return;
+  if (utf8Bytes(text) > MAX_BYTES) return;
   // Round-trip guard: if what we are about to write would be rejected on read,
   // do not write it at all.
   if (parseCart(text, state.slug, state.menuVersion).lines.length !== state.lines.length) return;

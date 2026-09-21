@@ -442,34 +442,47 @@ async function seedCart(page: Page) {
 // ------------------------------------------------------------- MINOR-6
 
 test('B2-M6 the cart dock shows the running subtotal, not the total', async ({ page }) => {
-  // 1280 so the cart ASIDE renders too: it lists Subtotal / Tax / Total, which
-  // lets the dock be cross-checked against the page's own numbers rather than
-  // against a literal a future fixture change would silently invalidate.
-  await page.setViewportSize({ width: 1280, height: 900 });
+  // THE CROSS-CHECK REFERENCE CHANGED IN C1, THE ASSERTION DID NOT.
+  //
+  // This used to read the aside's Subtotal / Tax / Total rows and compare the
+  // dock against them. C1 made the wide aside a cart-NEUTRAL Phase-D seam with
+  // no totals at all, so that reference no longer exists. The dock is now
+  // checked against an INDEPENDENTLY COMPUTED figure instead - which is a
+  // stronger reference, because it cannot drift with the component under test.
+  //
+  // Seeded cart (seedCart above):
+  //   item '1' 5500 + brioche 500 = 6000, x1 -> 6000
+  //   item '7' 2200 + bbq 0       = 2200, x2 -> 4400
+  //   subtotal 10400, tax 18% = 1872, total 12272.
+  // Subtotal and total differ widely, so rendering the wrong one is unmissable.
+  const SUBTOTAL_MINOR = 10400;
+  const TAX_RATE = 0.18;
+  const TOTAL_MINOR = SUBTOTAL_MINOR + Math.round(SUBTOTAL_MINOR * TAX_RATE);
+  const money = (minor: number) =>
+    `₪${minor % 100 === 0 ? String(minor / 100) : (minor / 100).toFixed(2)}`;
+
+  await page.setViewportSize({ width: 390, height: 844 });
   await seedCart(page);
   await page.goto(`${BASE}/en/s/maps-burger/menu`, { waitUntil: 'networkidle' });
-  // Wait for hydration to swap the prerendered surfaces for the live ones.
-  await page.locator('[data-sf-dock="live"]').waitFor({ state: 'attached' });
 
-  const money = await page.evaluate(() => {
-    const dock = document.querySelector('[class*="dockTotal"]')?.textContent?.trim() ?? '';
-    const rows: Record<string, string> = {};
-    for (const r of Array.from(document.querySelectorAll('[class*="totalRow"]'))) {
-      const spans = r.querySelectorAll('span');
-      if (spans.length >= 2) rows[spans[0].textContent!.trim()] = spans[1].textContent!.trim();
-    }
-    return { dock, rows };
-  });
+  const dock = page.locator('[data-sf-dock="live"]');
+  await expect(dock, 'a seeded cart must produce a dock').toHaveCount(1);
+  const shown = (await dock.locator('[class*="dockTotal"]').textContent())?.trim() ?? '';
 
-  expect(money.rows.Subtotal, 'the aside must state a subtotal').toBeTruthy();
-  expect(money.rows.Total, 'the aside must state a total').toBeTruthy();
-  // The seeded cart is taxed, so subtotal and total genuinely differ - this
-  // assertion can fail if the wrong field is rendered.
-  expect(money.rows.Subtotal).not.toBe(money.rows.Total);
-  expect(money.dock, 'the dock carries the SUBTOTAL').toBe(money.rows.Subtotal);
-  expect(money.dock, 'the dock must not carry the total').not.toBe(money.rows.Total);
+  // The two candidates are genuinely different, so this can fail.
+  expect(money(SUBTOTAL_MINOR)).not.toBe(money(TOTAL_MINOR));
+  expect(shown, 'the dock carries the SUBTOTAL').toBe(money(SUBTOTAL_MINOR));
+  expect(shown, 'the dock must not carry the total').not.toBe(money(TOTAL_MINOR));
 
-  RESULTS['B2-M6'] = money;
+  // And the wide seam still carries no money at all, so the dock is the only
+  // place a subtotal appears in Phase C.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${BASE}/en/s/maps-burger/menu`, { waitUntil: 'networkidle' });
+  const seam = page.locator('[data-sf-aside="seam"]');
+  await expect(seam).toHaveCount(1);
+  expect((await seam.textContent()) ?? '').not.toMatch(/₪\s*\d/);
+
+  RESULTS['B2-M6'] = { shown, subtotal: money(SUBTOTAL_MINOR), total: money(TOTAL_MINOR) };
 });
 
 // ------------------------------------------------------------ screenshots

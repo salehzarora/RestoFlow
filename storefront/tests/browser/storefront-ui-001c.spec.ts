@@ -654,74 +654,214 @@ async function wide(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-test('WIDE: the aside shows the VISITOR\'s cart, never the build-time fixture', async ({ page }) => {
-  // At container >= 900px the dock is display:none and the aside is the ONLY
-  // cart surface. If it kept rendering the seeded fixture, every desktop
-  // visitor would be shown a cart they never created - and a real add would
-  // change nothing on screen.
+test('R2/WIDE: the seam is cart-neutral and does NOT move when a real cart exists', async ({ page }) => {
+  // At container >= 900px the dock is display:none, so the seam is all there is.
+  // In Phase C it must stay a NON-FUNCTIONAL Phase-D seam: no lines, no count,
+  // no subtotal, no tax, no total - with or without a real cart.
   await wide(page);
   await seen(page);
   await page.goto(`${BASE}${MENU}`);
   await expect(page.locator('[data-sf-item]').first()).toBeVisible();
 
-  const aside = page.locator('aside');
-  await expect(aside).toBeVisible();
+  const seam = page.locator('[data-sf-aside="seam"]');
+  await expect(seam).toHaveCount(1);
+  const before = (await seam.textContent()) ?? '';
 
-  // An empty cart: the aside says so, and shows NO lines and no money.
-  await expect(aside.locator('li')).toHaveCount(0);
-  const emptyTotals = await aside.locator('[class*="totalRow"] span[dir="ltr"]').allTextContents();
-  expect(emptyTotals.every((t) => /^₪0$/.test(t)), `totals were ${emptyTotals.join()}`).toBe(true);
+  // Now give the visitor a REAL cart and reload.
+  await page.evaluate(
+    ([key, value]) => localStorage.setItem(key as string, value as string),
+    [CART_KEY, JSON.stringify({
+      schema: 1, slug: SLUG, menuVersion: 'mb-1',
+      lines: [{ lineId: 'l1aaa', itemId: '1', qty: 2, selections: {}, note: '' }],
+    })],
+  );
+  await page.reload();
+  await expect(page.locator('[data-sf-item]').first()).toBeVisible();
 
-  // The dock is genuinely hidden here, so the aside really is the only surface.
-  const dockVisible = await page.locator('[data-sf-dock="live"]').isVisible().catch(() => false);
-  expect(dockVisible).toBe(false);
+  const after = (await seam.textContent()) ?? '';
+  expect(after, 'the seam must not react to a real cart').toBe(before);
+  await expect(seam.locator('[class*="asideLine"]')).toHaveCount(0);
+  await expect(seam.locator('[class*="totalRow"]')).toHaveCount(0);
+  await expect(seam.locator('[class*="asideStepper"]')).toHaveCount(0);
+  expect(after).not.toMatch(/₪\s*\d/);
+  await expect(seam.locator('button')).toBeDisabled();
 
-  RESULTS.wideEmpty = { lines: 0, totals: emptyTotals };
-  await page.screenshot({ path: path.join(SHOTS, 'WIDE-aside-empty.png') });
+  // And the dock IS rendered (the cart is real) but hidden by the container query.
+  const dock = page.locator('[data-sf-dock="live"]');
+  await expect(dock, 'the dock must exist so the hide is meaningful').toHaveCount(1);
+  expect(await dock.evaluate((el) => getComputedStyle(el).display)).toBe('none');
+
+  RESULTS.wideSeam = { before: before.slice(0, 60), unchanged: after === before };
+  await page.screenshot({ path: path.join(SHOTS, 'WIDE-seam-neutral.png') });
 });
 
-test('WIDE: adding an item updates the aside, and its subtotal matches the arithmetic', async ({ page }) => {
-  await wide(page);
-  await seen(page);
-  await page.goto(`${BASE}${MENU}?item=7`); // fries 2200 + required sauce
-
-  await page.locator('[data-sf-group="sauce"] [role="radio"]').last().click(); // ranch +200
-  await page.locator('[data-sf-cta="product"]').click();
-
-  const aside = page.locator('aside');
-  await expect(aside.locator('li')).toHaveCount(1);
-
-  const rows = await aside.evaluate((el) => {
-    const out: Record<string, string> = {};
-    for (const row of Array.from(el.querySelectorAll('[class*="totalRow"]'))) {
-      const cells = row.querySelectorAll('span');
-      if (cells.length >= 2) out[cells[0].textContent!.trim()] = cells[1].textContent!.trim();
-    }
-    return out;
-  });
-  const values = Object.values(rows);
-  // 2400 subtotal, 18% tax = 432, total 2832 - integer minor units throughout.
-  expect(values).toContain('₪24');
-  expect(values).toContain('₪4.32');
-  expect(values).toContain('₪28.32');
-
-  RESULTS.wideLive = rows;
-  await page.screenshot({ path: path.join(SHOTS, 'WIDE-aside-live.png') });
-});
-
-test('WIDE: the aside CTA stays disabled - checkout is Phase D', async ({ page }) => {
+test('R2: Search has no dock and no wide cart surface, even with a real cart', async ({ page }) => {
   await wide(page);
   await seen(page);
   await page.addInitScript(
     ([key, value]) => localStorage.setItem(key as string, value as string),
     [CART_KEY, JSON.stringify({
       schema: 1, slug: SLUG, menuVersion: 'mb-1',
-      lines: [{ lineId: 'l1aaa', itemId: '1', qty: 1, selections: {}, note: '' }],
+      lines: [{ lineId: 'l1aaa', itemId: '1', qty: 2, selections: {}, note: '' }],
     })],
   );
-  await page.goto(`${BASE}${MENU}`);
-  const cta = page.locator('aside button');
-  await expect(cta).toBeDisabled();
+  await page.goto(`${BASE}${SEARCH}`);
+  await expect(page.locator('[data-sf-item]').first()).toBeVisible();
+  await expect(page.locator('[data-sf-dock]')).toHaveCount(0);
+  await expect(page.locator('[data-sf-aside="seam"]')).toHaveCount(0);
+  await expect(page.locator('aside')).toHaveCount(0);
+});
+
+test('R6: a NO-JAVASCRIPT visitor sees no cart anywhere', async ({ browser }) => {
+  // This is the crawler and the no-JS visitor. Whatever is in the bytes is what
+  // they get, so a fabricated cart is visible to them permanently.
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    javaScriptEnabled: false,
+  });
+  const page = await ctx.newPage();
+  for (const route of [MENU, SEARCH]) {
+    await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
+    const body = (await page.locator('body').textContent()) ?? '';
+    await expect(page.locator('[data-sf-dock]'), `${route}: a dock in no-JS bytes`).toHaveCount(0);
+    await expect(page.locator('[class*="asideLine"]'), `${route}: a cart line`).toHaveCount(0);
+    await expect(page.locator('[class*="totalRow"]'), `${route}: cart totals`).toHaveCount(0);
+    expect(body, `${route}: the seeded subtotal is in the no-JS bytes`).not.toContain('₪99');
+    expect(body, `${route}: the seeded total is in the no-JS bytes`).not.toContain('₪116.82');
+  }
+  // The menu still shows its seam, and the seam is truthful.
+  await page.goto(`${BASE}${MENU}`, { waitUntil: 'domcontentloaded' });
+  const seam = page.locator('[data-sf-aside="seam"]');
+  await expect(seam).toHaveCount(1);
+  const seamText = (await seam.textContent()) ?? '';
+  expect(seamText).not.toMatch(/₪\s*\d/);
+  RESULTS.noJs = { seamText: seamText.slice(0, 80) };
+  await page.screenshot({ path: path.join(SHOTS, 'NOJS-menu-no-cart.png') });
+  await ctx.close();
+});
+
+test('R3: a sold-out search row shows a VISIBLE localized reason', async ({ page }) => {
+  await phone(page);
+  await page.goto(`${BASE}${SEARCH}`);
+  const row = page.locator('[data-sf-item][aria-disabled="true"]');
+  await expect(row).toHaveCount(1);
+
+  // The cue must be a real, painted element - not sr-only, not opacity alone.
+  const tag = row.locator('[class*="rowSoldOutTag"]');
+  await expect(tag).toHaveCount(1);
+  await expect(tag).toBeVisible();
+  const box = await tag.boundingBox();
+  expect(box!.width, 'the cue must occupy real space').toBeGreaterThan(8);
+  expect(box!.height).toBeGreaterThan(8);
+  const text = (await tag.textContent())?.trim() ?? '';
+  expect(text.length, 'the cue must carry localized copy').toBeGreaterThan(0);
+
+  // It must NOT be clipped away like an sr-only node.
+  const clip = await tag.evaluate((el) => getComputedStyle(el).clipPath);
+  expect(clip === 'none' || clip === '').toBe(true);
+
+  RESULTS.soldOutCue = { text, box };
+  await page.screenshot({ path: path.join(SHOTS, 'R3-soldout-visible.png') });
+});
+
+test('R4: the clear button says clear, not close, and has a >=44px hit target', async ({ page }) => {
+  for (const [root, expected] of [
+    ['', 'مسح البحث'],
+    ['/he', 'נקה חיפוש'],
+    ['/en', 'Clear search'],
+  ] as const) {
+    await phone(page);
+    await page.goto(`${BASE}${root}/s/${SLUG}/search`);
+    await page.keyboard.type('a');
+    const clear = page.locator('[role="search"] button');
+    await expect(clear).toHaveCount(1);
+    await expect(clear).toHaveAttribute('aria-label', expected);
+
+    // The PAINTED circle stays 28px; the HIT AREA must reach 44px. Measured on
+    // the pseudo-element, which is what a finger actually lands on.
+    const hit = await clear.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const before = getComputedStyle(el, '::before');
+      const extra = (v: string) => Math.abs(parseFloat(v) || 0);
+      return {
+        painted: { w: Math.round(r.width), h: Math.round(r.height) },
+        hitW: Math.round(r.width + extra(before.insetInlineStart) + extra(before.insetInlineEnd)),
+        hitH: Math.round(r.height + extra(before.top) + extra(before.bottom)),
+      };
+    });
+    expect(hit.painted.w, `${root || '/'}: painted size must stay canonical`).toBe(28);
+    expect(hit.hitW, `${root || '/'}: hit width`).toBeGreaterThanOrEqual(44);
+    expect(hit.hitH, `${root || '/'}: hit height`).toBeGreaterThanOrEqual(44);
+
+    // And it really clears.
+    await clear.click();
+    await expect(page.locator('input[type="search"]')).toHaveValue('');
+    RESULTS[`clear${root || 'ar'}`] = hit;
+  }
+});
+
+test('J: a blocked Add moves FOCUS into the first unmet group', async ({ page }) => {
+  await phone(page);
+  await seen(page);
+  // Item 16 has TWO required groups (bun, meal), so "first" is meaningful.
+  await page.goto(`${BASE}${MENU}?item=16`);
+  const sheet = page.locator('[data-sf-sheet="product"]');
+  await expect(sheet).toBeVisible();
+
+  await page.locator('[data-sf-cta="product"]').click({ force: true });
+
+  // Sheet stays open, nothing added, the alert fires.
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('[role="alert"]').first()).toBeVisible();
+  expect(await page.evaluate((k) => localStorage.getItem(k), CART_KEY)).toBeNull();
+
+  // Focus is INSIDE the first unmet group, not left on the CTA.
+  const where = await page.evaluate(() => {
+    const active = document.activeElement;
+    const group = active?.closest('[data-sf-group]');
+    return {
+      groupId: group?.getAttribute('data-sf-group') ?? null,
+      isCta: active?.getAttribute('data-sf-cta') === 'product',
+    };
+  });
+  expect(where.isCta, 'focus must leave the CTA').toBe(false);
+  expect(where.groupId, 'focus must land in the FIRST unmet group').toBe('bun');
+
+  // tabIndex=-1 keeps it programmatically focusable WITHOUT adding a tab stop.
+  const tabindex = await sheet.locator('[data-sf-group="bun"]').getAttribute('tabindex');
+  expect(tabindex).toBe('-1');
+
+  RESULTS.blockedFocus = where;
+  await page.screenshot({ path: path.join(SHOTS, 'J-first-unmet-focused.png') });
+});
+
+test('K: the localized "included" word is NOT forced into an LTR island', async ({ page }) => {
+  // Only numerals belong in an LTR island. Wrapping a localized WORD in
+  // dir="ltr" mislabels its direction.
+  for (const root of ['', '/he'] as const) {
+    await phone(page);
+    await seen(page);
+    await page.goto(`${BASE}${root}/s/${SLUG}/menu?item=7`);
+    const opts = page.locator('[data-sf-group="sauce"] [role="radio"]');
+    await expect(opts.first()).toBeVisible();
+
+    const deltas = await page.locator('[data-sf-group="sauce"] [class*="delta"]').evaluateAll(
+      (els) => els.map((e) => ({
+        text: (e.textContent ?? '').trim(),
+        dir: e.getAttribute('dir'),
+        isMoney: /₪/.test(e.textContent ?? ''),
+      })),
+    );
+    expect(deltas.length).toBeGreaterThan(0);
+    for (const d of deltas) {
+      if (d.isMoney) {
+        expect(d.dir, `${root || 'ar'}: a money delta stays an LTR island`).toBe('ltr');
+      } else {
+        expect(d.dir, `${root || 'ar'}: "${d.text}" must not be forced LTR`).toBeNull();
+      }
+    }
+    RESULTS[`included${root || 'ar'}`] = deltas;
+  }
 });
 
 test('the CSP is real: no NEW inline style source appears on either screen', async ({ page }) => {

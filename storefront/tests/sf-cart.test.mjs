@@ -9,6 +9,7 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 const s = await import('../src/cart/cartStorage.ts');
 const model = await import('../src/cart/cartModel.ts');
@@ -103,19 +104,121 @@ test('LAYER 1 of the double-charge defence: a repeated option id is REJECTED out
   assert.deepEqual(parse(doubled), empty());
 });
 
-test('prototype pollution through a stored cart is impossible', () => {
-  const polluted = [
-    '{"schema":1,"slug":"' + SLUG + '","menuVersion":"' + MENU_VERSION +
-      '","lines":[],"__proto__":{"polluted":true}}',
-    payload({ lines: [line({ selections: { __proto__: ['x'] } })] }),
-    payload({ lines: [line({ selections: { constructor: ['x'] } })] }),
-    payload({ lines: [line({ selections: { prototype: ['x'] } })] }),
-  ];
-  for (const value of polluted) {
-    assert.doesNotThrow(() => parse(value));
+test('a forbidden key is REJECTED, and the vector really reaches the parser', () => {
+  // WHY THIS IS BUILT FROM RAW JSON TEXT, NOT AN OBJECT LITERAL.
+  //
+  // In an object LITERAL, `{ __proto__: [...] }` is a PROTOTYPE ASSIGNMENT: the
+  // object gets NO own property, and JSON.stringify emits `{}`. A test written
+  // that way never sends a __proto__ key anywhere and proves nothing.
+  // `JSON.parse` is different - it creates a real OWN property - and that is
+  // the path untrusted storage actually takes.
+  for (const key of ['__proto__', 'constructor', 'prototype']) {
+    const raw =
+      '{"schema":1,"slug":"' + SLUG + '","menuVersion":"' + MENU_VERSION +
+      '","lines":[{"lineId":"l1abc","itemId":"1","qty":1,"selections":' +
+      '{"' + key + '":["cheese"],"extras":["bacon"]},"note":""}]}';
+
+    // NON-VACUITY: prove the forbidden key is an OWN property of what the
+    // parser receives. Without this the assertion below could pass simply
+    // because the key never existed.
+    const asParsed = JSON.parse(raw);
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(asParsed.lines[0].selections, key),
+      `${key} never became an own property, so this vector is vacuous`,
+    );
+
+    // REJECTED, not silently dropped: a partly-trusted cart is worse than an
+    // empty one, and dropping the key would under-price the line.
+    assert.deepEqual(parse(raw), empty(), `${key} must invalidate the payload`);
   }
+
+  // The same at the line level and at the top level of the payload.
+  const atLine =
+    '{"schema":1,"slug":"' + SLUG + '","menuVersion":"' + MENU_VERSION +
+    '","lines":[{"__proto__":{"x":1},"lineId":"l1abc","itemId":"1","qty":1,' +
+    '"selections":{},"note":""}]}';
+  assert.deepEqual(parse(atLine), empty(), 'a forbidden key on the LINE must be rejected');
+
+  const atTop =
+    '{"__proto__":{"polluted":true},"schema":1,"slug":"' + SLUG +
+    '","menuVersion":"' + MENU_VERSION + '","lines":[]}';
+  assert.deepEqual(parse(atTop), empty(), 'a forbidden key on the PAYLOAD must be rejected');
+
+  // And nothing was polluted along the way.
   assert.equal({}.polluted, undefined, 'Object.prototype was polluted');
   assert.equal(Object.prototype.polluted, undefined, 'Object.prototype was polluted');
+  assert.equal({}.x, undefined, 'Object.prototype was polluted');
+});
+
+test('the 64 KiB ceiling is measured in UTF-8 BYTES, not UTF-16 code units', () => {
+  const CAP = 64 * 1024;
+  const bytes = (text) => new TextEncoder().encode(text).length;
+  const build = (pad) =>
+    '{"schema":1,"slug":"' + SLUG + '","menuVersion":"' + MENU_VERSION +
+    '","lines":[],"pad":"' + pad + '"}';
+
+  // ASCII: one code unit, one byte - length and bytes agree.
+  const asciiUnder = build('a'.repeat(CAP - 200));
+  assert.ok(bytes(asciiUnder) < CAP);
+  assert.deepEqual(parse(asciiUnder), empty()); // empty because `pad` is not a cart key
+  const asciiOver = build('a'.repeat(CAP + 200));
+  assert.ok(bytes(asciiOver) > CAP);
+  assert.deepEqual(parse(asciiOver), empty());
+
+  // ARABIC is the case that `.length` got wrong: one code unit, TWO UTF-8
+  // bytes. This payload is comfortably under the cap by length and comfortably
+  // OVER it by bytes, so it distinguishes the two implementations.
+  const arabic = build('م'.repeat(40000));
+  assert.ok(arabic.length < CAP, 'must be UNDER the cap when counted as code units');
+  assert.ok(bytes(arabic) > CAP, 'must be OVER the cap when counted as UTF-8 bytes');
+  assert.deepEqual(parse(arabic), empty(), 'an over-size payload must be refused');
+
+  // A REAL cart that is legitimately under the byte cap still parses, so the
+  // stricter measure did not break the normal case.
+  const good = payload();
+  assert.ok(bytes(good) < CAP);
+  assert.equal(parse(good).lines.length, 1);
+});
+
+test('WRITE SHAPE: only the approved key and the approved payload can be stored', () => {
+  // The read side is tested above. This pins what the module may WRITE, which
+  // nothing previously constrained: the file allowlist says WHICH file may use
+  // localStorage, never WHAT it puts there.
+  const src = readFileSync(new URL('../src/cart/cartStorage.ts', import.meta.url), 'utf8');
+
+  // Exactly one namespace, and the key is always built from it.
+  assert.match(src, /const NAMESPACE = 'sf:v1:cart:';/);
+  assert.equal((src.match(/\.setItem\(/g) ?? []).length, 1, 'exactly one write site');
+  assert.match(src, /found\.setItem\(key, text\)/);
+  // The key always comes from cartKey(), which validates the slug.
+  assert.match(src, /const key = cartKey\(state\.slug\);/);
+  assert.match(src, /isValidSlug\(slug\)/);
+
+  // The serialiser is explicit about its four fields and five per-line fields;
+  // a spread would let any extra key through.
+  assert.ok(!/\.\.\.state/.test(src), 'the serialiser must not spread the state');
+  assert.ok(!/\.\.\.line/.test(src), 'the serialiser must not spread a line');
+
+  // And the emitted text really carries nothing else.
+  let state = empty();
+  state = model.addLine(state, {
+    itemId: '1',
+    qty: 2,
+    selections: { bun: ['brioche'] },
+    note: 'no onion',
+  });
+  const text = s.serialiseCart(state);
+  const back = JSON.parse(text);
+  assert.deepEqual(Object.keys(back).sort(), ['lines', 'menuVersion', 'schema', 'slug']);
+  assert.deepEqual(Object.keys(back.lines[0]).sort(),
+    ['itemId', 'lineId', 'note', 'qty', 'selections']);
+
+  for (const forbidden of [
+    'fullName', 'phone', 'address', 'street', 'building', 'apartment',
+    'deliveryNotes', 'payment', 'requestRef', 'status', 'token', 'secret',
+  ]) {
+    assert.ok(!text.includes(forbidden), `${forbidden} reached the stored payload`);
+  }
 });
 
 test('the parser is bounded in every dimension an attacker controls', () => {
@@ -291,35 +394,32 @@ test('at the cap, addLine returns the SAME object so nothing re-renders', () => 
   assert.equal(model.addLine(state, { itemId: '7', qty: 1, selections: {}, note: '' }), state);
 });
 
-test('toCartView projects the live cart into the presentational shape', () => {
-  // The wide aside renders a CartView. If this projection drifts, the aside
-  // silently shows the wrong money at every container >= 900px, where it is
-  // the ONLY cart surface.
-  let state = empty();
-  state = model.addLine(state, { itemId: '1', qty: 2, selections: { bun: ['brioche'] }, note: '' });
-  const summary = model.summarise(state, MENU_ITEMS);
-  const view = model.toCartView(summary, 0.18);
+test('the WIDE ASIDE is not wired to the cart at all', () => {
+  // Phase C's wide aside is a NON-FUNCTIONAL Phase-D seam. The earlier
+  // `toCartView` projection is gone on purpose: the aside must not be able to
+  // show lines, a count, a subtotal, tax or a total, and the cleanest guarantee
+  // is that it cannot receive them.
+  assert.equal(model.toCartView, undefined, 'the live->presentational projection must be gone');
 
-  assert.deepEqual(Object.keys(view).sort(),
-    ['itemCount', 'lines', 'subtotalMinor', 'taxMinor', 'taxRate', 'totalMinor']);
-  assert.equal(view.itemCount, 2);
-  assert.equal(view.subtotalMinor, 12000); // (5500 + 500) * 2
-  assert.equal(view.taxMinor, Math.round(12000 * 0.18));
-  assert.equal(view.totalMinor, view.subtotalMinor + view.taxMinor);
-  for (const value of [view.subtotalMinor, view.taxMinor, view.totalMinor]) {
-    assert.ok(Number.isInteger(value), `${value} must be integer minor units`);
+  const aside = readFileSync(
+    new URL('../src/ui/storefront/home/CartParts.tsx', import.meta.url), 'utf8');
+  const body = aside.slice(aside.indexOf('export function CartAside'));
+  // No cart prop at all.
+  assert.ok(!/cart:\s*CartView/.test(body), 'CartAside must not accept a CartView');
+  for (const banned of ['cart.lines', 'cart.itemCount', 'subtotalMinor', 'taxMinor', 'totalMinor']) {
+    assert.ok(!body.includes(banned), `the seam must not reference ${banned}`);
   }
-  assert.deepEqual(Object.keys(view.lines[0]).sort(),
-    ['image', 'lineId', 'lineTotalMinor', 'name', 'optionSummary', 'quantity']);
-});
+  // It still renders the seam and a disabled CTA, so it stays a truthful seam
+  // rather than disappearing.
+  assert.ok(body.includes('data-sf-aside="seam"'));
+  assert.ok(body.includes('m.emptyCart'));
+  assert.ok(body.includes('aria-disabled="true"'));
 
-test('an empty live cart projects to a zeroed view, not a fixture', () => {
-  const view = model.toCartView(model.summarise(empty(), MENU_ITEMS), 0.18);
-  assert.deepEqual(view.lines, []);
-  assert.equal(view.itemCount, 0);
-  assert.equal(view.subtotalMinor, 0);
-  assert.equal(view.taxMinor, 0);
-  assert.equal(view.totalMinor, 0);
+  // And nothing in the client runtime hands it cart state.
+  const runtime = readFileSync(
+    new URL('../src/ui/storefront/cart/CartRuntime.tsx', import.meta.url), 'utf8');
+  assert.ok(!runtime.includes('CartAside'), 'the cart runtime must not render the aside');
+  assert.ok(!runtime.includes('AsideSlot'), 'the aside slot must be gone');
 });
 
 test('a REMOVAL reads as a removal, never as an addition', () => {

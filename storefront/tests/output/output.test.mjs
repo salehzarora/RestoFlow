@@ -112,3 +112,79 @@ test('every module named in the locked order actually renders somewhere', () => 
     assert.ok(seen.has(name), `module "${name}" renders on no shipped document`);
   }
 });
+
+// ------------------------------------------- shipped bytes carry NO visitor cart
+//
+// A static export serves IDENTICAL bytes to everyone, so any cart inside them is
+// a cart nobody owns. A no-JS visitor and a crawler see exactly these bytes.
+//
+// The fixture cart (home.ts SEEDED_LINES) is item 1 x1 plus item 7 x2, which
+// renders as "3 items", a 9900 subtotal and an 18% tax - so those are the exact
+// strings a leak would produce.
+
+/** Markers that can only come from a FABRICATED cart, never from a real one. */
+const FAKE_CART_MARKERS = [
+  '₪99',       // seeded subtotal
+  '₪17.82',    // 18% tax on the seeded subtotal
+  '₪116.82',   // seeded total
+  'dockCount',      // the dock's count badge
+  'dockTotal',      // the dock's money slot
+  'dockThumb',      // a line thumbnail in the dock
+  'asideLine',      // a line row in the wide aside
+  'totalRow',       // the aside's subtotal/tax/total block
+  'data-sf-dock',   // the live dock itself
+];
+
+/** Every emitted document and RSC payload, as text. */
+const emittedText = () =>
+  outFiles()
+    .filter((f) => f.endsWith('.html') || f.endsWith('.txt'))
+    .map((f) => ({ file: path.relative(OUT, f).replace(/\\/g, '/'), text: readFileSync(f, 'utf8') }));
+
+/** The rule as a pure function, so the negative control can run the SAME logic. */
+function fakeCartOffences(docs) {
+  const found = [];
+  for (const { file, text } of docs) {
+    for (const marker of FAKE_CART_MARKERS) {
+      if (text.includes(marker)) found.push(`${file}: ${marker}`);
+    }
+  }
+  return found;
+}
+
+test('no shipped document or RSC payload contains a fabricated cart', () => {
+  const docs = emittedText();
+  assert.ok(docs.length > 0, 'expected emitted documents');
+  assert.deepEqual(fakeCartOffences(docs), []);
+});
+
+test('NEGATIVE CONTROL: the fabricated-cart detector fails on a document that has one', () => {
+  // Without this the test above would also pass on an export that emits nothing
+  // at all, or if every marker were renamed.
+  const docs = emittedText();
+  for (const marker of FAKE_CART_MARKERS) {
+    const planted = [...docs, { file: 'scratch/planted.html', text: `<p>${marker}</p>` }];
+    const caught = fakeCartOffences(planted);
+    assert.deepEqual(caught, [`scratch/planted.html: ${marker}`],
+      `the detector MISSED a planted ${marker}`);
+  }
+});
+
+test('the wide aside ships as a cart-neutral seam, not a cart', () => {
+  // It must exist (it is the approved Phase-D seam) and must carry the empty
+  // label rather than a count, so the bytes are truthful for every visitor.
+  const menus = emittedText().filter((d) => /(^|\/)menu\.html$/.test(d.file));
+  assert.equal(menus.length, 4, 'expected one menu document per locale root');
+  for (const { file, text } of menus) {
+    assert.ok(text.includes('data-sf-aside="seam"'), `${file}: the wide seam is missing`);
+    // Scoped to the <aside> ELEMENT: the document also carries an RSC payload
+    // full of legitimate MENU prices, which are not cart state.
+    const start = text.indexOf('<aside');
+    const seam = text.slice(start, text.indexOf('</aside>', start));
+    assert.ok(start !== -1 && seam.length > 0, `${file}: no aside element`);
+    assert.ok(!seam.includes('asideStepper'), `${file}: the seam must expose no stepper`);
+    assert.ok(!seam.includes('asideLine'), `${file}: the seam must carry no cart line`);
+    assert.ok(!seam.includes('totalRow'), `${file}: the seam must carry no totals`);
+    assert.ok(!/₪\d/.test(seam), `${file}: the seam must carry no money`);
+  }
+});

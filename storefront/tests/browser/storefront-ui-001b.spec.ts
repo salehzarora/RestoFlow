@@ -189,7 +189,14 @@ for (const c of CASES) {
       await expect(page.locator('aside')).toBeVisible();
       info.asideWidth = await page.locator('aside').evaluate((el) => el.getBoundingClientRect().width);
       expect(Math.round(info.asideWidth as number), 'aside is 360px').toBe(360);
-      expect(await page.locator('[class*="dock"]').first().isVisible()).toBe(false);
+      // Exactly ONE wide seam, and it is the cart-neutral one.
+      await expect(page.locator('[data-sf-aside="seam"]')).toHaveCount(1);
+      // NOTE: the dock's wide-layout behaviour is NOT asserted here.
+      // Phase C made the dock live, so with an empty cart it is absent from the
+      // DOM entirely and `.first().isVisible() === false` would pass because the
+      // locator matches NOTHING - proving nothing about the container query.
+      // It is asserted in 'C1-G13' below, which seeds a REAL cart first so the
+      // dock exists and `display: none` is the only thing that can hide it.
     }
     if (c.id === 'G14') {
       // 834px is still phone-style: the container has not reached 900px.
@@ -371,4 +378,62 @@ test('the emptyMenu state renders and suppresses every module', async ({ page })
   expect(RESULTS.H02).toMatchObject({ sections: 0, rail: 0 });
   await page.screenshot({ path: path.join(SHOTS, 'H02-empty-menu-390x844.png') });
   assertClean('H02', w, await overflow(page));
+});
+
+// ------------------------------------------------------------------ C1: the
+// wide-layout dock rule, asserted against a cart that actually exists.
+
+/** A real, validated cart at the approved key - the state a visitor reaches. */
+async function seedRealCart(page: Page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem(
+        'sf:v1:cart:maps-burger',
+        JSON.stringify({
+          schema: 1,
+          slug: 'maps-burger',
+          menuVersion: 'mb-1',
+          lines: [{ lineId: 'l1aaa', itemId: '1', qty: 2, selections: { bun: ['brioche'] }, note: '' }],
+        }),
+      );
+      sessionStorage.setItem('sf:v1:seen:maps-burger', '1');
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+test('C1-G13 with a REAL cart: the dock exists at 834 and is display:none at 1280', async ({ page }) => {
+  await seedRealCart(page);
+
+  // 834px is still phone-style: the dock must EXIST and be visible.
+  await page.setViewportSize({ width: 834, height: 900 });
+  await page.goto(`${BASE}/s/maps-burger/menu`, { waitUntil: 'networkidle' });
+  const narrowDock = page.locator('[data-sf-dock="live"]');
+  await expect(narrowDock, 'the dock must exist at 834 with a real cart').toHaveCount(1);
+  await expect(narrowDock).toBeVisible();
+  await expect(page.locator('aside'), '834 must stay phone-style').toBeHidden();
+
+  // 1280px: the SAME cart, so the dock is still rendered - and the container
+  // query is the only thing that can hide it. Counting first is what makes this
+  // non-vacuous: an absent dock would fail the count, not silently pass.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${BASE}/s/maps-burger/menu`, { waitUntil: 'networkidle' });
+  const wideDock = page.locator('[data-sf-dock="live"]');
+  await expect(wideDock, 'the dock must still be RENDERED at 1280').toHaveCount(1);
+  const display = await wideDock.evaluate((el) => getComputedStyle(el).display);
+  expect(display, 'the container query must hide it').toBe('none');
+  await expect(wideDock).toBeHidden();
+
+  // Exactly one wide seam, and it does NOT move because a cart exists.
+  const seam = page.locator('[data-sf-aside="seam"]');
+  await expect(seam).toHaveCount(1);
+  await expect(seam).toBeVisible();
+  await expect(seam.locator('[class*="asideLine"]'), 'the seam shows no cart line').toHaveCount(0);
+  await expect(seam.locator('[class*="totalRow"]'), 'the seam shows no totals').toHaveCount(0);
+  const seamText = (await seam.textContent()) ?? '';
+  expect(seamText, 'the seam must carry no money').not.toMatch(/₪\s*\d/);
+  await expect(seam.locator('button'), 'the seam CTA is disabled').toBeDisabled();
+
+  RESULTS['C1-G13'] = { narrow: 'visible', wideDisplay: display, seamText: seamText.slice(0, 80) };
 });

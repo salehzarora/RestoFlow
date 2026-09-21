@@ -16,7 +16,6 @@ import { groupsFor } from '@/source/modifier-fixture';
 import type {
   CartLine,
   CartState,
-  CartView,
   MenuItem,
   Minor,
   ModifierGroup,
@@ -96,38 +95,6 @@ export function optionSummary(resolved: ResolvedCartLine): string {
 
 export { formatMoney };
 
-/**
- * Project the LIVE cart into the presentational `CartView` the approved Phase B
- * components already render.
- *
- * WHY A PROJECTION AND NOT A SECOND ASIDE. `CartParts.tsx` is guarded as
- * presentation-only and renders a `CartView`; duplicating its markup to make a
- * "live" copy would double the surface every future fix has to touch and would
- * quietly fork the two. Handing it the visitor's real numbers in the shape it
- * already accepts keeps ONE aside, still inert, still server-rendered.
- *
- * Tax is computed exactly as the fixture layer computes it - one rounding, at
- * the end, over integer minor units - so the wide aside and the fixture agree.
- */
-export function toCartView(summary: CartSummary, taxRate: number): CartView {
-  const subtotal = summary.subtotalMinor;
-  const tax: Minor = Math.round(subtotal * taxRate);
-  return {
-    lines: summary.lines.map((resolved) => ({
-      lineId: resolved.line.lineId,
-      name: resolved.item.name,
-      image: resolved.item.image,
-      quantity: resolved.line.qty,
-      lineTotalMinor: resolved.totalMinor,
-      optionSummary: optionSummary(resolved),
-    })),
-    itemCount: summary.itemCount,
-    subtotalMinor: subtotal,
-    taxMinor: tax,
-    totalMinor: subtotal + tax,
-    taxRate,
-  };
-}
 
 // ------------------------------------------------------------------ mutations
 

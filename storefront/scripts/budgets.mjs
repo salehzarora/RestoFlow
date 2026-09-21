@@ -34,6 +34,12 @@ export const ROUTES = [
   { route: '/ar/s/maps-burger/menu', file: 'ar/s/maps-burger/menu.html' },
   { route: '/en/s/maps-burger/menu', file: 'en/s/maps-burger/menu.html' },
   { route: '/he/s/maps-burger/menu', file: 'he/s/maps-burger/menu.html' },
+  // STOREFRONT-UI-001 Phase C: the search surface, measured in every locale
+  // root. Adding routes WIDENS coverage; no ceiling above is changed.
+  { route: '/s/maps-burger/search', file: 's/maps-burger/search.html' },
+  { route: '/ar/s/maps-burger/search', file: 'ar/s/maps-burger/search.html' },
+  { route: '/en/s/maps-burger/search', file: 'en/s/maps-burger/search.html' },
+  { route: '/he/s/maps-burger/search', file: 'he/s/maps-burger/search.html' },
 ];
 
 export const MEDIA_EXTENSIONS = ['.jpg', '.jpeg', '.gif', '.mp4', '.webm', '.mov'];
@@ -44,6 +50,9 @@ export const REQUIRED_HTML = [
   's/maps-burger.html', 'ar/s/maps-burger.html', 'en/s/maps-burger.html', 'he/s/maps-burger.html',
   's/maps-burger/menu.html', 'ar/s/maps-burger/menu.html',
   'en/s/maps-burger/menu.html', 'he/s/maps-burger/menu.html',
+  // STOREFRONT-UI-001 Phase C: the search surface must be emitted too.
+  's/maps-burger/search.html', 'ar/s/maps-burger/search.html',
+  'en/s/maps-burger/search.html', 'he/s/maps-burger/search.html',
 ];
 
 // No favicon: gate K2 (owner approval for a BIZBOT symbol derivative) is NOT

@@ -85,6 +85,7 @@ export interface StorefrontMessages {
   readonly maxReached: string;
   readonly decrease: string;
   readonly increase: string;
+  readonly clearSearch: string;
   readonly languageNames: Readonly<Record<Locale, string>>;
 }
 

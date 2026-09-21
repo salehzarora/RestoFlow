@@ -192,6 +192,12 @@ export function ProductSheet({
       // 'instant', and 'auto' defers to the element's computed scroll-behavior,
       // which this module deliberately leaves at the initial value.
       target?.scrollIntoView({ block: 'center', behavior: 'auto' });
+      // FOCUS, not merely scroll. Scrolling moves the viewport but leaves a
+      // keyboard visitor's focus on the CTA, so the group they must act on is
+      // somewhere else entirely. The section carries tabIndex={-1}, which makes
+      // it programmatically focusable WITHOUT adding a tab stop, so the sheet's
+      // tab order is unchanged.
+      target?.focus();
       return;
     }
     onSubmit({ qty, selections, note: sanitizeText(note, MAX_NOTE) });
@@ -261,6 +267,9 @@ export function ProductSheet({
                 className={styles.group}
                 key={group.id}
                 data-sf-group={group.id}
+                // -1: focusable from script (the blocked-submit handler) but
+                // never a tab stop of its own.
+                tabIndex={-1}
                 ref={(el) => {
                   if (el === null) groupRefs.current.delete(group.id);
                   else groupRefs.current.set(group.id, el);
@@ -316,15 +325,18 @@ export function ProductSheet({
                         <span className={styles.optionName}>
                           <TenantText>{option.name}</TenantText>
                         </span>
-                        {delta === '' ? null : (
-                          <span
-                            className={`${styles.delta} ${
-                              option.priceDeltaMinor > 0 ? '' : styles.deltaFree
-                            } ${shell.ltr}`}
-                            dir="ltr"
-                          >
+                        {/*
+                          ONLY the money delta is an LTR island. The zero-delta
+                          case renders a localized WORD ("included"), and
+                          forcing that into `dir="ltr"` mislabels its direction:
+                          the LTR island exists for numerals, not for copy.
+                        */}
+                        {delta === '' ? null : option.priceDeltaMinor > 0 ? (
+                          <span className={`${styles.delta} ${shell.ltr}`} dir="ltr">
                             {delta}
                           </span>
+                        ) : (
+                          <span className={`${styles.delta} ${styles.deltaFree}`}>{delta}</span>
                         )}
                       </button>
                     );

@@ -8,6 +8,7 @@ import { test } from 'node:test';
 
 const r = await import('../src/routes/routes.ts');
 const { LOCALES, DEFAULT_LOCALE } = await import('../src/i18n/locales.ts');
+const { ROUTES, REQUIRED_HTML } = await import('../scripts/budgets.mjs');
 
 test('the default locale owns the unprefixed path', () => {
   assert.equal(DEFAULT_LOCALE, 'ar');
@@ -136,5 +137,38 @@ test('switching is still an involution on the deeper screens', () => {
         assert.equal(r.switchLocalePath(moved, from), start, `${from} -> ${to} -> ${from}`);
       }
     }
+  }
+});
+
+test('the SEARCH routes are in the standard first-load measurement set', () => {
+  // Phase C added four routes. Before C1 none of them was measured, so a
+  // "first-load budget passed, per route" claim silently excluded the whole
+  // new surface.
+  const wanted = [
+    '/s/maps-burger/search',
+    '/ar/s/maps-burger/search',
+    '/en/s/maps-burger/search',
+    '/he/s/maps-burger/search',
+  ];
+  const measured = ROUTES.map((r) => r.route);
+  for (const route of wanted) {
+    assert.ok(measured.includes(route), `${route} is not in the measured route list`);
+  }
+  // The menu routes must still be there.
+  for (const route of ['/s/maps-burger/menu', '/he/s/maps-burger/menu']) {
+    assert.ok(measured.includes(route), `${route} fell out of the measured list`);
+  }
+  // Every measured route must name a file the export is required to emit, or
+  // the measurement would silently skip it.
+  for (const { route, file } of ROUTES) {
+    assert.ok(typeof file === 'string' && file.endsWith('.html'), `${route}: bad file`);
+  }
+  for (const route of wanted) {
+    const { file } = ROUTES.find((r) => r.route === route);
+    assert.ok(REQUIRED_HTML.includes(file), `${file} must also be a required document`);
+  }
+  // PRODUCTION measurement only: no demo or evidence route may appear.
+  for (const { route } of ROUTES) {
+    assert.ok(!route.includes('demo-'), `${route}: a demo route must not be measured`);
   }
 });

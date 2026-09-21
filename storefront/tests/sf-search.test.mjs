@@ -8,8 +8,10 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 const { searchItems, EMPTY_QUERY_COUNT } = await import('../src/source/search.ts');
+const { storefrontMessages } = await import('../src/i18n/storefront.ts');
 const { MENU_ITEMS } = await import('../src/source/menu-fixture.ts');
 const { formatMoney } = await import('../src/money/format.ts');
 
@@ -122,5 +124,63 @@ test('a query of pure punctuation or a regex metacharacter is literal, not a pat
       out.length < MENU_ITEMS.length,
       `${query} matched everything - it was treated as a pattern`,
     );
+  }
+});
+
+// ---------------------------------------------------------------- C1 additions
+
+test('R4: clearSearch is authored in all three dictionaries and is NOT `close`', () => {
+  // The clear button previously reused `close` ("Close"), which tells a
+  // screen-reader user the control leaves the screen. It empties the field.
+  const expected = {
+    ar: 'مسح البحث',
+    he: 'נקה חיפוש',
+    en: 'Clear search',
+  };
+  for (const [code, value] of Object.entries(expected)) {
+    const m = storefrontMessages(code);
+    assert.equal(m.clearSearch, value, `${code}: clearSearch`);
+    assert.notEqual(m.clearSearch, m.close, `${code}: clearSearch must differ from close`);
+    assert.notEqual(m.clearSearch, m.search, `${code}: clearSearch must differ from search`);
+  }
+});
+
+test('R4: the search screen labels the clear button with clearSearch, not close', () => {
+  const src = readFileSync(
+    new URL('../src/ui/storefront/search/SearchScreen.tsx', import.meta.url), 'utf8');
+  const clear = src.slice(src.indexOf('styles.clear'));
+  assert.ok(clear.includes('aria-label={m.clearSearch}'), 'the clear button must use clearSearch');
+  assert.ok(!/styles\.clear[\s\S]{0,400}aria-label=\{m\.close\}/.test(src),
+    'the clear button must no longer reuse close');
+});
+
+test('R3: a sold-out search row carries a VISIBLE localized cue, not only sr-only text', () => {
+  const src = readFileSync(
+    new URL('../src/ui/storefront/search/SearchScreen.tsx', import.meta.url), 'utf8');
+  // The cue must be rendered with a VISIBLE class, never the sr-only one.
+  assert.ok(/item\.soldOut \? <span className=\{styles\.rowSoldOutTag\}>\{m\.soldOut\}<\/span>/.test(src),
+    'the sold-out cue must be a visible, localized tag');
+  assert.ok(!/home\.srOnly[^\n]*m\.soldOut/.test(src),
+    'the sold-out reason must not be screen-reader-only');
+
+  // And that class must actually paint something: a rule that only set opacity
+  // would leave the cue invisible.
+  const css = readFileSync(
+    new URL('../src/ui/storefront/search/search.module.css', import.meta.url), 'utf8');
+  const rule = css.slice(css.indexOf('.rowSoldOutTag'), css.indexOf('}', css.indexOf('.rowSoldOutTag')));
+  for (const needed of ['background', 'color', 'font-size']) {
+    assert.ok(rule.includes(needed), `.rowSoldOutTag must declare ${needed}`);
+  }
+  assert.ok(!/display:\s*none/.test(rule), '.rowSoldOutTag must not be hidden');
+});
+
+test('R3: the sold-out item is reachable in search but excluded from Popular', () => {
+  const soldOut = MENU_ITEMS.filter((i) => i.soldOut);
+  assert.ok(soldOut.length > 0, 'the fixture must contain a sold-out item');
+  // Search lists it (it is inside the initial six).
+  assert.ok(searchItems(MENU_ITEMS, '').some((i) => i.soldOut));
+  // Popular never does: the rail is signature AND not sold out.
+  for (const item of soldOut) {
+    assert.ok(!(item.signature && !item.soldOut), 'a sold-out item must not qualify for Popular');
   }
 });

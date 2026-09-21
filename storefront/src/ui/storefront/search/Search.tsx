@@ -7,8 +7,9 @@
  * because the query is component state - which is what the execution packet
  * decides and what the prototype does; no query-URL behaviour is designed.
  *
- * `StorefrontRuntime` is mounted here with `showDock={false}`: search opens the
- * SAME product sheet as the menu (DESIGN_HANDOFF.md:90) but shows no cart dock.
+ * `StorefrontRuntime` is mounted here WITHOUT a dock slot: search opens the
+ * SAME product sheet as the menu (DESIGN_HANDOFF.md:90) but shows no cart dock
+ * and no wide seam.
  */
 import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';

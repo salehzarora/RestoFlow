@@ -1,11 +1,18 @@
 /**
- * Cart dock and the wide persistent aside.
+ * Cart dock (inert reference rendering) and the wide persistent aside (seam).
  *
- * PRESENTATION ONLY. Both render a `CartView` that the fixture layer assembles;
- * there is no store, no persistence, no mutation and no navigation to a cart
- * route, because none of that belongs to Phase B. The steppers and CTAs are
- * rendered as disabled controls so the layout and contrast can be reviewed
- * without implying behaviour that does not exist yet.
+ * PRESENTATION ONLY. No store, no persistence, no mutation, no navigation.
+ *
+ * `CartDock` renders a `CartView` and is the Phase B reference rendering of the
+ * dock's anatomy. It is NOT what a visitor sees: the live dock a visitor gets
+ * is cart/LiveCartDock.tsx, named by the boundary guard in sf-home.test.mjs.
+ * Nothing in the shipped app renders this component, so no fixture cart can
+ * reach a static document through it.
+ *
+ * `CartAside` takes NO cart at all. At container >= 900px it is the wide
+ * Phase-D seam and must stay truthful while the cart screen does not exist, so
+ * it deliberately has no lines, no count, no subtotal, no tax and no total, and
+ * a checkout CTA that is disabled because its route is Phase D.
  */
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
@@ -88,12 +95,10 @@ export function CartDock({
 }
 
 export function CartAside({
-  cart,
   m,
   state,
   opensAt,
 }: {
-  cart: CartView;
   m: StorefrontMessages;
   state: ServiceState;
   opensAt: string;
@@ -101,64 +106,20 @@ export function CartAside({
   const reason = blockedReason(state, m, opensAt);
 
   return (
-    <aside className={styles.aside} aria-labelledby="sf-aside-title">
+    <aside className={styles.aside} aria-labelledby="sf-aside-title" data-sf-aside="seam">
       <div className={styles.asideHead}>
         <h2 className={styles.asideTitle} id="sf-aside-title">
           {m.cart}
         </h2>
-        <span className={styles.asideCount}>
-          {cart.itemCount === 0 ? m.emptyCart : countLabel(cart, m)}
-        </span>
+        <span className={styles.asideCount}>{m.emptyCart}</span>
       </div>
 
-      <ul className={styles.asideLines}>
-        {cart.lines.map((line) => (
-          <li className={styles.asideLine} key={line.lineId}>
-            <div className={styles.asideLineTop}>
-              <span>
-                <span className={styles.asideLineName}>
-                  <TenantText>{line.name}</TenantText>
-                </span>
-                <span className={styles.asideLineOpts}>
-                  <TenantText>{line.optionSummary}</TenantText>
-                </span>
-              </span>
-              <span className={`${styles.price} ${styles.ltr}`} dir="ltr">
-                {formatMoney(line.lineTotalMinor)}
-              </span>
-            </div>
-            {/* Disabled: quantity is real cart behaviour, not Phase B. */}
-            <span className={styles.asideStepper} aria-hidden="true">
-              <span className={styles.stepBtn}>+</span>
-              <span className={`${styles.stepValue} ${styles.ltr}`} dir="ltr">
-                {line.quantity}
-              </span>
-              <span className={styles.stepBtn}>−</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <div className={styles.asideTotals}>
-        <div className={styles.totalRow}>
-          <span>{m.subtotal}</span>
-          <span className={styles.ltr} dir="ltr">
-            {formatMoney(cart.subtotalMinor)}
-          </span>
-        </div>
-        <div className={styles.totalRow}>
-          <span>{m.tax}</span>
-          <span className={styles.ltr} dir="ltr">
-            {formatMoney(cart.taxMinor)}
-          </span>
-        </div>
-        <div className={`${styles.totalRow} ${styles.totalRowFinal}`}>
-          <span>{m.total}</span>
-          <span className={`${styles.amount} ${styles.ltr}`} dir="ltr">
-            {formatMoney(cart.totalMinor)}
-          </span>
-        </div>
-      </div>
+      {/*
+        NO lines, NO subtotal, NO tax, NO total. Rendering a totals block here
+        would be business state, and this seam is deliberately not wired to the
+        cart. It is the same bytes for every visitor and does not move when a
+        real cart exists.
+      */}
 
       <button
         className={`${styles.asideCta} ${reason === null ? '' : styles.asideCtaDisabled}`}

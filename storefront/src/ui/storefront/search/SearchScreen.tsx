@@ -123,7 +123,7 @@ export function SearchScreen({
             <button
               className={styles.clear}
               type="button"
-              aria-label={m.close}
+              aria-label={m.clearSearch}
               onClick={() => {
                 setQuery('');
                 inputRef.current?.focus();
@@ -183,12 +183,13 @@ export function SearchScreen({
                 <span className={styles.rowCat}>
                   <TenantText>{categoryName(item.categoryId)}</TenantText>
                 </span>
+                {/* A VISIBLE localized cue, not dimming alone. The canonical row
+                    has no badge slot, so the existing `soldOut` string sits in
+                    the row's own TEXT COLUMN, under the category - it reads as
+                    part of the row, costs the price no width, and gives sighted
+                    and assistive-technology users the same reason. */}
+                {item.soldOut ? <span className={styles.rowSoldOutTag}>{m.soldOut}</span> : null}
               </span>
-
-              {/* A sold-out row is dimmed in the canonical design but carries no
-                  badge slot, so the reason is given to assistive technology
-                  only - it adds no pixels and invents no visual element. */}
-              {item.soldOut ? <span className={home.srOnly}>{m.soldOut}</span> : null}
 
               <span className={`${styles.rowPrice} ${shell.ltr}`} dir="ltr">
                 {formatMoney(item.priceMinor)}
