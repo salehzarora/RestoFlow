@@ -793,10 +793,10 @@ placeholder shell's classes moved from `app/globals.css` into a CSS Module
 the placeholder alone imports (−1,155 B on every storefront document); the
 scan of unreferenced rules found 42 B, and cross-module duplicate
 declaration bodies total ~3 KB — nowhere near the ~24 KB the raw limit
-needs. Final: 84,352 B on the flow / request / search documents and
-93,989 B on the home / intro documents (the menu documents link the intro's
+needs. Final: 84,177 B on the flow / request / search documents and
+93,814 B on the home / intro documents (the menu documents link the intro's
 server-side chunk as well, another loose-merge choice), against 70,000;
-Brotli 11,830 / 13,729 against 14,000 — met. The raw axis is carried to the
+Brotli 11,796 / 13,695 against 14,000 — met. The raw axis is carried to the
 owner as one decision (§6.6); the validators FAIL on it, as written.
 
 ### 6.4 DECISION C-4 — performance: cause found, two candidates, original-mode LCP residual (item 5)
@@ -903,9 +903,9 @@ Two written gates remain unmet after the bounded work, both structural on
 the pinned toolchain / protocol rather than defects in the storefront's
 behaviour, both measured and validated honestly (the validators FAIL):
 
-1. **CSS per route, raw axis:** 84,352 B (flow / request / search) and
-   93,989 B (home / intro) against 70,000 B; the Brotli axis (11,830 /
-   13,729 against 14,000) is met. Cause: Turbopack merges all client CSS
+1. **CSS per route, raw axis:** 84,177 B (flow / request / search) and
+   93,814 B (home / intro) against 70,000 B; the Brotli axis (11,796 /
+   13,695 against 14,000) is met. Cause: Turbopack merges all client CSS
    into one chunk per app and refuses strict chunking; changing that needs
    a protected file. Options: (a) accept the raw axis as met by the
    compressed axis for this bundler (the raw limit was written as a proxy
