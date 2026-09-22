@@ -1600,6 +1600,16 @@
 
 /* 34px tall with 36px buttons - the aside's own size, NOT the cart page's 40.
    COMPONENT_INVENTORY.md:183 "scrollable lines with 34px steppers". */
+/*
+ * NO `overflow: hidden` HERE, deliberately.
+ *
+ * It was copied from the cart page's stepper, where the "+" side carries an
+ * accent tint that really does need the rounded clip. Nothing inside THIS
+ * stepper is painted - both buttons are transparent and the value is bare text -
+ * so the clip cut back exactly one thing: the invisible 44px hit overlay below,
+ * which it trimmed to the painted 36 x 34 box. The D review measured that, and
+ * the D1 evidence pack carries a before/after capture showing no pixel moves.
+ */
 .asideStepper {
   display: inline-flex;
   align-items: center;
@@ -1607,7 +1617,6 @@
   height: 34px;
   border: 1.5px solid var(--hair2);
   border-radius: var(--r-md);
-  overflow: hidden;
 }
 
 .stepBtn {
@@ -1623,20 +1632,39 @@
   cursor: pointer;
 }
 
-/* PX-6: keep the approved 36 x 34 visual and grow only the HIT AREA to the
-   44px minimum with an invisible overlay. No pixel moves. */
+/*
+ * THE 44 x 44 HIT TARGET (DESIGN_HANDOFF.md:176, COMPONENT_INVENTORY.md:121).
+ *
+ * The painted control stays 36 x 34, which is the approved size
+ * (COMPONENT_INVENTORY.md:183). Only the hit area grows, through an invisible
+ * overlay on each button.
+ *
+ * The overlay is anchored to each button's OUTER edge rather than centred on it.
+ * Centring would push 4px of the target over the quantity readout, so a tap on
+ * the left edge of the number would decrement it; anchoring outward puts the
+ * extra 8px in the line's own padding, where nothing else is interactive. The
+ * two overlays therefore never reach each other, and neither reaches the value.
+ *
+ * `inset-inline-*` does the mirroring, so no direction-specific transform is
+ * needed and RTL needs no override.
+ */
 .stepBtn::after {
   content: '';
   position: absolute;
   inset-block-start: 50%;
-  inset-inline-start: 50%;
-  width: 44px;
   height: 44px;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
 }
 
-[dir='rtl'] .stepBtn::after {
-  transform: translate(50%, -50%);
+/* 36px painted + 8px outward = 44px of target, away from the value. */
+.stepBtnStart::after {
+  inset-inline-start: -8px;
+  inset-inline-end: 0;
+}
+
+.stepBtnEnd::after {
+  inset-inline-start: 0;
+  inset-inline-end: -8px;
 }
 
 .stepValue {

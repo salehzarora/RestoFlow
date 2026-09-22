@@ -40,7 +40,28 @@ export type CheckoutField =
   | 'building';
 
 /** A whole-form problem that is not attached to one input. */
-export type CheckoutBlocker = 'outside-zone' | 'below-minimum';
+export type CheckoutBlocker = 'outside-zone' | 'below-minimum' | 'service-unavailable';
+
+/**
+ * What the restaurant currently offers.
+ *
+ * REQUIRED, with no default. A default of "both available" is precisely the
+ * assumption that let a checkout validate against a service the restaurant had
+ * switched off: the draft starts on pickup before it knows the tenant, and
+ * nothing downstream asked. You cannot validate a checkout without knowing what
+ * can actually be ordered, so the caller must say.
+ */
+export interface ServiceAvailability {
+  readonly pickup: boolean;
+  readonly delivery: boolean;
+}
+
+export function isServiceAvailable(
+  service: CheckoutDraft['service'],
+  available: ServiceAvailability,
+): boolean {
+  return service === 'pickup' ? available.pickup : available.delivery;
+}
 
 export interface CheckoutValidation {
   readonly invalid: readonly CheckoutField[];
@@ -60,11 +81,29 @@ const FIELD_ORDER: readonly CheckoutField[] = [
   'building',
 ];
 
-export function validateCheckout(draft: CheckoutDraft, quote: Quote): CheckoutValidation {
+export function validateCheckout(
+  draft: CheckoutDraft,
+  quote: Quote,
+  available: ServiceAvailability,
+): CheckoutValidation {
   const invalid = new Set<CheckoutField>();
   const blockers: CheckoutBlocker[] = [];
 
   if (draft.service !== 'pickup' && draft.service !== 'delivery') invalid.add('service');
+
+  /*
+   * A SERVICE THE RESTAURANT HAS SWITCHED OFF CANNOT BE ORDERED.
+   *
+   * This is a BLOCKER, not a field error: the visitor has not typed anything
+   * wrong, and with both services off there is no answer they could give. The
+   * details step reuses the approved service message for it, and the step
+   * guards read the same result, so a direct load of /payment or /review cannot
+   * walk past it either.
+   *
+   * When exactly one service is off, the step moves the draft to the other one
+   * before this can fire; this is what remains when NEITHER is available.
+   */
+  if (!isServiceAvailable(draft.service, available)) blockers.push('service-unavailable');
   if (draft.fullName.trim() === '') invalid.add('fullName');
   if (!PHONE.test(draft.phone.trim())) invalid.add('phone');
 

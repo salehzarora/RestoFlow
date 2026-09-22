@@ -81,6 +81,16 @@ export const SCENARIOS: readonly Scenario[] = [
     options: trimmed(),
   },
   {
+    slug: 'demo-no-service',
+    proves:
+      'D1-C2 neither service available - the one state where a visitor has no answer '
+      + 'to give, so checkout must refuse rather than validate against a service the '
+      + 'restaurant has switched off',
+    preset: 'dark',
+    service: { pickupEnabled: false, deliveryEnabled: false },
+    options: trimmed(),
+  },
+  {
     slug: 'demo-empty',
     proves: 'H02 emptyMenu',
     preset: 'dark',

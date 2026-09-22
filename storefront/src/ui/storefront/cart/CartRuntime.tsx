@@ -19,14 +19,22 @@
  * contains one. The dock renders nothing at all; the aside keeps its frame,
  * because 360px of layout appearing after hydration would reflow the page.
  */
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { CartApi } from '@/cart/useCart';
 import type { StorefrontMessages } from '@/i18n/storefront';
 import type { MotionMode, ServiceState } from '@/source/types';
 import { LiveCartDock } from './LiveCartDock';
 import { LiveCartAside } from './LiveCartAside';
 import { EMPTY_DRAFT, useCheckoutDraft } from '../checkout/CheckoutDraftProvider';
-import { useQuote } from '@/money/useQuote';
+import { raceQuoteSource, useQuote } from '@/money/useQuote';
+import { isQuoteRace, readFlowScenario } from '@/source/flow-scenarios';
 import type { QuoteInput } from '@/money/quote';
 import { MENU_ITEMS, TAX_RATE } from '@/source/menu-fixture';
 import { findZone } from '@/source/zones';
@@ -107,6 +115,23 @@ export function AsideSlot({
   const draft = draftApi?.draft ?? EMPTY_DRAFT;
   const ready = cart !== null && cart.ready;
 
+  /*
+   * The aside honours the SAME closed scenario allowlist the flow does, so the
+   * one state that is otherwise unreachable here - a quote in flight - can be
+   * reproduced and proven. With the immediate fixture source a pending frame
+   * lasts one microtask, which is why the gap went unmeasured in D.
+   *
+   * Read after hydration, never during render: the first client render has to
+   * match the static document byte for byte.
+   */
+  const [fx, setFx] = useState('');
+  useLayoutEffect(() => {
+    setFx(readFlowScenario(window.location.search));
+    const onPop = () => setFx(readFlowScenario(window.location.search));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const input: QuoteInput = useMemo(
     () => ({
       cart: cart?.state ?? EMPTY_CART,
@@ -117,12 +142,19 @@ export function AsideSlot({
     }),
     [cart?.state, draft.service, draft.zoneId],
   );
-  const { quote } = useQuote(input);
+  const { quote, pending } = useQuote(input, isQuoteRace(fx) ? raceQuoteSource : undefined);
 
   return (
     <LiveCartAside
       summary={ready ? cart.summary : null}
       quote={quote}
+      /*
+       * BOTH halves of readiness reach the aside. Before, `pending` was
+       * discarded here, so the one surface that could navigate to checkout was
+       * the one surface with no gate on whether its total still belonged to the
+       * cart on screen.
+       */
+      pending={pending}
       update={cart?.update ?? null}
       remove={cart?.remove ?? null}
       m={m}

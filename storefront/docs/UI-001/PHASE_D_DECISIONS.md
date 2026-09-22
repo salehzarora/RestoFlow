@@ -384,15 +384,21 @@ survives two step navigations — so the soft navigation, and the draft, survive
 | 1 | What raises each cart notice | `SNAP-001`; the response shape is undefined. Injected, never derived. |
 | 2 | `cart_changed` has no banner | No design, no copy. Typed, unrendered. |
 | 3 | Idempotency-key lifetime across a reload | `IDEM-001`; storing it would touch the privacy boundary. |
-| 4 | Both services off | Undesigned. The CTA stays blocked; nothing is invented. |
+| 4 | ~~Both services off~~ **CLOSED IN D1** | The claim that "the CTA stays blocked" was **not true** when it was written: `validateCheckout` checked the *type* of `service`, never whether the restaurant offered it, so a complete checkout validated and progressed. D1 makes availability a required argument and blocks progression for real. See [PHASE_D1_CORRECTIONS.md](PHASE_D1_CORRECTIONS.md) §1.2. What remains undesigned — and is still not invented — is the *presentation*: with neither service on, the draft's default pickup card stays checked while announcing itself unavailable. |
 | 5 | `/checkout` is not blocked while the restaurant is closed | Neither the handoff nor the prototype blocks the steps — only the dock and the aside CTA. A guard would be new product behaviour and needs owner sign-off. |
 | 6 | The town `<select>` has no error message | Approved as a red border alone (`:448`). Not invented. |
 | 7 | G27 does not actually show a failure banner | The approved capture was taken without the error flag set, so it proves nothing about the banner. The four banners are asserted against `DESIGN_HANDOFF.md:130`, `STATE_MATRIX.json:238-254` and the prototype source, and captured fresh here. |
-| 8 | The flow routes' first load is 670,600 B against a 690,000 B ceiling | Passing, but with 19,400 B of headroom. See the report's byte section for the measured contributors and the smallest available optimisation. |
+| 8 | The flow routes' first load is **672,872 B** against a 690,000 B ceiling | Passing, with **17,128 B** of headroom — still the tightest margin in the build. **The 670,600 / 19,400 figures recorded here and in the Phase D pack were understated**; an independent measurement of the same commit found 671,605 / 18,395, and D1's own changes cost a further 1,267 B. Corrected figures and their sources: [PHASE_D1_CORRECTIONS.md](PHASE_D1_CORRECTIONS.md) §1.4. The smallest available optimisation is unchanged and was deliberately not taken in D1. |
 
 ---
 
 ## 9. Where the evidence is
+
+> **Read [PHASE_D1_CORRECTIONS.md](PHASE_D1_CORRECTIONS.md) alongside this file.**
+> Phase D1 closed four readiness findings against this phase and corrected the
+> measurement record. Where the two disagree, D1 is the later measurement; the
+> Phase D evidence pack is sealed and was not edited, so its superseded claims
+> are named there with their file and line rather than rewritten in place.
 
 The browser evidence, the screenshots and the byte measurements are in the
 Phase D evidence pack, outside the repository. `tests/sf-flow.test.mjs` holds

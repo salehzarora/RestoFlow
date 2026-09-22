@@ -103,6 +103,25 @@ export function delayedQuoteSource(delayFor: (input: QuoteInput) => number): Quo
   };
 }
 
+/**
+ * THE DEMO RACE SOURCE - one definition, shared by every surface that reads a
+ * quote, so the cart page and the wide aside can be driven into the same
+ * pending state by the same switch.
+ *
+ * It makes a SMALLER cart resolve MORE slowly, so an older request is guaranteed
+ * to land after a newer one. That is the only failure mode an async quote really
+ * has, and it cannot be reproduced by timing luck. It changes nothing but WHEN a
+ * result arrives: the arithmetic, the inputs and the rendered figures are the
+ * fixture's own.
+ *
+ * Selected only by the fixture layer's closed scenario allowlist. Production
+ * passes nothing and gets `fixtureQuoteSource`.
+ */
+export const raceQuoteSource: QuoteSource = delayedQuoteSource((input) => {
+  const units = input.cart.lines.reduce((n, l) => n + l.qty, 0);
+  return Math.max(120, 1600 - units * 120);
+});
+
 /** Stable identity so passing the default does not retrigger the effect. */
 export const useFixtureQuote = (input: QuoteInput): QuoteState =>
   useQuote(input, fixtureQuoteSource);

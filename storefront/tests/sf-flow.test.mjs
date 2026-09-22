@@ -189,14 +189,22 @@ test('the quote KEY carries no customer field', () => {
 const draft = (over = {}) => ({ ...EMPTY_DRAFT, ...over });
 const okPickup = draft({ service: 'pickup', fullName: 'SYNTH NAME', phone: '052-123-4567' });
 
+/**
+ * What the restaurant offers. `validateCheckout` takes this as a REQUIRED third
+ * argument: a default of "both available" is exactly the assumption that let a
+ * checkout validate against a service the tenant had switched off.
+ */
+const BOTH = { pickup: true, delivery: true };
+const NEITHER = { pickup: false, delivery: false };
+
 test('the prototype validation rules are transcribed exactly', () => {
   const q = quoteFor();
 
-  assert.equal(validateCheckout(okPickup, q).ok, true);
-  assert.deepEqual([...validateCheckout(draft({ ...okPickup, fullName: '   ' }), q).invalid], [
+  assert.equal(validateCheckout(okPickup, q, BOTH).ok, true);
+  assert.deepEqual([...validateCheckout(draft({ ...okPickup, fullName: '   ' }), q, BOTH).invalid], [
     'fullName',
   ]);
-  assert.deepEqual([...validateCheckout(draft({ ...okPickup, phone: '123' }), q).invalid], [
+  assert.deepEqual([...validateCheckout(draft({ ...okPickup, phone: '123' }), q, BOTH).invalid], [
     'phone',
   ]);
   // area, apartment and deliveryNotes are NEVER required - the prototype does
@@ -209,15 +217,15 @@ test('the prototype validation rules are transcribed exactly', () => {
     building: '7',
   });
   const dq = quoteFor({ service: 'delivery', zone: findZone('kafrmanda') });
-  assert.equal(validateCheckout(delivery, dq).ok, true);
-  assert.equal(validateCheckout(draft({ ...delivery, area: '' }), dq).ok, true);
-  assert.equal(validateCheckout(draft({ ...delivery, apartment: '' }), dq).ok, true);
-  assert.equal(validateCheckout(draft({ ...delivery, deliveryNotes: '' }), dq).ok, true);
+  assert.equal(validateCheckout(delivery, dq, BOTH).ok, true);
+  assert.equal(validateCheckout(draft({ ...delivery, area: '' }), dq, BOTH).ok, true);
+  assert.equal(validateCheckout(draft({ ...delivery, apartment: '' }), dq, BOTH).ok, true);
+  assert.equal(validateCheckout(draft({ ...delivery, deliveryNotes: '' }), dq, BOTH).ok, true);
   // ...but street and building are.
-  assert.deepEqual([...validateCheckout(draft({ ...delivery, street: ' ' }), dq).invalid], [
+  assert.deepEqual([...validateCheckout(draft({ ...delivery, street: ' ' }), dq, BOTH).invalid], [
     'street',
   ]);
-  assert.deepEqual([...validateCheckout(draft({ ...delivery, building: '' }), dq).invalid], [
+  assert.deepEqual([...validateCheckout(draft({ ...delivery, building: '' }), dq, BOTH).invalid], [
     'building',
   ]);
 });
@@ -228,28 +236,28 @@ test('the phone shape is the prototype regex, and nothing looser', () => {
   const rejects = ['', '52-123-4567', '052-123-456', '052-123-45678', 'abc', '+972521234567',
                    '052--123-4567', ' 052-123-4567 x'];
   for (const phone of accepts) {
-    assert.equal(validateCheckout(draft({ ...okPickup, phone }), q).ok, true, `rejected ${phone}`);
+    assert.equal(validateCheckout(draft({ ...okPickup, phone }), q, BOTH).ok, true, `rejected ${phone}`);
   }
   for (const phone of rejects) {
     assert.ok(
-      validateCheckout(draft({ ...okPickup, phone }), q).invalid.includes('phone'),
+      validateCheckout(draft({ ...okPickup, phone }), q, BOTH).invalid.includes('phone'),
       `accepted ${phone}`,
     );
   }
   // A leading/trailing space is trimmed before the test, as the prototype does.
-  assert.equal(validateCheckout(draft({ ...okPickup, phone: '  052-123-4567  ' }), q).ok, true);
+  assert.equal(validateCheckout(draft({ ...okPickup, phone: '  052-123-4567  ' }), q, BOTH).ok, true);
 });
 
 test('"first invalid" means first in DOM ORDER, not first declared', () => {
   const dq = quoteFor({ service: 'delivery', zone: null });
   const nothing = draft({ service: 'delivery' });
-  const v = validateCheckout(nothing, dq);
+  const v = validateCheckout(nothing, dq, BOTH);
   assert.equal(v.firstInvalid, 'fullName');
   assert.deepEqual([...v.invalid], ['fullName', 'phone', 'zoneId', 'street', 'building']);
   // With the name filled, the phone is next - not the town, which appears
   // later on screen even though it is a "bigger" problem.
   const named = draft({ ...nothing, fullName: 'SYNTH NAME' });
-  assert.equal(validateCheckout(named, dq).firstInvalid, 'phone');
+  assert.equal(validateCheckout(named, dq, BOTH).firstInvalid, 'phone');
 });
 
 test('a quote blocker is NOT a field error', () => {
@@ -263,7 +271,7 @@ test('a quote blocker is NOT a field error', () => {
     street: 'SYNTH ST',
     building: '7',
   });
-  const v = validateCheckout(d, dq);
+  const v = validateCheckout(d, dq, BOTH);
   assert.deepEqual([...v.invalid], []);
   assert.deepEqual([...v.blockers], ['outside-zone']);
   assert.equal(v.ok, false);
@@ -426,4 +434,103 @@ test('the delivery zones are the approved fixture, to the agora', () => {
   const fees = DELIVERY_ZONES.filter(isServed).map((z) => z.feeMinor);
   assert.equal(Math.min(...fees), 1000);
   assert.equal(findZone('nope'), null);
+});
+
+// ------------------------------------------- D1-C2: service availability
+
+test('a service the restaurant has switched off cannot be ordered', () => {
+  const q = quoteFor();
+
+  // Both available: the ordinary case, unchanged.
+  assert.equal(validateCheckout(okPickup, q, BOTH).ok, true);
+
+  // NEITHER available: there is no answer the visitor could give, so this is a
+  // BLOCKER and not a field error - they have typed nothing wrong.
+  const none = validateCheckout(okPickup, q, NEITHER);
+  assert.equal(none.ok, false);
+  assert.deepEqual([...none.blockers], ['service-unavailable']);
+  assert.deepEqual([...none.invalid], []);
+  assert.equal(none.firstInvalid, null);
+
+  // The SELECTED service is what matters, not whether some service exists.
+  const pickupOnly = { pickup: true, delivery: false };
+  const deliveryOnly = { pickup: false, delivery: true };
+  assert.equal(validateCheckout(okPickup, q, pickupOnly).ok, true);
+  assert.ok(
+    validateCheckout(okPickup, q, deliveryOnly).blockers.includes('service-unavailable'),
+    'pickup selected while only delivery is offered must block',
+  );
+
+  // ...and the mirror case, so the rule is not one-directional like the
+  // prototype's own (Storefront.dc.html:659 models delivery->pickup only).
+  const okDelivery = draft({
+    ...okPickup,
+    service: 'delivery',
+    zoneId: 'kafrmanda',
+    street: 'SYNTH ST',
+    building: '7',
+  });
+  const dq = quoteFor({ service: 'delivery', zone: findZone('kafrmanda') });
+  assert.equal(validateCheckout(okDelivery, dq, deliveryOnly).ok, true);
+  assert.ok(
+    validateCheckout(okDelivery, dq, pickupOnly).blockers.includes('service-unavailable'),
+    'delivery selected while only pickup is offered must block',
+  );
+});
+
+test('NEGATIVE CONTROL: availability is REQUIRED, so it cannot be forgotten', () => {
+  // The defect this closes was not a wrong answer - it was a question nobody
+  // asked. A default of "both available" would let a caller reintroduce it
+  // silently, so the parameter has none and omitting it throws.
+  assert.throws(
+    () => validateCheckout(okPickup, quoteFor()),
+    /available|undefined|Cannot read/i,
+    'validateCheckout must not accept a missing availability argument',
+  );
+});
+
+test('every surface that gates progression passes REAL tenant availability', () => {
+  // A rule enforced in one of the two places it is read is not enforced: the
+  // CTA and the direct-route guard must reach the same verdict.
+  const details = readFileSync(
+    new URL('../src/ui/storefront/checkout/DetailsScreen.tsx', import.meta.url), 'utf8');
+  const runtime = readFileSync(
+    new URL('../src/ui/storefront/checkout/FlowRuntime.tsx', import.meta.url), 'utf8');
+
+  for (const [name, src] of [['DetailsScreen', details], ['FlowRuntime', runtime]]) {
+    assert.match(src, /validateCheckout\(/, `${name} must use the shared validation`);
+    assert.match(
+      src,
+      /pickup:\s*tenant\.pickupEnabled/,
+      `${name} must pass the tenant's real pickup availability`,
+    );
+    assert.match(
+      src,
+      /delivery:\s*tenant\.deliveryEnabled/,
+      `${name} must pass the tenant's real delivery availability`,
+    );
+  }
+  // And nobody hard-codes a permissive answer.
+  for (const [name, src] of [['DetailsScreen', details], ['FlowRuntime', runtime]]) {
+    assert.ok(
+      !/pickup:\s*true/.test(src) && !/delivery:\s*true/.test(src),
+      `${name} must not hard-code an available service`,
+    );
+  }
+});
+
+test('the evidence-only both-off tenant exists and never ships', async () => {
+  // C2 needs a rendered proof, and no existing scenario turns BOTH off.
+  const { SCENARIOS } = await import('../src/source/scenarios.ts');
+  const both = SCENARIOS.find((s) => s.slug === 'demo-no-service');
+  assert.ok(both, 'the both-off fixture must exist');
+  assert.equal(both.service.pickupEnabled, false);
+  assert.equal(both.service.deliveryEnabled, false);
+
+  // It is evidence-only: the shipped slug list must not contain it.
+  const { homeSlugs } = await import('../src/source/home.ts');
+  assert.ok(
+    !homeSlugs().includes('demo-no-service'),
+    'a demo tenant must never reach the shipped export',
+  );
 });

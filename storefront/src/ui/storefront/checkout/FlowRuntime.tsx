@@ -26,7 +26,7 @@ import { StorefrontRuntime } from '../StorefrontRuntime';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
-import { delayedQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
+import { raceQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
 import { MENU_ITEMS, MENU_VERSION, TAX_RATE } from '@/source/menu-fixture';
 import { findZone } from '@/source/zones';
 import {
@@ -49,21 +49,6 @@ import { CartHeader, StepHeader } from './flowParts';
 import s from './flow.module.css';
 
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
-
-/**
- * The race seam's SOURCE.
- *
- * WHICH scenario selects it is the fixture layer's decision; HOW it behaves is
- * a quote concern and belongs beside the quote. It makes a SMALLER cart resolve
- * more slowly, so an older request always lands after a newer one - the only
- * failure mode an async quote really has, and one that cannot be reproduced by
- * timing luck. It changes nothing but WHEN a result arrives: the arithmetic,
- * the inputs and the rendered figures are the fixture's own.
- */
-const RACE_QUOTE: QuoteSource = delayedQuoteSource((input) => {
-  const units = input.cart.lines.reduce((n, l) => n + l.qty, 0);
-  return Math.max(120, 1600 - units * 120);
-});
 
 export interface FlowProps {
   readonly locale: Locale;
@@ -135,7 +120,7 @@ function FlowBody({
     }),
     [cart?.state, draft.service, slug, zone],
   );
-  const source = quoteSource ?? (isQuoteRace(fx) ? RACE_QUOTE : undefined);
+  const source = quoteSource ?? (isQuoteRace(fx) ? raceQuoteSource : undefined);
   const { quote, pending } = useQuote(input, source);
 
   const hrefs = useMemo(
@@ -169,14 +154,17 @@ function FlowBody({
   useEffect(() => {
     if (!ready || redirected.current) return;
     const empty = quote.lines.length === 0;
-    const details = validateCheckout(draft, quote);
+    const details = validateCheckout(draft, quote, {
+      pickup: tenant.pickupEnabled,
+      delivery: tenant.deliveryEnabled,
+    });
     let target: string | null = null;
     if (screen !== 'cart' && empty) target = hrefs.cart;
     else if ((screen === 'payment' || screen === 'review') && !details.ok) target = hrefs.checkout;
     if (target === null) return;
     redirected.current = true;
     router.replace(target);
-  }, [draft, hrefs, quote, ready, router, screen]);
+  }, [draft, hrefs, quote, ready, router, screen, tenant.deliveryEnabled, tenant.pickupEnabled]);
 
   /*
    * Step navigation CARRIES the scenario switch. Without it a demo state

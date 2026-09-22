@@ -134,7 +134,8 @@ export function DetailsScreen({
   const [focusTick, setFocusTick] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const v: CheckoutValidation = validateCheckout(draft, quote);
+  const available = { pickup: tenant.pickupEnabled, delivery: tenant.deliveryEnabled };
+  const v: CheckoutValidation = validateCheckout(draft, quote, available);
   // Nothing is red before the first blocked tap, even on a wholly empty form.
   const bad = (field: CheckoutField) => touched && v.invalid.includes(field);
   const isDelivery = draft.service === 'delivery';
@@ -165,12 +166,20 @@ export function DetailsScreen({
    * pickup). Both directions are the same rule; modelling only one is a
    * prototype shortcut, not a design decision.
    *
-   * With BOTH services off nothing is selected and nothing is changed: no
-   * design exists for a restaurant that accepts neither, and inventing one
-   * here would be inventing product behaviour. The CTA stays blocked.
+   * With BOTH services off NOTHING IS CHANGED - the draft keeps the default it
+   * arrived with, so the pickup card still reads as the chosen one while also
+   * announcing itself unavailable. That pairing is not pretty, but no design
+   * exists for a restaurant that accepts neither service, and inventing a
+   * cleared-selection state here would be inventing product behaviour. What
+   * matters is that it cannot be ACTED on: the CTA refuses, the step guards
+   * read the same validation, and a forced tap says so instead of advancing.
+   * Recorded as REVIEW-PENDING for the owner, not silently redesigned.
    */
   const pickupOff = !tenant.pickupEnabled;
   const deliveryOff = !tenant.deliveryEnabled;
+  /* Neither service can be ordered: the cards already say so, and the CTA must
+     refuse. Shown after a blocked tap, like every other checkout message. */
+  const noServiceAvailable = v.blockers.includes('service-unavailable');
   useEffect(() => {
     if (draft.service === 'pickup' && pickupOff && !deliveryOff) set({ service: 'delivery' });
     else if (draft.service === 'delivery' && deliveryOff && !pickupOff) set({ service: 'pickup' });
@@ -218,8 +227,15 @@ export function DetailsScreen({
               testId="delivery"
             />
           </div>
-          {bad('service') ? (
-            <div className={s.fieldError} role="alert" tabIndex={-1}>
+          {/*
+            The approved message for an unanswerable service question is the
+            section heading itself (Storefront.dc.html:823 serviceErrorText =
+            t.howReceive). It is reused unchanged when the restaurant offers
+            neither service - no new copy, and the blocked tap now has something
+            to focus.
+          */}
+          {bad('service') || (touched && noServiceAvailable) ? (
+            <div className={s.fieldError} role="alert" tabIndex={-1} data-sf-service-error="">
               {m.howReceive}
             </div>
           ) : null}
