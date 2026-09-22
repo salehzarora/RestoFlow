@@ -80,8 +80,12 @@ export interface RequestSeed {
   readonly service: 'pickup' | 'delivery';
   readonly zoneId: string;
   readonly lines: readonly { readonly itemId: string; readonly qty: number; readonly selections: ModifierSelections }[];
-  /** Epoch ms of the send, from the injected clock at that moment. */
-  readonly createdAt: number;
+  /**
+   * Epoch ms of the send, from the injected clock at that moment. Absent for
+   * a request this document did not send itself (the duplicate recovery): the
+   * source then ages it like a direct load instead of stamping the click.
+   */
+  readonly createdAt?: number;
 }
 
 /**
@@ -180,17 +184,24 @@ const EVENT_OFFSETS_MS: Readonly<Record<RequestState, number>> = {
 };
 const PROGRESS: readonly RequestState[] = ['received', 'waiting', 'accepted', 'preparing', 'ready', 'completed'];
 
-function eventsFor(state: RequestState, createdAt: number): readonly RequestEvent[] {
+/**
+ * The recorded events up to `state`. A record never lies in the future: a
+ * direct load is aged so every record is past, but the visitor's own send is
+ * seeded at the instant it happened, and a stamp that would follow it is held
+ * at the clock rather than announcing an instant that has not arrived.
+ */
+function eventsFor(state: RequestState, createdAt: number, now: number): readonly RequestEvent[] {
   const idx = PROGRESS.indexOf(state);
   const reached: RequestState[] =
     idx >= 0 ? PROGRESS.slice(0, idx + 1) : ['received', 'waiting', state];
-  return reached.map((s) => ({ state: s, at: createdAt + EVENT_OFFSETS_MS[s] }));
+  return reached.map((s) => ({ state: s, at: Math.min(createdAt + EVENT_OFFSETS_MS[s], now) }));
 }
 
 function snapshotFor(
   state: RequestState,
   seed: Omit<RequestSeed, 'createdAt'>,
   createdAt: number,
+  now: number,
   version: number,
   overrides: Partial<Pick<RequestSnapshot, 'expiresAt' | 'events'>> = {},
 ): RequestSnapshot {
@@ -208,7 +219,7 @@ function snapshotFor(
     taxMinor: money.taxMinor,
     totalMinor: money.totalMinor,
     state,
-    events: overrides.events ?? eventsFor(state, createdAt),
+    events: overrides.events ?? eventsFor(state, createdAt, now),
     createdAt,
     expiresAt:
       overrides.expiresAt !== undefined
@@ -262,6 +273,7 @@ export function demoStatusSource(options: DemoStatusOptions): StatusSource {
           initialState,
           seed,
           createdAt,
+          clock(),
           1,
           scenario?.kind === 'expires-late' ? { expiresAt: clock() + lateMs } : {},
         );
@@ -282,7 +294,7 @@ export function demoStatusSource(options: DemoStatusOptions): StatusSource {
   const advance = (state: RequestState) => {
     if (current === null || !isPending(current.state)) return;
     const at = clock();
-    current = snapshotFor(state, seed, current.createdAt, current.version + 1, {
+    current = snapshotFor(state, seed, current.createdAt, at, current.version + 1, {
       events: [...current.events, { state, at }],
       expiresAt: null,
     });

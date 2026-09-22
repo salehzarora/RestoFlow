@@ -72,8 +72,11 @@ function clockText(at: number): string {
 
 /**
  * The hero title and body TEMPLATE per state (:837). The body is interpolated
- * at render so the restaurant's name sits in a <bdi> and the minute count in
- * an LTR island, rather than being flattened into the sentence.
+ * at render so the restaurant's name and the minute count each sit in a
+ * <bdi>, rather than being flattened into the sentence. The minute count is
+ * NOT an LTR island (CONTENT:221 lists the M:SS countdown, not "30 min"): an
+ * isolate keeps number-then-unit in the reading order of every language,
+ * where a forced LTR run would read "min 30" in Arabic and Hebrew.
  */
 function copyFor(
   state: RequestState,
@@ -139,6 +142,7 @@ export function StatusScreen({
   menuHref,
   motionFull,
   cancelling,
+  focusOnMount = false,
   onChat,
   onCancel,
   onOrderAgain,
@@ -153,6 +157,11 @@ export function StatusScreen({
   motionFull: boolean;
   /** A cancel is in flight: the sheet's confirm is inert until it answers. */
   cancelling: boolean;
+  /**
+   * The view was switched to in place (received -> status): the control the
+   * visitor activated is gone, so the status card takes focus on mount.
+   */
+  focusOnMount?: boolean;
   onChat: () => void;
   /** Resolves once the source has answered; the sheet closes on either answer. */
   onCancel: () => Promise<void>;
@@ -164,11 +173,7 @@ export function StatusScreen({
   // {p} the pay phrase. Unused slots are simply not referenced by a template.
   const slots: Readonly<Record<string, ReactNode>> = {
     r: <Bidi>{tenant.name}</Bidi>,
-    m: (
-      <span className={s.ltr} dir="ltr">
-        {fill('{n} {u}', { n: String(snapshot.ttlMinutes), u: m.min })}
-      </span>
-    ),
+    m: <Bidi>{fill('{n} {u}', { n: String(snapshot.ttlMinutes), u: m.min })}</Bidi>,
     p: snapshot.service === 'delivery' ? m.payOnDelivery : m.payAtPickup,
   };
   const ttl = ttlFor(snapshot, now);
@@ -178,18 +183,36 @@ export function StatusScreen({
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const cancelButton = useRef<HTMLButtonElement>(null);
+  // The card is the focus target that exists in EVERY state: after a
+  // confirmed cancel the cancel control is gone, and after an in-place switch
+  // from received the activated control is gone. Focus never falls to body.
+  const card = useRef<HTMLDivElement>(null);
+  const restoreFocus = useRef(false);
   const openSheet = () => setSheetOpen(true);
   const closeSheet = useCallback(() => {
+    restoreFocus.current = true;
     setSheetOpen(false);
-    // Focus returns to the control that opened the sheet, if it still exists.
-    cancelButton.current?.focus();
+  }, []);
+  // Focus returns once the background is no longer inert - after the commit
+  // that removed the sheet - to the control that opened it, else to the card.
+  useEffect(() => {
+    if (sheetOpen || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    (cancelButton.current ?? card.current)?.focus();
+  }, [sheetOpen]);
+
+  useEffect(() => {
+    if (focusOnMount) card.current?.focus();
+    // Mount only: the switch happened once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The sheet closes itself if the source moves on while it is open: there is
-  // nothing left to cancel, and the card already says what happened.
+  // nothing left to cancel, and the card already says what happened. Focus is
+  // handed back the same way as an explicit close.
   useEffect(() => {
-    if (sheetOpen && !row.pending) setSheetOpen(false);
-  }, [row.pending, sheetOpen]);
+    if (sheetOpen && !row.pending) closeSheet();
+  }, [closeSheet, row.pending, sheetOpen]);
 
   const confirmCancel = async () => {
     if (cancelling) return;
@@ -199,7 +222,9 @@ export function StatusScreen({
 
   return (
     <div className={`${s.screen} ${motionFull ? s.motionFull : ''}`} data-sf-screen="status" data-sf-status={snapshot.state}>
-      <header className={s.head}>
+      {/* While the sheet is up, everything behind it is inert: unfocusable
+          and hidden from assistive technology, as a modal must be. */}
+      <header className={s.head} inert={sheetOpen}>
         <BackLink href={menuHref} label={m.back} />
         <LogoDisc tenant={tenant} small />
         <div className={s.headText}>
@@ -214,8 +239,8 @@ export function StatusScreen({
         </div>
       </header>
 
-      <div className={s.body}>
-        <div className={`${s.card} ${tone}`} data-sf-status-card={row.tone}>
+      <div className={s.body} inert={sheetOpen}>
+        <div className={`${s.card} ${tone}`} data-sf-status-card={row.tone} ref={card} tabIndex={-1}>
           <span className={s.cardIcon} aria-hidden="true">
             <PathIcon d={ICON_PATH[snapshot.state]} />
           </span>
@@ -345,9 +370,10 @@ export function StatusScreen({
 
 /**
  * The confirmation sheet (:573-:576): a modal dialog. Focus moves to "keep"
- * on open, Tab cycles inside it, Escape and the scrim keep the request, and
- * focus returns to the cancel control on close. Under reduced motion the root
- * rule collapses its rise to one frame.
+ * on open, Tab cycles inside it (also from the sheet's own body, which a
+ * click can focus), Escape and the scrim keep the request, the screen behind
+ * it is inert, and focus returns to the cancel control on close. Under
+ * reduced motion the root rule collapses its rise to one frame.
  */
 function CancelSheet({
   m,
@@ -381,10 +407,14 @@ function CancelSheet({
     const first = keep.current;
     const last = yes.current;
     if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
+    const active = document.activeElement;
+    // Focus can sit on the sheet itself after a click on its body; Tab then
+    // enters the cycle at either end instead of leaving the dialog.
+    const onSheet = active === event.currentTarget;
+    if (event.shiftKey && (active === first || onSheet)) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
+    } else if (!event.shiftKey && (active === last || onSheet)) {
       event.preventDefault();
       first.focus();
     }
@@ -399,6 +429,7 @@ function CancelSheet({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
+        tabIndex={-1}
         onKeyDown={onKeyDown}
       >
         <span className={s.handle} aria-hidden="true" />

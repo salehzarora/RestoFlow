@@ -49,6 +49,7 @@ export function ReceivedScreen({
   copy,
   onContinue,
   onTrack,
+  onWaWeb,
 }: {
   m: StorefrontMessages;
   tenant: RequestTenant;
@@ -64,6 +65,8 @@ export function ReceivedScreen({
   copy: CopyText;
   onContinue: () => void;
   onTrack: () => void;
+  /** The fallback block's launch: the same simulated open, staying here. */
+  onWaWeb: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,9 +150,10 @@ export function ReceivedScreen({
           <div className={s.fallback} data-sf-request-fallback="">
             <div className={s.fallbackTitle}>{m.waFallback}</div>
             <div className={s.fallbackRow}>
-              {/* The prototype's "open WhatsApp Web" is an href="#" (:539). Here
-                  it is the same simulated launch as the CTA - no navigation. */}
-              <button className={s.fallbackBtn} type="button" onClick={onContinue} data-sf-request-cta="wa-web">
+              {/* The prototype's "open WhatsApp Web" is an href="#" (:539): it
+                  leaves the visitor HERE, with the copy control still in
+                  reach. The same simulated launch, no navigation, no switch. */}
+              <button className={s.fallbackBtn} type="button" onClick={onWaWeb} data-sf-request-cta="wa-web">
                 {m.waWeb}
               </button>
               <button

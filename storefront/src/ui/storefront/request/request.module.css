@@ -20,10 +20,12 @@
  * animation.
  */
 
+/* No min-height of its own: the root is the 100dvh column and the screen
+   fills it with flex. A second 100dvh here would add the demo disclosure's
+   height on top and make every request view scroll by exactly that much. */
 .screen {
   flex: 1;
   min-width: 0;
-  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   animation: sfFade 250ms both;
@@ -269,6 +271,12 @@
   border-block-end: 1px solid var(--hair);
 }
 
+/* On status the summary CONTAINER carries the :571 `4px 14px`; the list
+   inside it carries none, or the rows would sit 8px / 28px in. */
+.linesStatus {
+  padding: 0;
+}
+
 .linesStatus .lineRow {
   padding: 10px 0;
 }
@@ -423,6 +431,7 @@
 }
 
 .fallbackBtn {
+  position: relative;
   height: 36px;
   padding: 0 12px;
   border-radius: 10px;
@@ -434,6 +443,17 @@
   gap: 6px;
   font: 700 13px / 1 var(--font);
   cursor: pointer;
+}
+
+/* The 36px visual keeps its size; the hit area reaches 44px (PACKET PX-6),
+   the same overlay the inline copy control uses. */
+.fallbackBtn::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 /* :541 - the message preview and its copy control. */
@@ -596,7 +616,9 @@
 .cardBody {
   margin: 4px 0 0;
   font: 400 13.5px / 1.45 var(--font);
-  opacity: 0.92;
+  /* The prototype dims the body to .92 (:556). The danger ink is walked to
+     AA at full opacity (PX-3a); composited at .92 it drops below 4.5:1 in the
+     shipped dark preset, so the body stays at 1 and keeps the walked pair. */
 }
 
 /* :556 - the TTL pill. Its text ticks every second, so it lives OUTSIDE the
@@ -660,7 +682,7 @@
 
 .toneBad .cardIcon {
   background: var(--bad);
-  color: var(--onBad);
+  color: var(--badbg);
 }
 
 .toneNeutral {
@@ -812,7 +834,7 @@
 /* The terminal node takes the hero tone's icon colours (:845-:846). */
 .nodeTerminal.toneBad .nodeDot {
   background: var(--bad);
-  color: var(--onBad);
+  color: var(--badbg);
   border-color: var(--bad);
 }
 
@@ -874,12 +896,14 @@
   height: 20px;
 }
 
+/* :567 - the danger ink on the page surface (not on the danger bed, so the
+   PX-3a walk does not apply here). */
 .cancelBtn {
   height: 48px;
   border-radius: 14px;
   border: 1.5px solid var(--hair2);
   background: transparent;
-  color: var(--badText);
+  color: var(--bad);
   font: 700 15px / 1 var(--font);
   cursor: pointer;
 }
@@ -1016,6 +1040,10 @@
 
 .keepBtn:hover {
   background: var(--sf2);
+}
+
+.keepBtn:active {
+  transform: scale(0.985);
 }
 
 /* "Yes, cancel": the danger fill with the ink derived on it (PACKET PX-3b),
@@ -1185,6 +1213,11 @@
   .motionFull .halo,
   .motionFull .sheen {
     animation: none;
+  }
+
+  /* A sheen that does not move is a stripe painted across the CTA label. */
+  .motionFull .sheen {
+    display: none;
   }
 
   /*

@@ -284,6 +284,37 @@ test('a seeded source shows the visitor\'s own send, priced as it was quoted', a
   assert.equal(snap.expiresAt, NOW - 1000 + 30 * 60_000);
 });
 
+test('a seeded source never records an event in the future: the send instant is the seed, later stamps are held at the clock', async () => {
+  const seed = { service: 'pickup', zoneId: '', lines: [{ itemId: '7', qty: 1, selections: {} }], createdAt: NOW - 1000 };
+  // The visitor's own send opens waiting: "waiting" would be +20 s after the
+  // send, which has not happened yet.
+  const own = await first(fixture.demoStatusSource({ scenario: null, clock, seed, cancelDelayMs: 0 }));
+  assert.deepEqual(own.events.map((e) => e.state), ['received', 'waiting']);
+  assert.equal(own.events[0].at, NOW - 1000);
+  for (const e of own.events) assert.ok(e.at <= NOW, `${e.state} recorded at ${e.at - NOW} ms after now`);
+  // And with a state token carried from the review URL: every stamp is a
+  // record at or before the clock, ascending, the first one the send itself.
+  for (const state of status.REQUEST_STATES) {
+    const snap = await first(fixture.demoStatusSource({ scenario: { kind: 'state', state }, clock, seed, cancelDelayMs: 0 }));
+    assert.equal(snap.createdAt, NOW - 1000);
+    const ats = snap.events.map((e) => e.at);
+    assert.deepEqual(ats, [...ats].sort((a, b) => a - b));
+    for (const e of snap.events) assert.ok(e.at <= NOW, `${state}/${e.state}: ${e.at - NOW} ms after now`);
+    for (const n of status.timelineFor(snap)) if (n.at !== null) assert.ok(n.at <= NOW);
+  }
+});
+
+test('a seed without a send instant (the duplicate recovery) is aged like a direct load, never stamped at the click', async () => {
+  const seed = { service: 'pickup', zoneId: '', lines: [{ itemId: '7', qty: 1, selections: {} }] };
+  const snap = await first(fixture.demoStatusSource({ scenario: null, clock, seed, cancelDelayMs: 0 }));
+  const direct = await first(fixture.demoStatusSource({ scenario: null, clock, cancelDelayMs: 0 }));
+  assert.equal(snap.createdAt, direct.createdAt);
+  assert.ok(snap.createdAt < NOW - 60_000, 'aged, not created now');
+  assert.equal(snap.expiresAt, direct.expiresAt);
+  // The summary is still the visitor's own.
+  assert.deepEqual(snap.lines.map((l) => [l.itemId, l.qty]), [['7', 1]]);
+});
+
 // ------------------------------------------------------------- the message
 
 test('the message is composed in the restaurant\'s language, names no contact field, and links the configured origin', () => {
@@ -361,10 +392,34 @@ test('every status tone pairs its ink and bed at AA, in both presets', () => {
       ['yes-cancel ink', t.onBad, t.bad],
       ['terminal warn node', t.warnbg, t.warn],
       ['done node', t.okbg, t.ok],
+      // The cancel control: the raw danger ink on the page surface (:567).
+      ['cancel control', t.bad, t.bg],
     ];
     for (const [name, ink, bed] of pairs) {
       const ratio = contrast(ink, bed);
       assert.ok(ratio >= AA, `${preset} ${name}: ${ink} on ${bed} = ${ratio.toFixed(2)} < ${AA}`);
     }
+    // The bad-tone icon disc and terminal node paint a non-text glyph in the
+    // bed colour on the danger fill (the prototype's toneCss, :839): the
+    // graphics threshold is 3:1.
+    const glyph = contrast(t.badbg, t.bad);
+    assert.ok(glyph >= 3, `${preset} bad glyph: ${t.badbg} on ${t.bad} = ${glyph.toFixed(2)} < 3`);
   }
+});
+
+test('the status body is not dimmed: composited at the prototype .92 the walked danger pair would fall under AA', () => {
+  const css = readFileSync(new URL('../src/ui/storefront/request/request.module.css', import.meta.url), 'utf8');
+  const body = css.match(/\.cardBody \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(body.length > 0, '.cardBody rule present');
+  assert.ok(!/opacity\s*:/.test(body), '.cardBody carries no opacity');
+  // Why: the AA walk is exact only at alpha 1. Show the .92 composite fails
+  // for the shipped dark tenant, so the rule above is load-bearing.
+  const t = buildTheme('dark', { primary: '#123027', accent: '#FF8A2A' });
+  const composite = (ink, bed, a) => {
+    const c = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [i, b] = [c(ink), c(bed)];
+    return `#${i.map((v, k) => Math.round(v * a + b[k] * (1 - a)).toString(16).padStart(2, '0')).join('')}`;
+  };
+  assert.ok(contrast(t.badText, t.badbg) >= AA);
+  assert.ok(contrast(composite(t.badText, t.badbg, 0.92), t.badbg) < AA, 'the .92 composite is the failing case');
 });

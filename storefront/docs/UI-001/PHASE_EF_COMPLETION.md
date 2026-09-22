@@ -311,6 +311,16 @@ send now re-checks the runtime's live answer (non-empty cart, details valid for
 the services the restaurant offers) AT submission, not only at route entry;
 the review CTA is `aria-disabled` while that answer is no.
 
+**Corrected in F (review finding).** The duplicate handoff carried
+`createdAt: Date.now()` at the click, so the status view of a request the
+banner had just called "already sent" showed "received <click time>" and a
+fresh 29:59. A duplicate recovery did not send anything from this document:
+its handoff now carries `createdAt: null`, and the fixture source ages the
+request exactly as a direct load does (`DEMO_AGE_MS`), which is what the
+prototype's `goStatus` shows (`P:723`, `P:648`). The summary is still the
+visitor's own lines. Unit test: "a seed without a send instant … is aged like
+a direct load, never stamped at the click".
+
 ### 3.5 DECISION E-4 — the status source contract
 
 `StatusSource.subscribe(ref, onSnapshot, onMissing)` never answers
@@ -324,6 +334,23 @@ explicit fixture records; the prototype's `createdAt + n × 4 min` is not
 reproduced — PX-10). Expiry is a source event at `expiresAt`; the UI shows
 0:00 until the source says expired. The fixture source is created per mount
 with the visitor's seed; no module holds one visitor's request.
+
+**Corrected in F (review finding).** The reasoning above held for the aged
+direct load only. For the visitor's OWN send the seed's `createdAt` is the
+send instant, and `createdAt + EVENT_OFFSETS_MS` then stamped records that
+had not happened yet: "waiting" at +20 s while the wall clock still read the
+send minute, and with a `status-<state>` token carried from the review URL,
+five stamps up to +32 min in the future — invented time, exactly what PX-10
+forbids. `eventsFor` now holds every record at the clock
+(`Math.min(createdAt + offset, now)`); a direct load is unaffected (all its
+records are past by construction). The runtime's `supersedes` guard also
+moved from a render-synchronised ref to a functional `setSnapshot`, so two
+answers delivered in one task cannot both pass a guard that only saw the
+last rendered snapshot, and a `cancel()` that throws is an "unknown" answer
+that clears the in-flight flag instead of leaving the confirm inert forever.
+Unit tests: "a seeded source never records an event in the future" (scenario
+null and every seeded state); E-FLOW asserts no node time later than the
+wall clock after a real send.
 
 ### 3.6 DECISION E-5 — WhatsApp is simulated, copy is real, the message is safe
 
@@ -377,6 +404,65 @@ touches the CSP, the config hash, the comparator or any ceiling.
 - A ref the source does not know renders the neutral unknown copy inside the
   tenant frame (`?fx=status-missing`); an ungenerated ref is a real 404.
 
+**Corrected in F (review findings, all within the approved design):**
+
+- **Focus never falls to `<body>`.** After a confirmed cancel the cancel
+  control unmounts with the pending state, and after the sheet closes itself
+  because the restaurant answered, the same; after "track status" /
+  "continue" the activated control unmounts with the received view. The
+  status card is now the focus target that exists in every state
+  (`tabIndex={-1}`, the root's `:focus-visible` ring): the sheet's close
+  restores focus to the cancel control if it still exists, else to the card,
+  and the in-place switch focuses the card on mount. Focus is restored in an
+  effect AFTER the commit that removed the sheet, because the background is
+  inert while it is open (next item). Asserted in H22, E-RACE, E-FLOW and the
+  cross-engine X01.
+- **The cancel sheet is a real modal.** `.head` and `.body` carry `inert`
+  while it is open (React 19's boolean prop), so the screen behind it is
+  unfocusable and hidden from assistive technology — what the packet's dialog
+  rule promises. The sheet is `tabIndex={-1}`: a click on its own body keeps
+  focus on the dialog, Escape still keeps the request, and Tab / Shift+Tab
+  from the sheet itself enter the cycle at "keep" / "yes" instead of leaving
+  the dialog. G35 asserts all three.
+- **"30 د" reads number-then-unit.** The body's `{m}` slot was a forced LTR
+  island, which in Arabic and Hebrew reads unit-then-number ("د 30").
+  CONTENT:221 lists the M:SS countdown as an island, not the minute phrase;
+  it is now a `<bdi>` isolate like the restaurant's name, so every locale
+  keeps its own order (the prototype flattens it into the sentence, `P:837`).
+  G30 asserts the two isolates and no `dir="ltr"` inside the body.
+- **The fallback block's controls reach 44 px.** "Open WhatsApp Web" and the
+  fallback "Copy message" are 36 px visuals; they now carry the same
+  invisible PX-6 overlay as the inline copy control (G29 probes both), and
+  "Open WhatsApp Web" is the prototype's `href="#"` (`P:539`): the same
+  simulated launch that leaves the visitor ON received with the copy control
+  in reach, rather than switching to status and taking the control away.
+- **`.cardBody` is not dimmed.** The prototype's `opacity: .92` (`P:556`)
+  composited over the danger bed puts the AA-walked `--badText` at 4.18:1 in
+  the shipped dark preset: the walk is exact only at alpha 1. The body
+  renders at full opacity; a unit test pins the rule and shows the .92
+  composite is the failing case.
+- **Prototype paint restored on three rules:** the status order summary was
+  padded twice (container `4px 14px` AND the list's own `4px 14px` → 8/28 px;
+  now `.linesStatus { padding: 0 }`, `P:571`); the bad-tone icon disc and
+  terminal node paint their glyph in `var(--badbg)` as the prototype's
+  `toneCss` does (`P:839`; 3.62:1 satisfies the 3:1 graphics threshold, and
+  `--onBad` stays the ink of the "yes, cancel" fill, PX-3b); the cancel
+  control is `var(--bad)` on the page surface (`P:567`; AA in both presets,
+  asserted), not the bed-walked `--badText`, which is for text ON the danger
+  bed only. `.keepBtn:active { transform: scale(.985) }` was missing.
+- **No second viewport.** `.screen` carried `min-height: 100dvh` inside the
+  root's own 100dvh column, so with the demo disclosure above it every
+  request view scrolled by exactly the disclosure's height. The screen fills
+  the root with `flex: 1` alone; E-RESPONSIVE asserts the document equals the
+  viewport where the content fits.
+- **Reduced motion hides the sheen.** `animation: none` left the sheen's
+  `display: block`, a stripe painted across the CTA label; it is
+  `display: none` under the media query. E-REDUCED asserts it.
+- **"Received is shown once" is enforced by SHOWING it.** The handoff is
+  marked seen the moment the received view is chosen, not when the visitor
+  leaves it, so Back then Forward renders status for the same send (E-BACK).
+  The mount that chose received keeps rendering it from its captured object.
+
 ### E-KEYS — the dictionary keys E consumes
 
 43 keys were added to all three dictionaries, in the same order, derived from
@@ -396,6 +482,126 @@ one authored string. Not added because no consumer exists: `requestCode`,
 
 ---
 
+## 3.9 Phase F — the ONE integrated final pass
+
+### 3.9.1 What F did
+
+An independent adversarial review of the E implementation (five lenses —
+design fidelity, runtime correctness, accessibility/bidi, privacy/truth,
+test vacuity — each finding verified by a second reader) returned 32
+confirmed findings and 3 refuted ones. Every confirmed finding was fixed
+within the bounded scope (no ceiling, comparator, guard or handoff was
+touched); the runtime and design corrections are recorded above under the
+decision they amend, and the test-side corrections are:
+
+- **G28-EN was vacuous.** It read `innerText` of a DETACHED clone, where
+  "sent" and "Copy message" glue into "sentCopy", so the `/\bsent\b/` check
+  could not fail — and would have contradicted the LOCKED string table, whose
+  preview label is "Message that will be sent". It now reads the rendered
+  document (disclosure hidden for the read), asserts the packet's actual
+  claim (no sentence states a message WAS sent), pins the future-tense label
+  positively, and proves its own detector on a planted past-tense sentence.
+- **H21 used the real clock; E-RACE and H19 were wall-clock races.** All
+  four now run under `page.clock` (Playwright 1.61): the countdown opens at
+  the fixture's 24:10 and moves by exactly the seconds advanced; expiry and
+  the late acceptance fire at the instant the SOURCE set and not a tick
+  before (a load slower than the 1.5 s margin fails the precondition instead
+  of being tolerated); "Copied" reverts at 1,600 ms exactly, not somewhere
+  in a 2 s window. The fallback copy control has its own H19 case.
+- **E-PRIVACY** now sweeps the received view's own DOM before it is left and
+  records every TRANSIENT write (`Storage.setItem`, `pushState` /
+  `replaceState`, the cookie setter), not only the final stores.
+- **Popups, failed assets and CSP violations** are recorded for EVERY E case
+  by a `beforeEach` / `afterEach` net, so "nothing leaves the page" now also
+  means no `window.open`.
+- **E-CALM** proves the calm preset structurally (class removed in place,
+  computed `animation-name` read) instead of asserting the FULL preset's
+  class is present.
+- The output scan for `wa.me` / `whatsapp://` / `api.whatsapp.com` /
+  `bizbot.app` sweeps the JS chunks, where a deep link would actually live,
+  and pins the RSC payload count to 4 per request document.
+
+### 3.9.2 The cross-engine smoke (Firefox 1532, WebKit 2311)
+
+G02, G04, G17, G22, G30 and the shortened keyboard-only X01 pass on both
+engines (`tests/browser/storefront-ui-001f-cross.spec.ts`,
+`playwright.cross.config.ts`, against an EVIDENCE build for G04's
+`demo-light` slug). **Playwright's WebKit is not Safari**; a real-device iOS
+pass is launch QA outside UI-001.
+
+One engine-specific fact, recorded rather than hidden: the committed CSP
+carries `upgrade-insecure-requests`, and WebKit applies it to a plain-http
+loopback origin (Chromium and Firefox exempt `127.0.0.1` as potentially
+trustworthy, per the spec), so every subresource is rewritten to `https://`
+and nothing hydrates. That is a property of the LOCAL server's scheme, not
+of the storefront — hosted, the document is https and the directive is a
+no-op. For WebKit only, the spec removes that ONE directive from the
+document response inside the test (`page.route`, every other directive
+kept) and writes that fact into its results file. `vercel.json` and
+`serve-out.mjs` are unchanged.
+
+### 3.9.3 Measurements after F (shipped build, `SF_EVIDENCE_ROUTES` unset)
+
+| Measure | After E (cp2) | After F | Cap / plan |
+|---|---|---|---|
+| `out/` total | 4,001,776 B | **4,002,589 B** (+813) | ≤ 4,194,304 (191,715 B left) |
+| Worst first-load JS (cart/checkout/payment/review) | 684,661 / 181,832 | **684,681 raw / 181,839 Brotli** | ≤ 690,000 / ≤ 200,000 |
+| Request route first-load | 656,321 / 175,112 | **656,793 / 175,309** | same |
+| Largest file | 229,156 | **229,156** (`25u4ugc163b9o.js`) | ≤ 262,144 |
+| CSS | 92,771 (2 files) | **93,092** (2 files, +321) | plan 70,000 raw, no validator (owner item, unchanged) |
+| Preloaded fonts | 3 files, 77,164 B | unchanged | plan "≤ 2", total ≤ 120,000 (owner item) |
+
+The F reserve (§2.3: 8,000 B) absorbed the whole F increment (813 B of
+`out/`, 20 B of first-load).
+
+### 3.9.4 Lab performance protocol (X16) — LOCAL, EMULATED
+
+Chromium, AR Home 390×844, 4× CPU, 1.6 Mbps / 150 ms, 5 runs per transfer
+mode, medians (worst in brackets). Raw figures in `perf-lab-raw.json` /
+`perf-lab-br.json`; the long-task attribution trace in
+`perf-trace-summary.json` (taken on the E build; Home did not change in F).
+
+| Metric | Target | Uncompressed transfer (`serve-out.mjs` as tooled) | Production-like Brotli (lab server) |
+|---|---|---|---|
+| LCP | ≤ 2,500 ms | **3,028 ms (3,264) — FAIL** | **1,464 ms (1,500) — PASS** |
+| CLS | ≤ 0.05 (hard 0.10) | 0 — PASS | 0 — PASS |
+| Long tasks, sum of time above 50 ms | ≤ 300 ms | **389 ms (440) — FAIL** | **637 ms (713) — FAIL** |
+| Font-swap shift | ≤ 0.02 | 0 — PASS | 0 — PASS |
+
+Read plainly: **the long-task target is not met in either mode, and LCP is
+met only under production-like compression.** Neither is hidden behind the
+"local, emulated" label; both are carried to the owner with their cause.
+
+- **LCP.** The LCP element is the hero image (`tenant-maps-burger-hero.webp`)
+  in every run. Under the repository's uncompressed server the 127 KB
+  document alone takes ~0.6 s of the 1.6 Mbps link before the image starts;
+  production compresses text (Vercel does), and under that transfer the
+  target is met with a 1 s margin. The uncompressed figure is what a
+  compression-less host would show and is reported for that reason.
+- **Long tasks.** The trace attributes the main-thread time to `Layout`
+  (612 ms) and `Paint` (555 ms), not to script: `EvaluateScript` is 142 ms
+  and `FunctionCall` 148 ms across all chunks. That is the approved Home's
+  paint cost under 4× throttle — the PR-5 `backdrop-filter` glass on the
+  compact bar and dock, and the module count — not a JS-weight problem the
+  permitted optimisations (§8) can address. The decision that could change
+  it (a no-blur fallback for low-end devices) is a VISUAL change and is
+  listed for the owner in `DEFERRED_AND_RELEASE_GATES.md`; it was not made
+  here. The figure is also noisier than the E-stage trial (raw 269 → 389,
+  br 563 → 637): a throttled lab on a shared workstation, five runs — the
+  spread is in the JSON.
+
+Nothing about these figures is field data; the hosted gate (Lighthouse /
+RUM on the real host) is still ahead of any launch.
+
+### 3.9.5 PG-4 final impact check
+
+See `PRIVACY_IMPACT.md` in the pack: no new sink; the E paths were
+re-exercised with canaries in every field, on the received view, after a
+copy and on the status view, including transient writes; negative controls
+for the detector, the contact-identifier source rule and the copy label.
+
+---
+
 ## 4. Carried forward from earlier phases (FINISH §6)
 
 Dual popular-badge placement; safe bidi isolation and its exemptions; the
@@ -412,4 +618,25 @@ blocked behaviour, no forced loss of cart or draft, not reopened for an
 
 ## 5. Non-blocking ledger
 
-_Minor editorial observations that need no further phase._
+_Observations that need no further phase; recorded so the final review does
+not rediscover them._
+
+- **Three review findings were refuted and left alone**, with the reason:
+  (a) "recreating `source` resubscribes without resetting the snapshot" —
+  the source identity changes only with an injected `clock` / `statusSource`
+  prop, which production never passes; (b) "the last unsubscribe clears the
+  scenario timers, so under `reactStrictMode` the `-late` scenarios never
+  fire" — the export runs no StrictMode double-mount, and the E suite proves
+  both scenarios fire; (c) "E-BACK cannot detect a surviving draft" — the
+  review step's guard redirects an empty draft, which is what E-BACK asserts
+  through the landing path and the empty field.
+- The G27 `provenBy` citation in the LOCKED pack points at the wrong
+  capture; noted for the pack's owner, the pack is not edited.
+- The Hebrew copy has had no native reading pass (pack OQ-3); the 43 E keys
+  are included in that debt.
+- `ui001f-evidence/` (the cross-engine PNGs and per-engine results) joins the
+  earlier per-phase evidence folders as untracked working files; the sealed
+  copies are in the pack.
+- The evidence folder `ui001e-evidence/` was regenerated by the final pass;
+  its PNGs supersede the ones captured before the F corrections (the G35
+  sheet capture, for instance, now follows the Tab-from-sheet-body probe).

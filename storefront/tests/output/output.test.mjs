@@ -259,7 +259,10 @@ test('the four request documents carry no request, no status, no TTL, no money a
   const docs = emittedText().filter((d) => /(^|\/)r\/[^/]+\.html$/.test(d.file));
   assert.equal(docs.length, 4);
   const payloads = emittedText().filter((d) => /(^|\/)r\/[^/]+(\/|\.txt$)/.test(d.file));
-  assert.ok(payloads.length >= 4, 'the RSC payloads of the request route must be in scope');
+  // Four RSC payloads per document (the route's .txt, _full, _tree and the
+  // page segment): an exact count, so a payload the export adds later cannot
+  // slip out of the sweep.
+  assert.equal(payloads.length, docs.length * 4, 'every RSC payload of the request route is in scope');
   for (const { file, text } of [...docs, ...payloads]) {
     if (file.endsWith('.html')) {
       assert.ok(text.includes('data-sf-pending'), `${file}: must ship the pre-hydration frame only`);
@@ -277,8 +280,14 @@ test('the four request documents carry no request, no status, no TTL, no money a
   }
 });
 
-test('no emitted document or payload carries a real WhatsApp destination or the dead status literal', () => {
-  for (const { file, text } of emittedText()) {
+test('no emitted document, payload OR script carries a real WhatsApp destination or the dead status literal', () => {
+  // The JS chunks are where a deep link would actually live; they are swept
+  // with the documents and payloads, not exempted from the rule.
+  const scripts = outFiles()
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => ({ file: path.relative(OUT, f).replace(/\\/g, '/'), text: readFileSync(f, 'utf8') }));
+  assert.ok(scripts.length > 10, 'the export ships scripts');
+  for (const { file, text } of [...emittedText(), ...scripts]) {
     for (const banned of ['wa.me', 'whatsapp://', 'api.whatsapp.com', 'bizbot.app']) {
       assert.ok(!text.includes(banned), `${file}: ${banned}`);
     }

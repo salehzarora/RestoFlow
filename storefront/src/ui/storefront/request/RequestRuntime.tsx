@@ -7,9 +7,11 @@
  * in-memory handoff names THIS ref and has not been shown yet, the visitor
  * just sent the request and sees RECEIVED; otherwise - a direct load, a
  * reload, a return visit, the duplicate recovery - the same URL renders
- * STATUS from the source. Received is shown once: "track status" and
- * "continue on WhatsApp" both mark it seen and switch to status in place, as
- * the prototype's `goStatus` / `continueWa` do (:723, :731).
+ * STATUS from the source. Received is shown once: choosing it marks the
+ * handoff seen at that moment, so Back and Forward render status; "track
+ * status" and "continue on WhatsApp" switch to status in place, as the
+ * prototype's `goStatus` / `continueWa` do (:723, :731), and hand focus to
+ * the status card so a keyboard or screen-reader visitor lands somewhere.
  *
  * NOTHING IS PRERENDERED. The static document is the chrome only
  * (`data-sf-pending`), identical for everyone. The handoff is read and the
@@ -49,6 +51,7 @@ import { TenantText } from '../TenantText';
 import {
   isPending,
   supersedes,
+  type CancelResult,
   type Clock,
   type RequestSnapshot,
   type StatusSource,
@@ -129,7 +132,12 @@ export function RequestRuntime({
     const h = handoffApi?.handoff ?? null;
     const mine = h !== null && h.ref === ref && h.slug === slug ? h : null;
     handoffRef.current = mine;
-    setView(mine !== null && mine.kind === 'accepted' && !mine.seen ? 'received' : 'status');
+    const received = mine !== null && mine.kind === 'accepted' && !mine.seen;
+    setView(received ? 'received' : 'status');
+    // Shown once means marked seen NOW, not when the visitor leaves it: a
+    // Back / Forward remount of this same document renders status. The
+    // captured object above is what this mount keeps rendering.
+    if (received) handoffApi?.markSeen(ref);
     setDecided(true);
     // Decided once per mount: a later handoff change must not flip the view.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,7 +159,7 @@ export function RequestRuntime({
               service: h.service,
               zoneId: h.zoneId,
               lines: h.lines.map((l) => ({ itemId: l.itemId, qty: l.qty, selections: l.selections })),
-              createdAt: h.createdAt,
+              createdAt: h.createdAt ?? undefined,
             },
     });
   }, [decided, now, scenario, statusSource]);
@@ -167,9 +175,11 @@ export function RequestRuntime({
     const stop = source.subscribe(
       ref,
       (next) => {
-        // Stale, foreign or older answers are refused in one place.
-        if (!live || !supersedes(snapshotRef.current, next, ref)) return;
-        setSnapshot(next);
+        // Stale, foreign or older answers are refused in one place, against
+        // the latest QUEUED snapshot: two answers in one task cannot both
+        // pass a guard that only reads the last rendered one.
+        if (!live) return;
+        setSnapshot((cur) => (supersedes(cur, next, ref) ? next : cur));
       },
       () => {
         if (live) setMissing(true);
@@ -205,20 +215,33 @@ export function RequestRuntime({
     const current = snapshotRef.current;
     if (source === null || current === null || cancelling) return;
     setCancelling(true);
-    const result = await source.cancel(ref, current.version);
+    // A source that throws is an unknown answer, and the sheet must not stay
+    // inert forever: the flag clears on every path.
+    let result: CancelResult = { kind: 'unknown' };
+    try {
+      result = await source.cancel(ref, current.version);
+    } catch {
+      result = { kind: 'unknown' };
+    } finally {
+      if (alive.current) setCancelling(false);
+    }
     if (!alive.current) return;
-    setCancelling(false);
     // Either answer is the truth now: cancelled, or whatever the restaurant
     // did first. An unknown answer changes nothing.
-    if (result.kind !== 'unknown' && supersedes(snapshotRef.current, result.snapshot, ref)) {
-      setSnapshot(result.snapshot);
+    if (result.kind !== 'unknown') {
+      const answer = result.snapshot;
+      setSnapshot((cur) => (supersedes(cur, answer, ref) ? answer : cur));
     }
   }, [cancelling, ref, source]);
 
   const hrefs = useMemo(() => ({ menu: menuPath(locale, slug) }), [locale, slug]);
 
+  // Whether the status view was reached by an in-place switch from received:
+  // the activated control unmounts, so the status card takes focus instead.
+  const switched = useRef(false);
   const goStatus = useCallback(() => {
     handoffApi?.markSeen(ref);
+    switched.current = true;
     setView('status');
   }, [handoffApi, ref]);
 
@@ -252,6 +275,10 @@ export function RequestRuntime({
     open.open('', '');
   }, [open]);
 
+  const onWaWeb = useCallback(() => {
+    open.open('', message);
+  }, [message, open]);
+
   const onOrderAgain = useCallback(() => {
     // INTERACTIONS.md:115 - the ONE designed clear: empties the cart on this
     // device and returns to the menu. Nothing else ever clears a cart.
@@ -284,6 +311,7 @@ export function RequestRuntime({
           copy={doCopy}
           onContinue={onContinue}
           onTrack={goStatus}
+          onWaWeb={onWaWeb}
         />
       </>
     );
@@ -328,6 +356,7 @@ export function RequestRuntime({
         menuHref={hrefs.menu}
         motionFull={motionFull}
         cancelling={cancelling}
+        focusOnMount={switched.current}
         onChat={onChat}
         onCancel={onCancel}
         onOrderAgain={onOrderAgain}

@@ -44,8 +44,12 @@ export interface RequestHandoff {
   readonly feeMinor: Minor;
   readonly taxMinor: Minor;
   readonly totalMinor: Minor;
-  /** Epoch ms at the send, from the clock at that moment. */
-  readonly createdAt: number;
+  /**
+   * Epoch ms at the send, from the clock at that moment - for an accepted
+   * send only. A duplicate recovery did not send anything from this document,
+   * so it carries no instant: the source shows its own record of the request.
+   */
+  readonly createdAt: number | null;
   /** True once the received view has been shown; the same URL then renders status. */
   readonly seen: boolean;
 }

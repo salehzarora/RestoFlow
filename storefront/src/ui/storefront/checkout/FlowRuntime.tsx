@@ -20,7 +20,8 @@
  *
  * THE HANDOFF (Phase E). An accepted send records the NONCONTACT summary of
  * what was sent in the in-memory handoff and navigates to `/r/:ref`; the
- * duplicate banner's "view status" does the same without a summary of its own.
+ * duplicate banner's "view status" carries the same summary, marked seen and
+ * without a send instant, so the same route opens the status view directly.
  * The cart is NOT cleared by a send, a failure or a duplicate (the prototype
  * keeps it, :728); only the status screen's "order again" clears it.
  */
@@ -211,7 +212,8 @@ function FlowBody({
         feeMinor: quote.feeMinor,
         taxMinor: quote.taxMinor,
         totalMinor: quote.totalMinor,
-        createdAt: Date.now(),
+        // The instant belongs to a send; a duplicate recovery invents none.
+        createdAt: kind === 'accepted' ? Date.now() : null,
         seen,
       };
     },

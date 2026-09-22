@@ -260,6 +260,21 @@ async function openStatus(page: Page, token: string, root = '') {
   await page.waitForSelector('[data-sf-screen="status"]', { timeout: 15_000 });
 }
 
+/**
+ * Freeze the page's (installed) clock right after a load and return the fake
+ * milliseconds since `t0`. The fixture's late answers and expiry are due
+ * 1.5 s after the source mounted, which is after t0: the freeze must land
+ * well before that, or the order of events would be real time again - so a
+ * slow load fails the test instead of being tolerated.
+ */
+async function freezeAfterLoad(page: Page, t0: number): Promise<number> {
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.pauseAt(now + 50);
+  const since = now + 50 - t0;
+  expect(since, 'the load must finish well before the fixture answers').toBeLessThan(1_200);
+  return since;
+}
+
 /** The effective hit box of a control, probed with elementFromPoint. */
 const PROBE_BOX = (selector: string) => {
   const el = document.querySelector(selector) as HTMLElement | null;
@@ -282,21 +297,84 @@ const PROBE_BOX = (selector: string) => {
   };
 };
 
-function watch(page: Page) {
-  const errors: string[] = [];
-  const offOrigin: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
-  });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('request', (req) => {
-    if (!req.url().startsWith(BASE)) offOrigin.push(`${req.method()} ${req.url()}`);
-  });
-  return { errors, offOrigin };
+/**
+ * The packet's global assertions, recorded for EVERY test by the fixture
+ * below and asserted after each: no console or page error, no request that
+ * leaves the origin, no failed asset, no CSP violation, and no popup - a
+ * `window.open` would otherwise pass "nothing leaves the page" unnoticed.
+ */
+interface Watch {
+  errors: string[];
+  offOrigin: string[];
+  failed: string[];
+  csp: string[];
+  popups: number;
 }
+const WATCHES = new WeakMap<Page, Watch>();
+
+function watch(page: Page): Watch {
+  const existing = WATCHES.get(page);
+  if (existing) return existing;
+  const w: Watch = { errors: [], offOrigin: [], failed: [], csp: [], popups: 0 };
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    (/content security policy/i.test(m.text()) ? w.csp : w.errors).push(m.text());
+  });
+  page.on('pageerror', (e) => w.errors.push(String(e)));
+  page.on('request', (req) => {
+    if (!req.url().startsWith(BASE)) w.offOrigin.push(`${req.method()} ${req.url()}`);
+  });
+  page.on('requestfailed', (req) => {
+    // A navigation abandons its in-flight requests; that is not a failed asset.
+    if (req.failure()?.errorText === 'net::ERR_ABORTED') return;
+    w.failed.push(`${req.url()} ${req.failure()?.errorText ?? ''}`);
+  });
+  page.on('popup', () => {
+    w.popups += 1;
+  });
+  page.context().on('page', () => {
+    w.popups += 1;
+  });
+  WATCHES.set(page, w);
+  return w;
+}
+
+test.beforeEach(async ({ page }) => {
+  watch(page);
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      console.error(`Content Security Policy violation: ${e.violatedDirective} ${e.blockedURI}`);
+    });
+  });
+});
+
+test.afterEach(async ({ page }, info) => {
+  const w = WATCHES.get(page);
+  if (!w) return;
+  // E-UNKNOWN loads a real 404 on purpose; Chromium reports that response as
+  // a console error. Nothing else is ever tolerated.
+  const errors = w.errors.filter((e) => !(info.title.startsWith('E-UNKNOWN') && /404/.test(e)));
+  expect(errors, 'console / page errors').toEqual([]);
+  expect(w.offOrigin, 'off-origin requests').toEqual([]);
+  expect(w.failed, 'failed requests').toEqual([]);
+  expect(w.csp, 'CSP violations').toEqual([]);
+  expect(w.popups, 'popups').toBe(0);
+});
 
 const overflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+
+/** A theme token as the `rgb(...)` a computed colour reports; runs in the page. */
+async function tokenRgb(page: Page, name: string): Promise<string> {
+  return page.evaluate((n) => {
+    const el = document.querySelector('[data-sf-screen]') as HTMLElement;
+    const raw = getComputedStyle(el).getPropertyValue(n).trim();
+    const m = raw.match(/^#([0-9a-f]{6})$/i);
+    if (!m) return raw;
+    const v = parseInt(m[1], 16);
+    return `rgb(${(v >> 16) & 255}, ${(v >> 8) & 255}, ${v & 255})`;
+  }, name);
+}
 
 // ================================================================ G28-G29
 
@@ -364,6 +442,7 @@ test('G28 received: the request was received, NOT confirmed - truth line visible
   expect(await overflow(page)).toBe(false);
   expect(w.errors).toEqual([]);
   expect(w.offOrigin).toEqual([]);
+  expect(w.popups, 'no window was opened').toBe(0);
   RESULTS.G28 = { url: page.url(), messageLines: message.split('\n').length, disc: disc!.width, cta: cta!.height };
   await page.screenshot({ path: path.join(SHOTS, 'G28-received-ar-dark-390.png'), fullPage: true });
 });
@@ -375,20 +454,32 @@ test('G28 EN: the received copy never says a message was sent; the preview keeps
   await send(page);
   expect(await page.evaluate(() => [document.documentElement.lang, document.documentElement.dir])).toEqual(['en', 'ltr']);
   await expect(page.locator('h1')).toHaveText(EN.received);
-  // Every visible sentence outside the demo disclosure: no "sent".
+  await page.waitForTimeout(1_200);
+  // The RENDERED text (innerText of the live document, the disclosure hidden
+  // for the read), never a detached clone whose innerText glues words. The
+  // claim is the packet's: WhatsApp is opened, never "sent" - so no sentence
+  // states a message or request WAS sent, and the approved future-tense
+  // preview label ("Message that will be sent", LOCKED string table) is
+  // present, pinned rather than tolerated by accident.
   const text = await page.evaluate(() => {
-    const note = document.querySelector('[data-sf-demo-note]');
-    const clone = document.body.cloneNode(true) as HTMLElement;
-    clone.querySelector('[data-sf-demo-note]')?.remove();
-    void note;
-    return clone.innerText;
+    const note = document.querySelector('[data-sf-demo-note]') as HTMLElement | null;
+    if (note) note.hidden = true;
+    const t = document.body.innerText;
+    if (note) note.hidden = false;
+    return t;
   });
-  expect(text).not.toMatch(/\bsent\b/i);
+  const PAST_SENT = /\b(was|were|been|is|are|got|already|successfully)\s+sent\b/i;
+  expect(text).not.toMatch(PAST_SENT);
+  expect(text).not.toMatch(/\b(message|request|order)\s+sent\b/i);
+  expect(text).toContain(EN.msgPreview);
+  expect(EN.msgPreview).toBe('Message that will be sent');
   expect(text).toContain('Not confirmed yet');
+  // The detector works: the past-tense sentence it guards against is caught.
+  expect('Your message was sent').toMatch(PAST_SENT);
   const pre = page.locator('[data-sf-request-message]');
   expect(await pre.getAttribute('dir')).toBe('rtl');
   expect(await pre.getAttribute('lang')).toBe('ar');
-  RESULTS.G28_EN = { noSent: true };
+  RESULTS.G28_EN = { noPastTenseSent: true, previewLabel: EN.msgPreview };
   await page.screenshot({ path: path.join(SHOTS, 'G28-received-en-390.png'), fullPage: true });
 });
 
@@ -408,13 +499,26 @@ test('G29 received with the WhatsApp fallback block: web + copy, no inline copy,
   await expect(fallback.locator('[data-sf-request-copy="fallback"]')).toHaveText(AR.copyMsg);
   await expect(page.locator('[data-sf-request-copy="inline"]')).toHaveCount(0);
   await expect(page.locator('[data-sf-request-message]')).toBeVisible();
-  // "Open WhatsApp Web" is the same simulated launch: nothing leaves the page.
+  // The 36px fallback controls keep their painted size and reach 44px (PX-6).
+  await page.waitForTimeout(1_200);
+  for (const sel of ['[data-sf-request-cta="wa-web"]', '[data-sf-request-copy="fallback"]']) {
+    const box = await page.evaluate(PROBE_BOX, sel);
+    expect(box!.painted.h, sel).toBe(36);
+    expect(box!.effective.h, sel).toBeGreaterThanOrEqual(44);
+  }
+  // "Open WhatsApp Web" is the same simulated launch: nothing leaves the
+  // page, no window opens, and the visitor STAYS on received (the prototype's
+  // href="#", :539) with the copy control still in reach.
   await fallback.locator('[data-sf-request-cta="wa-web"]').click();
-  await page.waitForSelector('[data-sf-screen="status"]');
+  await page.waitForTimeout(300);
+  await expect(page.locator('[data-sf-screen="received"]')).toHaveCount(1);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveCount(0);
+  await expect(fallback.locator('[data-sf-request-copy="fallback"]')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(REQUEST);
   expect(w.offOrigin).toEqual([]);
+  expect(w.popups).toBe(0);
   expect(w.errors).toEqual([]);
-  RESULTS.G29 = { fallback: true, offOrigin: 0 };
+  RESULTS.G29 = { fallback: true, offOrigin: 0, popups: 0, staysOnReceived: true };
   await page.screenshot({ path: path.join(SHOTS, 'G29-received-fallback-ar-dark-390.png'), fullPage: true });
 });
 
@@ -454,6 +558,16 @@ test('G30 status waiting: warn tone, live TTL outside the live region, current n
   const ttl = page.locator('[data-sf-ttl-value]');
   await expect(ttl).toHaveText(/^\d+:\d{2}$/);
   expect(await ttl.getAttribute('dir')).toBe('ltr');
+  // The body's "{m}" is number-then-unit in a bidi ISOLATE (<bdi>), not an
+  // LTR island: forced LTR would read "د 30" in Arabic. The M:SS countdown
+  // above is the island CONTENT:221 names; "30 د" is not.
+  const minutes = await page.evaluate(() => {
+    const body = document.querySelector('[data-sf-status-live] p')!;
+    const isolates = [...body.querySelectorAll('bdi')].map((b) => b.textContent);
+    return { isolates, ltrIslands: body.querySelectorAll('[dir="ltr"]').length };
+  });
+  expect(minutes.isolates).toEqual(['Maps Burger', `30 ${AR.min}`]);
+  expect(minutes.ltrIslands).toBe(0);
   const a11y = await page.evaluate(LIVE_NOT_TTL);
   expect(a11y).toEqual({ ttlPresent: true, ttlInsideLive: false, ttlRole: 'timer', ttlAriaLive: 'off', liveRole: 'status' });
   const n = await nodes(page);
@@ -466,9 +580,23 @@ test('G30 status waiting: warn tone, live TTL outside the live region, current n
   await expect(page.locator('[data-sf-status-actions]')).toHaveAttribute('data-sf-status-actions', 'chat cancel');
   await expect(page.locator('[data-sf-request-code]')).toHaveText(CODE);
   await expect(page.locator('[data-sf-request-summary]')).toContainText('₪141.60');
+  // :571 - the summary's rows sit 15px inside the card (1px border + the
+  // container's 14px), padded ONCE, not 29px; and :567 - the cancel control
+  // is painted in the danger ink itself, on the page surface.
+  const paint = await page.evaluate(() => {
+    const summary = document.querySelector('[data-sf-request-summary]') as HTMLElement;
+    const row = summary.querySelector('[data-sf-request-line]') as HTMLElement;
+    const cancel = document.querySelector('[data-sf-status-action="cancel"]') as HTMLElement;
+    return {
+      rowInset: Math.round(summary.getBoundingClientRect().right - row.getBoundingClientRect().right),
+      cancelColor: getComputedStyle(cancel).color,
+    };
+  });
+  expect(paint.rowInset).toBe(15);
+  expect(paint.cancelColor).toBe(await tokenRgb(page, '--bad'));
   expect(await overflow(page)).toBe(false);
   expect(w.errors).toEqual([]);
-  RESULTS.G30 = { a11y, nodes: n };
+  RESULTS.G30 = { a11y, nodes: n, paint };
   await page.screenshot({ path: path.join(SHOTS, 'G30-status-waiting-ar-dark-390.png'), fullPage: true });
 });
 
@@ -506,6 +634,19 @@ for (const [id, token, tone, actions, kinds, count, times] of STATE_CASES) {
       const label = await page.locator('[data-sf-node]').nth(2).locator('span span span').first().innerText();
       expect(label).toBe(await page.locator('h1').innerText());
     }
+    if (tone === 'bad') {
+      // The prototype's toneCss (:839): the icon disc and the terminal node
+      // paint their glyph in the tone's BED colour on the tone's fill.
+      const glyph = await page.evaluate(() => {
+        const icon = document.querySelector('[data-sf-status-card] > span') as HTMLElement;
+        const dot = document.querySelector('[data-sf-node-kind="terminal"] span span') as HTMLElement;
+        return { icon: getComputedStyle(icon).color, dot: getComputedStyle(dot).color, iconBg: getComputedStyle(icon).backgroundColor };
+      });
+      const badbg = await tokenRgb(page, '--badbg');
+      expect(glyph.icon).toBe(badbg);
+      expect(glyph.dot).toBe(badbg);
+      expect(glyph.iconBg).toBe(await tokenRgb(page, '--bad'));
+    }
     // No invented facts anywhere on the screen.
     const text = await page.locator('[data-sf-screen="status"]').innerText();
     expect(text).not.toMatch(/ETA|courier|rating|\bmin(ute)?s? left\b/i);
@@ -533,6 +674,30 @@ test('G35 cancel sheet: modal dialog, focus on keep, Tab cycles, Esc and the scr
   expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-cancel')), 'Tab wraps inside the sheet').toBe('keep');
   await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-cancel'))).toBe('yes');
+  // The screen behind the sheet is inert: the cancel control that opened it
+  // cannot take focus and is hidden from assistive technology.
+  const behind = await page.evaluate(() => {
+    const cancelCtl = document.querySelector('[data-sf-status-action="cancel"]') as HTMLElement;
+    cancelCtl.focus();
+    return { inertAncestor: cancelCtl.closest('[inert]') !== null, tookFocus: document.activeElement === cancelCtl };
+  });
+  expect(behind).toEqual({ inertAncestor: true, tookFocus: false });
+  // A click on the sheet's own body moves focus onto the dialog; Tab from
+  // there enters the cycle, and Escape still keeps the request.
+  await page.locator('[role="dialog"] h2').click();
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('role'))).toBe('dialog');
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-cancel')), 'Tab from the sheet body enters at keep').toBe('keep');
+  await page.locator('[role="dialog"] h2').click();
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-cancel')), 'Shift+Tab from the sheet body enters at yes').toBe('yes');
+  await page.locator('[role="dialog"] h2').click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-status-action')), 'Escape after a click inside still closes and restores').toBe('cancel');
+  await cancel.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
   await page.screenshot({ path: path.join(SHOTS, 'G35-status-cancel-sheet-ar-dark-390.png') });
   // Buttons meet the 44px minimum.
   for (const sel of ['[data-sf-cancel="keep"]', '[data-sf-cancel="yes"]']) {
@@ -549,7 +714,7 @@ test('G35 cancel sheet: modal dialog, focus on keep, Tab cycles, Esc and the scr
   await page.locator('[data-sf-cancel-scrim]').click({ position: { x: 10, y: 10 } });
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
-  RESULTS.G35 = { modal: true, focusTrap: true, escKeeps: true, scrimKeeps: true };
+  RESULTS.G35 = { modal: true, focusTrap: true, escKeeps: true, scrimKeeps: true, backgroundInert: true, tabFromSheetBody: true };
 });
 
 // ================================================================ H19-H22
@@ -563,7 +728,10 @@ test('H19 copy: "Copied" for 1.6 s only after a REAL successful clipboard write,
   const copy = page.locator('[data-sf-request-copy="inline"]');
   await expect(copy).toHaveText(AR.copyMsg);
   const preview = (await page.locator('[data-sf-request-message]').textContent()) ?? '';
-  const t0 = Date.now();
+  // The page's clock is the test's from here: the 1.6 s is pinned exactly,
+  // not bracketed by a wall-clock window.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now());
   await copy.click();
   await expect(copy).toHaveText(AR.copied);
   // Chromium on Windows hands the text back with CRLF line endings; the
@@ -573,11 +741,35 @@ test('H19 copy: "Copied" for 1.6 s only after a REAL successful clipboard write,
   for (const m of MARKERS) expect(written).not.toContain(m);
   expect(written).toContain('توصيل — كفر مندا');
   expect(written).not.toContain(SYNTH.street);
-  await expect(copy).toHaveText(AR.copyMsg, { timeout: 4_000 });
-  const elapsed = Date.now() - t0;
-  expect(elapsed).toBeGreaterThanOrEqual(1_500);
-  expect(elapsed).toBeLessThan(3_500);
-  RESULTS.H19 = { copiedFor: elapsed, clipboardMatchesPreview: true };
+  await page.clock.runFor(1_599);
+  await expect(copy, 'still "Copied" one millisecond before 1.6 s').toHaveText(AR.copied);
+  await page.clock.runFor(1);
+  await expect(copy, 'back to "Copy message" at exactly 1.6 s').toHaveText(AR.copyMsg);
+  RESULTS.H19 = { copiedForMs: 1_600, clipboardMatchesPreview: true };
+});
+
+test('H19 fallback: the fallback block\'s copy control writes the same message and reverts at 1.6 s', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+  await phone(page);
+  await seed(page, SEED_LINES);
+  await toReview(page, { delivery: false });
+  await page.evaluate(() => window.history.replaceState(null, '', `${window.location.pathname}?fx=wa-fallback`));
+  await send(page);
+  const copy = page.locator('[data-sf-request-copy="fallback"]');
+  await expect(copy).toHaveText(AR.copyMsg);
+  const preview = (await page.locator('[data-sf-request-message]').textContent()) ?? '';
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now());
+  await copy.click();
+  await expect(copy).toHaveText(AR.copied);
+  const written = (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
+  expect(written).toBe(preview);
+  for (const m of MARKERS) expect(written).not.toContain(m);
+  await page.clock.runFor(1_599);
+  await expect(copy).toHaveText(AR.copied);
+  await page.clock.runFor(1);
+  await expect(copy).toHaveText(AR.copyMsg);
+  RESULTS.H19_fallback = { copiedForMs: 1_600, clipboardMatchesPreview: true };
 });
 
 test('H19 NEGATIVE CONTROL: a failed write (SIMULATED clipboard stub) never shows "Copied"', async ({ page }) => {
@@ -600,30 +792,48 @@ test('H19 NEGATIVE CONTROL: a failed write (SIMULATED clipboard stub) never show
   RESULTS.H19_negative = { copiedShownOnFailure: false };
 });
 
-test('H21 the TTL ticks from the source\'s expiresAt, and expiry is a source event that ends the countdown', async ({ page }) => {
+test('H21 the TTL ticks from the source\'s expiresAt under a FAKE clock, and expiry is a source event that ends the countdown', async ({ page }) => {
   await phone(page);
+  // The page's Date and timers are the test's: the fixture ages the demo
+  // request 350 s, so the countdown opens at 30:00 - 5:50 = 24:10 exactly.
+  const T0 = new Date('2026-09-22T10:00:00.000Z').getTime();
+  await page.clock.install({ time: T0 });
   await openStatus(page, 'status-waiting');
+  await freezeAfterLoad(page, T0);
   const ttl = page.locator('[data-sf-ttl-value]');
   const parse = (s: string) => {
     const [m, sec] = s.split(':').map(Number);
     return m * 60 + sec;
   };
+  // 24:10 at mount; at most one whole-second tick may have run before the
+  // freeze, never more (the load precondition above).
   const a = parse(await ttl.innerText());
-  await page.waitForTimeout(2_200);
+  expect(a).toBeGreaterThanOrEqual(24 * 60 + 9);
+  expect(a).toBeLessThanOrEqual(24 * 60 + 10);
+  await page.clock.runFor(2_000);
   const b = parse(await ttl.innerText());
-  expect(a - b).toBeGreaterThanOrEqual(1);
-  expect(a - b).toBeLessThanOrEqual(3);
-  expect(a).toBeLessThanOrEqual(30 * 60);
+  expect(a - b, 'two seconds of clock = two seconds of countdown').toBe(2);
+  await page.clock.runFor(58_000);
+  expect(parse(await ttl.innerText())).toBe(a - 60);
+  // The timeline's own countdown node reads the same value.
+  await expect(page.locator('[data-sf-node-countdown]')).toContainText(await ttl.innerText());
 
-  // The restaurant does not answer in time: the SOURCE says expired.
+  // The restaurant does not answer in time: the SOURCE says expired, at the
+  // instant IT set - 1.5 s after the source mounted - and not a tick before.
+  await page.clock.install({ time: T0 });
   await openStatus(page, 'status-expires-late');
-  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'expired', { timeout: 8_000 });
+  const since = await freezeAfterLoad(page, T0);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
+  await page.clock.runFor(1_300 - since);
+  await expect(page.locator('[data-sf-screen="status"]'), 'still waiting before the expiry is due').toHaveAttribute('data-sf-status', 'waiting');
+  await page.clock.runFor(1_500);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'expired');
   await expect(page.locator('[data-sf-ttl]')).toHaveCount(0);
   await expect(page.locator('[data-sf-status-actions]')).toHaveAttribute('data-sf-status-actions', 'orderAgain');
   const n = await nodes(page);
   expect(n.map((x) => x.kind)).toEqual(['done', 'done', 'terminal']);
   expect(n[2].time).not.toBeNull();
-  RESULTS.H21 = { tickedBy: a - b, expiredBySource: true };
+  RESULTS.H21 = { opensAt: a, tickedBy: a - b, expiredBySource: true, fakeClock: true };
 });
 
 test('H22 cancel: keep -> confirm -> cancelled -> order again clears the cart and returns to the menu', async ({ page }) => {
@@ -639,6 +849,12 @@ test('H22 cancel: keep -> confirm -> cancelled -> order again clears the cart an
   await page.locator('[data-sf-cancel="yes"]').click();
   await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'cancelled', { timeout: 5_000 });
   await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+  // The cancel control is gone with the pending state; focus lands on the
+  // status card (the one element every state has), never on body.
+  expect(
+    await page.evaluate(() => document.activeElement?.getAttribute('data-sf-status-card') ?? document.activeElement?.tagName),
+    'focus after the confirm',
+  ).toBe('neutral');
   await expect(page.locator('[data-sf-status-card]')).toHaveAttribute('data-sf-status-card', 'neutral');
   await expect(page.locator('h1')).toHaveText(AR.cancelled);
   await expect(page.locator('[data-sf-status-action="cancel"]')).toHaveCount(0);
@@ -658,7 +874,12 @@ test('H22 cancel: keep -> confirm -> cancelled -> order again clears the cart an
 
 test('E-RACE the restaurant accepts while the confirmation sheet is open: nothing is cancelled', async ({ page }) => {
   await phone(page);
+  // The order of events is the TEST's: the clock is paused before the late
+  // answer (1.5 s after load) is due, and advanced past it with the sheet open.
+  const T0 = new Date('2026-09-22T10:00:00.000Z').getTime();
+  await page.clock.install({ time: T0 });
   await openStatus(page, 'status-accepts-late');
+  const since = await freezeAfterLoad(page, T0);
   await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
   await page.locator('[data-sf-status-action="cancel"]').click();
   await expect(page.locator('[role="dialog"]')).toBeVisible();
@@ -671,30 +892,44 @@ test('E-RACE the restaurant accepts while the confirmation sheet is open: nothin
     push();
     new MutationObserver(push).observe(el, { attributes: true, attributeFilter: ['data-sf-status'] });
   });
-  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'accepted', { timeout: 8_000 });
+  await page.clock.runFor(1_300 - since);
+  await expect(page.locator('[role="dialog"]'), 'still open before the answer is due').toBeVisible();
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
+  await page.clock.runFor(1_500);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'accepted');
   await expect(page.locator('[role="dialog"]'), 'the sheet closes: there is nothing left to cancel').toHaveCount(0);
   await expect(page.locator('[data-sf-status-actions]')).toHaveAttribute('data-sf-status-actions', 'chat');
+  // Focus is handed back: the cancel control is gone, so the card takes it.
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-status-card') ?? 'body')).toBe('ok');
   const states = await page.evaluate(() => (window as unknown as { __states: string[] }).__states);
   expect(states).not.toContain('cancelled');
   expect(states[states.length - 1]).toBe('accepted');
-  RESULTS.E_RACE = { states };
+  // After the answer there is nothing to cancel: the control itself is gone.
+  await expect(page.locator('[data-sf-status-action="cancel"]')).toHaveCount(0);
+  RESULTS.E_RACE = { states, deterministic: true };
 });
 
 test('E-RACE a cancel that lands FIRST is final: the restaurant answering later never overwrites a terminal state', async ({ page }) => {
   await phone(page);
+  const T0 = new Date('2026-09-22T10:00:00.000Z').getTime();
+  await page.clock.install({ time: T0 });
   await openStatus(page, 'status-accepts-late');
+  await freezeAfterLoad(page, T0);
   await page.locator('[data-sf-status-action="cancel"]').click();
-  // Confirm at once: the cancel round trip (~300ms) completes before the
-  // restaurant's answer (1.5s after load), so the request is cancelled...
+  // Confirm: the cancel round trip (300 ms) completes before the
+  // restaurant's answer (1.5 s after mount), so the request is cancelled...
   await page.locator('[data-sf-cancel="yes"]').click();
-  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'cancelled', { timeout: 5_000 });
+  await expect(page.locator('[data-sf-cancel="yes"]')).toHaveAttribute('aria-disabled', 'true');
+  await page.clock.runFor(300);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'cancelled');
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0);
   // ...and the late acceptance is refused by the source: a terminal state is
   // never overwritten. (The opposite order - answered first, cancel refused -
   // is pinned deterministically in tests/sf-request.test.mjs.)
-  await page.waitForTimeout(2_200);
+  await page.clock.runFor(2_000);
   await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'cancelled');
   await expect(page.locator('[data-sf-status-actions]')).toHaveAttribute('data-sf-status-actions', 'orderAgain');
-  RESULTS.E_RACE_confirm = { finalState: 'cancelled', lateAnswerIgnored: true };
+  RESULTS.E_RACE_confirm = { finalState: 'cancelled', lateAnswerIgnored: true, deterministic: true };
 });
 
 // ============================================================== the flow
@@ -705,10 +940,23 @@ test('E-FLOW submit -> received -> track -> status carries THIS send; a reload r
   const w = watch(page);
   await toReview(page, { delivery: false });
   await send(page);
-  await page.locator('[data-sf-request-cta="track"]').click();
+  await page.locator('[data-sf-request-cta="track"]').focus();
+  await page.keyboard.press('Enter');
   await page.waitForSelector('[data-sf-screen="status"]');
   expect(new URL(page.url()).pathname, 'received and status are STATES of one URL').toBe(REQUEST);
   await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
+  // The control that was activated is gone with the received view; focus
+  // moved to the status card, so a keyboard visitor is not dropped on body.
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-sf-status-card') ?? 'body'), 'focus after the switch').toBe('warn');
+  // The visitor's own send opened seconds ago: no recorded instant lies in
+  // the future of the wall clock (the "waiting" record is held at the clock).
+  const clockNow = await page.evaluate(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+  for (const x of await nodes(page)) {
+    if (x.time !== null) expect(x.time <= clockNow || (x.time.startsWith('23') && clockNow.startsWith('00')), `${x.state} at ${x.time} vs now ${clockNow}`).toBe(true);
+  }
   // The status view shows the visitor's own send: pickup, 129.80.
   await expect(page.locator('[data-sf-request-summary]')).toContainText('₪129.80');
   await expect(page.locator('[data-sf-request-summary] [data-sf-request-line]')).toHaveCount(2);
@@ -767,7 +1015,17 @@ test('E-BACK Back from the request route returns into the flow with the cart int
   expect([`/s/${SLUG}/review`, `/s/${SLUG}/checkout`]).toContain(pathname);
   expect(await page.evaluate((k) => window.localStorage.getItem(k), CART_KEY)).not.toBeNull();
   expect(await page.locator('[data-sf-field="fullName"]').inputValue().catch(() => '')).toBe('');
-  RESULTS.E_BACK = { landedOn: pathname };
+  // Forward again: received was shown ONCE. The same document, the same
+  // handoff - the request route now renders status, not the received view.
+  await page.goForward();
+  await page.waitForSelector('[data-sf-screen="status"]', { timeout: 15_000 });
+  expect(new URL(page.url()).pathname).toBe(REQUEST);
+  await expect(page.locator('[data-sf-screen="received"]')).toHaveCount(0);
+  await expect(page.locator('[data-sf-screen="status"]')).toHaveAttribute('data-sf-status', 'waiting');
+  // And it is still THIS send's summary (the handoff survived the soft
+  // navigations): pickup 129.80, not the fixed demo request.
+  await expect(page.locator('[data-sf-request-summary]')).toContainText('₪129.80');
+  RESULTS.E_BACK = { landedOn: pathname, forwardShows: 'status' };
 });
 
 test('E-UNKNOWN an ungenerated ref is a real 404; a source that knows no such request answers neutrally', async ({ page }) => {
@@ -805,6 +1063,14 @@ test('E-RESPONSIVE no horizontal overflow, no aside, one column at every width i
     expect(card!.width).toBeLessThanOrEqual(width);
     out[width] = { overflow: false, cardWidth: Math.round(card!.width) };
   }
+  // Where the content fits, the document is EXACTLY the viewport: the demo
+  // disclosure sits inside the 100dvh column, not on top of a second one.
+  await page.setViewportSize({ width: 1280, height: 1500 });
+  await openStatus(page, 'status-waiting');
+  await page.waitForTimeout(400);
+  const tall = await page.evaluate(() => ({ scroll: document.documentElement.scrollHeight, inner: window.innerHeight }));
+  expect(tall.scroll, `document ${tall.scroll} vs viewport ${tall.inner}`).toBe(tall.inner);
+  out.tall = tall;
   RESULTS.E_RESPONSIVE = out;
   await page.screenshot({ path: path.join(SHOTS, 'E-status-waiting-1280.png') });
 });
@@ -820,15 +1086,17 @@ test('E-REDUCED under reduced motion the truth line is visible at once and the d
   // Under motion the same probe would read 0 for the 350ms of the stagger.
   const probe = await page.evaluate(
     () =>
-      new Promise<{ truthOpacity: string; truthVisible: boolean; ringAnimation: string; framesWaited: number }>((resolve) => {
+      new Promise<{ truthOpacity: string; truthVisible: boolean; ringAnimation: string; sheenDisplay: string; framesWaited: number }>((resolve) => {
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             const truth = document.querySelector('[data-sf-received-truth]') as HTMLElement;
             const ring = document.querySelector('[data-sf-received-disc]')!.parentElement!.querySelector('span') as HTMLElement;
+            const sheen = document.querySelector('[data-sf-request-cta="continue"] > span:first-child') as HTMLElement;
             resolve({
               truthOpacity: getComputedStyle(truth).opacity,
               truthVisible: truth.getBoundingClientRect().height > 0,
               ringAnimation: getComputedStyle(ring).animationName,
+              sheenDisplay: getComputedStyle(sheen).display,
               framesWaited: 2,
             });
           }),
@@ -838,6 +1106,8 @@ test('E-REDUCED under reduced motion the truth line is visible at once and the d
   expect(probe.truthOpacity).toBe('1');
   expect(probe.truthVisible).toBe(true);
   expect(probe.ringAnimation).toBe('none');
+  // A stopped sheen would be a stripe painted across the CTA: it is not shown.
+  expect(probe.sheenDisplay).toBe('none');
   RESULTS.E_REDUCED = probe;
 });
 
@@ -867,14 +1137,45 @@ test('E-REDUCED NEGATIVE CONTROL: with motion, the same two-frame probe finds th
 
 test('E-CALM the calm motion preset keeps the entrance and drops the rings, halo and sheen', async ({ page }) => {
   await phone(page);
-  await openStatus(page, 'status-waiting');
-  // The shipped tenant is `full`; calm is proven structurally: without the
-  // motionFull class, the ring / halo / sheen rules do not apply.
+  await seed(page, SEED_LINES);
+  await toReview(page, { delivery: false });
+  await send(page);
+  // The shipped tenant is `full`. Calm is what the same markup does WITHOUT
+  // the motionFull class - so the class is removed in place and the computed
+  // styles are read: the decorations stop, the entrance keeps running.
   const probe = await page.evaluate(() => {
-    const screen = document.querySelector('[data-sf-screen="status"]') as HTMLElement;
-    return { hasMotionClass: [...screen.classList].some((c) => /motionFull/.test(c)) };
+    const screen = document.querySelector('[data-sf-screen="received"]') as HTMLElement;
+    const motionClass = [...screen.classList].find((c) => /motionFull/.test(c)) ?? null;
+    const ring = document.querySelector('[data-sf-received-disc]')!.parentElement!.querySelector('span') as HTMLElement;
+    const cta = document.querySelector('[data-sf-request-cta="continue"]') as HTMLElement;
+    const sheen = cta.querySelector(':scope > span:first-child') as HTMLElement;
+    const halo = cta.parentElement!.querySelector(':scope > span:first-child') as HTMLElement;
+    const truth = document.querySelector('[data-sf-received-truth]') as HTMLElement;
+    const read = () => ({
+      ring: getComputedStyle(ring).animationName,
+      halo: getComputedStyle(halo).animationName,
+      sheen: getComputedStyle(sheen).animationName,
+      sheenDisplay: getComputedStyle(sheen).display,
+      truth: getComputedStyle(truth).animationName,
+    });
+    const full = read();
+    if (motionClass) screen.classList.remove(motionClass);
+    const calm = read();
+    if (motionClass) screen.classList.add(motionClass);
+    return { motionClass: motionClass !== null, full, calm };
   });
-  expect(probe.hasMotionClass).toBe(true);
+  expect(probe.motionClass).toBe(true);
+  // Full: the decorations run and so does the entrance.
+  expect(probe.full.ring).not.toBe('none');
+  expect(probe.full.halo).not.toBe('none');
+  expect(probe.full.sheen).not.toBe('none');
+  expect(probe.full.truth).not.toBe('none');
+  // Calm: the decorations stop and the sheen is not painted; the entrance stays.
+  expect(probe.calm.ring).toBe('none');
+  expect(probe.calm.halo).toBe('none');
+  expect(probe.calm.sheen).toBe('none');
+  expect(probe.calm.sheenDisplay).toBe('none');
+  expect(probe.calm.truth).toBe(probe.full.truth);
   RESULTS.E_CALM = probe;
 });
 
@@ -893,15 +1194,47 @@ test('E-PRIVACY (PG-4) after a full delivery send with markers in every field: n
       configurable: true,
       value: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } },
     });
+    // Every TRANSIENT write is recorded too - a value written and removed
+    // again before the final sweep would otherwise never be seen: storage
+    // setItem, history pushState / replaceState and the cookie setter.
+    const writes: string[] = [];
+    (window as unknown as { __writes: string[] }).__writes = writes;
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
+      writes.push(`setItem ${k}=${v}`);
+      return setItem.call(this, k, v);
+    };
+    for (const fn of ['pushState', 'replaceState'] as const) {
+      const orig = History.prototype[fn];
+      History.prototype[fn] = function (this: History, state: unknown, title: string, url?: string | URL | null) {
+        writes.push(`${fn} ${JSON.stringify(state)} ${String(url ?? '')}`);
+        return orig.call(this, state, title, url);
+      };
+    }
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
+    if (cookie?.set) {
+      Object.defineProperty(document, 'cookie', {
+        configurable: true,
+        get() { return cookie.get!.call(document); },
+        set(v: string) { writes.push(`cookie ${v}`); cookie.set!.call(document, v); },
+      });
+    }
   });
   await toReview(page, { delivery: true });
   await send(page);
+  await page.waitForTimeout(1_200);
+  // The received view itself, before it is left: the DOM that carries the
+  // visitor's own summary and message must carry none of the markers.
+  const receivedDom = await page.evaluate(() => document.documentElement.outerHTML);
+  expect(receivedDom).toContain('data-sf-screen="received"');
   await page.locator('[data-sf-request-copy="inline"]').click();
   await page.locator('[data-sf-request-cta="track"]').click();
   await page.waitForSelector('[data-sf-screen="status"]');
   await page.waitForTimeout(400);
 
   const sinks = await page.evaluate(() => ({
+    receivedDom: '',
+    writes: (window as unknown as { __writes: string[] }).__writes.join('\n'),
     localKeys: Object.keys(window.localStorage),
     sessionKeys: Object.keys(window.sessionStorage),
     localText: Object.entries(window.localStorage).map(([k, v]) => `${k}=${v}`).join('\n'),
@@ -913,6 +1246,7 @@ test('E-PRIVACY (PG-4) after a full delivery send with markers in every field: n
     cookie: document.cookie,
     clip: (window as unknown as { __clip: string[] }).__clip.join('\n'),
   }));
+  sinks.receivedDom = receivedDom;
   const leaks: string[] = [];
   for (const [sink, text] of Object.entries(sinks)) {
     if (Array.isArray(text)) continue;
@@ -924,10 +1258,19 @@ test('E-PRIVACY (PG-4) after a full delivery send with markers in every field: n
   expect(sinks.cookie).toBe('');
   expect(sinks.name).toBe('');
   expect(sinks.clip.length).toBeGreaterThan(50);
+  // The transient recorder is live (it saw the flow's own writes) and every
+  // storage write it saw is the cart or the seen flag; no cookie was set.
+  const writeLines = sinks.writes.split('\n').filter(Boolean);
+  expect(writeLines.length).toBeGreaterThan(0);
+  expect(writeLines.filter((l) => l.startsWith('cookie '))).toEqual([]);
+  for (const line of writeLines) {
+    if (line.startsWith('setItem ')) expect(line).toMatch(/^setItem sf:v1:(cart|seen):maps-burger=/);
+  }
   expect(w.offOrigin).toEqual([]);
   expect(w.errors).toEqual([]);
+  expect(w.popups).toBe(0);
   // The detector works: a planted marker in a scratch string is found.
   const planted = `x ${SYNTH.street} y`;
   expect(MARKERS.some((m) => planted.includes(m))).toBe(true);
-  RESULTS.E_PRIVACY = { leaks, localKeys: sinks.localKeys, sessionKeys: sinks.sessionKeys, clipWrites: sinks.clip.split('\n').length, offOrigin: w.offOrigin.length };
+  RESULTS.E_PRIVACY = { leaks, localKeys: sinks.localKeys, sessionKeys: sinks.sessionKeys, clipWrites: sinks.clip.split('\n').length, transientWrites: writeLines.length, offOrigin: w.offOrigin.length };
 });
