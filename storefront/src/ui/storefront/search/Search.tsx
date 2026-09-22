@@ -24,7 +24,6 @@
  * on the server, and choosing it in JavaScript would make a layout depend on
  * hydration.
  */
-import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
 import { checkoutPath, menuPath } from '@/routes/routes';
@@ -60,7 +59,7 @@ export function Search({
   return (
     <ThemeScope
       tokens={tokens}
-      className={`${shell.root} ${rubik.variable}`}
+      className={`${shell.root}`}
       dir={dirOf(locale)}
     >
       {/* No dock slot here: the approved dock condition is menu-only

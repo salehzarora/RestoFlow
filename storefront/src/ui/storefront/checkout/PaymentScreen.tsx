@@ -31,6 +31,7 @@ export function PaymentScreen({
   motion,
   backHref,
   pending,
+  blockedReason = null,
   onContinue,
 }: {
   m: StorefrontMessages;
@@ -40,6 +41,8 @@ export function PaymentScreen({
   backHref: string;
   /** True while the quote for the CURRENT cart has not arrived. */
   pending: boolean;
+  /** The localised reason ordering is not open (closed / paused), or null. */
+  blockedReason?: string | null;
   onContinue: () => void;
 }) {
   const isDelivery = quote.service === 'delivery';
@@ -151,14 +154,15 @@ export function PaymentScreen({
         />
       </div>
 
-      {/* Payment itself is always valid - there is nothing to fill in - so the
-          only thing that can block this step is a total that does not yet
-          belong to the current cart. */}
+      {/* Payment itself is always valid - there is nothing to fill in - so
+          what can block this step is a total that does not yet belong to the
+          current cart, or a restaurant that is not taking orders right now. */}
       <FooterCta
-        label={m.reviewCta}
-        onActivate={pending ? () => undefined : onContinue}
+        label={blockedReason ?? m.reviewCta}
+        onActivate={blockedReason !== null || pending ? () => undefined : onContinue}
         totalMinor={quote.totalMinor}
-        blocked={pending}
+        blocked={blockedReason !== null || pending}
+        dim={blockedReason !== null}
         testId="to-review"
       />
     </div>

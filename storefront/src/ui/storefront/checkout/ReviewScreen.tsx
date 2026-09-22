@@ -141,6 +141,8 @@ export function ReviewScreen({
   backHref,
   pending,
   submittable,
+  blockedReason = null,
+  opensAt = '',
   gateway,
   onEditDetails,
   onEditPayment,
@@ -159,8 +161,12 @@ export function ReviewScreen({
   backHref: string;
   /** True while the quote for the CURRENT cart has not arrived. */
   pending: boolean;
-  /** The runtime's live validation of cart, details and availability. */
+  /** The runtime's ONE eligibility answer (readiness, cart, details, total). */
   submittable: boolean;
+  /** The localised reason ordering is not open (closed / paused), or null. */
+  blockedReason?: string | null;
+  /** When a closed restaurant opens; the same reason a late refusal shows. */
+  opensAt?: string;
   gateway: RequestGateway;
   onEditDetails: () => void;
   onEditPayment: () => void;
@@ -170,6 +176,18 @@ export function ReviewScreen({
 }) {
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<SubmitResult | null>(null);
+  // Mirrors `attempt` for the DOM, so evidence can count gateway invocations.
+  const [attempts, setAttempts] = useState(0);
+
+  /*
+   * THE ANSWER AT ACTIVATION. `send` closes over the props of the render it
+   * was created in; a pointer, Enter, Space or a forced `click()` all reach
+   * the same handler, and it reads the CURRENT eligibility through this ref
+   * rather than trusting whatever a stale closure captured. A refusal is a
+   * no-op: no attempt, no spinner, no gateway call, input untouched.
+   */
+  const latest = useRef({ submittable, pending, blocked: blockedReason !== null });
+  latest.current = { submittable, pending, blocked: blockedReason !== null };
 
   /*
    * ONE ATTEMPT AT A TIME, AND NO STALE COMPLETION.
@@ -199,10 +217,13 @@ export function ReviewScreen({
 
   const send = useCallback(() => {
     // Nothing may be sent against a total that does not belong to this cart,
-    // and nothing may be sent that the runtime does not currently validate.
-    if (sending || pending || !submittable) return;
+    // nothing while ordering is not open, and nothing the runtime does not
+    // currently validate - as of NOW, not as of the last render.
+    const now = latest.current;
+    if (sending || now.blocked || now.pending || !now.submittable) return;
     const mine = attempt.current + 1;
     attempt.current = mine;
+    setAttempts(mine);
     setFailure(null);
     setSending(true);
     void (async () => {
@@ -230,12 +251,16 @@ export function ReviewScreen({
       // unrendered rather than given an invented fifth banner.
       setFailure(result);
     })();
-  }, [draft, gateway, menuVersion, onComplete, pending, quote, sending, slug, submittable]);
+  }, [draft, gateway, menuVersion, onComplete, quote, sending, slug]);
 
-  const banner = failure === null ? null : bannerFor(failure, m, send, onViewStatus);
+  const banner = failure === null ? null : bannerFor(failure, m, send, onViewStatus, opensAt);
 
   return (
-    <div className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`} data-sf-screen="review">
+    <div
+      className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`}
+      data-sf-screen="review"
+      data-sf-send-attempts={attempts}
+    >
       <StepHeader m={m} title={m.review} backHref={backHref} step={2} />
 
       <div className={`${s.body} ${s.bodySteps}`}>
@@ -332,10 +357,11 @@ export function ReviewScreen({
       </div>
 
       <FooterCta
-        label={sending ? m.sending : m.sendRequest}
+        label={sending ? m.sending : (blockedReason ?? m.sendRequest)}
         onActivate={send}
         busy={sending}
-        blocked={pending || !submittable}
+        blocked={blockedReason !== null || pending || !submittable}
+        dim={blockedReason !== null}
         live={motion !== 'calm'}
         centred
         leading={
@@ -370,9 +396,24 @@ function bannerFor(
   m: StorefrontMessages,
   retry: () => void,
   viewStatus: (ref: string) => void,
+  opensAt: string,
 ) {
   const retryAction = { label: m.retry, onAction: retry, solid: true };
   switch (result.kind) {
+    case 'not_open':
+      // The restaurant closed or paused between the activation and the
+      // commit: the SAME reason the steps show, no invented copy, and no
+      // recovery to offer - nothing was created, the input is still here,
+      // and the control below already states the reason while it lasts.
+      return (
+        <Banner
+          tone="warn"
+          shake
+          icon={<ClockIcon />}
+          title={result.state === 'paused' ? m.orderingPaused : fill(m.orderingClosed, { t: opensAt })}
+          testId="not_open"
+        />
+      );
     case 'offline':
       return (
         <Banner

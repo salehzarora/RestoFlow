@@ -67,6 +67,9 @@ test.beforeAll(async () => {
  * from the DOCUMENT response here, in the test, leaving the rest of the CSP
  * in force; the results file records that this was done.
  */
+/** The last document CSP the WebKit shim served, and the one it was derived from. */
+const SHIM: { committed: string | null; adapted: string | null } = { committed: null, adapted: null };
+
 test.beforeEach(async ({ page }, info) => {
   if (info.project.name !== 'webkit') return;
   RESULTS.webkit_document_csp = 'upgrade-insecure-requests removed for loopback http (WebKit applies it to 127.0.0.1); every other directive kept';
@@ -75,10 +78,24 @@ test.beforeEach(async ({ page }, info) => {
     const res = await route.fetch();
     const headers = { ...res.headers() };
     const csp = headers['content-security-policy'];
-    if (csp) headers['content-security-policy'] = csp.replace(/;\s*upgrade-insecure-requests\s*/g, '');
+    if (csp) {
+      SHIM.committed = csp;
+      headers['content-security-policy'] = csp.replace(/;\s*upgrade-insecure-requests\s*/g, '');
+      SHIM.adapted = headers['content-security-policy'];
+    }
     await route.fulfill({ response: res, headers });
   });
 });
+
+/** Computed backdrop-filter by whichever property this engine supports. */
+const GLASS = (selector: string) => {
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (!el) return { found: false, value: null as string | null, supported: 'none' };
+  const cs = getComputedStyle(el) as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+  const supported = CSS.supports('backdrop-filter', 'blur(1px)') ? 'unprefixed' : CSS.supports('-webkit-backdrop-filter', 'blur(1px)') ? 'webkit' : 'none';
+  const value = supported === 'unprefixed' ? cs.backdropFilter : supported === 'webkit' ? (cs.webkitBackdropFilter ?? cs.getPropertyValue('-webkit-backdrop-filter')) : null;
+  return { found: true, value, supported };
+};
 
 test.afterAll(() => {
   server?.kill();
@@ -144,9 +161,24 @@ test('G02 home AR dark 390: locked module order, hero, strip and dock geometry',
   await expect(dock).toHaveCount(1);
   const dockBox = await dock.boundingBox();
   expect(Math.round(dockBox!.height)).toBe(60);
+  // The approved glass is REAL on this engine too: a non-none computed
+  // backdrop-filter on the hero control, the service strip and the dock,
+  // through whichever property the engine supports (recorded per engine).
+  const glass: Record<string, unknown> = {};
+  for (const [id, selector, expected] of [
+    ['heroIconButton', '[data-sf-module="hero"] [class*="iconBtn"]', 'blur(10px)'],
+    ['serviceStrip', '[data-sf-module="service"] [class*="service"]', 'blur(14px)'],
+    ['dock', '[data-sf-dock="live"]', 'blur(14px)'],
+  ] as const) {
+    const probe = await page.evaluate(GLASS, selector);
+    expect(probe.found, `${id} exists`).toBe(true);
+    expect(probe.supported, `${id}: ${info.project.name} supports backdrop-filter`).not.toBe('none');
+    expect(probe.value, `${id}: computed backdrop-filter on ${info.project.name}`).toBe(expected);
+    glass[id] = probe;
+  }
   expect(await overflow(page)).toBe(false);
   expect(errors).toEqual([]);
-  RESULTS[`G02_${info.project.name}`] = { order: collapsed, hero: hero!.height, dock: dockBox!.height };
+  RESULTS[`G02_${info.project.name}`] = { order: collapsed, hero: hero!.height, dock: dockBox!.height, glass };
   await page.screenshot({ path: path.join(SHOTS, `G02-${info.project.name}.png`) });
 });
 
@@ -297,4 +329,51 @@ test('X01 (shortened) keyboard-only, AR 390: cart -> checkout -> payment -> revi
   expect(errors).toEqual([]);
   RESULTS[`X01_${info.project.name}`] = { reached: 'status' };
   await page.screenshot({ path: path.join(SHOTS, `X01-${info.project.name}.png`), fullPage: true });
+});
+
+test('CSP the served policy is enforced on this engine: an inline <style> and a style attribute are both blocked, and the WebKit shim differs from the committed policy by exactly one directive', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    (window as unknown as { __csp: string[] }).__csp = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      (window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective}:${e.blockedURI}`);
+    });
+  });
+  await page.goto(`${BASE}${MENU}`, { waitUntil: 'networkidle' });
+  // The committed policy, read directly (this request never passes the page's route shim).
+  const direct = await page.request.get(`${BASE}${MENU}`);
+  const committed = direct.headers()['content-security-policy'] ?? '';
+  expect(committed).toContain("style-src 'self'");
+  expect(committed).toContain('upgrade-insecure-requests');
+  if (info.project.name === 'webkit') {
+    expect(SHIM.committed).toBe(committed);
+    const stripped = committed.replace(/;\s*upgrade-insecure-requests\s*/g, '');
+    expect(SHIM.adapted).toBe(stripped);
+    expect(committed.split(';').length - stripped.split(';').length, 'exactly one directive removed').toBe(1);
+  }
+  // NEGATIVE CONTROL: inline style is refused under style-src 'self' on the
+  // policy this engine actually received - so the shim (WebKit) or the
+  // committed header (Firefox) is in force, not a permissive fallback.
+  const probe = await page.evaluate(() => {
+    const style = document.createElement('style');
+    style.textContent = '.sf-csp-probe{color:rgb(1, 2, 3)}';
+    document.head.appendChild(style);
+    const p = document.createElement('p');
+    p.className = 'sf-csp-probe';
+    p.setAttribute('style', 'color:rgb(4, 5, 6)');
+    p.textContent = 'probe';
+    document.body.appendChild(p);
+    const color = getComputedStyle(p).color;
+    p.remove();
+    style.remove();
+    return { color };
+  });
+  expect(probe.color).not.toBe('rgb(1, 2, 3)');
+  expect(probe.color).not.toBe('rgb(4, 5, 6)');
+  // The violation report is dispatched on a later task.
+  await page.waitForTimeout(250);
+  const violations = await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp);
+  expect(violations.length, 'the engine reported the refusal').toBeGreaterThanOrEqual(1);
+  expect(violations.every((v) => v.startsWith('style-src'))).toBe(true);
+  RESULTS[`CSP_${info.project.name}`] = { committedDirectives: committed.split(';').length, shim: info.project.name === 'webkit' ? SHIM : null, inlineRefused: true, violations };
 });

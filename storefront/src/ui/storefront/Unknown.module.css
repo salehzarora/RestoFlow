@@ -17,7 +17,7 @@
   padding: 32px 24px;
   background: #f4f6f5;
   color: #1f2937;
-  font-family: var(--sf-font, 'Segoe UI'), Tahoma, sans-serif;
+  font-family: var(--sf-font-latin, sf-unset), var(--sf-font-arabic, sf-unset), var(--sf-font-hebrew, sf-unset), 'Segoe UI', Tahoma, sans-serif;
   text-align: center;
 }
 

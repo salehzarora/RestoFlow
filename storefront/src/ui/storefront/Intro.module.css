@@ -85,8 +85,8 @@
   color: var(--onhero);
   font: 700 12px / 1 var(--font);
   cursor: pointer;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .glassBtn svg {
@@ -190,8 +190,8 @@
   background: var(--glass);
   color: var(--onhero);
   font: 700 12px / 1.25 var(--font);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* A disabled service is struck through at 55% opacity. */

@@ -14,6 +14,18 @@ export const BUDGETS = {
   // not remove parse/compile cost, so the uncompressed guard stays.
   firstLoadJsBytes: 690000,         // exact decimal bytes, minified but uncompressed
   firstLoadJsBrotliBytes: 200000,   // exact decimal bytes, each response compressed separately
+  // STOREFRONT-UI-001 written acceptance limits for the two asset classes the
+  // plan named without a validator (finishing mandate 7; correction pass 4):
+  // per DIRECT-LOAD ROUTE, unique stylesheets actually referenced by the
+  // document, raw AND per-response Brotli; and the font files the document
+  // PRELOADS (link rel=preload as=font, plus any Link-header preload the
+  // committed header set carries), count AND bytes. These are the limits as
+  // written; this file never raises them. A route over a limit FAILS the
+  // measurement, the audit and the output test - it is reported, not waived.
+  cssPerRouteBytes: 70000,          // exact decimal bytes, minified but uncompressed
+  cssPerRouteBrotliBytes: 14000,    // exact decimal bytes, each stylesheet compressed separately
+  fontPreloadsPerRoute: 2,          // files
+  fontPreloadBytesPerRoute: 120000, // exact decimal bytes, the preloaded files summed
   sourceMaps: 0,
   referenceMedia: 0,
   serverFunctions: 0,

@@ -114,6 +114,7 @@ export function DetailsScreen({
   motion,
   backHref,
   pending,
+  blockedReason = null,
   onContinue,
   onAddItems,
 }: {
@@ -126,6 +127,12 @@ export function DetailsScreen({
   backHref: string;
   /** True while the quote for the CURRENT cart has not arrived. */
   pending: boolean;
+  /**
+   * The localised reason ordering is not open (closed / paused), or null.
+   * The form stays editable and the draft untouched; only progression is
+   * refused, and the control says why (the cart's own pattern, :398).
+   */
+  blockedReason?: string | null;
   onContinue: () => void;
   /** "add items" leaves the step for the menu; the draft survives the move. */
   onAddItems: () => void;
@@ -464,12 +471,16 @@ export function DetailsScreen({
 
       <FooterCta
         label={
-          <>
-            {m.stepPayment}
-            <ChevronIcon />
-          </>
+          blockedReason ?? (
+            <>
+              {m.stepPayment}
+              <ChevronIcon />
+            </>
+          )
         }
         onActivate={() => {
+          // Ordering that is not open admits no step, whatever was typed.
+          if (blockedReason !== null) return;
           // A stale total may be SHOWN, but nothing may be ordered against it.
           if (pending) return;
           if (v.ok) {
@@ -480,8 +491,8 @@ export function DetailsScreen({
           setFocusTick((n) => n + 1);
         }}
         totalMinor={quote.totalMinor}
-        blocked={!v.ok || pending}
-        dim={touched && !v.ok}
+        blocked={blockedReason !== null || !v.ok || pending}
+        dim={blockedReason !== null || (touched && !v.ok)}
         testId="to-payment"
       />
     </div>

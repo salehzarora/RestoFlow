@@ -21,8 +21,13 @@ What it is:
 - A per-slug cart in `localStorage` (`sf:v1:cart:<slug>`) and two session
   flags; everything typed at checkout lives in application memory only.
 - Money in integer minor units from one quote authority
-  (`src/money/quote.ts`); a self-hosted Rubik; a per-tenant theme derived at
-  build time and applied through the CSSOM under `style-src 'self'`.
+  (`src/money/quote.ts`); a self-hosted Rubik in three script subsets, two
+  of them preloaded per locale root and the third fetched on demand
+  (`src/fonts/README.md`); a per-tenant theme derived at build time and
+  applied through the CSSOM under `style-src 'self'`.
+- Ordering that is exactly `open`: a closed or paused restaurant refuses every
+  step and the send in place, states why, and keeps the cart and the typed
+  draft (`src/ui/storefront/checkout/eligibility.ts`).
 
 What it deliberately is not:
 
@@ -47,7 +52,7 @@ SF_EVIDENCE_ROUTES=1 npm run build         the local EVIDENCE export (adds demo-
 node --test tests/output/output.test.mjs   assertions over the built out/ tree
 node scripts/audit-output.mjs              budgets, file types, off-origin references
 node scripts/audit-inputs.mjs              build-input hygiene
-node scripts/measure-firstload.mjs         per-route first-load JS, raw and Brotli
+node scripts/measure-firstload.mjs         per-route first-load JS, CSS and font preloads against the written limits
 node scripts/isolated-build.mjs            rebuild in a scratch copy and compare
 node scripts/serve-out.mjs                 loopback static server for out/ (PORT=...)
 npx playwright test -c tests/browser/playwright.config.ts <spec>          Chromium

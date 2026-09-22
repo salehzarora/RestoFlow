@@ -6,7 +6,6 @@
  * applies them via CSSOM. No component below this point ever sees a raw tenant
  * colour, and none of them contains a resolved colour of their own.
  */
-import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
@@ -39,7 +38,7 @@ export function StorefrontScreen({
   });
 
   return (
-    <ThemeScope tokens={tokens} className={`${shell.root} ${rubik.variable}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} className={`${shell.root}`} dir={dirOf(locale)}>
       <IntroGate slug={slug} homeHref={`${storefrontPath(locale, slug)}/menu`}>
         <Intro tenant={tenant} locale={locale} motion={motion} />
       </IntroGate>

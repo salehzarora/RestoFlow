@@ -178,8 +178,8 @@
   background: var(--glass);
   color: var(--onhero);
   cursor: pointer;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .iconBtn svg {
@@ -277,8 +277,8 @@
   border-radius: var(--r-card);
   background: var(--glassDock);
   box-shadow: 0 20px 40px -28px rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   overflow: hidden;
 }
 
@@ -617,8 +617,8 @@
 
 .compact {
   background: var(--glassDock);
-  backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border-block-end: 1px solid transparent;
   opacity: 0;
   pointer-events: none;
@@ -877,6 +877,26 @@
   margin-block-start: 20px;
   padding: 0 var(--gutter);
   scroll-margin-block-start: 116px;
+}
+
+/*
+ * Off-screen work is deferred, not changed. On a 390x844 phone the home
+ * document is ~5,600px tall and everything from the first category section
+ * down (~4,300px: seven sections, the story, the footer) is below the fold,
+ * yet the first layout shaped and laid out all of it. `content-visibility:
+ * auto` lets the engine skip layout and paint of a section until it nears the
+ * viewport; what is painted, when painted, is identical, the DOM and the
+ * accessibility tree are untouched, anchors and scrollIntoView still land on
+ * the section (the engine renders a target on demand), and `auto <size>`
+ * keeps a section's REAL size once it has been rendered so nothing above the
+ * viewport is re-estimated. Only the category sections carry it (the popular
+ * section straddles the first screen and stays as it was); the story and the
+ * footer carry it too. Measured under the lab protocol
+ * (PERF_PROTOCOL_AND_TRACE.md, candidate 2).
+ */
+.section[id] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
 }
 
 .sectionHead {
@@ -1143,8 +1163,8 @@
   border: 1px solid var(--glassLine);
   color: var(--onhero);
   font: 800 11px / 1 var(--font);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 /*
@@ -1215,6 +1235,8 @@
   overflow: hidden;
   background: var(--sf);
   border: 1px solid var(--hair);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 325px;
 }
 
 .storyMedia {
@@ -1298,6 +1320,8 @@
   gap: 6px;
   color: var(--tx3);
   font: 500 12px / 1.5 var(--font);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 141px;
 }
 
 .footerRow {
@@ -1364,8 +1388,8 @@
   box-shadow:
     0 22px 46px -20px rgba(0, 0, 0, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .dockThumbs {

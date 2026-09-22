@@ -1080,6 +1080,24 @@
   text-align: center;
 }
 
+/* A simulated launch flashes the disclosure once (a remounted span restarts
+   it); under reduced motion the root rule collapses it to one frame. */
+.demoNoteFired > span {
+  display: block;
+  animation: sfNoteFlash 900ms var(--e-standard) both;
+}
+
+@keyframes sfNoteFlash {
+  0% {
+    color: var(--tx);
+    background: var(--sf2);
+  }
+  100% {
+    color: var(--tx3);
+    background: transparent;
+  }
+}
+
 /* The unknown-request answer: neutral copy on the tenant surface. */
 .missing {
   padding: 40px 28px;

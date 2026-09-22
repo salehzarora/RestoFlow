@@ -6,6 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { auditOutput, walk } from '../../scripts/audit-output.mjs';
+import { checkBudgets, measure } from '../../scripts/measure-firstload.mjs';
+import { BUDGETS } from '../../scripts/budgets.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import {
   renderedModuleOrder,
   checkModuleOrder,
@@ -291,5 +295,119 @@ test('no emitted document, payload OR script carries a real WhatsApp destination
     for (const banned of ['wa.me', 'whatsapp://', 'api.whatsapp.com', 'bizbot.app']) {
       assert.ok(!text.includes(banned), `${file}: ${banned}`);
     }
+  }
+});
+
+// ------------------------------------------------------ CSS / font preloads
+//
+// The two asset classes the plan named limits for without a validator
+// (finishing mandate 7; correction pass 4). Measured per DIRECT-LOAD ROUTE by
+// the same method as the JS budget: unique stylesheets the document actually
+// references, each compressed separately; the fonts the document PRELOADS.
+// The limits are the written ones (scripts/budgets.mjs); a route over one
+// FAILS here, it is not warned about. The raw and compressed axes are
+// separate tests so a report can name which one a route missed.
+
+const CSS_FONT = (p) => /CSS|font preload|stylesheet|preloaded font|no stylesheet/.test(p);
+// Measured once per run; the tests below read the same rows.
+let MEASURED = null;
+const measured = () => (MEASURED ??= measure(OUT));
+
+test('CSS / font measurement covers every direct-load route and is never empty', () => {
+  const rows = measured();
+  assert.equal(rows.length, 36, 'every canonical direct-load route is measured');
+  for (const r of rows) {
+    assert.ok(r.css.uniqueStylesheets >= 1, `${r.route}: at least one stylesheet counted`);
+    assert.ok(r.css.bytes > 0 && r.css.brotli > 0, `${r.route}: nonzero CSS bytes on both axes`);
+    assert.equal(r.css.inlineStyleBytes, 0, `${r.route}: no inline <style> under style-src 'self'`);
+    for (const s of r.css.stylesheets) assert.ok(!s.missing, `${r.route}: ${s.url} exists`);
+    for (const f of r.fontPreloads.files) assert.ok(!f.missing, `${r.route}: ${f.url} exists`);
+  }
+  // Every storefront document (not the four locale-root placeholders)
+  // preloads its script subsets: an empty preload count would be a broken
+  // font binding, not a saving.
+  for (const r of rows.filter((x) => /\/s\/|\/r\//.test(x.route))) {
+    assert.equal(r.fontPreloads.count, 2, `${r.route}: two preloaded subsets, ${r.fontPreloads.files.map((f) => f.url).join(', ')}`);
+  }
+});
+
+test('font preloads per route: at most 2 files and at most 120,000 B (the written limit)', () => {
+  const problems = checkBudgets(measured()).filter((p) => /font preload|preloaded font/.test(p));
+  assert.deepEqual(problems, []);
+});
+
+test('the preloaded subsets are the right ones per root: Latin everywhere, Arabic on ar / en / root, Hebrew on he (src/fonts/README.md)', () => {
+  for (const r of measured().filter((x) => /\/s\/|\/r\//.test(x.route))) {
+    const names = r.fontPreloads.files.map((f) => f.url.replace(/.*rubik_/, '').replace(/_var.*/, '')).sort();
+    const expected = r.route.startsWith('/he/') ? ['hebrew', 'latin'] : ['arabic', 'latin'];
+    assert.deepEqual(names, expected, r.route);
+  }
+});
+
+test('CSS per route: at most 14,000 B Brotli (the written limit)', () => {
+  const problems = checkBudgets(measured()).filter((p) => /CSS .* brotli/.test(p));
+  assert.deepEqual(problems, []);
+});
+
+test('CSS per route: at most 70,000 B raw (the written limit)', () => {
+  const problems = checkBudgets(measured()).filter((p) => /CSS .* uncompressed/.test(p));
+  assert.deepEqual(problems, []);
+});
+
+test('NEGATIVE CONTROLS: an oversized stylesheet, a third preload and an oversized preload set each FAIL the same check', () => {
+  // Built from a real measurement so the shape is the validator's own; only
+  // the offending figure is changed, one at a time.
+  const real = measured().find((r) => r.route === '/s/maps-burger/menu');
+  const clone = () => JSON.parse(JSON.stringify(real));
+  const within = clone();
+  within.css.bytes = BUDGETS.cssPerRouteBytes; within.css.brotli = BUDGETS.cssPerRouteBrotliBytes;
+  within.fontPreloads.count = BUDGETS.fontPreloadsPerRoute; within.fontPreloads.bytes = BUDGETS.fontPreloadBytesPerRoute;
+  within.fontPreloads.files = within.fontPreloads.files.slice(0, 2);
+  assert.deepEqual(checkBudgets([within]).filter(CSS_FONT), [], 'exactly at every limit passes');
+
+  const bigRaw = clone(); bigRaw.css.bytes = BUDGETS.cssPerRouteBytes + 1; bigRaw.css.brotli = 1;
+  assert.match(checkBudgets([bigRaw]).filter(CSS_FONT).join('\n'), /CSS 70001 B > 70000 B uncompressed/);
+  const bigBr = clone(); bigBr.css.bytes = 1; bigBr.css.brotli = BUDGETS.cssPerRouteBrotliBytes + 1;
+  assert.match(checkBudgets([bigBr]).filter(CSS_FONT).join('\n'), /CSS 14001 B brotli > 14000 B/);
+  const three = clone(); three.css.bytes = 1; three.css.brotli = 1; three.fontPreloads.count = 3; three.fontPreloads.bytes = 1;
+  assert.match(checkBudgets([three]).filter(CSS_FONT).join('\n'), /3 font preloads > 2/);
+  const heavy = clone(); heavy.css.bytes = 1; heavy.css.brotli = 1; heavy.fontPreloads.count = 2; heavy.fontPreloads.bytes = BUDGETS.fontPreloadBytesPerRoute + 1;
+  assert.match(checkBudgets([heavy]).filter(CSS_FONT).join('\n'), /font preloads 120001 B > 120000 B/);
+  const empty = clone(); empty.css.bytes = 0; empty.css.brotli = 0; empty.css.uniqueStylesheets = 0;
+  assert.match(checkBudgets([empty]).filter(CSS_FONT).join('\n'), /no stylesheet counted/);
+});
+
+test('NEGATIVE CONTROL: the measurement itself counts a planted third preload and an 80,000 B stylesheet', () => {
+  // A scratch out/ with one document (the "/" route) that links a real
+  // oversized stylesheet and three font preloads; measure() must COUNT them,
+  // not only the checker judge them.
+  const dir = mkdtempSync(path.join(tmpdir(), 'sf-css-fixture-'));
+  try {
+    mkdirSync(path.join(dir, 'css'), { recursive: true });
+    mkdirSync(path.join(dir, 'f'), { recursive: true });
+    writeFileSync(path.join(dir, 'css', 'big.css'), `.a{color:red}`.repeat(6154).slice(0, 80000));
+    for (const n of ['a', 'b', 'c']) writeFileSync(path.join(dir, 'f', `${n}.woff2`), Buffer.alloc(50000, n.charCodeAt(0)));
+    writeFileSync(path.join(dir, 'index.html'), [
+      '<html lang="ar" dir="rtl"><head>',
+      '<link rel="preload" href="/f/a.woff2" as="font" crossorigin="" type="font/woff2"/>',
+      '<link rel="preload" href="/f/b.woff2" as="font" crossorigin="" type="font/woff2"/>',
+      '<link rel="preload" href="/f/c.woff2" as="font" crossorigin="" type="font/woff2"/>',
+      '<link rel="stylesheet" href="/css/big.css" data-precedence="next"/>',
+      '<link rel="stylesheet" href="/css/big.css" data-precedence="next"/>',
+      '</head><body></body></html>',
+    ].join(''));
+    const rows = measure(dir);
+    assert.equal(rows.length, 1);
+    const r = rows[0];
+    assert.equal(r.css.uniqueStylesheets, 1, 'the twice-linked stylesheet counts once');
+    assert.equal(r.css.bytes, 80000);
+    assert.equal(r.fontPreloads.count, 3);
+    assert.equal(r.fontPreloads.bytes, 150000);
+    const problems = checkBudgets(rows).filter(CSS_FONT).join('\n');
+    assert.match(problems, /CSS 80000 B > 70000 B uncompressed/);
+    assert.match(problems, /3 font preloads > 2/);
+    assert.match(problems, /font preloads 150000 B > 120000 B/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

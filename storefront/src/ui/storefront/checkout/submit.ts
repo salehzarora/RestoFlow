@@ -15,6 +15,7 @@
  */
 import type { Quote } from '@/money/quote';
 import { DEMO_REQUEST_REF } from '@/source/request-ref';
+import type { ServiceState } from '@/source/types';
 import type { CheckoutDraft } from './draft';
 
 /** What a send is allowed to carry. Deliberately explicit, never a spread. */
@@ -67,7 +68,14 @@ export type SubmitResult =
   | { readonly kind: 'offline' }
   | { readonly kind: 'server_error' }
   | { readonly kind: 'rate_limited' }
-  | { readonly kind: 'cart_changed' };
+  | { readonly kind: 'cart_changed' }
+  /**
+   * Ordering was not open at the moment the gateway would have committed the
+   * request: the restaurant closed or paused after the send was activated.
+   * The screen shows the same closed / paused reason the steps show; nothing
+   * was created, so nothing is erased.
+   */
+  | { readonly kind: 'not_open'; readonly state: 'closed' | 'paused' };
 
 export type RequestGateway = (submission: Submission) => Promise<SubmitResult>;
 
@@ -84,7 +92,19 @@ export function isValidRef(ref: string): boolean {
  * value can change what happens.
  */
 export function fixtureGateway(
-  options: { readonly outcome?: SubmitResult['kind']; readonly delayMs?: number } = {},
+  options: {
+    readonly outcome?: SubmitResult['kind'];
+    readonly delayMs?: number;
+    /**
+     * The restaurant's ordering state as the gateway would see it at the
+     * moment of commit. A real gateway asks its own server; the fixture asks
+     * the runtime's CURRENT reading, so a send activated while open and
+     * committed after a close is refused with the reason, and one committed
+     * before the close stays accepted - a completed request is never erased
+     * retroactively.
+     */
+    readonly readiness?: () => ServiceState;
+  } = {},
 ): RequestGateway {
   return async (submission) => {
     // The approved mocked delay (DESIGN_HANDOFF.md:130 "a spinner for ~900ms",
@@ -93,6 +113,10 @@ export function fixtureGateway(
     // pass 0 so they assert behaviour rather than wall-clock.
     const wait = options.delayMs ?? 0;
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    const state: ServiceState = options.readiness?.() ?? 'open';
+    if (state === 'closed' || state === 'paused') return { kind: 'not_open', state };
+    // A reading this build does not know is not "open": nothing is committed.
+    if (state !== 'open') return { kind: 'server_error' };
     const kind = options.outcome ?? 'accepted';
     switch (kind) {
       case 'accepted':

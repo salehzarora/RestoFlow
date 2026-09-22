@@ -147,7 +147,9 @@ test.describe('language links', () => {
 
   test('keyboard focus reaches every locale link and is visible', async ({ page }) => {
     await page.goto(`${BASE}/en`, { waitUntil: 'networkidle' });
-    const links = page.locator('a.langLink');
+    // The placeholder's classes are a CSS Module now (module-scoped names), so
+    // the locale links are selected by their local name.
+    const links = page.locator('a[class*="langLink"]');
     await expect(links).toHaveCount(3);
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => document.activeElement?.tagName);
@@ -195,7 +197,7 @@ test.describe('without JavaScript', () => {
       await expect(page.locator('h1')).toBeVisible();
       // Placeholder copy and the locale links are server-rendered, so they work
       // without hydration.
-      await expect(page.locator('a.langLink')).toHaveCount(3);
+      await expect(page.locator('a[class*="langLink"]')).toHaveCount(3);
     });
   }
 });

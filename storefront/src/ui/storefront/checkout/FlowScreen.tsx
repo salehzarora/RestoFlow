@@ -10,7 +10,6 @@
  *
  * A server component, so none of this file reaches the browser.
  */
-import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
@@ -43,7 +42,7 @@ export function FlowScreen({
   return (
     <ThemeScope
       tokens={tokens}
-      className={`${shell.root} ${rubik.variable}`}
+      className={`${shell.root}`}
       dir={dirOf(locale)}
     >
       <FlowRuntime

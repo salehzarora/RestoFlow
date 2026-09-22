@@ -11,7 +11,6 @@
  *
  * A server component, so none of this file reaches the browser.
  */
-import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
@@ -29,6 +28,7 @@ export function RequestScreen({
   contentLocale,
   preset = 'dark',
   motion = 'full',
+  fontClass,
 }: {
   tenant: Tenant;
   locale: Locale;
@@ -37,6 +37,8 @@ export function RequestScreen({
   contentLocale: ContentLocale;
   preset?: Preset;
   motion?: MotionMode;
+  /** The root's font set class (two preloads, one on demand); the page binds it. */
+  fontClass: string;
 }) {
   const tokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
@@ -44,7 +46,7 @@ export function RequestScreen({
   });
 
   return (
-    <ThemeScope tokens={tokens} className={`${shell.root} ${rubik.variable}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} className={`${shell.root} ${fontClass}`} dir={dirOf(locale)}>
       <RequestRuntime
         locale={locale}
         requestRef={requestRef}

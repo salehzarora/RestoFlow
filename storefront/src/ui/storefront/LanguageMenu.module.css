@@ -17,8 +17,8 @@
   font: 800 13px / 1 var(--font);
   cursor: pointer;
   list-style: none;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* Remove the native disclosure triangle in every engine. */
@@ -75,8 +75,8 @@
   border-radius: var(--r-control);
   background: var(--glassDock, var(--sf));
   box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   animation: sfUp var(--d-standard) var(--e-standard) both;
 }
 

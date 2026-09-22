@@ -6,6 +6,7 @@ import { brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUDGETS, MEDIA_EXTENSIONS, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
+import { measure, checkBudgets } from './measure-firstload.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
@@ -133,6 +134,13 @@ export function auditOutput(outDir = OUT) {
     }
   }
 
+  // Per-route CSS and font-preload limits (budgets.mjs), the same measurement
+  // measure-firstload.mjs reports; a route over a written limit fails here too.
+  const perRoute = measure(outDir);
+  for (const p of checkBudgets(perRoute)) if (/CSS|font preload|stylesheet|preloaded font|no stylesheet/.test(p)) problems.push(p);
+  const cssWorst = perRoute.reduce((a, r) => (r.css && r.css.bytes > (a?.css?.bytes ?? -1) ? r : a), null);
+  const fontsWorst = perRoute.reduce((a, r) => (r.fontPreloads && r.fontPreloads.count > (a?.fontPreloads?.count ?? -1) ? r : a), null);
+
   const largest = files.slice().sort((a, b) => b.size - a.size).slice(0, 5)
     .map((f) => ({ file: rel(f.path), bytes: f.size }));
 
@@ -140,6 +148,8 @@ export function auditOutput(outDir = OUT) {
     problems,
     stats: {
       totalBytes: total, fileCount: files.length, firstLoadJs, firstLoadJsBrotli, scripts, largest,
+      cssWorstRoute: cssWorst ? { route: cssWorst.route, bytes: cssWorst.css.bytes, brotli: cssWorst.css.brotli, stylesheets: cssWorst.css.uniqueStylesheets } : null,
+      fontPreloadsWorstRoute: fontsWorst ? { route: fontsWorst.route, count: fontsWorst.fontPreloads.count, bytes: fontsWorst.fontPreloads.bytes } : null,
       documents, notFound, documentationHostsInChunks: [...docHosts].sort(),
     },
   };

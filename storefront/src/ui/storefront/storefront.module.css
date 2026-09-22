@@ -78,10 +78,22 @@
   --e-sheen: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* --- type --- */
-  /* The fallback inside var() matters: without it, an undefined --sf-font
-     makes every `font:` shorthand that references it INVALID, and the browser
-     drops the whole declaration including its size and weight. */
-  --font: var(--sf-font, 'Segoe UI'), Tahoma, sans-serif;
+  /* Three script families, one per subset file (src/fonts/README.md), walked
+     per character by their unicode-range; then the system list. The fallback
+     inside each var() matters: without it, an undefined variable makes every
+     `font:` shorthand that references it INVALID and the browser drops the
+     whole declaration - and it must be a family NO device has, so a missing
+     variable is skipped rather than catching every character before the next
+     Rubik subset.
+
+     NO `local()` FALLBACK FACE. next/font's metric-adjusted Arial face (and a
+     Segoe UI one tried in the correction pass) each cost ~150 ms of the FIRST
+     layout on the lab's 4x-throttled Chromium - `local()` matching walks the
+     installed font collection - for a benefit the fixed line-heights of this
+     design do not need: the swap shift measured 0 without them (G-FONTS, the
+     lab protocol). Recorded in PERF_PROTOCOL_AND_TRACE.md. */
+  --font: var(--sf-font-latin, sf-unset), var(--sf-font-arabic, sf-unset), var(--sf-font-hebrew, sf-unset),
+    'Segoe UI', Tahoma, sans-serif;
 
   display: flex;
   flex-direction: column;

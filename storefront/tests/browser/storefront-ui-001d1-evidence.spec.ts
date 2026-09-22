@@ -22,8 +22,12 @@ const SHOTS = process.env.SF_D1E_SHOT_DIR ?? path.join(STOREFRONT, 'ui001d1-evid
 const RESULTS: Record<string, unknown> = {};
 
 const NONE = 'demo-no-service';
-const PICKUP_OFF = 'demo-closed'; // pickupEnabled: false, delivery still offered
-const DELIVERY_OFF = 'demo-paused'; // deliveryEnabled: false, pickup still offered
+// OPEN restaurants with one service off. (demo-closed / demo-paused also have
+// one service off, but they are closed / paused, and since the correction
+// pass ordering that is not open blocks every step - which is a different
+// fact from availability, proven separately in storefront-ui-001g.spec.ts.)
+const PICKUP_OFF = 'demo-pickup-off'; // pickupEnabled: false, delivery still offered
+const DELIVERY_OFF = 'demo-delivery-off'; // deliveryEnabled: false, pickup still offered
 
 let server: ChildProcess;
 

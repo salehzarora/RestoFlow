@@ -15,6 +15,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // stays mounted across the soft navigation from /s/:slug/review to /r/:ref.
   return (
     <html lang="ar" dir="rtl">
+      {/* The font set is NOT bound here: sibling root layouts share one
+          chunk group on the pinned toolchain, so anything a root layout imports
+          is linked into every root's documents. It is bound one level down,
+          per root - see src/fonts/README.md. */}
       <body>
         <RequestHandoffProvider>{children}</RequestHandoffProvider>
       </body>

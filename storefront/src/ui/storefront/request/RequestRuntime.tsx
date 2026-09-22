@@ -265,19 +265,33 @@ export function RequestRuntime({
     });
   }, [contentLocale, displayCode, h, receivedLines, ref, tenant.name]);
 
+  /*
+   * EVERY LAUNCH IS SIMULATED (DEFERRED WA-001) and every launch is
+   * answered: the launcher's typed result is surfaced through the demo
+   * disclosure's live region, which re-issues its sentence and flashes. A
+   * result this build does not know ('opened' / 'unavailable' belong to a
+   * real launcher) is not turned into a claim: the disclosure stays as it is.
+   */
+  const [demoFired, setDemoFired] = useState(0);
+  const launch = useCallback(
+    (text: string) => {
+      if (open.open('', text) === 'simulated') setDemoFired((n) => n + 1);
+    },
+    [open],
+  );
+
   const onContinue = useCallback(() => {
-    // DEFERRED(WA-001): the demo launcher opens nothing and says so.
-    open.open('', message);
+    launch(message);
     goStatus();
-  }, [goStatus, message, open]);
+  }, [goStatus, launch, message]);
 
   const onChat = useCallback(() => {
-    open.open('', '');
-  }, [open]);
+    launch('');
+  }, [launch]);
 
   const onWaWeb = useCallback(() => {
-    open.open('', message);
-  }, [message, open]);
+    launch(message);
+  }, [launch, message]);
 
   const onOrderAgain = useCallback(() => {
     // INTERACTIONS.md:115 - the ONE designed clear: empties the cart on this
@@ -297,7 +311,7 @@ export function RequestRuntime({
   if (view === 'received' && h !== null) {
     return (
       <>
-        <DemoNote m={m} />
+        <DemoNote m={m} fired={demoFired} />
         <ReceivedScreen
           m={m}
           tenant={tenant}
@@ -346,7 +360,7 @@ export function RequestRuntime({
 
   return (
     <>
-      <DemoNote m={m} />
+      <DemoNote m={m} fired={demoFired} />
       <StatusScreen
         m={m}
         tenant={tenant}

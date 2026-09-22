@@ -6,7 +6,7 @@
  * name or slug — so an unknown or unpublished slug cannot leak that a tenant
  * exists, or anything about it. The BIZBOT mark is platform-owned.
  */
-import { rubik } from '@/fonts/rubik';
+import { rubikUnknown } from '@/fonts/rubik-unknown';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
 import styles from './Unknown.module.css';
@@ -19,7 +19,7 @@ export function Unknown({ locale }: { locale: Locale }) {
     // also rendered by app/not-found.tsx, which Next emits WITHOUT a root
     // layout, so there is no <html> tag of ours to carry them. Declaring them
     // here is what makes the Arabic copy render right-to-left in 404.html.
-    <main className={`${styles.screen} ${rubik.variable}`} lang={locale} dir={dirOf(locale)}>
+    <main className={`${styles.screen} ${rubikUnknown.className}`} lang={locale} dir={dirOf(locale)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         className={styles.mark}

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requestRefs, resolveRequest } from '@/source/request-fixture';
+import { rubikPreloadHebrew } from '@/fonts/rubik-preload-hebrew';
 import { RequestScreen } from '@/ui/storefront/request/RequestScreen';
 
 export const dynamicParams = false;
@@ -26,6 +27,7 @@ export default async function Page({ params }: { params: Promise<{ ref: string }
       requestRef={resolved.ref}
       slug={resolved.slug}
       contentLocale={resolved.contentLocale}
+      fontClass={rubikPreloadHebrew.className}
     />
   );
 }

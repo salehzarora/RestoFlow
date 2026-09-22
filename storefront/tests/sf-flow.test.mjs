@@ -549,3 +549,101 @@ test('the evidence-only both-off tenant exists and never ships', async () => {
     'a demo tenant must never reach the shipped export',
   );
 });
+
+// --------------------------------------------------------------- eligibility
+//
+// The ONE submission-eligibility predicate (correction pass, item 1): every
+// step control and the send read it. Ordering must be EXACTLY 'open'; a
+// closed, paused or unresolved reading refuses whatever else is valid.
+
+const eligibility = await import('../src/ui/storefront/checkout/eligibility.ts');
+const { submitEligibility, orderingBlocker, orderingReason } = eligibility;
+const { storefrontMessages } = await import('../src/i18n/storefront.ts');
+const okDelivery = draft({ service: 'delivery', fullName: 'SYNTH NAME', phone: '052-123-4567', zoneId: 'kafrmanda', area: 'SYNTH AREA', street: 'SYNTH ST', building: '7' });
+
+test('orderingBlocker: exactly open authorises; closed and paused are named; anything else is unresolved, never open', () => {
+  assert.equal(orderingBlocker('open'), null);
+  assert.equal(orderingBlocker('closed'), 'closed');
+  assert.equal(orderingBlocker('paused'), 'paused');
+  assert.equal(orderingBlocker(null), 'unresolved');
+  assert.equal(orderingBlocker('OPEN'), 'unresolved');
+  assert.equal(orderingBlocker('opening'), 'unresolved');
+  assert.equal(orderingBlocker(''), 'unresolved');
+});
+
+test('submitEligibility: the positive control - open, ready, settled, a cart and valid details', () => {
+  const q = quoteFor();
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: true });
+});
+
+test('submitEligibility: closed, paused and unresolved refuse an otherwise valid send, for either service', () => {
+  const q = quoteFor();
+  const qd = quoteFor({ service: 'delivery', zone: findZone('kafrmanda') });
+  for (const [state, blocker] of [['closed', 'closed'], ['paused', 'paused'], [null, 'unresolved'], ['later', 'unresolved']]) {
+    assert.deepEqual(submitEligibility({ state, ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker }, `${state} pickup`);
+    assert.deepEqual(submitEligibility({ state, ready: true, pending: false, quote: qd, draft: okDelivery, services: BOTH }), { ok: false, blocker }, `${state} delivery`);
+  }
+});
+
+test('submitEligibility: the blockers come in the order the visitor can act on them', () => {
+  const q = quoteFor();
+  // Not ready beats everything (there is nothing to decide against).
+  assert.deepEqual(submitEligibility({ state: 'closed', ready: false, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: null, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
+  // Then the restaurant's state, before the cart or the details.
+  const emptyQ = buildQuote({ cart: empty(), items: MENU_ITEMS, service: 'pickup', zone: null, taxRate: TAX_RATE });
+  assert.deepEqual(submitEligibility({ state: 'paused', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'paused' });
+  // Then the cart, then the details, then a total that is still settling.
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'empty' });
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'details' });
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: NEITHER }), { ok: false, blocker: 'details' });
+  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: true, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'pending' });
+});
+
+test('orderingReason: the two existing localised strings, in every language, and nothing invented for unresolved', () => {
+  for (const locale of ['ar', 'en', 'he']) {
+    const m = storefrontMessages(locale);
+    assert.equal(orderingReason('closed', m, '10:00'), m.orderingClosed.replace('{t}', '10:00'));
+    assert.ok(orderingReason('closed', m, '10:00').includes('10:00'));
+    assert.equal(orderingReason('paused', m, '10:00'), m.orderingPaused);
+    assert.equal(orderingReason('unresolved', m, '10:00'), null);
+    assert.equal(orderingReason(null, m, '10:00'), null);
+  }
+});
+
+test('the fixture gateway refuses at its COMMIT instant when ordering is not open, and never invents a reason for an unknown reading', async () => {
+  const sub = submissionFor();
+  let state = 'open';
+  const gateway = submit.fixtureGateway({ delayMs: 0, readiness: () => state });
+  assert.deepEqual(await gateway(sub), { kind: 'accepted', ref: DEMO_REQUEST_REF });
+  state = 'closed';
+  assert.deepEqual(await gateway(sub), { kind: 'not_open', state: 'closed' });
+  state = 'paused';
+  assert.deepEqual(await gateway(sub), { kind: 'not_open', state: 'paused' });
+  state = 'weird';
+  assert.deepEqual(await gateway(sub), { kind: 'server_error' });
+  // A gateway without a reader (the unit-test seam) stays as it was.
+  assert.deepEqual(await submit.fixtureGateway({ delayMs: 0 })(sub), { kind: 'accepted', ref: DEMO_REQUEST_REF });
+  // The reading is taken AFTER the delay, i.e. at the commit, not at the call.
+  state = 'open';
+  const slow = submit.fixtureGateway({ delayMs: 5, readiness: () => state });
+  const p = slow(sub);
+  state = 'closed';
+  assert.deepEqual(await p, { kind: 'not_open', state: 'closed' });
+});
+
+test('the readiness scenarios are fixture tokens: closed allowlist, evidence only, carried like every other token', async () => {
+  const { readFlowScenario, readinessFor, withFlowScenario, FLOW_SCENARIOS } = await import('../src/source/flow-scenarios.ts');
+  for (const token of ['closes-late', 'pauses-late', 'opens-late']) {
+    assert.equal(readFlowScenario(`?fx=${token}`), token);
+    assert.ok(FLOW_SCENARIOS.includes(token));
+    assert.ok(readinessFor(token) !== null);
+    assert.equal(withFlowScenario('/s/x/review', token), `/s/x/review?fx=${token}`);
+  }
+  assert.deepEqual(readinessFor('closes-late'), { later: { state: 'closed', afterMs: 1500 } });
+  assert.deepEqual(readinessFor('pauses-late'), { later: { state: 'paused', afterMs: 1500 } });
+  assert.deepEqual(readinessFor('opens-late'), { initial: 'closed', later: { state: 'open', afterMs: 1500 } });
+  assert.equal(readinessFor('closes-now'), null);
+  assert.equal(readFlowScenario('?fx=closes-now'), '');
+  assert.equal(readinessFor(''), null);
+});

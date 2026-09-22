@@ -14,6 +14,12 @@
  * A third entry exists purely to make a RACE reproducible: it slows a smaller
  * cart's quote so an older request always resolves after a newer one.
  *
+ * A fourth group makes a READINESS CHANGE reproducible: the restaurant's
+ * ordering state is a build-time fact of a fixture document, so the only way
+ * to prove that a step already entered refuses a send once ordering closes
+ * (or admits one once it reopens) is a scenario that flips the state after a
+ * fixed delay. Evidence only; the shipped tenant is open and no token is set.
+ *
  * WHY THIS MODULE EXISTS AT ALL. `tests/sf-source-rules.test.mjs` forbids the
  * scenario switch from appearing outside the fixture layer, and that rule is
  * right: the whole switch must disappear with the fixtures when a live adapter
@@ -23,6 +29,8 @@
  * Everything here is PRESENTATIONAL. Nothing in this file mutates a cart,
  * changes a price, writes to storage or reaches a network.
  */
+
+import type { ServiceState } from './types';
 
 /** The three designed cart notices (Storefront.dc.html:849). */
 export type FlowNoticeKind = 'changed' | 'price' | 'soldOut';
@@ -51,6 +59,20 @@ const SENDS: Readonly<Record<string, FlowSendOutcome>> = {
 
 const RACE = 'quote-race';
 
+/** A readiness change after the flow was entered (see the header). */
+export interface ReadinessScenario {
+  /** The state to start from instead of the document's, if any. */
+  readonly initial?: ServiceState;
+  /** The state the restaurant moves to, and when. */
+  readonly later?: { readonly state: ServiceState; readonly afterMs: number };
+}
+
+const READINESS: Readonly<Record<string, ReadinessScenario>> = {
+  'closes-late': { later: { state: 'closed', afterMs: 1500 } },
+  'pauses-late': { later: { state: 'paused', afterMs: 1500 } },
+  'opens-late': { initial: 'closed', later: { state: 'open', afterMs: 1500 } },
+};
+
 /** The one query parameter this switch reads: `?fx=<token>`. */
 const PARAM = 'fx';
 
@@ -63,7 +85,7 @@ const PARAM = 'fx';
 export function readFlowScenario(search: string): string {
   const value = new URLSearchParams(search).get(PARAM);
   if (value === null) return '';
-  return value in NOTICES || value in SENDS || value === RACE ? value : '';
+  return value in NOTICES || value in SENDS || value in READINESS || value === RACE ? value : '';
 }
 
 /**
@@ -89,9 +111,14 @@ export function isQuoteRace(scenario: string): boolean {
   return scenario === RACE;
 }
 
+export function readinessFor(scenario: string): ReadinessScenario | null {
+  return READINESS[scenario] ?? null;
+}
+
 /** Every token this build accepts, for the evidence index and for tests. */
 export const FLOW_SCENARIOS: readonly string[] = [
   ...Object.keys(NOTICES),
   ...Object.keys(SENDS),
+  ...Object.keys(READINESS),
   RACE,
 ];

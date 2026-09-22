@@ -25,13 +25,14 @@ import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary, type ResolvedCartLine } from '@/cart/cartModel';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { MotionMode, ServiceState } from '@/source/types';
 import { AlertIcon, InfoIcon, MinusIcon, NoteIcon, PlusIcon, TrolleyIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { Announcer, Banner, Bidi, FooterCta, Interpolate, Money, Totals, CartHeader } from './flowParts';
+import { orderingBlocker, orderingReason } from './eligibility';
 import s from './flow.module.css';
 
 /**
@@ -45,12 +46,6 @@ export interface CartNotice {
   readonly kind: CartNoticeKind;
   /** The real item name for `soldOut`. Never a placeholder. */
   readonly itemName?: string;
-}
-
-function blockedReason(state: ServiceState, m: StorefrontMessages, opensAt: string): string | null {
-  if (state === 'closed') return fill(m.orderingClosed, { t: opensAt });
-  if (state === 'paused') return m.orderingPaused;
-  return null;
 }
 
 function CartLineCard({
@@ -197,7 +192,8 @@ export function CartScreen({
 }) {
   const [announcement, setAnnouncement] = useState('');
   const lines = cart.summary.lines;
-  const reason = blockedReason(state, m, opensAt);
+  // The one shared reason: exactly 'open' proceeds, anything else states why.
+  const reason = orderingReason(orderingBlocker(state), m, opensAt);
 
   const setQty = useCallback(
     (line: ResolvedCartLine, next: number) => {

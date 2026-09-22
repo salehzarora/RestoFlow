@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { rubikPreloadHebrew } from '@/fonts/rubik-preload-hebrew';
 import { CheckoutDraftProvider } from '@/ui/storefront/checkout/CheckoutDraftProvider';
 
 /**
@@ -12,6 +13,10 @@ import { CheckoutDraftProvider } from '@/ui/storefront/checkout/CheckoutDraftPro
  *
  * The provider is keyed by the CANONICAL slug, so one tenant's draft can never
  * be observed by another.
+ *
+ * It also binds THIS root's font set (two preloaded subsets, one on demand -
+ * src/fonts/README.md) on a wrapper element: bound any higher, in the root
+ * layout, the pinned toolchain links every root's set into every document.
  */
 export default async function SlugLayout({
   children,
@@ -21,5 +26,9 @@ export default async function SlugLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <CheckoutDraftProvider slug={slug}>{children}</CheckoutDraftProvider>;
+  return (
+    <CheckoutDraftProvider slug={slug}>
+      <div className={rubikPreloadHebrew.className} data-sf-fonts="">{children}</div>
+    </CheckoutDraftProvider>
+  );
 }

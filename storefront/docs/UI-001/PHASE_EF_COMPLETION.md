@@ -578,16 +578,21 @@ met only under production-like compression.** Neither is hidden behind the
   production compresses text (Vercel does), and under that transfer the
   target is met with a 1 s margin. The uncompressed figure is what a
   compression-less host would show and is reported for that reason.
-- **Long tasks.** The trace attributes the main-thread time to `Layout`
-  (612 ms) and `Paint` (555 ms), not to script: `EvaluateScript` is 142 ms
-  and `FunctionCall` 148 ms across all chunks. That is the approved Home's
-  paint cost under 4× throttle — the PR-5 `backdrop-filter` glass on the
-  compact bar and dock, and the module count — not a JS-weight problem the
-  permitted optimisations (§8) can address. The decision that could change
-  it (a no-blur fallback for low-end devices) is a VISUAL change and is
-  listed for the owner in `DEFERRED_AND_RELEASE_GATES.md`; it was not made
-  here. The figure is also noisier than the E-stage trial (raw 269 → 389,
-  br 563 → 637): a throttled lab on a shared workstation, five runs — the
+- **Long tasks.** ~~The trace attributes the main-thread time to `Layout`
+  (612 ms) and `Paint` (555 ms) … the PR-5 `backdrop-filter` glass on the
+  compact bar and dock~~ — **WITHDRAWN (correction pass, §6).** That
+  attribution was wrong on two counts the final review caught: the trace sums
+  were whole-trace, all-thread totals with nested events double-counted (a
+  `RunTask` added to the `Layout` it contains), not main-thread self time in
+  the long-task windows; and the glass was not rendering at all in the
+  reviewed export (the build kept only `-webkit-backdrop-filter`, which the
+  lab's Chromium ignores), so blur could not have been the cause of
+  anything. The correct attribution, from the renderer main thread's self
+  time inside the > 50 ms windows with a verified paired arm, is in §6.4: the
+  first layout, dominated by the `local()` fallback font faces and by laying
+  out ~4,300 px of below-the-fold content; blur measured within noise. The
+  figure was also noisier than the E-stage trial (raw 269 → 389, br
+  563 → 637): a throttled lab on a shared workstation, five runs — the
   spread is in the JSON.
 
 Nothing about these figures is field data; the hosted gate (Lighthouse /
@@ -621,15 +626,28 @@ blocked behaviour, no forced loss of cart or draft, not reopened for an
 _Observations that need no further phase; recorded so the final review does
 not rediscover them._
 
-- **Three review findings were refuted and left alone**, with the reason:
+- **Three review findings were not confirmed by their verifiers**; the
+  verifiers' own recorded reasons (the workflow journal, quoted in the F
+  pack's `review/phase-e-adversarial-findings.json`), not a paraphrase:
   (a) "recreating `source` resubscribes without resetting the snapshot" —
-  the source identity changes only with an injected `clock` / `statusSource`
-  prop, which production never passes; (b) "the last unsubscribe clears the
-  scenario timers, so under `reactStrictMode` the `-late` scenarios never
-  fire" — the export runs no StrictMode double-mount, and the E suite proves
-  both scenarios fire; (c) "E-BACK cannot detect a surviving draft" — the
-  review step's guard redirects an empty draft, which is what E-BACK asserts
-  through the landing path and the empty field.
+  *"the mechanism the finding describes is accurately read from the code,
+  but no reachable input produces the wrong output"*: the only caller,
+  `RequestScreen`, passes no `clock`, `statusSource`, `launcher` or `copy`,
+  so the memoised identities never change in the delivered runtime (a latent
+  hazard for a future caller, not a defect); (b) "under `reactStrictMode` the
+  `-late` scenarios never fire" — *"NOT REPRODUCED. The finding's premise —
+  that StrictMode runs the subscribe effect mount → cleanup → mount while a
+  live source is attached — is false for this component"*: `source` is null
+  on the mount render, so the double-invoked effect subscribes to nothing,
+  and the live subscription is created by the later `decided` update
+  (the earlier wording here, "the export runs no StrictMode double-mount",
+  was wrong as a reason and is withdrawn); (c) "E-BACK cannot detect a
+  surviving draft" — *"the test therefore does go red on that regression
+  (slowly and for an opaque reason), not green"*: with no `actionTimeout`
+  the `inputValue().catch()` would auto-wait to the 60 s test timeout, and
+  the two-way `/review | /checkout` acceptance was broader than the recorded
+  landing. The residual MINOR was fixed in the correction pass: E-BACK now
+  waits for `/checkout` exactly and asserts the field exists and is empty.
 - The G27 `provenBy` citation in the LOCKED pack points at the wrong
   capture; noted for the pack's owner, the pack is not edited.
 - The Hebrew copy has had no native reading pass (pack OQ-3); the 43 E keys
@@ -640,3 +658,274 @@ not rediscover them._
 - The evidence folder `ui001e-evidence/` was regenerated by the final pass;
   its PNGs supersede the ones captured before the F corrections (the G35
   sheet capture, for instance, now follows the Tab-from-sheet-body probe).
+
+---
+
+## 6. The final local correction pass (owner-activated, 2026-09-22)
+
+Authority: the owner's activation *OWNER APPROVED — UI-001 FINAL CORRECTION
+LOCAL* with the *BIZBOT STOREFRONT — ONE FINAL LOCAL CORRECTION PASS* packet
+inline. The bundled review and mandate files it names
+(`sources/Pasted markdown(20260922-160953).md`,
+`sources/BIZBOT_STOREFRONT_UI_001_FABLE_FINISH_LOCAL.txt`,
+`01_FINAL_CORRECTION_Fable.txt`) were not on disk after a bounded search
+(Desktop, Downloads, Documents, the repository); the packet's own account of
+the findings is the authority for this pass, and that is recorded here and in
+the pack's `FINDINGS_DISPOSITION.md`. Starting HEAD `940d8f68`; one
+correction checkpoint follows.
+
+### 6.1 DECISION C-1 — ordering is exactly 'open' (review item 1)
+
+One predicate, `submitEligibility` (`checkout/eligibility.ts`), answers every
+step control, both entry guards and the send: ordering must be EXACTLY
+`'open'` (closed, paused, unresolved and any value this build does not know
+refuse), then the visitor's own cart must have been read and priced, then the
+cart non-empty, then the details valid for the services offered, then the
+total settled. `orderingReason` returns the two existing localised strings
+(`orderingClosed {t}`, `orderingPaused`) and nothing invented for
+"unresolved". The cart's own control already used the closed / paused
+reason; it now reads the same predicate.
+
+- Readiness is LIVE in `FlowRuntime`: it starts as the document's build-time
+  state and is read at every render and at the send's activation through a
+  ref — a pointer tap, Enter, Space and a forced DOM `click()` reach one
+  handler that reads the CURRENT answer, so a stale closure cannot send.
+- A closed or paused restaurant never redirects (a redirect would loop: no
+  earlier step is "the one where the restaurant opens"). The step renders,
+  the form stays editable, the draft and the cart stay untouched, and the
+  progression control states the reason; the two prerequisite redirects
+  (empty cart → cart, empty details → checkout) stay, and now carry the demo
+  token like every other step navigation (a deep link with a readiness token
+  was losing it).
+- The fixture gateway reads readiness at its COMMIT instant
+  (`fixtureGateway({ readiness })`): a send activated while open and
+  committed after a close is refused with `{ kind: 'not_open', state }`,
+  rendered with the same closed / paused reason as a banner and on the
+  control; a send committed before the close stands, and the close never
+  erases it (the received view and the status of that request are shown as
+  before). A reading the gateway does not know is `server_error`, not a
+  fabricated reason.
+- The only way readiness can change inside one document in a fixture build is
+  a fixture scenario, so three evidence-only tokens exist
+  (`closes-late`, `pauses-late`, `opens-late`, 1.5 s, replayed per step
+  mount); the shipped tenant is open and the shipped URL carries no token.
+- Proof: unit (`sf-flow`: the predicate's table, its order, the reasons in
+  three languages, the gateway's commit-time refusal) and browser
+  (`storefront-ui-001g.spec.ts`, evidence build, `page.clock`: the open
+  positive control with exactly one gateway call; closed and paused direct
+  checkout / payment / review with a valid cart; open → closed and open →
+  paused after entering the flow, refused at activation with zero gateway
+  calls and the draft intact; closed → open admitting the same input;
+  commit-time refusal and commit-before-close standing). The reviewed target
+  (`940d8f68`) fails the same cases — the cart proceeds to payment on a
+  closed restaurant, the send stays enabled after a close — recorded in the
+  pack (`logs/negative-control-reviewed-target-940d8f68.log`).
+
+### 6.2 DECISION C-2 — the approved glass is real in the built output (item 2)
+
+The source carried `backdrop-filter` FOLLOWED by `-webkit-backdrop-filter`;
+Turbopack's CSS pipeline (lightningcss) on the pinned toolchain treats a
+prefixed declaration that follows the unprefixed one as an override and emits
+only the prefixed one, which the lab's Chromium ignores — so the export had
+no glass. Demonstrated on the pinned toolchain in an owned scratch copy
+(prefixed-first: both declarations emitted; source order as reviewed:
+prefixed only). The smallest source-only correction: the prefixed
+declaration FIRST, the unprefixed one LAST, in the three modules
+(`home`, `Intro`, `LanguageMenu`; nine declarations), through the existing
+build path — no config, dependency, minifier override, runtime injection or
+post-build patch. Proof on a real rebuilt export: nine unprefixed and nine
+prefixed declarations served; a non-none computed `backdrop-filter` on every
+consumer — hero icon button (10 px), service strip (14), compact header (14),
+badge (8), cart dock (14), intro glass button (10), intro pills (10), language
+control (10) and its panel (14) — on Chromium, and on Firefox 1532 and
+WebKit 2311 for the hero control, strip and dock (both report the unprefixed
+property as supported); the geometry the glass sits on unchanged (hero 298,
+dock 60); a scratch negative control with the declarations removed is
+detected (`computed: none`). No blur fallback is shipped or removed.
+
+### 6.3 DECISION C-3 — CSS and font-preload limits: validators, fonts met, CSS raw not (items 3, 4)
+
+The written limits — CSS per direct-load route ≤ 70,000 B raw AND ≤ 14,000 B
+Brotli; font preloads per route ≤ 2 files AND ≤ 120,000 B — are now in
+`scripts/budgets.mjs`, measured per route by `scripts/measure-firstload.mjs`
+(unique referenced stylesheets, per-response Brotli by the existing method,
+inline `<style>` reported separately; `link rel=preload as=font` plus any
+`Link`-header preload the committed header set would add, of which there are
+none), asserted by `scripts/audit-output.mjs` and by
+`tests/output/output.test.mjs` with nonzero-coverage assertions (36 routes,
+≥ 1 stylesheet each, 2 preloads on every storefront document) and negative
+controls (an oversized stylesheet, a third preload and an oversized preload
+set each fail the checker; a planted 80,000 B stylesheet and three preloads
+are COUNTED by the measurer).
+
+**Fonts — met.** The pinned `next/font/local` decides `preload` per call and
+offers no per-file `unicode-range` or preload, so each subset is its own
+call and its own family; the three are composed in `--font` and walked per
+character by their script blocks' `unicode-range`. Per root: `/`, `/ar`,
+`/en` preload Latin + Arabic (67,816 B) and fetch Hebrew (which carries `₪`)
+on demand; `/he` preloads Latin + Hebrew (44,696 B) and fetches Arabic on
+demand; the 404 document preloads nothing. Every set is bound one level
+below the root layout (the slug layout's wrapper, the request page's prop):
+sibling root layouts share one chunk group on this toolchain, so a set
+imported by a root layout was linked into every root's documents; the
+not-found boundary is part of every route's tree, so the 404 document's own
+set holds only on-demand calls of its own; and the arrangement of module
+names and import order is load-bearing, because the toolchain's loose CSS
+merging absorbs one set into the chunk every document links depending on it
+(ten builds, recorded in the pack). Preloading Arabic instead of Latin on
+`/he` could not be kept at two preloads for that reason; the Arabic swap on
+`/he` is instead made near-invisible by Segoe UI's Arabic metrics
+(rubik/segoe widths 98–103 %), which is the system fallback the family list
+reaches. Rendering and swap measured: every script renders in Rubik on all
+three roots, the on-demand subset is fetched when its script appears, and
+the layout shift after `fonts.ready` is 0.00 on AR, EN and HE Home
+(G-FONTS). `src/fonts/README.md` records the arrangement.
+
+**CSS raw — not met, structurally, on this toolchain.** Every client CSS
+module is merged into ONE chunk that every document links (proven:
+`entryCSSFiles` lists the same chunk for every page and for the not-found
+boundary; JS is split per route, CSS is not). `experimental.cssChunking:
+'strict'` is refused by Turbopack ("only supported with webpack") — proven
+by a build in the scratch copy — and switching the bundler is a
+`package.json` / `next.config.mjs` change, both protected. The only
+storefront-local levers were taken: server-only CSS is per entry, so the
+placeholder shell's classes moved from `app/globals.css` into a CSS Module
+the placeholder alone imports (−1,155 B on every storefront document); the
+scan of unreferenced rules found 42 B, and cross-module duplicate
+declaration bodies total ~3 KB — nowhere near the ~24 KB the raw limit
+needs. Final: 84,352 B on the flow / request / search documents and
+93,989 B on the home / intro documents (the menu documents link the intro's
+server-side chunk as well, another loose-merge choice), against 70,000;
+Brotli 11,830 / 13,729 against 14,000 — met. The raw axis is carried to the
+owner as one decision (§6.6); the validators FAIL on it, as written.
+
+### 6.4 DECISION C-4 — performance: cause found, two candidates, original-mode LCP residual (item 5)
+
+Post-correction measurement first (real glass, corrected fonts, before any
+optimisation), then the cause, then at most two candidates, then the final
+measurement — all under the unchanged protocol (Chromium, AR Home 390×844,
+4× CPU, 1.6 Mbps / 150 ms, cold, 5 runs, medians; original uncompressed
+transport as the contract, Brotli supplemental).
+
+| Stage | Transport | LCP | Long tasks > 50 ms (sum) | Long tasks total | CLS | Font swap |
+|---|---|---|---|---|---|---|
+| Baseline (reviewed, `940d8f68`, glass absent) | uncompressed | 3,028 FAIL | 389 FAIL | 539 | 0 | 0 |
+| Baseline | Brotli | 1,464 PASS | 637 FAIL | 868 | 0 | 0 |
+| Post-correction (glass real, fonts, ordering) | uncompressed | 2,836 FAIL | 311 FAIL | 411 | 0 | 0 |
+| Post-correction | Brotli | 1,408 PASS | 777 FAIL | 927 | 0 | 0 |
+| Candidate 1 (no `local()` fallback faces) | Brotli | 1,396 PASS | 472 FAIL | 678 | 0 | 0 |
+| **Candidate 2 (+ off-screen sections deferred)** | **uncompressed** | **2,708 FAIL** | **207 PASS** | 307 | 0 | 0 |
+| **Candidate 2** | **Brotli** | **1,424 PASS** | **270 PASS** | 420 | 0 | 0 |
+
+Cause analysis (renderer main thread only, self time inside the > 50 ms
+windows, nested events subtracted, off-thread parsing excluded; the page's
+own `PerformanceObserver` long-task sum agrees with the trace-derived
+windows within 3 ms): the windows are ~85 % rendering, ~15 % script (React's
+hydration commit in `RunMicrotasks`); the rendering is almost entirely ONE
+event, the first `Layout` at DOMContentLoaded — 597 ms in the post-correction
+build — plus the full relayout when each preloaded font arrives (~150 ms).
+The paired arm with the glass declarations neutralised through the CSSOM
+(verified: nine rules changed, computed `backdrop-filter: none`) moved the
+sum by ~50 ms (776 → 725) — **blur is not the cause; the earlier
+attribution is withdrawn (§3.9.4)**. Hypothesis arms, one neutralised at a
+time with the change verified (`perf-arms-br.json`): container queries,
+text-shadow, box-shadow, animations, the hero SVG and the images each
+changed nothing; removing the two `src: local()` fallback faces (next/font's
+generated Arial face and the Segoe UI face this pass had added for Arabic)
+cut the first layout from ~590 to ~290 ms — `local()` matching walks the
+installed font collection under throttle; removing every `@font-face` cut it
+to ~240 ms. **Causality: supported** for the `local()` faces (paired,
+verified, reproduced); for the remaining first-layout cost the arm that
+removed the off-screen work (candidate 2) is the evidence.
+
+- **Candidate 1:** no `local()` fallback face at all (`adjustFontFallback`
+  off, the hand-written faces removed; the family list falls to the system
+  list). Design-preserving: the design fixes every line-height, and the swap
+  shift measured 0 with and without the metric overrides (lab, G-FONTS).
+  Brotli long tasks 777 → 472.
+- **Candidate 2:** `content-visibility: auto` with `contain-intrinsic-size:
+  auto <size>` on the category sections, the story and the footer — the
+  ~4,300 px below a 390×844 first screen. Off-screen layout and paint are
+  deferred until a section nears the viewport; what is painted is identical,
+  the DOM and the accessibility tree are untouched, anchors and
+  `scrollIntoView` render their target on demand, `auto` keeps a rendered
+  section's real size. Long tasks 472 → 270 (Brotli) and 311 → 207
+  (uncompressed): PASS on both transports. Every browser suite was rerun on
+  the final build (§6.7).
+
+**Residual: LCP under the original uncompressed transport, 2,708 ms
+(2,648–2,940) against 2,500.** The LCP element is the hero image in every
+run; ahead of it the link carries the 128 KB document and 94 KB of CSS
+uncompressed. Under production-like Brotli the same page reaches LCP at
+1,424 ms. Carried to the owner as one decision (§6.6); no threshold is
+changed, no result waived.
+
+### 6.5 The smaller closures (items 6–12)
+
+- The blur attribution: withdrawn in place (§3.9.4) with the forward record
+  above; the sealed F report is untouched.
+- CSS / font limits: written limits, baseline exceeded (93,092 raw / 12,624
+  Brotli; 3 preloads / 77,164 B), final outcome per §6.3.
+- H01: no test named H01 existed; the intro of the evidence slugs did not
+  even have a document (the intro page pre-rendered the canonical slug
+  only). The evidence build now emits the demo slugs' intro documents
+  (shipped set unchanged), and `G-H01` asserts closed / paused with the
+  right tone, a non-pulsing state dot, and the switched-off service pill,
+  with the open intro as the positive control. `FINAL_COVERAGE` had
+  claimed "b1 (H01 states)"; that claim is withdrawn in the new coverage map.
+- The three not-confirmed findings: §5, reworded to the verifiers' own
+  reasons; the E-BACK residual fixed.
+- WhatsApp / chat: external navigation stays forbidden. The launcher's typed
+  `'simulated'` result is now SURFACED: the demo disclosure is a
+  `role="status"` live region that re-issues its one approved sentence
+  (a fresh node, so it is announced again) and flashes once on every
+  simulated launch — "continue on WhatsApp", "open chat" and the fallback's
+  "open WhatsApp Web" (which now keeps the visitor on received with the copy
+  control in reach). The sentence never claims a launch; the message preview
+  is unchanged by a launch and carries no contact field or note; no popup,
+  no request, no navigation (G-CHAT; the reviewed target had `role="note"`
+  and no feedback).
+- Clipboard: the real-write gate and the exact 1,600 ms are unchanged and
+  still asserted (H19, H19 fallback).
+- Cross-engine CSP: the WebKit shim is now asserted to differ from the
+  committed policy by exactly one directive, and an inline-style negative
+  control (an injected `<style>` and a `style` attribute, both refused,
+  `securitypolicyviolation` reported) proves the policy each engine received
+  is enforced. The public-TLS evidence is not reopened; a self-signed
+  transport would be a test limitation, not `bypassCSP` and not proof of
+  public TLS. WebKit ≠ Safari stays explicit.
+- Hebrew native reading: public-launch QA, unchanged. Arrow / chevron and
+  the selected-unavailable disposition: not reopened.
+
+### 6.6 ONE consolidated owner decision (the residual gates)
+
+Two written gates remain unmet after the bounded work, both structural on
+the pinned toolchain / protocol rather than defects in the storefront's
+behaviour, both measured and validated honestly (the validators FAIL):
+
+1. **CSS per route, raw axis:** 84,352 B (flow / request / search) and
+   93,989 B (home / intro) against 70,000 B; the Brotli axis (11,830 /
+   13,729 against 14,000) is met. Cause: Turbopack merges all client CSS
+   into one chunk per app and refuses strict chunking; changing that needs
+   a protected file. Options: (a) accept the raw axis as met by the
+   compressed axis for this bundler (the raw limit was written as a proxy
+   for transfer; production transfers Brotli); (b) authorise the protected
+   change (webpack with `cssChunking: 'strict'` — `package.json` /
+   `next.config.mjs`) as a separate ticket; (c) a design reduction of ~24 KB
+   of real, referenced rules across the eleven screens.
+2. **LCP under the original uncompressed transport:** 2,708 ms against
+   2,500 ms (Brotli 1,424 ms). Cause: 222 KB of uncompressed document + CSS
+   ahead of the hero image on a 1.6 Mbps link. Options: (a) adopt the
+   production-like compressed transport as the acceptance transport for
+   LCP (the host compresses); (b) reduce the document ahead of the image —
+   the inline RSC payload duplicates the menu (a shared-engine matter, not
+   storefront-local); (c) a smaller / lower-priority hero image (a design
+   change).
+
+Everything else in this pass passes its gate; nothing was lowered, waived or
+relabelled.
+
+### 6.7 Final validation (this pass, one controlled lane, shipped build last)
+
+Filled from the final logs in the correction pack's
+`FINAL_CORRECTION_REPORT.md` §3; the pack is the record.

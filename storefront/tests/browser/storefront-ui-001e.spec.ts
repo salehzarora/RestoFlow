@@ -1009,12 +1009,16 @@ test('E-BACK Back from the request route returns into the flow with the cart int
   await toReview(page, { delivery: false });
   await send(page);
   await page.goBack();
-  await page.waitForTimeout(800);
+  // The draft lived in the slug segment's provider, which the request route
+  // unmounted: Back lands on the review step, whose guard finds an EMPTY
+  // draft and replaces it with the details step. Both facts are asserted
+  // exactly - a surviving draft would keep the review step and fail here.
+  await page.waitForURL(`**/s/${SLUG}/checkout**`, { timeout: 10_000 });
   const pathname = new URL(page.url()).pathname;
-  // The review step's guard sends an empty draft back to details.
-  expect([`/s/${SLUG}/review`, `/s/${SLUG}/checkout`]).toContain(pathname);
+  expect(pathname).toBe(`/s/${SLUG}/checkout`);
   expect(await page.evaluate((k) => window.localStorage.getItem(k), CART_KEY)).not.toBeNull();
-  expect(await page.locator('[data-sf-field="fullName"]').inputValue().catch(() => '')).toBe('');
+  await expect(page.locator('[data-sf-field="fullName"]')).toHaveCount(1);
+  await expect(page.locator('[data-sf-field="fullName"]')).toHaveValue('');
   // Forward again: received was shown ONCE. The same document, the same
   // handoff - the request route now renders status, not the received view.
   await page.goForward();

@@ -11,7 +11,6 @@
  */
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
-import { rubik } from '@/fonts/rubik';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import { cartPath, checkoutPath, searchPath } from '@/routes/routes';
@@ -104,7 +103,7 @@ export function Home({
   return (
     <ThemeScope
       tokens={tokens}
-      className={`${shell.root} ${rubik.variable} ${MOTION_CLASS[view.motion]}`}
+      className={`${shell.root} ${MOTION_CLASS[view.motion]}`}
       dir={dirOf(locale)}
     >
       {/*

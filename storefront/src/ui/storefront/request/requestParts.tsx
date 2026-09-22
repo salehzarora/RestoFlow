@@ -103,11 +103,26 @@ export function LineRows({
  * original copy: the storefront has no demo-mode notice of its own, and a
  * received screen that opened no WhatsApp must say so somewhere the visitor
  * can read.
+ *
+ * It is ALSO the feedback for every simulated launch: a tap on "continue on
+ * WhatsApp", "open chat" or "open WhatsApp Web" opens nothing (DEFERRED
+ * WA-001), and a click that does nothing visible is not feedback. The
+ * launcher's typed result is surfaced HERE - the disclosure is a `role="status"`
+ * live region, and each simulated launch re-issues its one sentence (a fresh
+ * node, so assistive technology announces it again) and flashes it once.
+ * Nothing claims WhatsApp opened or a message was sent; the copy says the
+ * opposite, in the visitor's language.
  */
-export function DemoNote({ m }: { m: StorefrontMessages }) {
+export function DemoNote({ m, fired = 0 }: { m: StorefrontMessages; fired?: number }) {
   return (
-    <p className={s.demoNote} role="note" data-sf-demo-note="">
-      {m.demoNotice}
+    <p
+      className={`${s.demoNote} ${fired > 0 ? s.demoNoteFired : ''}`}
+      role="status"
+      aria-live="polite"
+      data-sf-demo-note=""
+      data-sf-demo-note-fired={fired}
+    >
+      <span key={fired}>{m.demoNotice}</span>
     </p>
   );
 }

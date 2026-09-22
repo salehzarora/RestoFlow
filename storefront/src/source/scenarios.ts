@@ -91,6 +91,23 @@ export const SCENARIOS: readonly Scenario[] = [
     options: trimmed(),
   },
   {
+    slug: 'demo-pickup-off',
+    proves:
+      'D1-C2 one service available while OPEN - the step moves to the available '
+      + 'service and availability alone never blocks progression (demo-closed also '
+      + 'has pickup off, but it is closed, and ordering that is not open blocks)',
+    preset: 'dark',
+    service: { pickupEnabled: false },
+    options: trimmed(),
+  },
+  {
+    slug: 'demo-delivery-off',
+    proves: 'D1-C2 one service available while OPEN, the other direction',
+    preset: 'dark',
+    service: { deliveryEnabled: false },
+    options: trimmed(),
+  },
+  {
     slug: 'demo-empty',
     proves: 'H02 emptyMenu',
     preset: 'dark',

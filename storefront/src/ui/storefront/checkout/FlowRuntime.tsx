@@ -40,6 +40,7 @@ import {
   isQuoteRace,
   noticeFor,
   readFlowScenario,
+  readinessFor,
   sendOutcomeFor,
   withFlowScenario,
 } from '@/source/flow-scenarios';
@@ -52,6 +53,7 @@ import { DetailsScreen, type FlowTenant } from './DetailsScreen';
 import { PaymentScreen } from './PaymentScreen';
 import { ReviewScreen } from './ReviewScreen';
 import { validateCheckout } from './validation';
+import { orderingBlocker, orderingReason, submitEligibility } from './eligibility';
 import { fixtureGateway, type CompletionObserver, type RequestGateway } from './submit';
 import { CartHeader, StepHeader } from './flowParts';
 import s from './flow.module.css';
@@ -132,6 +134,33 @@ function FlowBody({
   const source = quoteSource ?? (isQuoteRace(fx) ? raceQuoteSource : undefined);
   const { quote, pending } = useQuote(input, source);
 
+  /*
+   * READINESS - the restaurant's ordering state as this runtime currently
+   * knows it. It starts as the document's build-time fact and is read LIVE by
+   * every guard and by the send: a state that changes after the flow was
+   * entered (the fixture's `*-late` scenarios stand in for a real feed,
+   * DEFERRED STATUS-001) refuses the next step and the send at once, and a
+   * reopening admits the same untouched input. `liveState` is also what the
+   * fixture gateway consults at its commit instant.
+   */
+  const [liveState, setLiveState] = useState<ServiceState>(state);
+  const liveStateRef = useRef<ServiceState>(state);
+  liveStateRef.current = liveState;
+  useEffect(() => {
+    const scenario = readinessFor(fx);
+    setLiveState(scenario?.initial ?? state);
+    if (!scenario?.later) return;
+    const { state: next, afterMs } = scenario.later;
+    const id = setTimeout(() => {
+      // The gateway's reader must see the flip the instant it happens, not
+      // after React has rendered it: a commit due in the same task as the
+      // flip would otherwise read the stale value.
+      liveStateRef.current = next;
+      setLiveState(next);
+    }, afterMs);
+    return () => clearTimeout(id);
+  }, [fx, state]);
+
   const hrefs = useMemo(
     () => ({
       menu: menuPath(locale, slug),
@@ -144,6 +173,18 @@ function FlowBody({
   );
 
   const ready = cart !== null && cart.ready && quote !== null;
+  const services = useMemo(
+    () => ({ pickup: tenant.pickupEnabled, delivery: tenant.deliveryEnabled }),
+    [tenant.deliveryEnabled, tenant.pickupEnabled],
+  );
+
+  /*
+   * THE ONE ELIGIBILITY ANSWER, re-evaluated on every render from the live
+   * readiness, the visitor's own cart, the current quote and the draft.
+   * Every step control and the send read it; nothing else decides.
+   */
+  const eligibility = submitEligibility({ state: liveState, ready, pending, quote, draft, services });
+  const blockedReason = orderingReason(orderingBlocker(liveState), m, tenant.opensAt);
 
   /*
    * ENTRY GUARDS.
@@ -152,6 +193,13 @@ function FlowBody({
    * on `/payment` having entered nothing at all. Showing a payment step for a
    * request that can never be sent would be a lie, so each step redirects to
    * the first one it is missing a prerequisite for.
+   *
+   * A CLOSED or PAUSED restaurant is not a missing prerequisite the visitor
+   * can supply on an earlier step, so it never redirects: the step renders,
+   * the cart and the typed draft stay exactly as they are, the progression
+   * control states the reason, and the same input proceeds once ordering
+   * reopens. (A redirect here would loop: no step is "the one where the
+   * restaurant opens".)
    *
    * They run only once the visitor's OWN cart has been read: before that every
    * cart looks empty and the guard would bounce everyone off checkout.
@@ -163,17 +211,17 @@ function FlowBody({
   useEffect(() => {
     if (!ready || redirected.current) return;
     const empty = quote.lines.length === 0;
-    const details = validateCheckout(draft, quote, {
-      pickup: tenant.pickupEnabled,
-      delivery: tenant.deliveryEnabled,
-    });
+    const details = validateCheckout(draft, quote, services);
     let target: string | null = null;
     if (screen !== 'cart' && empty) target = hrefs.cart;
     else if ((screen === 'payment' || screen === 'review') && !details.ok) target = hrefs.checkout;
     if (target === null) return;
     redirected.current = true;
-    router.replace(target);
-  }, [draft, hrefs, quote, ready, router, screen, tenant.deliveryEnabled, tenant.pickupEnabled]);
+    // The demo token rides along, as it does on every step navigation:
+    // a redirect that dropped it made the readiness scenarios unreachable
+    // from a deep link (evidence only; the shipped URL carries no token).
+    router.replace(withFlowScenario(target, readFlowScenario(window.location.search)));
+  }, [draft, hrefs, quote, ready, router, screen, services]);
 
   /*
    * Step navigation CARRIES the scenario switch. Without it a demo state
@@ -248,7 +296,7 @@ function FlowBody({
    */
   const outcome = sendOutcomeFor(fx);
   const activeGateway = useMemo(
-    () => gateway ?? fixtureGateway({ outcome, delayMs: 900 }),
+    () => gateway ?? fixtureGateway({ outcome, delayMs: 900, readiness: () => liveStateRef.current }),
     [gateway, outcome],
   );
 
@@ -258,13 +306,8 @@ function FlowBody({
     return <FlowSkeleton m={m} screen={screen} hrefs={hrefs} />;
   }
 
-  // Re-evaluated on every render, so the send reads the CURRENT answer.
-  const submittable =
-    quote.lines.length > 0 &&
-    validateCheckout(draft, quote, {
-      pickup: tenant.pickupEnabled,
-      delivery: tenant.deliveryEnabled,
-    }).ok;
+  // The send reads the CURRENT answer of the one predicate above.
+  const submittable = eligibility.ok;
 
   const kind = noticeFor(fx);
   const notice: CartNotice | null =
@@ -284,7 +327,7 @@ function FlowBody({
           cart={cart}
           quote={quote}
           menuHref={hrefs.menu}
-          state={state}
+          state={liveState}
           opensAt={tenant.opensAt}
           motion={motion}
           notice={notice}
@@ -304,6 +347,7 @@ function FlowBody({
           motion={motion}
           backHref={hrefs.cart}
           pending={pending}
+          blockedReason={blockedReason}
           onContinue={() => go(hrefs.payment)}
           onAddItems={() => go(hrefs.menu)}
         />
@@ -317,6 +361,7 @@ function FlowBody({
           motion={motion}
           backHref={hrefs.checkout}
           pending={pending}
+          blockedReason={blockedReason}
           onContinue={() => go(hrefs.review)}
         />
       );
@@ -335,6 +380,8 @@ function FlowBody({
           backHref={hrefs.payment}
           pending={pending}
           submittable={submittable}
+          blockedReason={blockedReason}
+          opensAt={tenant.opensAt}
           gateway={activeGateway}
           onEditDetails={() => go(hrefs.checkout)}
           onEditPayment={() => go(hrefs.payment)}
