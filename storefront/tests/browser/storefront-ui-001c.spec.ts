@@ -796,10 +796,19 @@ test('C2-C: Search at 1280 shows EXACTLY ONE aside, and it is the live one', asy
   expect(a.text, 'the hydrated aside carries money').toMatch(/₪\s*\d/);
   const cta = aside.locator('[data-sf-aside-cta="checkout"]');
   await expect(cta).toHaveCount(1);
-  await expect(cta).toHaveAttribute('href', `/s/${SLUG}/checkout`);
+  // E-stage repair of the D1 focus regression: the checkout control is ONE
+  // persistent <button> whose activation is a soft navigation, no longer a
+  // <Link> swapped in on settlement. Its destination is proven by activating
+  // it, not by reading an href it no longer carries.
+  expect(await cta.evaluate((el) => el.tagName)).toBe('BUTTON');
+  await expect(cta).not.toHaveAttribute('aria-disabled', 'true');
 
   RESULTS.c2Wide = a;
   await page.screenshot({ path: path.join(SHOTS, 'C2-search-wide-aside.png') });
+
+  await cta.click();
+  await page.waitForURL(`**/s/${SLUG}/checkout**`);
+  expect(new URL(page.url()).pathname).toBe(`/s/${SLUG}/checkout`);
 });
 
 test('C2-C: the Search aside reacts to THIS visitor\'s cart, and to nothing else', async ({ page }) => {

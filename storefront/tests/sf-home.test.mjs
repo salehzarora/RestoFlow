@@ -350,8 +350,13 @@ test('both cart CTAs now have a REAL destination, and say why when they do not',
   assert.ok(!/disabled(?!=\{)/.test(dock.replace(/dockDisabled/g, '')),
     'the dock CTA must not be disabled any more');
   const aside = read(LIVE_ASIDE);
-  assert.ok(aside.includes('href={checkoutHref}'),
+  // E-stage repair of the D1 focus regression: the aside CTA is ONE persistent
+  // <button> for its whole life and navigates through the router, so the
+  // destination is the argument of the push rather than an href.
+  assert.ok(aside.includes('router.push(checkoutHref)'),
     'at wide the aside CTA goes STRAIGHT to checkout, not to the cart route');
+  assert.ok(!aside.includes('href={checkoutHref}'),
+    'the settled control must not be a swapped-in link any more');
 
   // Blocked is still blocked - and is a span, so nothing focusable leads
   // nowhere while ordering is closed or paused.

@@ -27,8 +27,19 @@
  * shekels invisible. A totals block that does not add up is a money defect, so
  * the fee row is rendered here on the same `feeApplies` rule every other
  * surface uses. Recorded in PHASE_D_DECISIONS.md.
+ *
+ * THE CHECKOUT CONTROL IS ONE ELEMENT FOR ITS WHOLE LIFE (E-stage repair of the
+ * D1 keyboard regression). D1 rendered a `<button aria-disabled>` while the
+ * quote was pending and swapped in a `<Link>` once it settled. The swap
+ * destroyed the focused node, so a keyboard visitor who had reached the control
+ * during the pending window was dropped to `<body>` the moment it became
+ * usable. The control is now a single `<button>` - the element the prototype
+ * uses (:636) - that stays inert while blocked and performs the same SOFT
+ * navigation a Link click would once a matching total exists. Its identity
+ * never changes, so focus survives settlement without anything having to
+ * restore it, and nothing ever moves focus that the visitor did not move.
  */
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { CartSummary } from '@/cart/cartModel';
 import { optionSummary } from '@/cart/cartModel';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
@@ -75,6 +86,7 @@ export function LiveCartAside({
   opensAt: string;
   checkoutHref: string;
 }) {
+  const router = useRouter();
   const reason = blockedReason(state, m, opensAt);
   const lines = summary?.lines ?? [];
   const count = summary?.itemCount ?? 0;
@@ -235,10 +247,18 @@ export function LiveCartAside({
               nowhere - the Phase C position, unchanged.
 
               A MISSING OR SUPERSEDED TOTAL is transient and the control will come
-              back, so it stays a real button: focusable, activatable by pointer
+              back, so it is a real button: focusable, activatable by pointer
               and by keyboard, and inert while it refuses. That is the same
               aria-disabled-never-disabled rule the four flow CTAs use, and it is
               what stops an old amount authorising the next step.
+
+              It is the SAME button before and after the total lands. Only its
+              refusal changes - never its node - so focus that was on it while
+              it refused is still on it when it works. A blocked activation does
+              nothing at all: no navigation, no focus move, no announcement.
+              The settled activation is a soft navigation through the router,
+              exactly what a Link click performs, so the memory-only draft
+              survives; there is no prefetch to 404 because there is no href.
             */}
             {reason !== null ? (
               <span
@@ -248,26 +268,18 @@ export function LiveCartAside({
               >
                 {reason}
               </span>
-            ) : blocked ? (
+            ) : (
               <button
-                className={`${styles.asideCta} ${styles.asideCtaDisabled}`}
+                className={`${styles.asideCta} ${blocked ? styles.asideCtaDisabled : ''}`}
                 type="button"
-                aria-disabled="true"
-                data-sf-aside-cta="pending"
+                aria-disabled={blocked ? 'true' : undefined}
+                onClick={() => {
+                  if (!blocked) router.push(checkoutHref);
+                }}
+                data-sf-aside-cta={blocked ? 'pending' : 'checkout'}
               >
                 {m.checkout}
               </button>
-            ) : (
-              <Link
-                className={styles.asideCta}
-                href={checkoutHref}
-                /* A static export serves no per-segment RSC payload, so Next's
-                   viewport prefetch would 404 on every wide render. */
-                prefetch={false}
-                data-sf-aside-cta="checkout"
-              >
-                {m.checkout}
-              </Link>
             )}
           </div>
         </>

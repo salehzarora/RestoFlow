@@ -1606,9 +1606,13 @@
  * It was copied from the cart page's stepper, where the "+" side carries an
  * accent tint that really does need the rounded clip. Nothing inside THIS
  * stepper is painted - both buttons are transparent and the value is bare text -
- * so the clip cut back exactly one thing: the invisible 44px hit overlay below,
- * which it trimmed to the painted 36 x 34 box. The D review measured that, and
- * the D1 evidence pack carries a before/after capture showing no pixel moves.
+ * so the clip cut back exactly one thing: the invisible 44px hit overlay below.
+ * The Phase D pack INFERRED the hit area from this rule and never hit-tested
+ * it; the independent D1 review measured the parent's effective target at
+ * 40 x 33 (the parent overlay was centred, so the clip kept its 4 inner px).
+ * D1 measures it at 44 x 45. Layout geometry is unchanged (36 x 32 button,
+ * 34px stepper); one painted thing DID change, beneficially: the 3px
+ * `:focus-visible` ring is no longer clipped by the stepper box.
  */
 .asideStepper {
   display: inline-flex;
