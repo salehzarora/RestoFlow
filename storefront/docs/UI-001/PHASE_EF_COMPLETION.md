@@ -798,6 +798,9 @@ needs. Final: 84,177 B on the flow / request / search documents and
 server-side chunk as well, another loose-merge choice), against 70,000;
 Brotli 11,796 / 13,695 against 14,000 — met. The raw axis is carried to the
 owner as one decision (§6.6); the validators FAIL on it, as written.
+*Forward note (2026-09-23): the owner decided this as CSS-UI001-01 — a
+bounded exception on exactly these 32 routes with the original limit and its
+FAIL retained; see §7.1. The figures above are unchanged.*
 
 ### 6.4 DECISION C-4 — performance: cause found, two candidates, original-mode LCP residual (item 5)
 
@@ -925,7 +928,225 @@ behaviour, both measured and validated honestly (the validators FAIL):
 Everything else in this pass passes its gate; nothing was lowered, waived or
 relabelled.
 
+*Forward note (2026-09-23): both items were decided by the owner as
+CSS-UI001-01 (option a, bounded: a 100,000 B ceiling on exactly the 32
+affected routes, the 70,000 B target and its FAIL retained) and
+PERF-UI001-01 (option a: the compressed local lab decides local LCP
+acceptance at an unchanged 2,500 ms, the uncompressed FAIL retained as a
+diagnostic). Recorded in §7; the text above is left as written.*
+
 ### 6.7 Final validation (this pass, one controlled lane, shipped build last)
 
 Filled from the final logs in the correction pack's
 `FINAL_CORRECTION_REPORT.md` §3; the pack is the record.
+
+## 7. Scoped acceptance decisions (owner-activated, 2026-09-23)
+
+Authority: the owner's activation *OWNER APPROVED — UI-001 SCOPED ACCEPTANCE
+EXCEPTIONS* with the packet *BIZBOT STOREFRONT UI-001 — SCOPED ACCEPTANCE
+DECISION / LOCAL CLOSEOUT* inline, approving exactly two bounded
+local-acceptance decisions: **CSS-UI001-01** and **PERF-UI001-01**. The
+bundle files the packet names (`01_SCOPED_ACCEPTANCE_Fable.txt`,
+`02_FINAL_DELTA_REVIEW.txt`, `sources/Pasted markdown(20260922-160953).md`,
+`sources/BIZBOT_STOREFRONT_UI_001_FINAL_CORRECTION_Fable.txt`,
+`sources/BIZBOT_STOREFRONT_UI_001_FABLE_FINISH_LOCAL.txt`) were not on disk
+after a bounded search (the repository and its worktrees, Desktop, Downloads,
+Documents, the owner's audit input folders); no supplied path was given for
+an extracted bundle. The owner's message carried the full packet text, which
+is the authority for this closeout; no substitute for the absent review was
+invented and no bundled file is claimed to have been read. Starting HEAD
+`1387d23b` (runtime checkpoint `929c9084` followed by the documentation
+checkpoint `1387d23b`, both verified in place).
+
+**What this closeout is.** An acceptance-rule, test and record update only.
+It changes no runtime behaviour, no bundler, no design, no protected
+configuration, no dependency, no comparator; the sealed evidence packs are
+untouched; the export on disk is the one measured at `1387d23b` (the
+addendum's `SOURCE_BINDING.json` re-measures it and an isolated build of the
+checkpoint compares equal after the unchanged build-id normalisation). It is
+**not** independent approval of the correction: independent acceptance of
+the corrected application remains a separate step.
+
+**What changes, exactly.** Two acceptance requirements and nothing else:
+
+| Requirement | Before (§6.6) | After this closeout |
+|---|---|---|
+| Raw CSS per direct-load route | 70,000 B on every route; validators FAIL on 32 routes | 70,000 B still recorded and reported on every route; on the **32 listed routes only** the effective ceiling is **100,000 B** (owner-chosen); Brotli ≤ 14,000 B unchanged and required; aggregate marked `WITH_APPROVED_EXCEPTIONS` |
+| Which local lane decides LCP acceptance | the uncompressed lab (FAIL 2,700 ms) with Brotli supplemental | the **compressed local lab** is primary (target **≤ 2,500 ms unchanged**); the uncompressed lane and its FAIL are retained as a diagnostic record |
+
+Every other limit and boundary is unchanged: `out/` ≤ 4,194,304 B; JS per
+route ≤ 690,000 raw and ≤ 200,000 Brotli; single emitted file ≤ 262,144 B;
+font preloads ≤ 2 files and ≤ 120,000 B; long tasks > 50 ms ≤ 300 ms on
+BOTH transports; CLS ≤ 0.05 (hard ≤ 0.10); font-swap shift ≤ 0.02; the
+source-map / media / symlink / server exclusions; one demo ref and four
+roots; the privacy, security, data, design and protected-file boundaries.
+
+### 7.1 DECISION CSS-UI001-01 — the bounded raw-CSS exception
+
+The raw axis is **not** discarded: compressed bytes are not CSS parsing or
+rendering work, so the original target — 70,000 raw bytes per direct-load
+route — stays recorded in `scripts/budgets.mjs` (unchanged value) and its
+compliance is reported per route, FAIL included. With the owner's activation
+the effective raw ceiling on the exact routes below is **100,000 decimal
+bytes**: a new owner-chosen limit for this acceptance decision — not a
+framework requirement, not a pre-existing approval, not measured × 1.2 — that
+permits at most 6,186 B above the reported worst value (93,814 B). The
+Brotli ceiling stays 14,000 B per route and must also pass. Other routes
+keep the 70,000 B target; no route, project, dependency or bundler change
+receives the exception automatically. This is a scoped performance tradeoff,
+**not evidence that 93,814 B passes 70,000 B**.
+
+**Route list** — enumerated from the final source-bound measurement
+(`measurements/measure-firstload-final.json` of the sealed correction pack,
+re-measured identically on the export in this closeout), not inferred from
+the count of failing lines:
+
+| Documents (canonical routes) | Count | Stylesheets | Raw bytes | Brotli | Original 70,000 | Approved 100,000 | Brotli 14,000 | Effective |
+|---|---|---|---|---|---|---|---|---|
+| intro `/s/maps-burger` in `/`, `/ar`, `/en`, `/he` | 4 | 4 | 93,814 (`/he` 93,812) | 13,685 (`/he` 13,695) | **FAIL** (retained) | PASS | PASS | `PASS_WITH_APPROVED_EXCEPTION` |
+| home `…/menu` in the four roots | 4 | 4 | 93,814 (`/he` 93,812) | 13,685 (`/he` 13,695) | **FAIL** (retained) | PASS | PASS | `PASS_WITH_APPROVED_EXCEPTION` |
+| search `…/search` in the four roots | 4 | 3 | 84,177 (`/he` 84,175) | 11,786 (`/he` 11,796) | **FAIL** (retained) | PASS | PASS | `PASS_WITH_APPROVED_EXCEPTION` |
+| flow `…/cart`, `…/checkout`, `…/payment`, `…/review` in the four roots | 16 | 3 | 84,177 (`/he` 84,175) | 11,786 (`/he` 11,796) | **FAIL** (retained) | PASS | PASS | `PASS_WITH_APPROVED_EXCEPTION` |
+| request `/r/DEMO-7K4XM2D9P3` in the four roots | 4 | 3 | 84,177 (`/he` 84,175) | 11,786 (`/he` 11,796) | **FAIL** (retained) | PASS | PASS | `PASS_WITH_APPROVED_EXCEPTION` |
+| **NOT listed:** locale-root placeholders `/`, `/ar`, `/en`, `/he` | 4 | 2 | 2,201 | 786 | PASS | — (70,000 applies) | PASS | `PASS` |
+
+Aggregate on the export of `1387d23b`: **`PASS_WITH_APPROVED_EXCEPTIONS`** —
+36 routes measured, the original limit FAILED on 32 (retained), the
+exception applied on the same 32, Brotli met on all.
+
+**Implementation (Storefront-local, the smallest auditable change):**
+
+- `scripts/acceptance-exceptions.mjs` (new) — the frozen exception table:
+  id, decision, original limit (bound to `BUDGETS.cssPerRouteBytes`),
+  approved limit 100,000, Brotli limit (bound to
+  `BUDGETS.cssPerRouteBrotliBytes`), the 32 exact routes, the review
+  trigger. Read by no environment variable and by no frontend code.
+- `scripts/measure-firstload.mjs` — `cssRawLimitFor(route)` (the ceiling in
+  force: the exception on a listed route, the written limit elsewhere);
+  `cssAcceptance(results)` (per route: `measured_raw_bytes`,
+  `original_limit`, `original_compliance`, `exception_id`,
+  `approved_exception_limit`, `brotli_bytes`, `brotli_limit`,
+  `brotli_compliance`, `effective_acceptance` =
+  `PASS` | `PASS_WITH_APPROVED_EXCEPTION` | `FAIL`, and the aggregate
+  status `PASS` | `PASS_WITH_APPROVED_EXCEPTIONS` | `FAIL`);
+  `checkBudgets` judges raw CSS against the ceiling in force, and now also
+  fails a measurement with zero route coverage or a row without a CSS /
+  font-preload measurement (previously a missing row passed silently — a
+  catch-and-ignore the packet forbids). A load-time guard throws if the
+  table drifts from `budgets.mjs`. The CLI prints the acceptance record and
+  marks its result `PASSED WITH_APPROVED_EXCEPTIONS` when the exception is
+  used.
+- `scripts/audit-output.mjs` — the same judgement, `stats.cssAcceptance`
+  carried, and `OUTPUT AUDIT PASSED WITH_APPROVED_EXCEPTIONS — …` printed
+  with the retained-FAIL count.
+- `tests/output/output.test.mjs` — the former raw test is now the
+  acceptance test: it asserts the record above per route, that the
+  exception list equals **exactly** the routes measured over the original
+  limit (a route that no longer needs it must be removed; a route that is
+  not a measured canonical route cannot be listed), that the placeholders
+  are unlisted, and that the audit carries the same aggregate. A new
+  negative-control test exercises the real evaluator: a listed route at
+  100,001 B raw → FAIL; a listed route over 14,000 B Brotli → FAIL; an
+  unlisted route at 70,001 B (and at 100,000 B) → FAIL; a missing
+  measurement, a non-numeric measurement, a missing referenced stylesheet
+  and zero coverage → FAIL; a listed route at exactly 100,000 / 14,000 →
+  passes only `WITH_APPROVED_EXCEPTION`; a listed route under 70,000 passes
+  plainly (the exception is not credited when unused); the table is frozen
+  (mutation throws), the evaluators take the measurement only, and none of
+  the three scripts reads `process.env`. A third test pins both decision
+  records as written. Five scratch mutants of the validator (approved limit
+  lowered to 90,000; a route dropped from the list; a route added; the
+  Brotli check removed; the exception applied to every route) are each
+  caught by these tests (addendum `logs/mutants-acceptance.log`).
+
+No catch-and-ignore, continue-on-error, skip flag or output-asset exclusion
+was added; nothing prints a warning and exits success. **Review this
+exception** when the pinned bundler / architecture is replaced or the shipped
+route / design scope expands; it is not a permanent budget for any other
+BIZBOT project.
+
+### 7.2 DECISION PERF-UI001-01 — the compressed local lab decides LCP
+
+With the owner's activation the documented compressed (Brotli) local lab
+becomes the primary LCP acceptance transport for UI-001; the target stays
+**≤ 2,500 ms**. The original uncompressed lane and its observed FAIL are
+kept as a diagnostic record — not relabelled, not erased, and not described
+as passing. Every other protocol parameter is unchanged (canonical AR Home;
+390×844 @2x mobile; 4× CPU slowdown; 1.6 Mbps / 0.75 Mbps / 150 ms RTT;
+cold state; five runs; the established median); compression is the sole
+transport distinction — no cached or prewarmed run, hidden resource, reduced
+design, other clock or changed throttling.
+
+**Measurements** — reused from the sealed correction pack (`perf-lab-final-br.json`,
+`perf-lab-final-raw.json`; head `1387d23b`, shipped build measured last),
+**not newly run**: no runtime, source or build input changed in this
+closeout and the export's binding was re-verified (§7.4). Their original
+labels stand.
+
+| Lane | Role after PERF-UI001-01 | LCP median (worst) | Target | Result | Long tasks > 50 ms (≤ 300, both lanes) | CLS | Font swap |
+|---|---|---|---|---|---|---|---|
+| Compressed local lab (Brotli q11) | **primary — decides local LCP acceptance** | **1,404 ms (1,416)** | 2,500 | **PASS** | 264 (278) PASS | 0 PASS | 0 PASS |
+| Uncompressed local lab | **diagnostic record** | 2,700 ms (2,744) | 2,500 | **FAIL (retained)** | 239 (259) PASS | 0 PASS | 0 PASS |
+
+**Actual compression of the served response** (addendum
+`COMPRESSION_WIRE_PROOF.json`, run in this closeout against the same
+export, transport only — no metric taken): a real Chromium loading
+`/s/maps-burger/menu` through the lab server received all 16 text responses
+with `Content-Encoding: br` and every binary response without encoding
+(`Vary: Accept-Encoding`); every decoded body is sha256-identical to the
+export file; the document went 127,841 → 10,514 wire bytes, the four
+stylesheets 93,814 → 13,685, the eleven scripts 538,973 → 138,983; text
+wire bytes 163,182 against 760,628 decoded. HTTP probes of the same paths
+with `br`, `gzip` and `identity` show the negotiation on both sides. The
+server's settings are recorded (Brotli q11, text mode, one compression per
+response body, Content-Length = encoded body). The per-response offline q11
+budget estimate equals the wire bytes here only because the lab server uses
+the same compressor — which is precisely why this is **report-only local
+evidence**: a local compressor's quality level is not a proved edge quality
+level, and **hosted compression and hosted performance remain UNVERIFIED**
+until a separately authorised hosted gate verifies that the actual
+deployment serves eligible HTML / CSS / JS / RSC with negotiated compression
+and the right content types, and measures the real serving path. No
+deployment, login, bypass or header change was made to test that now.
+
+**Compression versus CPU cost.** Compression changes transfer time only.
+The renderer's parse, style, layout and paint work is the same on both
+lanes — which is why the long-task, CLS and font-swap limits are retained on
+BOTH transports and both pass (239 / 264 ms), and why the raw CSS axis of
+§7.1 stays recorded rather than being declared met by the compressed axis.
+
+### 7.3 Remaining release gates (unchanged by this closeout)
+
+1. **Independent acceptance** of the corrected application (`929c9084` +
+   this policy checkpoint) — the DELTA review; this closeout is not it.
+2. **Hosted gate** (separately authorised): negotiated compression and
+   content types on the actual serving path; LCP and the other lab limits
+   on the real deployment; the committed header set as served.
+3. The launch-QA items already recorded in §5 (Hebrew native reading pass;
+   the accepted dispositions on arrow / chevron and selected-unavailable).
+4. The owner items §6.6 carried: **closed by CSS-UI001-01 and
+   PERF-UI001-01** for local acceptance only; the underlying structural
+   facts (Turbopack's single CSS chunk; the uncompressed document ahead of
+   the hero image) are unchanged and remain the review triggers above.
+
+### 7.4 Validation for this closeout (policy / test / record changes only)
+
+Run on the export already on disk (the shipped build of `1387d23b`), not a
+rebuild: `node --test tests/output/output.test.mjs` 24 / 24 (the acceptance
+test, the packet's negative controls and the decision-record test included);
+`node scripts/audit-output.mjs` → `OUTPUT AUDIT PASSED WITH_APPROVED_EXCEPTIONS
+— CSS-UI001-01 applied on 32 route(s); original 70000 B raw CSS limit FAIL
+retained on 32 route(s)`; `node scripts/measure-firstload.mjs` → `PASSED
+WITH_APPROVED_EXCEPTIONS`, per route, with the acceptance record in its
+JSON; the five validator mutants each caught; the node unit suite and
+`tsc --noEmit` unchanged and green; `git diff --check` clean; the isolated
+build of the policy checkpoint compares equal to the export on disk after
+the unchanged build-id normalisation (the comparator `compare-exports.mjs`
+untouched), which is the proof that the runtime tree and export are those
+of `1387d23b`. No browser suite was rerun: no runtime input changed, and
+the packet forbids re-running hundreds of runtime cases for a
+validator-and-record update; the A–G browser evidence of the sealed
+correction pack stands with its original labels. The addendum outside git
+(`worktrees/output/storefront-ui-001-scoped-acceptance-<timestamp>/`) holds
+the logs, the acceptance table, the transport proof, the source binding and
+its manifest, written last.

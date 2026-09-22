@@ -6,8 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { auditOutput, walk } from '../../scripts/audit-output.mjs';
-import { checkBudgets, measure } from '../../scripts/measure-firstload.mjs';
+import { checkBudgets, cssAcceptance, cssRawLimitFor, measure } from '../../scripts/measure-firstload.mjs';
 import { BUDGETS } from '../../scripts/budgets.mjs';
+import { CSS_RAW_EXCEPTION, PERF_LCP_ACCEPTANCE } from '../../scripts/acceptance-exceptions.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
@@ -307,6 +308,15 @@ test('no emitted document, payload OR script carries a real WhatsApp destination
 // The limits are the written ones (scripts/budgets.mjs); a route over one
 // FAILS here, it is not warned about. The raw and compressed axes are
 // separate tests so a report can name which one a route missed.
+//
+// CSS-UI001-01 (owner-approved, 2026-09-23; scripts/acceptance-exceptions.mjs):
+// the ORIGINAL 70,000 B raw limit stays recorded and its compliance is still
+// reported per route - a retained FAIL is a record, not a pass. On the EXACT
+// thirty-two listed storefront routes the effective raw ceiling is 100,000 B
+// (a new owner-chosen limit for this decision, not measured x 1.2); the
+// 14,000 B Brotli limit is unchanged and must pass as well. Every other
+// route keeps the 70,000 B target. The aggregate is visibly marked
+// WITH_APPROVED_EXCEPTIONS whenever the exception is used.
 
 const CSS_FONT = (p) => /CSS|font preload|stylesheet|preloaded font|no stylesheet/.test(p);
 // Measured once per run; the tests below read the same rows.
@@ -349,9 +359,146 @@ test('CSS per route: at most 14,000 B Brotli (the written limit)', () => {
   assert.deepEqual(problems, []);
 });
 
-test('CSS per route: at most 70,000 B raw (the written limit)', () => {
-  const problems = checkBudgets(measured()).filter((p) => /CSS .* uncompressed/.test(p));
-  assert.deepEqual(problems, []);
+test('CSS per route raw (CSS-UI001-01): the original 70,000 B limit is recorded with its compliance; the approved 100,000 B ceiling applies to exactly the listed routes; Brotli 14,000 B unchanged; the aggregate is marked WITH_APPROVED_EXCEPTIONS', () => {
+  const rows = measured();
+  const problems = checkBudgets(rows).filter((p) => /CSS .* uncompressed/.test(p));
+  assert.deepEqual(problems, [], 'no route is over the raw ceiling in force for it');
+  const acc = cssAcceptance(rows);
+  assert.equal(acc.routesMeasured, 36);
+  const over = [];
+  for (const row of acc.rows) {
+    assert.equal(row.original_limit, BUDGETS.cssPerRouteBytes, `${row.route}: the original limit is still the written one`);
+    assert.equal(row.brotli_limit, BUDGETS.cssPerRouteBrotliBytes, `${row.route}: the Brotli limit is unchanged`);
+    assert.equal(row.brotli_compliance, 'PASS', `${row.route}: Brotli ${row.brotli_bytes} B`);
+    assert.notEqual(row.effective_acceptance, 'FAIL', `${row.route}: ${row.problem}`);
+    if (row.measured_raw_bytes > BUDGETS.cssPerRouteBytes) {
+      over.push(row.route);
+      // The retained record: the original limit is FAILED, and the route
+      // passes only WITH the named exception, under its ceiling.
+      assert.equal(row.original_compliance, 'FAIL', row.route);
+      assert.equal(row.exception_id, CSS_RAW_EXCEPTION.id, `${row.route} must be a listed route`);
+      assert.equal(row.approved_exception_limit, CSS_RAW_EXCEPTION.approvedLimitBytes);
+      assert.equal(row.effective_acceptance, 'PASS_WITH_APPROVED_EXCEPTION', row.route);
+      assert.ok(row.measured_raw_bytes <= CSS_RAW_EXCEPTION.approvedLimitBytes, `${row.route}: ${row.measured_raw_bytes} B`);
+    } else {
+      assert.equal(row.original_compliance, 'PASS', row.route);
+      assert.equal(row.effective_acceptance, 'PASS', row.route);
+    }
+    if (!CSS_RAW_EXCEPTION.routes.includes(row.route)) {
+      assert.equal(cssRawLimitFor(row.route), BUDGETS.cssPerRouteBytes, `${row.route}: unlisted, the written limit applies`);
+      assert.ok(row.measured_raw_bytes <= BUDGETS.cssPerRouteBytes, `${row.route}: unlisted route within 70,000 B`);
+    }
+  }
+  // The exception list is bound to the measurement, not inferred from a
+  // failure count: it names exactly the canonical routes measured over the
+  // original limit - neither a route that does not need it (narrow the list
+  // when a route drops under 70,000 B; the exception is temporary) nor one
+  // that is not a measured canonical route. The locale-root placeholders are
+  // not listed.
+  assert.deepEqual([...CSS_RAW_EXCEPTION.routes].sort(), over.sort(),
+    'CSS-UI001-01 lists exactly the routes measured over the original limit');
+  for (const r of ['/', '/ar', '/en', '/he']) assert.ok(!CSS_RAW_EXCEPTION.routes.includes(r), `${r} is not excepted`);
+  const expectedStatus = over.length ? 'PASS_WITH_APPROVED_EXCEPTIONS' : 'PASS';
+  assert.equal(acc.status, expectedStatus);
+  assert.deepEqual(acc.originalFailuresRetained.sort(), over.sort());
+  // The audit carries the same aggregate, visibly.
+  const { stats } = auditOutput(OUT);
+  assert.equal(stats.cssAcceptance.status, expectedStatus);
+  assert.deepEqual(stats.cssAcceptance.originalFailuresRetained.sort(), over.sort());
+  console.log(`${CSS_RAW_EXCEPTION.id}: original ${BUDGETS.cssPerRouteBytes} B raw limit FAIL retained on ${over.length} route(s); effective ${acc.status}`);
+});
+
+test('NEGATIVE CONTROLS (CSS-UI001-01): the real evaluator FAILS a listed route at 100,001 B raw, a listed route over 14,000 B Brotli, an unlisted route at 70,001 B raw, a missing measurement, a missing stylesheet and zero coverage; exactly 100,000 B passes only WITH the exception and only on a listed route', () => {
+  const listed = measured().find((r) => r.route === '/s/maps-burger/menu');
+  const unlisted = measured().find((r) => r.route === '/');
+  assert.ok(CSS_RAW_EXCEPTION.routes.includes(listed.route) && !CSS_RAW_EXCEPTION.routes.includes(unlisted.route));
+  const clone = (r) => JSON.parse(JSON.stringify(r));
+  const judge = (row) => ({ problems: checkBudgets([row]).filter(CSS_FONT).join('\n'), acc: cssAcceptance([row]) });
+
+  // named (listed) route at 100,001 raw -> FAIL
+  const a = clone(listed); a.css.bytes = CSS_RAW_EXCEPTION.approvedLimitBytes + 1; a.css.brotli = 1;
+  let j = judge(a);
+  assert.match(j.problems, /CSS 100001 B > 100000 B uncompressed \(approved exception CSS-UI001-01 ceiling; original limit 70000 B\)/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL'); assert.equal(j.acc.status, 'FAIL');
+  assert.equal(j.acc.rows[0].original_compliance, 'FAIL');
+
+  // named (listed) route over 14,000 Brotli -> FAIL, whatever the raw figure
+  const b = clone(listed); b.css.bytes = 80000; b.css.brotli = BUDGETS.cssPerRouteBrotliBytes + 1;
+  j = judge(b);
+  assert.match(j.problems, /CSS 14001 B brotli > 14000 B/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL'); assert.equal(j.acc.rows[0].brotli_compliance, 'FAIL');
+
+  // unlisted route over 70,000 raw -> FAIL under the ORIGINAL limit, no exception id
+  const c = clone(unlisted); c.css.bytes = BUDGETS.cssPerRouteBytes + 1; c.css.brotli = 1;
+  j = judge(c);
+  assert.match(j.problems, /CSS 70001 B > 70000 B uncompressed/);
+  assert.doesNotMatch(j.problems, /approved exception/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL'); assert.equal(j.acc.rows[0].exception_id, null);
+  assert.match(j.acc.rows[0].problem, /route not listed under CSS-UI001-01/);
+
+  // an unlisted route at exactly 100,000 is still a FAIL: the exception does not travel
+  const g = clone(unlisted); g.css.bytes = CSS_RAW_EXCEPTION.approvedLimitBytes; g.css.brotli = 1;
+  j = judge(g);
+  assert.match(j.problems, /CSS 100000 B > 70000 B uncompressed/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL');
+
+  // missing measurement -> FAIL (no catch-and-ignore)
+  const d = clone(listed); delete d.css;
+  j = judge(d);
+  assert.match(j.problems, /no CSS measurement/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL'); assert.match(j.acc.rows[0].problem, /no CSS measurement/);
+  const d2 = clone(listed); d2.css.bytes = 'unknown';
+  j = judge(d2);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL');
+
+  // missing referenced stylesheet -> FAIL
+  const e = clone(listed); e.css.stylesheets[0] = { url: e.css.stylesheets[0].url, missing: true };
+  j = judge(e);
+  assert.match(j.problems, /missing stylesheet/);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'FAIL'); assert.match(j.acc.rows[0].problem, /missing referenced stylesheet/);
+
+  // zero route coverage -> FAIL
+  assert.match(checkBudgets([]).join('\n'), /no route measured \(zero coverage\)/);
+  assert.equal(cssAcceptance([]).status, 'FAIL');
+
+  // a listed route at exactly 100,000 raw and 14,000 Brotli passes, and only WITH the exception
+  const f = clone(listed); f.css.bytes = CSS_RAW_EXCEPTION.approvedLimitBytes; f.css.brotli = BUDGETS.cssPerRouteBrotliBytes;
+  j = judge(f);
+  assert.equal(j.problems, '');
+  assert.equal(j.acc.rows[0].original_compliance, 'FAIL');
+  assert.equal(j.acc.rows[0].effective_acceptance, 'PASS_WITH_APPROVED_EXCEPTION');
+  assert.equal(j.acc.status, 'PASS_WITH_APPROVED_EXCEPTIONS');
+  // a listed route under the original limit passes PLAINLY - the exception is not credited when unused
+  const h = clone(listed); h.css.bytes = BUDGETS.cssPerRouteBytes; h.css.brotli = 1;
+  j = judge(h);
+  assert.equal(j.acc.rows[0].effective_acceptance, 'PASS'); assert.equal(j.acc.status, 'PASS');
+
+  // Nothing outside this table can select or widen the exception: the table
+  // is frozen, the evaluators take the measurement only, and neither module
+  // reads the environment.
+  assert.ok(Object.isFrozen(CSS_RAW_EXCEPTION) && Object.isFrozen(CSS_RAW_EXCEPTION.routes));
+  assert.throws(() => { CSS_RAW_EXCEPTION.routes.push('/'); }, TypeError);
+  assert.throws(() => { CSS_RAW_EXCEPTION.approvedLimitBytes = 1e9; }, TypeError);
+  assert.equal(checkBudgets.length, 1); assert.equal(cssAcceptance.length, 1); assert.equal(cssRawLimitFor.length, 1);
+  for (const f of ['scripts/acceptance-exceptions.mjs', 'scripts/measure-firstload.mjs', 'scripts/audit-output.mjs']) {
+    assert.doesNotMatch(readFileSync(path.join(ROOT, f), 'utf8'), /process\.env/, `${f} reads no environment variable`);
+  }
+});
+
+test('PERF-UI001-01 is recorded as written: LCP target 2,500 ms unchanged, the compressed local lab decides, the uncompressed lane is retained as a diagnostic, the other lab limits and the hosted gate unchanged', () => {
+  assert.equal(PERF_LCP_ACCEPTANCE.id, 'PERF-UI001-01');
+  assert.equal(PERF_LCP_ACCEPTANCE.lcpTargetMs, 2500);
+  assert.match(PERF_LCP_ACCEPTANCE.acceptanceTransport, /compressed local lab/);
+  assert.match(PERF_LCP_ACCEPTANCE.diagnosticTransport, /uncompressed local lab .* retained as a diagnostic record/);
+  assert.deepEqual(PERF_LCP_ACCEPTANCE.unchanged, { longTaskOver50Ms: 300, cls: 0.05, clsHard: 0.1, fontSwapShift: 0.02 });
+  assert.match(PERF_LCP_ACCEPTANCE.hosted, /UNVERIFIED/);
+  assert.ok(Object.isFrozen(PERF_LCP_ACCEPTANCE) && Object.isFrozen(PERF_LCP_ACCEPTANCE.unchanged));
+  // The CSS exception's own record, likewise as written.
+  assert.equal(CSS_RAW_EXCEPTION.originalLimitBytes, 70000);
+  assert.equal(CSS_RAW_EXCEPTION.approvedLimitBytes, 100000);
+  assert.equal(CSS_RAW_EXCEPTION.brotliLimitBytes, 14000);
+  assert.equal(CSS_RAW_EXCEPTION.routes.length, 32);
+  assert.equal(new Set(CSS_RAW_EXCEPTION.routes).size, 32, 'no duplicate route');
 });
 
 test('NEGATIVE CONTROLS: an oversized stylesheet, a third preload and an oversized preload set each FAIL the same check', () => {
@@ -365,8 +512,15 @@ test('NEGATIVE CONTROLS: an oversized stylesheet, a third preload and an oversiz
   within.fontPreloads.files = within.fontPreloads.files.slice(0, 2);
   assert.deepEqual(checkBudgets([within]).filter(CSS_FONT), [], 'exactly at every limit passes');
 
-  const bigRaw = clone(); bigRaw.css.bytes = BUDGETS.cssPerRouteBytes + 1; bigRaw.css.brotli = 1;
+  // 70,001 B raw on an UNLISTED route fails the written limit; on this
+  // listed route the same figure fails the ORIGINAL limit in the acceptance
+  // record while the approved ceiling admits it (CSS-UI001-01).
+  const bigRaw = clone(); bigRaw.route = '/'; bigRaw.css.bytes = BUDGETS.cssPerRouteBytes + 1; bigRaw.css.brotli = 1;
   assert.match(checkBudgets([bigRaw]).filter(CSS_FONT).join('\n'), /CSS 70001 B > 70000 B uncompressed/);
+  const bigRawListed = clone(); bigRawListed.css.bytes = BUDGETS.cssPerRouteBytes + 1; bigRawListed.css.brotli = 1;
+  assert.deepEqual(checkBudgets([bigRawListed]).filter(CSS_FONT), []);
+  assert.equal(cssAcceptance([bigRawListed]).rows[0].original_compliance, 'FAIL');
+  assert.equal(cssAcceptance([bigRawListed]).rows[0].effective_acceptance, 'PASS_WITH_APPROVED_EXCEPTION');
   const bigBr = clone(); bigBr.css.bytes = 1; bigBr.css.brotli = BUDGETS.cssPerRouteBrotliBytes + 1;
   assert.match(checkBudgets([bigBr]).filter(CSS_FONT).join('\n'), /CSS 14001 B brotli > 14000 B/);
   const three = clone(); three.css.bytes = 1; three.css.brotli = 1; three.fontPreloads.count = 3; three.fontPreloads.bytes = 1;

@@ -19,6 +19,15 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUDGETS, ROUTES } from './budgets.mjs';
+import { CSS_RAW_EXCEPTION } from './acceptance-exceptions.mjs';
+
+// The exception table must agree with the written limits it sits on top of;
+// a drift here is a defect, not a quiet re-baselining.
+if (CSS_RAW_EXCEPTION.originalLimitBytes !== BUDGETS.cssPerRouteBytes
+  || CSS_RAW_EXCEPTION.brotliLimitBytes !== BUDGETS.cssPerRouteBrotliBytes
+  || !(CSS_RAW_EXCEPTION.approvedLimitBytes > CSS_RAW_EXCEPTION.originalLimitBytes)) {
+  throw new Error('acceptance-exceptions.mjs disagrees with budgets.mjs');
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
@@ -173,8 +182,78 @@ export function measure(outDir = OUT) {
   return results;
 }
 
+/**
+ * The raw-CSS ceiling in force for a route: the owner-approved exception
+ * CSS-UI001-01 for its EXACT listed routes, the written limit for every
+ * other route. Nothing else selects it.
+ */
+export function cssRawLimitFor(route) {
+  return CSS_RAW_EXCEPTION.routes.includes(route) ? CSS_RAW_EXCEPTION.approvedLimitBytes : BUDGETS.cssPerRouteBytes;
+}
+
+/**
+ * The CSS acceptance record, per route, under decision CSS-UI001-01. The
+ * original limit and its compliance are ALWAYS reported (the retained FAIL
+ * is the record the owner asked to keep); the approved exception applies
+ * only to its listed routes, and a route passes WITH it only when both the
+ * approved raw ceiling and the unchanged Brotli ceiling hold. Unknown or
+ * missing measurements, a missing referenced stylesheet and zero route
+ * coverage FAIL. Takes the measurement only - no option can widen it.
+ */
+export function cssAcceptance(results) {
+  const X = CSS_RAW_EXCEPTION;
+  const rows = [];
+  for (const r of results) {
+    const listed = X.routes.includes(r.route);
+    const css = r.css;
+    const missing = css?.stylesheets?.filter((s) => s.missing).map((s) => s.url) ?? [];
+    const measurable = !!css && Number.isInteger(css.bytes) && Number.isInteger(css.brotli)
+      && css.uniqueStylesheets > 0 && missing.length === 0;
+    const raw = measurable ? css.bytes : null;
+    const br = measurable ? css.brotli : null;
+    const originalCompliance = measurable && raw <= X.originalLimitBytes ? 'PASS' : 'FAIL';
+    const brotliCompliance = measurable && br <= X.brotliLimitBytes ? 'PASS' : 'FAIL';
+    let effective, problem = null;
+    if (!css) { effective = 'FAIL'; problem = 'no CSS measurement for this route'; }
+    else if (missing.length) { effective = 'FAIL'; problem = `missing referenced stylesheet: ${missing.join(', ')}`; }
+    else if (!measurable) { effective = 'FAIL'; problem = css.uniqueStylesheets > 0 ? 'CSS measurement is not a byte count' : 'no stylesheet counted (measurement empty)'; }
+    else if (brotliCompliance === 'FAIL') { effective = 'FAIL'; problem = `CSS ${br} B brotli > ${X.brotliLimitBytes} B`; }
+    else if (originalCompliance === 'PASS') effective = 'PASS';
+    else if (listed && raw <= X.approvedLimitBytes) effective = 'PASS_WITH_APPROVED_EXCEPTION';
+    else if (listed) { effective = 'FAIL'; problem = `CSS ${raw} B > ${X.approvedLimitBytes} B uncompressed (approved exception ${X.id} ceiling; original limit ${X.originalLimitBytes} B)`; }
+    else { effective = 'FAIL'; problem = `CSS ${raw} B > ${X.originalLimitBytes} B uncompressed (route not listed under ${X.id})`; }
+    rows.push({
+      route: r.route,
+      measured_raw_bytes: raw,
+      original_limit: X.originalLimitBytes,
+      original_compliance: originalCompliance,
+      exception_id: listed ? X.id : null,
+      approved_exception_limit: listed ? X.approvedLimitBytes : null,
+      brotli_bytes: br,
+      brotli_limit: X.brotliLimitBytes,
+      brotli_compliance: brotliCompliance,
+      effective_acceptance: effective,
+      problem,
+    });
+  }
+  const status = rows.length === 0 ? 'FAIL'
+    : rows.some((x) => x.effective_acceptance === 'FAIL') ? 'FAIL'
+    : rows.some((x) => x.effective_acceptance === 'PASS_WITH_APPROVED_EXCEPTION') ? 'PASS_WITH_APPROVED_EXCEPTIONS'
+    : 'PASS';
+  return {
+    exception: { id: X.id, decision: X.decision, originalLimitBytes: X.originalLimitBytes, approvedLimitBytes: X.approvedLimitBytes, brotliLimitBytes: X.brotliLimitBytes, listedRoutes: X.routes.length },
+    status,
+    routesMeasured: rows.length,
+    originalFailuresRetained: rows.filter((x) => x.original_compliance === 'FAIL').map((x) => x.route),
+    exceptionsApplied: rows.filter((x) => x.effective_acceptance === 'PASS_WITH_APPROVED_EXCEPTION').map((x) => x.route),
+    rows,
+  };
+}
+
 export function checkBudgets(results) {
   const problems = [];
+  // A measurement that covered no route proves nothing and must not pass.
+  if (results.length === 0) problems.push('no route measured (zero coverage)');
   for (const r of results) {
     if (r.firstLoadUncompressed > BUDGETS.firstLoadJsBytes) {
       problems.push(`${r.route}: first-load JS ${r.firstLoadUncompressed} B > ${BUDGETS.firstLoadJsBytes} B uncompressed`);
@@ -185,18 +264,27 @@ export function checkBudgets(results) {
     for (const a of r.assets) if (a.missing) problems.push(`${r.route}: missing asset ${a.url}`);
     // The CSS and font-preload limits, per route, both axes where two exist.
     // A document with NO stylesheet or NO preload is a measurement that found
-    // nothing, and is reported as such rather than passing on an empty count.
-    if (r.css) {
+    // nothing, and is reported as such rather than passing on an empty count;
+    // a row WITHOUT the measurement is a missing measurement and fails too.
+    // The raw CSS ceiling is the one in force for the route (CSS-UI001-01 on
+    // its exact listed routes, the written 70,000 B elsewhere); the original
+    // limit's compliance is reported by cssAcceptance(), never dropped.
+    if (!r.css) problems.push(`${r.route}: no CSS measurement`);
+    else {
       if (r.css.uniqueStylesheets === 0) problems.push(`${r.route}: no stylesheet counted (measurement empty)`);
-      if (r.css.bytes > BUDGETS.cssPerRouteBytes) {
-        problems.push(`${r.route}: CSS ${r.css.bytes} B > ${BUDGETS.cssPerRouteBytes} B uncompressed`);
+      const rawLimit = cssRawLimitFor(r.route);
+      if (r.css.bytes > rawLimit) {
+        problems.push(rawLimit === BUDGETS.cssPerRouteBytes
+          ? `${r.route}: CSS ${r.css.bytes} B > ${rawLimit} B uncompressed`
+          : `${r.route}: CSS ${r.css.bytes} B > ${rawLimit} B uncompressed (approved exception ${CSS_RAW_EXCEPTION.id} ceiling; original limit ${BUDGETS.cssPerRouteBytes} B)`);
       }
       if (r.css.brotli > BUDGETS.cssPerRouteBrotliBytes) {
         problems.push(`${r.route}: CSS ${r.css.brotli} B brotli > ${BUDGETS.cssPerRouteBrotliBytes} B`);
       }
       for (const s of r.css.stylesheets) if (s.missing) problems.push(`${r.route}: missing stylesheet ${s.url}`);
     }
-    if (r.fontPreloads) {
+    if (!r.fontPreloads) problems.push(`${r.route}: no font-preload measurement`);
+    else {
       if (r.fontPreloads.count > BUDGETS.fontPreloadsPerRoute) {
         problems.push(`${r.route}: ${r.fontPreloads.count} font preloads > ${BUDGETS.fontPreloadsPerRoute}`);
       }
@@ -211,6 +299,7 @@ export function checkBudgets(results) {
 
 if (process.argv[1]?.endsWith('measure-firstload.mjs')) {
   const results = measure();
+  const acceptance = cssAcceptance(results);
   console.log(JSON.stringify({
     nodeVersion: process.version,
     brotli: { mode: 'BROTLI_MODE_TEXT', quality: 11, perResponse: true },
@@ -221,6 +310,9 @@ if (process.argv[1]?.endsWith('measure-firstload.mjs')) {
       fontPreloadsPerRoute: BUDGETS.fontPreloadsPerRoute, fontPreloadBytesPerRoute: BUDGETS.fontPreloadBytesPerRoute,
     },
     headerPreloads: headerPreloads(),
+    // CSS-UI001-01: the per-route acceptance record - original limit and its
+    // compliance retained beside the effective (excepted) acceptance.
+    cssAcceptance: acceptance,
     routes: results,
   }, null, 2));
   const problems = checkBudgets(results);
@@ -228,6 +320,8 @@ if (process.argv[1]?.endsWith('measure-firstload.mjs')) {
     console.error('\nFIRST-LOAD / CSS / FONT-PRELOAD BUDGET FAILED:');
     for (const p of problems) console.error('  - ' + p);
     process.exitCode = 1;
+  } else if (acceptance.status === 'PASS_WITH_APPROVED_EXCEPTIONS') {
+    console.log(`\nFIRST-LOAD, CSS AND FONT-PRELOAD BUDGETS PASSED WITH_APPROVED_EXCEPTIONS, per route - ${acceptance.exception.id} applied on ${acceptance.exceptionsApplied.length} route(s): original ${acceptance.exception.originalLimitBytes} B raw CSS limit FAIL retained on ${acceptance.originalFailuresRetained.length} route(s), approved ${acceptance.exception.approvedLimitBytes} B ceiling met, ${acceptance.exception.brotliLimitBytes} B Brotli limit unchanged and met`);
   } else {
     console.log('\nFIRST-LOAD, CSS AND FONT-PRELOAD BUDGETS PASSED, per route');
   }

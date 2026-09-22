@@ -66,4 +66,7 @@ switch disappears with it.
 `storefront/scripts/` and `storefront/tests/` are support code. The deployment
 filter never scans them, which is why they may use Node built-ins while the
 application source may not. The decision records for UI-001 are under
-`docs/UI-001/`.
+`docs/UI-001/`; the owner-approved, scoped acceptance exceptions the output
+validators apply (CSS-UI001-01, PERF-UI001-01) are the frozen table in
+`scripts/acceptance-exceptions.mjs` and are recorded in
+`docs/UI-001/PHASE_EF_COMPLETION.md` §7.

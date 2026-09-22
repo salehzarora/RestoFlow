@@ -22,6 +22,9 @@ export const BUDGETS = {
   // committed header set carries), count AND bytes. These are the limits as
   // written; this file never raises them. A route over a limit FAILS the
   // measurement, the audit and the output test - it is reported, not waived.
+  // The ONE owner-approved, bounded exception to the raw CSS limit
+  // (CSS-UI001-01: 100,000 B on exactly 32 listed routes, this value still
+  // recorded and reported) lives in acceptance-exceptions.mjs, not here.
   cssPerRouteBytes: 70000,          // exact decimal bytes, minified but uncompressed
   cssPerRouteBrotliBytes: 14000,    // exact decimal bytes, each stylesheet compressed separately
   fontPreloadsPerRoute: 2,          // files

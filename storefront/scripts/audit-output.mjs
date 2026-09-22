@@ -6,7 +6,7 @@ import { brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUDGETS, MEDIA_EXTENSIONS, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
-import { measure, checkBudgets } from './measure-firstload.mjs';
+import { measure, checkBudgets, cssAcceptance } from './measure-firstload.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
@@ -135,9 +135,16 @@ export function auditOutput(outDir = OUT) {
   }
 
   // Per-route CSS and font-preload limits (budgets.mjs), the same measurement
-  // measure-firstload.mjs reports; a route over a written limit fails here too.
+  // measure-firstload.mjs reports; a route over a limit in force fails here
+  // too. The raw CSS ceiling in force is the owner-approved exception
+  // CSS-UI001-01 on its exact listed routes and the written limit elsewhere
+  // (acceptance-exceptions.mjs); the original limit's compliance is carried
+  // in `stats.cssAcceptance`, so a retained FAIL stays visible, and the
+  // aggregate is marked WITH_APPROVED_EXCEPTIONS whenever the exception is used.
   const perRoute = measure(outDir);
-  for (const p of checkBudgets(perRoute)) if (/CSS|font preload|stylesheet|preloaded font|no stylesheet/.test(p)) problems.push(p);
+  for (const p of checkBudgets(perRoute)) if (/CSS|font preload|stylesheet|preloaded font|no stylesheet|zero coverage/.test(p)) problems.push(p);
+  const acceptance = cssAcceptance(perRoute);
+  if (acceptance.status === 'FAIL') for (const row of acceptance.rows) if (row.problem) problems.push(`${row.route}: ${row.problem}`);
   const cssWorst = perRoute.reduce((a, r) => (r.css && r.css.bytes > (a?.css?.bytes ?? -1) ? r : a), null);
   const fontsWorst = perRoute.reduce((a, r) => (r.fontPreloads && r.fontPreloads.count > (a?.fontPreloads?.count ?? -1) ? r : a), null);
 
@@ -150,6 +157,10 @@ export function auditOutput(outDir = OUT) {
       totalBytes: total, fileCount: files.length, firstLoadJs, firstLoadJsBrotli, scripts, largest,
       cssWorstRoute: cssWorst ? { route: cssWorst.route, bytes: cssWorst.css.bytes, brotli: cssWorst.css.brotli, stylesheets: cssWorst.css.uniqueStylesheets } : null,
       fontPreloadsWorstRoute: fontsWorst ? { route: fontsWorst.route, count: fontsWorst.fontPreloads.count, bytes: fontsWorst.fontPreloads.bytes } : null,
+      cssAcceptance: {
+        status: acceptance.status, exception: acceptance.exception, routesMeasured: acceptance.routesMeasured,
+        originalFailuresRetained: acceptance.originalFailuresRetained, exceptionsApplied: acceptance.exceptionsApplied,
+      },
       documents, notFound, documentationHostsInChunks: [...docHosts].sort(),
     },
   };
@@ -162,6 +173,9 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     console.error('\nOUTPUT AUDIT FAILED:');
     for (const p of problems) console.error('  - ' + p);
     process.exitCode = 1;
+  } else if (stats.cssAcceptance.status === 'PASS_WITH_APPROVED_EXCEPTIONS') {
+    const a = stats.cssAcceptance;
+    console.log(`\nOUTPUT AUDIT PASSED WITH_APPROVED_EXCEPTIONS - ${a.exception.id} applied on ${a.exceptionsApplied.length} route(s); original ${a.exception.originalLimitBytes} B raw CSS limit FAIL retained on ${a.originalFailuresRetained.length} route(s)`);
   } else {
     console.log('\nOUTPUT AUDIT PASSED');
   }
