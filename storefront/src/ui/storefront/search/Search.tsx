@@ -27,7 +27,7 @@
 import { rubik } from '@/fonts/rubik';
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
-import { menuPath } from '@/routes/routes';
+import { checkoutPath, menuPath } from '@/routes/routes';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import { MENU_VERSION } from '@/source/menu-fixture';
@@ -36,7 +36,7 @@ import { StorefrontRuntime } from '../StorefrontRuntime';
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
 import home from '../home/home.module.css';
-import { CartAside } from '../home/CartParts';
+import { AsideSlot } from '../cart/CartRuntime';
 import { SearchScreen } from './SearchScreen';
 
 export function Search({
@@ -87,7 +87,12 @@ export function Search({
             m={m}
             menuHref={menuPath(locale, slug)}
           />
-          <CartAside m={m} state={tenant.service.state} opensAt={tenant.hours.opens} />
+          <AsideSlot
+            m={m}
+            state={tenant.service.state}
+            opensAt={tenant.hours.opens}
+            checkoutHref={checkoutPath(locale, slug)}
+          />
         </div>
       </StorefrontRuntime>
       <span className={home.srOnly} data-slug={slug} />

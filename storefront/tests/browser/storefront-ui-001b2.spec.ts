@@ -474,13 +474,16 @@ test('B2-M6 the cart dock shows the running subtotal, not the total', async ({ p
   expect(shown, 'the dock carries the SUBTOTAL').toBe(money(SUBTOTAL_MINOR));
   expect(shown, 'the dock must not carry the total').not.toBe(money(TOTAL_MINOR));
 
-  // And the wide seam still carries no money at all, so the dock is the only
-  // place a subtotal appears in Phase C.
+  // At wide the dock is hidden and the ASIDE is the cart surface. It shows the
+  // same subtotal - and, unlike the dock, also the tax and the total, because
+  // it is the full totals block rather than a running strip.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${BASE}/en/s/maps-burger/menu`, { waitUntil: 'networkidle' });
-  const seam = page.locator('[data-sf-aside="seam"]');
-  await expect(seam).toHaveCount(1);
-  expect((await seam.textContent()) ?? '').not.toMatch(/₪\s*\d/);
+  const aside = page.locator('[data-sf-aside="live"]');
+  await expect(aside).toHaveCount(1);
+  const asideText = (await aside.textContent()) ?? '';
+  expect(asideText, 'the aside repeats the SAME subtotal').toContain(money(SUBTOTAL_MINOR));
+  expect(asideText, 'and, unlike the dock, the total as well').toContain(money(TOTAL_MINOR));
 
   RESULTS['B2-M6'] = { shown, subtotal: money(SUBTOTAL_MINOR), total: money(TOTAL_MINOR) };
 });

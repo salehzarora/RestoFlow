@@ -33,12 +33,37 @@ test('no string is empty and no string is left in another language', () => {
   }
   // A Hebrew or Arabic value identical to the English one is almost always an
   // untranslated copy-paste. languageNames are exempt: they are endonyms.
+  //
+  // `phoneHint` is the one other exemption, and it is the handoff's own
+  // decision: CONTENT_AND_LOCALIZATION.md:87 authors `05X-XXX-XXXX` in all
+  // three columns because it is a numeric FORMAT MASK, not prose. The
+  // exemption is kept narrow by proving the value really is a mask below, so
+  // untranslated sentences cannot hide behind it.
+  const IDENTICAL_BY_DESIGN = new Set(['phoneHint']);
   for (const code of ['ar', 'he']) {
     for (const [key, value] of Object.entries(DICTS[code])) {
       if (typeof value !== 'string') continue;
+      if (IDENTICAL_BY_DESIGN.has(key)) continue;
       assert.notEqual(value, DICTS.en[key], `${code}.${key} looks untranslated`);
     }
   }
+});
+
+test('the ONE identical-by-design key is a format mask, not untranslated prose', () => {
+  // Without this the exemption above would be a hole: any key added to
+  // IDENTICAL_BY_DESIGN could carry English prose in every locale.
+  const MASK = /^[0-9X‐-― ()+.-]+$/;
+  for (const code of LOCALES) {
+    const value = DICTS[code].phoneHint;
+    assert.ok(MASK.test(value), `${code}.phoneHint must be a numeric format mask, got ${value}`);
+    assert.ok(!/[A-WYZa-z]/.test(value), `${code}.phoneHint must carry no prose`);
+  }
+  // And it really is the same in all three, which is why it needs the exemption.
+  assert.equal(DICTS.ar.phoneHint, DICTS.en.phoneHint);
+  assert.equal(DICTS.he.phoneHint, DICTS.en.phoneHint);
+  // The neighbouring helper text is NOT exempt and must differ per locale.
+  assert.notEqual(DICTS.ar.phoneHelp, DICTS.en.phoneHelp);
+  assert.notEqual(DICTS.he.phoneHelp, DICTS.en.phoneHelp);
 });
 
 test('language names are endonyms and identical across dictionaries', () => {

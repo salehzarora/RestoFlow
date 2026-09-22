@@ -22,7 +22,7 @@ export const MAX_QTY = 20;
 /** Kitchen note length, per the approved sheet. */
 export const MAX_NOTE = 140;
 
-function assertMinor(value: number, what: string): Minor {
+export function assertMinor(value: number, what: string): Minor {
   if (!Number.isInteger(value)) {
     throw new TypeError(`${what} must be integer minor units, received ${String(value)}`);
   }

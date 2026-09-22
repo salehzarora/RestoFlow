@@ -170,23 +170,66 @@ test('NEGATIVE CONTROL: the fabricated-cart detector fails on a document that ha
   }
 });
 
-test('the wide aside ships as a cart-neutral seam, not a cart', () => {
-  // It must exist (it is the approved Phase-D seam) and must carry the empty
-  // label rather than a count, so the bytes are truthful for every visitor.
-  // BOTH surfaces carry the seam: the menu and, since C2, search.
-  const withSeam = emittedText().filter((d) => /(^|\/)(menu|search)\.html$/.test(d.file));
-  assert.equal(withSeam.length, 8,
+test('the wide aside is live in the browser but carries NO cart in the bytes', () => {
+  /*
+   * Phase D makes the aside functional, and this gate does NOT relax because
+   * of it - it gets sharper.
+   *
+   * A static document is byte-identical for every visitor, so any cart in it
+   * is a cart nobody owns. That is exactly the defect the Phase C review found
+   * when a seeded fixture cart reached sixteen shipped documents. The live
+   * aside therefore prerenders its FRAME and its head only, and the lines,
+   * steppers and totals appear only after this visitor's own cart has been
+   * read from their own device.
+   *
+   * The frame must still be there: returning nothing until hydration would
+   * reflow 360px of layout the moment the cart arrives.
+   *
+   * BOTH surfaces carry it: the menu and, since C2, search.
+   */
+  const withAside = emittedText().filter((d) => /(^|\/)(menu|search)\.html$/.test(d.file));
+  assert.equal(withAside.length, 8,
     'expected one menu AND one search document per locale root');
-  for (const { file, text } of withSeam) {
-    assert.ok(text.includes('data-sf-aside="seam"'), `${file}: the wide seam is missing`);
+  for (const { file, text } of withAside) {
+    assert.ok(text.includes('data-sf-aside="live"'), `${file}: the wide aside is missing`);
     // Scoped to the <aside> ELEMENT: the document also carries an RSC payload
     // full of legitimate MENU prices, which are not cart state.
     const start = text.indexOf('<aside');
     const seam = text.slice(start, text.indexOf('</aside>', start));
     assert.ok(start !== -1 && seam.length > 0, `${file}: no aside element`);
-    assert.ok(!seam.includes('asideStepper'), `${file}: the seam must expose no stepper`);
-    assert.ok(!seam.includes('asideLine'), `${file}: the seam must carry no cart line`);
-    assert.ok(!seam.includes('totalRow'), `${file}: the seam must carry no totals`);
-    assert.ok(!/₪\d/.test(seam), `${file}: the seam must carry no money`);
+    assert.ok(!seam.includes('asideStepper'), `${file}: the bytes must expose no stepper`);
+    assert.ok(!seam.includes('asideLine'), `${file}: the bytes must carry no cart line`);
+    assert.ok(!seam.includes('totalRow'), `${file}: the bytes must carry no totals`);
+    assert.ok(!/₪\d/.test(seam), `${file}: the bytes must carry no money`);
+    // And the frame IS there, with its head, so the column does not appear
+    // from nowhere after hydration.
+    assert.ok(seam.includes('sf-aside-title'), `${file}: the aside head is missing`);
+  }
+});
+
+test('the four flow documents contain no cart, no draft and no money', () => {
+  /*
+   * The same rule, applied where it matters most. `/cart` is the one route
+   * whose entire purpose is to show a cart - which is precisely why its static
+   * bytes must contain none: every visitor is served the same file.
+   *
+   * The draft check is the privacy half: a checkout document that shipped a
+   * name, a phone or an address would be shipping one visitor's details to
+   * every other.
+   */
+  const flow = emittedText().filter((d) =>
+    /(^|\/)(cart|checkout|payment|review)\.html$/.test(d.file),
+  );
+  assert.equal(flow.length, 16, 'expected four flow documents per locale root');
+  for (const { file, text } of flow) {
+    assert.ok(text.includes('data-sf-pending'), `${file}: must ship the pre-hydration frame only`);
+    for (const banned of ['data-sf-cart-line', 'data-sf-totals', 'data-sf-aside-line']) {
+      assert.ok(!text.includes(banned), `${file}: prerendered ${banned}`);
+    }
+    assert.ok(!/₪\d/.test(text), `${file}: the document must carry no money`);
+    // No input may arrive with a value: a prefilled contact field in a static
+    // document is someone else's data.
+    assert.ok(!/<input[^>]*\svalue="[^"]/.test(text), `${file}: an input ships a value`);
+    assert.ok(!/<textarea[^>]*>[^<]/.test(text), `${file}: a textarea ships content`);
   }
 });

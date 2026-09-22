@@ -189,8 +189,8 @@ for (const c of CASES) {
       await expect(page.locator('aside')).toBeVisible();
       info.asideWidth = await page.locator('aside').evaluate((el) => el.getBoundingClientRect().width);
       expect(Math.round(info.asideWidth as number), 'aside is 360px').toBe(360);
-      // Exactly ONE wide seam, and it is the cart-neutral one.
-      await expect(page.locator('[data-sf-aside="seam"]')).toHaveCount(1);
+      // Exactly ONE wide cart column, and it is the live one.
+      await expect(page.locator('[data-sf-aside="live"]')).toHaveCount(1);
       // NOTE: the dock's wide-layout behaviour is NOT asserted here.
       // Phase C made the dock live, so with an empty cart it is absent from the
       // DOM entirely and `.first().isVisible() === false` would pass because the
@@ -425,15 +425,24 @@ test('C1-G13 with a REAL cart: the dock exists at 834 and is display:none at 128
   expect(display, 'the container query must hide it').toBe('none');
   await expect(wideDock).toBeHidden();
 
-  // Exactly one wide seam, and it does NOT move because a cart exists.
-  const seam = page.locator('[data-sf-aside="seam"]');
-  await expect(seam).toHaveCount(1);
-  await expect(seam).toBeVisible();
-  await expect(seam.locator('[class*="asideLine"]'), 'the seam shows no cart line').toHaveCount(0);
-  await expect(seam.locator('[class*="totalRow"]'), 'the seam shows no totals').toHaveCount(0);
-  const seamText = (await seam.textContent()) ?? '';
-  expect(seamText, 'the seam must carry no money').not.toMatch(/₪\s*\d/);
-  await expect(seam.locator('button'), 'the seam CTA is disabled').toBeDisabled();
+  // Exactly one wide cart column, and from Phase D it DOES carry this
+  // visitor's cart - the dock and the aside are the same cart in two places.
+  const aside = page.locator('[data-sf-aside="live"]');
+  await expect(aside).toHaveCount(1);
+  await expect(aside).toBeVisible();
+  await expect(aside.locator('[data-sf-aside-line]'), 'the aside shows the cart').toHaveCount(1);
+  await expect(aside.locator('[data-sf-aside-totals]')).toHaveCount(1);
+  const asideText = (await aside.textContent()) ?? '';
+  expect(asideText, 'the hydrated aside carries money').toMatch(/₪\s*\d/);
+  // The dock's subtotal and the aside's subtotal are the SAME cart, so they
+  // must agree - two surfaces disagreeing about money is the defect this pins.
+  const dockSubtotal = (await wideDock.locator('[class*="dockTotal"]').textContent())?.trim();
+  expect(asideText, 'the dock and the aside must agree').toContain(dockSubtotal ?? '@@');
 
-  RESULTS['C1-G13'] = { narrow: 'visible', wideDisplay: display, seamText: seamText.slice(0, 80) };
+  RESULTS['C1-G13'] = {
+    narrow: 'visible',
+    wideDisplay: display,
+    asideText: asideText.slice(0, 80),
+    dockSubtotal,
+  };
 });

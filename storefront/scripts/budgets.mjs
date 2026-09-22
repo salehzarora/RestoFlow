@@ -40,6 +40,24 @@ export const ROUTES = [
   { route: '/ar/s/maps-burger/search', file: 'ar/s/maps-burger/search.html' },
   { route: '/en/s/maps-burger/search', file: 'en/s/maps-burger/search.html' },
   { route: '/he/s/maps-burger/search', file: 'he/s/maps-burger/search.html' },
+  // STOREFRONT-UI-001 Phase D: the four flow surfaces, measured in every
+  // locale root. Adding routes WIDENS coverage; no ceiling above changes.
+  { route: '/s/maps-burger/cart', file: 's/maps-burger/cart.html' },
+  { route: '/ar/s/maps-burger/cart', file: 'ar/s/maps-burger/cart.html' },
+  { route: '/en/s/maps-burger/cart', file: 'en/s/maps-burger/cart.html' },
+  { route: '/he/s/maps-burger/cart', file: 'he/s/maps-burger/cart.html' },
+  { route: '/s/maps-burger/checkout', file: 's/maps-burger/checkout.html' },
+  { route: '/ar/s/maps-burger/checkout', file: 'ar/s/maps-burger/checkout.html' },
+  { route: '/en/s/maps-burger/checkout', file: 'en/s/maps-burger/checkout.html' },
+  { route: '/he/s/maps-burger/checkout', file: 'he/s/maps-burger/checkout.html' },
+  { route: '/s/maps-burger/payment', file: 's/maps-burger/payment.html' },
+  { route: '/ar/s/maps-burger/payment', file: 'ar/s/maps-burger/payment.html' },
+  { route: '/en/s/maps-burger/payment', file: 'en/s/maps-burger/payment.html' },
+  { route: '/he/s/maps-burger/payment', file: 'he/s/maps-burger/payment.html' },
+  { route: '/s/maps-burger/review', file: 's/maps-burger/review.html' },
+  { route: '/ar/s/maps-burger/review', file: 'ar/s/maps-burger/review.html' },
+  { route: '/en/s/maps-burger/review', file: 'en/s/maps-burger/review.html' },
+  { route: '/he/s/maps-burger/review', file: 'he/s/maps-burger/review.html' },
 ];
 
 export const MEDIA_EXTENSIONS = ['.jpg', '.jpeg', '.gif', '.mp4', '.webm', '.mov'];
@@ -53,6 +71,11 @@ export const REQUIRED_HTML = [
   // STOREFRONT-UI-001 Phase C: the search surface must be emitted too.
   's/maps-burger/search.html', 'ar/s/maps-burger/search.html',
   'en/s/maps-burger/search.html', 'he/s/maps-burger/search.html',
+  // STOREFRONT-UI-001 Phase D: all sixteen flow documents must be emitted.
+  's/maps-burger/cart.html', 'ar/s/maps-burger/cart.html', 'en/s/maps-burger/cart.html', 'he/s/maps-burger/cart.html',
+  's/maps-burger/checkout.html', 'ar/s/maps-burger/checkout.html', 'en/s/maps-burger/checkout.html', 'he/s/maps-burger/checkout.html',
+  's/maps-burger/payment.html', 'ar/s/maps-burger/payment.html', 'en/s/maps-burger/payment.html', 'he/s/maps-burger/payment.html',
+  's/maps-burger/review.html', 'ar/s/maps-burger/review.html', 'en/s/maps-burger/review.html', 'he/s/maps-burger/review.html',
 ];
 
 // No favicon: gate K2 (owner approval for a BIZBOT symbol derivative) is NOT
@@ -74,4 +97,21 @@ export const EXPECTED_DOCUMENT = {
   'ar/s/maps-burger/menu.html': { lang: 'ar', dir: 'rtl' },
   'en/s/maps-burger/menu.html': { lang: 'en', dir: 'ltr' },
   'he/s/maps-burger/menu.html': { lang: 'he', dir: 'rtl' },
+  // Phase D: every flow document declares its own language and direction.
+  's/maps-burger/cart.html': { lang: 'ar', dir: 'rtl' },
+  'ar/s/maps-burger/cart.html': { lang: 'ar', dir: 'rtl' },
+  'en/s/maps-burger/cart.html': { lang: 'en', dir: 'ltr' },
+  'he/s/maps-burger/cart.html': { lang: 'he', dir: 'rtl' },
+  's/maps-burger/checkout.html': { lang: 'ar', dir: 'rtl' },
+  'ar/s/maps-burger/checkout.html': { lang: 'ar', dir: 'rtl' },
+  'en/s/maps-burger/checkout.html': { lang: 'en', dir: 'ltr' },
+  'he/s/maps-burger/checkout.html': { lang: 'he', dir: 'rtl' },
+  's/maps-burger/payment.html': { lang: 'ar', dir: 'rtl' },
+  'ar/s/maps-burger/payment.html': { lang: 'ar', dir: 'rtl' },
+  'en/s/maps-burger/payment.html': { lang: 'en', dir: 'ltr' },
+  'he/s/maps-burger/payment.html': { lang: 'he', dir: 'rtl' },
+  's/maps-burger/review.html': { lang: 'ar', dir: 'rtl' },
+  'ar/s/maps-burger/review.html': { lang: 'ar', dir: 'rtl' },
+  'en/s/maps-burger/review.html': { lang: 'en', dir: 'ltr' },
+  'he/s/maps-burger/review.html': { lang: 'he', dir: 'rtl' },
 };

@@ -4,7 +4,7 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -269,20 +269,24 @@ test('motion classes map calm to no extra class', () => {
 // --------------------------------------------------------------- cart is inert
 
 /**
- * THE INERT/LIVE DOCK BOUNDARY, named explicitly.
+ * THE LIVE-CART BOUNDARY, named explicitly.
  *
- * Phase B proved the dock's layout with a presentational component. Phase C
- * needs a dock that moves, and the honest way to add one is to NAME the new
- * boundary here rather than quietly add a second dock this guard does not know
- * about. So: CartParts.tsx stays inert - the Phase B assertion below is
- * unchanged and still enforced - and exactly ONE other file may be a live dock.
+ * Phase B proved the dock's layout with an inert presentational component, and
+ * Phase C added one live dock beside it. Phase D makes the WIDE ASIDE live too,
+ * and retires the inert reference rather than leaving a second component that
+ * renders a fixture cart - the exact shape of the defect the Phase C review
+ * found, where a seeded cart reached sixteen shipped documents.
  *
- * Both files are read RAW, not comment-stripped, on purpose: a banned API must
- * not appear at all, not even in prose, so nobody can document their way past
- * the rule.
+ * So the boundary is now: exactly TWO components may render a cart, both under
+ * `src/ui/storefront/cart/`, both client, and neither may touch a store. The
+ * rule is written down here rather than quietly abandoned.
+ *
+ * Files are read RAW, not comment-stripped, on purpose: a banned API must not
+ * appear at all, not even in prose, so nobody can document their way past it.
  */
-const INERT_DOCK = 'src/ui/storefront/home/CartParts.tsx';
 const LIVE_DOCK = 'src/ui/storefront/cart/LiveCartDock.tsx';
+const LIVE_ASIDE = 'src/ui/storefront/cart/LiveCartAside.tsx';
+const RETIRED_INERT = 'src/ui/storefront/home/CartParts.tsx';
 
 /** Every .tsx under src/, as repo-relative POSIX paths. */
 function sourceFiles() {
@@ -298,41 +302,83 @@ function sourceFiles() {
   return out;
 }
 
-test('the cart is presentational only - no store, no persistence, no mutation', () => {
-  const cartSource = read(INERT_DOCK);
-  for (const banned of ['useState', 'useReducer', 'localStorage', 'sessionStorage', 'onClick', 'dispatch']) {
-    assert.ok(!cartSource.includes(banned), `CartParts must not contain ${banned}`);
-  }
-  // Every control is explicitly disabled.
-  assert.ok((cartSource.match(/disabled/g) ?? []).length >= 2);
-  // It must also stay a SERVER component: a 'use client' here would ship every
-  // dock and aside string as JavaScript.
-  assert.ok(!cartSource.includes("'use client'"), 'CartParts must stay a server component');
+test('the inert Phase B cart reference is DELETED, not merely unused', () => {
+  // Leaving it in the tree is what let a fixture cart be rendered by mistake
+  // once already. An unused component is one import away from being used.
+  assert.ok(!existsSync(path.join(ROOT, RETIRED_INERT)), `${RETIRED_INERT} must be gone`);
+  const offenders = sourceFiles().filter((rel) => {
+    const src = code(rel);
+    return src.includes('CartAside') || src.includes('CartDock');
+  }).filter((rel) => rel !== LIVE_DOCK && rel !== LIVE_ASIDE
+    && rel !== 'src/ui/storefront/cart/CartRuntime.tsx');
+  assert.deepEqual(offenders, [], 'the retired components are still referenced');
+
+  // And nothing renders the PRESENTATIONAL CartView any more: the live
+  // surfaces read a CartSummary resolved from the real menu instead.
+  const views = sourceFiles().filter((rel) => /\bcart:\s*CartView\b/.test(code(rel)));
+  assert.deepEqual(views, [], 'a component still takes the fixture CartView');
 });
 
-test('exactly one live dock exists, and it is the named one', () => {
-  const live = read(LIVE_DOCK);
-  // Non-vacuity: the named file must exist and must actually BE the live dock,
-  // or this allowlist entry is guarding nothing.
-  assert.ok(live.includes("'use client'"), `${LIVE_DOCK} must be the client dock`);
-  assert.ok(live.includes('useState'), `${LIVE_DOCK} must actually hold state`);
-
-  // The live dock still may not reach a browser store directly: persistence
-  // belongs to the one allowlisted cart-storage module.
-  for (const banned of ['localStorage', 'sessionStorage']) {
-    assert.ok(!live.includes(banned), `${LIVE_DOCK} must not touch ${banned}`);
+test('exactly two live cart surfaces exist, and they are the named ones', () => {
+  for (const rel of [LIVE_DOCK, LIVE_ASIDE]) {
+    const src = read(rel);
+    // Non-vacuity: each named file must exist and must actually be live, or
+    // the allowlist entry is guarding nothing.
+    assert.ok(src.includes("'use client'"), `${rel} must be a client component`);
+    // Neither may reach a browser store directly: persistence belongs to the
+    // one allowlisted cart-storage module.
+    for (const banned of ['localStorage', 'sessionStorage']) {
+      assert.ok(!src.includes(banned), `${rel} must not touch ${banned}`);
+    }
   }
+  assert.ok(read(LIVE_DOCK).includes('useState'), 'the dock must actually hold state');
+  assert.ok(read(LIVE_ASIDE).includes('onClick'), 'the aside steppers must actually be live');
 
-  // Its CTA stays disabled: the only approved destination is the cart route,
-  // which is Phase D. A dock that looks active and goes nowhere would be a lie.
-  assert.ok(live.includes('aria-disabled="true"'), 'the live dock CTA must be aria-disabled');
-
-  // And no THIRD dock may appear: any other component rendering a dock class is
-  // a duplicate the boundary does not cover.
+  // No THIRD surface: any other component rendering a dock or aside class is a
+  // duplicate this boundary does not cover.
   const others = sourceFiles()
-    .filter((r) => r !== INERT_DOCK && r !== LIVE_DOCK)
-    .filter((r) => /\b\w+\.dockCta\b/.test(read(r)));
-  assert.deepEqual(others, [], 'a dock exists outside the two named files');
+    .filter((rel) => rel !== LIVE_DOCK && rel !== LIVE_ASIDE)
+    .filter((rel) => /\b\w+\.(dockCta|asideCta|asideLines)\b/.test(read(rel)));
+  assert.deepEqual(others, [], 'a cart surface exists outside the two named files');
+});
+
+test('both cart CTAs now have a REAL destination, and say why when they do not', () => {
+  // Phase C kept both disabled because the cart route did not exist. It does
+  // now, so a disabled CTA would be the lie instead.
+  const dock = read(LIVE_DOCK);
+  assert.ok(dock.includes('href={cartHref}'), 'the dock CTA must link to the cart route');
+  assert.ok(!/disabled(?!=\{)/.test(dock.replace(/dockDisabled/g, '')),
+    'the dock CTA must not be disabled any more');
+  const aside = read(LIVE_ASIDE);
+  assert.ok(aside.includes('href={checkoutHref}'),
+    'at wide the aside CTA goes STRAIGHT to checkout, not to the cart route');
+
+  // Blocked is still blocked - and is a span, so nothing focusable leads
+  // nowhere while ordering is closed or paused.
+  for (const [rel, src] of [[LIVE_DOCK, dock], [LIVE_ASIDE, aside]]) {
+    assert.ok(src.includes('blockedReason'), `${rel} must still state the blocked reason`);
+    assert.ok(/<span[\s\S]{0,200}?Disabled/.test(src), `${rel} blocked CTA must not be a link`);
+  }
+});
+
+test('an empty cart hides the DOCK but keeps the ASIDE frame', () => {
+  // The dock is an overlay, so it can vanish. The aside is a 360px LAYOUT
+  // column: vanishing would reflow the page the moment the cart is read.
+  assert.match(read(LIVE_DOCK), /if \(count === 0\) return null;/);
+
+  const aside = read(LIVE_ASIDE);
+  const body = aside.slice(aside.indexOf('export function LiveCartAside'));
+  assert.ok(!body.includes('return null'), 'the aside component must never render nothing');
+  // The frame comes FIRST and the empty state lives inside it, so an empty
+  // cart still occupies its 360px rather than collapsing the layout.
+  assert.ok(
+    body.indexOf('<aside') !== -1 && body.indexOf('<aside') < body.indexOf('asideEmpty'),
+    'the empty state must sit INSIDE the aside frame',
+  );
+  assert.ok(aside.includes('asideEmpty'), 'the aside needs its own one-line empty state');
+
+  const view = buildHome(tenant, homeOptionsFor(['cart-empty']));
+  assert.equal(view.cart.itemCount, 0);
 });
 
 test('cart totals are integer minor units and tax is configuration', () => {
@@ -343,13 +389,6 @@ test('cart totals are integer minor units and tax is configuration', () => {
   assert.equal(view.cart.totalMinor, view.cart.subtotalMinor + view.cart.taxMinor);
   assert.equal(view.cart.taxMinor, Math.round(view.cart.subtotalMinor * view.cart.taxRate));
   assert.equal(view.cart.taxRate, TAX_RATE, 'the rate comes from configuration, not a component');
-});
-
-test('an empty cart hides the dock', () => {
-  const cartSource = read('src/ui/storefront/home/CartParts.tsx');
-  assert.match(cartSource, /if \(cart\.itemCount === 0\) return null;/);
-  const view = buildHome(tenant, homeOptionsFor(['cart-empty']));
-  assert.equal(view.cart.itemCount, 0);
 });
 
 // ------------------------------------------------------------------ scenarios

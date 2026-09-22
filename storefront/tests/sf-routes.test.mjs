@@ -107,9 +107,26 @@ test('a 3-segment storefront path parses, so the language switcher does not sile
   }
 });
 
-test('only the two named leaves parse; any other third segment stays unknown', () => {
-  for (const p of ['/s/maps-burger/checkout', '/s/maps-burger/cart', '/s/maps-burger/menu/extra',
-                   '/s/Bad Slug/search', '/s/maps-burger/MENU']) {
+test('only the SIX named leaves parse; any other third segment stays unknown', () => {
+  // Phase D added cart/checkout/payment/review as real segments, so they must
+  // now PARSE - otherwise the language switcher falls through to `unknown` and
+  // a visitor changing language mid-checkout is thrown back to the menu with a
+  // full document load, losing a draft that lives only in memory.
+  for (const locale of LOCALES) {
+    for (const [leaf, build] of [
+      ['cart', r.cartPath],
+      ['checkout', r.checkoutPath],
+      ['payment', r.paymentPath],
+      ['review', r.reviewPath],
+    ]) {
+      assert.deepEqual(r.parseRoute(build(locale, 'maps-burger')),
+        { locale, kind: leaf, slug: 'maps-burger' });
+    }
+  }
+  // The whitelist is still closed: a leaf nobody declared does not parse.
+  for (const p of ['/s/maps-burger/received', '/s/maps-burger/menu/extra',
+                   '/s/Bad Slug/search', '/s/maps-burger/MENU', '/s/maps-burger/CART',
+                   '/s/maps-burger/checkout/extra']) {
     assert.equal(r.parseRoute(p).kind, 'unknown', `${p} must not parse`);
   }
   // A trailing slash is NOT a third segment: empty segments are filtered, and
@@ -117,6 +134,19 @@ test('only the two named leaves parse; any other third segment stays unknown', (
   // resource as `/s/x` and must keep parsing as the storefront.
   assert.equal(r.parseRoute('/s/maps-burger/').kind, 'storefront');
   assert.equal(r.parseRoute('/s/maps-burger/search/').kind, 'search');
+});
+
+test('switching locale on a FLOW step keeps the SAME step', () => {
+  // The four Phase D screens are where this matters most: the checkout draft is
+  // application memory only, so anything that forces a full document load loses
+  // the visitor's name, phone and address.
+  assert.equal(r.switchLocalePath('/s/maps-burger/cart', 'en'), '/en/s/maps-burger/cart');
+  assert.equal(r.switchLocalePath('/he/s/maps-burger/checkout', 'ar'), '/s/maps-burger/checkout');
+  assert.equal(r.switchLocalePath('/en/s/maps-burger/payment', 'he'), '/he/s/maps-burger/payment');
+  assert.equal(r.switchLocalePath('/s/maps-burger/review', 'he'), '/he/s/maps-burger/review');
+  // NEGATIVE CONTROL: a leaf that is NOT declared still refuses, so the four
+  // cases above prove the whitelist rather than a wildcard.
+  assert.equal(r.switchLocalePath('/s/maps-burger/received', 'en'), null);
 });
 
 test('switching locale on menu and search keeps the SAME screen', () => {

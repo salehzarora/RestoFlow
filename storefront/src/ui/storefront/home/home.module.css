@@ -1530,8 +1530,10 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 18px var(--gutter) 12px;
-  border-block-end: 1px solid var(--hair);
+  /* 18px 18px 12px, and deliberately NO bottom hairline: the canonical wide
+     screenshot has none, and the first full-width rule in it is the divider
+     under the first line. */
+  padding: 18px 18px 12px;
 }
 
 .asideTitle {
@@ -1541,79 +1543,116 @@
 }
 
 .asideCount {
-  font: 600 12px / 1.2 var(--font);
+  font: 600 13px / 1.2 var(--font);
   color: var(--tx3);
+}
+
+/* One centred line, and nothing else. The aside's empty state is NOT the cart
+   page's: no icon tile, no title, no "browse the menu" action - the panel sits
+   beside the menu the visitor is already looking at. */
+.asideEmpty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--tx3);
+  font: 400 14px / 1.4 var(--font);
 }
 
 .asideLines {
   flex: 1;
   overflow-y: auto;
   margin: 0;
-  padding: 0;
+  padding: 0 18px;
   list-style: none;
 }
 
 .asideLine {
-  padding: 14px var(--gutter);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
   border-block-end: 1px solid var(--hair);
 }
 
-.asideLineTop {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+.asideLineMain {
+  flex: 1;
+  min-width: 0;
 }
 
 .asideLineName {
   display: block;
   margin: 0;
-  font: 700 14px / 1.25 var(--font);
+  font: 700 14.5px / 1.25 var(--font);
   color: var(--tx);
 }
 
 .asideLineOpts {
   display: block;
   margin: 2px 0 0;
-  font: 400 11.5px / 1.35 var(--font);
-  color: var(--tx3);
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx2);
 }
 
+.asideLinePrice {
+  flex: none;
+  font: 800 14px / 1.3 var(--font);
+  color: var(--tx);
+}
+
+/* 34px tall with 36px buttons - the aside's own size, NOT the cart page's 40.
+   COMPONENT_INVENTORY.md:183 "scrollable lines with 34px steppers". */
 .asideStepper {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  margin-block-start: 10px;
-  padding: 3px;
-  border-radius: var(--r-pill);
-  background: var(--sf2);
+  margin-block-start: 8px;
+  height: 34px;
+  border: 1.5px solid var(--hair2);
+  border-radius: var(--r-md);
+  overflow: hidden;
 }
 
 .stepBtn {
-  width: 44px;
-  height: 40px;
+  position: relative;
+  width: 36px;
+  height: 100%;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: var(--r-pill);
   background: transparent;
   color: var(--tx);
   font: 800 16px / 1 var(--font);
+  cursor: pointer;
+}
+
+/* PX-6: keep the approved 36 x 34 visual and grow only the HIT AREA to the
+   44px minimum with an invisible overlay. No pixel moves. */
+.stepBtn::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+[dir='rtl'] .stepBtn::after {
+  transform: translate(50%, -50%);
 }
 
 .stepValue {
-  min-width: 34px;
+  min-width: 22px;
   text-align: center;
   font: 800 14px / 1 var(--font);
   color: var(--tx);
 }
 
 .asideTotals {
-  padding: 14px var(--gutter);
+  padding: 12px 18px 18px;
   border-block-start: 1px solid var(--hair);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  font-size: 13.5px;
 }
 
 .totalRow {
@@ -1621,39 +1660,45 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  font: 500 13px / 1.3 var(--font);
+  font: 500 13.5px / 1.3 var(--font);
   color: var(--tx2);
 }
 
+/* 16/800 with NO dashed divider - the cart page has one, the aside does not. */
 .totalRowFinal {
-  font: 800 17px / 1.3 var(--font);
+  font: 800 16px / 1.3 var(--font);
   color: var(--tx);
 }
 
 .totalRowFinal .amount {
   color: var(--acct);
+  text-shadow: var(--glow);
 }
 
 .asideCta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 54px;
-  margin: 4px var(--gutter) 18px;
+  height: 50px;
+  margin-block-start: 6px;
   border: 0;
-  border-radius: var(--r-control);
+  border-radius: var(--r-card);
   background: var(--cta);
   box-shadow: var(--ctaSh);
   color: var(--onacc);
   font: 800 15px / 1 var(--font);
   cursor: pointer;
+  text-decoration: none;
+  /* The label may be a whole sentence when ordering is blocked. */
+  padding: 0 14px;
+  text-align: center;
 }
 
 .asideCtaDisabled {
   background: var(--sf2);
   box-shadow: none;
-  color: var(--tx3);
-  cursor: not-allowed;
+  color: var(--tx2);
+  cursor: default;
 }
 
 /* ------------------------------------------------------------------ misc */

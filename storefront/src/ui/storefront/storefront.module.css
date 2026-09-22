@@ -30,7 +30,18 @@
   --accB: rgba(224, 123, 44, 0.45);
   --ok: #43e3ac;
   --warn: #fbbf24;
+  --warnbg: #78350f;
   --bad: #f87171;
+  --badbg: #7f1d1d;
+  /* PX-3: #f87171 on #7f1d1d is below AA, so danger TEXT is walked lighter.
+     buildTheme recomputes all of these per tenant; these are first-paint only. */
+  --badText: #fca5a5;
+  --onBad: #0b1512;
+  --info: #93c5fd;
+  --infobg: #1e3a8a;
+  /* The accent SELECTION bed, and the accent ink that is legible on it. */
+  --accs: #3b3322;
+  --accOnSelection: #e89a58;
   --cta: linear-gradient(135deg, #e5904e 0%, #e07b2c 52%, #b86524 100%);
   --ctaSh: 0 12px 28px -8px rgba(224, 123, 44, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);

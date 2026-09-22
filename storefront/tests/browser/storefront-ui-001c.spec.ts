@@ -473,7 +473,11 @@ test('a corrupt stored cart is discarded silently and the dock stays hidden', as
   await expect(page.locator('[data-sf-dock="live"]')).toHaveCount(0);
 });
 
-test('the dock CTA is disabled, because the cart route is Phase D', async ({ page }) => {
+test('the dock CTA LINKS to the cart route, now that Phase D has built it', async ({ page }) => {
+  // In Phase C this CTA was disabled because its only approved destination did
+  // not exist, and a control that looks active and goes nowhere is a lie. The
+  // route exists now, so the assertion moves with the behaviour rather than
+  // being deleted: what it pins is that the control is honest either way.
   await phone(page);
   await seen(page);
   await page.addInitScript(
@@ -484,9 +488,14 @@ test('the dock CTA is disabled, because the cart route is Phase D', async ({ pag
     })],
   );
   await page.goto(`${BASE}${MENU}`);
-  const cta = page.locator('[data-sf-dock="live"] button');
-  await expect(cta).toBeDisabled();
-  await expect(cta).toHaveAttribute('aria-disabled', 'true');
+  const cta = page.locator('[data-sf-dock-cta="cart"]');
+  await expect(cta).toHaveCount(1);
+  await expect(cta).toHaveAttribute('href', `/s/${SLUG}/cart`);
+  // A real link, not a button pretending: it must open in a new tab too.
+  expect(await cta.evaluate((el) => el.tagName)).toBe('A');
+  await cta.click();
+  await page.waitForURL(`**/s/${SLUG}/cart`);
+  await expect(page.locator('[data-sf-screen="cart"]')).toBeVisible();
 });
 
 test('REGRESSION: the fixed scrim fills the VIEWPORT, not a container-query box', async ({ page }) => {
@@ -654,20 +663,33 @@ async function wide(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-test('R2/WIDE: the seam is cart-neutral and does NOT move when a real cart exists', async ({ page }) => {
-  // At container >= 900px the dock is display:none, so the seam is all there is.
-  // In Phase C it must stay a NON-FUNCTIONAL Phase-D seam: no lines, no count,
-  // no subtotal, no tax, no total - with or without a real cart.
+test('R2/WIDE: the SERVED BYTES carry no cart, and the aside becomes one only after hydration', async ({ page }) => {
+  // Phase C kept the wide aside inert because the cart route did not exist.
+  // Phase D makes it functional, and the rule that mattered does NOT relax: a
+  // static document is byte-identical for every visitor, so any cart in it is
+  // a cart nobody owns. Both halves are asserted here.
   await wide(page);
   await seen(page);
+
+  // HALF ONE: the bytes. Fetched, never rendered - no JavaScript can have run.
+  const served = await (await fetch(`${BASE}${MENU}`)).text();
+  const asideStart = served.indexOf('<aside');
+  const asideBytes = served.slice(asideStart, served.indexOf('</aside>', asideStart));
+  expect(asideStart, 'the aside FRAME must be prerendered').toBeGreaterThan(-1);
+  for (const banned of ['asideLine', 'asideStepper', 'totalRow']) {
+    expect(asideBytes, `the served bytes carry ${banned}`).not.toContain(banned);
+  }
+  expect(asideBytes).not.toMatch(/₪\s*\d/);
+
+  // HALF TWO: with a real cart in this visitor's own storage, it fills in.
+  await page.evaluate(
+    ([key, value]) => localStorage.setItem(key as string, value as string),
+    [CART_KEY, JSON.stringify({
+      schema: 1, slug: SLUG, menuVersion: 'mb-1',
+      lines: [{ lineId: 'l1aaa', itemId: '1', qty: 2, selections: {}, note: '' }],
+    })],
+  ).catch(() => undefined);
   await page.goto(`${BASE}${MENU}`);
-  await expect(page.locator('[data-sf-item]').first()).toBeVisible();
-
-  const seam = page.locator('[data-sf-aside="seam"]');
-  await expect(seam).toHaveCount(1);
-  const before = (await seam.textContent()) ?? '';
-
-  // Now give the visitor a REAL cart and reload.
   await page.evaluate(
     ([key, value]) => localStorage.setItem(key as string, value as string),
     [CART_KEY, JSON.stringify({
@@ -678,21 +700,22 @@ test('R2/WIDE: the seam is cart-neutral and does NOT move when a real cart exist
   await page.reload();
   await expect(page.locator('[data-sf-item]').first()).toBeVisible();
 
-  const after = (await seam.textContent()) ?? '';
-  expect(after, 'the seam must not react to a real cart').toBe(before);
-  await expect(seam.locator('[class*="asideLine"]')).toHaveCount(0);
-  await expect(seam.locator('[class*="totalRow"]')).toHaveCount(0);
-  await expect(seam.locator('[class*="asideStepper"]')).toHaveCount(0);
-  expect(after).not.toMatch(/₪\s*\d/);
-  await expect(seam.locator('button')).toBeDisabled();
+  const aside = page.locator('[data-sf-aside="live"]');
+  await expect(aside).toHaveCount(1);
+  await expect(aside.locator('[data-sf-aside-line]')).toHaveCount(1);
+  const after = (await aside.textContent()) ?? '';
+  expect(after, 'the hydrated aside must show this visitor\'s money').toMatch(/₪\s*\d/);
 
   // And the dock IS rendered (the cart is real) but hidden by the container query.
   const dock = page.locator('[data-sf-dock="live"]');
   await expect(dock, 'the dock must exist so the hide is meaningful').toHaveCount(1);
   expect(await dock.evaluate((el) => getComputedStyle(el).display)).toBe('none');
 
-  RESULTS.wideSeam = { before: before.slice(0, 60), unchanged: after === before };
-  await page.screenshot({ path: path.join(SHOTS, 'WIDE-seam-neutral.png') });
+  RESULTS.wideAside = {
+    servedBytesCarryNoCart: true,
+    hydratedShowsCart: /₪\s*\d/.test(after),
+  };
+  await page.screenshot({ path: path.join(SHOTS, 'WIDE-aside-live.png') });
 });
 
 /** Visible asides only: below 900 the seam stays in the document and the
@@ -710,7 +733,7 @@ async function asideCounts(page: Page) {
     return {
       dom: all.length,
       visible: visible.length,
-      seams: document.querySelectorAll('[data-sf-aside="seam"]').length,
+      live: document.querySelectorAll('[data-sf-aside="live"]').length,
       text: a0 ? (a0.textContent ?? '').trim() : null,
       width: r ? Math.round(r.width) : null,
       x: r ? Math.round(r.x) : null,
@@ -749,7 +772,7 @@ test('C2-A/B: Search below 900 shows NO dock and NO visible aside, with a real c
   }
 });
 
-test('C2-C: Search at 1280 shows EXACTLY ONE neutral, non-functional aside', async ({ page }) => {
+test('C2-C: Search at 1280 shows EXACTLY ONE aside, and it is the live one', async ({ page }) => {
   await seen(page);
   await seedRealCart(page);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -759,36 +782,46 @@ test('C2-C: Search at 1280 shows EXACTLY ONE neutral, non-functional aside', asy
   const a = await asideCounts(page);
   expect(a.visible, 'exactly one visible aside').toBe(1);
   expect(a.dom, 'exactly one aside in the document').toBe(1);
-  expect(a.seams, 'and it is the neutral seam').toBe(1);
+  expect(a.live, 'and it is the live cart column').toBe(1);
   expect(a.width, 'the approved 360px column').toBe(360);
   expect(a.overflow).toBe(false);
   await expect(page.locator('[data-sf-dock]'), 'no dock at wide').toHaveCount(0);
 
-  // NON-FUNCTIONAL: no business state and no working control.
-  const seam = page.locator('[data-sf-aside="seam"]');
-  await expect(seam.locator('[class*="asideLine"]')).toHaveCount(0);
-  await expect(seam.locator('[class*="totalRow"]')).toHaveCount(0);
-  await expect(seam.locator('[class*="asideStepper"]')).toHaveCount(0);
-  expect(a.text, 'the seam carries no money').not.toMatch(/₪\s*\d/);
-  const buttons = seam.locator('button');
-  await expect(buttons).toHaveCount(1);
-  await expect(buttons, 'the checkout CTA is disabled - that route is Phase D').toBeDisabled();
+  // FUNCTIONAL, from Phase D: it carries this visitor's lines, their stepper
+  // and their totals, and its CTA goes straight to checkout.
+  const aside = page.locator('[data-sf-aside="live"]');
+  await expect(aside.locator('[data-sf-aside-line]')).toHaveCount(1);
+  await expect(aside.locator('[data-sf-aside-totals]')).toHaveCount(1);
+  await expect(aside.locator('[data-sf-stepper="aside"]')).toHaveCount(1);
+  expect(a.text, 'the hydrated aside carries money').toMatch(/₪\s*\d/);
+  const cta = aside.locator('[data-sf-aside-cta="checkout"]');
+  await expect(cta).toHaveCount(1);
+  await expect(cta).toHaveAttribute('href', `/s/${SLUG}/checkout`);
 
   RESULTS.c2Wide = a;
-  await page.screenshot({ path: path.join(SHOTS, 'C2-search-wide-seam.png') });
+  await page.screenshot({ path: path.join(SHOTS, 'C2-search-wide-aside.png') });
 });
 
-test('C2-C: the Search seam does NOT react to the visitor\'s real cart', async ({ page }) => {
+test('C2-C: the Search aside reacts to THIS visitor\'s cart, and to nothing else', async ({ page }) => {
   await seen(page);
   await seedRealCart(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${BASE}${SEARCH}`);
-  const seam = page.locator('[data-sf-aside="seam"]');
-  const before = (await seam.textContent()) ?? '';
+  const aside = page.locator('[data-sf-aside="live"]');
+  const before = (await aside.textContent()) ?? '';
 
   // Replace it with a much larger cart and reload.
-  await page.evaluate(
-    ([key, value]) => localStorage.setItem(key as string, value as string),
+  //
+  // It has to go through addInitScript, not page.evaluate: `seedRealCart`
+  // installed an init script that re-seeds the ORIGINAL cart on every
+  // navigation, so a value written to localStorage now would be overwritten by
+  // the reload. Init scripts run in the order they were added, so this one
+  // wins. (The Phase C version of this test could not notice: the seam it was
+  // asserting on was inert either way.)
+  await page.addInitScript(
+    ([key, value]) => {
+      try { localStorage.setItem(key as string, value as string); } catch { /* ignore */ }
+    },
     [CART_KEY, JSON.stringify({
       schema: 1, slug: SLUG, menuVersion: 'mb-1',
       lines: [
@@ -799,10 +832,14 @@ test('C2-C: the Search seam does NOT react to the visitor\'s real cart', async (
   );
   await page.reload();
   await expect(page.locator('[data-sf-item]').first()).toBeVisible();
-  const after = (await seam.textContent()) ?? '';
-  expect(after, 'the seam must be inert').toBe(before);
-  expect(after).not.toMatch(/₪\s*\d/);
-  expect(after).not.toMatch(/9|13/); // no count leaking from the 9+4 cart
+  const after = (await aside.textContent()) ?? '';
+  expect(after, 'the aside must follow the cart').not.toBe(before);
+  await expect(aside.locator('[data-sf-aside-line]')).toHaveCount(2);
+  // 9 x 5500 + 4 x 2200 = 58300, tax 10494, total 68794.
+  expect(after).toContain('₪583');
+  expect(after).toContain('₪687.94');
+  // And the count is UNITS, 13, not lines.
+  expect((await aside.locator('[data-sf-aside-count]').textContent()) ?? '').toContain('13');
 });
 
 test('C2-D: the Search seam sits on the logical inline-END in both directions', async ({ page }) => {
@@ -822,21 +859,25 @@ test('C2-D: the Search seam sits on the logical inline-END in both directions', 
   }
 });
 
-test('C2-E: a NO-JS visitor sees the Search seam, and it is cart-neutral', async ({ browser }) => {
+test('C2-E: a NO-JS visitor sees the Search aside FRAME, and it carries no cart', async ({ browser }) => {
+  // Without JavaScript nothing can read this visitor's storage, so the frame is
+  // all there is - and the frame is what keeps 360px of layout from appearing
+  // out of nowhere for everyone else.
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     javaScriptEnabled: false,
   });
   const page = await ctx.newPage();
   await page.goto(`${BASE}${SEARCH}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('[data-sf-aside="seam"]')).toHaveCount(1);
+  await expect(page.locator('[data-sf-aside="live"]')).toHaveCount(1);
   await expect(page.locator('[data-sf-dock]')).toHaveCount(0);
+  await expect(page.locator('[data-sf-aside-line]')).toHaveCount(0);
   await expect(page.locator('[class*="asideLine"]')).toHaveCount(0);
   await expect(page.locator('[class*="totalRow"]')).toHaveCount(0);
   const body = (await page.locator('body').textContent()) ?? '';
   expect(body).not.toContain('₪99');
   expect(body).not.toContain('₪116.82');
-  await page.screenshot({ path: path.join(SHOTS, 'C2-nojs-search-seam.png') });
+  await page.screenshot({ path: path.join(SHOTS, 'C2-nojs-search-aside.png') });
   await ctx.close();
 });
 
@@ -858,9 +899,9 @@ test('R6: a NO-JAVASCRIPT visitor sees no cart anywhere', async ({ browser }) =>
     expect(body, `${route}: the seeded subtotal is in the no-JS bytes`).not.toContain('₪99');
     expect(body, `${route}: the seeded total is in the no-JS bytes`).not.toContain('₪116.82');
   }
-  // The menu still shows its seam, and the seam is truthful.
+  // The menu still shows its aside FRAME, and the frame is truthful.
   await page.goto(`${BASE}${MENU}`, { waitUntil: 'domcontentloaded' });
-  const seam = page.locator('[data-sf-aside="seam"]');
+  const seam = page.locator('[data-sf-aside="live"]');
   await expect(seam).toHaveCount(1);
   const seamText = (await seam.textContent()) ?? '';
   expect(seamText).not.toMatch(/₪\s*\d/);

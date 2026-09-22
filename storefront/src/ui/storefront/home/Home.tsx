@@ -14,7 +14,7 @@ import { storefrontMessages } from '@/i18n/storefront';
 import { rubik } from '@/fonts/rubik';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
-import { searchPath } from '@/routes/routes';
+import { cartPath, checkoutPath, searchPath } from '@/routes/routes';
 import { MENU_VERSION } from '@/source/menu-fixture';
 import type { HomeView } from '@/source/types';
 import { LanguageMenu } from '../LanguageMenu';
@@ -32,8 +32,7 @@ import {
   StoryCard,
 } from './HomeParts';
 import { MenuSection, PopularSection } from './MenuParts';
-import { CartAside } from './CartParts';
-import { DockSlot } from '../cart/CartRuntime';
+import { AsideSlot, DockSlot } from '../cart/CartRuntime';
 import { HomeChrome } from './HomeChrome';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import styles from './home.module.css';
@@ -67,6 +66,8 @@ export function Home({
   });
   const empty = items.length === 0;
   const searchHref = searchPath(locale, slug);
+  const cartHref = cartPath(locale, slug);
+  const checkoutHref = checkoutPath(locale, slug);
   const firstCategoryId = categories[0] === undefined ? '' : `sf-cat-${categories[0].id}`;
 
   // The hero's own header row: menu button on the start side, the brand lockup
@@ -203,17 +204,24 @@ export function Home({
               motion={view.motion}
               state={tenant.service.state}
               opensAt={tenant.hours.opens}
+              cartHref={cartHref}
             />
           </main>
 
           {/*
-            THE WIDE SEAM, DELIBERATELY NON-FUNCTIONAL IN PHASE C.
-            It is a plain server component that never sees the cart store: no
-            lines, no count, no subtotal, no tax, no total, and a checkout CTA
-            that is disabled because its route is Phase D. It renders the same
-            bytes for every visitor and does not change when a real cart exists.
+            THE WIDE CART, FUNCTIONAL FROM PHASE D.
+            Its FRAME is prerendered so 360px of layout does not appear after
+            hydration, but it carries no lines, no count, no subtotal, no tax
+            and no total until this visitor's own cart has been read - so the
+            static document still contains no cart at all. At wide there is no
+            dock, and this CTA goes straight to checkout.
           */}
-          <CartAside m={m} state={tenant.service.state} opensAt={tenant.hours.opens} />
+          <AsideSlot
+            m={m}
+            state={tenant.service.state}
+            opensAt={tenant.hours.opens}
+            checkoutHref={checkoutHref}
+          />
         </div>
       </StorefrontRuntime>
       <span className={styles.srOnly} data-slug={slug} />

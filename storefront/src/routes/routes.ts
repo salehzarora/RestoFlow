@@ -35,6 +35,30 @@ export function searchPath(locale: Locale, slug: string): string {
   return `${storefrontPath(locale, slug)}/search`;
 }
 
+/**
+ * The Phase D flow. Four real segments, one per screen, because the checkout
+ * draft has to survive moving between them and only a shared LAYOUT above real
+ * routes does that; the layout lives at the `s/[slug]` segment.
+ *
+ * SCREEN_MAP.json:203 `/s/:slug/cart`, :237 `/s/:slug/checkout`,
+ * :277 `/s/:slug/payment`, :306 `/s/:slug/review`.
+ */
+export function cartPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/cart`;
+}
+
+export function checkoutPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/checkout`;
+}
+
+export function paymentPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/payment`;
+}
+
+export function reviewPath(locale: Locale, slug: string): string {
+  return `${storefrontPath(locale, slug)}/review`;
+}
+
 export function requestPath(locale: Locale, ref: string): string {
   return `${localePrefix(locale)}/r/${ref}`;
 }
@@ -45,7 +69,17 @@ export function localeHomePath(locale: Locale): string {
 
 export interface ParsedRoute {
   readonly locale: Locale;
-  readonly kind: 'storefront' | 'menu' | 'search' | 'request' | 'localeHome' | 'unknown';
+  readonly kind:
+    | 'storefront'
+    | 'menu'
+    | 'search'
+    | 'cart'
+    | 'checkout'
+    | 'payment'
+    | 'review'
+    | 'request'
+    | 'localeHome'
+    | 'unknown';
   readonly slug?: string;
   readonly ref?: string;
 }
@@ -55,7 +89,14 @@ export interface ParsedRoute {
  * matched, so a third screen cannot start parsing by accident: adding one is an
  * edit here, a builder above and a case in `switchLocalePath` below.
  */
-const STOREFRONT_LEAVES = { menu: 'menu', search: 'search' } as const;
+const STOREFRONT_LEAVES = {
+  menu: 'menu',
+  search: 'search',
+  cart: 'cart',
+  checkout: 'checkout',
+  payment: 'payment',
+  review: 'review',
+} as const;
 
 function isLeaf(segment: string | undefined): segment is keyof typeof STOREFRONT_LEAVES {
   return segment !== undefined && Object.hasOwn(STOREFRONT_LEAVES, segment);
@@ -102,6 +143,14 @@ export function switchLocalePath(pathname: string, target: Locale): string | nul
       return parsed.slug ? menuPath(target, parsed.slug) : null;
     case 'search':
       return parsed.slug ? searchPath(target, parsed.slug) : null;
+    case 'cart':
+      return parsed.slug ? cartPath(target, parsed.slug) : null;
+    case 'checkout':
+      return parsed.slug ? checkoutPath(target, parsed.slug) : null;
+    case 'payment':
+      return parsed.slug ? paymentPath(target, parsed.slug) : null;
+    case 'review':
+      return parsed.slug ? reviewPath(target, parsed.slug) : null;
     case 'request':
       return parsed.ref ? requestPath(target, parsed.ref) : null;
     case 'localeHome':

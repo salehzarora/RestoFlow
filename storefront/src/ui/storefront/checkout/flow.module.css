@@ -1,0 +1,1317 @@
+/*
+ * THE PHASE D FLOW - cart, checkout (details), payment, review.
+ *
+ * Every measurement below is transcribed from the approved prototype
+ * (prototype/Storefront.dc.html) and cross-checked against the canonical
+ * screenshots. The prototype is the pixel authority
+ * (BIZBOT_STOREFRONT_DESIGN_HANDOFF/prototype/README.md:15); the line numbers
+ * in the comments are its own.
+ *
+ * KEYFRAMES ARE DEFINED HERE, AT THE BOTTOM. CSS Modules scope `@keyframes`
+ * per FILE exactly as they scope class names, so a name declared in another
+ * module resolves to nothing and the animation silently does not run. That
+ * exact bug is documented in storefront.module.css.
+ *
+ * NO INLINE STYLE ANYWHERE. The committed CSP is `style-src 'self'` with no
+ * 'unsafe-inline'.
+ *
+ * NO PHYSICAL PROPERTIES. `inset-inline`, `padding-inline`, `border-inline`
+ * and `text-align: start/end` only - the same three locales run LTR and RTL
+ * through this stylesheet.
+ */
+
+.screen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* ============================================================ sticky header */
+
+/* :366 cart   `padding: <topPad> 8px 8px`
+   :418 steps  `padding: <topPad> 8px 10px`
+   Both on --sf with a 1px --hair bottom rule. topPad is 10px standalone. */
+.head {
+  flex: none;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  background: var(--sf);
+  border-block-end: 1px solid var(--hair);
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 8px;
+}
+
+.headRowSteps {
+  padding-block-end: 10px;
+}
+
+/* :367 / :419 - 44x44, radius 12, transparent. */
+.back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/*
+ * The chevron points BACK along the reading direction. The shared ChevronIcon
+ * points forward, so the back control mirrors it in LTR - and the prototype's
+ * own `transform: {{flipBg}}` (:776) mirrors again in RTL, which lands back on
+ * "no transform".
+ */
+.back svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .back svg {
+  transform: none;
+}
+
+/* :368 / :419 - 18px/800, flex 1, start-aligned. */
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 800 18px / 1.2 var(--font);
+  color: var(--tx);
+}
+
+/* :368 - the UNIT count, 13px --tx3. */
+.count {
+  flex: none;
+  padding-inline-end: 10px;
+  font: 400 13px / 1.2 var(--font);
+  color: var(--tx3);
+}
+
+/* :420 - three-segment progress. Row `gap:6px; padding:6px 10px 0`. */
+.steps {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 0;
+}
+
+.step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font: 700 11.5px / 1.2 var(--font);
+  color: var(--tx3);
+  text-align: center;
+}
+
+/* Every segment UP TO AND INCLUDING the current one is accent (:830). */
+.stepBar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sf2);
+}
+
+.stepFilled .stepBar {
+  background: var(--cta);
+}
+
+.stepNow {
+  color: var(--tx);
+}
+
+.stepNow .stepBar {
+  box-shadow: 0 0 10px var(--accB);
+}
+
+/* ============================================================= scroll body */
+
+/* :370 cart `padding:12px 16px 24px; gap:12px`
+   :422 steps `padding:14px 16px 24px; gap:18px` */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px var(--gutter) 24px;
+}
+
+.bodySteps {
+  gap: 18px;
+  padding-block-start: 14px;
+}
+
+/* :424 etc - a labelled block of fields. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font: 800 15.5px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+/* ============================================================== cart lines */
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* :385 - radius 18, 1px --hair, a vertical --sf -> --sf2 gradient. */
+.line {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--r-surface);
+  border: 1px solid var(--hair);
+  background: linear-gradient(180deg, var(--sf), var(--sf2));
+  box-shadow:
+    0 12px 28px -20px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.motionFull .line {
+  animation: sfUp var(--d-emphasis) var(--e-standard) both;
+}
+
+/* :386 - 64px thumb, radius 12, --sf2 bed. */
+.lineMedia {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-control);
+  overflow: hidden;
+  background: var(--sf2);
+}
+
+.lineImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lineNoImg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 900 22px / 1 var(--font);
+  color: var(--acct);
+}
+
+.lineBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lineTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* :388 - 15.5px/700, line-height 1.25, wraps freely
+   (CONTENT_AND_LOCALIZATION.md:259). */
+.lineName {
+  font: 700 15.5px / 1.25 var(--font);
+  color: var(--tx);
+  min-width: 0;
+}
+
+.linePrice {
+  flex: none;
+  font-weight: 800;
+}
+
+/* :389 - the modifier summary. */
+.lineMods {
+  font: 400 13px / 1.35 var(--font);
+  color: var(--tx2);
+}
+
+/* :390 - the kitchen note, with its 13px glyph. */
+.lineNote {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font: 400 13px / 1.35 var(--font);
+  color: var(--tx3);
+}
+
+.lineNote svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lineFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-start: 6px;
+}
+
+/* :392 - the CART stepper: 40px tall, 44px buttons, radius 12, 1px --hair2
+   on --bg. COMPONENT_INVENTORY.md:121 "40px in the cart ... the + side is
+   accent-tinted". */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--hair2);
+  border-radius: var(--r-control);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.stepBtn {
+  width: 44px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.stepPlus {
+  background: var(--accA);
+  color: var(--acct);
+}
+
+.stepBtn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stepValue {
+  min-width: 24px;
+  text-align: center;
+  font-weight: 800;
+}
+
+.lineActions {
+  display: flex;
+  gap: 2px;
+}
+
+/* :393 - Edit in --acct, Remove in --bad, both 40px tall / 13.5px / 700. */
+.lineAction {
+  position: relative;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--acct);
+  font: 700 13.5px / 1 var(--font);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.lineRemove {
+  color: var(--bad);
+}
+
+/*
+ * PX-6 hit-area extension. The approved VISUAL size stays exactly as drawn; an
+ * invisible pseudo-element grows the touch target to the 44px minimum
+ * (DESIGN_HANDOFF.md:176). No pixel moves, and the element it sits on is
+ * `position: relative` so the overlay cannot escape its own control.
+ */
+.lineAction::after,
+.noticeAction::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}
+
+[dir='rtl'] .lineAction::after,
+[dir='rtl'] .noticeAction::after {
+  transform: translate(50%, -50%);
+}
+
+/* ================================================================= notices */
+
+/* :372 - one InlineBanner: 12px 14px, radius 14, 20px leading glyph, at most
+   ONE action (COMPONENT_INVENTORY.md:149). */
+.notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  border: 1px solid transparent;
+  background: var(--sf2);
+  color: var(--tx);
+}
+
+.noticeWarn {
+  background: var(--warnbg);
+  color: var(--warn);
+}
+
+.noticeBad {
+  background: var(--badbg);
+  color: var(--badText);
+}
+
+.noticeInfo {
+  background: var(--infobg);
+  color: var(--info);
+}
+
+/* The served-zone pill sits on the accent SELECTION bed, so its ink is the
+   token walked to AA on that bed, never plain --acct. */
+.noticeAcc {
+  background: var(--accs);
+  color: var(--accOnSelection);
+}
+
+/* A neutral surface, not a tone - the payment timing line (:478). */
+.noticePlain {
+  background: var(--sf);
+  border-color: var(--hair);
+  color: var(--tx2);
+  font-size: 13.5px;
+}
+
+.noticeIcon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-block-start: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.noticeIconSm {
+  width: 18px;
+  height: 18px;
+}
+
+.noticeText {
+  flex: 1;
+  min-width: 0;
+}
+
+.noticeTitle {
+  font: 800 14.5px / 1.3 var(--font);
+}
+
+.noticeBody {
+  margin-block-start: 2px;
+  font: 400 13px / 1.4 var(--font);
+  opacity: 0.92;
+}
+
+/* :374 - the "got it" / recovery chip: 34px, outlined in currentColor. */
+.noticeAction {
+  position: relative;
+  margin-block-start: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1.5px solid currentColor;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: inherit;
+  font: 700 13px / 1 var(--font);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* :496 - the send-failure banner's action is an INVERTED chip: the bed colour
+   inked on the tone. */
+.noticeActionSolid {
+  margin-block-start: 10px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  background: currentColor;
+}
+
+.noticeBad .noticeActionSolid > span {
+  color: var(--badbg);
+}
+
+.noticeWarn .noticeActionSolid > span {
+  color: var(--warnbg);
+}
+
+.noticeInfo .noticeActionSolid > span {
+  color: var(--infobg);
+}
+
+.motionFull .noticeShake {
+  animation: sfShake 400ms var(--e-standard) both;
+}
+
+/* ================================================================== totals */
+
+/* :399 - radius 16, 1px --hair on --sf, padding 14px 16px, gap 8, 14px. */
+.totals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px var(--gutter);
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+  font-size: 14px;
+}
+
+/* :487 - on review the totals live INSIDE the summary card, with no frame. */
+.totalsBare {
+  padding: 12px 0;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13.5px;
+}
+
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.totalLabel {
+  color: var(--tx2);
+  min-width: 0;
+}
+
+/* :403 - the total sits above a DASHED rule, 17px/800, value in accent. */
+.totalFinal {
+  padding-block-start: 8px;
+  border-block-start: 1px dashed var(--hair2);
+  font: 800 17px / 1.3 var(--font);
+}
+
+.totalsBare .totalFinal {
+  padding-block-start: 6px;
+}
+
+.totalFinal .totalLabel {
+  color: var(--tx);
+}
+
+.totalAmount {
+  color: var(--acct);
+  text-shadow: var(--glow);
+}
+
+/* ====================================================== fulfilment + fields */
+
+/* :428 - a two-up grid of 92px radio cards, pickup FIRST in DOM order. */
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 2px solid var(--hair);
+  background: var(--sf);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.choiceOn {
+  background: var(--accs);
+  border-color: var(--acc);
+}
+
+/* :821 - a service the restaurant has switched off dims to .5. No strike:
+   the strike-through belongs to the HOME service strip (:800), not here. */
+.choiceOff {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.choiceBad {
+  border-color: var(--bad);
+}
+
+.choiceTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.choiceIcon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--acct);
+}
+
+.choiceMark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--hair2);
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  color: var(--onacc);
+}
+
+.choiceOn .choiceMark {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+
+.choiceMark svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  visibility: hidden;
+}
+
+.choiceOn .choiceMark svg {
+  visibility: visible;
+}
+
+.choiceName {
+  font: 800 15px / 1.2 var(--font);
+}
+
+.choiceDesc {
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx2);
+}
+
+/* :823 - the service error reuses the section heading as its message. */
+.fieldError {
+  font: 600 13px / 1.3 var(--font);
+  color: var(--bad);
+}
+
+/* :442 - a real <label> wrapping its control. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font: 600 13px / 1.2 var(--font);
+  color: var(--tx2);
+}
+
+/* COMPONENT_INVENTORY.md:136 - 48px, 12px radius, 1.5px border. */
+.input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: var(--r-control);
+  border: 1.5px solid var(--hair2);
+  background: var(--sf);
+  color: var(--tx);
+  font: inherit;
+  font-size: 15px;
+}
+
+.input::placeholder {
+  color: var(--tx3);
+}
+
+.input:focus {
+  border-color: var(--acc);
+}
+
+.inputBad {
+  border-color: var(--bad);
+}
+
+/* :443 - the phone field is an LTR island that stays START-aligned in RTL. */
+.phone {
+  direction: ltr;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The field's OWN direction is ltr, so `end` inside it is the right edge -
+ * which is the page's START edge in an RTL document. That is what the design
+ * means by "LTR field, start-aligned in RTL", expressed logically rather than
+ * as a physical `right`.
+ */
+[dir='rtl'] .phone {
+  text-align: end;
+}
+
+.help {
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx3);
+}
+
+.helpBad {
+  color: var(--bad);
+}
+
+/* :448 - the town select: native, with the platform arrow suppressed and a
+   drawn chevron on the inline-end side. */
+.selectWrap {
+  position: relative;
+}
+
+.select {
+  width: 100%;
+  height: 48px;
+  padding-inline: 14px 40px;
+  border-radius: var(--r-control);
+  border: 1.5px solid var(--hair2);
+  background: var(--sf);
+  color: var(--tx);
+  font: inherit;
+  font-size: 15px;
+  appearance: none;
+}
+
+.select:focus {
+  border-color: var(--acc);
+}
+
+.selectChevron {
+  position: absolute;
+  inset-block-start: 15px;
+  inset-inline-end: 14px;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--tx3);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* :451 - street 2fr, building 1fr. */
+.pair {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+}
+
+/* :457 - the delivery note, two rows, no resize handle. */
+.textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  border: 1.5px solid var(--hair2);
+  background: var(--sf);
+  color: var(--tx);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  resize: none;
+}
+
+.textarea:focus {
+  border-color: var(--acc);
+}
+
+/* ========================================================== payment method */
+
+.methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* :467 - cash, selected and unchangeable. */
+.method {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 16px;
+  border: 2px solid var(--acc);
+  background: var(--accs);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  width: 100%;
+  cursor: default;
+}
+
+/* :472 - card: dashed, muted, and NOT a button. */
+.methodSoon {
+  border: 2px dashed var(--hair2);
+  background: var(--sf);
+}
+
+.methodTile {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-control);
+  display: grid;
+  place-items: center;
+  background: var(--cta);
+  color: var(--onacc);
+  box-shadow: 0 8px 18px -8px var(--accB);
+}
+
+.methodSoon .methodTile {
+  background: var(--sf2);
+  color: var(--tx3);
+  box-shadow: none;
+}
+
+.methodTile svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.methodText {
+  flex: 1;
+  min-width: 0;
+}
+
+.methodTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.methodName {
+  font: 800 15.5px / 1.25 var(--font);
+}
+
+.methodSoon .methodName {
+  color: var(--tx2);
+}
+
+.methodDesc {
+  margin-block-start: 2px;
+  font: 400 13px / 1.35 var(--font);
+  color: var(--tx2);
+}
+
+.methodSoon .methodDesc {
+  color: var(--tx3);
+}
+
+/* :474 - the "coming soon" pill. */
+.soonPill {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--acct);
+  color: var(--acct);
+  font: 800 11px / 1.2 var(--font);
+  letter-spacing: 0.02em;
+}
+
+.methodMark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  background: var(--acc);
+  color: var(--onacc);
+}
+
+.methodMarkEmpty {
+  background: transparent;
+  border: 2px solid var(--hair2);
+}
+
+.methodMark svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ============================================================ review blocks */
+
+/* :485 - the line summary + totals card. */
+.summary {
+  padding: 4px var(--gutter);
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+}
+
+.summaryList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summaryLine {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-block-end: 1px solid var(--hair);
+}
+
+/* :486 - the qty chip, e.g. "2x". */
+.qtyChip {
+  flex: none;
+  min-width: 28px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  background: var(--sf2);
+  display: grid;
+  place-items: center;
+  font: 800 12.5px / 1 var(--font);
+}
+
+.summaryText {
+  flex: 1;
+  min-width: 0;
+}
+
+.summaryName {
+  font: 700 14.5px / 1.3 var(--font);
+}
+
+.summaryMods {
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx2);
+}
+
+.summaryNote {
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx3);
+}
+
+.summaryPrice {
+  flex: none;
+  font-weight: 800;
+}
+
+/* :489 - the three read-back blocks. */
+.blocks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.block {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--hair);
+  background: var(--sf);
+}
+
+.blockTile {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-md);
+  background: var(--sf2);
+  color: var(--acct);
+  display: grid;
+  place-items: center;
+}
+
+.blockTile svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.blockText {
+  flex: 1;
+  min-width: 0;
+}
+
+.blockLabel {
+  font: 600 12px / 1.2 var(--font);
+  color: var(--tx3);
+}
+
+.blockValue {
+  font: 700 14.5px / 1.3 var(--font);
+}
+
+.blockSub {
+  font: 400 13px / 1.4 var(--font);
+  color: var(--tx2);
+}
+
+.blockFoot {
+  margin-block-start: 4px;
+  font: 400 12px / 1.4 var(--font);
+  color: var(--tx3);
+}
+
+.blockEdit {
+  flex: none;
+  align-self: flex-start;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--acct);
+  font: 700 13px / 1 var(--font);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ============================================================ sticky footer */
+
+/* :505 - `padding: 10px 16px <barPad>`, 1px --hair top rule on --sf. */
+.foot {
+  flex: none;
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 20;
+  padding: 10px var(--gutter) 14px;
+  background: var(--sf);
+  border-block-start: 1px solid var(--hair);
+}
+
+/* :409 cart 56px / :506-507 steps 54px, both with the label at the start and
+   the TOTAL at the end. */
+.cta {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 54px;
+  border: 0;
+  border-radius: var(--r-card);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font: 800 16px / 1 var(--font);
+  cursor: pointer;
+  background: var(--cta);
+  color: var(--onacc);
+  box-shadow: var(--ctaSh);
+  text-decoration: none;
+}
+
+.ctaCart {
+  height: 56px;
+  border-radius: 16px;
+}
+
+/* :508 - the send CTA is CENTRED and carries no total. */
+.ctaCentre {
+  height: 56px;
+  justify-content: center;
+}
+
+/*
+ * Two different predicates, deliberately (:826):
+ *   aria-disabled = !valid            - true from the first paint
+ *   this dim      = touched && !valid - only AFTER a blocked tap
+ */
+.ctaDim {
+  background: var(--sf2);
+  color: var(--tx2);
+  box-shadow: none;
+}
+
+.ctaLabel {
+  position: relative;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctaLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * A-9: the approved screenshot puts a literal "->" in the RTL CTA, so the
+ * arrow points AWAY from the reading direction. The shared chevron is used
+ * instead and mirrors with the page, which is the same glyph pointing the
+ * right way in both directions.
+ */
+.ctaLabel svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[dir='rtl'] .ctaLabel svg {
+  transform: scaleX(-1);
+}
+
+.ctaPrice {
+  position: relative;
+  flex: none;
+}
+
+.ctaIcon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* :409 / :508 - the sheen runs only when the control is live and motion is on. */
+.sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.26) 50%,
+    transparent 65%
+  );
+}
+
+.motionFull .sheen {
+  animation: sfSheen var(--d-sheen) var(--e-sheen) 1s infinite;
+}
+
+/* :508 - the spinner IS the sending state; nothing else changes. */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-pill);
+  border: 3px solid currentColor;
+  border-inline-end-color: transparent;
+}
+
+.motionFull .spinner {
+  animation: sfSpin 800ms linear infinite;
+}
+
+/* ============================================================= empty state */
+
+/* :378 - 64px 20px, centred, gap 8. */
+.empty {
+  padding: 64px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.emptyTile {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-module);
+  background: var(--sf2);
+  color: var(--tx3);
+  display: grid;
+  place-items: center;
+}
+
+.emptyTile svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.emptyTitle {
+  margin: 6px 0 0;
+  font: 800 18px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+.emptyBody {
+  font: 400 14px / 1.4 var(--font);
+  color: var(--tx2);
+}
+
+.emptyCta {
+  margin-block-start: 14px;
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: var(--r-card);
+  background: var(--cta);
+  color: var(--onacc);
+  font: 800 15px / 1 var(--font);
+  text-decoration: none;
+  box-shadow: var(--ctaSh);
+}
+
+/* ================================================================= helpers */
+
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* =============================================================== keyframes */
+
+@keyframes sfSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sfSheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes sfShake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  30%,
+  70% {
+    transform: translateX(6px);
+  }
+  50% {
+    transform: translateX(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motionFull .line,
+  .motionFull .sheen,
+  .motionFull .spinner,
+  .motionFull .noticeShake {
+    animation: none;
+  }
+}

@@ -394,32 +394,57 @@ test('at the cap, addLine returns the SAME object so nothing re-renders', () => 
   assert.equal(model.addLine(state, { itemId: '7', qty: 1, selections: {}, note: '' }), state);
 });
 
-test('the WIDE ASIDE is not wired to the cart at all', () => {
-  // Phase C's wide aside is a NON-FUNCTIONAL Phase-D seam. The earlier
-  // `toCartView` projection is gone on purpose: the aside must not be able to
-  // show lines, a count, a subtotal, tax or a total, and the cleanest guarantee
-  // is that it cannot receive them.
+test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other surface', () => {
+  // Phase C's aside was a deliberately non-functional seam because the cart
+  // route did not exist. It does now, so this guard MOVES rather than being
+  // deleted: what it pins is no longer "it cannot show a cart" but "it shows
+  // the same cart, from the same authority, and computes nothing itself".
+  //
+  // The old `toCartView` projection stays gone: the live surfaces read a
+  // CartSummary resolved from the CURRENT menu, never a presentational view.
   assert.equal(model.toCartView, undefined, 'the live->presentational projection must be gone');
 
   const aside = readFileSync(
-    new URL('../src/ui/storefront/home/CartParts.tsx', import.meta.url), 'utf8');
-  const body = aside.slice(aside.indexOf('export function CartAside'));
-  // No cart prop at all.
-  assert.ok(!/cart:\s*CartView/.test(body), 'CartAside must not accept a CartView');
-  for (const banned of ['cart.lines', 'cart.itemCount', 'subtotalMinor', 'taxMinor', 'totalMinor']) {
-    assert.ok(!body.includes(banned), `the seam must not reference ${banned}`);
-  }
-  // It still renders the seam and a disabled CTA, so it stays a truthful seam
-  // rather than disappearing.
-  assert.ok(body.includes('data-sf-aside="seam"'));
-  assert.ok(body.includes('m.emptyCart'));
-  assert.ok(body.includes('aria-disabled="true"'));
+    new URL('../src/ui/storefront/cart/LiveCartAside.tsx', import.meta.url), 'utf8');
 
-  // And nothing in the client runtime hands it cart state.
+  // It reads a resolved summary and a Quote; it never derives money.
+  assert.ok(aside.includes('summary: CartSummary | null'));
+  assert.ok(aside.includes('quote: Quote | null'));
+  for (const banned of ['taxRate', 'Math.round', 'TAX_RATE']) {
+    assert.ok(!aside.includes(banned), `the aside must not compute money: found ${banned}`);
+  }
+
+  // The fee row is gated on feeApplies - never on a truthy amount, or a served
+  // zone with free delivery would be presented as no delivery at all.
+  assert.ok(aside.includes('quote.feeApplies'), 'the aside must render the delivery-fee row');
+
+  // What the aside deliberately does NOT SHOW, by design and not by omission:
+  // thumbnails, the kitchen note, Edit, Remove, and the cart notices.
+  for (const absent of ['lineMedia', 'NoteIcon', 'm.edit', 'm.remove', 'changedTitle']) {
+    assert.ok(!aside.includes(absent), `the aside must not carry ${absent}`);
+  }
+
+  // But it must PRESERVE the note it does not show. A stepper that wrote back
+  // a line without its note would silently erase a kitchen instruction the
+  // visitor typed - invisible here, and invisible on the cart page afterwards.
+  assert.match(aside, /note: line\.line\.note/,
+    'the aside stepper must carry the kitchen note through an update');
+  assert.match(aside, /selections: line\.line\.selections/,
+    'the aside stepper must carry the modifier selections through an update');
+
+  // And the runtime hands it the cart through one named slot.
   const runtime = readFileSync(
     new URL('../src/ui/storefront/cart/CartRuntime.tsx', import.meta.url), 'utf8');
-  assert.ok(!runtime.includes('CartAside'), 'the cart runtime must not render the aside');
-  assert.ok(!runtime.includes('AsideSlot'), 'the aside slot must be gone');
+  assert.ok(runtime.includes('AsideSlot'), 'the cart runtime must expose the aside slot');
+  assert.ok(runtime.includes('LiveCartAside'));
+});
+
+test('NEGATIVE CONTROL: the aside money guard would notice a hand-rolled total', () => {
+  // The rule above is worth something only if the banned strings really are
+  // the shape a drifting implementation would take.
+  const drifted = 'const taxMinor = Math.round(subtotal * TAX_RATE);';
+  const caught = ['taxRate', 'Math.round', 'TAX_RATE'].filter((b) => drifted.includes(b));
+  assert.deepEqual(caught, ['Math.round', 'TAX_RATE']);
 });
 
 test('a REMOVAL reads as a removal, never as an addition', () => {
@@ -435,8 +460,13 @@ test('a REMOVAL reads as a removal, never as an addition', () => {
   const summary = model.optionSummary(resolved);
 
   assert.ok(summary.includes('\u2715'), `removals must carry the marker: ${summary}`);
-  // The ADDED option must NOT carry it.
-  const parts = summary.split(' \u2022 ');
+  // The separator is U+00B7 MIDDLE DOT. That is what the prototype joins with
+  // (Storefront.dc.html:690 - the bytes are 20 B7 20) and what the approved
+  // cart screenshots render. Phase C shipped U+2022 BULLET and this assertion
+  // pinned the wrong character with it; Phase D corrects both together.
+  assert.ok(!summary.includes('\u2022'), 'the separator must not be a BULLET');
+  // The ADDED option must NOT carry the removal marker.
+  const parts = summary.split(' \u00b7 ');
   assert.equal(parts.length, 2);
   assert.ok(!parts[0].includes('\u2715'), 'an added option must not be marked as removed');
   assert.ok(parts[1].startsWith('\u2715'), 'the removal must lead with the marker');

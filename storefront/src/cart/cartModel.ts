@@ -88,9 +88,19 @@ export function summarise(state: CartState, items: readonly MenuItem[]): CartSum
   };
 }
 
-/** The summary string a cart line shows, e.g. "بريوش • جبنة إضافية". */
+/**
+ * The summary string a cart line shows, e.g. "بريوش · جبنة إضافية".
+ *
+ * THE SEPARATOR IS U+00B7 MIDDLE DOT, not U+2022 BULLET. The prototype joins
+ * with `' · '` (Storefront.dc.html:690, verified byte-for-byte: 20 B7 20) and
+ * the approved cart screenshots render the middle dot. Phase C shipped the
+ * bullet; Phase D corrects it, and the test that pinned the wrong character
+ * moves with it.
+ */
+export const MOD_SEPARATOR = ' · ';
+
 export function optionSummary(resolved: ResolvedCartLine): string {
-  return resolved.optionNames.join(' • ');
+  return resolved.optionNames.join(MOD_SEPARATOR);
 }
 
 export { formatMoney };

@@ -52,6 +52,11 @@ const FIXTURE_LAYER = [
   'src/source/home.ts',
   'src/source/menu-fixture.ts',
   'src/source/scenarios.ts',
+  // Phase D: the three cart notices and the four send failures have no honest
+  // trigger yet - which lines changed is a server answer that does not exist -
+  // so they are injected from a demo token. That machinery belongs HERE, with
+  // the other fixtures it disappears with, and not inside a component.
+  'src/source/flow-scenarios.ts',
 ];
 
 test('no app file emits an inline style attribute or style prop', () => {
@@ -107,12 +112,56 @@ test('no Maps Burger derived colour is hard-coded in the UI or stylesheets', () 
   }
 });
 
+/**
+ * The hyphenated demo tokens. Deliberately NOT the typed result kinds: a
+ * component legitimately names `server_error`, because that is the shape it
+ * renders; what it must never name is the URL token that selects it.
+ */
+const DEMO_TOKENS = [
+  'cart-changed', 'cart-price', 'cart-sold-out',
+  'server-error', 'rate-limited', 'quote-race',
+];
+
 test('the fixture scenario switch never leaves the fixture layer', () => {
   for (const f of [...TSX, ...CSS]) {
     if (FIXTURE_LAYER.includes(rel(f))) continue;
     const src = code(f);
     assert.ok(!/\bfx=/.test(src), `${rel(f)}: ?fx= outside the fixture layer`);
     assert.ok(!/applyScenario|FIXTURE_SCENARIOS/.test(src), `${rel(f)}: scenario API leaked`);
+    // Building the parameter out of pieces is the same leak with one extra
+    // step, so the bare token is forbidden too - otherwise the rule above is
+    // satisfied by concatenation rather than by the machinery staying put.
+    assert.ok(!/['"`]fx['"`]/.test(src), `${rel(f)}: the scenario parameter leaked`);
+    for (const token of DEMO_TOKENS) {
+      assert.ok(!src.includes(token), `${rel(f)}: the demo token ${token} leaked`);
+    }
+  }
+});
+
+test('NEGATIVE CONTROL: the scenario rule catches every way of spelling it', () => {
+  // A guard that cannot fail proves nothing, and this one grew two clauses
+  // precisely because the first was satisfiable by writing the parameter in
+  // two halves.
+  const attempts = [
+    `const url = '/s/x/cart?fx=' + token;`,
+    `const PARAM = 'fx';`,
+    `if (token === "quote-race") slow();`,
+    `params.set(\`fx\`, 'cart-sold-out');`,
+  ];
+  for (const attempt of attempts) {
+    const caught =
+      /\bfx=/.test(attempt) ||
+      /['"`]fx['"`]/.test(attempt) ||
+      DEMO_TOKENS.some((t) => attempt.includes(t));
+    assert.ok(caught, `the rule would MISS: ${attempt}`);
+  }
+  // And it does not fire on ordinary source that merely contains those letters.
+  for (const innocent of ['const effects = fixtures.map(f => f.x);', 'const fxRate = 1;']) {
+    const caught =
+      /\bfx=/.test(innocent) ||
+      /['"`]fx['"`]/.test(innocent) ||
+      DEMO_TOKENS.some((t) => innocent.includes(t));
+    assert.ok(!caught, `the rule is too broad: ${innocent}`);
   }
 });
 
@@ -269,7 +318,9 @@ test('NEGATIVE CONTROL: the storage rule fails on an unauthorised FILE and an un
     assert.match(crossedBack, /sessionStorage is allowed ONLY/);
 
     // An unauthorised file using the LONG-LIVED store must be caught too.
-    const thirdCopy = copy('src/ui/storefront/home/CartParts.tsx');
+    // The checkout draft module is the sharpest subject for it: it is the one
+    // file whose whole contract is that customer fields never reach a store.
+    const thirdCopy = copy('src/ui/storefront/checkout/CheckoutDraftProvider.tsx');
     assert.equal(storageOffence(relOf(thirdCopy), readFileSync(thirdCopy, 'utf8')), null);
     writeFileSync(thirdCopy,
       readFileSync(thirdCopy, 'utf8') + '\nconst leak = localStorage.getItem("sf:v1:cart:x");\n',

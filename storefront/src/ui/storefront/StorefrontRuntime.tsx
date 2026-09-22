@@ -151,21 +151,29 @@ export function StorefrontRuntime({
       // Sold out is not openable (COMPONENT_INVENTORY.md:112).
       return host.getAttribute('aria-disabled') === 'true' ? null : host;
     }
-    function onClick(event: MouseEvent) {
-      const host = hostOf(event.target);
+    // A cart line's Edit control carries BOTH attributes, so the same
+    // delegation opens the sheet pre-filled and the sheet replaces that line
+    // instead of appending a second one. The item/line ownership check below
+    // still decides whether the pairing is legitimate.
+    function targetOf(host: HTMLElement | null): SheetTarget | null {
       const id = host?.dataset.sfItem;
-      if (id === undefined) return;
+      if (id === undefined || host === null) return null;
+      const line = host.dataset.sfLine;
+      return { itemId: id, lineId: line === undefined || line === '' ? null : line };
+    }
+    function onClick(event: MouseEvent) {
+      const next = targetOf(hostOf(event.target));
+      if (next === null) return;
       event.preventDefault();
-      open({ itemId: id, lineId: null });
+      open(next);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Enter' && event.key !== ' ') return;
-      const host = hostOf(event.target);
-      const id = host?.dataset.sfItem;
-      if (id === undefined) return;
+      const next = targetOf(hostOf(event.target));
+      if (next === null) return;
       // role="button" must answer Enter and Space like a real button does.
       event.preventDefault();
-      open({ itemId: id, lineId: null });
+      open(next);
     }
     document.addEventListener('click', onClick);
     document.addEventListener('keydown', onKeyDown);

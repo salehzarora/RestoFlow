@@ -16,11 +16,14 @@
  * new is everything that needs a real cart: the halo, the count bump, the
  * no-image thumbnail fallback and a subtotal that moves.
  *
- * THE CTA IS STILL DISABLED. Its only approved destination is the `cart` route
- * (INTERACTIONS.md:78), which is Phase D. Rendering it as an active control
- * with nowhere to go would be a lie; the repo's existing precedent for a
- * control without a target is to disable it (Home.tsx:76-79).
+ * THE CTA IS LIVE FROM PHASE D. Its approved destination is the `cart` route
+ * (INTERACTIONS.md:78), which now exists, so it is a real link. While ordering
+ * is closed or paused it states the reason instead and does not navigate -
+ * rendered as a `span` rather than a dead link, so nothing focusable leads
+ * nowhere. The dock only exists below 900px anyway; at wide the aside replaces
+ * it and goes straight to checkout.
  */
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
@@ -45,12 +48,14 @@ export function LiveCartDock({
   motion,
   state,
   opensAt,
+  cartHref,
 }: {
   summary: CartSummary;
   m: StorefrontMessages;
   motion: MotionMode;
   state: ServiceState;
   opensAt: string;
+  cartHref: string;
 }) {
   const count = summary.itemCount;
   const [bump, setBump] = useState(false);
@@ -117,15 +122,27 @@ export function LiveCartDock({
         </span>
       </span>
 
-      <button
-        className={`${styles.dockCta} ${reason === null ? '' : styles.dockDisabled}`}
-        type="button"
-        disabled
-        aria-disabled="true"
-      >
-        {reason === null ? m.viewCart : reason}
-        {reason === null ? <ChevronIcon /> : null}
-      </button>
+      {reason === null ? (
+        <Link
+          className={styles.dockCta}
+          href={cartHref}
+          /* A static export serves no per-segment RSC payload, so Next's
+             viewport prefetch would 404 on every render of this dock. */
+          prefetch={false}
+          data-sf-dock-cta="cart"
+        >
+          {m.viewCart}
+          <ChevronIcon />
+        </Link>
+      ) : (
+        <span
+          className={`${styles.dockCta} ${styles.dockDisabled}`}
+          role="status"
+          data-sf-dock-cta="blocked"
+        >
+          {reason}
+        </span>
+      )}
     </div>
   );
 }
