@@ -22,7 +22,8 @@
  * the divergence is recorded in the Phase C report.
  */
 import { useMemo, useRef, useState } from 'react';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import { fill, storefrontMessages } from '@/i18n/storefront';
+import type { Locale } from '@/i18n/locales';
 import { formatMoney } from '@/money/format';
 import { searchItems } from '@/source/search';
 import type { Category, MenuItem } from '@/source/types';
@@ -64,14 +65,16 @@ function NoResultsTitle({ template, query }: { template: string; query: string }
 export function SearchScreen({
   items,
   categories,
-  m,
+  locale,
   menuHref,
 }: {
   items: readonly MenuItem[];
   categories: readonly Category[];
-  m: StorefrontMessages;
+  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
+  locale: Locale;
   menuHref: string;
 }) {
+  const m = storefrontMessages(locale);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 

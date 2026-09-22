@@ -233,3 +233,54 @@ test('the four flow documents contain no cart, no draft and no money', () => {
     assert.ok(!/<textarea[^>]*>[^<]/.test(text), `${file}: a textarea ships content`);
   }
 });
+
+// ------------------------------------------ the request documents are NEUTRAL
+//
+// Phase E. `/r/<ref>` is one document per locale root that renders EITHER the
+// received view (this visitor just sent a request) OR the status view (the
+// source answered after mount). Both are decided after hydration, so the
+// served bytes carry the chrome only: no request state, no timeline, no TTL,
+// no line, no amount, no code, no personal field - nothing that could belong
+// to one visitor and be served to every other.
+const SHIPPED_REF = 'DEMO-7K4XM2D9P3';
+
+test('the shipped export emits exactly one request ref, in every locale root', () => {
+  const refs = new Set();
+  for (const f of outFiles()) {
+    const m = f.match(/\/r\/([^/]+)(?:\/|\.)/);
+    if (m) refs.add(m[1]);
+  }
+  assert.deepEqual([...refs], [SHIPPED_REF]);
+  const docs = emittedText().filter((d) => /(^|\/)r\/[^/]+\.html$/.test(d.file));
+  assert.equal(docs.length, 4, 'expected one request document per locale root');
+});
+
+test('the four request documents carry no request, no status, no TTL, no money and no code', () => {
+  const docs = emittedText().filter((d) => /(^|\/)r\/[^/]+\.html$/.test(d.file));
+  assert.equal(docs.length, 4);
+  const payloads = emittedText().filter((d) => /(^|\/)r\/[^/]+(\/|\.txt$)/.test(d.file));
+  assert.ok(payloads.length >= 4, 'the RSC payloads of the request route must be in scope');
+  for (const { file, text } of [...docs, ...payloads]) {
+    if (file.endsWith('.html')) {
+      assert.ok(text.includes('data-sf-pending'), `${file}: must ship the pre-hydration frame only`);
+    }
+    for (const banned of [
+      'data-sf-screen="received"', 'data-sf-screen="status"', 'data-sf-status=', 'data-sf-timeline', 'data-sf-ttl',
+      'data-sf-request-line', 'data-sf-request-code', 'data-sf-request-message', 'data-sf-cancel-sheet',
+      'data-sf-demo-note', '#MB-2487', 'aria-current="step"', 'role="timer"',
+    ]) {
+      assert.ok(!text.includes(banned), `${file}: prerendered ${banned}`);
+    }
+    assert.ok(!/\u20AA\d/.test(text), `${file}: the document must carry no money`);
+    // The opaque ref may appear (it is the URL); the display code may not.
+    assert.ok(!text.includes('MB-2487'), `${file}: the display code is not a prerendered fact`);
+  }
+});
+
+test('no emitted document or payload carries a real WhatsApp destination or the dead status literal', () => {
+  for (const { file, text } of emittedText()) {
+    for (const banned of ['wa.me', 'whatsapp://', 'api.whatsapp.com', 'bizbot.app']) {
+      assert.ok(!text.includes(banned), `${file}: ${banned}`);
+    }
+  }
+});

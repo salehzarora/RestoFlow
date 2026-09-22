@@ -43,6 +43,12 @@ export interface CartApi {
   readonly add: (draft: CartDraft) => void;
   readonly update: (lineId: string, draft: Omit<CartDraft, 'itemId'>) => void;
   readonly remove: (lineId: string) => void;
+  /**
+   * Empties the cart on this device. The ONE designed caller is the status
+   * screen's "order again" (INTERACTIONS.md:115 "clears the cart and returns
+   * to the menu"); nothing clears a cart on a send, a failure or a duplicate.
+   */
+  readonly clear: () => void;
   readonly state: CartState;
 }
 
@@ -115,7 +121,12 @@ export function useCart(
     [commit],
   );
 
+  const clear = useCallback(() => {
+    if (stateRef.current.lines.length === 0) return;
+    commit(emptyCart(slug, menuVersion));
+  }, [commit, menuVersion, slug]);
+
   const summary = useMemo(() => summarise(state, items), [state, items]);
 
-  return { summary, ready, add, update, remove, state };
+  return { summary, ready, add, update, remove, clear, state };
 }

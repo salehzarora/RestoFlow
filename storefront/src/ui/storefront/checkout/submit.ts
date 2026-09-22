@@ -1,10 +1,9 @@
 /**
- * THE FIXTURE REQUEST GATEWAY - and the D/E boundary.
+ * THE FIXTURE REQUEST GATEWAY.
  *
- * Phase D owns everything up to and including the typed RESULT of a send.
- * Phase E owns the received/status screen at `/r/:code`. This module therefore
- * models the send and returns a typed outcome; it does NOT navigate anywhere
- * and does NOT know what a received screen looks like.
+ * This module models the send and returns a typed outcome; it does NOT
+ * navigate anywhere and does NOT know what a received screen looks like. The
+ * runtime that owns navigation takes the result to `/r/:ref` (Phase E).
  *
  * NO I/O OF ANY KIND. No fetch, no WhatsApp, no queue, no retry timer, no
  * logging. A real gateway would live behind this same signature.
@@ -15,6 +14,7 @@
  * server module singleton would leak one visitor's data into another's render.
  */
 import type { Quote } from '@/money/quote';
+import { DEMO_REQUEST_REF } from '@/source/request-ref';
 import type { CheckoutDraft } from './draft';
 
 /** What a send is allowed to carry. Deliberately explicit, never a spread. */
@@ -79,7 +79,7 @@ export function isValidRef(ref: string): boolean {
 }
 
 /**
- * The fixture gateway. It decides an outcome from the SUBMISSION SHAPE alone -
+ * The fixture gateway. It decides an outcome from demo configuration alone -
  * never from a customer field - so the demo is reproducible and no contact
  * value can change what happens.
  */
@@ -106,19 +106,21 @@ export function fixtureGateway(
 }
 
 /**
- * A deterministic reference derived from order SHAPE only - never from a name,
- * phone or address, which must not be recoverable from a reference.
+ * THE ONE FIXTURE REF. Phase D hashed the order's shape into a mock reference;
+ * that reference named a document the static export never emitted, so the
+ * accepted send could not be taken anywhere. The fixture now answers with the
+ * single generated demo ref that every request route pre-renders and that the
+ * status fixture serves (FINISH 4.1). Reconciling the two is a fixture
+ * allocation, not production ID generation and not an idempotency claim.
+ *
+ * The submission is still consulted so the signature stays what a real
+ * gateway needs - and so the rule below remains testable: NOTHING about the
+ * visitor may be recoverable from a reference, and here nothing about the
+ * order is either.
  */
 function refFor(submission: Submission): string {
-  let hash = 0;
-  const shape = `${submission.slug}|${submission.totalMinor}|${submission.lines
-    .map((l) => `${l.itemId}x${l.qty}`)
-    .join(',')}`;
-  for (let i = 0; i < shape.length; i += 1) {
-    hash = (hash * 31 + shape.charCodeAt(i)) >>> 0;
-  }
-  const code = hash.toString(36).toUpperCase().slice(0, 4).padStart(4, '0');
-  return `MB-${code}`;
+  void submission;
+  return DEMO_REQUEST_REF;
 }
 
 /** Build a submission from validated state. Contact is read, never stored. */
@@ -153,13 +155,9 @@ export function buildSubmission(
 }
 
 /**
- * THE D/E HANDOFF SEAM.
- *
- * On acceptance Phase E will take the visitor to `/r/:ref`. That route does not
- * exist yet, so D must not navigate to it - an enabled control whose only
- * outcome is a 404 would be worse than an honest block. Instead the completion
- * is handed to an injected observer, which D's tests assert against and E will
- * replace with the real navigation.
+ * THE COMPLETION OBSERVER. The review screen hands every terminal result to
+ * it; the flow runtime, which owns navigation, takes an accepted result to
+ * `/r/:ref` and lets a test observe the same call.
  */
 export type CompletionObserver = (result: SubmitResult) => void;
 
@@ -172,7 +170,7 @@ export function newIdempotencyKey(): string {
   return `k${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** True when the outcome is one E will own a destination for. */
+/** True when the outcome has a destination: the received / status route. */
 export function isTerminal(result: SubmitResult): boolean {
   return result.kind === 'accepted' || result.kind === 'duplicate';
 }

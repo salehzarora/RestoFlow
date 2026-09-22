@@ -58,6 +58,13 @@ export const ROUTES = [
   { route: '/ar/s/maps-burger/review', file: 'ar/s/maps-burger/review.html' },
   { route: '/en/s/maps-burger/review', file: 'en/s/maps-burger/review.html' },
   { route: '/he/s/maps-burger/review', file: 'he/s/maps-burger/review.html' },
+  // STOREFRONT-UI-001 Phase E: the request surface (received | status on ONE
+  // document), the single canonical demo ref, measured in every locale root.
+  // Adding routes WIDENS coverage; no ceiling above changes.
+  { route: '/r/DEMO-7K4XM2D9P3', file: 'r/DEMO-7K4XM2D9P3.html' },
+  { route: '/ar/r/DEMO-7K4XM2D9P3', file: 'ar/r/DEMO-7K4XM2D9P3.html' },
+  { route: '/en/r/DEMO-7K4XM2D9P3', file: 'en/r/DEMO-7K4XM2D9P3.html' },
+  { route: '/he/r/DEMO-7K4XM2D9P3', file: 'he/r/DEMO-7K4XM2D9P3.html' },
 ];
 
 export const MEDIA_EXTENSIONS = ['.jpg', '.jpeg', '.gif', '.mp4', '.webm', '.mov'];
@@ -76,6 +83,7 @@ export const REQUIRED_HTML = [
   's/maps-burger/checkout.html', 'ar/s/maps-burger/checkout.html', 'en/s/maps-burger/checkout.html', 'he/s/maps-burger/checkout.html',
   's/maps-burger/payment.html', 'ar/s/maps-burger/payment.html', 'en/s/maps-burger/payment.html', 'he/s/maps-burger/payment.html',
   's/maps-burger/review.html', 'ar/s/maps-burger/review.html', 'en/s/maps-burger/review.html', 'he/s/maps-burger/review.html',
+  'r/DEMO-7K4XM2D9P3.html', 'ar/r/DEMO-7K4XM2D9P3.html', 'en/r/DEMO-7K4XM2D9P3.html', 'he/r/DEMO-7K4XM2D9P3.html',
 ];
 
 // No favicon: gate K2 (owner approval for a BIZBOT symbol derivative) is NOT
@@ -114,4 +122,8 @@ export const EXPECTED_DOCUMENT = {
   'ar/s/maps-burger/review.html': { lang: 'ar', dir: 'rtl' },
   'en/s/maps-burger/review.html': { lang: 'en', dir: 'ltr' },
   'he/s/maps-burger/review.html': { lang: 'he', dir: 'rtl' },
+  'r/DEMO-7K4XM2D9P3.html': { lang: 'ar', dir: 'rtl' },
+  'ar/r/DEMO-7K4XM2D9P3.html': { lang: 'ar', dir: 'rtl' },
+  'en/r/DEMO-7K4XM2D9P3.html': { lang: 'en', dir: 'ltr' },
+  'he/r/DEMO-7K4XM2D9P3.html': { lang: 'he', dir: 'rtl' },
 };

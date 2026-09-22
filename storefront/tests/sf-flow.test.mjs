@@ -21,6 +21,7 @@ const { validateCheckout, FIELD_LIMITS } = await import(
 );
 const { EMPTY_DRAFT } = await import('../src/ui/storefront/checkout/draft.ts');
 const submit = await import('../src/ui/storefront/checkout/submit.ts');
+const { DEMO_REQUEST_REF } = await import('../src/source/request-ref.ts');
 
 const empty = () => ({ schema: 1, slug: 'maps-burger', menuVersion: MENU_VERSION, lines: [] });
 
@@ -303,12 +304,17 @@ const submissionFor = (over = {}) =>
     'k-test',
   );
 
-test('a reference is derived from ORDER SHAPE only - never from a customer field', () => {
+test('the fixture reference is the ONE generated demo ref - never a customer field', () => {
+  // Phase E: the accepted send navigates to /r/<ref>, and a static export
+  // emits exactly one request document. A reference derived from the order's
+  // shape (Phase D) would name a document that does not exist, so the fixture
+  // answers with the single pre-rendered ref for every send.
   const a = submissionFor();
   const b = submissionFor({ fullName: 'SOMEONE ELSE', phone: '050-000-0000', street: 'OTHER' });
-  const refA = submit.fixtureGateway();
-  return Promise.all([refA(a), refA(b)]).then(([ra, rb]) => {
+  const gateway = submit.fixtureGateway();
+  return Promise.all([gateway(a), gateway(b)]).then(([ra, rb]) => {
     assert.equal(ra.kind, 'accepted');
+    assert.equal(ra.ref, DEMO_REQUEST_REF, 'the fixture must answer with the one generated ref');
     assert.equal(ra.ref, rb.ref, 'the reference moved when only the contact changed');
     assert.ok(submit.isValidRef(ra.ref), `${ra.ref} is not a valid reference`);
     // And nothing recoverable about the visitor is in it.
@@ -318,7 +324,7 @@ test('a reference is derived from ORDER SHAPE only - never from a customer field
   });
 });
 
-test('the reference DOES move when the order does - the control for the rule above', () => {
+test('the reference does NOT move when the order does - it names the one emitted document', () => {
   const gateway = submit.fixtureGateway();
   const one = submissionFor();
   const other = {
@@ -327,7 +333,12 @@ test('the reference DOES move when the order does - the control for the rule abo
     lines: [{ itemId: '1', qty: 9 }],
   };
   return Promise.all([gateway(one), gateway(other)]).then(([a, b]) => {
-    assert.notEqual(a.ref, b.ref, 'the reference must follow the order');
+    assert.equal(a.ref, b.ref, 'one fixture ref, whatever was ordered');
+    // The duplicate outcome names the same document, so its recovery can open it.
+    return submit.fixtureGateway({ outcome: 'duplicate' })(one).then((d) => {
+      assert.equal(d.kind, 'duplicate');
+      assert.equal(d.ref, DEMO_REQUEST_REF);
+    });
   });
 });
 
@@ -354,8 +365,12 @@ test('the gateway module holds no state and performs no I/O', () => {
   // render on a server, so there is none. Column 0 is what "module level"
   // means here: `let` inside a function body is ordinary local scope.
   assert.ok(!/^(let|var)\s/m.test(src), 'submit.ts must hold no module-level state');
-  assert.ok(/^\s+let hash = 0;/m.test(src),
-    'NON-VACUITY: the rule must not be passing because the file has no `let` at all');
+  assert.ok(/^\s+(let|const) \w+ = /m.test(src),
+    'NON-VACUITY: the rule must not be passing because the file has no binding at all');
+  // The ref authority is the constants module, never the whole status fixture:
+  // pulling it into the flow's graph costs the flow routes' first load.
+  assert.ok(src.includes("from '@/source/request-ref'"), 'submit.ts reads the ref from request-ref.ts');
+  assert.ok(!src.includes('request-fixture'), 'submit.ts must not import the status fixture');
 });
 
 test('a submission carries EXACTLY the declared fields - never a spread', () => {
@@ -389,33 +404,33 @@ test('D knows which outcomes Phase E owns a destination for', () => {
   }
 });
 
-test('nothing in Phase D navigates to the Phase E received route', () => {
-  // An enabled control whose only outcome is a 404 is worse than an honest
-  // block, so the boundary is asserted rather than trusted.
-  const files = [
-    'src/ui/storefront/checkout/ReviewScreen.tsx',
-    'src/ui/storefront/checkout/FlowRuntime.tsx',
-    'src/ui/storefront/checkout/submit.ts',
-  ];
-  for (const rel of files) {
-    const raw = readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
-    // Comments are stripped first: this rule is about CODE. The files
-    // deliberately DISCUSS the boundary in prose, and forbidding the words
-    // would push the reasoning out of the source instead of the behaviour.
-    const src = raw
-      .replace(/\/\*[\s\S]*?\*\//g, ' ')
-      .replace(/(^|[^:])\/\/.*/gm, '$1 ');
+test('the flow runtime alone navigates to the received route, through the route builder', () => {
+  // Phase E supplies the destination. Exactly ONE file takes an accepted send
+  // there, and it does so through requestPath() - never a hard-coded /r/.
+  const strip = (raw) => raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*/gm, '$1 ');
+  const read = (rel) => strip(readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8'));
+
+  const runtime = read('src/ui/storefront/checkout/FlowRuntime.tsx');
+  assert.ok(runtime.includes('requestPath(locale, result.ref)'), 'the accepted send goes to /r/<ref>');
+  assert.ok(runtime.includes('requestPath(locale, ref)'), 'the duplicate recovery goes to /r/<ref>');
+  assert.ok(!/['"`]\/r\//.test(runtime), 'FlowRuntime must not hard-code /r/');
+  assert.ok(runtime.includes("kind !== 'accepted'"), 'only an ACCEPTED result navigates automatically');
+
+  for (const rel of ['src/ui/storefront/checkout/ReviewScreen.tsx', 'src/ui/storefront/checkout/submit.ts']) {
+    const src = read(rel);
     assert.ok(!src.includes('requestPath'), `${rel} must not build the /r/:ref route`);
     assert.ok(!/['"`]\/r\//.test(src), `${rel} must not hard-code /r/`);
+    assert.ok(!src.includes('useRouter'), `${rel} must not own navigation`);
   }
 
-  // The review screen in particular must not navigate AT ALL on a result: it
-  // hands the outcome to an injected observer, which is the seam Phase E
-  // replaces with the real navigation.
-  const review = readFileSync(
-    new URL('../src/ui/storefront/checkout/ReviewScreen.tsx', import.meta.url), 'utf8');
-  assert.ok(!review.includes('useRouter'), 'the review screen must not own navigation');
-  assert.ok(review.includes('onComplete'), 'the completion observer is the D/E seam');
+  // The review screen hands every terminal result to the runtime: the accepted
+  // one through the observer, the duplicate's recovery through a callback the
+  // banner's ONE action calls. The visitor chooses; nothing is automatic.
+  const review = read('src/ui/storefront/checkout/ReviewScreen.tsx');
+  assert.ok(review.includes('onComplete'), 'the completion observer is the seam');
+  assert.ok(review.includes('onViewStatus'), 'the duplicate recovery is a callback');
+  assert.ok(review.includes('label: m.viewStatus'), 'the duplicate banner carries its designed action');
+  assert.ok(review.includes('!submittable'), 'the send re-checks validation at submission');
 });
 
 // -------------------------------------------------------------- the zones

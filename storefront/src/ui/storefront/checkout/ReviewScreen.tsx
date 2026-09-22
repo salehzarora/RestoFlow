@@ -16,10 +16,15 @@
  * the scroll position and all three blocks are untouched, and nothing is
  * written anywhere. Each failure carries ONE recovery.
  *
- * THE D/E BOUNDARY. Phase D owns the typed RESULT of a send. The received
- * screen at `/r/:ref` is Phase E and does not exist yet, so an accepted send
- * hands the result to an injected observer instead of navigating to a route
- * that would 404.
+ * THIS SCREEN OWNS NO NAVIGATION. Every terminal result - accepted, and the
+ * duplicate's "view status" recovery - is handed to the runtime through the
+ * completion observer and the view-status callback; the runtime takes it to
+ * the received / status route. Nothing here is a Link, a router or an href.
+ *
+ * WHAT IS CHECKED AT SUBMISSION, not only at route entry: `submittable` is the
+ * runtime's live answer to "is this cart non-empty, are the details valid for
+ * the service the restaurant offers", and a pending quote still blocks. A
+ * send against a total that no longer matches this cart never happens.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CartApi } from '@/cart/useCart';
@@ -135,10 +140,12 @@ export function ReviewScreen({
   motion,
   backHref,
   pending,
+  submittable,
   gateway,
   onEditDetails,
   onEditPayment,
   onComplete,
+  onViewStatus,
 }: {
   m: StorefrontMessages;
   locale: Locale;
@@ -152,10 +159,14 @@ export function ReviewScreen({
   backHref: string;
   /** True while the quote for the CURRENT cart has not arrived. */
   pending: boolean;
+  /** The runtime's live validation of cart, details and availability. */
+  submittable: boolean;
   gateway: RequestGateway;
   onEditDetails: () => void;
   onEditPayment: () => void;
   onComplete: CompletionObserver;
+  /** The duplicate banner's one recovery: open the status of the earlier send. */
+  onViewStatus: (ref: string) => void;
 }) {
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<SubmitResult | null>(null);
@@ -187,8 +198,9 @@ export function ReviewScreen({
   const zoneName = quote.zone?.name ?? '';
 
   const send = useCallback(() => {
-    // Nothing may be sent against a total that does not belong to this cart.
-    if (sending || pending) return;
+    // Nothing may be sent against a total that does not belong to this cart,
+    // and nothing may be sent that the runtime does not currently validate.
+    if (sending || pending || !submittable) return;
     const mine = attempt.current + 1;
     attempt.current = mine;
     setFailure(null);
@@ -208,18 +220,19 @@ export function ReviewScreen({
         onComplete(result);
         return;
       }
-      // A duplicate is also something Phase E owns a destination for, so the
-      // observer learns the reference even though this phase renders no
-      // navigation for it. Reported HERE, in the handler, never during render.
+      // A duplicate has a destination too - the earlier send's status - but
+      // it is offered as the banner's recovery, not taken automatically: the
+      // visitor decides. The observer still learns the reference. Reported
+      // HERE, in the handler, never during render.
       if (result.kind === 'duplicate') onComplete(result);
       // `cart_changed` is DEFERRED(SNAP-001): the packet types it, the handoff
       // designs no banner for it and the pack carries no copy. It is left
       // unrendered rather than given an invented fifth banner.
       setFailure(result);
     })();
-  }, [draft, gateway, menuVersion, onComplete, pending, quote, sending, slug]);
+  }, [draft, gateway, menuVersion, onComplete, pending, quote, sending, slug, submittable]);
 
-  const banner = failure === null ? null : bannerFor(failure, m, send);
+  const banner = failure === null ? null : bannerFor(failure, m, send, onViewStatus);
 
   return (
     <div className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`} data-sf-screen="review">
@@ -322,7 +335,7 @@ export function ReviewScreen({
         label={sending ? m.sending : m.sendRequest}
         onActivate={send}
         busy={sending}
-        blocked={pending}
+        blocked={pending || !submittable}
         live={motion !== 'calm'}
         centred
         leading={
@@ -347,12 +360,17 @@ export function ReviewScreen({
  * hyphenated demo tokens that select them: the banner belongs to the result,
  * and the token that produced it is fixture machinery this screen never sees.
  *
- * `duplicate` deliberately has NO action in this phase. Its designed recovery
- * is "view status", which goes to `/r/:ref` - a Phase E route that does not
- * exist. An enabled control whose only outcome is a 404 is worse than none, so
- * the action is withheld and the body still tells the visitor what to do.
+ * `duplicate` carries its designed recovery, "view status"
+ * (Storefront.dc.html:831-:833), now that the status route exists. Phase D
+ * withheld it because the destination did not; an enabled control whose only
+ * outcome is a 404 would have been worse than none.
  */
-function bannerFor(result: SubmitResult, m: StorefrontMessages, retry: () => void) {
+function bannerFor(
+  result: SubmitResult,
+  m: StorefrontMessages,
+  retry: () => void,
+  viewStatus: (ref: string) => void,
+) {
   const retryAction = { label: m.retry, onAction: retry, solid: true };
   switch (result.kind) {
     case 'offline':
@@ -399,6 +417,7 @@ function bannerFor(result: SubmitResult, m: StorefrontMessages, retry: () => voi
           icon={<DuplicateIcon />}
           title={m.duplicate}
           body={m.duplicateBody}
+          action={{ label: m.viewStatus, onAction: () => viewStatus(result.ref), solid: true }}
           testId="duplicate"
         />
       );

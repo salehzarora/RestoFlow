@@ -25,7 +25,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useCart, type CartDraft } from '@/cart/useCart';
 import { findLine } from '@/cart/cartModel';
-import type { StorefrontMessages } from '@/i18n/storefront';
+import { storefrontMessages } from '@/i18n/storefront';
+import type { Locale } from '@/i18n/locales';
 import { groupsFor } from '@/source/modifier-fixture';
 import type { MenuItem, MotionMode, ServiceState } from '@/source/types';
 import { CartScope } from './cart/CartRuntime';
@@ -71,7 +72,7 @@ export function StorefrontRuntime({
   slug,
   menuVersion,
   items,
-  m,
+  locale,
   motion,
   state,
   opensAt,
@@ -80,7 +81,14 @@ export function StorefrontRuntime({
   slug: string;
   menuVersion: string;
   items: readonly MenuItem[];
-  m: StorefrontMessages;
+  /**
+   * The LOCALE, not the dictionary. A dictionary handed across the server ->
+   * client boundary is serialised into every document's RSC payload - four
+   * files per document, eight home/search documents - while the client bundle
+   * already carries all three dictionaries for the flow. Resolving it here
+   * costs no bytes; passing it cost ~290 KB of the export (E-OPT-1).
+   */
+  locale: Locale;
   motion: MotionMode;
   state: ServiceState;
   opensAt: string;
@@ -90,6 +98,7 @@ export function StorefrontRuntime({
    */
   children?: ReactNode;
 }) {
+  const m = storefrontMessages(locale);
   const cart = useCart(slug, menuVersion, items);
   const [target, setTarget] = useState<SheetTarget | null>(null);
   const [toast, setToast] = useState<{ text: string; nonce: number } | null>(null);

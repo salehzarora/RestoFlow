@@ -549,13 +549,14 @@ test('D-G26 review reads the request back, then sends with a spinner', async ({ 
   await send.click();
   await expect(send).toBeDisabled();
   await page.screenshot({ path: path.join(SHOTS, 'H17-review-sending.png') });
-  await expect(send).toBeEnabled({ timeout: 5_000 });
+  // Phase E: an accepted send goes to the received screen at /r/<ref>. The
+  // spinner lasts the approved ~900ms before the navigation.
+  await page.waitForURL('**/r/**', { timeout: 10_000 });
   const elapsed = Date.now() - started;
   expect(elapsed).toBeGreaterThan(700);
-
-  // D does NOT navigate on success: `/r/:ref` is Phase E.
-  expect(new URL(page.url()).pathname).toBe(REVIEW);
-  RESULTS.G26 = { sendMs: elapsed, stayedOnReview: true };
+  await page.waitForSelector('[data-sf-screen="received"]', { timeout: 10_000 });
+  expect(new URL(page.url()).pathname).toMatch(/^\/r\/[A-Z0-9]{1,8}-[A-Z0-9]{1,12}$/);
+  RESULTS.G26 = { sendMs: elapsed, landedOn: new URL(page.url()).pathname };
 });
 
 test('D-G27 each send failure renders ONE recovery and preserves everything', async ({ page }) => {
@@ -568,7 +569,8 @@ test('D-G27 each send failure renders ONE recovery and preserves everything', as
     ['offline', 'offline', 1],
     ['server-error', 'server_error', 1],
     ['rate-limited', 'rate_limited', 1],
-    ['duplicate', 'duplicate', 0],
+    // Phase E: the duplicate's "view status" recovery has a destination now.
+    ['duplicate', 'duplicate', 1],
   ] as const) {
     await page.goto(`${BASE}${CHECKOUT}?fx=${fx}`);
     await fillDetails(page, { delivery: true });
@@ -758,7 +760,10 @@ test('D-X11 the customer details reach NO sink, and die on reload', async ({ pag
   await page.locator('[data-sf-cta="to-review"]').click();
   await page.waitForURL(`**${REVIEW}`);
   await page.locator('[data-sf-cta="send"]').click();
-  await expect(page.locator('[data-sf-cta="send"]')).toBeEnabled({ timeout: 5_000 });
+  // Phase E: the accepted send lands on the received screen. The sinks are
+  // read THERE - after the navigation, the handoff and the message composition.
+  await page.waitForURL('**/r/**', { timeout: 10_000 });
+  await page.waitForSelector('[data-sf-screen="received"]', { timeout: 10_000 });
 
   const leaks = await page.evaluate(async (markers) => {
     const found: Record<string, boolean> = {};
@@ -809,11 +814,14 @@ test('D-X11 the customer details reach NO sink, and die on reload', async ({ pag
   }, MARKERS);
   expect(detects).toBe(true);
 
-  // A reload kills the draft and keeps the cart. That IS the contract.
+  // A reload kills the draft and keeps the cart. That IS the contract. On the
+  // request route a reload also drops the in-memory handoff: the same URL is
+  // then the status view, never the received view.
   await page.reload();
   const cartStillThere = await page.evaluate((k) => window.localStorage.getItem(k), CART_KEY);
   expect(cartStillThere).not.toBeNull();
-  await page.waitForURL(`**${CART}`, { timeout: 10_000 }).catch(() => undefined);
+  await page.waitForSelector('[data-sf-screen="status"]', { timeout: 10_000 });
+  await expect(page.locator('[data-sf-screen="received"]')).toHaveCount(0);
   await page.goto(`${BASE}${CHECKOUT}`);
   await expect(page.locator('[data-sf-field="fullName"]')).toHaveValue('');
 

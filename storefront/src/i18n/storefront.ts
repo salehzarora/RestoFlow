@@ -154,6 +154,51 @@ export interface StorefrontMessages {
   readonly payAtPickup: string;
   readonly payOnDelivery: string;
   readonly restaurantConfirms: string;
+  // Phase E: received / status / cancel / WhatsApp copy, from the approved
+  // string table; demoNotice is the one execution-clarification string.
+  readonly received: string;
+  readonly receivedBody: string;
+  readonly continueWa: string;
+  readonly trackStatus: string;
+  readonly waFallback: string;
+  readonly waWeb: string;
+  readonly copyMsg: string;
+  readonly copied: string;
+  readonly msgPreview: string;
+  readonly waiting: string;
+  readonly waitingBody: string;
+  readonly expiresIn: string;
+  readonly accepted: string;
+  readonly acceptedBody: string;
+  readonly preparing: string;
+  readonly preparingBody: string;
+  readonly readyPickup: string;
+  readonly readyPickupBody: string;
+  readonly readyDelivery: string;
+  readonly readyDeliveryBody: string;
+  readonly completed: string;
+  readonly completedBody: string;
+  readonly rejected: string;
+  readonly rejectedBody: string;
+  readonly expired: string;
+  readonly expiredBody: string;
+  readonly cancelled: string;
+  readonly cancelledBody: string;
+  readonly cancelRequest: string;
+  readonly cancelTitle: string;
+  readonly cancelBody: string;
+  readonly keep: string;
+  readonly yesCancel: string;
+  readonly openChat: string;
+  readonly orderAgain: string;
+  readonly stReceived: string;
+  readonly stWaiting: string;
+  readonly stAccepted: string;
+  readonly stPreparing: string;
+  readonly stReady: string;
+  readonly stCompleted: string;
+  readonly viewStatus: string;
+  readonly demoNotice: string;
   readonly languageNames: Readonly<Record<Locale, string>>;
 }
 

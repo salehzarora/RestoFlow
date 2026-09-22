@@ -70,7 +70,7 @@ export function Search({
         slug={slug}
         menuVersion={MENU_VERSION}
         items={items}
-        m={m}
+        locale={locale}
         motion={view.motion}
         state={tenant.service.state}
         opensAt={tenant.hours.opens}
@@ -84,11 +84,11 @@ export function Search({
           <SearchScreen
             items={items}
             categories={categories}
-            m={m}
+            locale={locale}
             menuHref={menuPath(locale, slug)}
           />
           <AsideSlot
-            m={m}
+            locale={locale}
             state={tenant.service.state}
             opensAt={tenant.hours.opens}
             checkoutHref={checkoutPath(locale, slug)}

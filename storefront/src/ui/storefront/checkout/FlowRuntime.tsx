@@ -16,8 +16,13 @@
  * chances for them to disagree about the total.
  *
  * WHAT IS DELIBERATELY ABSENT: no storage of any customer field, no network
- * call, no analytics, no WhatsApp, no `/r/:ref` navigation. Phase D ends at the
- * typed result of a send.
+ * call, no analytics, no WhatsApp.
+ *
+ * THE HANDOFF (Phase E). An accepted send records the NONCONTACT summary of
+ * what was sent in the in-memory handoff and navigates to `/r/:ref`; the
+ * duplicate banner's "view status" does the same without a summary of its own.
+ * The cart is NOT cleared by a send, a failure or a duplicate (the prototype
+ * keeps it, :728); only the status screen's "order again" clears it.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -29,6 +34,7 @@ import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
 import { raceQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
 import { MENU_ITEMS, MENU_VERSION, TAX_RATE } from '@/source/menu-fixture';
 import { findZone } from '@/source/zones';
+import { withRequestScenario } from '@/source/request-scenarios';
 import {
   isQuoteRace,
   noticeFor,
@@ -37,7 +43,8 @@ import {
   withFlowScenario,
 } from '@/source/flow-scenarios';
 import type { MotionMode, ServiceState } from '@/source/types';
-import { cartPath, checkoutPath, menuPath, paymentPath, reviewPath } from '@/routes/routes';
+import { cartPath, checkoutPath, menuPath, paymentPath, requestPath, reviewPath } from '@/routes/routes';
+import { useRequestHandoff, type RequestHandoff } from '../request/RequestHandoffProvider';
 import { EMPTY_DRAFT, useCheckoutDraft } from './CheckoutDraftProvider';
 import { CartScreen, type CartNotice } from './CartScreen';
 import { DetailsScreen, type FlowTenant } from './DetailsScreen';
@@ -70,7 +77,7 @@ export function FlowRuntime(props: FlowProps) {
       slug={props.slug}
       menuVersion={MENU_VERSION}
       items={MENU_ITEMS}
-      m={m}
+      locale={props.locale}
       motion={props.motion}
       state={props.state}
       opensAt={props.tenant.opensAt}
@@ -99,6 +106,7 @@ function FlowBody({
 
   const [fx, setFx] = useState('');
   const [dismissed, setDismissed] = useState(false);
+  const handoffApi = useRequestHandoff();
 
   // The URL is read AFTER hydration, never during render: the first client
   // render has to match the static document byte for byte.
@@ -177,11 +185,58 @@ function FlowBody({
     [fx, router],
   );
 
+  /**
+   * The noncontact summary of THIS send, from the same quote that priced it.
+   * Ids, quantities, selections and quoted amounts only: nothing typed into a
+   * contact field can reach the handoff, because the handoff type has no slot
+   * for it and nothing here reads one.
+   */
+  const handoffFor = useCallback(
+    (ref: string, kind: RequestHandoff['kind'], seen: boolean): RequestHandoff | null => {
+      if (quote === null || cart === null) return null;
+      return {
+        slug,
+        ref,
+        kind,
+        service: quote.service,
+        zoneId: quote.zone?.id ?? '',
+        zoneName: quote.feeApplies && quote.zone !== null ? quote.zone.name : null,
+        lines: quote.lines.map((line) => ({
+          itemId: line.item.id,
+          qty: line.qty,
+          selections: cart.state.lines.find((l) => l.lineId === line.lineId)?.selections ?? {},
+          lineTotalMinor: line.lineTotalMinor,
+        })),
+        subtotalMinor: quote.subtotalMinor,
+        feeMinor: quote.feeMinor,
+        taxMinor: quote.taxMinor,
+        totalMinor: quote.totalMinor,
+        createdAt: Date.now(),
+        seen,
+      };
+    },
+    [cart, quote, slug],
+  );
+
   const complete = useCallback<CompletionObserver>(
     (result) => {
       onComplete?.(result);
+      if (result.kind !== 'accepted') return;
+      const handoff = handoffFor(result.ref, 'accepted', false);
+      if (handoff !== null) handoffApi?.set(handoff);
+      // A request-route demo token on this URL rides along (fixture layer).
+      router.push(withRequestScenario(requestPath(locale, result.ref), window.location.search));
     },
-    [onComplete],
+    [handoffApi, handoffFor, locale, onComplete, router],
+  );
+
+  const viewStatus = useCallback(
+    (ref: string) => {
+      const handoff = handoffFor(ref, 'duplicate', true);
+      if (handoff !== null) handoffApi?.set(handoff);
+      router.push(requestPath(locale, ref));
+    },
+    [handoffApi, handoffFor, locale, router],
   );
 
   /*
@@ -200,6 +255,14 @@ function FlowBody({
   if (!ready) {
     return <FlowSkeleton m={m} screen={screen} hrefs={hrefs} />;
   }
+
+  // Re-evaluated on every render, so the send reads the CURRENT answer.
+  const submittable =
+    quote.lines.length > 0 &&
+    validateCheckout(draft, quote, {
+      pickup: tenant.pickupEnabled,
+      delivery: tenant.deliveryEnabled,
+    }).ok;
 
   const kind = noticeFor(fx);
   const notice: CartNotice | null =
@@ -269,10 +332,12 @@ function FlowBody({
           motion={motion}
           backHref={hrefs.payment}
           pending={pending}
+          submittable={submittable}
           gateway={activeGateway}
           onEditDetails={() => go(hrefs.checkout)}
           onEditPayment={() => go(hrefs.payment)}
           onComplete={complete}
+          onViewStatus={viewStatus}
         />
       );
   }

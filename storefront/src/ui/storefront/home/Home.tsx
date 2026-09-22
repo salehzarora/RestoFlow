@@ -122,7 +122,7 @@ export function Home({
         slug={slug}
         menuVersion={MENU_VERSION}
         items={items}
-        m={m}
+        locale={locale}
         motion={view.motion}
         state={tenant.service.state}
         opensAt={tenant.hours.opens}
@@ -136,7 +136,7 @@ export function Home({
             */}
             <HomeChrome
               tenant={tenant}
-              m={m}
+              locale={locale}
               categories={categories}
               slug={slug}
               announcement={
@@ -200,7 +200,7 @@ export function Home({
                 so the static document and the first client render agree and
                 neither contains a cart. */}
             <DockSlot
-              m={m}
+              locale={locale}
               motion={view.motion}
               state={tenant.service.state}
               opensAt={tenant.hours.opens}
@@ -217,7 +217,7 @@ export function Home({
             dock, and this CTA goes straight to checkout.
           */}
           <AsideSlot
-            m={m}
+            locale={locale}
             state={tenant.service.state}
             opensAt={tenant.hours.opens}
             checkoutHref={checkoutHref}

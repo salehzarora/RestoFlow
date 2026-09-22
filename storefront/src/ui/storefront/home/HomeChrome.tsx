@@ -20,7 +20,8 @@ import {
   markAnnouncementDismissed,
   markIntroSeen,
 } from '@/session/uiSession';
-import type { StorefrontMessages } from '@/i18n/storefront';
+import { storefrontMessages } from '@/i18n/storefront';
+import type { Locale } from '@/i18n/locales';
 import type { Category, Tenant } from '@/source/types';
 import { ChevronIcon, CloseIcon, SearchIcon, SendIcon } from '../icons';
 import { TenantText } from '../TenantText';
@@ -84,7 +85,7 @@ function CategoryIcon({ path }: { path: string }) {
 export function HomeChrome({
   tenant,
   slug,
-  m,
+  locale,
   categories,
   announcement,
   hero,
@@ -97,7 +98,8 @@ export function HomeChrome({
   /** The ROUTE slug, not tenant.slug: every demo scenario resolves to the same
       tenant, so tenant.slug would collapse several slugs onto one session key. */
   slug: string;
-  m: StorefrontMessages;
+  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
+  locale: Locale;
   categories: readonly Category[];
   announcement: string | null;
   hero: ReactNode;
@@ -106,6 +108,7 @@ export function HomeChrome({
   searchLabel: string;
   searchHref: string;
 }) {
+  const m = storefrontMessages(locale);
   const [dismissed, setDismissed] = useState(false);
   const [compact, setCompact] = useState(false);
   const [active, setActive] = useState(categories[0]?.id ?? '');

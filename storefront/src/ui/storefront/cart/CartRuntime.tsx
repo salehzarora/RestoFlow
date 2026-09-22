@@ -28,7 +28,8 @@ import {
   type ReactNode,
 } from 'react';
 import type { CartApi } from '@/cart/useCart';
-import type { StorefrontMessages } from '@/i18n/storefront';
+import { storefrontMessages } from '@/i18n/storefront';
+import type { Locale } from '@/i18n/locales';
 import type { MotionMode, ServiceState } from '@/source/types';
 import { LiveCartDock } from './LiveCartDock';
 import { LiveCartAside } from './LiveCartAside';
@@ -55,19 +56,21 @@ export function useCartApi(): CartApi | null {
 }
 
 export function DockSlot({
-  m,
+  locale,
   motion,
   state,
   opensAt,
   cartHref,
 }: {
-  m: StorefrontMessages;
+  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
+  locale: Locale;
   motion: MotionMode;
   state: ServiceState;
   opensAt: string;
   cartHref: string;
 }) {
   const cart = useCartApi();
+  const m = storefrontMessages(locale);
   // Nothing before the visitor's own cart has been read: an empty cart renders
   // no dock, and that is exactly what the static document must contain.
   if (cart === null || !cart.ready) return null;
@@ -100,16 +103,18 @@ export function DockSlot({
  * that does not add up.
  */
 export function AsideSlot({
-  m,
+  locale,
   state,
   opensAt,
   checkoutHref,
 }: {
-  m: StorefrontMessages;
+  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
+  locale: Locale;
   state: ServiceState;
   opensAt: string;
   checkoutHref: string;
 }) {
+  const m = storefrontMessages(locale);
   const cart = useCartApi();
   const draftApi = useCheckoutDraft();
   const draft = draftApi?.draft ?? EMPTY_DRAFT;

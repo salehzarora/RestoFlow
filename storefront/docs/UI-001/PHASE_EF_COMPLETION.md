@@ -197,15 +197,202 @@ route and taken only if the final measurement needs it.
 
 ### 2.4 Measurement after the minimal E scaffold (FINISH §7)
 
-_Recorded in §3 when the scaffold builds._
+**The estimate was wrong, and the measurement caught it before polish.** The
+first E scaffold — four `r/[ref]` pages, the runtime, the fixture, the 43
+dictionary keys and the handoff provider in the root layouts — built to
+**4,267,380 B**: **73,076 B over the ceiling**, an increment of 330,273 B
+against an estimate of 174,018–209,268.
+
+Where the estimate failed (all output bytes, measured by diffing the two
+builds document by document):
+
+| growth | bytes | why the allocation missed it |
+|---|---:|---|
+| menu documents (4) | +47,144 | the home page passed the WHOLE dictionary `m` across the server→client boundary to five client components; the flight protocol serialises it into the HTML's inline payload and into three of the four RSC files of every document — so **each new key cost ~5 copies per home/search document**, not one copy in a chunk |
+| search documents (4) | +46,020 | same |
+| tenant-home / locale-root documents (8) | +10,804 | the handoff provider's client reference in every document (4 files each) plus the same dictionary effect on the intro |
+| flow documents (16) | +36,080 | the provider's client reference and the enlarged module map, ~2.2 KB per document |
+| request family (4 new documents) | +134,181 | within the 140,802–143,368 analogy (slightly under: a lighter skeleton) |
+| shared: E page chunk, request CSS (+18,507), provider chunk | +56,044 | chunk ≈ 24 KB, CSS at the top of its range |
+
+The D1 allocation priced "dictionary growth" at 6,621 B in one shared chunk.
+The true marginal cost of a dictionary key in this export was **~2.5 KB**,
+because the home and search pages duplicated the dictionary into their
+payloads — a pre-existing cost the allocation never modelled, and the reason
+"186 − 143 = needed keys" was the wrong question (PHASE_D1_CORRECTIONS.md §5(c)).
+
+**Permitted local optimisation applied (FINISH §8, "avoiding duplicate
+serialisation")** — DECISION E-OPT-1 in §3.7: the five client boundaries that
+took `m` now take `locale` and resolve the dictionary from the client bundle
+they already carry. Recovered **266,088 B** (menu family 1,468,547 →
+1,335,195; search 437,251 → 304,331), i.e. the home/search documents are now
+**smaller than before E** (1,421,403 / 391,231 at D1). No key, state or locale
+was lost: every E consumer's key is asserted present in all three dictionaries
+with identical placeholders (`tests/sf-request.test.mjs`), the full shipped
+and evidence browser matrices pass, and the CSP and import rules are untouched.
+
+A second route-scoped-import correction (DECISION E-OPT-2) keeps the flow
+routes' first load from carrying the status fixture: the demo ref and the
+`?fx=` switch live in two small modules the flow can import alone.
+
+**Measured after E (shipped build, Node v24.21.0), the figures F starts from:**
+
+| | bytes | vs. §2.1 baseline |
+|---|---:|---:|
+| `out/` (223 files) | **4,001,776** | +64,669 |
+| remaining to 4,194,304 | **192,528** | |
+| request family, 4 documents (HTML 46,244 + RSC 87,521) | 133,765 | new; 32,514–36,218 per document |
+| worst direct-load JS: the 16 flow routes | **684,661 raw / 181,832 Brotli** | +11,822 / +3,948 |
+| first-load margins | **5,339 raw / 18,168 Brotli** | |
+| request route first load | 656,321 / 175,112 | new |
+| largest file (`25u4ugc163b9o.js`) | 229,156 | unchanged |
+| dictionary-bearing chunk (`1j9_jodcjx2he.js`) | 40,982 | re-chunked; both files checked against 262,144 |
+| CSS (2 files) | 92,771 | +18,849 (the request module) |
+
+The F reserve of 8,000 B (§2.3) stands: **184,528 B** remain above it. The
+first-load raw margin on the flow routes, **5,339 B**, is the one number that
+could bind in F: three ~1.3 KB corrections fit, a fourth would not, and the
+per-locale dictionary lever (FINISH §8) is the documented recourse.
 
 ---
 
 ## 3. Phase E decisions
 
-_Filled as E lands: fixture-ref authority, submission handoff, received /
-status state table, WhatsApp and copy simulation, runtime/static truth and
-privacy, dictionary keys (§E-KEYS)._
+### 3.1 INHERITED — the screens, the states, the copy
+
+The received hero, summary card, WhatsApp CTA, track button, fallback block and
+message preview (`P:513-:544`); the status header, hero card, vertical
+timeline, action column, order summary and cancel sheet (`P:546-:576`); the
+nine states, their tones, their action sets, the pending predicate
+`received || waiting` and the TTL-while-waiting rule (`P:835-:847`); the 1.6 s
+copied feedback (`P:733`); the `M:SS` countdown; every string, taken
+programmatically from the approved table (`storefront-data.js` export `T`),
+never retyped. `STATE_TABLE` in `status.ts` is the one table; a unit test pins
+it to the prototype.
+
+### 3.2 DECISION E-1 — one opaque demo ref, one document, two views
+
+`/r/DEMO-7K4XM2D9P3` is the only request document, in four locale roots; the
+received and status screens are STATES of it, decided after hydration. The
+segment is opaque and says "DEMO" in the URL; `#MB-2487` is the display code
+(PD-11), resolved on the client — it is request data and does not appear in
+the served bytes (`tests/output/output.test.mjs` asserts it). One authority
+(`src/source/request-ref.ts`, re-exported by `request-fixture.ts`) feeds the
+static params, the gateway's accepted and duplicate results, and the status
+source. The Phase D order-shape hash is gone: it named a document that was
+never emitted. This is a fixture allocation, not ID generation and not an
+idempotency claim. Evidence scenarios add zero artefacts: every state is a
+`?fx=` token on the same document.
+
+### 3.3 DECISION E-2 — the handoff is memory in the root layout
+
+The accepted send records the NONCONTACT summary (ids, quantities, selections,
+quoted amounts, service, zone, the instant) in `RequestHandoffProvider`,
+mounted in each root layout — the only ancestor that survives the soft
+navigation from `/s/:slug/review` to `/r/:ref`. The type has no slot for a
+contact field, a source rule greps the request side for every contact
+identifier, and the flow's handoff builder is asserted to read only the quote
+and the cart lines. Received is shown once ("seen"); "track status",
+"continue on WhatsApp" and any later visit render status. A reload drops it:
+the same URL is then the status view fed by the source, never the received
+view (E-FLOW, D-X11).
+
+**The cart is not cleared by a send** — the prototype keeps it (`P:728`) and
+"order again" is the ONE designed clear (`P:737`, INTERACTIONS.md:115), so
+`CartApi.clear()` exists for that action alone. A failure, a duplicate or a
+stale completion changes nothing. The memory-only draft is destroyed by the
+segment change itself, which is the privacy contract working as designed.
+
+### 3.4 DECISION E-3 — the duplicate recovery and submission-time validation
+
+The duplicate banner carries its designed one action, "view status"
+(`P:831-:833`), which opens the status view — offered, never automatic. The
+send now re-checks the runtime's live answer (non-empty cart, details valid for
+the services the restaurant offers) AT submission, not only at route entry;
+the review CTA is `aria-disabled` while that answer is no.
+
+### 3.5 DECISION E-4 — the status source contract
+
+`StatusSource.subscribe(ref, onSnapshot, onMissing)` never answers
+synchronously; `cancel(ref, seenVersion)` is guarded by the SOURCE's state:
+answered-first → `not_pending` with the newer snapshot, never a cancelled one;
+a stale version is refused. The runtime accepts a snapshot only if it
+`supersedes` the current one (same ref, higher version), ignores callbacks
+after unmount, and clears its subscription and timers. Times on the timeline
+come only from recorded events (`DEMO_AGE_MS` / `EVENT_OFFSETS_MS` are
+explicit fixture records; the prototype's `createdAt + n × 4 min` is not
+reproduced — PX-10). Expiry is a source event at `expiresAt`; the UI shows
+0:00 until the source says expired. The fixture source is created per mount
+with the visitor's seed; no module holds one visitor's request.
+
+### 3.6 DECISION E-5 — WhatsApp is simulated, copy is real, the message is safe
+
+`demoLauncher` returns `'simulated'` and opens nothing (DEFERRED WA-001); no
+`wa.me`, `whatsapp://`, `api.whatsapp.com` or `window.open` exists in
+`src/` (source rule + output test). Because the screen therefore cannot say
+WhatsApp opened, one localized notice states the fact — **"Local demo — no
+order or message is sent."** — an execution clarification (FINISH 4.4), the
+only authored copy in E, marked as such in the dictionaries' comment. The
+prototype's `href="#"` "open WhatsApp Web" is the same simulated launch.
+
+The message is composed in the restaurant's language (Arabic, the fixture
+tenant's) from the prototype's own fragments (`P:768`) with two recorded
+departures: the delivery line names the ZONE only — street and building are
+dedicated CheckoutDraft fields and may not reach message text (FINISH 4.2/4.4)
+— and the status link is the configured origin + `/r/<ref>` (PX-2), never
+`bizbot.app`. `PUBLIC_ORIGIN` is configuration
+(`src/routes/origin.ts`, the approved future host); it makes no domain exist.
+
+Copy writes the composed message only, from the one file allowed to touch the
+clipboard (`clipboard.ts`; write only, no `readText` anywhere), and "Copied"
+appears only after the browser reports success — the prototype flipped the
+label even on failure (`P:733`). The 30 px control keeps its painted size
+and reaches 44 px through an invisible overlay (PX-6).
+
+### 3.7 DECISION E-OPT-1 / E-OPT-2 — the two permitted optimisations (§2.4)
+
+E-OPT-1: five client boundaries (`StorefrontRuntime`, `HomeChrome`,
+`SearchScreen`, `DockSlot`, `AsideSlot`) take `locale` instead of `m`.
+Before/after: `out/` 4,267,380 → 4,001,292; menu documents 373,029 →
+336,790 (max); search 114,960 → 78,829; no first-load change. E-OPT-2:
+`request-ref.ts` and `request-scenarios.ts` are the small modules the flow
+imports; flow first load 687,245 → 684,661 raw. Neither adds a dependency,
+touches the CSP, the config hash, the comparator or any ceiling.
+
+### 3.8 DECISION E-6 — accessibility and truth details the prototype lacks
+
+- The ticking TTL is `role="timer" aria-live="off"` OUTSIDE the
+  `role="status"` live region that announces state changes (PX-5c).
+- The timeline is an `<ol>` with `aria-current="step"` on the current node.
+- The cancel sheet is `role="dialog" aria-modal`: focus moves to "keep", Tab
+  cycles inside, Escape and the scrim keep the request, focus returns to the
+  cancel control; the sheet closes itself if the source moves on while open.
+- Under reduced motion the request module also collapses animation DELAYS:
+  the root rule collapses durations only, so the staggered "not confirmed yet"
+  line would otherwise sit invisible for 350 ms under the very setting that
+  promises one frame. Proven with a two-frame probe and its negative control.
+- "Yes, cancel" uses the derived danger ink (`--onBad`), the danger card the
+  AA-walked `--badText` (PX-3a/b); every tone pair is asserted at AA in both
+  presets.
+- A ref the source does not know renders the neutral unknown copy inside the
+  tenant frame (`?fx=status-missing`); an ungenerated ref is a real 404.
+
+### E-KEYS — the dictionary keys E consumes
+
+43 keys were added to all three dictionaries, in the same order, derived from
+the consumers (`ReceivedScreen`, `StatusScreen`, `requestParts`,
+`RequestRuntime`, the review banner) and cross-checked by a unit test that
+reads `m.<key>` from those files and asserts each exists in ar/en/he with
+identical placeholders: received, receivedBody, continueWa, trackStatus,
+waFallback, waWeb, copyMsg, copied, msgPreview, waiting, waitingBody,
+expiresIn, accepted, acceptedBody, preparing, preparingBody, readyPickup,
+readyPickupBody, readyDelivery, readyDeliveryBody, completed, completedBody,
+rejected, rejectedBody, expired, expiredBody, cancelled, cancelledBody,
+cancelRequest, cancelTitle, cancelBody, keep, yesCancel, openChat, orderAgain,
+stReceived, stWaiting, stAccepted, stPreparing, stReady, stCompleted,
+viewStatus — all verbatim from the approved table — plus **demoNotice**, the
+one authored string. Not added because no consumer exists: `requestCode`,
+`backToMenu`, `readyStep` (unused in the prototype too).
 
 ---
 

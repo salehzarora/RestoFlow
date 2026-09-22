@@ -227,6 +227,12 @@ is a 404 is worse than an honest block, so an accepted send hands the result to
 an injected observer and this phase navigates nowhere. A test asserts that no
 Phase D file builds `requestPath` or hard-codes `/r/`.
 
+*Superseded 2026-09-22 (Phase E):* the destination exists. `FlowRuntime` alone
+takes an accepted send to `requestPath(locale, ref)` after recording the
+noncontact handoff; the observer seam stays for tests, and the test above is
+inverted (`ReviewScreen` and `submit.ts` still never navigate). See
+`PHASE_EF_COMPLETION.md` §3.2–3.4.
+
 ### DECISION D16 — the `duplicate` banner carries NO action in this phase
 
 Its designed recovery is "view status", which goes to that same Phase E route.
@@ -234,6 +240,10 @@ The banner renders its title and body — "Open its status instead of sending it
 again" — and withholds the action.  `COMPONENT_INVENTORY.md:149` permits at most
 one action, not at least one. The key `viewStatus` is therefore **not** added:
 a copy key nothing can wire is dead weight.
+
+*Superseded 2026-09-22 (Phase E):* the banner carries its designed one action,
+`viewStatus` (key added), which opens the status view of the earlier send —
+offered to the visitor, never taken automatically.
 
 ### DECISION D17 — one attempt at a time, and no stale completion
 
@@ -387,7 +397,7 @@ survives two step navigations — so the soft navigation, and the draft, survive
 | 4 | ~~Both services off~~ **CLOSED IN D1** | The claim that "the CTA stays blocked" was **not true** when it was written: `validateCheckout` checked the *type* of `service`, never whether the restaurant offered it, so a complete checkout validated and progressed. D1 makes availability a required argument and blocks progression for real. See [PHASE_D1_CORRECTIONS.md](PHASE_D1_CORRECTIONS.md) §1.2. What remains undesigned — and is still not invented — is the *presentation*: with neither service on, the draft's default pickup card stays checked while announcing itself unavailable. |
 | 5 | `/checkout` is not blocked while the restaurant is closed | Neither the handoff nor the prototype blocks the steps — only the dock and the aside CTA. A guard would be new product behaviour and needs owner sign-off. |
 | 6 | The town `<select>` has no error message | Approved as a red border alone (`:448`). Not invented. |
-| 7 | G27 does not actually show a failure banner | The approved capture was taken without the error flag set, so it proves nothing about the banner. The four banners are asserted against `DESIGN_HANDOFF.md:130`, `STATE_MATRIX.json:238-254` and the prototype source, and captured fresh here. |
+| 7 | G27 does not actually show a failure banner | The approved capture was taken without the error flag set, so it proves nothing about the banner. The four banners are asserted against `DESIGN_HANDOFF.md:130`, `STATE_MATRIX.json:238-254` and the prototype source, and captured fresh here. *E:* the duplicate banner now carries its one action (D16 superseded). |
 | 8 | The flow routes' first load is **672,872 B** against a 690,000 B ceiling | Passing, with **17,128 B** of headroom — still the tightest margin in the build. **The 670,600 / 19,400 figures recorded here and in the Phase D pack were understated**; an independent measurement of the same commit found 671,605 / 18,395, and D1's own changes cost a further 1,267 B. Corrected figures and their sources: [PHASE_D1_CORRECTIONS.md](PHASE_D1_CORRECTIONS.md) §1.4. The smallest available optimisation is unchanged and was deliberately not taken in D1. |
 
 ---

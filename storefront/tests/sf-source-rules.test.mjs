@@ -57,6 +57,11 @@ const FIXTURE_LAYER = [
   // so they are injected from a demo token. That machinery belongs HERE, with
   // the other fixtures it disappears with, and not inside a component.
   'src/source/flow-scenarios.ts',
+  // Phase E: the one demo ref, the demo request, the demo status source and
+  // the request route's own scenario allowlist.
+  'src/source/request-fixture.ts',
+  'src/source/request-ref.ts',
+  'src/source/request-scenarios.ts',
 ];
 
 test('no app file emits an inline style attribute or style prop', () => {
@@ -120,6 +125,11 @@ test('no Maps Burger derived colour is hard-coded in the UI or stylesheets', () 
 const DEMO_TOKENS = [
   'cart-changed', 'cart-price', 'cart-sold-out',
   'server-error', 'rate-limited', 'quote-race',
+  // Phase E: the request route's tokens. A component renders a STATE it was
+  // given; it never names the URL token that selects one.
+  'status-received', 'status-waiting', 'status-accepted', 'status-preparing', 'status-ready',
+  'status-completed', 'status-rejected', 'status-expired', 'status-cancelled',
+  'status-accepts-late', 'status-expires-late', 'status-missing', 'wa-fallback',
 ];
 
 test('the fixture scenario switch never leaves the fixture layer', () => {
@@ -213,15 +223,29 @@ const UI_SESSION_MODULE = 'src/session/uiSession.ts';
  */
 const CART_STORAGE_MODULE = 'src/cart/cartStorage.ts';
 
+/**
+ * The ONE module allowed to WRITE to the clipboard, added for Phase E. The
+ * copy control copies the composed demo message only; confining the API to
+ * one file is what makes "only that text" a checkable claim.
+ */
+const CLIPBOARD_MODULE = 'src/ui/storefront/request/clipboard.ts';
+
 /** The store each module owns. Every other file may touch neither. */
 const STORE_OWNERS = [
   ['sessionStorage', UI_SESSION_MODULE],
   ['localStorage', CART_STORAGE_MODULE],
+  // Any spelling of the clipboard object - navigator.clipboard, a local alias,
+  // window.navigator.clipboard - contains this member access.
+  ['.clipboard', CLIPBOARD_MODULE],
 ];
 
 /** Banned in EVERY app/ and src/ file, the allowlisted modules included. */
 const BANNED_EVERYWHERE = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
-  'indexedDB', 'document.cookie'];
+  'indexedDB', 'document.cookie',
+  // Phase E: no real WhatsApp navigation of any kind (DEFERRED WA-001), and no
+  // clipboard READ path anywhere - the write path has exactly one owner below.
+  'wa.me', 'whatsapp://', 'api.whatsapp.com', 'window.open(', 'readText('];
+
 
 /**
  * The rule as a pure function of (path, text), so the negative controls below
@@ -727,4 +751,103 @@ test('NEGATIVE CONTROL: the structural-bidi guard catches a block-level dir="aut
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ------------------------------------------------------------ Phase E rules
+
+/**
+ * The request handoff, the status snapshot, the message and the copy path may
+ * never carry a contact field. The rule is by IDENTIFIER: none of these files
+ * may even name one, so a field cannot be threaded through under its own name.
+ * `note` is excluded from the list because the runtime must construct a
+ * CartLine (which has a note slot) to resolve item names; that slot is always
+ * the empty string there, which the assertion below pins.
+ */
+const CONTACT_IDENTIFIERS = ['fullName', 'phone', 'street', 'building', 'apartment', 'deliveryNotes', 'area'];
+const CONTACT_FREE_FILES = [
+  'src/ui/storefront/request/RequestHandoffProvider.tsx',
+  'src/ui/storefront/request/status.ts',
+  'src/ui/storefront/request/message.ts',
+  'src/ui/storefront/request/clipboard.ts',
+  'src/ui/storefront/request/RequestRuntime.tsx',
+  'src/ui/storefront/request/ReceivedScreen.tsx',
+  'src/ui/storefront/request/StatusScreen.tsx',
+  'src/ui/storefront/request/requestParts.tsx',
+  'src/source/request-fixture.ts',
+];
+
+test('nothing on the request side can name a contact field', () => {
+  for (const relPath of CONTACT_FREE_FILES) {
+    const file = path.join(ROOT, relPath);
+    assert.ok(existsSync(file), `${relPath} must exist`);
+    const src = code(file);
+    for (const id of CONTACT_IDENTIFIERS) {
+      assert.ok(!new RegExp(`\\b${id}\\b`).test(src), `${relPath} names the contact field ${id}`);
+    }
+  }
+  // The one CartLine the runtime builds carries an EMPTY note, always.
+  const runtime = code(path.join(ROOT, 'src/ui/storefront/request/RequestRuntime.tsx'));
+  assert.match(runtime, /note: ''/);
+  assert.ok(!/note: (?!'')/.test(runtime), 'the runtime must never forward a note');
+  // The flow side hands the handoff only what the quote and the cart lines hold.
+  const flow = code(path.join(ROOT, 'src/ui/storefront/checkout/FlowRuntime.tsx'));
+  const handoffBlock = flow.slice(flow.indexOf('const handoffFor'), flow.indexOf('const complete'));
+  assert.ok(handoffBlock.length > 100, 'the handoff builder must exist');
+  for (const id of [...CONTACT_IDENTIFIERS, 'draft.', 'note']) {
+    assert.ok(!handoffBlock.includes(id), `the handoff builder reads ${id}`);
+  }
+});
+
+test('NEGATIVE CONTROL: the contact-identifier rule catches a threaded field', () => {
+  const planted = "export interface RequestHandoff { readonly phone: string; }";
+  assert.ok(CONTACT_IDENTIFIERS.some((id) => new RegExp(`\\b${id}\\b`).test(planted)));
+  // And it does not fire on the words it must tolerate.
+  const innocent = "const phoneme = 1; const areaCode = 2; const building2 = 3;";
+  assert.ok(!CONTACT_IDENTIFIERS.some((id) => new RegExp(`\\b${id}\\b`).test(innocent)));
+});
+
+test('the launcher opens nothing and the clipboard module only writes', () => {
+  const launcher = code(path.join(ROOT, 'src/ui/storefront/request/launcher.ts'));
+  assert.ok(launcher.includes("return 'simulated'"), 'the demo launcher must report a simulated launch');
+  assert.ok(!/location|href|navigate|open\(/.test(launcher.replace(/open\(digits/, '').replace(/open\(\)/, '')),
+    'the demo launcher must not navigate');
+  const clipboard = code(path.join(ROOT, CLIPBOARD_MODULE));
+  assert.ok(clipboard.includes('writeText'), 'the clipboard module must actually write');
+  assert.ok(!clipboard.includes('readText'), 'the clipboard module must never read');
+  assert.ok(clipboard.includes('return false'), 'a failed write must report false');
+  // Exactly one file touches the clipboard at all.
+  const touching = TSX.filter((f) => /navigator\.clipboard|\.clipboard\b/.test(code(f))).map(rel);
+  assert.deepEqual(touching, [CLIPBOARD_MODULE]);
+});
+
+test('the request route pre-renders one ref and the status source never answers synchronously', () => {
+  const fixture = code(path.join(ROOT, 'src/source/request-fixture.ts'));
+  assert.match(fixture, /return \[DEMO_REQUEST_REF\];/);
+  // The first snapshot is delivered from a timer, never during subscribe().
+  assert.ok(fixture.includes('later(0, () => {'), 'the first answer must arrive after mount');
+  // The route files read the ONE authority.
+  for (const root of ['(root)', 'ar', 'en', 'he']) {
+    const page = code(path.join(ROOT, `app/${root}/r/[ref]/page.tsx`));
+    assert.ok(page.includes('requestRefs()'), `${root}: static params come from requestRefs()`);
+    assert.ok(page.includes('resolveRequest(ref)'), `${root}: the ref resolves through the fixture`);
+    assert.ok(page.includes('dynamicParams = false'));
+  }
+  // No synthesised timestamps: the timeline reads events, never a formula.
+  const status = code(path.join(ROOT, 'src/ui/storefront/request/status.ts'));
+  assert.ok(!/createdAt\s*\+/.test(status), 'status.ts must not add to createdAt');
+  const screen = code(path.join(ROOT, 'src/ui/storefront/request/StatusScreen.tsx'));
+  assert.ok(!/createdAt/.test(screen), 'the screen never derives a time from createdAt');
+  assert.ok(screen.includes('node.at === null ? null'), 'a node without an event shows no time');
+  // The countdown lives outside the live region.
+  assert.ok(screen.includes('role="timer" aria-live="off"'), 'the TTL must not announce every second');
+});
+
+test('the message never carries the literal the prototype hard-coded', () => {
+  for (const f of TSX) {
+    assert.ok(!code(f).includes('bizbot.app'), `${rel(f)}: the dead status-link literal`);
+  }
+  const message = code(path.join(ROOT, 'src/ui/storefront/request/message.ts'));
+  assert.ok(message.includes('statusUrl'), 'the status link is an input, built from the configured origin');
+  const origin = code(path.join(ROOT, 'src/routes/origin.ts'));
+  assert.match(origin, /export const PUBLIC_ORIGIN = 'https:\/\/[a-z0-9.-]+';/);
 });
