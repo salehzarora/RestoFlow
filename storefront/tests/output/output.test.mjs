@@ -173,9 +173,11 @@ test('NEGATIVE CONTROL: the fabricated-cart detector fails on a document that ha
 test('the wide aside ships as a cart-neutral seam, not a cart', () => {
   // It must exist (it is the approved Phase-D seam) and must carry the empty
   // label rather than a count, so the bytes are truthful for every visitor.
-  const menus = emittedText().filter((d) => /(^|\/)menu\.html$/.test(d.file));
-  assert.equal(menus.length, 4, 'expected one menu document per locale root');
-  for (const { file, text } of menus) {
+  // BOTH surfaces carry the seam: the menu and, since C2, search.
+  const withSeam = emittedText().filter((d) => /(^|\/)(menu|search)\.html$/.test(d.file));
+  assert.equal(withSeam.length, 8,
+    'expected one menu AND one search document per locale root');
+  for (const { file, text } of withSeam) {
     assert.ok(text.includes('data-sf-aside="seam"'), `${file}: the wide seam is missing`);
     // Scoped to the <aside> ELEMENT: the document also carries an RSC payload
     // full of legitimate MENU prices, which are not cart state.
