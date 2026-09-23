@@ -5,8 +5,13 @@
 -- 20260913164029_public_surface_acl_remediation_001.sql and the rule recorded
 -- as DECISION D-037 / SECURITY_AND_THREAT_MODEL T-016:
 --
---   A. the set of `public` functions EXECUTE-able by `anon` is EMPTY (Phase 1A
---      allowlist) — dynamic over pg_proc, culprits are printed on failure;
+--   A. the set of `public` functions EXECUTE-able by `anon` EQUALS the
+--      enumerated allowlist — dynamic over pg_proc, culprits are printed on
+--      failure. STOREFRONT-READ-001 (2026-09-23, owner decision D1: D-037
+--      ratified with ONE amendment) moved the allowlist from EMPTY to exactly
+--      {public.storefront_menu(text)}, the one SECURITY DEFINER function
+--      `public` may carry, and the one public function `authenticated` may
+--      NOT execute; A1 / A5 / D1 pin that set by equality;
 --   B. `anon` has no USAGE on schema `app` and keeps USAGE on `public`;
 --   C. `anon` holds no privilege on any `public` table, view or sequence;
 --   D. `authenticated` is untouched — every wrapper stays executable and the
@@ -34,19 +39,26 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(61);
+select plan(62);
+
+-- The D-037 allowlist as amended by STOREFRONT-READ-001: exactly one function,
+-- named by identity. Every A1 / A5 / D1 assertion below compares against THIS
+-- literal, so a second anon-callable or DEFINER public function fails here
+-- until it is enumerated in its own migration + suite (D-037 point 2).
+create temp table sec001_allowlist (identity text primary key);
+insert into sec001_allowlist values ('storefront_menu(text)');
 
 -- ----------------------------------------------------------------------------
 -- A. anon function family guard (effective privileges, dynamic) ............ (6)
 -- ----------------------------------------------------------------------------
 select is(
-  (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text), '')
+  (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace
       and p.prokind = 'f'
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  '',
-  'A1. anon-executable public function set is EMPTY (Phase 1A allowlist) — any culprit prints here');
+  (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
+  'A1. anon-executable public function set EQUALS the enumerated allowlist {storefront_menu(text)} — any extra culprit prints here');
 
 select cmp_ok(
   (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'),
@@ -70,9 +82,11 @@ select is(
   'A4. the PUBLIC pseudo-role holds EXECUTE on no public function (acldefault-aware)');
 
 select is(
-  (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef),
-  0,
-  'A5. no public function is SECURITY DEFINER — a wrapper can never carry anon into app.*');
+  (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
+     from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef),
+  (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
+  'A5. the ONLY public SECURITY DEFINER function is the enumerated allowlist (D-037 amendment) — no wrapper can carry anon into app.*');
 
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text), '')
@@ -146,11 +160,12 @@ select is(
 -- D. authenticated regression — grants untouched ........................... (23)
 -- ----------------------------------------------------------------------------
 select is(
-  (select count(*)::int from pg_proc p
+  (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
+     from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  0,
-  'D1. every public function remains EXECUTE-able by authenticated');
+  (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
+  'D1. every public function remains EXECUTE-able by authenticated EXCEPT the enumerated anon-only allowlist (explicitly revoked)');
 
 -- device / pairing
 select ok(has_function_privilege('authenticated', 'public.redeem_device_pairing(text, text)', 'EXECUTE'),
@@ -279,6 +294,13 @@ select ok(has_function_privilege('authenticated', 'public.list_timezones()', 'EX
   'E5. authenticated EXECUTE is untouched by the anon revoke');
 select ok(has_table_privilege('authenticated', 'public.plans', 'SELECT'),
   'E6. authenticated SELECT is untouched by the anon revoke');
+-- STOREFRONT-READ-001: the SEC-001 statement form above is NOT a drift remedy
+-- any more. Re-running it would strip the allowlist grant (proven here, inside
+-- this rolled-back transaction) — DEPLOYMENT.md §16 records the rule. The
+-- grant is restored so the remaining assertions see the real posture.
+select ok(not has_function_privilege('anon', 'public.storefront_menu(text)', 'EXECUTE'),
+  'E6b. re-running the SEC-001 schema-wide revoke STRIPS the READ-001 allowlist — SEC-001 must never be re-applied as a drift remedy');
+grant execute on function public.storefront_menu(text) to anon;
 
 set local role anon;
 select throws_ok(
