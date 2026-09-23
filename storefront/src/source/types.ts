@@ -1,16 +1,21 @@
 /**
  * The tenant runtime boundary.
  *
- * These types are the ONLY shape the UI may read. A real adapter (Phase D+)
- * must satisfy the same interface, so no component learns where data came from.
+ * These types are the ONLY shape the UI may read. The fixture (UI-001) and the
+ * live adapter (STOREFRONT-READ-001, src/source/live) both produce them, so no
+ * component learns where data came from.
  *
  * Money rule (RestoFlow D-007, restated by the design handoff): amounts are
  * INTEGER MINOR UNITS. There is no floating-point money anywhere in this
- * package, and a formatter is the only place a decimal point appears.
+ * package, and a formatter is the only place a decimal point appears. The tax
+ * rate is an INTEGER number of basis points for the same reason.
  */
 
 /** An integer number of agorot. Never a float, never a formatted string. */
 export type Minor = number;
+
+/** An integer number of basis points (1800 = 18%). Never a float. */
+export type BasisPoints = number;
 
 export type Preset = 'dark' | 'light';
 
@@ -20,14 +25,24 @@ export interface TenantBrand {
   /** Raw tenant input; the theme layer sanitises before use. */
   readonly primary: string;
   readonly accent: string;
-  /** Logo asset path, or null for the initial-tile fallback. */
+  /** Logo asset URL, or null for the initial-tile fallback. */
   readonly logo: string | null;
 }
 
 export interface TenantHours {
-  /** 24-hour `HH:MM`. */
+  /**
+   * 24-hour `HH:MM` of TODAY's window (the current one when open, else the
+   * next one starting today); empty when no window starts today or the
+   * restaurant published none.
+   */
   readonly opens: string;
   readonly closes: string;
+  /**
+   * The next opening instant (ISO 8601 with offset) when closed, or null when
+   * open now / no window within 7 days / unknown (fixture). The only forward
+   * pointer across days: a time in `opens` never describes another day.
+   */
+  readonly nextOpen: string | null;
 }
 
 export interface TenantService {
@@ -36,6 +51,13 @@ export interface TenantService {
   readonly deliveryEnabled: boolean;
   /** Lowest delivery fee across zones, in minor units. */
   readonly deliveryFromMinor: Minor;
+  /**
+   * Whether this storefront accepts requests at all. False for every LIVE
+   * tenant in STOREFRONT-READ-001 (browse-only): the flow shows the reason on
+   * every progression control and never constructs a gateway. The fixture
+   * tenant stays true so the accepted UI-001 demo keeps working.
+   */
+  readonly orderingEnabled: boolean;
 }
 
 export interface Tenant {
@@ -48,21 +70,57 @@ export interface Tenant {
   readonly brand: TenantBrand;
   readonly hours: TenantHours;
   readonly service: TenantService;
-  /** Hero image path. Video is deferred out of UI-001 by approved decision 8. */
-  readonly heroImage: string;
+  /**
+   * Hero image URL, or null: a live tenant that published no hero renders the
+   * brand-colour panel without a photo (owner decision D11). Video is deferred
+   * out of UI-001 by approved decision 8.
+   */
+  readonly heroImage: string | null;
   readonly currency: 'ILS';
 }
 
+/** A delivery zone. Fixture-only data in this slice (no zone storage exists). */
+export interface DeliveryZone {
+  readonly id: string;
+  readonly name: string;
+  /** Delivery fee in minor units, or null when the zone is NOT served. */
+  readonly feeMinor: Minor | null;
+  /** Minimum order subtotal in minor units, or null when not served. */
+  readonly minimumMinor: Minor | null;
+}
+
 /**
- * What the storefront can be asked for. Phase A only needs tenant lookup; the
- * menu/cart members arrive with their own phases rather than being stubbed here
- * as empty shapes nobody can trust.
+ * Everything a route needs to render one storefront, from either source. The
+ * modifier groups, the zones, the tax rate and the menu version travel WITH the
+ * view so the client islands read them through props/context instead of
+ * importing the fixture (packet §4.5, exact import sites).
+ */
+export interface StorefrontResolution {
+  readonly view: HomeView;
+  readonly preset: Preset;
+  readonly groups: readonly ModifierGroup[];
+  readonly zones: readonly DeliveryZone[];
+  readonly taxRateBp: BasisPoints;
+  /** The cart key: a persisted cart for another version is discarded. */
+  readonly menuVersion: string;
+}
+
+/**
+ * What the storefront can be asked for. The seam is ASYNC because the live
+ * source is a network read; the fixture resolves on a microtask.
  */
 export interface StorefrontSource {
   readonly kind: 'fixture' | 'live';
-  /** Null means "no such published storefront" — the Unknown screen's trigger. */
-  getTenant(slug: string): Tenant | null;
+  /** Null means "no such published storefront" - the Unknown screen's trigger. */
+  getStorefront(slug: string): Promise<StorefrontResolution | null>;
   /** Slugs that must be statically pre-rendered. Empty for a live source. */
+  staticSlugs(): readonly string[];
+}
+
+/** The fixture's synchronous tenant lookup (fixtures.ts); the scenario layer reads it. */
+export interface FixtureTenantSource {
+  readonly kind: 'fixture';
+  getTenant(slug: string): Tenant | null;
   staticSlugs(): readonly string[];
 }
 
@@ -78,7 +136,10 @@ export interface Category {
   readonly name: string;
   /** Representative photo, or null to fall back to the outlined icon. */
   readonly image: string | null;
-  /** 24-grid outlined SVG path, assignable per restaurant from the dashboard. */
+  /**
+   * 24-grid outlined SVG path. NEVER tenant text: the fixture authors it and the
+   * live adapter resolves it from the icon-key REGISTRY (src/source/live/icons.ts).
+   */
   readonly iconPath: string;
   readonly blurb: string | null;
 }
@@ -175,6 +236,7 @@ export interface AnnouncementModule {
 
 export interface CampaignModule {
   readonly title: string;
+  /** Empty when the tenant has no second line; the hero then omits the row. */
   readonly subline: string;
 }
 
@@ -204,15 +266,15 @@ export interface HomeModules {
   /**
    * `ready` governs the popular rail's TRUTH, not its styling: false removes
    * every rank claim and relabels the rail. The threshold that decides it is a
-   * backend concern and is fixture-driven in UI-001.
+   * backend concern; the live adapter never claims it.
    */
   readonly popular: { readonly enabled: boolean; readonly ready: boolean };
 }
 
 /**
- * A PRESENTATIONAL cart summary. Phase B renders the dock and the wide aside
- * from this shape; there is no store, no persistence and no mutation anywhere.
- * Real cart behaviour arrives in its own phase.
+ * A PRESENTATIONAL cart summary. Phase B rendered the dock and the wide aside
+ * from this shape; nothing renders it since Phase D and it carries no visitor
+ * data. Kept so the fixture's evidence assertions still have their subject.
  */
 export interface CartLineView {
   readonly lineId: string;
@@ -229,8 +291,8 @@ export interface CartView {
   readonly subtotalMinor: Minor;
   readonly taxMinor: Minor;
   readonly totalMinor: Minor;
-  /** The configured rate, rendered as its own line. Configuration, not law. */
-  readonly taxRate: number;
+  /** The configured rate in basis points, rendered as its own line. Configuration, not law. */
+  readonly taxRateBp: BasisPoints;
 }
 
 export interface HomeView {

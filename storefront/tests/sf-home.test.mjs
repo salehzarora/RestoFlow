@@ -23,7 +23,7 @@ const { storefrontMessages, fill } = await import('../src/i18n/storefront.ts');
 const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, LOCKED_MODULE_ORDER } = await import(
   '../scripts/module-order.mjs'
 );
-const { CATEGORIES, MENU_ITEMS, TAX_RATE } = await import('../src/source/menu-fixture.ts');
+const { CATEGORIES, MENU_ITEMS, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
 
 const tenant = fixtureSource.getTenant('maps-burger');
 const homeSource = read('src/ui/storefront/home/Home.tsx');
@@ -34,7 +34,9 @@ test('the fixture tenant and menu load', () => {
   assert.ok(tenant !== null);
   assert.equal(CATEGORIES.length, 7);
   assert.equal(MENU_ITEMS.length, 20);
-  assert.equal(TAX_RATE, 0.18);
+  // INTEGER basis points, never a float (D-007): 1800 = 18%.
+  assert.equal(TAX_RATE_BP, 1800);
+  assert.ok(Number.isInteger(TAX_RATE_BP));
 });
 
 // ---------------------------------------------------------------- module order
@@ -359,9 +361,13 @@ test('both cart CTAs now have a REAL destination, and say why when they do not',
     'the settled control must not be a swapped-in link any more');
 
   // Blocked is still blocked - and is a span, so nothing focusable leads
-  // nowhere while ordering is closed or paused.
+  // nowhere while ordering is closed, paused or (STOREFRONT-READ-001) off for
+  // this storefront. Both read the ONE shared reason from eligibility.ts,
+  // browse-only first, rather than a private copy of the closed/paused rule.
   for (const [rel, src] of [[LIVE_DOCK, dock], [LIVE_ASIDE, aside]]) {
-    assert.ok(src.includes('blockedReason'), `${rel} must still state the blocked reason`);
+    assert.ok(src.includes('orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt)'),
+      `${rel} must state the shared blocked reason (browse-only first)`);
+    assert.ok(!src.includes('function blockedReason'), `${rel} must not keep a private copy of the reason rule`);
     assert.ok(/<span[\s\S]{0,200}?Disabled/.test(src), `${rel} blocked CTA must not be a link`);
   }
 });
@@ -392,8 +398,8 @@ test('cart totals are integer minor units and tax is configuration', () => {
     assert.ok(Number.isInteger(value), `${value} must be integer minor units`);
   }
   assert.equal(view.cart.totalMinor, view.cart.subtotalMinor + view.cart.taxMinor);
-  assert.equal(view.cart.taxMinor, Math.round(view.cart.subtotalMinor * view.cart.taxRate));
-  assert.equal(view.cart.taxRate, TAX_RATE, 'the rate comes from configuration, not a component');
+  assert.equal(view.cart.taxMinor, Math.round((view.cart.subtotalMinor * view.cart.taxRateBp) / 10000));
+  assert.equal(view.cart.taxRateBp, TAX_RATE_BP, 'the rate comes from configuration, not a component');
 });
 
 // ------------------------------------------------------------------ scenarios

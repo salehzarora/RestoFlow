@@ -167,7 +167,8 @@ export function ReviewScreen({
   blockedReason?: string | null;
   /** When a closed restaurant opens; the same reason a late refusal shows. */
   opensAt?: string;
-  gateway: RequestGateway;
+  /** Null for a browse-only storefront: a send is a no-op (STOREFRONT-READ-001). */
+  gateway: RequestGateway | null;
   onEditDetails: () => void;
   onEditPayment: () => void;
   onComplete: CompletionObserver;
@@ -220,7 +221,7 @@ export function ReviewScreen({
     // nothing while ordering is not open, and nothing the runtime does not
     // currently validate - as of NOW, not as of the last render.
     const now = latest.current;
-    if (sending || now.blocked || now.pending || !now.submittable) return;
+    if (gateway === null || sending || now.blocked || now.pending || !now.submittable) return;
     const mine = attempt.current + 1;
     attempt.current = mine;
     setAttempts(mine);

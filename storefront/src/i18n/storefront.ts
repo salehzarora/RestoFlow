@@ -65,6 +65,11 @@ export interface StorefrontMessages {
   readonly emptyMenuBody: string;
   readonly orderingClosed: string;
   readonly orderingPaused: string;
+  // STOREFRONT-READ-001 (owner decision D5): the ONE new family for a
+  // browse-only storefront - never a reuse of orderingPaused, which claims
+  // that the restaurant paused.
+  readonly orderingOfflineTitle: string;
+  readonly orderingOfflineBody: string;
   readonly callRestaurant: string;
   readonly menuLabel: string;
   readonly compactMenuLabel: string;

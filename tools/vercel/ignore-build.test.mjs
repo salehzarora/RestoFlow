@@ -16,16 +16,17 @@ const scratchParent = realpathSync(tmpdir());
 const scratch = mkdtempSync(join(scratchParent, 'restoflow-vercel-filter-test-'));
 const emptyGitConfig = join(scratch, 'empty-git-config');
 writeFileSync(emptyGitConfig, '');
-// PLAN §14 canonical text. STOREFRONT_CONFIG_HASH pins this byte-for-byte, so a
+// STOREFRONT-READ-001 canonical text (server-rendered, revalidate + expireTime;
+// no static export). STOREFRONT_CONFIG_HASH pins this byte-for-byte, so a
 // stray edit here turns every storefront case into a fail-safe BUILD. Written
 // from INLINE literals because SOURCE_ROOT has no storefront/ at 001A.
 const STOREFRONT_NEXT_CONFIG = `/** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
   images: { unoptimized: true },
   reactStrictMode: true,
   poweredByHeader: false,
   trailingSlash: false,
+  expireTime: 360,
 };
 
 export default nextConfig;
@@ -1387,7 +1388,7 @@ test('24 storefront guard failures all fail safe to BUILD', () => {
   const cases = [
     ['request-time entrypoint', (repo) => put(repo, 'storefront/middleware.ts', 'export function middleware() {}\n')],
     ['checkout override', (repo) => put(repo, 'storefront/.vercelignore', 'out\n')],
-    ['changed next.config', (repo) => put(repo, 'storefront/next.config.mjs', STOREFRONT_NEXT_CONFIG.replace('export', 'standalone'))],
+    ['changed next.config', (repo) => put(repo, 'storefront/next.config.mjs', STOREFRONT_NEXT_CONFIG.replace('expireTime: 360', "output: 'export'"))],
     ['missing lockfile', (repo) => unlinkSync(join(repo, 'storefront/package-lock.json'))],
     ['floating dependency range', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '^16.3.5' } }, null, 2) + '\n')],
     ['unlisted runtime dependency', (repo) => put(repo, 'storefront/package.json', JSON.stringify({ name: 'storefront', private: true, scripts: { build: 'next build' }, dependencies: { next: '16.3.5', lodash: '4.17.21' } }, null, 2) + '\n')],

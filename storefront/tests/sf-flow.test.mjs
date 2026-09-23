@@ -14,7 +14,8 @@ import { readFileSync } from 'node:fs';
 
 const { buildQuote, quoteKey } = await import('../src/money/quote.ts');
 const { DELIVERY_ZONES, findZone, isServed } = await import('../src/source/zones.ts');
-const { MENU_ITEMS, MENU_VERSION, TAX_RATE } = await import('../src/source/menu-fixture.ts');
+const { MENU_ITEMS, MENU_VERSION, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
+const { MODIFIER_GROUPS } = await import('../src/source/modifier-fixture.ts');
 const { addLine } = await import('../src/cart/cartModel.ts');
 const { validateCheckout, FIELD_LIMITS } = await import(
   '../src/ui/storefront/checkout/validation.ts'
@@ -45,13 +46,37 @@ const quoteFor = (over = {}) =>
   buildQuote({
     cart: seeded(),
     items: MENU_ITEMS,
+    groups: MODIFIER_GROUPS,
     service: 'pickup',
     zone: null,
-    taxRate: TAX_RATE,
+    taxRateBp: TAX_RATE_BP,
     ...over,
   });
 
 // ------------------------------------------------------------------- money
+
+test('STOREFRONT-READ-001: a browse-only storefront is blocked BEFORE anything else, whatever else is true', async () => {
+  const { submitEligibility, orderingBlocker, orderingReason } = await import('../src/ui/storefront/checkout/eligibility.ts');
+  const { storefrontMessages } = await import('../src/i18n/storefront.ts');
+  const q = quoteFor();
+  const draft = { ...EMPTY_DRAFT, fullName: 'SYNTH', phone: '052-123-4567' };
+  const services = { pickup: true, delivery: true };
+  // Everything else would pass: open, ready, valid details, a settled quote.
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: q, draft, services }), { ok: true });
+  assert.deepEqual(submitEligibility({ orderingEnabled: false, state: 'open', ready: true, pending: false, quote: q, draft, services }), { ok: false, blocker: 'ordering-off' });
+  // ...and it outranks every other blocker, including an unresolved cart.
+  assert.deepEqual(submitEligibility({ orderingEnabled: false, state: 'closed', ready: false, pending: true, quote: null, draft: EMPTY_DRAFT, services }), { ok: false, blocker: 'ordering-off' });
+  assert.equal(orderingBlocker('open', false), 'ordering-off');
+  assert.equal(orderingBlocker('closed', false), 'ordering-off');
+  assert.equal(orderingBlocker('open', true), null);
+  assert.equal(orderingBlocker('closed'), 'closed', 'the default keeps the pre-READ-001 rule for the fixture');
+  for (const locale of ['ar', 'he', 'en']) {
+    const m = storefrontMessages(locale);
+    assert.equal(orderingReason('ordering-off', m, '10:00'), m.orderingOfflineTitle);
+    assert.ok(m.orderingOfflineTitle.length > 0 && m.orderingOfflineBody.length > 0);
+    assert.notEqual(m.orderingOfflineTitle, m.orderingPaused, 'the new family is never a reuse of orderingPaused');
+  }
+});
 
 test('the canonical PICKUP totals match the approved screenshot exactly', () => {
   // home__ar__light__wide__1280x820 and cart/review pickup: 110 / 19.80 / 129.80
@@ -69,10 +94,10 @@ test('the canonical DELIVERY totals match the approved screenshot exactly', () =
   assert.equal(q.subtotalMinor, 11000);
   assert.equal(q.feeMinor, 1000);
   assert.equal(q.feeApplies, true);
-  // THE TAX BASE IS SUBTOTAL PLUS FEE. round((11000 + 1000) * 0.18) = 2160.
+  // THE TAX BASE IS SUBTOTAL PLUS FEE. round((11000 + 1000) * 1800 / 10000) = 2160.
   // Taxing the subtotal alone gives 1980 and under-charges every delivery.
   assert.equal(q.taxMinor, 2160);
-  assert.notEqual(q.taxMinor, Math.round(q.subtotalMinor * TAX_RATE));
+  assert.notEqual(q.taxMinor, Math.round((q.subtotalMinor * TAX_RATE_BP) / 10000));
   assert.equal(q.totalMinor, 14160);
   assert.equal(q.totalMinor, q.subtotalMinor + q.feeMinor + q.taxMinor);
 });
@@ -83,9 +108,10 @@ test('every amount stays an INTEGER number of minor units', () => {
       const q = buildQuote({
         cart: seeded(),
         items: MENU_ITEMS,
+        groups: MODIFIER_GROUPS,
         service,
         zone,
-        taxRate: TAX_RATE,
+        taxRateBp: TAX_RATE_BP,
       });
       for (const [name, value] of Object.entries({
         subtotal: q.subtotalMinor,
@@ -111,9 +137,10 @@ test('a fee of ZERO is free delivery, and a fee of NULL is no delivery', () => {
   const free = buildQuote({
     cart: seeded(),
     items: MENU_ITEMS,
+    groups: MODIFIER_GROUPS,
     service: 'delivery',
     zone: { id: 'free', name: 'Free town', feeMinor: 0, minimumMinor: 0 },
-    taxRate: TAX_RATE,
+    taxRateBp: TAX_RATE_BP,
   });
   assert.deepEqual([...free.blockers], []);
   assert.equal(free.orderable, true);
@@ -140,7 +167,8 @@ test('the shortfall is measured against the SUBTOTAL, not the total', () => {
     items: MENU_ITEMS,
     service: 'delivery',
     zone: findZone('sakhnin'),
-    taxRate: TAX_RATE,
+    groups: MODIFIER_GROUPS,
+    taxRateBp: TAX_RATE_BP,
   });
   assert.equal(q.subtotalMinor, 2200);
   assert.equal(q.shortfallMinor, 5800);
@@ -156,7 +184,8 @@ test('a line whose item left the menu is skipped, never priced from stale data',
     items: MENU_ITEMS,
     service: 'pickup',
     zone: null,
-    taxRate: TAX_RATE,
+    groups: MODIFIER_GROUPS,
+    taxRateBp: TAX_RATE_BP,
   });
   assert.equal(q.lines.length, 0);
   assert.equal(q.subtotalMinor, 0);
@@ -171,7 +200,8 @@ test('the quote KEY carries no customer field', () => {
     items: MENU_ITEMS,
     service: 'delivery',
     zone: findZone('kafrmanda'),
-    taxRate: TAX_RATE,
+    groups: MODIFIER_GROUPS,
+    taxRateBp: TAX_RATE_BP,
   };
   const key = quoteKey(input);
   for (const secret of ['SYNTH-NAME', '0521234567', 'Main Street', '12B']) {
@@ -180,7 +210,7 @@ test('the quote KEY carries no customer field', () => {
   // It DOES change with everything that changes the price...
   assert.notEqual(key, quoteKey({ ...input, service: 'pickup' }));
   assert.notEqual(key, quoteKey({ ...input, zone: findZone('sakhnin') }));
-  assert.notEqual(key, quoteKey({ ...input, taxRate: 0.17 }));
+  assert.notEqual(key, quoteKey({ ...input, taxRateBp: 1700 }));
   // ...and is stable when nothing that affects the price has.
   assert.equal(key, quoteKey({ ...input }));
 });
@@ -573,31 +603,31 @@ test('orderingBlocker: exactly open authorises; closed and paused are named; any
 
 test('submitEligibility: the positive control - open, ready, settled, a cart and valid details', () => {
   const q = quoteFor();
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: true });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: true });
 });
 
 test('submitEligibility: closed, paused and unresolved refuse an otherwise valid send, for either service', () => {
   const q = quoteFor();
   const qd = quoteFor({ service: 'delivery', zone: findZone('kafrmanda') });
   for (const [state, blocker] of [['closed', 'closed'], ['paused', 'paused'], [null, 'unresolved'], ['later', 'unresolved']]) {
-    assert.deepEqual(submitEligibility({ state, ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker }, `${state} pickup`);
-    assert.deepEqual(submitEligibility({ state, ready: true, pending: false, quote: qd, draft: okDelivery, services: BOTH }), { ok: false, blocker }, `${state} delivery`);
+    assert.deepEqual(submitEligibility({ orderingEnabled: true, state, ready: true, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker }, `${state} pickup`);
+    assert.deepEqual(submitEligibility({ orderingEnabled: true, state, ready: true, pending: false, quote: qd, draft: okDelivery, services: BOTH }), { ok: false, blocker }, `${state} delivery`);
   }
 });
 
 test('submitEligibility: the blockers come in the order the visitor can act on them', () => {
   const q = quoteFor();
   // Not ready beats everything (there is nothing to decide against).
-  assert.deepEqual(submitEligibility({ state: 'closed', ready: false, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: null, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'closed', ready: false, pending: false, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: null, draft: okPickup, services: BOTH }), { ok: false, blocker: 'unresolved' });
   // Then the restaurant's state, before the cart or the details.
-  const emptyQ = buildQuote({ cart: empty(), items: MENU_ITEMS, service: 'pickup', zone: null, taxRate: TAX_RATE });
-  assert.deepEqual(submitEligibility({ state: 'paused', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'paused' });
+  const emptyQ = buildQuote({ cart: empty(), items: MENU_ITEMS, groups: MODIFIER_GROUPS, service: 'pickup', zone: null, taxRateBp: TAX_RATE_BP });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'paused', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'paused' });
   // Then the cart, then the details, then a total that is still settling.
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'empty' });
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'details' });
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: NEITHER }), { ok: false, blocker: 'details' });
-  assert.deepEqual(submitEligibility({ state: 'open', ready: true, pending: true, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'pending' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: emptyQ, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'empty' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: q, draft: EMPTY_DRAFT, services: BOTH }), { ok: false, blocker: 'details' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: false, quote: q, draft: okPickup, services: NEITHER }), { ok: false, blocker: 'details' });
+  assert.deepEqual(submitEligibility({ orderingEnabled: true, state: 'open', ready: true, pending: true, quote: q, draft: okPickup, services: BOTH }), { ok: false, blocker: 'pending' });
 });
 
 test('orderingReason: the two existing localised strings, in every language, and nothing invented for unresolved', () => {

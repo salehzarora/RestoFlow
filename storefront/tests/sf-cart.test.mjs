@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 const s = await import('../src/cart/cartStorage.ts');
 const model = await import('../src/cart/cartModel.ts');
 const { MENU_ITEMS, MENU_VERSION } = await import('../src/source/menu-fixture.ts');
+const { MODIFIER_GROUPS } = await import('../src/source/modifier-fixture.ts');
 
 const SLUG = 'maps-burger';
 const empty = () => s.emptyCart(SLUG, MENU_VERSION);
@@ -299,7 +300,7 @@ test('a line whose item has left the menu is SKIPPED, never rendered from stale 
     { lineId: 'l1', itemId: '1', qty: 1, selections: {}, note: '' },
     { lineId: 'l2', itemId: 'no-such-item', qty: 3, selections: {}, note: '' },
   ] };
-  const summary = model.summarise(state, MENU_ITEMS);
+  const summary = model.summarise(state, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(summary.lines.length, 1);
   assert.equal(summary.lines[0].item.id, '1');
   // The vanished line contributes NOTHING to the count or the subtotal.
@@ -311,7 +312,7 @@ test('the summary counts UNITS, not lines, and subtotals them', () => {
   let state = empty();
   state = model.addLine(state, { itemId: '1', qty: 2, selections: { bun: ['brioche'] }, note: '' });
   state = model.addLine(state, { itemId: '7', qty: 3, selections: { sauce: ['ranch'] }, note: '' });
-  const summary = model.summarise(state, MENU_ITEMS);
+  const summary = model.summarise(state, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(summary.lines.length, 2);
   assert.equal(summary.itemCount, 5);
   // (5500 + 500) * 2 + (2200 + 200) * 3
@@ -407,10 +408,13 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   const aside = readFileSync(
     new URL('../src/ui/storefront/cart/LiveCartAside.tsx', import.meta.url), 'utf8');
 
-  // It reads a resolved summary and a Quote; it never derives money.
+  // It reads a resolved summary and a Quote; it never derives money. It MAY
+  // read `quote.taxRateBp` to label the tax row (STOREFRONT-READ-001: the
+  // rate is the tenant's, interpolated into the label), so the guard bans the
+  // ARITHMETIC shapes, not the field name.
   assert.ok(aside.includes('summary: CartSummary | null'));
   assert.ok(aside.includes('quote: Quote | null'));
-  for (const banned of ['taxRate', 'Math.round', 'TAX_RATE']) {
+  for (const banned of ASIDE_MONEY_BANNED) {
     assert.ok(!aside.includes(banned), `the aside must not compute money: found ${banned}`);
   }
 
@@ -439,12 +443,19 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   assert.ok(runtime.includes('LiveCartAside'));
 });
 
+/** The arithmetic a drifting aside would take: a rounding, a rate constant, a rate multiplication, the bp division. */
+const ASIDE_MONEY_BANNED = ['Math.round', 'TAX_RATE', '* quote.taxRateBp', 'taxRateBp *', '/ 10000', '* 0.'];
+
 test('NEGATIVE CONTROL: the aside money guard would notice a hand-rolled total', () => {
   // The rule above is worth something only if the banned strings really are
   // the shape a drifting implementation would take.
   const drifted = 'const taxMinor = Math.round(subtotal * TAX_RATE);';
-  const caught = ['taxRate', 'Math.round', 'TAX_RATE'].filter((b) => drifted.includes(b));
+  const caught = ASIDE_MONEY_BANNED.filter((b) => drifted.includes(b));
   assert.deepEqual(caught, ['Math.round', 'TAX_RATE']);
+  const driftedBp = 'const taxMinor = (subtotal * quote.taxRateBp) / 10000;';
+  assert.deepEqual(ASIDE_MONEY_BANNED.filter((b) => driftedBp.includes(b)), ['* quote.taxRateBp', '/ 10000']);
+  // ...and the legitimate label read is not an offence.
+  assert.deepEqual(ASIDE_MONEY_BANNED.filter((b) => 'fill(m.tax, { p: formatRateBp(quote.taxRateBp) })'.includes(b)), []);
 });
 
 test('a REMOVAL reads as a removal, never as an addition', () => {
@@ -456,7 +467,7 @@ test('a REMOVAL reads as a removal, never as an addition', () => {
     selections: { bun: ['brioche'], remove: ['onion'] },
     note: '',
   });
-  const resolved = model.resolveLine(state.lines[0], MENU_ITEMS);
+  const resolved = model.resolveLine(state.lines[0], MENU_ITEMS, MODIFIER_GROUPS);
   const summary = model.optionSummary(resolved);
 
   assert.ok(summary.includes('\u2715'), `removals must carry the marker: ${summary}`);
@@ -482,7 +493,7 @@ test('a resolved line is priced and summarised within the group bounds', () => {
     selections: { extras: ['cheese', 'bacon', 'egg', 'jal', 'avo'] },
     note: '',
   };
-  const resolved = model.resolveLine(line, MENU_ITEMS);
+  const resolved = model.resolveLine(line, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(resolved.optionNames.length, 3);
   assert.equal(resolved.unitMinor, 5500 + 600 + 800 + 500);
 });
@@ -500,7 +511,7 @@ test('lines naming an item the menu no longer has are PRUNED, not kept invisibly
       { lineId: 'l2bbb', itemId: 'gone', qty: 20, selections: {}, note: '' },
     ],
   };
-  const usable = model.summarise(withOrphan, MENU_ITEMS);
+  const usable = model.summarise(withOrphan, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(usable.lines.length, 1);
   assert.equal(usable.itemCount, 1);
   // The pruned state is what useCart writes back; assert the shape it produces.

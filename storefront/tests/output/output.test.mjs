@@ -1,4 +1,7 @@
-// Post-build assertions over the REAL exported tree. Run after `npm run build`.
+// Post-build assertions over the REAL server-render SNAPSHOT (STOREFRONT-READ-001):
+// run `npm run build`, then `node scripts/snapshot-server.mjs`, which fetches every
+// canonical route from a real `next start` into out/ (documents, one RSC flight
+// payload per document, .next/static, public/, 404.html, SNAPSHOT.json).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { existsSync } from 'node:fs';
@@ -7,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { auditOutput, walk } from '../../scripts/audit-output.mjs';
 import { checkBudgets, cssAcceptance, cssRawLimitFor, measure } from '../../scripts/measure-firstload.mjs';
-import { BUDGETS } from '../../scripts/budgets.mjs';
+import { BUDGETS, MEDIA_PATH_PREFIX } from '../../scripts/budgets.mjs';
 import { CSS_RAW_EXCEPTION, PERF_LCP_ACCEPTANCE } from '../../scripts/acceptance-exceptions.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,8 +23,95 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out');
 
-test('the export exists', () => {
-  assert.ok(existsSync(OUT), 'run npm run build before the output tests');
+const SNAPSHOT = path.join(OUT, 'SNAPSHOT.json');
+
+test('the snapshot exists', () => {
+  assert.ok(existsSync(OUT), 'run npm run build, then node scripts/snapshot-server.mjs, before the output tests');
+  assert.ok(existsSync(SNAPSHOT), 'out/ must be a server-render snapshot (SNAPSHOT.json present), not a stale static export');
+});
+
+// ------------------------------------------ STOREFRONT-READ-001: served contract
+//
+// The snapshot records what `next start` actually answered per route. These are
+// the LOCAL halves of T-S6 / T-S7: the ISR cache header on every storefront
+// document, no cookie on any response, a real 404 for an unknown slug, and no
+// database credential, origin or auth-shaped token in anything a browser loads.
+const snapshotRecord = () => JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
+
+test('every storefront document was served with the 60 s ISR cache header and no cookie; an unknown slug is a real 404', () => {
+  const record = snapshotRecord();
+  assert.deepEqual(record.problems, [], record.problems.join('\n'));
+  // The 28 tenant documents (7 screens x 4 locale roots) carry the ISR contract
+  // (revalidate = 60, expireTime = 360 -> stale-while-revalidate=300); the four
+  // request documents are fixture-only static routes (dynamicParams = false).
+  const tenantDocs = record.documents.filter((d) => /\/s\//.test(d.route) && d.file !== '404.html');
+  assert.equal(tenantDocs.length, 28, 'every tenant document is in the snapshot');
+  for (const d of tenantDocs) {
+    assert.equal(d.status, 200, d.route);
+    assert.match(d.headers['cache-control'] ?? '', /s-maxage=60\b/, `${d.route}: ${d.headers['cache-control']}`);
+    assert.match(d.headers['cache-control'] ?? '', /stale-while-revalidate=300\b/, `${d.route}: ${d.headers['cache-control']}`);
+    assert.equal(d.flightStatus, 200, `${d.route}: its RSC flight payload was served`);
+    assert.ok(d.flightBytes > 0, `${d.route}: the flight payload is not empty`);
+  }
+  const requestDocs = record.documents.filter((d) => /\/r\//.test(d.route));
+  assert.equal(requestDocs.length, 4, 'the fixture request document exists in every locale root (fixture mode)');
+  for (const d of requestDocs) assert.equal(d.status, 200, d.route);
+  for (const d of record.documents) assert.equal(d.headers['set-cookie'], undefined, `${d.route} set a cookie`);
+  const missing = record.documents.find((d) => d.file === '404.html');
+  assert.ok(missing, 'the unknown-slug fetch is recorded');
+  assert.equal(missing.status, 404, 'an unknown slug is a real 404, never a 200 with the Unknown copy');
+  // The server artifact is REPORTED, in its own row - never folded into the static ceiling.
+  assert.ok(Number.isInteger(record.serverBundleBytes) && record.serverBundleBytes > 0, 'the server bundle size is recorded');
+  console.log(`server bundle ${record.serverBundleBytes} B (reported, not budgeted); client static ${record.clientStaticBytes} B`);
+});
+
+test('the largest served document is reported against the PROPOSED per-document ceiling (not enforced until approved)', () => {
+  const record = snapshotRecord();
+  const worst = record.documents.filter((d) => d.status === 200).reduce((a, d) => (d.bytes > a.bytes ? d : a));
+  console.log(`largest document ${worst.route}: ${worst.bytes} B decoded (proposal ${BUDGETS.documentBytesProposal} B - ${worst.bytes <= BUDGETS.documentBytesProposal ? 'within' : 'OVER'})`);
+  assert.ok(Number.isInteger(worst.bytes) && worst.bytes > 0);
+});
+
+/** What a browser must never receive from this site: the read path is server-only. */
+const CREDENTIAL_SHAPES = [
+  ['apikey', /\bapikey\b/i],
+  ['the server env names', /STOREFRONT_SUPABASE_/],
+  ['a PostgREST path', /\/rest\/v1\//],
+  ['an auth path', /\/auth\/v1\//],
+  ['a JWT shape', /eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}/],
+  ['a publishable key shape', /sb_publishable_[A-Za-z0-9_-]{10,}/],
+  ['anonymous sign-in', /signInAnonymously/],
+  ['a supabase client', /createClient\(/],
+];
+
+test('no emitted client chunk, document or flight payload carries a database credential, API path or auth-shaped token', () => {
+  const scripts = outFiles()
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => ({ file: path.relative(OUT, f).replace(/\\/g, '/'), text: readFileSync(f, 'utf8') }));
+  assert.ok(scripts.length > 10, 'the snapshot ships client scripts');
+  const all = [...emittedText(), ...scripts];
+  for (const { file, text } of all) {
+    for (const [label, shape] of CREDENTIAL_SHAPES) {
+      assert.ok(!shape.test(text), `${file}: carries ${label}`);
+    }
+    // The ONLY permitted appearance of the database origin is a published
+    // derivative <img src> under the public storefront-media path.
+    for (const m of text.matchAll(/https?:\/\/[a-z0-9-]+\.supabase\.co[^"'\s<>)]*/gi)) {
+      assert.ok(m[0].startsWith(MEDIA_PATH_PREFIX), `${file}: the database origin appears outside the public media path: ${m[0].slice(0, 80)}`);
+    }
+  }
+});
+
+test('NEGATIVE CONTROL: the credential scan catches each shape it names', () => {
+  const planted = [
+    'x = { apikey: "k" }', 'process.env.STOREFRONT_SUPABASE_URL', 'fetch("/rest/v1/rpc/storefront_menu")', '"/auth/v1/token"',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0', 'sb_publishable_abcdefghijklmnop', 'auth.signInAnonymously()', 'createClient(url, key)',
+  ];
+  for (const [i, sample] of planted.entries()) {
+    assert.ok(CREDENTIAL_SHAPES.some(([, shape]) => shape.test(sample)), `shape ${i} MISSED: ${sample}`);
+  }
+  // and the boundary case it must NOT flag: the plural word is not the header name
+  assert.ok(!CREDENTIAL_SHAPES.some(([, shape]) => shape.test('const key = "apikeys are not this";')), 'the scan must not flag the plural "apikeys"');
 });
 
 test('the output audit reports no problems', () => {
@@ -46,10 +136,11 @@ test('404 exists and does not carry a wrong language', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The SHIPPED export carries the canonical tenant slug and nothing else. Demo
-// scenario documents cost 1,306,346 bytes of a 4 MiB ceiling that may not be
-// raised, so they are emitted only by a local SF_EVIDENCE_ROUTES=1 build.
-// Adding one back to any generateStaticParams turns this list RED.
+// The SNAPSHOT carries the canonical fixture tenant and nothing else (fixture
+// mode; a live tenant is never snapshotted here). Demo scenario slugs resolve
+// only in a local SF_EVIDENCE_ROUTES=1 build, exactly as the static export
+// emitted them; a live tenant slug does not exist in fixture mode. Adding a demo
+// slug to any generateStaticParams turns this list RED.
 const SHIPPED_SLUGS = ['maps-burger'];
 
 // walk() yields { path, symlink, size } records, not strings.
@@ -264,10 +355,10 @@ test('the four request documents carry no request, no status, no TTL, no money a
   const docs = emittedText().filter((d) => /(^|\/)r\/[^/]+\.html$/.test(d.file));
   assert.equal(docs.length, 4);
   const payloads = emittedText().filter((d) => /(^|\/)r\/[^/]+(\/|\.txt$)/.test(d.file));
-  // Four RSC payloads per document (the route's .txt, _full, _tree and the
-  // page segment): an exact count, so a payload the export adds later cannot
-  // slip out of the sweep.
-  assert.equal(payloads.length, docs.length * 4, 'every RSC payload of the request route is in scope');
+  // ONE RSC flight payload per document in the server-render snapshot (the
+  // static export used to write four per route): an exact count, so a payload
+  // the lane adds later cannot slip out of the sweep.
+  assert.equal(payloads.length, docs.length, 'every RSC payload of the request route is in scope');
   for (const { file, text } of [...docs, ...payloads]) {
     if (file.endsWith('.html')) {
       assert.ok(text.includes('data-sf-pending'), `${file}: must ship the pre-hydration frame only`);

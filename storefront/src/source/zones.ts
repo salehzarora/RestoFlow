@@ -10,16 +10,9 @@
  *
  * This is demo/business configuration, not a legal or tariff assertion.
  */
-import type { Minor } from './types';
+import type { DeliveryZone } from './types';
 
-export interface DeliveryZone {
-  readonly id: string;
-  readonly name: string;
-  /** Delivery fee in minor units, or null when the zone is NOT served. */
-  readonly feeMinor: Minor | null;
-  /** Minimum order subtotal in minor units, or null when not served. */
-  readonly minimumMinor: Minor | null;
-}
+export type { DeliveryZone };
 
 export const DELIVERY_ZONES: readonly DeliveryZone[] = [
   { id: 'kafrmanda', name: 'كفر مندا', feeMinor: 1000, minimumMinor: 4000 },

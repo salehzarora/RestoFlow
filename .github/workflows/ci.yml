@@ -251,11 +251,20 @@ jobs:
         working-directory: storefront
         run: node scripts/audit-inputs.mjs
 
-      - name: Storefront — static export
+      # STOREFRONT-READ-001: a SERVER build (no static export). STOREFRONT_SOURCE
+      # is unset here, so the build is the fixture tenant; no database, no
+      # credential and no network is involved in CI. The snapshot lane then
+      # fetches every canonical route from a real `next start` into out/, which
+      # is what every output gate below reads.
+      - name: Storefront — server build
         working-directory: storefront
         run: npm run build
 
-      - name: Storefront — output budgets and emitted lang/dir
+      - name: Storefront — server-render snapshot (real next start -> out/)
+        working-directory: storefront
+        run: node scripts/snapshot-server.mjs
+
+      - name: Storefront — output budgets, served headers and emitted lang/dir
         working-directory: storefront
         run: |
           node scripts/audit-output.mjs
@@ -271,6 +280,19 @@ jobs:
       - name: Storefront — three-project filter proof (real shell, different trees)
         working-directory: storefront
         run: node scripts/filter-proof.mjs
+
+      # STOREFRONT-READ-001: a LIVE-mode build must prerender NO tenant or
+      # request route (every slug resolves at request time; /r/* is a 404).
+      # Network-free and credential-free: the live configuration is read per
+      # request, never at build time. Runs AFTER every fixture-snapshot gate
+      # because it replaces .next; nothing below reads .next.
+      - name: Storefront — live-mode build prerenders nothing tenant-scoped
+        working-directory: storefront
+        env:
+          STOREFRONT_SOURCE: live
+        run: |
+          npm run build
+          node -e "const m=require('./.next/prerender-manifest.json');const bad=Object.keys(m.routes||{}).filter((r)=>r.includes('/s/')||r.includes('/r/'));if(bad.length){console.error('prerendered tenant/request routes in a LIVE build:',bad);process.exit(1)}console.log('live build: no tenant or request route prerendered; routes:',Object.keys(m.routes||{}).join(' '))"
 
       # The browser suite (tests/browser) and the isolated-copy comparison
       # (scripts/isolated-build.mjs) are deliberately LOCAL gates: the first

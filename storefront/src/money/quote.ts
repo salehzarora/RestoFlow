@@ -10,7 +10,7 @@
  *
  *     subtotal = sum(unit(line) * qty)
  *     fee      = service === 'delivery' && zone && zone.fee ? zone.fee : 0
- *     tax      = round((subtotal + fee) * TAX_RATE)
+ *     tax      = round((subtotal + fee) * rate_bp / 10000)
  *     total    = subtotal + fee + tax
  *
  * Note the tax base: it is (subtotal + FEE), not the subtotal alone. Getting
@@ -20,15 +20,20 @@
  * ids and quantities only; every price is resolved here from the fixture, so a
  * tampered or stale payload cannot set its own prices.
  *
- * TAX IS CONFIGURATION, NOT LAW. `TAX_RATE` is a fixture value for this demo
- * tenant. It is passed in rather than imported so no screen can hard-code a
- * rate, and the rendered label must state the configured rate rather than a
- * fixed literal.
+ * TAX IS CONFIGURATION, NOT LAW. The rate is an INTEGER number of basis
+ * points from the tenant's branch (the fixture's TAX_RATE_BP for the demo). It
+ * is passed in rather than imported so no screen can hard-code a rate, and the
+ * rendered label states the configured rate rather than a fixed literal.
+ * Never a float: `round(base * rate_bp / 10000)` on integers (D-007).
+ *
+ * THE GROUPS TRAVEL WITH THE INPUT (STOREFRONT-READ-001): a quote resolves
+ * option deltas against the groups the SAME source served with the items,
+ * never against a fixture import.
  */
 import { assertMinor, lineTotalMinor, subtotalMinor } from './pricing';
-import { groupsFor } from '@/source/modifier-fixture';
-import { isServed, type DeliveryZone } from '@/source/zones';
-import type { CartState, MenuItem, Minor } from '@/source/types';
+import { groupsFor } from '@/source/lookup';
+import { isServed } from '@/source/zones';
+import type { BasisPoints, CartState, DeliveryZone, MenuItem, Minor, ModifierGroup } from '@/source/types';
 
 export type Service = 'pickup' | 'delivery';
 
@@ -56,7 +61,7 @@ export interface Quote {
   /** True only when a real delivery fee applies, so 0 is never shown as "free". */
   readonly feeApplies: boolean;
   readonly taxMinor: Minor;
-  readonly taxRate: number;
+  readonly taxRateBp: BasisPoints;
   readonly totalMinor: Minor;
   readonly service: Service;
   readonly zone: DeliveryZone | null;
@@ -70,9 +75,10 @@ export interface Quote {
 export interface QuoteInput {
   readonly cart: CartState;
   readonly items: readonly MenuItem[];
+  readonly groups: readonly ModifierGroup[];
   readonly service: Service;
   readonly zone: DeliveryZone | null;
-  readonly taxRate: number;
+  readonly taxRateBp: BasisPoints;
 }
 
 /**
@@ -93,11 +99,12 @@ export function quoteKey(input: QuoteInput): string {
       return `${l.itemId}x${l.qty}[${sel}]`;
     })
     .join('|');
-  return `${input.cart.slug}/${input.cart.menuVersion}/${input.service}/${input.zone?.id ?? '-'}/${input.taxRate}/${lines}`;
+  return `${input.cart.slug}/${input.cart.menuVersion}/${input.service}/${input.zone?.id ?? '-'}/${input.taxRateBp}/${lines}`;
 }
 
 export function buildQuote(input: QuoteInput): Quote {
-  const { cart, items, service, zone, taxRate } = input;
+  const { cart, items, groups, service, zone, taxRateBp } = input;
+  assertMinor(taxRateBp, 'tax rate (basis points)');
 
   const lines: QuoteLine[] = [];
   for (const line of cart.lines) {
@@ -105,8 +112,8 @@ export function buildQuote(input: QuoteInput): Quote {
     // A line whose item has left the menu is skipped, never priced from stale
     // data and never silently substituted with another product.
     if (item === undefined) continue;
-    const groups = groupsFor(item.groupIds);
-    const total = lineTotalMinor(item, groups, line.selections, line.qty);
+    const itemGroups = groupsFor(item.groupIds, groups);
+    const total = lineTotalMinor(item, itemGroups, line.selections, line.qty);
     lines.push({
       lineId: line.lineId,
       item,
@@ -121,8 +128,10 @@ export function buildQuote(input: QuoteInput): Quote {
   const feeApplies = service === 'delivery' && served;
   const fee: Minor = feeApplies ? assertMinor(zone!.feeMinor!, 'delivery fee') : 0;
 
-  // The tax base is subtotal PLUS fee - the prototype's rule.
-  const tax: Minor = Math.round((subtotal + fee) * taxRate);
+  // The tax base is subtotal PLUS fee - the prototype's rule - on an integer
+  // basis-point rate: (subtotal + fee) * rate_bp is an exact integer, and the
+  // one division rounds once.
+  const tax: Minor = Math.round(((subtotal + fee) * taxRateBp) / 10000);
   const total: Minor = subtotal + fee + tax;
 
   const minimum = service === 'delivery' && served ? (zone!.minimumMinor ?? 0) : 0;
@@ -143,7 +152,7 @@ export function buildQuote(input: QuoteInput): Quote {
     feeMinor: fee,
     feeApplies,
     taxMinor: tax,
-    taxRate,
+    taxRateBp,
     totalMinor: total,
     service,
     zone,

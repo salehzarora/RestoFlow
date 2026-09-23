@@ -29,8 +29,7 @@ import { storefrontMessages } from '@/i18n/storefront';
 import { checkoutPath, menuPath } from '@/routes/routes';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
-import { MENU_VERSION } from '@/source/menu-fixture';
-import type { HomeView } from '@/source/types';
+import type { StorefrontResolution } from '@/source/types';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
@@ -39,16 +38,16 @@ import { AsideSlot } from '../cart/CartRuntime';
 import { SearchScreen } from './SearchScreen';
 
 export function Search({
-  view,
+  resolution,
   locale,
   slug,
-  preset = 'dark',
 }: {
-  view: HomeView;
+  resolution: StorefrontResolution;
   locale: Locale;
   slug: string;
-  preset?: Preset;
 }) {
+  const { view, groups, zones, taxRateBp, menuVersion } = resolution;
+  const preset: Preset = resolution.preset;
   const m = storefrontMessages(locale);
   const { tenant, categories, items } = view;
   const tokens = buildTheme(preset, {
@@ -67,8 +66,12 @@ export function Search({
           neither canonical search screenshot shows one. */}
       <StorefrontRuntime
         slug={slug}
-        menuVersion={MENU_VERSION}
+        menuVersion={menuVersion}
         items={items}
+        groups={groups}
+        zones={zones}
+        taxRateBp={taxRateBp}
+        orderingEnabled={tenant.service.orderingEnabled}
         locale={locale}
         motion={view.motion}
         state={tenant.service.state}

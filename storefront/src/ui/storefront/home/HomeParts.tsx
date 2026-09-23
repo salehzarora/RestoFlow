@@ -38,16 +38,20 @@ export function CampaignHero({
   return (
     <div className={styles.hero} data-sf-module="hero">
       <div className={styles.heroMedia}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className={styles.heroImg}
-          src={tenant.heroImage}
-          alt=""
-          width={1600}
-          height={1067}
-          decoding="async"
-          fetchPriority="high"
-        />
+        {/* A tenant that published no hero keeps the brand-colour panel with no
+            photo (owner decision D11): the media box stays, the img does not. */}
+        {tenant.heroImage === null ? null : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className={styles.heroImg}
+            src={tenant.heroImage}
+            alt=""
+            width={1600}
+            height={1067}
+            decoding="async"
+            fetchPriority="high"
+          />
+        )}
       </div>
       <div className={styles.heroShade} />
       {/* The motif is unconditional: INTERACTIONS.md:124 and STATE_MATRIX.json:104
@@ -66,10 +70,16 @@ export function CampaignHero({
         <h1 className={styles.heroTitle}>
           <span dir="auto">{title}</span>
         </h1>
-        <div className={styles.heroRule} />
-        <p className={styles.heroSub}>
-          <span dir="auto">{subline}</span>
-        </p>
+        {/* The rule and the subline exist only when there IS a second line:
+            a live tenant's campaign is its tagline alone (D11). */}
+        {subline === '' ? null : (
+          <>
+            <div className={styles.heroRule} />
+            <p className={styles.heroSub}>
+              <span dir="auto">{subline}</span>
+            </p>
+          </>
+        )}
       </div>
       <span className={styles.srOnly}>{fill(m.hours, {})}</span>
     </div>
@@ -213,6 +223,30 @@ export function StateNotice({
               : fill(m.pausedBody, { r: tenant.displayName })}
           </TenantText>
         </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The browse-only notice (STOREFRONT-READ-001, owner decision D5): the menu is
+ * real, requests are not yet accepted here. Informational, no action. It is a
+ * `notice` module like the closed / paused one and precedes it.
+ */
+export function OrderingOffNotice({ m }: { m: StorefrontMessages }) {
+  return (
+    <div
+      className={`${styles.notice} ${styles.noticePaused}`}
+      data-sf-notice="ordering-off"
+      data-sf-module="notice"
+      role="status"
+    >
+      <span className={styles.noticeIcon} aria-hidden="true">
+        <ClockIcon />
+      </span>
+      <span>
+        <span className={styles.noticeTitle}>{m.orderingOfflineTitle}</span>
+        <span className={styles.noticeBody}>{m.orderingOfflineBody}</span>
       </span>
     </div>
   );

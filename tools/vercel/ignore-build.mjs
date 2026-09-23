@@ -15,7 +15,7 @@ const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
 // until this pin is reviewed: that file decides what the build reads.
-export const STOREFRONT_CONFIG_HASH = '4aa433d21dba5868d85a1829de513eb1a7475125ac2c2dba0b287eaab471fd16';
+export const STOREFRONT_CONFIG_HASH = '59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705';
 const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
 // STAGE 7 R3 static-shell module contract: the ONLY bare specifiers storefront
@@ -50,8 +50,10 @@ function storefrontLocal(file) {
     || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
     || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file);
 }
-// Approved static-export deployment values. `out` is Next's export target;
-// the ignore command must invoke THIS engine with the storefront selector.
+// Approved storefront deployment values. STOREFRONT-READ-001: the storefront is
+// a SERVER-RENDERED Next.js app (revalidate + expireTime, no `output: 'export'`);
+// the Next.js preset creates its function, so `functions` stays absent and the
+// ignore command must invoke THIS engine with the storefront selector.
 // HOST-FIX-001: the storefront config declares NO outputDirectory. Vercel's
 // Next.js preset locates the framework build directory (.next) itself and then
 // serves the static export from out/; an explicit outputDirectory in vercel.json
@@ -481,9 +483,13 @@ function tsconfigGraphRoot(entry) {
   return prefix.join('/') || '.';
 }
 
-// Guarded input contract for the static-export storefront, run at BOTH the
-// baseline and the head revision like inspectMarketing. Every failure BUILDs:
-// an input this engine does not understand must never be silently ignored.
+// Guarded input contract for the server-built storefront (STOREFRONT-READ-001:
+// a Next.js server build, no static export), run at BOTH the baseline and the
+// head revision like inspectMarketing. Every failure BUILDs: an input this
+// engine does not understand must never be silently ignored. Consequence: the
+// first push after a contract change (e.g. a STOREFRONT_CONFIG_HASH re-pin)
+// fails the guard at the OLD baseline and builds the storefront by fail-safe
+// exactly once; the next push classifies normally.
 function inspectStorefront(repo, revision) {
   const controls = git(repo, ['ls-tree', '-r', '-z', '--name-only', revision, '--', '.vercelignore', 'storefront']).text.split('\0');
   // 1-2. No checkout override, and no request-time entrypoint: an exported

@@ -43,22 +43,17 @@ import { useRouter } from 'next/navigation';
 import type { CartSummary } from '@/cart/cartModel';
 import { optionSummary } from '@/cart/cartModel';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
-import { formatMoney } from '@/money/format';
+import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { ModifierSelections, ServiceState } from '@/source/types';
 import { TenantText } from '../TenantText';
+import { orderingBlocker, orderingReason } from '../checkout/eligibility';
 import styles from '../home/home.module.css';
 
 export type CartUpdate = (
   lineId: string,
   draft: { qty: number; selections: ModifierSelections; note: string },
 ) => void;
-
-function blockedReason(state: ServiceState, m: StorefrontMessages, opensAt: string): string | null {
-  if (state === 'closed') return fill(m.orderingClosed, { t: opensAt });
-  if (state === 'paused') return m.orderingPaused;
-  return null;
-}
 
 export function LiveCartAside({
   summary,
@@ -68,6 +63,7 @@ export function LiveCartAside({
   remove,
   m,
   state,
+  orderingEnabled,
   opensAt,
   checkoutHref,
 }: {
@@ -83,11 +79,14 @@ export function LiveCartAside({
   remove: ((lineId: string) => void) | null;
   m: StorefrontMessages;
   state: ServiceState;
+  /** False for a browse-only storefront: the CTA states the reason, never navigates. */
+  orderingEnabled: boolean;
   opensAt: string;
   checkoutHref: string;
 }) {
   const router = useRouter();
-  const reason = blockedReason(state, m, opensAt);
+  // The ONE shared reason (eligibility.ts): browse-only first, then closed / paused.
+  const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
   const lines = summary?.lines ?? [];
   const count = summary?.itemCount ?? 0;
 
@@ -219,12 +218,16 @@ export function LiveCartAside({
                   </div>
                 ) : null}
 
-                <div className={styles.totalRow}>
-                  <span>{m.tax}</span>
-                  <span className={styles.ltr} dir="ltr">
-                    {formatMoney(quote.taxMinor)}
-                  </span>
-                </div>
+                {/* No tax row when the tenant charges none (rate 0): a zero line
+                    would read as a tax that was waived, not one that does not exist. */}
+                {quote.taxRateBp === 0 ? null : (
+                  <div className={styles.totalRow}>
+                    <span>{fill(m.tax, { p: formatRateBp(quote.taxRateBp) })}</span>
+                    <span className={styles.ltr} dir="ltr">
+                      {formatMoney(quote.taxMinor)}
+                    </span>
+                  </div>
+                )}
 
                 <div className={`${styles.totalRow} ${styles.totalRowFinal}`}>
                   <span>{m.total}</span>

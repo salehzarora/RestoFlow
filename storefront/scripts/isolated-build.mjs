@@ -3,8 +3,15 @@
 //
 // Copies ONLY the intended storefront build inputs to a disposable directory
 // OUTSIDE the monorepo, installs from the same lockfile with the same Node, and
-// compares the two exports with the pure comparator in compare-exports.mjs.
+// compares the two builds with the pure comparator in compare-exports.mjs.
 // Proves the build needs no sibling source, owner asset or repository context.
+//
+// STOREFRONT-READ-001: the storefront is server-rendered, so the artifact
+// compared is the CLIENT STATIC tree (.next/static: every chunk, stylesheet,
+// font and manifest a browser can load) plus each build's own BUILD_ID, given to
+// the comparator through the same index.html marker a served document carries.
+// The server bundle embeds absolute build paths and is not byte-comparable
+// across directories by design; it is not what this evidence is about.
 //
 // What is NOT copied: the parent repository, .git, owner folders, credentials,
 // node_modules, or any previous build output.
@@ -34,17 +41,23 @@ function walk(dir, base = dir) {
   return found.sort();
 }
 
-/** Read an export into the comparator's inventory shape. */
-function readExport(outDir) {
+/** Read a build's client static tree into the comparator's inventory shape. */
+function readBuild(nextDir) {
   const files = new Map();
-  for (const rel of walk(outDir)) {
-    const abs = path.join(outDir, rel);
+  const staticDir = path.join(nextDir, 'static');
+  for (const rel of walk(staticDir)) {
+    const abs = path.join(staticDir, rel);
     const raw = readFileSync(abs);
-    files.set(rel, {
+    files.set(`_next/static/${rel}`, {
       bytes: statSync(abs).size,
       content: TEXT.test(rel) ? raw.toString('utf8') : raw,
     });
   }
+  // The build id, in the exact form a served document references it, so the
+  // comparator's ONE permitted normalisation (build-ID literals) applies.
+  const buildId = readFileSync(path.join(nextDir, 'BUILD_ID'), 'utf8').trim();
+  const marker = `<script src="/_next/static/${buildId}/_buildManifest.js"></script>`;
+  files.set('index.html', { bytes: Buffer.byteLength(marker), content: marker });
   return files;
 }
 
@@ -68,14 +81,14 @@ try {
   execFileSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: appDir, stdio: 'inherit', shell: process.platform === 'win32' });
   execFileSync('npm', ['run', 'build'], { cwd: appDir, stdio: 'inherit', shell: process.platform === 'win32' });
 
-  const worktreeOut = path.join(STOREFRONT, 'out');
-  const isolatedOut = path.join(appDir, 'out');
-  if (!existsSync(worktreeOut)) problems.push('worktree out/ missing - build it first');
-  if (!existsSync(isolatedOut)) problems.push('isolated out/ missing');
+  const worktreeNext = path.join(STOREFRONT, '.next');
+  const isolatedNext = path.join(appDir, '.next');
+  if (!existsSync(path.join(worktreeNext, 'BUILD_ID'))) problems.push('worktree .next/ missing - build it first');
+  if (!existsSync(path.join(isolatedNext, 'BUILD_ID'))) problems.push('isolated .next/ missing');
 
   if (!problems.length) {
-    const a = readExport(worktreeOut);
-    const b = readExport(isolatedOut);
+    const a = readBuild(worktreeNext);
+    const b = readBuild(isolatedNext);
 
     // RAW first: how many files differ byte-for-byte, before any normalisation.
     let rawDiffering = 0;
@@ -107,10 +120,11 @@ try {
     process.exitCode = 1;
   } else {
     console.log('\nISOLATED BUILD COMPARISON PASSED');
-    console.log('Scope of this evidence: the CURRENT shell builds identically without sibling');
-    console.log('source or owner assets. It is not a claim about future features, and it is');
-    console.log('NOT hosted routing or header verification - vercel.json behaviour is proven');
-    console.log('separately, and only against the local emulation until the hosted gate.');
+    console.log('Scope of this evidence: the CURRENT storefront builds an identical client');
+    console.log('static tree without sibling source or owner assets. It is not a claim about');
+    console.log('future features, and it is NOT hosted routing or header verification -');
+    console.log('vercel.json behaviour is proven separately, and only against the local');
+    console.log('emulation until the hosted gate.');
   }
 } finally {
   rmSync(isolated, { recursive: true, force: true });

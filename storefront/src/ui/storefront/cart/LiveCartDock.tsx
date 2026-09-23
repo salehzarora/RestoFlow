@@ -30,16 +30,11 @@ import { formatMoney } from '@/money/format';
 import type { CartSummary } from '@/cart/cartModel';
 import type { MotionMode, ServiceState } from '@/source/types';
 import { ChevronIcon } from '../icons';
+import { orderingBlocker, orderingReason } from '../checkout/eligibility';
 import styles from '../home/home.module.css';
 
 function countLabel(count: number, m: StorefrontMessages): string {
   return count === 1 ? m.item : fill(m.items, { n: String(count) });
-}
-
-function blockedReason(state: ServiceState, m: StorefrontMessages, opensAt: string): string | null {
-  if (state === 'closed') return fill(m.orderingClosed, { t: opensAt });
-  if (state === 'paused') return m.orderingPaused;
-  return null;
 }
 
 export function LiveCartDock({
@@ -47,6 +42,7 @@ export function LiveCartDock({
   m,
   motion,
   state,
+  orderingEnabled,
   opensAt,
   cartHref,
 }: {
@@ -54,6 +50,8 @@ export function LiveCartDock({
   m: StorefrontMessages;
   motion: MotionMode;
   state: ServiceState;
+  /** False for a browse-only storefront: the CTA states the reason, never links. */
+  orderingEnabled: boolean;
   opensAt: string;
   cartHref: string;
 }) {
@@ -76,7 +74,8 @@ export function LiveCartDock({
 
   // Hidden while the cart is empty, exactly as the design specifies.
   if (count === 0) return null;
-  const reason = blockedReason(state, m, opensAt);
+  // The ONE shared reason (eligibility.ts): browse-only first, then closed / paused.
+  const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
 
   return (
     <div className={styles.dock} data-sf-dock="live">

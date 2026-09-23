@@ -32,8 +32,7 @@ import {
 } from './validation';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import type { Quote } from '@/money/quote';
-import { DELIVERY_ZONES } from '@/source/zones';
-import type { MotionMode } from '@/source/types';
+import type { DeliveryZone, MotionMode } from '@/source/types';
 import { CheckIcon, ChevronIcon, DeliveryIcon, PinIcon, StoreIcon } from '../icons';
 import { Banner, Bidi, FooterCta, Interpolate, Money, StepHeader } from './flowParts';
 import s from './flow.module.css';
@@ -53,6 +52,8 @@ export interface FlowTenant {
   readonly opensAt: string;
   readonly pickupEnabled: boolean;
   readonly deliveryEnabled: boolean;
+  /** False for a browse-only storefront (STOREFRONT-READ-001). */
+  readonly orderingEnabled: boolean;
 }
 
 function ServiceCard({
@@ -111,6 +112,7 @@ export function DetailsScreen({
   set,
   quote,
   tenant,
+  zones,
   motion,
   backHref,
   pending,
@@ -123,6 +125,8 @@ export function DetailsScreen({
   set: (patch: Partial<CheckoutDraft>) => void;
   quote: Quote;
   tenant: FlowTenant;
+  /** The zones the route's source served (the fixture's; empty for a live tenant). */
+  zones: readonly DeliveryZone[];
   motion: MotionMode;
   backHref: string;
   /** True while the quote for the CURRENT cart has not arrived. */
@@ -323,7 +327,7 @@ export function DetailsScreen({
                     The list keeps the page direction; a <select> gives no
                     inner run to isolate.
                   */}
-                  {DELIVERY_ZONES.map((z) => (
+                  {zones.map((z) => (
                     <option key={z.id} value={z.id}>
                       {z.name}
                     </option>

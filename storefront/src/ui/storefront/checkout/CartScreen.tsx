@@ -170,6 +170,7 @@ export function CartScreen({
   quote,
   menuHref,
   state,
+  orderingEnabled,
   opensAt,
   motion,
   notice,
@@ -182,6 +183,8 @@ export function CartScreen({
   quote: Quote;
   menuHref: string;
   state: ServiceState;
+  /** False for a browse-only storefront: the CTA states why and a notice explains. */
+  orderingEnabled: boolean;
   opensAt: string;
   motion: MotionMode;
   notice: CartNotice | null;
@@ -192,8 +195,9 @@ export function CartScreen({
 }) {
   const [announcement, setAnnouncement] = useState('');
   const lines = cart.summary.lines;
-  // The one shared reason: exactly 'open' proceeds, anything else states why.
-  const reason = orderingReason(orderingBlocker(state), m, opensAt);
+  // The one shared reason: browse-only first, then exactly 'open' proceeds,
+  // anything else states why.
+  const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
 
   const setQty = useCallback(
     (line: ResolvedCartLine, next: number) => {
@@ -219,6 +223,19 @@ export function CartScreen({
       <CartHeader m={m} backHref={menuHref} count={cart.summary.itemCount} />
 
       <div className={s.body}>
+        {/* STOREFRONT-READ-001: the browse-only notice, the one new string family
+            (owner decision D5). Informational, no action - the lines below stay. */}
+        {orderingEnabled ? null : (
+          <Banner
+            tone="info"
+            alert={false}
+            smallIcon
+            icon={<InfoIcon />}
+            title={m.orderingOfflineTitle}
+            body={m.orderingOfflineBody}
+            testId="ordering-off"
+          />
+        )}
         {notice === null ? null : (
           <Banner
             tone={notice.kind === 'price' ? 'info' : 'warn'}

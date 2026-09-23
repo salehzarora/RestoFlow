@@ -54,16 +54,19 @@ export function Intro({
   return (
     <div className={`${styles.screen} ${MOTION_CLASS[motion]}`}>
       <div className={styles.media}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className={styles.mediaImg}
-          src={tenant.heroImage}
-          alt=""
-          width={1600}
-          height={1067}
-          decoding="async"
-          fetchPriority="high"
-        />
+        {/* No hero published -> the brand-colour canvas alone (D11). */}
+        {tenant.heroImage === null ? null : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className={styles.mediaImg}
+            src={tenant.heroImage}
+            alt=""
+            width={1600}
+            height={1067}
+            decoding="async"
+            fetchPriority="high"
+          />
+        )}
       </div>
       <div className={styles.vignette} />
 

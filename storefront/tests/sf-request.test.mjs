@@ -14,7 +14,8 @@ const { isValidRef } = await import('../src/theme/sanitize.ts');
 const fixture = await import('../src/source/request-fixture.ts');
 const { DEMO_REQUEST_REF, DEMO_DISPLAY_CODE, DEMO_REQUEST_SLUG } = await import('../src/source/request-ref.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
-const { MENU_ITEMS, MENU_VERSION, TAX_RATE } = await import('../src/source/menu-fixture.ts');
+const { MENU_ITEMS, MENU_VERSION, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
+const { MODIFIER_GROUPS } = await import('../src/source/modifier-fixture.ts');
 const { findZone } = await import('../src/source/zones.ts');
 const { buildTheme, AA } = await import('../src/theme/buildTheme.ts');
 const { contrast } = await import('../src/theme/contrast.ts');
@@ -172,7 +173,7 @@ test('the fixture source never answers synchronously, prices through the money a
   // The demo request is the prototype's small seed, delivered to Kafr Manda: 141.60.
   const quote = buildQuote({
     cart: { schema: 1, slug: DEMO_REQUEST_SLUG, menuVersion: MENU_VERSION, lines: snap.lines.map((l, i) => ({ lineId: `q${i}`, itemId: l.itemId, qty: l.qty, selections: l.selections, note: '' })) },
-    items: MENU_ITEMS, service: 'delivery', zone: findZone('kafrmanda'), taxRate: TAX_RATE,
+    items: MENU_ITEMS, groups: MODIFIER_GROUPS, service: 'delivery', zone: findZone('kafrmanda'), taxRateBp: TAX_RATE_BP,
   });
   assert.equal(snap.totalMinor, quote.totalMinor);
   assert.equal(snap.totalMinor, 14160);
