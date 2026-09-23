@@ -1,0 +1,91 @@
+/*
+ * The locale-root placeholder's styles, moved here from app/globals.css so
+ * they are a route-scoped import: the Placeholder is the only importer, and a
+ * storefront document never links this file. Rules are verbatim; only the
+ * class names are now module-scoped (hashed), which the shell spec selects by
+ * `[class*="langLink"]`.
+ */
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: var(--max-width);
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.brand {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  line-height: 1.25;
+}
+
+.tagline {
+  margin: 0 0 20px;
+  color: var(--color-muted);
+}
+
+.status {
+  margin: 0 0 28px;
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+}
+
+.langs {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 20px;
+}
+
+.langList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.langLink {
+  display: inline-block;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.langLink[aria-current='page'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.langLink:hover,
+.langLink:focus-visible {
+  border-color: var(--color-focus);
+}
+
+.langLink:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}

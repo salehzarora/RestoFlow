@@ -1,0 +1,150 @@
+/*
+ * Storefront foundations: non-colour design tokens, base rules and the shared
+ * keyframe set from TOKENS.json.
+ *
+ * COLOUR tokens are NOT declared here. They are derived per tenant by
+ * src/theme/buildTheme.ts and applied to this element with CSSOM
+ * setProperty (proven compatible with `style-src 'self'` by PG-1/U-8).
+ * Neutral fallbacks below keep the first paint legible before that runs, and
+ * they are BIZBOT platform colours, never a tenant's.
+ */
+
+.root {
+  /* --- neutral first-paint fallbacks (platform, not tenant) --- */
+  --bg: #101816;
+  --sf: #172320;
+  --sf2: #1f302b;
+  --tx: #fff4e6;
+  --tx2: #d8cec2;
+  --tx3: #a79c90;
+  --hair: rgba(255, 244, 230, 0.1);
+  --hair2: rgba(255, 244, 230, 0.2);
+  --hero: #13322a;
+  --onhero: #ffffff;
+  --onhero2: rgba(255, 255, 255, 0.78);
+  --acc: #e07b2c;
+  --onacc: #0b1512;
+  --acct: #e07b2c;
+  --ring: #e07b2c;
+  --accA: rgba(224, 123, 44, 0.16);
+  --accB: rgba(224, 123, 44, 0.45);
+  --ok: #43e3ac;
+  --warn: #fbbf24;
+  --warnbg: #78350f;
+  --bad: #f87171;
+  --badbg: #7f1d1d;
+  /* PX-3: #f87171 on #7f1d1d is below AA, so danger TEXT is walked lighter.
+     buildTheme recomputes all of these per tenant; these are first-paint only. */
+  --badText: #fca5a5;
+  --onBad: #0b1512;
+  --info: #93c5fd;
+  --infobg: #1e3a8a;
+  /* The accent SELECTION bed, and the accent ink that is legible on it. */
+  --accs: #3b3322;
+  --accOnSelection: #e89a58;
+  --cta: linear-gradient(135deg, #e5904e 0%, #e07b2c 52%, #b86524 100%);
+  --ctaSh: 0 12px 28px -8px rgba(224, 123, 44, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --glow: 0 0 14px rgba(224, 123, 44, 0.55);
+  --heroGlow: radial-gradient(90% 70% at 50% 108%, rgba(224, 123, 44, 0.4), transparent 72%);
+  --glass: rgba(19, 50, 42, 0.74); /* NEUTRAL_PRIMARY #13322a at 74% */
+  --glassLine: rgba(255, 255, 255, 0.14);
+
+  /* --- radii --- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-control: 12px;
+  --r-card: 14px;
+  --r-surface: 18px;
+  --r-module: 20px;
+  --r-story: 24px;
+  --r-pill: 999px;
+
+  /* --- spacing --- */
+  --gutter: 16px;
+
+  /* --- motion (TOKENS.json -> motion) --- */
+  --d-micro: 120ms;
+  --d-standard: 200ms;
+  --d-emphasis: 300ms;
+  --d-reveal: 460ms;
+  --d-pop: 560ms;
+  --d-sheen: 4200ms;
+  --d-halo: 2600ms;
+  --d-ken: 24000ms;
+  --e-standard: cubic-bezier(0.22, 0.9, 0.26, 1);
+  --e-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --e-sheen: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- type --- */
+  /* Three script families, one per subset file (src/fonts/README.md), walked
+     per character by their unicode-range; then the system list. The fallback
+     inside each var() matters: without it, an undefined variable makes every
+     `font:` shorthand that references it INVALID and the browser drops the
+     whole declaration - and it must be a family NO device has, so a missing
+     variable is skipped rather than catching every character before the next
+     Rubik subset.
+
+     NO `local()` FALLBACK FACE. next/font's metric-adjusted Arial face (and a
+     Segoe UI one tried in the correction pass) each cost ~150 ms of the FIRST
+     layout on the lab's 4x-throttled Chromium - `local()` matching walks the
+     installed font collection - for a benefit the fixed line-heights of this
+     design do not need: the swap shift measured 0 without them (G-FONTS, the
+     lab protocol). Recorded in PERF_PROTOCOL_AND_TRACE.md. */
+  --font: var(--sf-font-latin, sf-unset), var(--sf-font-arabic, sf-unset), var(--sf-font-hebrew, sf-unset),
+    'Segoe UI', Tahoma, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Focus: 3px ring at 2px offset on every interactive element. */
+.root :focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* LTR islands inside RTL text: prices, codes, phones, times. */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * KEYFRAMES LIVE WITH THEIR CONSUMERS, NOT HERE.
+ *
+ * CSS Modules scope keyframe names per file. Nine were defined here and
+ * consumed only from Intro.module.css, LanguageMenu.module.css and
+ * home.module.css - so every one of those references resolved to an undefined
+ * name and applied no animation at all. Each consuming module now defines what
+ * it uses. `sfPulse` was consumed by nothing anywhere and is gone.
+ *
+ * The reduced-motion override below still applies to all of them: it is a
+ * `.root *` DESCENDANT selector, so it reaches elements whatever module their
+ * classes and animations come from.
+ */
+
+/*
+ * prefers-reduced-motion overrides all three authored motion modes to a single
+ * frame, exactly as TOKENS.json specifies.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+  }
+}

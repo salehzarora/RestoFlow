@@ -1,0 +1,1253 @@
+/*
+ * PHASE E - the received screen, the status screen and the cancel sheet.
+ *
+ * Every measurement is transcribed from the approved prototype
+ * (prototype/Storefront.dc.html :513-:576) and cross-checked against the
+ * received__* and status__* captures; the line numbers in the comments are
+ * the prototype's own. Tone colours are the theme's tokens, never a literal.
+ *
+ * KEYFRAMES ARE DEFINED AT THE BOTTOM OF THIS FILE. CSS Modules scope
+ * @keyframes per file, so nothing here may borrow a name from another module.
+ *
+ * NO INLINE STYLE, NO PHYSICAL PROPERTIES - the same rules as every other
+ * storefront stylesheet.
+ *
+ * Motion: the entrance stagger (fade / rise / pop / draw) runs in every mode,
+ * as the home and flow surfaces do; the decorative rings, halo and sheen run
+ * only under `.motionFull` (prototype `fx`, :774). prefers-reduced-motion
+ * collapses everything to one frame through the root rule, and the entrance
+ * keyframes END visible, so no truth line can be hidden by a stopped
+ * animation.
+ */
+
+/* No min-height of its own: the root is the 100dvh column and the screen
+   fills it with flex. A second 100dvh here would add the demo disclosure's
+   height on top and make every request view scroll by exactly that much. */
+.screen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  animation: sfFade 250ms both;
+}
+
+/* The pre-hydration frame: chrome only, nothing that belongs to anyone. */
+.pendingBody {
+  flex: 1;
+}
+
+/* ================================================================ received */
+
+/* :516 - brand hero, 32px bottom radius, centred column, 10px gaps. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 28px 20px 28px;
+  background: var(--hero);
+  color: var(--onhero);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-end-start-radius: 32px;
+  border-end-end-radius: 32px;
+  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 0.7);
+}
+
+/* :517 - the tenant's hero glow, :518 - a soft white wash. */
+.heroGlow {
+  position: absolute;
+  inset: 0;
+  background: var(--heroGlow);
+  pointer-events: none;
+}
+
+.heroWash {
+  position: absolute;
+  inset-inline: -20%;
+  inset-block-start: -45%;
+  height: 110%;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.1), transparent 70%);
+  pointer-events: none;
+}
+
+/* :519 - 100px stage for the disc and its rings. */
+.discStage {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  display: grid;
+  place-items: center;
+  margin-block-start: 6px;
+}
+
+/* :520 - two expanding rings, three cycles each, only when motion is on. */
+.ring {
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  border: 2px solid var(--acc);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.motionFull .ring {
+  animation: sfRing 1800ms cubic-bezier(0.2, 0.7, 0.3, 1) 300ms 3;
+}
+
+.motionFull .ringLate {
+  animation-delay: 900ms;
+}
+
+/* :521 - 78px accent disc with the drawn check. */
+.disc {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+  background: var(--cta);
+  color: var(--onacc);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 0 0 9px var(--accA),
+    0 16px 36px -10px var(--accB),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: sfPop 550ms var(--e-standard) both;
+}
+
+.disc svg {
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.disc path {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: sfDraw 500ms ease-out 400ms forwards;
+}
+
+/* :523 - 24/800, then :524 code pill, :525 body; staggered 150 -> 350ms. */
+.heroTitle {
+  position: relative;
+  margin: 0;
+  font: 800 24px / 1.15 var(--font);
+  color: inherit;
+  animation: sfUp 450ms var(--e-standard) 150ms both;
+}
+
+.codePill {
+  position: relative;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: var(--accA);
+  color: var(--onhero);
+  box-shadow: inset 0 0 0 1px var(--accB);
+  text-shadow: var(--glow);
+  font: 800 13.5px / 1.2 var(--font);
+  letter-spacing: 0.04em;
+  animation: sfUp 450ms var(--e-standard) 250ms both;
+}
+
+.heroBody {
+  position: relative;
+  margin: 0;
+  max-width: 320px;
+  font: 400 14px / 1.45 var(--font);
+  color: var(--onhero2);
+  animation: sfUp 450ms var(--e-standard) 350ms both;
+}
+
+/* :527 - the content column. */
+.column {
+  padding: 16px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* :528 - the branded summary card. */
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--hair);
+  background: linear-gradient(180deg, var(--sf), var(--sf2));
+  box-shadow: 0 16px 36px -24px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  animation: sfUp 450ms var(--e-standard) 400ms both;
+}
+
+/* :529 - logo, name, service · payment, small code pill. */
+.summaryHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-block-end: 1px solid var(--hair);
+}
+
+.logo {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--acc);
+  box-shadow: 0 0 0 4px var(--accA);
+}
+
+.logoInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+}
+
+.logoInner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logoInitial {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--cta);
+  color: var(--onacc);
+  font: 900 17px / 1 var(--font);
+}
+
+.summaryText {
+  flex: 1;
+  min-width: 0;
+}
+
+.summaryName {
+  font: 800 15px / 1.3 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summarySub {
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+.codeSmall {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accA);
+  color: var(--acct);
+  text-shadow: var(--glow);
+  font: 800 12.5px / 1.2 var(--font);
+}
+
+/* :530 - the lines; :571 the status variant with 10px rows. */
+.lines {
+  padding: 4px 14px;
+  font-size: 13.5px;
+}
+
+.lineRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 0;
+  border-block-end: 1px solid var(--hair);
+}
+
+/* On status the summary CONTAINER carries the :571 `4px 14px`; the list
+   inside it carries none, or the rows would sit 8px / 28px in. */
+.linesStatus {
+  padding: 0;
+}
+
+.linesStatus .lineRow {
+  padding: 10px 0;
+}
+
+.lineText {
+  min-width: 0;
+}
+
+.lineQty {
+  font-weight: 800;
+}
+
+.lineTotal {
+  flex: none;
+  font-weight: 700;
+}
+
+/* :531 - total in the accent ink; :571 total · cash on status. */
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  font: 800 15px / 1.3 var(--font);
+}
+
+.linesStatus .totalRow {
+  padding: 10px 0;
+  font-size: 13.5px;
+}
+
+.totalAccent {
+  color: var(--acct);
+  text-shadow: var(--glow);
+}
+
+/* :533-:536 - the WhatsApp CTA with its halo and sheen. */
+.ctaWrap {
+  position: relative;
+  animation: sfUp 450ms var(--e-standard) 450ms both;
+}
+
+.halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  box-shadow: 0 0 0 5px var(--accB);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.motionFull .halo {
+  animation: sfHalo 2200ms cubic-bezier(0.2, 0.6, 0.3, 1) 1100ms 3;
+}
+
+.waCta {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 58px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--cta);
+  color: var(--onacc);
+  box-shadow: var(--ctaSh);
+  font: 800 16px / 1 var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition:
+    transform 120ms,
+    filter 200ms;
+}
+
+.waCta:hover {
+  filter: brightness(1.06);
+}
+
+.waCta:active {
+  transform: scale(0.985);
+}
+
+.sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.26) 50%, transparent 65%);
+  pointer-events: none;
+  display: none;
+}
+
+.motionFull .sheen {
+  display: block;
+  animation: sfSheen var(--d-sheen) var(--e-sheen) 1800ms infinite;
+}
+
+.waGlyph {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  flex: none;
+}
+
+.waLabel {
+  position: relative;
+}
+
+/* :537 - the secondary "track status" button. */
+.secondary {
+  height: 50px;
+  border-radius: 16px;
+  border: 1.5px solid var(--hair2);
+  background: transparent;
+  color: inherit;
+  font: 700 15px / 1 var(--font);
+  cursor: pointer;
+  transition:
+    background 200ms,
+    transform 120ms;
+  animation: sfUp 450ms var(--e-standard) 550ms both;
+}
+
+.secondary:hover {
+  background: var(--sf2);
+}
+
+.secondary:active {
+  transform: scale(0.985);
+}
+
+/* :539 - "WhatsApp didn't open?" warning block. */
+.fallback {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--warnbg);
+  color: var(--warn);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fallbackTitle {
+  font: 800 14px / 1.3 var(--font);
+}
+
+.fallbackRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fallbackBtn {
+  position: relative;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 13px / 1 var(--font);
+  cursor: pointer;
+}
+
+/* The 36px visual keeps its size; the hit area reaches 44px (PACKET PX-6),
+   the same overlay the inline copy control uses. */
+.fallbackBtn::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+/* :541 - the message preview and its copy control. */
+.preview {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+  animation: sfUp 450ms var(--e-standard) 650ms both;
+}
+
+.previewHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 6px;
+  font: 700 12px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+/*
+ * The 30px copy control keeps its approved painted size; the 44px minimum
+ * target comes from an invisible overlay (PACKET PX-6), the same rule the
+ * aside steppers use.
+ */
+.copyBtn {
+  position: relative;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sf2);
+  color: var(--acct);
+  font: 700 12px / 1 var(--font);
+  cursor: pointer;
+}
+
+.copyBtn::after {
+  content: '';
+  position: absolute;
+  inset-inline: -4px;
+  inset-block-start: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+/*
+ * The message is composed in the RESTAURANT's language and keeps that
+ * direction whatever the page's is (:541 `dir="rtl"`; PACKET:713).
+ */
+.messageText {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 13px / 1.5 var(--font);
+  color: var(--tx2);
+  text-align: start;
+}
+
+/* ================================================================== status */
+
+/* :549 - sticky header on --sf. */
+.head {
+  flex: none;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 8px;
+  background: var(--sf);
+  border-block-end: 1px solid var(--hair);
+}
+
+.headLogo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 1.5px;
+  background: var(--acc);
+}
+
+.headLogo .logoInitial {
+  font-size: 15px;
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.headCode {
+  font: 800 16px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+/* The code is an LTR island INSIDE a block that keeps the page direction, so
+   it sits at the start edge beside the name instead of jumping across. */
+.headCode .ltr {
+  display: inline-block;
+}
+
+.headSub {
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+/* :553 - the scrolling body. */
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* :554 - the status hero card; tone classes below. */
+.card {
+  padding: 16px;
+  border-radius: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border: 1px solid transparent;
+}
+
+.cardIcon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.cardIcon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cardText {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font: 800 18px / 1.2 var(--font);
+}
+
+.cardBody {
+  margin: 4px 0 0;
+  font: 400 13.5px / 1.45 var(--font);
+  /* The prototype dims the body to .92 (:556). The danger ink is walked to
+     AA at full opacity (PX-3a); composited at .92 it drops below 4.5:1 in the
+     shipped dark preset, so the body stays at 1 and keeps the walked pair. */
+}
+
+/* :556 - the TTL pill. Its text ticks every second, so it lives OUTSIDE the
+   live region (PACKET PX-5c) and is an LTR island (CONTENT:221). */
+.ttl {
+  margin-block-start: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.12);
+  font: 700 13px / 1.2 var(--font);
+}
+
+.ttl svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* Tones (:839 `toneCss`, COMPONENT_INVENTORY.md:164). The danger ink is the
+   token walked to AA on its bed, never the raw --bad (PACKET PX-3a). */
+.toneInfo {
+  background: var(--infobg);
+  color: var(--info);
+}
+
+.toneInfo .cardIcon {
+  background: var(--info);
+  color: var(--infobg);
+}
+
+.toneWarn {
+  background: var(--warnbg);
+  color: var(--warn);
+}
+
+.toneWarn .cardIcon {
+  background: var(--warn);
+  color: var(--warnbg);
+}
+
+.toneOk {
+  background: var(--okbg);
+  color: var(--ok);
+}
+
+.toneOk .cardIcon {
+  background: var(--ok);
+  color: var(--okbg);
+}
+
+.toneBad {
+  background: var(--badbg);
+  color: var(--badText);
+}
+
+.toneBad .cardIcon {
+  background: var(--bad);
+  color: var(--badbg);
+}
+
+.toneNeutral {
+  background: var(--sf2);
+  color: var(--tx);
+}
+
+.toneNeutral .cardIcon {
+  background: var(--sf);
+  color: var(--tx2);
+}
+
+/* :558 - the vertical timeline. An ordered list; vertical so it never mirrors. */
+.timeline {
+  margin: 0;
+  padding: 6px 16px;
+  list-style: none;
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+}
+
+.node {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 56px;
+}
+
+.nodeRail {
+  flex: none;
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nodeDot {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-block-start: 14px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: transparent;
+  border: 2px solid var(--hair2);
+  transition:
+    background 200ms,
+    border-color 200ms,
+    box-shadow 200ms;
+}
+
+.nodeDot svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* INTERACTIONS.md:110 - the connector fills over 300ms. */
+.nodeLine {
+  flex: 1;
+  width: 2px;
+  min-height: 12px;
+  margin-block-start: 4px;
+  background: var(--hair2);
+  transition: background 300ms;
+}
+
+.nodeText {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 0 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+  border-block-end: 1px solid var(--hair);
+}
+
+.node:last-child .nodeText {
+  border-block-end: 0;
+}
+
+/* :846 hasLine: !last - no connector below the last node. */
+.node:last-child .nodeLine {
+  display: none;
+}
+
+.nodeLabel {
+  display: block;
+  font: 500 15px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+.nodeSub {
+  display: block;
+  margin-block-start: 2px;
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+.nodeTime {
+  flex: none;
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+.nodeDone .nodeDot {
+  background: var(--ok);
+  color: var(--okbg);
+  border-color: var(--ok);
+}
+
+.nodeDone .nodeLine {
+  background: var(--ok);
+}
+
+.nodeDone .nodeLabel {
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.nodeCurrent .nodeDot {
+  background: var(--cta);
+  color: var(--onacc);
+  border-color: var(--acc);
+  box-shadow:
+    0 0 0 4px var(--accA),
+    0 0 18px var(--accB);
+}
+
+.nodeCurrent .nodeLabel {
+  font-weight: 800;
+  color: var(--tx);
+  text-shadow: var(--glow);
+}
+
+.nodeTerminal .nodeLabel {
+  font-weight: 800;
+  color: var(--tx);
+}
+
+/* The terminal node takes the hero tone's icon colours (:845-:846). */
+.nodeTerminal.toneBad .nodeDot {
+  background: var(--bad);
+  color: var(--badbg);
+  border-color: var(--bad);
+}
+
+.nodeTerminal.toneWarn .nodeDot {
+  background: var(--warn);
+  color: var(--warnbg);
+  border-color: var(--warn);
+}
+
+.nodeTerminal.toneNeutral .nodeDot {
+  background: var(--sf);
+  color: var(--tx2);
+  border-color: var(--sf);
+}
+
+/* A terminal node carries no tone background of its own. */
+.nodeTerminal {
+  background: transparent;
+  color: inherit;
+}
+
+/* :566-:569 - the action column. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chatCta {
+  position: relative;
+  overflow: hidden;
+  height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--cta);
+  color: var(--onacc);
+  box-shadow: var(--ctaSh);
+  font: 800 15px / 1 var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    transform 120ms,
+    filter 200ms;
+}
+
+.chatCta:hover {
+  filter: brightness(1.06);
+}
+
+.chatCta:active {
+  transform: scale(0.985);
+}
+
+.chatCta .waGlyph {
+  width: 20px;
+  height: 20px;
+}
+
+/* :567 - the danger ink on the page surface (not on the danger bed, so the
+   PX-3a walk does not apply here). */
+.cancelBtn {
+  height: 48px;
+  border-radius: 14px;
+  border: 1.5px solid var(--hair2);
+  background: transparent;
+  color: var(--bad);
+  font: 700 15px / 1 var(--font);
+  cursor: pointer;
+}
+
+.chatOutline {
+  height: 48px;
+  border-radius: 14px;
+  border: 1.5px solid var(--hair2);
+  background: transparent;
+  color: inherit;
+  font: 700 15px / 1 var(--font);
+  cursor: pointer;
+  transition:
+    background 200ms,
+    transform 120ms;
+}
+
+.chatOutline:hover {
+  background: var(--sf2);
+}
+
+.chatOutline:active {
+  transform: scale(0.985);
+}
+
+.againCta {
+  height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--cta);
+  color: var(--onacc);
+  box-shadow: var(--ctaSh);
+  font: 800 15px / 1 var(--font);
+  cursor: pointer;
+  transition:
+    transform 120ms,
+    filter 200ms;
+}
+
+.againCta:hover {
+  filter: brightness(1.06);
+}
+
+.againCta:active {
+  transform: scale(0.985);
+}
+
+/* :571 - the order summary on status. */
+.statusSummary {
+  padding: 4px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+  font-size: 13.5px;
+}
+
+/* ============================================================ cancel sheet */
+
+/* :574 - full-viewport overlay, sheet anchored at the block end. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: var(--scrim);
+  animation: sfFade 200ms both;
+  cursor: default;
+}
+
+/* :575 - 24px top radius, 560 max, rises over 300ms. */
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 16px 20px;
+  border-start-start-radius: 24px;
+  border-start-end-radius: 24px;
+  background: var(--sf);
+  color: var(--tx);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: sfRise 300ms var(--e-standard) both;
+}
+
+.handle {
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 6px;
+  border-radius: 2px;
+  background: var(--hair2);
+}
+
+.sheetTitle {
+  margin: 0;
+  font: 800 19px / 1.25 var(--font);
+}
+
+.sheetBody {
+  margin: 0;
+  font: 400 14px / 1.45 var(--font);
+  color: var(--tx2);
+}
+
+.sheetActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-block-start: 8px;
+}
+
+.keepBtn {
+  height: 50px;
+  border-radius: 14px;
+  border: 1.5px solid var(--hair2);
+  background: transparent;
+  color: inherit;
+  font: 700 15px / 1 var(--font);
+  cursor: pointer;
+  transition:
+    background 200ms,
+    transform 120ms;
+}
+
+.keepBtn:hover {
+  background: var(--sf2);
+}
+
+.keepBtn:active {
+  transform: scale(0.985);
+}
+
+/* "Yes, cancel": the danger fill with the ink derived on it (PACKET PX-3b),
+   not the prototype's literal white. */
+.yesBtn {
+  height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bad);
+  color: var(--onBad);
+  font: 800 15px / 1 var(--font);
+  cursor: pointer;
+}
+
+.yesBtn[aria-disabled='true'],
+.cancelBtn[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ============================================================== disclosure */
+
+/*
+ * The local-demo notice - an execution clarification, not original copy
+ * (FINISH 4.4). Small, plain, above the content on both views.
+ */
+.demoNote {
+  margin: 0;
+  padding: 8px 16px;
+  font: 600 12px / 1.4 var(--font);
+  color: var(--tx3);
+  background: var(--sf);
+  border-block-end: 1px solid var(--hair);
+  text-align: center;
+}
+
+/* A simulated launch flashes the disclosure once (a remounted span restarts
+   it); under reduced motion the root rule collapses it to one frame. */
+.demoNoteFired > span {
+  display: block;
+  animation: sfNoteFlash 900ms var(--e-standard) both;
+}
+
+@keyframes sfNoteFlash {
+  0% {
+    color: var(--tx);
+    background: var(--sf2);
+  }
+  100% {
+    color: var(--tx3);
+    background: transparent;
+  }
+}
+
+/* The unknown-request answer: neutral copy on the tenant surface. */
+.missing {
+  padding: 40px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.missingTitle {
+  margin: 0;
+  font: 800 22px / 1.2 var(--font);
+}
+
+.missingBody {
+  margin: 0;
+  max-width: 300px;
+  font: 400 14px / 1.45 var(--font);
+  color: var(--tx2);
+}
+
+/* ================================================================ islands */
+
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================================== keyframes */
+
+@keyframes sfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sfRise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sfPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sfRing {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes sfDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sfHalo {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.04, 1.24);
+  }
+}
+
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  45%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motionFull .ring,
+  .motionFull .halo,
+  .motionFull .sheen {
+    animation: none;
+  }
+
+  /* A sheen that does not move is a stripe painted across the CTA label. */
+  .motionFull .sheen {
+    display: none;
+  }
+
+  /*
+   * The root rule collapses every DURATION to one frame but leaves DELAYS in
+   * place, and a staggered entrance with a "both" fill sits at its first
+   * keyframe - invisible - until its delay elapses. That would hide the
+   * "not confirmed yet" line for 350ms under the very setting that promises a
+   * single frame. Delays collapse here too, so the stagger becomes one frame.
+   */
+  .screen *,
+  .screen *::before,
+  .screen *::after {
+    animation-delay: 0s !important;
+  }
+}

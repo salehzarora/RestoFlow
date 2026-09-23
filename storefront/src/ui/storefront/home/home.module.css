@@ -1,0 +1,1897 @@
+/*
+ * Home / menu — screen 2 of the approved handoff.
+ * Canonical: screenshots/home__ar__dark__list-normal__390x844.png
+ *
+ * "The home screen is a module list, not a fixed layout." Order is fixed in this
+ * release; visibility is a per-restaurant toggle.
+ *
+ * Every colour is a semantic token from the Phase A derivation. Logical
+ * properties throughout, so one tree serves RTL and LTR.
+ */
+
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scroller {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- announce */
+
+.announce {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px var(--gutter);
+  background: var(--hero);
+  color: var(--onhero);
+  font: 700 12.5px / 1.35 var(--font);
+}
+
+.announceGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--acc);
+}
+
+.announceGlyph svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.announceText {
+  flex: 1;
+  min-width: 0;
+}
+
+.announceClose {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--onhero);
+  cursor: pointer;
+  /* Painted 26px per the design; the tap target is expanded without moving it. */
+  position: relative;
+}
+
+.announceClose::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
+.announceClose svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* ------------------------------------------------------------------- hero */
+
+.hero {
+  position: relative;
+  height: 298px;
+  border-end-start-radius: 28px;
+  border-end-end-radius: 28px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.heroMedia {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.heroImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+
+/* Ken Burns belongs to `full`/`lively` only. */
+.motionFull .heroImg,
+.motionLively .heroImg {
+  animation: sfKen var(--d-ken) var(--e-standard) forwards;
+}
+
+/* 26% top for header legibility, 32% bottom for copy. The middle stays clear. */
+.heroShade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.62) 0%, transparent 26%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, transparent 32%);
+}
+
+/* The dotted map motif, drawn once at 28%. */
+.heroMotif {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-start: 0;
+  z-index: 1;
+  width: 190px;
+  height: 120px;
+  opacity: 0.28;
+  color: var(--acc);
+  pointer-events: none;
+}
+
+.heroMotif svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 3 9;
+}
+
+.heroRow {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 84px 1fr 84px;
+  align-items: center;
+  padding: 12px;
+}
+
+.heroSide {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.heroSideEnd {
+  justify-content: flex-end;
+}
+
+.iconBtn {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--glassLine);
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  color: var(--onhero);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.iconBtn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lockupText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.brandName {
+  margin: 0;
+  font: 800 15.5px / 1.15 var(--font);
+  color: var(--onhero);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brandCity {
+  margin: 0;
+  font: 600 11px / 1.2 var(--font);
+  color: var(--onhero2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brandLogo {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: var(--r-pill);
+  object-fit: cover;
+  background: var(--hero);
+}
+
+.heroCopy {
+  position: absolute;
+  z-index: 3;
+  inset-block-end: 16px;
+  inset-inline: var(--gutter);
+}
+
+.heroTitle {
+  margin: 0;
+  font: 900 27px / 1.1 var(--font);
+  color: var(--onhero);
+}
+
+.heroRule {
+  width: 74px;
+  height: 3px;
+  margin: 8px 0;
+  border-radius: 2px;
+  background: var(--acc);
+}
+
+.heroSub {
+  margin: 0;
+  font: 500 12.5px / 1.35 var(--font);
+  color: var(--onhero2);
+}
+
+/* ---------------------------------------------------------- service strip */
+
+.serviceWrap {
+  margin: -6px var(--gutter) 0;
+  position: relative;
+  z-index: 2;
+}
+
+.service {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  min-height: 46px;
+  border-radius: var(--r-card);
+  background: var(--glassDock);
+  box-shadow: 0 20px 40px -28px rgba(0, 0, 0, 0.9);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.serviceCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+.serviceCell + .serviceCell {
+  border-inline-start: 1px solid var(--hair);
+}
+
+.serviceIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--acc);
+}
+
+.serviceIcon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.serviceClock {
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--acc);
+  border-radius: var(--r-pill);
+}
+
+.serviceClock svg {
+  width: 16px;
+  height: 16px;
+}
+
+.serviceText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.serviceLabel {
+  margin: 0;
+  font: 700 12px / 1.25 var(--font);
+  color: var(--tx);
+  /* Wraps rather than truncating: the design shows the hours over two lines in
+     a narrow cell, and shrinking the type to force one line was ruled out. */
+  overflow-wrap: anywhere;
+}
+
+.serviceMeta {
+  margin: 0;
+  font: 600 11px / 1.25 var(--font);
+  color: var(--onDock2);
+  /* Wraps rather than truncating, like .serviceLabel above: the approved 360
+     canonical puts the status word on two lines, and the paused word on three.
+     The previous `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
+     clipped MID-WORD with no indicator, because the hours cell's only child is a
+     block-level .stateRow and text-overflow only ellipsizes inline content.
+     `anywhere` (not `break-word`) also drops the cell's min-content floor, so
+     the 1fr grid columns keep their even split instead of being blown out by a
+     long tenant city or a wide locale string. */
+  overflow-wrap: anywhere;
+}
+
+/* The state word uses the surface-calibrated tone so it passes on both docks. */
+.stateOpen {
+  color: var(--ok);
+}
+
+.stateClosed {
+  color: var(--badText, var(--bad));
+}
+
+.statePaused {
+  color: var(--warn);
+}
+
+.stateRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stateDot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+
+.motionFull .stateOpen .stateDot,
+.motionLively .stateOpen .stateDot {
+  animation: sfDot 2000ms var(--e-standard) infinite;
+}
+
+.serviceOff {
+  opacity: 0.55;
+}
+
+.serviceOff .serviceLabel {
+  text-decoration: line-through;
+}
+
+/* ------------------------------------------------------------ state notice */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px var(--gutter) 0;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--hair2);
+  background: var(--sf);
+}
+
+/*
+ * CLOSED is deliberately NOT a danger tone. The approved prototype
+ * (Storefront.dc.html:801) gives closed the neutral dock surface --sf with --tx
+ * ink and a --hair2 hairline - i.e. exactly the base .notice rule above - and
+ * makes PAUSED the only warning-toned state. A closed restaurant is a normal
+ * condition, not an error. Do not reintroduce a .noticeClosed override.
+ */
+
+.noticePaused {
+  border-color: var(--warn);
+  background: var(--warnbg);
+}
+
+.noticeTitle {
+  display: block;
+  margin: 0 0 3px;
+  font: 800 13.5px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+.noticeBody {
+  display: block;
+  margin: 0;
+  font: 400 12.5px / 1.4 var(--font);
+  color: var(--tx2);
+}
+
+.noticeIcon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--tx);
+}
+
+.noticeIcon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ------------------------------------------------------------ category rail */
+
+.rail {
+  position: relative;
+  margin-block-start: 14px;
+}
+
+.railTrack {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  height: 108px;
+  padding: 0 40px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.railTrack::-webkit-scrollbar {
+  display: none;
+}
+
+.orb {
+  flex: none;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--tx2);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.orbCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--sf2);
+  border: 2px solid transparent;
+  transform: scale(0.93);
+  transition:
+    transform var(--d-emphasis) var(--e-overshoot),
+    border-color var(--d-standard) var(--e-standard),
+    filter var(--d-standard) var(--e-standard);
+  filter: brightness(0.72);
+}
+
+.orbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.orbIcon {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--tx2);
+}
+
+.orbLabel {
+  /* Fixed height so nothing reflows when the label wraps to two lines. */
+  height: 2.4em;
+  font: 600 11.5px / 1.2 var(--font);
+  text-align: center;
+  overflow: hidden;
+}
+
+.orbActive .orbCircle {
+  transform: scale(1.08);
+  border-color: var(--acc);
+  filter: brightness(1.06);
+}
+
+.orbActive .orbLabel {
+  font-weight: 800;
+  color: var(--acct);
+}
+
+.orbActive .orbIcon {
+  color: var(--acc);
+}
+
+.railArrow {
+  position: absolute;
+  inset-block-start: 16px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hair2);
+  border-radius: var(--r-pill);
+  background: var(--sf);
+  color: var(--tx);
+  cursor: pointer;
+  z-index: 2;
+}
+
+/* The arrow hit area reaches 44px without changing the painted 30px circle. */
+.railArrow::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.railArrow svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.railArrowStart {
+  inset-inline-start: 6px;
+}
+
+.railArrowEnd {
+  inset-inline-end: 6px;
+}
+
+/* Chevrons point along the reading direction. */
+.railArrowStart svg {
+  transform: scaleX(-1);
+}
+
+.railArrowStart:dir(rtl) svg {
+  transform: none;
+}
+
+.railArrowEnd:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+/* --------------------------------------------------------- compact header */
+
+/*
+ * A zero-height sticky HOST keeps the compact header completely out of flow:
+ * it reserves nothing while hidden AND pushes nothing when it appears. A
+ * sticky header that merely collapses its own height still shifts the document
+ * by its full height the moment it expands.
+ */
+.compactHost {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+  height: 0;
+  overflow: visible;
+}
+
+.compact {
+  background: var(--glassDock);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-block-end: 1px solid transparent;
+  opacity: 0;
+  pointer-events: none;
+  /* The zero height that keeps this out of flow lives on .compactHost, not
+     here. visibility, not opacity alone: an opacity-0 header is still FOCUSABLE
+     and still in the accessibility tree, so its chip rail was tabbable while
+     invisible. visibility:hidden removes both - and unlike display:none it
+     still generates a box, which the "centre the active chip in BOTH rails"
+     effect depends on and which keeps the zero-height host jump-free.
+     It is in the transition list on purpose: CSS interpolates visibility as
+     `visible` across the whole of (0,1) whenever one endpoint is visible, and
+     that is what lets the EXIT fade finish before the header leaves the tree.
+     Drop it from the list and the header vanishes instantly on the way out. */
+  visibility: hidden;
+  transform: translateY(-100%);
+  transition:
+    opacity var(--d-standard) var(--e-standard),
+    transform var(--d-standard) var(--e-standard),
+    visibility var(--d-standard) var(--e-standard);
+}
+
+.compactOn {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  border-block-end-color: var(--hair);
+  pointer-events: auto;
+}
+
+.compactRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 var(--gutter);
+}
+
+.compactLogo {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: var(--r-pill);
+  object-fit: cover;
+}
+
+.compactName {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 800 14px / 1.2 var(--font);
+  color: var(--tx);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compactBtn {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--tx);
+  cursor: pointer;
+}
+
+.compactBtn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chipRail {
+  display: flex;
+  gap: 8px;
+  padding: 0 var(--gutter) 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.chipRail::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Reduced motion: the rails drop their own smooth scrolling too.
+ *
+ * `behavior: 'auto'` from HomeChrome DEFERS to this property, so leaving
+ * `scroll-behavior: smooth` here would silently keep animating both rails even
+ * after the script asked for auto. It also covers the one path the script
+ * cannot reach at all: the user agent's own scroll-into-view when a chip is
+ * focused from the keyboard.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .railTrack,
+  .chipRail {
+    scroll-behavior: auto;
+  }
+}
+
+.chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--hair2);
+  border-radius: var(--r-pill);
+  background: var(--sf2);
+  color: var(--tx2);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.chip svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Idle chips are icon-only; the active one expands to icon + label. */
+.chipLabel {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 800 12.5px / 1 var(--font);
+  transition: max-width 250ms var(--e-standard);
+}
+
+.chipActive {
+  border-color: var(--acc);
+  background: var(--accs);
+  color: var(--acct);
+}
+
+.chipActive .chipLabel {
+  max-width: 11rem;
+}
+
+/* ------------------------------------------------------------ promo banner */
+
+.promo {
+  display: grid;
+  grid-template-columns: 1fr 42%;
+  margin: 16px var(--gutter) 0;
+  border-radius: var(--r-banner, 22px);
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--promoWarm) 0%, var(--promoWarm2) 100%);
+  text-decoration: none;
+  color: #1f2937;
+}
+
+.promoMediaWrap {
+  /* Inline-END pane in both directions: the approved band is text-then-photo
+     (prototype Storefront.dc.html:189/:195). Pinned explicitly so a future DOM
+     reorder cannot silently invert the composition again. Grid line numbers
+     resolve against the INLINE axis, so this is logical, not physical. */
+  grid-column: 2;
+  position: relative;
+  min-height: 150px;
+}
+
+.promoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.promoPrice {
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline-end: 10px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(17, 24, 39, 0.82);
+  color: #fff;
+  font: 800 13px / 1 var(--font);
+}
+
+.promoBody {
+  grid-column: 1;
+  min-width: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.promoKicker {
+  margin: 0;
+  /* Constant across presets by design; this is the parchment's own ink. */
+  color: #9a3412;
+  font: 900 11px / 1 var(--font);
+  letter-spacing: 0.08em;
+}
+
+.promoTitle {
+  margin: 0;
+  font: 900 19px / 1.12 var(--font);
+  color: #1f2937;
+}
+
+.promoText {
+  margin: 0;
+  font: 400 12.5px / 1.35 var(--font);
+  color: #4b5563;
+}
+
+.promoCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-block-start: auto;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  font: 800 14px / 1 var(--font);
+}
+
+.promoCta svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.promoCta:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+/* ----------------------------------------------------------------- section */
+
+.section {
+  margin-block-start: 20px;
+  padding: 0 var(--gutter);
+  scroll-margin-block-start: 116px;
+}
+
+/*
+ * Off-screen work is deferred, not changed. On a 390x844 phone the home
+ * document is ~5,600px tall and everything from the first category section
+ * down (~4,300px: seven sections, the story, the footer) is below the fold,
+ * yet the first layout shaped and laid out all of it. `content-visibility:
+ * auto` lets the engine skip layout and paint of a section until it nears the
+ * viewport; what is painted, when painted, is identical, the DOM and the
+ * accessibility tree are untouched, anchors and scrollIntoView still land on
+ * the section (the engine renders a target on demand), and `auto <size>`
+ * keeps a section's REAL size once it has been rendered so nothing above the
+ * viewport is re-estimated. Only the category sections carry it (the popular
+ * section straddles the first screen and stays as it was); the story and the
+ * footer carry it too. Measured under the lab protocol
+ * (PERF_PROTOCOL_AND_TRACE.md, candidate 2).
+ */
+.section[id] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 12px;
+}
+
+.sectionBar {
+  width: 5px;
+  height: 18px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--acc);
+  box-shadow: var(--glow);
+}
+
+.sectionTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 800 18px / 1.2 var(--font);
+  color: var(--tx);
+}
+
+.sectionBlurb {
+  margin: -6px 0 12px;
+  font: 400 12.5px / 1.4 var(--font);
+  color: var(--tx3);
+}
+
+.flameTile {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--accA);
+  color: var(--acc);
+}
+
+.flameTile svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.seeAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding-inline: 8px;
+  border: 0;
+  background: none;
+  color: var(--acct);
+  font: 700 12.5px / 1 var(--font);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.seeAll svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.seeAll:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+.sectionSub {
+  margin: 0;
+  font: 600 11px / 1.2 var(--font);
+  color: var(--tx3);
+}
+
+/* ------------------------------------------------------------------- cards */
+
+.popularGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.gridWrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.listWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  position: relative;
+  display: block;
+  border-radius: var(--r-card);
+  background: var(--sf);
+  border: 1px solid var(--hair);
+  overflow: hidden;
+  text-align: start;
+  color: inherit;
+  text-decoration: none;
+  padding: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+.cardSoldOut {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cardMediaFeatured {
+  position: relative;
+  height: 172px;
+  background: var(--sf2);
+}
+
+.cardMediaPopular {
+  position: relative;
+  height: 124px;
+  background: var(--sf2);
+}
+
+.cardMediaGrid {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--sf2);
+}
+
+.cardImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* No-image fallback: the item's initial on a surface→accent wash. */
+.cardNoImage {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--sf2) 0%, var(--accA) 100%);
+  color: var(--acct);
+  font: 900 26px / 1 var(--font);
+}
+
+.cardBody {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardName {
+  margin: 0;
+  font: 800 17px / 1.2 var(--font);
+  color: var(--tx);
+}
+
+.cardNameSmall {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardDesc {
+  margin: 0;
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-start: 2px;
+}
+
+.price {
+  font: 800 15px / 1 var(--font);
+  color: var(--acct);
+}
+
+.priceFrom {
+  font: 600 11px / 1 var(--font);
+  color: var(--tx3);
+  margin-inline-end: 3px;
+}
+
+.addPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  font: 800 13px / 1 var(--font);
+  cursor: pointer;
+}
+
+.addCircle {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  cursor: pointer;
+}
+
+.addCircle::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+
+.addCircle svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.badge {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-start: 10px;
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  border: 1px solid var(--glassLine);
+  color: var(--onhero);
+  font: 800 11px / 1 var(--font);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/*
+ * The ITEM-truth slot on a popular card. The popularity badge owns the
+ * inline-START corner (the approved prototype slot), so an item's own new/deal
+ * badge takes the OPPOSITE CORNER and the two truths coexist - neither can
+ * overwrite the other. The opposite BLOCK edge, not merely the opposite inline
+ * edge: "#1 most ordered" plus "New" is wider than a ~173px popular card at
+ * 390, so side by side they would collide. Logical properties throughout, so
+ * the pair mirrors correctly in RTL with no direction branch.
+ */
+.badgeItem {
+  inset-block-start: auto;
+  inset-inline-start: auto;
+  inset-block-end: 10px;
+  inset-inline-end: 10px;
+}
+
+.badgeSoldOut {
+  background: var(--bad);
+  color: var(--onBad, #fff);
+  border-color: transparent;
+}
+
+/* `lively` adds a slow float to popular cards, and nothing else. */
+.motionLively .popularGrid .card {
+  animation: sfFloat 7000ms var(--e-standard) infinite;
+}
+
+/* --------------------------------------------------------------- list row */
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 104px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: var(--r-card);
+  background: var(--sf);
+  border: 1px solid var(--hair);
+  text-align: start;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+
+.rowMedia {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--sf2);
+}
+
+.rowBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ------------------------------------------------------------------ story */
+
+.story {
+  margin: 20px var(--gutter) 0;
+  border-radius: var(--r-story);
+  overflow: hidden;
+  background: var(--sf);
+  border: 1px solid var(--hair);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 325px;
+}
+
+.storyMedia {
+  position: relative;
+  height: 150px;
+}
+
+.storyImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storyFade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--sf) 0%, transparent 62%);
+}
+
+.storyBody {
+  padding: 0 16px 16px;
+  margin-block-start: -18px;
+  position: relative;
+}
+
+.storyKicker {
+  margin: 0 0 4px;
+  font: 900 11px / 1 var(--font);
+  letter-spacing: 0.08em;
+  color: var(--acct);
+}
+
+.storyTitle {
+  margin: 0 0 8px;
+  font: 900 21px / 1.15 var(--font);
+  color: var(--tx);
+}
+
+.storyText {
+  margin: 0 0 12px;
+  font: 400 13px / 1.45 var(--font);
+  color: var(--tx2);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--r-pill);
+  background: var(--sf2);
+  font: 600 11.5px / 1.2 var(--font);
+  color: var(--tx2);
+}
+
+.factDot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--acc);
+  flex: none;
+}
+
+/* ----------------------------------------------------------------- footer */
+
+.footer {
+  margin-block-start: 24px;
+  padding: 18px var(--gutter) 24px;
+  border-block-start: 1px solid var(--hair);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--tx3);
+  font: 500 12px / 1.5 var(--font);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 141px;
+}
+
+.footerRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.footerCredit {
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 11.5px / 1.3 var(--font);
+}
+
+.footerMark {
+  width: 16px;
+  height: 16px;
+}
+
+.footerBrand {
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--tx2);
+}
+
+/* ------------------------------------------------------------- empty menu */
+
+.empty {
+  margin: 28px var(--gutter);
+  padding: 32px 20px;
+  border-radius: var(--r-card);
+  border: 1px dashed var(--hair2);
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0 0 6px;
+  font: 800 18px / 1.2 var(--font);
+  color: var(--tx);
+}
+
+.emptyBody {
+  margin: 0;
+  font: 400 13px / 1.45 var(--font);
+  color: var(--tx3);
+}
+
+/* -------------------------------------------------------------- cart dock */
+
+.dock {
+  position: sticky;
+  inset-block-end: 14px;
+  z-index: 25;
+  margin: 18px var(--gutter) 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 10px;
+  border-radius: var(--r-module);
+  background: var(--glassDock);
+  box-shadow:
+    0 22px 46px -20px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.dockThumbs {
+  display: flex;
+  flex: none;
+  padding-inline-start: 14px;
+}
+
+.dockThumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  object-fit: cover;
+  border: 2px solid var(--glassDock);
+  margin-inline-start: -14px;
+  background: var(--sf2);
+}
+
+.dockCount {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-start: 8px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--acc);
+  color: var(--onacc);
+  font: 900 11px / 1 var(--font);
+}
+
+.dockText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dockItems {
+  display: block;
+  margin: 0;
+  font: 600 11.5px / 1.2 var(--font);
+  color: var(--onDock2);
+}
+
+.dockTotal {
+  display: block;
+  margin: 0;
+  font: 800 15px / 1.2 var(--font);
+  color: var(--acct);
+}
+
+.dockCta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  font: 800 13.5px / 1 var(--font);
+  overflow: hidden;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.motionFull .dockCta::before,
+.motionLively .dockCta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.3) 50%, transparent 70%);
+  animation: sfSheen var(--d-sheen) var(--e-sheen) infinite;
+}
+
+.dockCta svg {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dockCta:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+.dockDisabled {
+  background: var(--sf2);
+  box-shadow: none;
+  color: var(--tx3);
+  cursor: not-allowed;
+}
+
+.dockDisabled::before {
+  display: none;
+}
+
+.dockRelative {
+  position: relative;
+}
+
+/* ------------------------------------------------------------- wide aside */
+
+.shell {
+  display: flex;
+  min-width: 0;
+  /* The wide breakpoint is measured on THIS container, not the viewport, so
+     the same component lays out correctly inside the dashboard preview. */
+  container-type: inline-size;
+  container-name: storefront;
+}
+
+.aside {
+  display: none;
+}
+
+/*
+ * The wide layout is keyed to CONTAINER width, not viewport width, so the same
+ * component behaves correctly inside the dashboard preview. 834px therefore
+ * keeps the phone layout by design; only >= 900px gets the aside.
+ */
+@container storefront (min-width: 900px) {
+  .aside {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: 360px;
+    border-inline-start: 1px solid var(--hair);
+    background: var(--sf);
+    max-height: 100dvh;
+    position: sticky;
+    inset-block-start: 0;
+  }
+
+  .hero {
+    height: 320px;
+  }
+
+  .dock {
+    display: none;
+  }
+
+  .page {
+    min-width: 0;
+  }
+}
+
+.asideHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  /* 18px 18px 12px, and deliberately NO bottom hairline: the canonical wide
+     screenshot has none, and the first full-width rule in it is the divider
+     under the first line. */
+  padding: 18px 18px 12px;
+}
+
+.asideTitle {
+  margin: 0;
+  font: 800 18px / 1.2 var(--font);
+  color: var(--tx);
+}
+
+.asideCount {
+  font: 600 13px / 1.2 var(--font);
+  color: var(--tx3);
+}
+
+/* One centred line, and nothing else. The aside's empty state is NOT the cart
+   page's: no icon tile, no title, no "browse the menu" action - the panel sits
+   beside the menu the visitor is already looking at. */
+.asideEmpty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--tx3);
+  font: 400 14px / 1.4 var(--font);
+}
+
+.asideLines {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 18px;
+  list-style: none;
+}
+
+.asideLine {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-block-end: 1px solid var(--hair);
+}
+
+.asideLineMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.asideLineName {
+  display: block;
+  margin: 0;
+  font: 700 14.5px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+.asideLineOpts {
+  display: block;
+  margin: 2px 0 0;
+  font: 400 12.5px / 1.35 var(--font);
+  color: var(--tx2);
+}
+
+.asideLinePrice {
+  flex: none;
+  font: 800 14px / 1.3 var(--font);
+  color: var(--tx);
+}
+
+/* 34px tall with 36px buttons - the aside's own size, NOT the cart page's 40.
+   COMPONENT_INVENTORY.md:183 "scrollable lines with 34px steppers". */
+/*
+ * NO `overflow: hidden` HERE, deliberately.
+ *
+ * It was copied from the cart page's stepper, where the "+" side carries an
+ * accent tint that really does need the rounded clip. Nothing inside THIS
+ * stepper is painted - both buttons are transparent and the value is bare text -
+ * so the clip cut back exactly one thing: the invisible 44px hit overlay below.
+ * The Phase D pack INFERRED the hit area from this rule and never hit-tested
+ * it; the independent D1 review measured the parent's effective target at
+ * 40 x 33 (the parent overlay was centred, so the clip kept its 4 inner px).
+ * D1 measures it at 44 x 45. Layout geometry is unchanged (36 x 32 button,
+ * 34px stepper); one painted thing DID change, beneficially: the 3px
+ * `:focus-visible` ring is no longer clipped by the stepper box.
+ */
+.asideStepper {
+  display: inline-flex;
+  align-items: center;
+  margin-block-start: 8px;
+  height: 34px;
+  border: 1.5px solid var(--hair2);
+  border-radius: var(--r-md);
+}
+
+.stepBtn {
+  position: relative;
+  width: 36px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--tx);
+  font: 800 16px / 1 var(--font);
+  cursor: pointer;
+}
+
+/*
+ * THE 44 x 44 HIT TARGET (DESIGN_HANDOFF.md:176, COMPONENT_INVENTORY.md:121).
+ *
+ * The painted control stays 36 x 34, which is the approved size
+ * (COMPONENT_INVENTORY.md:183). Only the hit area grows, through an invisible
+ * overlay on each button.
+ *
+ * The overlay is anchored to each button's OUTER edge rather than centred on it.
+ * Centring would push 4px of the target over the quantity readout, so a tap on
+ * the left edge of the number would decrement it; anchoring outward puts the
+ * extra 8px in the line's own padding, where nothing else is interactive. The
+ * two overlays therefore never reach each other, and neither reaches the value.
+ *
+ * `inset-inline-*` does the mirroring, so no direction-specific transform is
+ * needed and RTL needs no override.
+ */
+.stepBtn::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+/* 36px painted + 8px outward = 44px of target, away from the value. */
+.stepBtnStart::after {
+  inset-inline-start: -8px;
+  inset-inline-end: 0;
+}
+
+.stepBtnEnd::after {
+  inset-inline-start: 0;
+  inset-inline-end: -8px;
+}
+
+.stepValue {
+  min-width: 22px;
+  text-align: center;
+  font: 800 14px / 1 var(--font);
+  color: var(--tx);
+}
+
+.asideTotals {
+  padding: 12px 18px 18px;
+  border-block-start: 1px solid var(--hair);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.totalRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font: 500 13.5px / 1.3 var(--font);
+  color: var(--tx2);
+}
+
+/* 16/800 with NO dashed divider - the cart page has one, the aside does not. */
+.totalRowFinal {
+  font: 800 16px / 1.3 var(--font);
+  color: var(--tx);
+}
+
+.totalRowFinal .amount {
+  color: var(--acct);
+  text-shadow: var(--glow);
+}
+
+.asideCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 50px;
+  margin-block-start: 6px;
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  font: 800 15px / 1 var(--font);
+  cursor: pointer;
+  text-decoration: none;
+  /* The label may be a whole sentence when ordering is blocked. */
+  padding: 0 14px;
+  text-align: center;
+}
+
+.asideCtaDisabled {
+  background: var(--sf2);
+  box-shadow: none;
+  color: var(--tx2);
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ misc */
+
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes sfFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/*
+ * KEYFRAMES, co-located on purpose.
+ *
+ * CSS Modules scope keyframe names PER FILE, exactly like class names. A
+ * keyframe defined in storefront.module.css compiles to a scoped identifier
+ * that NOTHING in this file can reference, so every `animation:` here used to
+ * name a keyframe that did not exist and silently did nothing. There is no
+ * `composes` for keyframes and `:global` is forbidden by the source rules, so
+ * each consuming module carries its own copy. Bodies are identical to
+ * TOKENS.json -> motion.keyframes; change them together.
+ */
+@keyframes sfKen {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes sfDot {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 1;
+  }
+}
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+/*
+ * DOCK HALO - DESIGN_HANDOFF.md:76 "A halo pulses while the cart has items and
+ * motion is not `calm`", named `sfHalo` at TOKENS.json:403 with the 2600ms
+ * duration at :383. It is a decorative overlay ring, never a box-shadow on the
+ * dock itself, so it cannot enlarge the dock's hit area.
+ *
+ * Only reachable once the cart is live, which is why Phase B had no consumer
+ * for it: `.dockHalo` is rendered by the hydrated dock alone.
+ */
+.dockHalo {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-module);
+  box-shadow: 0 0 0 5px var(--accB);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.motionFull .dockHalo,
+.motionLively .dockHalo {
+  /* The easing is authored in the prototype (Storefront.dc.html:328) and has
+     no TOKENS.json name, so it is written out here rather than mis-attributed
+     to --e-standard, which is a different curve. */
+  animation: sfHalo var(--d-halo) cubic-bezier(0.2, 0.6, 0.3, 1) 900ms infinite;
+}
+
+@keyframes sfHalo {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  70%,
+  100% {
+    transform: scale(1.04, 1.24);
+    opacity: 0;
+  }
+}
+
+/*
+ * COUNT BUMP - INTERACTIONS.md:69 "the cart dock count bumps 1 -> 1.25 -> 1
+ * over 200ms". The prototype instead holds 1.25 for the toast's whole 2200ms
+ * life (Storefront.dc.html:703/:796); the handoff text is followed here and the
+ * divergence is recorded in the Phase C report.
+ */
+.motionFull .dockBump,
+.motionLively .dockBump {
+  animation: sfBump var(--d-standard) var(--e-overshoot) 1;
+}
+
+@keyframes sfBump {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* No-image cart line: the initial on the shared surface-to-accent wash, the
+   same fallback every other card uses (COMPONENT_INVENTORY.md:92). */
+.dockThumbNone {
+  display: grid;
+  place-items: center;
+  font: 900 15px / 1 var(--font);
+  color: var(--acct);
+  background: linear-gradient(135deg, var(--sf2), var(--accA));
+}

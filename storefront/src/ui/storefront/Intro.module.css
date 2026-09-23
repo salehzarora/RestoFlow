@@ -1,0 +1,470 @@
+/*
+ * Intro / welcome screen — screen 1 of the approved handoff.
+ * Canonical evidence: screenshots/intro__ar__dark__default__390x844.png
+ *
+ * "It is not a splash: it is a real route state with working controls."
+ * There is deliberately NO skip control and NO auto-advance.
+ */
+
+.screen {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* The screen does not scroll. */
+  overflow: hidden;
+  min-height: 100dvh;
+}
+
+/* --- layer 1: full-bleed hero media --- */
+.media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.mediaImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+
+/* Ken Burns 1 -> 1.08 over 24s, in `full`/`lively` only (DESIGN_HANDOFF.md:32).
+   These classes are declared in THIS file on purpose: CSS Modules scope class
+   names per file, so home.module.css's .motionFull cannot reach the Intro. */
+.motionFull .mediaImg,
+.motionLively .mediaImg {
+  animation: sfKen var(--d-ken) var(--e-standard) forwards;
+}
+
+/* --- layer 2: vignette + accent glow wash --- */
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.52) 0%, rgba(0, 0, 0, 0.1) 32%, rgba(0, 0, 0, 0.82) 100%),
+    var(--heroGlow);
+}
+
+/* --- layer 3: content --- */
+.content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--gutter) env(safe-area-inset-bottom, 0);
+  color: var(--onhero);
+}
+
+/* top row: language + search */
+.topRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.glassBtn {
+  position: relative;
+  /* Design states 40-44px for these controls; 44 is chosen so the painted size
+     IS the touch target, rather than relying on an overlay the hit-testing and
+     the measured box disagree about. */
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glassLine);
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  color: var(--onhero);
+  font: 700 12px / 1 var(--font);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.glassBtn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* centre block, bottom anchored */
+.centre {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 14px;
+}
+
+.logoRing {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--r-pill);
+  padding: 3px;
+  background: conic-gradient(from 210deg, var(--acc), var(--accB), var(--acc));
+  display: grid;
+  place-items: center;
+  animation: sfPop var(--d-pop) var(--e-overshoot) both;
+  animation-delay: 0ms;
+}
+
+.logo {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  object-fit: cover;
+  background: var(--hero);
+  display: block;
+}
+
+.logoFallback {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  background: var(--acc);
+  color: var(--onacc);
+  font: 900 34px / 1 var(--font);
+}
+
+.kicker {
+  margin: 14px 0 0;
+  font: 600 13px / 1.3 var(--font);
+  color: var(--onhero2);
+  animation: sfUp var(--d-reveal) var(--e-standard) both;
+  animation-delay: 150ms;
+}
+
+.name {
+  margin: 4px 0 0;
+  font: 900 40px / 1.08 var(--font);
+  letter-spacing: 0;
+  text-shadow: var(--glow);
+  animation: sfRise var(--d-reveal) var(--e-standard) both;
+  animation-delay: 220ms;
+}
+
+.tagline {
+  margin: 8px 0 0;
+  font: 500 15px / 1.4 var(--font);
+  color: var(--onhero2);
+  animation: sfUp var(--d-reveal) var(--e-standard) both;
+  animation-delay: 300ms;
+}
+
+/* three glass service pills */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  animation: sfUp var(--d-reveal) var(--e-standard) both;
+  animation-delay: 380ms;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--glassLine);
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  color: var(--onhero);
+  font: 700 12px / 1.25 var(--font);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* A disabled service is struck through at 55% opacity. */
+.pillOff {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* Semantic tone for the service-state pill. The dot inherits currentColor so
+   one class sets both the label and the indicator. */
+.toneOk {
+  color: var(--ok);
+}
+
+.toneWarn {
+  color: var(--warn);
+}
+
+.toneBad {
+  color: var(--bad);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  flex: none;
+  background: currentColor;
+}
+
+/* Only an OPEN restaurant pulses; a closed or paused dot is steady - and only
+   in `full`/`lively`, matching the identical home dot (home.module.css). */
+.motionFull .toneOk .dot,
+.motionLively .toneOk .dot {
+  animation: sfDot 2000ms var(--e-standard) infinite;
+}
+
+.pillIcon {
+  display: inline-flex;
+  flex: none;
+}
+
+.pillIcon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The design's mid-dot separator between the service and its fee. */
+.sep {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  opacity: 0.55;
+  flex: none;
+}
+
+/* primary CTA */
+.cta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 60px;
+  margin: 18px 0 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--cta);
+  box-shadow: var(--ctaSh);
+  color: var(--onacc);
+  font: 800 16px / 1 var(--font);
+  cursor: pointer;
+  overflow: hidden;
+  text-decoration: none;
+  animation: sfRise var(--d-reveal) var(--e-standard) both;
+  animation-delay: 460ms;
+}
+
+/* sheen sweep */
+.cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 70%
+  );
+}
+
+/* halo, three cycles */
+.cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--accB);
+  pointer-events: none;
+}
+
+.ctaLabel {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctaChevron {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  margin-inline-start: 8px;
+}
+
+.ctaChevron svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The chevron points along the reading direction. */
+.ctaChevron:dir(rtl) svg {
+  transform: scaleX(-1);
+}
+
+/* Available to assistive technology, not painted. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.credit {
+  margin: 12px 0 14px;
+  text-align: center;
+  font: 600 11.5px / 1.3 var(--font);
+  color: var(--onhero2);
+  animation: sfFade var(--d-reveal) var(--e-standard) both;
+  animation-delay: 520ms;
+}
+
+.creditName {
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+/* LTR island inside RTL copy: times and prices. */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * KEYFRAMES, co-located on purpose.
+ *
+ * CSS Modules scope keyframe names PER FILE, exactly like class names. A
+ * keyframe defined in storefront.module.css compiles to a scoped identifier
+ * that NOTHING in this file can reference, so every `animation:` here used to
+ * name a keyframe that did not exist and silently did nothing. There is no
+ * `composes` for keyframes and `:global` is forbidden by the source rules, so
+ * each consuming module carries its own copy. Bodies are identical to
+ * TOKENS.json -> motion.keyframes; change them together.
+ */
+@keyframes sfKen {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes sfPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sfUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sfRise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sfDot {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 1;
+  }
+}
+@keyframes sfSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes sfHalo {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+@keyframes sfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* sheen - INTERACTIONS.md:124 and STATE_MATRIX.json:104 both put sheen sweeps outside calm */
+.motionFull .cta::before,
+.motionLively .cta::before {
+  animation: sfSheen var(--d-sheen) var(--e-sheen) infinite;
+}
+
+/* halo - a finite decorative flourish, not an entrance; calm is "entrance transitions only" */
+.motionFull .cta::after,
+.motionLively .cta::after {
+  animation: sfHalo var(--d-halo) var(--e-standard) 3;
+}
