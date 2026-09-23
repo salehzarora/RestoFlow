@@ -288,6 +288,24 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 
 ---
 
+### 4.7 `restaurant_storefront_profiles` (STOREFRONT-READ-001, PROPOSED DECISION D-039)
+- **Purpose:** The published Storefront identity of **one** restaurant (1:1 with `restaurants`): the public slug, display and brand fields, opening hours, pause state, service flags and the publish switch that gates the anon read `public.storefront_menu` ([API_CONTRACT](API_CONTRACT.md) §4.42).
+- **Key fields:** `restaurant_id` (PK), `storefront_branch_id` (the one branch whose catalog, availability, timezone, currency and tax the storefront serves), `slug` (storage grammar `^[a-z0-9]+(-[a-z0-9]+)*$`, 3–48, reserved words `api order admin pos kds kiosk app ar en he www s r`; **partial-unique among live rows**; immutable in this slice), `display_name` (1–60), `tagline` (≤ 90), `public_city` (≤ 60), `public_address` (≤ 80), `public_phone` (E.164 or local shape), `primary_color` / `accent_color` (`#RRGGBB`), `visual_preset ∈ {dark, light}`, `locale_default ∈ {ar, he, en}`, `card_mode ∈ {list, grid}`, `motion ∈ {calm, full, lively}`, `pickup_enabled`, `delivery_enabled` and `ordering_enabled` (**both forced `false` by CHECK `browse_only`** in this slice), `paused_until`, `pause_reason` (≤ 120), `opening_hours jsonb` (`{"weekly":[{dow, open, close}], "exceptions":[{date, closed} | {date, open, close}]}`, validated by `app.storefront_opening_hours_is_valid`; a close earlier than its open crosses midnight, `open = close` is refused), `logo_media_id`, `hero_media_id`, `is_published` (default `false`), `version` (≥ 1, CAS token), timestamps + `deleted_at`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `storefront_branch_id`.
+- **FKs (composite, same-org — D-012 layer 4):** `(organization_id, restaurant_id) -> restaurants`, `(organization_id, restaurant_id, storefront_branch_id) -> branches`, `(organization_id, logo_media_id | hero_media_id) -> storefront_media`.
+- **Access:** RLS enabled + forced with four deny policies and **no role grants**; read only through `public.storefront_menu` (anon, DEFINER, published rows only) and `app.get_restaurant_storefront_profile` (manager+); written only by `app.set_restaurant_storefront_profile` (rank ≥ 2, idempotent, CAS on `version`, audited `settings.storefront.updated` / `settings.storefront.update_denied`). Publish preconditions: slug, branch, resolvable timezone, currency `ILS`, exclusive (or disabled) tax, ≥ 1 live category with a live item, ≥ 1 opening-hours window.
+- **Sync:** not a POS/KDS entity — server-authoritative, never in the outbox; `deleted_at` tombstone kept for the house convention.
+
+### 4.8 `storefront_media` (STOREFRONT-READ-001, PROPOSED DECISION D-039)
+- **Purpose:** The map from a **private** original (`menu-images` / `restaurant-logos` object) to its **published public derivative** in the public bucket `storefront-media` (WebP, `w480` / `w960`, ≤ 512 KiB), so that the public read never exposes a private key and a derivative is immutable and content-addressed.
+- **Key fields:** `id`, `source_bucket ∈ {menu-images, restaurant-logos}`, `source_key` (1–512), `variant ∈ {w480, w960}`, `object_key` (`^[0-9a-f]{32}/[0-9a-f]{64}\.webp$` — the prefix is `app.storefront_media_prefix(restaurant_id)` = the first 32 hex of `sha256('storefront-media:' || restaurant_id)`, the file name is `content_hash`; enforced by CHECK), `content_hash` (sha-256 of the bytes), `width` / `height` (1–4096), `bytes` (1–524288), `published_at`, `unpublished_at` (≥ `published_at` when set), timestamps. Partial-unique `(organization_id, restaurant_id, source_bucket, source_key, variant) where unpublished_at is null`; unique `object_key`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
+- **FKs (composite, same-org):** `(organization_id, restaurant_id) -> restaurants`; referenced by `restaurant_storefront_profiles.logo_media_id` / `hero_media_id` and (later tickets) by item images.
+- **Access:** RLS enabled + forced with four deny policies and **no role grants**. The bucket's SELECT / INSERT / UPDATE / DELETE policies (`to authenticated`) are all gated by `app.can_write_storefront_object(name)` — true only for a **registered** row's `object_key` whose restaurant the caller manages (rank ≥ 2). `public.storefront_menu` emits `image_url` only for rows with `published_at is not null and unpublished_at is null`. The generation / upload / publish action is a later Dashboard ticket; no upload, delete, signed URL or export exists in this slice.
+- **Sync:** server-only; never in the outbox.
+
+---
+
 ## 5. Floor entity
 
 ### 5.1 `tables`
