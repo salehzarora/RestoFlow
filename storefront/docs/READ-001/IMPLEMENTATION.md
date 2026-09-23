@@ -159,8 +159,10 @@ changed on any provider.
 `tools/vercel/ignore-build.mjs` run in a disposable clone of the branch
 (`C:/tmp/sf-fanout-read001`, deleted afterwards) with
 `VERCEL_GIT_PREVIOUS_SHA = f93473bf…` (current `main`) and
-`VERCEL_GIT_COMMIT_SHA = ec94d424…` (the local head), each selector in its
-project directory:
+`VERCEL_GIT_COMMIT_SHA` = the local head at the time of the record (run twice:
+on the first head reviewed, and again on the final regrouped head — same
+result both times; the exact shas are in the evidence pack `fanout-t-s12.log`),
+each selector in its project directory:
 
 | selector | decision | reason | categories |
 |---|---|---|---|
