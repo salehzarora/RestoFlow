@@ -22,8 +22,19 @@ What it is:
   layouts, and that is the accepted choice.
 - One read seam, `src/source/storefront.ts`, with two sources selected by the
   **server-only** env `STOREFRONT_SOURCE`:
-  - `fixture` (default): the UI-001 fixture tenant `maps-burger`, no network;
-    the `/r/:ref` received / status document and the fixture gateway exist.
+  - `fixture`: the UI-001 fixture tenant `maps-burger`, no network; the
+    `/r/:ref` received / status document and the fixture gateway exist. It is
+    the default **only on a developer machine** (no `VERCEL` variable).
+  - **Fail closed in a provider context** (`src/source/mode.ts`): in a Vercel
+    build or runtime (`VERCEL=1` / `VERCEL_ENV`) the value must be exactly
+    `fixture` or `live`; absent, empty, whitespace-only or misspelled stops the
+    build (`generateStaticParams`) and every request with the misconfiguration
+    error, so a public deployment can never silently serve the demo. CI proves
+    both halves: a provider-shaped build with `STOREFRONT_SOURCE=live` passes
+    and a provider-shaped build without the variable fails. The historical
+    HOST-001 demo deployment is immutable evidence; before any future rebuild
+    of that demo project a separately authorized provider action would have to
+    set `STOREFRONT_SOURCE=fixture` on it.
   - `live`: `src/source/live/` calls the RPC with global `fetch` from server
     code only (`STOREFRONT_SUPABASE_URL`, `STOREFRONT_SUPABASE_ANON_KEY`,
     read inside functions at request time; see `.env.example`), decodes the
@@ -114,8 +125,14 @@ database port named in `supabase/config.toml`; on a stack that runs on other
 ports, use that port in `STOREFRONT_LOCAL_DB_URL` (or shift `config.toml`
 locally for the run and revert it before committing).
 
-Demo scenarios are selected with `?fx=<token>` and are read only inside the
-fixture source (`src/source/fixtures.ts`); the live source ignores the switch.
+Demo scenarios are selected with `?fx=<token>` and exist for the fixture source
+only: the server-side scenario slugs live in `src/source/fixtures.ts`, and the
+client runtimes read the token only when the resolution's `source` is
+`fixture`, so no URL token can induce a demo notice, a readiness scenario or a
+send outcome on a live tenant's pages. Opening hours are rendered by one
+helper, `src/ui/storefront/home/hoursCopy.ts`, from the live model (today's
+window, or the next opening day and time on the restaurant's own clock, or a
+bounded "closed for now"); paused never invents a next-open time.
 
 `storefront/scripts/` and `storefront/tests/` are support code. The deployment
 filter never scans them, which is why they may use Node built-ins while the

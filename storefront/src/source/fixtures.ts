@@ -23,7 +23,7 @@ const MAPS_BURGER: Tenant = {
     accent: '#FF8A2A',
     logo: '/tenant-maps-burger-logo.png',
   },
-  hours: { opens: '10:00', closes: '23:00', nextOpen: null },
+  hours: { opens: '10:00', closes: '23:00', nextOpen: null, nextOpenAt: null, timezone: 'Asia/Jerusalem' },
   service: {
     state: 'open',
     pickupEnabled: true,

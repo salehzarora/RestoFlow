@@ -27,7 +27,7 @@ test('vercel.json uses only allowed keys with the exact required values', () => 
   // still lands in out/ - next.config.mjs, not this file, decides that.
   assert.equal(Object.hasOwn(v, 'outputDirectory'), false, 'vercel.json must not declare outputDirectory');
   assert.equal(v.ignoreCommand, 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi');
-  assert.equal(v.functions, undefined, 'a static export has no functions');
+  assert.equal(v.functions, undefined, 'the Next.js preset creates the function; vercel.json declares none');
   for (const key of ['rewrites', 'redirects']) {
     if (v[key] != null) assert.equal(v[key].length, 0, `${key} must be absent or empty`);
   }

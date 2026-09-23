@@ -414,9 +414,8 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   // ARITHMETIC shapes, not the field name.
   assert.ok(aside.includes('summary: CartSummary | null'));
   assert.ok(aside.includes('quote: Quote | null'));
-  for (const banned of ASIDE_MONEY_BANNED) {
-    assert.ok(!aside.includes(banned), `the aside must not compute money: found ${banned}`);
-  }
+  const offences = asideMoneyOffences(aside);
+  assert.deepEqual(offences, [], `the aside must not compute money: ${offences.join(' | ')}`);
 
   // The fee row is gated on feeApplies - never on a truthy amount, or a served
   // zone with free delivery would be presented as no delivery at all.
@@ -443,19 +442,52 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   assert.ok(runtime.includes('LiveCartAside'));
 });
 
-/** The arithmetic a drifting aside would take: a rounding, a rate constant, a rate multiplication, the bp division. */
-const ASIDE_MONEY_BANNED = ['Math.round', 'TAX_RATE', '* quote.taxRateBp', 'taxRateBp *', '/ 10000', '* 0.'];
+/**
+ * The aside money guard (STOREFRONT-READ-001, strengthened after review D1).
+ * The aside may READ the rate for its label - exactly `formatRateBp(quote.taxRateBp)`
+ * and the `quote.taxRateBp === 0` visibility check - and nothing else: every
+ * other occurrence of the rate, any rounding call, any rate constant, any
+ * basis-point division or decimal rate multiplication is an offence, with or
+ * without whitespace around the operators.
+ */
+const ASIDE_ALLOWED_RATE_READS = ['formatRateBp(quote.taxRateBp)', 'quote.taxRateBp === 0'];
+const ASIDE_MONEY_SHAPES = [
+  [/Math\.(?:round|trunc|floor|ceil)\s*\(/g, 'a rounding call'],
+  [/\bTAX_RATE\b/g, 'the fixture rate constant'],
+  [/\/\s*10000\b/g, 'a basis-point division'],
+  [/\*\s*0\.\d/g, 'a decimal rate multiplication'],
+  [/taxRateBp\s*[*/%+-]/g, 'arithmetic on the rate'],
+  [/[*/%+-]\s*(?:quote\.)?taxRateBp\b/g, 'arithmetic on the rate'],
+  // ...and no arithmetic between money fields either: the aside prints amounts, it never derives one
+  [/\b\w+Minor\b\s*[*/%+-](?!=)/g, 'arithmetic on a money field'],
+  [/[*/%+-]\s*(?:quote\.|line\.|summary\.)?\w+Minor\b/g, 'arithmetic on a money field'],
+];
+export function asideMoneyOffences(src) {
+  const offences = [];
+  for (const [shape, why] of ASIDE_MONEY_SHAPES) for (const m of src.matchAll(shape)) offences.push(`${why}: ${m[0]}`);
+  // every remaining read of the rate must be one of the two allowed forms
+  let stripped = src;
+  for (const allowed of ASIDE_ALLOWED_RATE_READS) stripped = stripped.split(allowed).join('');
+  for (const m of stripped.matchAll(/taxRateBp/g)) offences.push(`a rate read outside the allowed forms at ${m.index}`);
+  return offences;
+}
 
-test('NEGATIVE CONTROL: the aside money guard would notice a hand-rolled total', () => {
-  // The rule above is worth something only if the banned strings really are
-  // the shape a drifting implementation would take.
-  const drifted = 'const taxMinor = Math.round(subtotal * TAX_RATE);';
-  const caught = ASIDE_MONEY_BANNED.filter((b) => drifted.includes(b));
-  assert.deepEqual(caught, ['Math.round', 'TAX_RATE']);
-  const driftedBp = 'const taxMinor = (subtotal * quote.taxRateBp) / 10000;';
-  assert.deepEqual(ASIDE_MONEY_BANNED.filter((b) => driftedBp.includes(b)), ['* quote.taxRateBp', '/ 10000']);
-  // ...and the legitimate label read is not an offence.
-  assert.deepEqual(ASIDE_MONEY_BANNED.filter((b) => 'fill(m.tax, { p: formatRateBp(quote.taxRateBp) })'.includes(b)), []);
+test('NEGATIVE CONTROL: the aside money guard notices a hand-rolled total, spaced or not', () => {
+  const drifts = [
+    'const taxMinor = Math.round(subtotal * TAX_RATE);',
+    'const taxMinor = (subtotal * quote.taxRateBp) / 10000;',
+    'const taxMinor = Math.trunc(subtotal*quote.taxRateBp/10000);',
+    'const t=subtotal*quote.taxRateBp/10000;',
+    'const rate = quote.taxRateBp; const t = subtotal * rate;',
+    'const t = subtotal * 0.18;',
+    'const t = subtotal*quote.taxRateBp;',
+    'formatMoney(quote.subtotalMinor + quote.feeMinor)',
+    'formatMoney(quote.totalMinor-quote.subtotalMinor)',
+    'const each = line.totalMinor / line.qty;',
+  ];
+  for (const d of drifts) assert.ok(asideMoneyOffences(d).length > 0, `must be caught: ${d}`);
+  // ...and the legitimate label read and its visibility check are not offences.
+  assert.deepEqual(asideMoneyOffences('{quote.taxRateBp === 0 ? null : <span>{fill(m.tax, { p: formatRateBp(quote.taxRateBp) })}</span>}'), []);
 });
 
 test('a REMOVAL reads as a removal, never as an addition', () => {

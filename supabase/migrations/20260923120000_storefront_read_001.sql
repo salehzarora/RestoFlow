@@ -786,6 +786,15 @@ begin
         if jsonb_typeof(v_val) not in ('string', 'null') then
           return jsonb_build_object('ok', false, 'error', 'invalid', 'reason', 'paused_until_invalid', 'entity', c_entity);
         end if;
+        -- ONE canonical wire format (independent review, C3): an RFC 3339 /
+        -- ISO 8601 instant with an EXPLICIT Z or offset, or null. Relative words
+        -- ('tomorrow', 'now'), 'infinity' and offset-less strings - which Postgres
+        -- would otherwise read in the caller's SESSION zone, i.e. UTC under
+        -- PostgREST - are refused, so the pause instant is deterministic.
+        if v_val #>> '{}' is not null
+           and (v_val #>> '{}') !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$' then
+          return jsonb_build_object('ok', false, 'error', 'invalid', 'reason', 'paused_until_invalid', 'entity', c_entity);
+        end if;
         begin
           v_next.paused_until := (v_val #>> '{}')::timestamptz;
         exception when others then
@@ -1291,7 +1300,7 @@ begin
   select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
     into v_anon_set
     from pg_proc p
-   where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
+   where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
      and has_function_privilege('anon', p.oid, 'EXECUTE');
   if v_anon_set <> 'storefront_menu(text)' then
     raise exception 'STOREFRONT-READ-001 posture NOT reached: anon-executable public set is [%], expected exactly storefront_menu(text)', v_anon_set;
@@ -1302,7 +1311,7 @@ begin
   select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
     into v_defs
     from pg_proc p
-   where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef;
+   where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef;
   if v_defs <> 'storefront_menu(text)' then
     raise exception 'STOREFRONT-READ-001 posture NOT reached: public SECURITY DEFINER set is [%], expected exactly storefront_menu(text)', v_defs;
   end if;

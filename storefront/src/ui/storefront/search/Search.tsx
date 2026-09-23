@@ -65,6 +65,7 @@ export function Search({
           (prototype Storefront.dc.html:865 `showCartBar: isMenu && ...`), and
           neither canonical search screenshot shows one. */}
       <StorefrontRuntime
+        source={resolution.source}
         slug={slug}
         menuVersion={menuVersion}
         items={items}

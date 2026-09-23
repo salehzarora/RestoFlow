@@ -284,8 +284,11 @@ export function decodeStorefrontMenu(raw: unknown): StorefrontMenuEnvelope {
       item_id: id(m.item_id, `${at}.item_id`),
       name: str(m.name, `${at}.name`, 80),
       selection_type: oneOf(m.selection_type, ['single', 'multiple'], `${at}.selection_type`),
-      min_select: int(m.min_select, `${at}.min_select`, 0, 1000),
-      max_select: m.max_select === null ? null : int(m.max_select, `${at}.max_select`, 0, 1000),
+      // The storage domain (public.modifiers CHECKs: min_select >= 0; max_select
+      // null or >= 0; int4). Anything a manager can legally store must decode;
+      // the min/max RELATION is bounded by the adapter, not refused here.
+      min_select: int(m.min_select, `${at}.min_select`, 0, 2147483647),
+      max_select: m.max_select === null ? null : int(m.max_select, `${at}.max_select`, 0, 2147483647),
       is_required: bool(m.is_required, `${at}.is_required`),
       display_order: int(m.display_order, `${at}.display_order`, -2147483648, 2147483647),
     } satisfies WireModifier;

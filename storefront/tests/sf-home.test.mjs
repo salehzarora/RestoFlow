@@ -521,3 +521,76 @@ test('NEGATIVE CONTROL: the gate is not vacuous - an evidence build DOES emit th
     else process.env.SF_EVIDENCE_ROUTES = previous;
   }
 });
+
+// ------------------------------------------------ STOREFRONT-READ-001 correction pass: hours copy + live fixture tokens
+
+const { hoursLabel, closedNoticeBody, weekdayName } = await import('../src/ui/storefront/home/hoursCopy.ts');
+const { storefrontMessages: messagesFor } = await import('../src/i18n/storefront.ts');
+
+const DANGLING = /(^|\s)(opens|يفتح|נפתח ב־)\s*$|Opens at \.|في \.|ב־\.|–\s*$|^\s*–|\{[a-z]\}/;
+/** hoursCopy reads only service.state and hours: a minimal tenant is the honest input. */
+function tenantWith(hours, state) {
+  return {
+    slug: 'synth', displayName: 'T', tagline: '', city: '', address: '', phone: '', currency: 'ILS', heroImage: null,
+    brand: { primary: '#123027', accent: '#ff8a2a', logo: null },
+    hours: { timezone: 'Asia/Jerusalem', nextOpen: null, nextOpenAt: null, ...hours },
+    service: { state, pickupEnabled: true, deliveryEnabled: false, deliveryFromMinor: 0, orderingEnabled: false },
+  };
+}
+
+test('hours copy (review finding B): every state renders a COMPLETE sentence in ar / en / he - never a dangling time, dash or placeholder', () => {
+  const cases = {
+    open: tenantWith({ opens: '10:00', closes: '23:00' }, 'open'),
+    closedLaterToday: tenantWith({ opens: '15:00', closes: '23:00' }, 'closed'),
+    closedNext: tenantWith({ opens: '', closes: '', nextOpen: '2026-09-25T07:00:00+00:00', nextOpenAt: { weekday: 5, time: '10:00' } }, 'closed'),
+    closedNone: tenantWith({ opens: '', closes: '' }, 'closed'),
+    overnight: tenantWith({ opens: '18:00', closes: '02:00' }, 'open'),
+    pausedWindow: tenantWith({ opens: '10:00', closes: '23:00' }, 'paused'),
+    pausedNone: tenantWith({ opens: '', closes: '' }, 'paused'),
+  };
+  for (const locale of ['ar', 'en', 'he']) {
+    const m = messagesFor(locale);
+    const label = Object.fromEntries(Object.entries(cases).map(([k, t]) => [k, hoursLabel(t, m)]));
+    assert.deepEqual(label.open, { text: '10:00–23:00', numeric: true });
+    assert.deepEqual(label.overnight, { text: '18:00–02:00', numeric: true });
+    assert.deepEqual(label.pausedWindow, { text: '10:00–23:00', numeric: true }, 'paused keeps the window: it is not closed');
+    assert.equal(label.closedLaterToday.text, m.opensAt.replace('{t}', '15:00'));
+    assert.equal(label.closedNext.text, m.opensOn.replace('{d}', m.weekday5).replace('{t}', '10:00'));
+    assert.ok(label.closedNext.text.includes(m.weekday5) && label.closedNext.text.includes('10:00'), locale + ': the next window names its day and time');
+    assert.equal(label.closedNone.text, m.closedNow);
+    assert.equal(label.pausedNone.text, m.unavailableNow, 'paused with no window never invents a next-open time');
+    for (const [k, l] of Object.entries(label)) assert.ok(!DANGLING.test(l.text), `${locale}/${k}: dangling copy: "${l.text}"`);
+    // the closed notice body
+    assert.equal(closedNoticeBody(cases.closedLaterToday, m), m.closedBody.replace('{t}', '15:00'));
+    assert.equal(closedNoticeBody(cases.closedNext, m), m.closedBodyOn.replace('{d}', m.weekday5).replace('{t}', '10:00'));
+    assert.equal(closedNoticeBody(cases.closedNone, m), m.closedBodyNoHours);
+    for (const t of [cases.closedLaterToday, cases.closedNext, cases.closedNone]) assert.ok(!DANGLING.test(closedNoticeBody(t, m)), locale + ': dangling notice body');
+    // every weekday has a name in this locale
+    for (let d = 0; d < 7; d++) assert.ok(weekdayName(m, d).length > 0, `${locale}: weekday ${d}`);
+    assert.equal(weekdayName(m, 7), '', 'an impossible weekday index renders nothing, never undefined');
+  }
+});
+
+test('the hours copy helper is the ONLY hours renderer: the strip, the notice, the footer and the intro read it, and nobody renders hours.opens raw', () => {
+  const parts = read('src/ui/storefront/home/HomeParts.tsx');
+  const intro = read('src/ui/storefront/Intro.tsx');
+  assert.ok(parts.includes('hoursLabel(tenant, m)') && parts.includes('closedNoticeBody(tenant, m)'));
+  assert.ok(intro.includes('hoursLabel(tenant, m)'));
+  for (const src of [parts, intro]) {
+    assert.ok(!/hours\.opens\}?[–-]|fill\(m\.opensAt, \{ t: (tenant\.)?hours\.opens|fill\(m\.closedBody/.test(src), 'no raw hours rendering remains');
+  }
+});
+
+test('LIVE ignores every ?fx= demo token (review finding C5): the runtimes read the token for the fixture source only', () => {
+  const flow = read('src/ui/storefront/checkout/FlowRuntime.tsx');
+  const cart = read('src/ui/storefront/cart/CartRuntime.tsx');
+  assert.ok(flow.includes("const fxEnabled = resolutionSource === 'fixture';"), 'the flow gates the token on the resolution source');
+  assert.ok(/readFx = useCallback\(\(search: string\) => \(fxEnabled \? readFlowScenario\(search\) : ''\)/.test(flow), 'every read goes through the gated reader');
+  assert.equal((flow.match(/readFlowScenario\(/g) ?? []).length, 1, 'readFlowScenario is called in exactly one (gated) place in the flow');
+  assert.ok(cart.includes("const fxEnabled = menu.source === 'fixture';") && cart.includes('if (!fxEnabled) return undefined;'), 'the aside gates the token on the menu source');
+  // the resolution names its source on both sides of the seam
+  const types = read('src/source/types.ts');
+  assert.ok(types.includes("readonly source: 'fixture' | 'live';"));
+  assert.ok(read('src/source/live/adapter.ts').includes("return { source: 'live',"));
+  assert.ok(read('src/source/storefront.ts').includes("source: 'fixture',"));
+});

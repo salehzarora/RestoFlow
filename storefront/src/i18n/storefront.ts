@@ -22,6 +22,19 @@ export interface StorefrontMessages {
   readonly paused: string;
   readonly closesAt: string;
   readonly opensAt: string;
+  /** "opens {d} {t}" - the next window on another day (STOREFRONT-READ-001 B). */
+  readonly opensOn: string;
+  /** "closed for now" - closed with no trustworthy next window. */
+  readonly closedNow: string;
+  readonly closedBodyOn: string;
+  readonly closedBodyNoHours: string;
+  readonly weekday0: string;
+  readonly weekday1: string;
+  readonly weekday2: string;
+  readonly weekday3: string;
+  readonly weekday4: string;
+  readonly weekday5: string;
+  readonly weekday6: string;
   readonly pickup: string;
   readonly delivery: string;
   readonly pickupOff: string;

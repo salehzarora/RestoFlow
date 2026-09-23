@@ -34,7 +34,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(98);
+select plan(121);
 
 -- ===== fixtures ==============================================================
 -- Org A (ILS): R-A1 published (branch A1a storefront, A1b sibling), R-A2 unpublished,
@@ -82,11 +82,14 @@ insert into app_users (id, email) values
   ('00000000-0000-0000-0000-00ad0000ee01', 'sfr1-owner-a@example.test'),
   ('00000000-0000-0000-0000-00ad0000ee02', 'sfr1-manager-a@example.test'),
   ('00000000-0000-0000-0000-00ad0000ee03', 'sfr1-cashier-a@example.test'),
+  ('00000000-0000-0000-0000-00ad0000ee04', 'sfr1-cashier-a1@example.test'),
   ('00000000-0000-0000-0000-00ad0000ee0b', 'sfr1-owner-b@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role) values
   ('00000000-0000-0000-0000-00ad0000ab01', '00000000-0000-0000-0000-00ad0000ee01', '00000000-0000-0000-0000-00ad00000a00', null, null, 'org_owner'),
   ('00000000-0000-0000-0000-00ad0000ab02', '00000000-0000-0000-0000-00ad0000ee02', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', null, 'manager'),
   ('00000000-0000-0000-0000-00ad0000ab03', '00000000-0000-0000-0000-00ad0000ee03', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', null, 'cashier'),
+  -- a cashier whose membership COVERS restaurant R-A1 (the media owner): the storage rank floor is what refuses it, not a scope miss
+  ('00000000-0000-0000-0000-00ad0000ab04', '00000000-0000-0000-0000-00ad0000ee04', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, 'cashier'),
   ('00000000-0000-0000-0000-00ad0000ab0b', '00000000-0000-0000-0000-00ad0000ee0b', '00000000-0000-0000-0000-00ad00000b00', null, null, 'org_owner');
 
 -- R-A1 menu: Cat1 (global), Cat2 (sibling A1b only), CatDead (inactive, holds an
@@ -185,7 +188,7 @@ create temp table _sf (label text primary key, r jsonb);
 grant select, insert on _sf to anon, authenticated;
 
 -- ============================================================================
--- A. contract introspection ............................................. (18)
+-- A. contract introspection ............................................. (21)
 -- ============================================================================
 select is((select count(*)::int from pg_proc where pronamespace = 'public'::regnamespace and proname = 'storefront_menu'), 1,
   'A1. exactly ONE overload of public.storefront_menu exists');
@@ -208,6 +211,29 @@ select ok(
   and not has_function_privilege('authenticated', 'app.storefront_opening_hours_is_valid(jsonb)', 'EXECUTE')
   and not has_function_privilege('anon', 'app.storefront_publish_blockers(uuid, uuid, uuid, text, jsonb)', 'EXECUTE'),
   'A6b. the caller-blind DEFINER helpers (publish_blockers / service_window / media_prefix / hours validator) are EXECUTE-able by no app role');
+-- NEGATIVE CONTROL (review C1): the family guard must see PROCEDURES too. A SECURITY DEFINER
+-- procedure granted to anon is created inside this transaction, must be reported by the SAME
+-- set expressions the migration's final DO block and T-016 use (prokind in ('f','p')), and is
+-- dropped again; the sets then equal the enumerated allowlist once more.
+create procedure public.zz_read001_probe_proc() language sql security definer set search_path = '' as $$ select 1 $$;
+revoke all on procedure public.zz_read001_probe_proc() from public;
+grant execute on procedure public.zz_read001_probe_proc() to anon;
+select is(
+  (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
+     from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and has_function_privilege('anon', p.oid, 'EXECUTE')),
+  'storefront_menu(text), zz_read001_probe_proc()',
+  'A6c. NEGATIVE CONTROL: an anon-executable SECURITY DEFINER PROCEDURE is caught by the widened anon-set guard (prokind f + p)');
+select is(
+  (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
+     from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
+  'storefront_menu(text), zz_read001_probe_proc()',
+  'A6d. NEGATIVE CONTROL: the widened SECURITY DEFINER-set guard reports the procedure too');
+drop procedure public.zz_read001_probe_proc();
+select is(
+  (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
+     from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and has_function_privilege('anon', p.oid, 'EXECUTE')),
+  'storefront_menu(text)',
+  'A6e. ...and once the probe is dropped the anon-executable routine set is exactly the allowlist again');
 select ok(has_function_privilege('anon', 'public.storefront_menu(text)', 'EXECUTE'),
   'A7. anon holds EXECUTE on public.storefront_menu(text)');
 select ok(not has_function_privilege('authenticated', 'public.storefront_menu(text)', 'EXECUTE'),
@@ -252,7 +278,7 @@ select ok(
   'A17. the served ordering_enabled / delivery_enabled are LITERAL false in the function body (browse-only slice)');
 
 -- ============================================================================
--- B. bucket + write policies ............................................. (8)
+-- B. bucket + write policies ............................................. (22)
 -- ============================================================================
 select is((select public from storage.buckets where id = 'storefront-media'), true,
   'B1. storefront-media bucket exists and is PUBLIC (derivatives only)');
@@ -274,6 +300,90 @@ select ok(
 select ok(not has_function_privilege('anon', 'app.can_write_storefront_object(text)', 'EXECUTE')
       and has_function_privilege('authenticated', 'app.can_write_storefront_object(text)', 'EXECUTE'),
   'B8. the object gate is executable by authenticated only');
+
+-- BEHAVIOUR as REAL principals (review C4). Two more registered derivatives: org B's live key 'd' and
+-- an org B key 'e' registered but never uploaded; two objects exist in the bucket (A's 'a', B's 'd'),
+-- inserted by the harness role which bypasses RLS. Everything rolls back with the transaction.
+insert into storefront_media (id, organization_id, restaurant_id, source_bucket, source_key, variant, object_key, content_hash, width, height, bytes, published_at, unpublished_at) values
+  ('00000000-0000-0000-0000-00ad0000f0b1', '00000000-0000-0000-0000-00ad00000b00', '00000000-0000-0000-0000-00ad00000b10', 'menu-images', 'orgb/private/x.jpg', 'w480',
+   app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000b10') || '/' || repeat('d', 64) || '.webp', repeat('d', 64), 480, 480, 100, now(), null),
+  ('00000000-0000-0000-0000-00ad0000f0b2', '00000000-0000-0000-0000-00ad00000b00', '00000000-0000-0000-0000-00ad00000b10', 'menu-images', 'orgb/private/y.jpg', 'w480',
+   app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000b10') || '/' || repeat('e', 64) || '.webp', repeat('e', 64), 480, 480, 100, now(), null);
+insert into storage.objects (bucket_id, name) values
+  ('storefront-media', app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000a10') || '/' || repeat('a', 64) || '.webp'),
+  ('storefront-media', app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000b10') || '/' || repeat('d', 64) || '.webp');
+
+-- storage.protect_delete() (a statement trigger) refuses every direct DELETE unless the Storage
+-- API's own session gate is set; setting it here as the harness lets the RLS DELETE policy - the
+-- thing this section proves - be exercised by the REAL roles exactly as the API exercises it.
+-- the opaque prefixes, computed ONCE as the harness: the real roles cannot (and must not) call
+-- app.storefront_media_prefix themselves
+create temp table _sf_keys as
+  select app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000a10') as pa,
+         app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000b10') as pb;
+grant select on _sf_keys to anon, authenticated;
+set local storage.allow_delete_query = 'true';
+set local role anon;
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media'), 0,
+  'B9. anon lists NO object of the public bucket through storage.objects (a public bucket serves GET by URL; it never enumerates)');
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('storefront-media', (select pa from _sf_keys) || '/' || repeat('f', 64) || '.webp') $$,
+  '42501', null,
+  'B10. anon cannot upload into the bucket');
+-- silent no-ops as anon (0 rows visible); the harness role verifies the effect below
+update storage.objects set metadata = '{"probe":"anon"}'::jsonb where bucket_id = 'storefront-media';
+delete from storage.objects where bucket_id = 'storefront-media';
+reset role;
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media' and metadata ? 'probe'), 0,
+  'B11. anon updated no object (no probe mark landed)');
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media'), 2,
+  'B12. anon deleted no object (both objects remain)');
+
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee01';   -- org_owner of Org A (rank 3 over R-A1)
+select is((select string_agg(name, ',') from storage.objects where bucket_id = 'storefront-media'),
+  (select pa from _sf_keys) || '/' || repeat('a', 64) || '.webp',
+  'B13. a manager of Org A sees exactly ITS registered object, never Org B''s (the SELECT policy is tenant-scoped, not bucket-wide)');
+update storage.objects set name = (select pa from _sf_keys) || '/' || repeat('b', 64) || '.webp'
+ where bucket_id = 'storefront-media' and name = (select pa from _sf_keys) || '/' || repeat('a', 64) || '.webp';
+reset role;
+select is((select string_agg(name, ',') from storage.objects where bucket_id = 'storefront-media' and name like (select pa from _sf_keys) || '/%'),
+  (select pa from _sf_keys) || '/' || repeat('b', 64) || '.webp',
+  'B14. ...and may move its object to ANOTHER key registered to its restaurant (UPDATE is reachable through the SELECT policy)');
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee01';
+select throws_ok(
+  $$ update storage.objects set name = (select pa from _sf_keys) || '/' || repeat('9', 64) || '.webp' where bucket_id = 'storefront-media' $$,
+  '42501', null,
+  'B15. ...but not to an UNREGISTERED key (WITH CHECK)');
+delete from storage.objects where bucket_id = 'storefront-media' and name like (select pb from _sf_keys) || '/%';
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('storefront-media', (select pa from _sf_keys) || '/' || repeat('f', 64) || '.webp') $$,
+  '42501', null,
+  'B17. an Org A manager cannot upload an UNREGISTERED key, even under its own prefix');
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('storefront-media', (select pb from _sf_keys) || '/' || repeat('e', 64) || '.webp') $$,
+  '42501', null,
+  'B18. ...nor a key registered to ANOTHER tenant (cross-tenant key mutation refused)');
+delete from storage.objects where bucket_id = 'storefront-media' and name = (select pa from _sf_keys) || '/' || repeat('b', 64) || '.webp';
+reset role;
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media' and name like (select pb from _sf_keys) || '/%'), 1,
+  'B16. an Org A manager deletes nothing under Org B''s prefix');
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media' and name like (select pa from _sf_keys) || '/%'), 0,
+  'B19. ...and may retract (DELETE) its own registered derivative');
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee0b';   -- org_owner of Org B
+select is((select string_agg(name, ',') from storage.objects where bucket_id = 'storefront-media'),
+  (select pb from _sf_keys) || '/' || repeat('d', 64) || '.webp',
+  'B20. Org B''s owner sees exactly Org B''s object');
+set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee04';   -- cashier COVERING R-A1 (rank 1 over the media owner)
+select is((select count(*)::int from storage.objects where bucket_id = 'storefront-media'), 0,
+  'B21. a cashier whose membership covers the restaurant still sees no object (rank floor, not scope)');
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('storefront-media', (select pa from _sf_keys) || '/' || repeat('a', 64) || '.webp') $$,
+  '42501', null,
+  'B22. ...and cannot upload even a registered key of its own restaurant''s org (rank < manager)');
+reset role;
 
 -- ============================================================================
 -- C. the projection as the REAL role anon .............................. (24)
@@ -429,7 +539,7 @@ select is((select r from _sf where label = 'big'), '{"ok":false,"error":"payload
   'D15. 501 live items -> the TYPED payload_limit envelope, never not_found');
 
 -- ============================================================================
--- E. the write RPC, the CHECK layer, the manager read .................. (28)
+-- E. the write RPC, the CHECK layer, the manager read .................. (34)
 -- ============================================================================
 set local role authenticated;
 set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee02';   -- manager over R-A9
@@ -474,6 +584,27 @@ insert into _sf values ('w_media_bad', public.set_restaurant_storefront_profile(
 insert into _sf values ('w_publish', public.set_restaurant_storefront_profile(
   '00000000-0000-0000-0000-00ad00c0000b', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 1,
   '{"is_published":true,"opening_hours":{"weekly":[{"dow":0,"open":"09:00","close":"17:00"}],"exceptions":[{"date":"2026-12-25","closed":true}]},"public_phone":"+972520000000","primary_color":"#AABBCC"}'::jsonb));
+-- paused_until wire format (review C3): ONE canonical shape - RFC 3339 with an explicit Z/offset - or null
+insert into _sf values ('w_pause_word', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00031', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 2,
+  '{"paused_until":"tomorrow"}'::jsonb));
+insert into _sf values ('w_pause_naive', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00032', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 2,
+  '{"paused_until":"2026-10-01 12:00"}'::jsonb));
+insert into _sf values ('w_pause_inf', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00033', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 2,
+  '{"paused_until":"infinity"}'::jsonb));
+insert into _sf values ('w_pause_date', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00034', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 2,
+  '{"paused_until":"2026-10-01"}'::jsonb));
+insert into _sf values ('w_pause_iso', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00035', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 2,
+  '{"paused_until":"2026-10-01T12:00:00+03:00"}'::jsonb));
+-- the stored instant, read back through the manager read BEFORE the pause is cleared
+insert into _sf values ('r_after_pause', public.get_restaurant_storefront_profile('00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90'));
+insert into _sf values ('w_pause_clear', public.set_restaurant_storefront_profile(
+  '00000000-0000-0000-0000-00ad00c00036', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', 3,
+  '{"paused_until":null}'::jsonb));
 insert into _sf values ('r_manager', public.get_restaurant_storefront_profile('00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90'));
 set local app.current_app_user_id = '00000000-0000-0000-0000-00ad0000ee03';   -- cashier at R-A9
 insert into _sf values ('w_cashier', public.set_restaurant_storefront_profile(
@@ -534,8 +665,8 @@ select is((select r ->> 'error' from _sf where label = 'w_cashier'), 'permission
   'E19. a cashier is denied (typed, no raise)');
 select is((select count(*)::int from audit_events where organization_id = '00000000-0000-0000-0000-00ad00000a00' and action = 'settings.storefront.update_denied'), 1,
   'E20. the denial is audited once');
-select is((select count(*)::int from audit_events where organization_id = '00000000-0000-0000-0000-00ad00000a00' and action = 'settings.storefront.updated'), 2,
-  'E21. the two accepted writes are audited (create + publish); replay / stale / invalid audit nothing');
+select is((select count(*)::int from audit_events where organization_id = '00000000-0000-0000-0000-00ad00000a00' and action = 'settings.storefront.updated'), 4,
+  'E21. the four accepted writes are audited (create + publish + pause + clear); replay / stale / invalid audit nothing');
 select ok((select (r ->> 'ok')::boolean and (r ->> 'exists')::boolean and (r -> 'derived' ->> 'publish_ready')::boolean
               and r -> 'derived' ->> 'timezone' = 'Asia/Jerusalem' and r -> 'derived' ->> 'currency_code' = 'ILS'
               and (r -> 'derived' -> 'tax' ->> 'rate_bp')::int = 1700
@@ -560,6 +691,20 @@ select throws_ok(
      values ('00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', 'menu-images', 'k', 'w480', app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000b10') || '/' || repeat('c', 64) || '.webp', repeat('c', 64), 1, 1, 1) $$,
   '23514', null,
   'E27. a derivative cannot be registered under ANOTHER restaurant''s opaque prefix (key-shape CHECK)');
+select is((select r ->> 'reason' from _sf where label = 'w_pause_word'), 'paused_until_invalid',
+  'E28. paused_until: a relative word (tomorrow) is refused');
+select is((select r ->> 'reason' from _sf where label = 'w_pause_naive'), 'paused_until_invalid',
+  'E29. paused_until: an offset-less timestamp (session-zone dependent) is refused');
+select is((select r ->> 'reason' from _sf where label = 'w_pause_inf'), 'paused_until_invalid',
+  'E30. paused_until: infinity is refused');
+select is((select r ->> 'reason' from _sf where label = 'w_pause_date'), 'paused_until_invalid',
+  'E31. paused_until: a bare date is refused');
+select ok((select (r ->> 'ok')::boolean and (r ->> 'version')::int = 3 from _sf where label = 'w_pause_iso')
+          and (select (r -> 'profile' ->> 'paused_until')::timestamptz = '2026-10-01T09:00:00Z'::timestamptz from _sf where label = 'r_after_pause'),
+  'E32. paused_until: an RFC 3339 instant with an explicit offset is accepted and stored as that instant (deterministic across session zones)');
+select ok((select (r ->> 'ok')::boolean and (r ->> 'version')::int = 4 from _sf where label = 'w_pause_clear')
+          and (select paused_until is null from restaurant_storefront_profiles where restaurant_id = '00000000-0000-0000-0000-00ad00000a90'),
+  'E33. paused_until: null clears the pause');
 
 -- ============================================================================
 -- F. the newly published tenant is served by the public read ............. (2)

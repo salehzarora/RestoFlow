@@ -9,10 +9,10 @@ import { test } from 'node:test';
 import { NOT_FOUND_ENVELOPE, PAYLOAD_LIMIT_ENVELOPE, SYNTH_IDS, SYNTH_MEDIA_PATH, syntheticEnvelope } from './support/envelope.mjs';
 
 const { decodeStorefrontMenu, EnvelopeError, CAPS } = await import('../src/source/live/decode.ts');
-const { adaptStorefront, liveStorefrontSource, mediaUrl } = await import('../src/source/live/adapter.ts');
+const { adaptStorefront, liveStorefrontSource, mediaUrl, nextOpenParts } = await import('../src/source/live/adapter.ts');
 const { liveConfig, storefrontMenuRequest, fetchStorefrontMenu } = await import('../src/source/live/client.ts');
 const { CATEGORY_ICON_KEYS, iconPathFor, DEFAULT_ICON_KEY } = await import('../src/source/live/icons.ts');
-const { sourceMode, isLiveMode, fixtureStorefrontSource, storefrontSource } = await import('../src/source/storefront.ts');
+const { sourceMode, isLiveMode, isProviderContext, fixtureStorefrontSource, storefrontSource } = await import('../src/source/storefront.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
 const { summarise, addLine } = await import('../src/cart/cartModel.ts');
 
@@ -106,6 +106,48 @@ test('text caps count CODE POINTS like the server: an astral character at the ca
   assert.equal(decodeStorefrontMenu(name).restaurant.display_name, name.restaurant.display_name);
 });
 
+test('min_select / max_select accept the STORAGE domain (0 .. int4 max), not a magic ceiling; the relation is bounded by the adapter', () => {
+  const withBounds = (min, max) => {
+    const e = syntheticEnvelope();
+    e.modifiers[1] = { ...e.modifiers[1], min_select: min, max_select: max };
+    return e;
+  };
+  for (const [min, max] of [[0, null], [0, 0], [1, 1], [1000, 1000], [1001, 1001], [0, 2147483647], [2147483647, null]]) {
+    const ok = decodeStorefrontMenu(withBounds(min, max));
+    assert.equal(ok.modifiers[1].min_select, min);
+    assert.equal(ok.modifiers[1].max_select, max);
+  }
+  // outside the storage domain: negative, non-integer, above int4, string
+  for (const [min, max] of [[-1, null], [0, -1], [1.5, null], [0, 2147483648], [2147483648, null], ['1', null], [0, '2']]) {
+    assert.throws(() => decodeStorefrontMenu(withBounds(min, max)), EnvelopeError, `${min}/${max}`);
+  }
+  // a legally stored large maximum keeps the storefront up and reaches the group as its max
+  const big = adaptStorefront(decodeStorefrontMenu(withBounds(0, 5000)), ORIGIN);
+  assert.equal(big.groups.find((g) => g.id === SYNTH_IDS.extras).max, 5000);
+  // an unsatisfiable pair (min above a bounded max) drops THAT group only - bounded, never the whole storefront
+  const impossible = adaptStorefront(decodeStorefrontMenu(withBounds(3, 2)), ORIGIN);
+  assert.equal(impossible.groups.some((g) => g.id === SYNTH_IDS.extras), false, 'the impossible group is dropped');
+  assert.equal(impossible.view.items.length, 3, 'the items still render');
+  assert.deepEqual(impossible.view.items[0].groupIds, [SYNTH_IDS.weight], 'the burger keeps its satisfiable group');
+  // min <= max (min 2, max 3) is a normal multi group; single ignores any max
+  const normal = adaptStorefront(decodeStorefrontMenu(withBounds(2, 3)), ORIGIN);
+  assert.deepEqual([normal.groups.find((g) => g.id === SYNTH_IDS.extras).max, normal.groups.find((g) => g.id === SYNTH_IDS.extras).required], [3, true]);
+  const singleEnvelope = syntheticEnvelope();
+  singleEnvelope.modifiers[0] = { ...singleEnvelope.modifiers[0], max_select: 5000, min_select: 7 };
+  const single = adaptStorefront(decodeStorefrontMenu(singleEnvelope), ORIGIN).groups.find((g) => g.id === SYNTH_IDS.weight);
+  assert.equal(single.single, true);
+  assert.equal(Object.hasOwn(single, 'max'), false, 'a single-choice group never carries a max');
+});
+
+test('nextOpenParts expresses the next opening instant on the restaurant wall clock, or null when it cannot', () => {
+  assert.deepEqual(nextOpenParts('2026-09-27T07:00:00+00:00', 'Asia/Jerusalem'), { weekday: 0, time: '10:00' }, 'Sunday 10:00 IDT');
+  assert.deepEqual(nextOpenParts('2026-09-30T15:00:00Z', 'Asia/Jerusalem'), { weekday: 3, time: '18:00' }, 'Wednesday 18:00 IDT');
+  assert.deepEqual(nextOpenParts('2026-12-31T22:00:00Z', 'Asia/Jerusalem'), { weekday: 5, time: '00:00' }, 'midnight local (Friday 2027-01-01) renders 00:00, never 24:00');
+  assert.equal(nextOpenParts(null, 'Asia/Jerusalem'), null);
+  assert.equal(nextOpenParts('not-a-date', 'Asia/Jerusalem'), null);
+  assert.equal(nextOpenParts('2026-09-27T07:00:00+00:00', 'Not/AZone'), null, 'an unknown zone yields null, never a fabricated time');
+});
+
 // ------------------------------------------------------------------ adapter
 
 test('the adapter maps the envelope onto the fixture shape with the packet §3 rules', () => {
@@ -119,10 +161,12 @@ test('the adapter maps the envelope onto the fixture shape with the packet §3 r
   assert.equal(tenant.heroImage, null, 'no hero published -> null (D11)');
   assert.equal(tenant.brand.logo, null);
   assert.equal(tenant.currency, 'ILS');
-  assert.deepEqual(tenant.hours, { opens: '00:00', closes: '00:00', nextOpen: null });
-  // closed with no window today: opens/closes empty, the next opening instant carried as the only forward pointer
+  assert.deepEqual(tenant.hours, { opens: '00:00', closes: '00:00', nextOpen: null, nextOpenAt: null, timezone: 'Asia/Jerusalem' });
+  assert.equal(r.source, 'live');
+  // closed with no window today: opens/closes empty, the next opening instant carried as the only forward pointer,
+  // ALSO expressed on the restaurant's own wall clock (Sunday 2026-09-27 10:00 Asia/Jerusalem) for the UI copy
   const closed = adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({ hours: { opens: null, closes: null, open_now: false, next_open: '2026-09-27T07:00:00+00:00' }, service: { state: 'closed' } })), ORIGIN);
-  assert.deepEqual(closed.view.tenant.hours, { opens: '', closes: '', nextOpen: '2026-09-27T07:00:00+00:00' });
+  assert.deepEqual(closed.view.tenant.hours, { opens: '', closes: '', nextOpen: '2026-09-27T07:00:00+00:00', nextOpenAt: { weekday: 0, time: '10:00' }, timezone: 'Asia/Jerusalem' });
   assert.equal(r.preset, 'dark');
   assert.equal(r.taxRateBp, 1800);
   assert.equal(r.menuVersion, '3.1758600000');
@@ -237,16 +281,62 @@ test('the icon registry mirrors the 49 Dashboard keys and falls back to the menu
 
 // ------------------------------------------------------------- source switch
 
-test('the source switch is fixture by default, live on demand, and refuses any other value', () => {
+test('the source switch: explicit fixture / live everywhere; the fixture default exists OUTSIDE a provider context only', () => {
+  // non-provider (a developer machine): absent / empty -> fixture; explicit values honoured; anything else refused
+  assert.equal(isProviderContext({}), false);
   assert.equal(sourceMode({}), 'fixture');
   assert.equal(sourceMode({ STOREFRONT_SOURCE: '' }), 'fixture');
   assert.equal(sourceMode({ STOREFRONT_SOURCE: 'fixture' }), 'fixture');
   assert.equal(sourceMode({ STOREFRONT_SOURCE: 'live' }), 'live');
   assert.equal(isLiveMode({ STOREFRONT_SOURCE: 'live' }), true);
-  assert.throws(() => sourceMode({ STOREFRONT_SOURCE: 'demo' }), /must be "fixture" or "live"/);
+  assert.throws(() => sourceMode({ STOREFRONT_SOURCE: 'demo' }), /must be exactly "fixture" or "live"/);
+  assert.throws(() => sourceMode({ STOREFRONT_SOURCE: ' ' }), /must be exactly/);
+  assert.throws(() => sourceMode({ STOREFRONT_SOURCE: 'Live' }), /must be exactly/);
   assert.equal(storefrontSource({}).kind, 'fixture');
   assert.equal(storefrontSource({ STOREFRONT_SOURCE: 'live' }).kind, 'live');
   assert.deepEqual(storefrontSource({ STOREFRONT_SOURCE: 'live' }).staticSlugs(), [], 'nothing is pre-rendered live');
+  // NODE_ENV alone never makes a provider context (it is production for every next build)
+  assert.equal(isProviderContext({ NODE_ENV: 'production' }), false);
+  assert.equal(sourceMode({ NODE_ENV: 'production' }), 'fixture');
+});
+
+test('FAIL CLOSED (review finding A): in a provider context the source must be stated exactly; nothing silently selects the fixture', () => {
+  const PROVIDER = [{ VERCEL: '1' }, { VERCEL: '1', VERCEL_ENV: 'production' }, { VERCEL: '1', VERCEL_ENV: 'preview' }, { VERCEL_ENV: 'production' }];
+  for (const ctx of PROVIDER) {
+    assert.equal(isProviderContext(ctx), true, JSON.stringify(ctx));
+    // absent, empty, whitespace-only, misspelled / wrong case
+    assert.throws(() => sourceMode({ ...ctx }), /must be exactly "fixture" or "live" in a provider \(VERCEL\) build or runtime, got undefined/, 'absent ' + JSON.stringify(ctx));
+    assert.throws(() => sourceMode({ ...ctx, STOREFRONT_SOURCE: '' }), /in a provider .* got ""/, 'empty');
+    assert.throws(() => sourceMode({ ...ctx, STOREFRONT_SOURCE: '   ' }), /in a provider .* got "   "/, 'whitespace-only');
+    assert.throws(() => sourceMode({ ...ctx, STOREFRONT_SOURCE: 'lvie' }), /in a provider .* got "lvie"/, 'misspelled');
+    assert.throws(() => sourceMode({ ...ctx, STOREFRONT_SOURCE: 'Live' }), /in a provider/, 'wrong case');
+    assert.throws(() => sourceMode({ ...ctx, STOREFRONT_SOURCE: ' live' }), /in a provider/, 'padded');
+    assert.throws(() => storefrontSource({ ...ctx }), /in a provider/, 'the switch itself throws, so generateStaticParams and every request throw');
+    // explicit values are honoured in a provider context
+    assert.equal(sourceMode({ ...ctx, STOREFRONT_SOURCE: 'fixture' }), 'fixture');
+    assert.equal(sourceMode({ ...ctx, STOREFRONT_SOURCE: 'live' }), 'live');
+    assert.equal(storefrontSource({ ...ctx, STOREFRONT_SOURCE: 'fixture' }).kind, 'fixture');
+    assert.equal(storefrontSource({ ...ctx, STOREFRONT_SOURCE: 'live' }).kind, 'live');
+  }
+  // and there is no live -> fixture fallback of any kind in the live source (the adapter throws; see the transport test below)
+  assert.equal(typeof liveStorefrontSource, 'function');
+});
+
+test('the request-route fixture applies the SAME source rule (a provider build without a source cannot prerender the demo ref)', async () => {
+  const { requestRefs } = await import('../src/source/request-fixture.ts');
+  const saved = { VERCEL: process.env.VERCEL, VERCEL_ENV: process.env.VERCEL_ENV, STOREFRONT_SOURCE: process.env.STOREFRONT_SOURCE };
+  try {
+    delete process.env.VERCEL; delete process.env.VERCEL_ENV; delete process.env.STOREFRONT_SOURCE;
+    assert.equal(requestRefs().length, 1, 'non-provider default: the one demo ref');
+    process.env.STOREFRONT_SOURCE = 'live';
+    assert.deepEqual(requestRefs(), [], 'live: no request route');
+    delete process.env.STOREFRONT_SOURCE; process.env.VERCEL = '1';
+    assert.throws(() => requestRefs(), /in a provider/, 'provider without a source: throws, never the demo ref');
+    process.env.STOREFRONT_SOURCE = 'fixture';
+    assert.equal(requestRefs().length, 1, 'provider with an explicit fixture: the demo ref');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });
 
 test('the fixture source resolves the canonical tenant, keeps its groups / zones / rate, and hides demo slugs outside an evidence build', async () => {
@@ -255,6 +345,7 @@ test('the fixture source resolves the canonical tenant, keeps its groups / zones
   try {
     const canonical = await fixtureStorefrontSource.getStorefront('maps-burger');
     assert.ok(canonical);
+    assert.equal(canonical.source, 'fixture', 'the fixture resolution names its source (the ?fx= tokens are honoured for it only)');
     assert.equal(canonical.view.tenant.service.orderingEnabled, true, 'the fixture demo still orders');
     assert.equal(canonical.taxRateBp, 1800);
     assert.equal(canonical.menuVersion, 'mb-1');

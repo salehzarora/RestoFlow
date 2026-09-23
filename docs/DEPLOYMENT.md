@@ -999,14 +999,16 @@ BUILD, never a silent IGNORE.
 
 `inspectStorefront` is a guarded input contract evaluated at **both** the
 baseline and the head revision, mirroring `inspectMarketing`. It requires the
-static-export shape (`framework: nextjs`, `installCommand: npm ci`,
-`buildCommand: npm run build`, no functions, no rewrites/redirects), a private
-manifest whose runtime dependencies are only `next`/`react`/`react-dom` at exact
-versions, a present lockfile, a `next.config.mjs` pinned by the exported
-`STOREFRONT_CONFIG_HASH`, **no** `outputDirectory` key (HOST-FIX-001: the
-Next.js preset locates `.next` itself and serves the `out/` export; an explicit
-value — `out` included — overrides that lookup and failed hosted with
-`NEXT_NO_ROUTES_MANIFEST`, so any explicit value fails the contract) and an
+Next.js **server-build** shape (`framework: nextjs`, `installCommand: npm ci`,
+`buildCommand: npm run build`, no `functions` key — the preset creates the
+function — no rewrites/redirects; STOREFRONT-READ-001 replaced the earlier
+static-export shape), a private manifest whose runtime dependencies are only
+`next`/`react`/`react-dom` at exact versions, a present lockfile, a
+`next.config.mjs` pinned by the exported `STOREFRONT_CONFIG_HASH` (a server
+build with `revalidate`/`expireTime`, no `output: 'export'`), **no**
+`outputDirectory` key (HOST-FIX-001: the Next.js preset locates `.next` itself;
+an explicit value — `out` included — overrides that lookup and failed hosted
+with `NEXT_NO_ROUTES_MANIFEST`, so any explicit value fails the contract) and an
 `ignoreCommand` that invokes this engine with the `storefront` selector, the
 TypeScript build-graph boundary described below, module specifiers that resolve
 inside the storefront runtime roots or are one of exactly four allowlisted
@@ -1083,16 +1085,18 @@ Directory** is enabled precisely so the ignore command can read
 `../tools/vercel/`, so the whole repository is on disk while the build runs.
 
 R3 closes it at the **source contract** rather than by analysing filesystem
-reads. During the INFRA static-export phase the storefront needs no *request-time*
-server, so Node built-in capability is unnecessary for this phase; importing one
-is an input this engine does not understand, and unsupported inputs BUILD.
+reads. The storefront's server build (STOREFRONT-READ-001) reads its one
+upstream over the platform's global `fetch` and its configuration from
+`process.env`, neither of which is a bare import, so Node built-in capability
+remains unnecessary; importing one is an input this engine does not understand,
+and unsupported inputs BUILD.
 
-Note what "no server runtime" does and does not mean. A static export still
-**executes code at build time** — the official static-exports guide states
-"Server Components consumed inside the `app` directory will run during the
-build". The no-Node-builtins rule is therefore this phase's *chosen source
-contract*, not a general property of static Next projects. The only bare
-specifiers storefront source may import are:
+Note what the rule does and does not mean. Server Components run both at build
+time (`generateStaticParams`, prerendered roots) and at request time (the
+revalidated tenant routes). The no-Node-builtins rule is this project's
+*chosen source contract*, re-reviewed by STOREFRONT-READ-001 for the server
+build, not a general property of Next projects. The only bare specifiers
+storefront source may import are:
 
 | Allowed | Rejected |
 |---|---|
@@ -1173,15 +1177,24 @@ external-read question this section closes.
 'self'`, `object-src 'none'`, `frame-ancestors 'none'`, `media-src 'none'` and
 `X-Robots-Tag: noindex, nofollow`. It carries **one accepted exception**:
 `script-src 'self' 'unsafe-inline'`, because Next emits inline hydration scripts
-(`self.__next_f.push(...)`) and a static export cannot mint a per-request nonce.
+(`self.__next_f.push(...)`); the INFRA static export could not mint a
+per-request nonce, and the STOREFRONT-READ-001 server build deliberately does
+not add one yet (see below).
 
 State it accurately. This is **not a strict CSP**, and it does not block all
-inline script injection. Nor is `'unsafe-inline'` *unavoidable* for static output
-in general — hash-based policies exist; this phase deliberately does not add a
-hash-generation pipeline, because that would conflict with the hash-pinned
-`next.config.mjs` and the pinned build script. It is a bounded trade-off for a
-placeholder with no tenant content, no customer data and no ordering, and it
-**must be re-reviewed before any of those are introduced**. `'unsafe-eval'` never
+inline script injection. Nor is `'unsafe-inline'` *unavoidable* — a server
+build can mint a per-request nonce and hash-based policies exist; the INFRA
+phase deliberately added no hash-generation pipeline because that would
+conflict with the hash-pinned `next.config.mjs` and the pinned build script.
+**Re-review under STOREFRONT-READ-001 (2026-09-24):** the storefront now serves
+live tenant menu content (browse-only; still no customer data and no ordering),
+so the trigger named below has been met for tenant content. The exception is
+**kept as a recorded, bounded trade-off for the browse-only slice** — every
+tenant string is rendered as text, no tenant value ever becomes markup, script
+or a URL, and the documents carry nothing that belongs to a visitor — and a
+nonce-based `script-src` is a **named follow-up that must land before real
+ordering or any customer data is introduced** (it is not part of READ-001).
+`'unsafe-eval'` never
 appears in the served policy. `noindex` is a crawler directive, not access
 control.
 
@@ -1490,8 +1503,8 @@ Preflight is the §13 procedure (confirm `supabase/.temp/project-ref` = `oqmevrn
 
 | # | Query (read-only) | Expected AFTER |
 |---|---|---|
-| 1 | `select count(*) filter (where has_function_privilege('anon', p.oid, 'EXECUTE')) as anon_exec, count(*) as total from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f';` | `anon_exec = 0`; `total` unchanged (118 on 2026-09-13) |
-| 2 | `select count(*) filter (where not has_function_privilege('authenticated', p.oid, 'EXECUTE')) as auth_missing from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f';` | `0` |
+| 1 | `select count(*) filter (where has_function_privilege('anon', p.oid, 'EXECUTE')) as anon_exec, count(*) as total from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p');` | `anon_exec = 0`; `total` unchanged (118 on 2026-09-13) |
+| 2 | `select count(*) filter (where not has_function_privilege('authenticated', p.oid, 'EXECUTE')) as auth_missing from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p');` | `0` |
 | 3 | `select string_agg(c.relname, ', ') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p','v','m') and (has_table_privilege('anon', c.oid, 'SELECT') or has_table_privilege('anon', c.oid, 'INSERT') or has_table_privilege('anon', c.oid, 'UPDATE') or has_table_privilege('anon', c.oid, 'DELETE') or has_table_privilege('anon', c.oid, 'TRUNCATE') or has_table_privilege('anon', c.oid, 'REFERENCES') or has_table_privilege('anon', c.oid, 'TRIGGER'));` | `NULL` (no table or view) |
 | 4 | `select string_agg(c.relname, ', ') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'S' and (has_sequence_privilege('anon', c.oid, 'USAGE') or has_sequence_privilege('anon', c.oid, 'SELECT') or has_sequence_privilege('anon', c.oid, 'UPDATE'));` | `NULL` (no sequences exist today) |
 | 5 | `select has_schema_privilege('anon','app','USAGE') as anon_app, has_schema_privilege('anon','public','USAGE') as anon_public, has_schema_privilege('authenticated','app','USAGE') as auth_app;` | `false, true, true` |
@@ -1509,8 +1522,8 @@ Any AFTER value other than the expected one = **STOP**: do not improvise; run th
 |---|---|---|
 | 1 | (as above) | `anon_exec = 1`; `total` = the PRE value + 3 (`storefront_menu`, and the `set_restaurant_storefront_profile` / `get_restaurant_storefront_profile` wrappers) |
 | 2 | (as above) | `auth_missing = 1` — the one anon-only function, from which `authenticated` is **explicitly revoked** |
-| 9 | `select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by 1) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and has_function_privilege('anon', p.oid, 'EXECUTE');` | exactly `storefront_menu(text)` |
-| 10 | `select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by 1) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef;` | exactly `storefront_menu(text)` — the only `SECURITY DEFINER` function in `public` |
+| 9 | `select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by 1) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and has_function_privilege('anon', p.oid, 'EXECUTE');` | exactly `storefront_menu(text)` |
+| 10 | `select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by 1) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef;` | exactly `storefront_menu(text)` — the only `SECURITY DEFINER` function in `public` |
 | 11 | `select rolconfig from pg_roles where rolname = 'anon';` | **record** PRE and POST (the role-level `statement_timeout` is the execution bound of the public read — **OPEN QUESTION Q-028**); the migration does not change it |
 | 12 | `select pg_get_userbyid(d.defaclrole) as owner, coalesce(n.nspname, '<global>') as scope, d.defaclobjtype, d.defaclacl::text from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace where n.nspname = 'public' and pg_get_userbyid(d.defaclrole) = 'supabase_admin' order by 3;` | **record** (these rows carry `anon`, cannot be altered by `postgres` and do not apply to migration-created objects; unchanged by the migration) |
 | 13 | `select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'storefront-media';` | `true, 524288, {image/webp}` |

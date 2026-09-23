@@ -26,6 +26,7 @@ import type {
   MenuItem,
   ModifierGroup,
   ModifierOption,
+  NextOpenAt,
   Preset,
   StorefrontResolution,
   StorefrontSource,
@@ -48,6 +49,32 @@ export interface AdaptedStorefront extends StorefrontResolution {
   readonly tenant: Tenant;
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/**
+ * The next opening instant on the restaurant's wall clock (weekday + HH:MM in
+ * its own zone), computed here on the server with the platform's time-zone
+ * database so the UI never does date arithmetic. Any input the platform cannot
+ * express (unparseable instant, unknown zone) yields null: the UI then renders
+ * the bounded "closed" copy instead of a fabricated time.
+ */
+export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt | null {
+  if (iso === null) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const weekday = (WEEKDAYS as readonly string[]).indexOf(part('weekday'));
+    const hour = part('hour') === '24' ? '00' : part('hour');
+    const minute = part('minute');
+    if (weekday < 0 || !/^\d{2}$/.test(hour) || !/^\d{2}$/.test(minute)) return null;
+    return { weekday, time: `${hour}:${minute}` };
+  } catch {
+    return null;
+  }
+}
+
 export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const tenant: Tenant = {
@@ -58,7 +85,13 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
     address: r.address ?? '',
     phone: r.phone ?? '',
     brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin) },
-    hours: { opens: envelope.hours.opens ?? '', closes: envelope.hours.closes ?? '', nextOpen: envelope.hours.next_open },
+    hours: {
+      opens: envelope.hours.opens ?? '',
+      closes: envelope.hours.closes ?? '',
+      nextOpen: envelope.hours.next_open,
+      nextOpenAt: nextOpenParts(envelope.hours.next_open, envelope.hours.timezone),
+      timezone: envelope.hours.timezone,
+    },
     service: {
       state: envelope.service.state,
       pickupEnabled: envelope.service.pickup_enabled,
@@ -83,7 +116,14 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
     const options = optionsByGroup.get(m.id);
     if (options === undefined || options.length === 0) continue;
     const single = m.selection_type === 'single';
+    // Relational bounds (independent review, C2): the database stores any
+    // non-negative integer pair, so the wire decoder accepts the storage domain
+    // and the RELATION is judged here. A `single` group offers exactly one
+    // choice whatever its max; a multi group whose minimum exceeds its bounded
+    // maximum can never be satisfied and is dropped (bounded), never rendered
+    // as a trap and never a reason to fail the whole storefront.
     const max = !single && m.max_select !== null && m.max_select > 0 ? m.max_select : undefined;
+    if (max !== undefined && m.min_select > max) continue;
     groups.push({
       id: m.id,
       name: m.name,
@@ -141,7 +181,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
     cart: { lines: [], itemCount: 0, subtotalMinor: 0, taxMinor: 0, totalMinor: 0, taxRateBp },
   };
   const preset: Preset = r.visual_preset;
-  return { view, preset, groups, zones: [], taxRateBp, menuVersion: envelope.menu_version };
+  return { source: 'live', view, preset, groups, zones: [], taxRateBp, menuVersion: envelope.menu_version };
 }
 
 /**

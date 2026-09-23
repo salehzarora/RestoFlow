@@ -50,6 +50,12 @@ const EMPTY_CART: CartState = { schema: 1, slug: '', menuVersion: '', lines: [] 
  * of importing a fixture, so a live tenant's quote is priced on ITS menu.
  */
 export interface MenuData {
+  /**
+   * Which source produced the menu. The `?fx=` demo scenario tokens are
+   * honoured for `fixture` ONLY; a live tenant's cart ignores every URL token
+   * (STOREFRONT-READ-001 review finding C5).
+   */
+  readonly source: 'fixture' | 'live';
   readonly items: readonly MenuItem[];
   readonly groups: readonly ModifierGroup[];
   readonly zones: readonly DeliveryZone[];
@@ -58,7 +64,7 @@ export interface MenuData {
   readonly orderingEnabled: boolean;
 }
 
-const EMPTY_MENU: MenuData = { items: [], groups: [], zones: [], taxRateBp: 0, menuVersion: '', orderingEnabled: false };
+const EMPTY_MENU: MenuData = { source: 'live', items: [], groups: [], zones: [], taxRateBp: 0, menuVersion: '', orderingEnabled: false };
 
 const CartContext = createContext<CartApi | null>(null);
 const MenuContext = createContext<MenuData>(EMPTY_MENU);
@@ -159,12 +165,15 @@ export function AsideSlot({
    * match the static document byte for byte.
    */
   const [fx, setFx] = useState('');
+  const fxEnabled = menu.source === 'fixture';
   useLayoutEffect(() => {
+    // A live tenant never reads a demo token from the URL (review finding C5).
+    if (!fxEnabled) return undefined;
     setFx(readFlowScenario(window.location.search));
     const onPop = () => setFx(readFlowScenario(window.location.search));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [fxEnabled]);
 
   const input: QuoteInput = useMemo(
     () => ({

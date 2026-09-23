@@ -411,7 +411,7 @@ function bannerFor(
           tone="warn"
           shake
           icon={<ClockIcon />}
-          title={result.state === 'paused' ? m.orderingPaused : fill(m.orderingClosed, { t: opensAt })}
+          title={result.state === 'paused' ? m.orderingPaused : opensAt === '' ? m.closedTitle : fill(m.orderingClosed, { t: opensAt })}
           testId="not_open"
         />
       );

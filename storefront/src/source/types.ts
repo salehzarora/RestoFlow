@@ -43,6 +43,20 @@ export interface TenantHours {
    * pointer across days: a time in `opens` never describes another day.
    */
   readonly nextOpen: string | null;
+  /**
+   * `nextOpen` expressed on the restaurant's own wall clock (weekday 0 = Sunday
+   * .. 6 = Saturday, `HH:MM`), computed ON THE SERVER by the adapter so the UI
+   * renders it from the dictionary without any date arithmetic or Intl call of
+   * its own; null whenever `nextOpen` is null or cannot be expressed.
+   */
+  readonly nextOpenAt: NextOpenAt | null;
+  /** The IANA zone the hours are expressed in (informational). */
+  readonly timezone: string;
+}
+
+export interface NextOpenAt {
+  readonly weekday: number;
+  readonly time: string;
 }
 
 export interface TenantService {
@@ -96,6 +110,12 @@ export interface DeliveryZone {
  * importing the fixture (packet §4.5, exact import sites).
  */
 export interface StorefrontResolution {
+  /**
+   * Which source produced this resolution. The client runtimes honour the
+   * `?fx=` demo scenario tokens ONLY for `fixture`; a live tenant's pages
+   * ignore them entirely (independent review, STOREFRONT-READ-001 C5).
+   */
+  readonly source: 'fixture' | 'live';
   readonly view: HomeView;
   readonly preset: Preset;
   readonly groups: readonly ModifierGroup[];

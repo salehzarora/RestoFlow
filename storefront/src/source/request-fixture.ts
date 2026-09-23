@@ -39,6 +39,7 @@ import {
   type StatusSource,
 } from '@/ui/storefront/request/status';
 import { fixtureSource } from './fixtures';
+import { sourceMode as sourceModeRule } from './mode';
 import { DEMO_DISPLAY_CODE, DEMO_REQUEST_REF, DEMO_REQUEST_SLUG } from './request-ref';
 import { MENU_ITEMS, MENU_VERSION, TAX_RATE_BP } from './menu-fixture';
 import { MODIFIER_GROUPS } from './modifier-fixture';
@@ -57,7 +58,9 @@ export const REQUEST_TTL_MINUTES = 30;
  * Read inside the function, never at module scope, so the switch stays server-only.
  */
 export function requestRefs(): readonly string[] {
-  if (process.env.STOREFRONT_SOURCE === 'live') return [];
+  // The same fail-closed rule as the slug routes (src/source/mode.ts): a
+  // provider build without an explicit source throws here too.
+  if (sourceModeRule() === 'live') return [];
   return [DEMO_REQUEST_REF];
 }
 

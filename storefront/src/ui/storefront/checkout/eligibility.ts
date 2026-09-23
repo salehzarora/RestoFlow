@@ -81,7 +81,9 @@ export function orderingReason(
   opensAt: string,
 ): string | null {
   if (blocker === 'ordering-off') return m.orderingOfflineTitle;
-  if (blocker === 'closed') return fill(m.orderingClosed, { t: opensAt });
+  // A closed restaurant with no window today has no time to name: the bounded
+  // closed title, never "Ordering opens at " (review, hours finding B).
+  if (blocker === 'closed') return opensAt === '' ? m.closedTitle : fill(m.orderingClosed, { t: opensAt });
   if (blocker === 'paused') return m.orderingPaused;
   return null;
 }

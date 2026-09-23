@@ -46,6 +46,7 @@ export function FlowScreen({
       dir={dirOf(locale)}
     >
       <FlowRuntime
+        source={resolution.source}
         locale={locale}
         slug={slug}
         screen={screen}

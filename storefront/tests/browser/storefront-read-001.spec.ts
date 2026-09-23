@@ -171,6 +171,17 @@ test.describe('STOREFRONT-READ-001 live read against a STUB envelope server', ()
         modifier_options: [],
       });
     }
+    // hours states (review finding B): closed with a next window on another day (Friday 2026-09-25 10:00
+    // Asia/Jerusalem), closed with no window within 7 days, and an overnight window that is open now
+    if (slug === 'sf-stub-closed-next') {
+      return syntheticEnvelope({ restaurant: { slug }, hours: { opens: null, closes: null, open_now: false, next_open: '2026-09-25T07:00:00+00:00' }, service: { state: 'closed' } });
+    }
+    if (slug === 'sf-stub-closed-none') {
+      return syntheticEnvelope({ restaurant: { slug }, hours: { opens: null, closes: null, open_now: false, next_open: null }, service: { state: 'closed' } });
+    }
+    if (slug === 'sf-stub-night') {
+      return syntheticEnvelope({ restaurant: { slug }, hours: { opens: '18:00', closes: '02:00', open_now: true, next_open: null } });
+    }
     return NOT_FOUND_ENVELOPE;
   };
 
@@ -313,6 +324,60 @@ test.describe('STOREFRONT-READ-001 live read against a STUB envelope server', ()
     html = await page.content();
     expect(html).not.toContain('data-sf-module="hero"');
     mode = 'ok';
+  });
+
+  test('review B: hours copy per state and locale - never a dangling time, dash or placeholder; paused never invents a next-open', async ({ page }) => {
+    mode = 'ok';
+    const DANGLING = /(^|\s)(opens|يفتح|נפתח ב־)\s*<|Opens at \.|في \.|ב־\.|>\s*–\s*<|\{[a-z]\}/;
+    for (const root of ROOTS) {
+      const m = root.m as Record<string, string>;
+      // closed, next window Friday 10:00 on the tenant's own clock
+      await page.goto(`${BASE}${root.prefix}/s/sf-stub-closed-next/menu`, { waitUntil: 'domcontentloaded' });
+      let service = await page.locator('[data-sf-module="service"]').innerHTML();
+      let notice = await page.locator('[data-sf-notice="closed"]').innerText();
+      expect(service, `${root.prefix} closed-next strip`).toContain(m.weekday5);
+      expect(service).toContain('10:00');
+      expect(notice, `${root.prefix} closed-next notice`).toContain(m.weekday5);
+      expect(notice).toContain('10:00');
+      expect(service).not.toMatch(DANGLING);
+      expect(await page.locator('[data-sf-module="footer"]').innerHTML()).not.toMatch(DANGLING);
+      // closed, nothing within 7 days: a complete bounded sentence, no time, no dash
+      await page.goto(`${BASE}${root.prefix}/s/sf-stub-closed-none/menu`, { waitUntil: 'domcontentloaded' });
+      service = await page.locator('[data-sf-module="service"]').innerHTML();
+      notice = await page.locator('[data-sf-notice="closed"]').innerText();
+      expect(service).toContain(m.closedNow);
+      expect(notice).toContain(m.closedBodyNoHours);
+      expect(service).not.toMatch(DANGLING);
+      expect(await page.locator('[data-sf-module="footer"]').innerHTML()).not.toMatch(DANGLING);
+      for (let d = 0; d < 7; d++) expect(notice, 'no weekday is invented').not.toContain(m[`weekday${d}`]);
+      // overnight window, open now: the numeric range
+      await page.goto(`${BASE}${root.prefix}/s/sf-stub-night/menu`, { waitUntil: 'domcontentloaded' });
+      service = await page.locator('[data-sf-module="service"]').innerHTML();
+      expect(service).toContain('18:00–02:00');
+      await expect(page.locator('[data-sf-notice="closed"]')).toHaveCount(0);
+      // paused (sf-stub-b): the paused notice, never a next-open time or weekday
+      await page.goto(`${BASE}${root.prefix}/s/sf-stub-b/menu`, { waitUntil: 'domcontentloaded' });
+      const paused = await page.locator('[data-sf-notice="paused"]').innerText();
+      expect(paused).toContain(m.pausedTitle);
+      for (let d = 0; d < 7; d++) expect(paused).not.toContain(m[`weekday${d}`]);
+      expect(await page.locator('[data-sf-module="service"]').innerHTML()).not.toMatch(DANGLING);
+    }
+  });
+
+  test('review C5: LIVE ignores every ?fx= demo token - no fixture cart notice can be induced by URL', async ({ page }) => {
+    mode = 'ok';
+    // every token family the fixture accepts: cart notices, the quote race, send outcomes, readiness
+    for (const token of ['cart-sold-out', 'cart-price', 'cart-changed', 'quote-race', 'server-error', 'closed', 'opens-late']) {
+      await page.goto(`${BASE}/en/s/sf-stub-a/cart?fx=${token}`, { waitUntil: 'networkidle' });
+      await expect(page.locator('[data-sf-banner="ordering-off"]'), token).toHaveCount(1);
+      await expect(page.locator('[data-sf-banner^="cart-"]'), `fixture notice induced by ?fx=${token}`).toHaveCount(0);
+      await expect(page.locator('[data-sf-cta="send"]')).toHaveCount(0);
+      expect(await page.content()).not.toContain('sold out and was removed');
+    }
+    // the menu with a token: still the live tenant, still browse-only
+    await page.goto(`${BASE}/en/s/sf-stub-a/menu?fx=cart-sold-out`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-sf-notice="ordering-off"]')).toHaveCount(1);
+    for (const marker of FIXTURE_MARKERS) expect(await page.content()).not.toContain(marker);
   });
 
   test('T-S7 freshness: a menu change is visible after the 60 s revalidate window (stale-while-revalidate serves the old document once)', async ({ request }) => {

@@ -55,18 +55,18 @@ select is(
   (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace
-      and p.prokind = 'f'
+      and p.prokind in ('f', 'p')
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
   (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
   'A1. anon-executable public function set EQUALS the enumerated allowlist {storefront_menu(text)} — any extra culprit prints here');
 
 select cmp_ok(
-  (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'),
+  (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')),
   '>=', 100,
   'A2. the guard covers the real wrapper population (>= 100 public functions; not vacuous)');
 
 select is(
-  (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.proacl is null),
+  (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.proacl is null),
   0,
   'A3. every public function carries an EXPLICIT ACL (a NULL ACL would mean implicit PUBLIC EXECUTE)');
 
@@ -75,7 +75,7 @@ select is(
      from pg_proc p
      cross join lateral aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
     where p.pronamespace = 'public'::regnamespace
-      and p.prokind = 'f'
+      and p.prokind in ('f', 'p')
       and a.grantee = 0
       and a.privilege_type = 'EXECUTE'),
   '',
@@ -84,7 +84,7 @@ select is(
 select is(
   (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
      from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef),
+    where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
   (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
   'A5. the ONLY public SECURITY DEFINER function is the enumerated allowlist (D-037 amendment) — no wrapper can carry anon into app.*');
 
@@ -162,7 +162,7 @@ select is(
 select is(
   (select coalesce(string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', '')), '')
      from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
+    where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
   'D1. every public function remains EXECUTE-able by authenticated EXCEPT the enumerated anon-only allowlist (explicitly revoked)');

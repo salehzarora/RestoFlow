@@ -36,8 +36,9 @@ jobs:
   validate:
     name: format · bootstrap · analyze · test · guardrails
     runs-on: ubuntu-latest
-    # 30 minutes: the storefront static-export lane is additive to an already
-    # ~15-minute job. Reviewed under STOREFRONT-INFRA-001B.
+    # 30 minutes: the storefront lane (a server build plus its snapshot gates
+    # since STOREFRONT-READ-001) is additive to an already ~15-minute job.
+    # Reviewed under STOREFRONT-INFRA-001B; budget unchanged by READ-001.
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -286,13 +287,42 @@ jobs:
       # Network-free and credential-free: the live configuration is read per
       # request, never at build time. Runs AFTER every fixture-snapshot gate
       # because it replaces .next; nothing below reads .next.
-      - name: Storefront — live-mode build prerenders nothing tenant-scoped
+      - name: Storefront — live-mode build (provider-shaped) prerenders nothing tenant-scoped
         working-directory: storefront
         env:
           STOREFRONT_SOURCE: live
+          VERCEL: '1'
+          VERCEL_ENV: preview
         run: |
           npm run build
           node -e "const m=require('./.next/prerender-manifest.json');const bad=Object.keys(m.routes||{}).filter((r)=>r.includes('/s/')||r.includes('/r/'));if(bad.length){console.error('prerendered tenant/request routes in a LIVE build:',bad);process.exit(1)}console.log('live build: no tenant or request route prerendered; routes:',Object.keys(m.routes||{}).join(' '))"
+
+      # STOREFRONT-READ-001 (review finding A): a PROVIDER-shaped build that omits
+      # STOREFRONT_SOURCE must FAIL CLOSED - it must never quietly become the
+      # fixture demo. The fixture build above is the local, non-provider default
+      # (no VERCEL variable); here VERCEL is set and the variable is absent, so
+      # the build has to stop with the misconfiguration error, and for no other
+      # reason.
+      - name: Storefront — provider-shaped build without STOREFRONT_SOURCE fails closed
+        working-directory: storefront
+        env:
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set +e
+          npm run build > "$RUNNER_TEMP/provider-missing-source.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'a provider-shaped build without STOREFRONT_SOURCE succeeded: it must fail closed'
+            exit 1
+          fi
+          if ! grep -q 'STOREFRONT_SOURCE must be exactly' "$RUNNER_TEMP/provider-missing-source.log"; then
+            echo 'the build failed for another reason:'
+            tail -40 "$RUNNER_TEMP/provider-missing-source.log"
+            exit 1
+          fi
+          echo 'provider-shaped build without STOREFRONT_SOURCE failed closed with the misconfiguration error'
 
       # The browser suite (tests/browser) and the isolated-copy comparison
       # (scripts/isolated-build.mjs) are deliberately LOCAL gates: the first

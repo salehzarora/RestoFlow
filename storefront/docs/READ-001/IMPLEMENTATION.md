@@ -66,7 +66,7 @@ Applied to the **local** Docker database only (`supabase migration up --local`,
 
 ### 1.3 Shared engine, CI, lanes
 
-- `tools/vercel/ignore-build.mjs` — `STOREFRONT_CONFIG_HASH` re-pinned to `59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705` (was `4aa433d2…`); `tools/vercel/ignore-build.test.mjs` fixture + mutation case follow. **Fan-out:** a shared-engine change builds all three provider projects once on its first push (T-S12; recorded in the evidence pack before any push).
+- `tools/vercel/ignore-build.mjs` — `STOREFRONT_CONFIG_HASH` re-pinned to `59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705` (was `4aa433d2…`); `tools/vercel/ignore-build.test.mjs` fixture + mutation case follow. **Fan-out:** a shared-engine change builds all three provider projects **once per environment event** — three Preview builds on the first push and three Production builds at the merge (§7; T-S12, recorded in the evidence packs before any push).
 - `.github/workflows/ci.yml` — the storefront lane runs the server build, then `scripts/snapshot-server.mjs` (real `next start` → `out/`), then the output / audit / first-load lanes over the snapshot.
 - `scripts/snapshot-server.mjs` — starts `next start` on a loopback port, fetches every route into `out/` (documents, one RSC flight `.txt` per document via the `?_rsc=` redirect, `_next/static`, `public/`, `404.html`, `SNAPSHOT.json`).
 - `scripts/budgets.mjs` — `MEDIA_ORIGIN`, `MEDIA_PATH_PREFIX`, `documentBytesProposal: 200000` (a server-rendered document carries its RSC payload); `serverFunctions` removed. `scripts/audit-output.mjs` allows the media origin for `<img>` only. `scripts/isolated-build.mjs` compares `.next/static` + the `BUILD_ID` marker.
@@ -86,7 +86,7 @@ Applied to the **local** Docker database only (`supabase migration up --local`,
 | fixture snapshot lanes | `npm run build` → `snapshot-server.mjs` → `tests/output/output.test.mjs` (28) → `audit-output.mjs` → `measure-firstload.mjs` → `audit-inputs.mjs` | green on the final tree; 37 documents, client static 982,006 B, server bundle 13,065,444 B, largest document `/s/maps-burger/menu` 130,256 B (proposal 200,000); the two owner-approved UI-001 exceptions (CSS-UI001-01, PERF-UI001-01) still apply |
 | live build | `STOREFRONT_SOURCE=live npm run build` | prerendered `/`, `/ar`, `/en`, `/he`, `/_not-found`, `/_global-error` only; 32 dynamic routes |
 | served header | `next start` + fetch | `Cache-Control: s-maxage=60, stale-while-revalidate=300` on tenant documents; no `Set-Cookie` |
-| Playwright READ-001 | `tests/browser/storefront-read-001.spec.ts` (STUB block always; REAL block through the shim against the seeded local database) | **8 / 8** on the final live build — RPC called with the anon key over the exact PostgREST shape and never by the browser; the configured key value and every credential shape absent from every rendered document; two tenants × four roots, no fixture leakage, hostile text as text, browse-only, at least one published derivative rendered, the serialised tax rate per tenant; checkout routes bounce, `/r/*` 404; per-URL cache with the 60 s header; `not_found` → 404 document, error / timeout → error page, never the fixture; a change on a never-touched slug is visible after the revalidate window with exactly one render inside it; REAL: the seeded tenants served by `public.storefront_menu`, tax rate `1800` / `0` per tenant, unpublished and unknown slugs are the same 404 |
+| Playwright READ-001 | `tests/browser/storefront-read-001.spec.ts` (STUB block always; REAL block through the shim against the seeded local database) | **8 / 8** on the 2026-09-23 sealed-pack build (**10 / 10** after the correction pass added the hours and fixture-token rows; see §9 and the correction pack) — RPC called with the anon key over the exact PostgREST shape and never by the browser; the configured key value and every credential shape absent from every rendered document; two tenants × four roots, no fixture leakage, hostile text as text, browse-only, at least one published derivative rendered, the serialised tax rate per tenant; checkout routes bounce, `/r/*` 404; per-URL cache with the 60 s header; `not_found` → 404 document, error / timeout → error page, never the fixture; a change on a never-touched slug is visible after the revalidate window with exactly one render inside it; REAL: the seeded tenants served by `public.storefront_menu`, tax rate `1800` / `0` per tenant, unpublished and unknown slugs are the same 404 |
 
 Secrets: the local anon key is read from `supabase status -o env` into the
 process environment only and is masked in every saved log (`<ANON_KEY>`); no
@@ -170,18 +170,23 @@ each selector in its project directory:
 | `marketing` (`site/`) | BUILD | `relevant_changes` | same |
 | `storefront` (`storefront/`) | BUILD | `unsupported_build_contract` | — (fail-safe) |
 
-The product and marketing builds are the expected **one-time** shared-engine
-fan-out (the `STOREFRONT_CONFIG_HASH` pin changed). The storefront decision is
-also a BUILD, but by **fail-safe**: `inspectStorefront` validates the contract
-at the baseline **and** the head, and the baseline (`main`) still carries the
+The product and marketing builds are the shared-engine fan-out (the
+`STOREFRONT_CONFIG_HASH` pin changed). The storefront decision is also a
+BUILD, but by **fail-safe**: `inspectStorefront` validates the contract at
+the baseline **and** the head, and the baseline (`main`) still carries the
 pre-READ-001 `next.config.mjs` (old hash) and output contract, so the guard
-fails at the baseline. On the next push, with this head as the previous
-successful deployment, the storefront selector classifies normally again
-(`scripts/filter-proof.mjs` D1–D4 prove `relevant_changes` /
-`unaffected_changes` when both trees carry the new contract). Expected
-provider builds on the first push of this change: **3** (one per project),
-then the usual per-project classification. No push was made; this is a
-record, not an action.
+fails at the baseline. Once a deployment carrying the new contract is the
+previous successful deployment of an environment, the storefront selector
+classifies normally again there (`scripts/filter-proof.mjs` D1–D4 prove
+`relevant_changes` / `unaffected_changes` when both trees carry the new
+contract). **Count, per environment event (corrected after independent
+review):** every environment evaluates against its OWN previous successful
+deployment, so this change triggers **three builds per event** — three Preview
+builds on the first push and three Production builds at the merge (six for
+READ-001 alone; three more if PR #286 is merged on its own first); further
+pushes to the branch classify per project (product / marketing IGNORE unless
+the engine changes again, storefront BUILD). Never "3 builds" without that
+qualifier. No push was made; this is a record, not an action.
 
 ## 8. Independent adversarial review (local, 2026-09-23) and what changed
 
@@ -212,3 +217,32 @@ with the exact diff that closed it):
 
 Unchanged by the review: the anon-only grant posture, the uniform `not_found`,
 the served-key sets, the browse-only live mode, the fixture / live separation.
+
+## 9. Independent review verdict (2026-09-23) and the local correction pass (2026-09-24)
+
+The independent read-only review of `642b5aae` (pack
+`worktrees/output/storefront-read-001-review-20260923T183213Z/`) returned
+**CHANGES REQUIRED**: one BLOCKER (a provider build without `STOREFRONT_SOURCE`
+silently served the fixture demo), one MAJOR (closed-with-no-window-today
+rendered dangling hours text; `next_open` was never rendered) and bounded
+pre-hosted-PRE items. The owner-approved correction pass closed them locally,
+without redesigning READ-001:
+
+| # | Finding | Correction |
+|---|---|---|
+| A (BLOCKER) | absent / empty `STOREFRONT_SOURCE` → fixture in any context | `src/source/mode.ts`: explicit `fixture` / `live` everywhere; absent / empty → fixture **only outside a provider context**; in a Vercel build or runtime (`VERCEL` / `VERCEL_ENV`) absent, empty, whitespace-only or misspelled **throws** (build and request); `request-fixture.ts` applies the same rule; unit matrix (7 negative controls incl. provider explicit fixture / live and the non-provider default); CI: a provider-shaped live build must pass and a provider-shaped build without the variable must fail with the misconfiguration error; README / `.env.example` / D-039 state the rule and the HOST-001 demo provider prerequisite |
+| B (MAJOR) | dangling `opens ` / `Opens at .` / `Hours –` | one renderer `src/ui/storefront/home/hoursCopy.ts` from the live model; `TenantHours.nextOpenAt` (weekday + time on the restaurant's clock, computed on the server by `nextOpenParts`) and `timezone`; new dictionary keys (`opensOn`, `closedNow`, `closedBodyOn`, `closedBodyNoHours`, `weekday0..6`) × ar / en / he; paused never invents a next-open; unit matrix (7 states × 3 locales) + browser rows (closed-next, closed-none, overnight, paused × 4 roots) |
+| C1 | procedure-blind guards | `prokind in ('f','p')` in the migration's final DO block and every T-016 set guard; T-017 A6c–A6e create an anon-executable SECURITY DEFINER procedure inside the transaction, prove the widened guard reports it, drop it, and prove the set is the allowlist again |
+| C2 | decoder `min/max_select` cap 1000 | decoder accepts the storage domain (`0..2147483647`); the adapter judges the relation (single ignores max; an unsatisfiable multi group is dropped, bounded); boundary + malformed tests incl. `1001`, `5000`, int4 max, min > max |
+| C3 | permissive `paused_until` | one wire format (RFC 3339 with explicit `Z` / offset, or null) validated before the cast; T-017 E28–E33 (`tomorrow`, offset-less, `infinity`, bare date refused; `+03:00` stored as the instant; null clears); API §4.42.2 documents it |
+| C4 | storage policies asserted structurally only | T-017 B9–B22 as real principals: anon lists / uploads / updates / deletes nothing; an Org A owner sees, moves (to another registered key) and retracts only its own registered derivative, cannot use an unregistered key or another tenant's key; Org B's owner sees only Org B's; a cashier sees nothing and cannot upload; the SELECT policy enables no anonymous enumeration |
+| C5 | `?fx=` tokens on a live cart | `StorefrontResolution.source` (`fixture` / `live`) threaded to the runtimes; the flow and the aside read a token only for `fixture`; browser negative control over every token family on a live tenant; the fixture control (UI-001 D-G19–G21) still passes |
+| D1 | weakened aside money guard | `asideMoneyOffences()` (regex shapes, whitespace-insensitive; only `formatRateBp(quote.taxRateBp)` and the `=== 0` check allowed) + negative control |
+| D2 | server-only import guard by literal prefix | `serverOnlyImports()` by path shape (alias or any relative path) + negative control |
+| D3 / D4 / D5 | stale static-export prose; contradictory D-037 status; "3 builds" | engine comments, DEPLOYMENT §15 and the contract test reworded for the server build; D-037 status single-valued (owner-approved, ratified with the amendment); D-039 and §7 count builds per environment event |
+| D6 | evidence currency | forward addendum in the correction pack (unit log 282 vs 283 / 19 files; empty typecheck log; run2 failure narrated); sealed packs untouched |
+
+Explicitly deferred (recorded findings, not silent "fixed" claims): phone-width
+cart navigation, global-error page, DST policy / 24 h window form, tombstone
+re-create, duplicate-id hardening, Dashboard editor / media publisher, real
+ordering.

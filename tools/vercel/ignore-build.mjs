@@ -18,11 +18,13 @@ const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c
 export const STOREFRONT_CONFIG_HASH = '59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705';
 const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
-// STAGE 7 R3 static-shell module contract: the ONLY bare specifiers storefront
-// source may import. Node builtins are deliberately absent. A static export has
-// no server runtime, so filesystem/process capability is unnecessary here, and
-// allowing it would let build-time code read repository paths this engine does
-// not track. Adding a BFF must re-review this list (SEC-002 / READ-001).
+// STAGE 7 R3 module contract: the ONLY bare specifiers storefront source may
+// import. Node builtins are deliberately absent. STOREFRONT-READ-001 re-reviewed
+// this list for the SERVER build: the live read uses the global `fetch` and
+// `process.env` (both platform globals, not bare imports), so no builtin and no
+// SDK was added; filesystem/process capability stays unnecessary, and allowing
+// it would let build-time code read repository paths this engine does not
+// track. Adding a BFF or a Node dependency must re-review this list again.
 const STOREFRONT_BARE_IMPORTS = ['react', 'react-dom', 'next'];
 // npm runs pre/post hooks around `npm ci` and `npm run build` on its own, so a
 // lifecycle entry is arbitrary code executing inside the build and outside this
@@ -55,13 +57,15 @@ function storefrontLocal(file) {
 // the Next.js preset creates its function, so `functions` stays absent and the
 // ignore command must invoke THIS engine with the storefront selector.
 // HOST-FIX-001: the storefront config declares NO outputDirectory. Vercel's
-// Next.js preset locates the framework build directory (.next) itself and then
-// serves the static export from out/; an explicit outputDirectory in vercel.json
-// overrides that lookup for the deployment (it is not merely a project-settings
-// default), and 'out' made the hosted builder fail with NEXT_NO_ROUTES_MANIFEST
-// after a successful next build. Any explicit value - 'out', '.next', 'dist',
-// null - is therefore unsupported and fails safe to BUILD. The export itself is
-// unchanged: next.config.mjs (pinned below) still writes out/.
+// Next.js preset locates the framework build directory (.next) itself; an
+// explicit outputDirectory in vercel.json overrides that lookup for the
+// deployment (it is not merely a project-settings default), and 'out' made the
+// hosted builder fail with NEXT_NO_ROUTES_MANIFEST after a successful next
+// build. Any explicit value - 'out', '.next', 'dist', null - is therefore
+// unsupported and fails safe to BUILD. STOREFRONT-READ-001: the pinned
+// next.config.mjs (below) is a SERVER build (no `output: 'export'`; the preset
+// creates the serverless function from .next); nothing is written to out/ by
+// the build - the local snapshot lane materialises out/ from a real next start.
 const STOREFRONT_IGNORE_COMMAND = `if node ../${ENGINE} storefront; then exit 0; else exit 1; fi`;
 const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
 // Three linked projects use main. First-preview fallback also checks the source
@@ -492,8 +496,10 @@ function tsconfigGraphRoot(entry) {
 // exactly once; the next push classifies normally.
 function inspectStorefront(repo, revision) {
   const controls = git(repo, ['ls-tree', '-r', '-z', '--name-only', revision, '--', '.vercelignore', 'storefront']).text.split('\0');
-  // 1-2. No checkout override, and no request-time entrypoint: an exported
-  // site has none, so adding one must be a reviewed engine change.
+  // 1-2. No checkout override, and no repository-defined request-time
+  // entrypoint (api/, middleware, route handlers): the server build's only
+  // request handling is the Next.js preset's own page rendering, so adding an
+  // entrypoint must be a reviewed engine change.
   if (controls.some((file) => ['.vercelignore', 'storefront/.vercelignore'].includes(file) || unsupportedEntrypoint(file, 'storefront/', false))) fail('unsupported_build_contract');
   // 5. Pre-check existence: without it cat-file --batch prints "<spec> missing",
   // the header regex fails, and the reason degrades to unsupported_graph.

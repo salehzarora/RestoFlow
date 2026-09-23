@@ -69,6 +69,7 @@ function searchWithItem(search: string, target: SheetTarget | null): string {
 }
 
 export function StorefrontRuntime({
+  source,
   slug,
   menuVersion,
   items,
@@ -82,6 +83,8 @@ export function StorefrontRuntime({
   opensAt,
   children,
 }: {
+  /** Which source rendered the route; `?fx=` demo tokens are honoured for `fixture` only. */
+  source: 'fixture' | 'live';
   slug: string;
   menuVersion: string;
   items: readonly MenuItem[];
@@ -114,7 +117,7 @@ export function StorefrontRuntime({
 }) {
   const m = storefrontMessages(locale);
   const cart = useCart(slug, menuVersion, items, groups);
-  const menu: MenuData = { items, groups, zones, taxRateBp, menuVersion, orderingEnabled };
+  const menu: MenuData = { source, items, groups, zones, taxRateBp, menuVersion, orderingEnabled };
   const [target, setTarget] = useState<SheetTarget | null>(null);
   const [toast, setToast] = useState<{ text: string; nonce: number } | null>(null);
 

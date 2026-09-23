@@ -19,6 +19,7 @@ import { formatMoney } from '@/money/format';
 import { searchPath, storefrontPath } from '@/routes/routes';
 import type { MotionMode, Tenant } from '@/source/types';
 import { LanguageMenu } from './LanguageMenu';
+import { hoursLabel } from './home/hoursCopy';
 import { ChevronIcon, DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './Intro.module.css';
 
@@ -161,7 +162,7 @@ export function Intro({
           {m.poweredBy} <span className={styles.creditName}>BIZBOT</span>
           <span className={styles.srOnly}>
             {' · '}
-            {hours.opens}–{hours.closes}
+            {hoursLabel(tenant, m).text}
           </span>
         </p>
       </div>

@@ -65,6 +65,13 @@ import s from './flow.module.css';
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
 export interface FlowProps {
+  /**
+   * Which source rendered the route. The `?fx=` demo scenario tokens (cart
+   * notices, readiness, send outcomes, the quote race) are honoured for
+   * `fixture` ONLY; a live tenant's flow ignores every URL token, so no
+   * fixture banner can be induced on a real cart (review finding C5).
+   */
+  readonly source: 'fixture' | 'live';
   readonly locale: Locale;
   readonly slug: string;
   readonly screen: FlowScreenName;
@@ -87,6 +94,7 @@ export function FlowRuntime(props: FlowProps) {
   const m = storefrontMessages(props.locale);
   return (
     <StorefrontRuntime
+      source={props.source}
       slug={props.slug}
       menuVersion={props.menuVersion}
       items={props.items}
@@ -105,6 +113,7 @@ export function FlowRuntime(props: FlowProps) {
 }
 
 function FlowBody({
+  source: resolutionSource,
   locale,
   slug,
   screen,
@@ -129,15 +138,19 @@ function FlowBody({
   const [fx, setFx] = useState('');
   const [dismissed, setDismissed] = useState(false);
   const handoffApi = useRequestHandoff();
+  // Demo scenario tokens exist for the fixture only (review finding C5).
+  const fxEnabled = resolutionSource === 'fixture';
+  const readFx = useCallback((search: string) => (fxEnabled ? readFlowScenario(search) : ''), [fxEnabled]);
 
   // The URL is read AFTER hydration, never during render: the first client
   // render has to match the static document byte for byte.
   useLayoutEffect(() => {
-    setFx(readFlowScenario(window.location.search));
-    const onPop = () => setFx(readFlowScenario(window.location.search));
+    if (!fxEnabled) return undefined;
+    setFx(readFx(window.location.search));
+    const onPop = () => setFx(readFx(window.location.search));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [fxEnabled, readFx]);
 
   const zone = zoneFor(draft.zoneId, zones);
   const input: QuoteInput = useMemo(
@@ -254,8 +267,8 @@ function FlowBody({
     // The demo token rides along, as it does on every step navigation:
     // a redirect that dropped it made the readiness scenarios unreachable
     // from a deep link (evidence only; the shipped URL carries no token).
-    router.replace(withFlowScenario(target, readFlowScenario(window.location.search)));
-  }, [draft, hrefs, quote, ready, router, screen, services, tenant.orderingEnabled]);
+    router.replace(withFlowScenario(target, readFx(window.location.search)));
+  }, [draft, hrefs, quote, readFx, ready, router, screen, services, tenant.orderingEnabled]);
 
   /*
    * Step navigation CARRIES the scenario switch. Without it a demo state

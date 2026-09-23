@@ -635,6 +635,9 @@ test('orderingReason: the two existing localised strings, in every language, and
     const m = storefrontMessages(locale);
     assert.equal(orderingReason('closed', m, '10:00'), m.orderingClosed.replace('{t}', '10:00'));
     assert.ok(orderingReason('closed', m, '10:00').includes('10:00'));
+    // closed with no window today: a bounded title, never "Ordering opens at " (review, hours finding B)
+    assert.equal(orderingReason('closed', m, ''), m.closedTitle);
+    assert.ok(!/\{t\}|at\s*$|في\s*$|ב־\s*$/.test(orderingReason('closed', m, '')));
     assert.equal(orderingReason('paused', m, '10:00'), m.orderingPaused);
     assert.equal(orderingReason('unresolved', m, '10:00'), null);
     assert.equal(orderingReason(null, m, '10:00'), null);

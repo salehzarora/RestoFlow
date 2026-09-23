@@ -193,21 +193,52 @@ test('NEGATIVE CONTROL: the scenario rule catches every way of spelling it', () 
  * import them at all. `process.env` is read in exactly the named server
  * modules, never in a component.
  */
-const SERVER_ONLY_MODULES = ['@/source/storefront', '@/source/live/', './live/', '../live/'];
-const ENV_READERS = ['src/source/storefront.ts', 'src/source/live/client.ts', 'src/source/home.ts', 'src/source/request-fixture.ts'];
+/**
+ * Every import specifier of a module, and the ones among them that reach the
+ * server-only live read: the switch (`source/storefront`) or anything under
+ * `source/live/`, spelled through the alias OR any relative path (review
+ * finding D2: a literal-prefix match let `'../../source/live/client'` through).
+ */
+// `from '…'` imports, side-effect `import '…'` and dynamic `import('…')` alike
+const IMPORT_SPECIFIER = /\b(?:from\s+|import\s*\(?\s*)['"]([^'"]+)['"]/g;
+const SERVER_ONLY_SPECIFIER = /(?:^|\/)source\/(?:storefront|live(?:\/|$))|^\.{1,2}\/live(?:\/|$)/;
+export function serverOnlyImports(src) {
+  return [...src.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]).filter((s) => SERVER_ONLY_SPECIFIER.test(s));
+}
+const ENV_READERS = ['src/source/storefront.ts', 'src/source/mode.ts', 'src/source/live/client.ts', 'src/source/home.ts'];
 
-test('the live read stays server-only: no client module and no UI module imports it', () => {
+test('the live read stays server-only: no client module and no UI module imports it, however the path is spelled', () => {
+  let matched = 0;
   for (const f of TSX) {
-    const src = code(f);
-    const imports = SERVER_ONLY_MODULES.filter((m) => src.includes(`from '${m}`) || src.includes(`from "${m}`));
+    const imports = serverOnlyImports(code(f));
     if (imports.length === 0) continue;
+    matched += 1;
     const where = rel(f);
     assert.ok(!/^\s*'use client'/m.test(readFileSync(f, 'utf8')), `${where}: a client module imports the live read (${imports.join(', ')})`);
     assert.ok(!where.startsWith('src/ui/'), `${where}: a UI module imports the live read (${imports.join(', ')})`);
   }
-  // Non-vacuity: the route files DO import the switch.
-  const routes = TSX.filter((f) => rel(f).startsWith('app/') && code(f).includes("from '@/source/storefront'"));
+  // Non-vacuity: the 28 route files import the switch, and the switch itself imports the adapter.
+  const routes = TSX.filter((f) => rel(f).startsWith('app/') && serverOnlyImports(code(f)).includes('@/source/storefront'));
   assert.equal(routes.length, 28, `expected the 28 slug route files to import the switch, got ${routes.length}`);
+  assert.ok(matched >= 29, `expected at least the routes and the switch to be inspected, got ${matched}`);
+});
+
+test('NEGATIVE CONTROL: a client module importing the live read by ANY path spelling is reported by the guard', () => {
+  const offenders = [
+    "'use client';\nimport { fetchStorefrontMenu } from '../../source/live/client';",
+    "'use client';\nimport { getStorefront } from '../source/storefront';",
+    "'use client';\nimport { liveStorefrontSource } from '@/source/live/adapter';",
+    "import { x } from \"@/source/storefront\";",
+    "import { adaptStorefront } from './live/adapter';",
+    "'use client';\nimport '@/source/live/client';",
+    "'use client';\nconst m = await import('@/source/live/client');",
+    "'use client';\nconst m = await import(\"../source/storefront\");",
+  ];
+  for (const src of offenders) assert.equal(serverOnlyImports(src).length, 1, `must be reported: ${src}`);
+  // ...and the pure lookups, the types and the mode rule are not the live read
+  for (const src of ["import { groupsFor } from '@/source/lookup';", "import type { Tenant } from '@/source/types';", "import { sourceMode } from './mode';", "import x from 'react';"]) {
+    assert.deepEqual(serverOnlyImports(src), [], `must not be reported: ${src}`);
+  }
 });
 
 test('process.env is read only in the named server modules, and never in a component', () => {

@@ -119,6 +119,7 @@ export function Home({
         this visitor's own storage, after hydration, can put one there.
       */}
       <StorefrontRuntime
+        source={resolution.source}
         slug={slug}
         menuVersion={menuVersion}
         items={items}

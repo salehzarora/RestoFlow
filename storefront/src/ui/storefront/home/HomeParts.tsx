@@ -8,6 +8,7 @@ import { formatMoney } from '@/money/format';
 import type { PromoModule, ServiceState, StoryModule, Tenant } from '@/source/types';
 import { ChevronIcon, ClockIcon, DeliveryIcon, MapMotif, StoreIcon } from '../icons';
 import { TenantText } from '../TenantText';
+import { closedNoticeBody, hoursLabel } from './hoursCopy';
 import styles from './home.module.css';
 
 /** Price, always an LTR island with tabular figures even inside RTL copy. */
@@ -119,7 +120,8 @@ const STATE_CLASS: Readonly<Record<ServiceState, string>> = {
 };
 
 export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
-  const { service, hours } = tenant;
+  const { service } = tenant;
+  const hoursText = hoursLabel(tenant, m);
   const stateWord =
     service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
 
@@ -172,13 +174,15 @@ export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: Storefron
                 (Storefront.dc.html:798, CONTENT_AND_LOCALIZATION.md:44); open and
                 paused keep the range. The range is a numeric LTR island, but the
                 closed copy is localized PROSE and must follow the page direction -
-                a time renders correctly inside RTL text on its own. */}
-            {service.state === 'closed' ? (
-              <span className={styles.serviceLabel}>{fill(m.opensAt, { t: hours.opens })}</span>
-            ) : (
+                a time renders correctly inside RTL text on its own. Every branch
+                (incl. closed with no window today) is a complete sentence:
+                hoursCopy.ts owns the rule. */}
+            {hoursText.numeric ? (
               <span className={`${styles.serviceLabel} ${styles.ltr}`} dir="ltr">
-                {hours.opens}–{hours.closes}
+                {hoursText.text}
               </span>
+            ) : (
+              <span className={styles.serviceLabel}>{hoursText.text}</span>
             )}
             <span className={`${styles.serviceMeta} ${STATE_CLASS[service.state]}`}>
               <span className={styles.stateRow}>
@@ -219,7 +223,7 @@ export function StateNotice({
         <span className={styles.noticeBody}>
           <TenantText>
             {closed
-              ? fill(m.closedBody, { t: tenant.hours.opens })
+              ? closedNoticeBody(tenant, m)
               : fill(m.pausedBody, { r: tenant.displayName })}
           </TenantText>
         </span>
@@ -333,6 +337,7 @@ export function StoryCard({ story }: { story: StoryModule }) {
 }
 
 export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
+  const hoursText = hoursLabel(tenant, m);
   return (
     <footer className={styles.footer} data-sf-module="footer">
       <div className={styles.footerRow}>
@@ -340,9 +345,13 @@ export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessage
       </div>
       <div className={styles.footerRow}>
         <span>{m.hours}</span>
-        <span className={styles.ltr} dir="ltr">
-          {tenant.hours.opens}–{tenant.hours.closes}
-        </span>
+        {hoursText.numeric ? (
+          <span className={styles.ltr} dir="ltr">
+            {hoursText.text}
+          </span>
+        ) : (
+          <span>{hoursText.text}</span>
+        )}
       </div>
       <div className={styles.footerRow}>
         <span>{m.callRestaurant}</span>
