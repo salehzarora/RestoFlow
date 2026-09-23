@@ -52,7 +52,14 @@ function storefrontLocal(file) {
 }
 // Approved static-export deployment values. `out` is Next's export target;
 // the ignore command must invoke THIS engine with the storefront selector.
-const STOREFRONT_OUTPUT_DIRECTORY = 'out';
+// HOST-FIX-001: the storefront config declares NO outputDirectory. Vercel's
+// Next.js preset locates the framework build directory (.next) itself and then
+// serves the static export from out/; an explicit outputDirectory in vercel.json
+// overrides that lookup for the deployment (it is not merely a project-settings
+// default), and 'out' made the hosted builder fail with NEXT_NO_ROUTES_MANIFEST
+// after a successful next build. Any explicit value - 'out', '.next', 'dist',
+// null - is therefore unsupported and fails safe to BUILD. The export itself is
+// unchanged: next.config.mjs (pinned below) still writes out/.
 const STOREFRONT_IGNORE_COMMAND = `if node ../${ENGINE} storefront; then exit 0; else exit 1; fi`;
 const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
 // Three linked projects use main. First-preview fallback also checks the source
@@ -490,12 +497,13 @@ function inspectStorefront(repo, revision) {
   const files = readBatch(repo, revision, ['storefront/vercel.json', 'storefront/package.json', 'storefront/next.config.mjs', 'storefront/tsconfig.json']);
   // 3. Deployment config.
   const config = JSON.parse(files.get('storefront/vercel.json'));
-  if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'outputDirectory', 'ignoreCommand', 'trailingSlash', 'cleanUrls', 'headers', 'redirects', 'rewrites'].includes(key))) fail('unsupported_build_contract');
+  if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'ignoreCommand', 'trailingSlash', 'cleanUrls', 'headers', 'redirects', 'rewrites'].includes(key))) fail('unsupported_build_contract');
   if (config.framework !== 'nextjs' || config.installCommand !== 'npm ci' || config.buildCommand !== 'npm run build' || config.functions) fail('unsupported_build_contract');
-  // Exact values, not merely allowed keys: a different outputDirectory publishes a
-  // tree this contract never inspected, and a different ignoreCommand means the
-  // project is filtered by something other than this reviewed engine.
-  if (config.outputDirectory !== STOREFRONT_OUTPUT_DIRECTORY || config.ignoreCommand !== STOREFRONT_IGNORE_COMMAND) fail('unsupported_build_contract');
+  // Exact values, not merely allowed keys: an explicit outputDirectory (any value,
+  // null included - the key is what overrides the preset) is outside the
+  // contract, and a different ignoreCommand means the project is filtered by
+  // something other than this reviewed engine.
+  if (Object.hasOwn(config, 'outputDirectory') || config.ignoreCommand !== STOREFRONT_IGNORE_COMMAND) fail('unsupported_build_contract');
   for (const key of ['rewrites', 'redirects']) {
     if (config[key] != null && (!Array.isArray(config[key]) || config[key].length)) fail('unsupported_build_contract');
   }

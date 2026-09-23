@@ -38,9 +38,10 @@ const STOREFRONT_TSCONFIG = {
   compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
   include: ['app', 'src'], exclude: ['tests'],
 };
+// HOST-FIX-001: no outputDirectory - the Next.js preset locates .next itself
+// and serves the out/ export; an explicit value is refused (see the engine).
 const STOREFRONT_VERCEL = {
   framework: 'nextjs', installCommand: 'npm ci', buildCommand: 'npm run build',
-  outputDirectory: 'out',
   ignoreCommand: 'if node ../tools/vercel/ignore-build.mjs storefront; then exit 0; else exit 1; fi',
 };
 
@@ -1514,18 +1515,50 @@ test('24 safe tsconfig shapes pass inspection and never fan out', () => {
 // foreign ignoreCommand means the project is filtered by something other than
 // this engine; `exit 0` would make it never build at all.
 test('24 storefront deployment values are pinned, not merely allowed', () => {
-  const { outputDirectory, ignoreCommand, ...withoutBoth } = STOREFRONT_VERCEL;
+  const { ignoreCommand, ...withoutIgnore } = STOREFRONT_VERCEL;
   const cases = [
+    // HOST-FIX-001: the outputDirectory KEY is the refused thing. Reinstating the
+    // pre-fix 'out', pointing at the framework directory, an arbitrary path or an
+    // explicit null each override the Next.js preset's own lookup and BUILD.
+    ['outputDirectory reinstated as out (the pre-fix form)', { ...STOREFRONT_VERCEL, outputDirectory: 'out' }],
     ['a different outputDirectory', { ...STOREFRONT_VERCEL, outputDirectory: 'dist' }],
-    ['outputDirectory omitted', { ...withoutBoth, ignoreCommand }],
+    ['the framework directory as outputDirectory', { ...STOREFRONT_VERCEL, outputDirectory: '.next' }],
+    ['an explicit null outputDirectory', { ...STOREFRONT_VERCEL, outputDirectory: null }],
+    ['a different framework', { ...STOREFRONT_VERCEL, framework: null }],
     ['an always-ignore ignoreCommand', { ...STOREFRONT_VERCEL, ignoreCommand: 'exit 0' }],
     ['the marketing selector', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('storefront', 'marketing') }],
     ['a different engine path', { ...STOREFRONT_VERCEL, ignoreCommand: ignoreCommand.replace('../tools', '../other') }],
-    ['ignoreCommand omitted', { ...withoutBoth, outputDirectory }],
+    ['ignoreCommand omitted', { ...withoutIgnore }],
   ];
   for (const [label, config] of cases) {
     guardOnly((repo) => put(repo, 'storefront/vercel.json', json(config)), label);
   }
+});
+
+// HOST-FIX-001: the old-to-new transition is not an IGNORE. The baseline still
+// carries outputDirectory: 'out', the head carries the corrected form, and the
+// guard runs at both revisions: the storefront selector BUILDs with the guard
+// reason, never relevant_changes and never IGNORE. The other selectors judge
+// the same storefront-only diff as unaffected (the engine file is unchanged in
+// this fixture; a real publication of the fix ALSO edits the engine, which is
+// shared_engine for every selector - see the fan-out record, not this test).
+test('24 the outputDirectory transition BUILDs by guard at the baseline and by classification afterwards', () => {
+  const { repo, base: oldForm } = fixture({ seed: (r) => put(r, 'storefront/vercel.json', json({ ...STOREFRONT_VERCEL, outputDirectory: 'out' })) });
+  put(repo, 'storefront/vercel.json', json(STOREFRONT_VERCEL));
+  const corrected = commit(repo);
+  const transition = invoke(repo, 'storefront', oldForm);
+  assert.equal(transition.output.decision, 'BUILD', transition.stdout);
+  assert.equal(transition.output.reason, 'unsupported_build_contract', transition.stdout);
+  assert.deepEqual(transition.output.categories, {}, 'the guard refused the baseline before classification');
+  expectDecision(repo, 'marketing', oldForm, 'IGNORE');
+  expectDecision(repo, 'product', oldForm, 'IGNORE');
+  // Once the corrected form is the baseline, a storefront-only edit is judged
+  // by classification again: the successor contract passes both revisions.
+  put(repo, 'storefront/docs/after-fix.md', '# fixture\n');
+  commit(repo);
+  const after = invoke(repo, 'storefront', corrected);
+  assert.equal(after.output.decision, 'BUILD', after.stdout);
+  assert.equal(after.output.reason, 'relevant_changes', after.stdout);
 });
 
 // Stage 7 hardening 2: the runtime pin. No approved Node value exists to

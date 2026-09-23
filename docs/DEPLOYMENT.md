@@ -1003,7 +1003,10 @@ static-export shape (`framework: nextjs`, `installCommand: npm ci`,
 `buildCommand: npm run build`, no functions, no rewrites/redirects), a private
 manifest whose runtime dependencies are only `next`/`react`/`react-dom` at exact
 versions, a present lockfile, a `next.config.mjs` pinned by the exported
-`STOREFRONT_CONFIG_HASH`, an `outputDirectory` of exactly `out` and an
+`STOREFRONT_CONFIG_HASH`, **no** `outputDirectory` key (HOST-FIX-001: the
+Next.js preset locates `.next` itself and serves the `out/` export; an explicit
+value — `out` included — overrides that lookup and failed hosted with
+`NEXT_NO_ROUTES_MANIFEST`, so any explicit value fails the contract) and an
 `ignoreCommand` that invokes this engine with the `storefront` selector, the
 TypeScript build-graph boundary described below, module specifiers that resolve
 inside the storefront runtime roots or are one of exactly four allowlisted
