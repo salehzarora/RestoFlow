@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -152,7 +153,10 @@ function fixture(options = {}) {
   const repo = mkdtempSync(join(scratch, 'repo-'));
   runGit(repo, ['init', '--quiet', '--initial-branch=main']);
   put(repo, 'pubspec.yaml', rootManifest);
-  const files = ['pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs'];
+  // tools/assemble_web_canvaskit.mjs is consumed by the product build tail and
+  // pinned by CANVASKIT_ASSEMBLER_HASH; inspectGraph also requires it to EXIST.
+  // Omitting it here would fail every product case closed and prove nothing.
+  const files = ['pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'tools/assemble_web_canvaskit.mjs', 'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs'];
   for (const path of files) put(repo, path, readFileSync(join(SOURCE_ROOT, path)));
   put(repo, HELPER, readFileSync(join(SOURCE_ROOT, HELPER)));
   for (const [member, text] of manifestTexts) {
@@ -1795,4 +1799,150 @@ test('24 same-tree storefront self-check ignores', () => {
 test('24 misspelled storefront selector is an invalid selector', () => {
   const { repo, base } = fixture();
   expectDecision(repo, 'storefrnt', base, 'BUILD');
+});
+
+// ===========================================================================
+// 25 CanvasKit assembler — the consumed-helper contract.
+//
+// The product build tail delegates to tools/assemble_web_canvaskit.mjs. Anything
+// under tools/ that is not tools/vercel/ otherwise classifies as
+// unconsumed_tools, which is irrelevant to every selector — a FALSE IGNORE for a
+// file the build actually reads. These prove the helper is inside the contract,
+// that it fails closed, and that it is product-scoped rather than relevant to
+// every project.
+// ===========================================================================
+
+const ASSEMBLER = 'tools/assemble_web_canvaskit.mjs';
+
+/** The engine's own convention: CRLF-normalised sha256. */
+const lfHash = (text) => createHash('sha256').update(String(text).replace(/\r\n/g, '\n')).digest('hex');
+
+/** Rewrite a pin inside the FIXTURE's engine copy, so the fixture stays coherent. */
+function repin(repo, constant, value) {
+  const file = join(repo, HELPER);
+  const source = readFileSync(file, 'utf8');
+  const pattern = new RegExp(`const ${constant} = '[a-f0-9]{64}';`);
+  assert.match(source, pattern, `${constant} must exist to be re-pinned`);
+  put(repo, HELPER, source.replace(pattern, `const ${constant} = '${value}';`));
+}
+
+test('25 a re-pinned helper change: product fails CLOSED, others scope it correctly', () => {
+  const { repo, base } = fixture();
+  // A real helper edit always forces an engine edit too, because the pin lives in
+  // the engine. And inspectGraph validates BOTH compared trees against the single
+  // running pin, so the BASELINE tree - which still holds the old helper - can
+  // never satisfy a new pin. The integrity guard therefore strictly DOMINATES
+  // classification for this file: the observable product result is always
+  // unsupported_build_contract, i.e. a BUILD, never a false IGNORE.
+  //
+  // tools/vercel_build_web.sh has had exactly this property all along; the helper
+  // simply joins it. The product_config entry added for the helper is a SECOND
+  // layer: if the guard were ever loosened, the helper would still be a product
+  // input rather than falling through to unconsumed_tools.
+  const changed = readFileSync(join(repo, ASSEMBLER), 'utf8') + '// local candidate probe' + String.fromCharCode(10);
+  put(repo, ASSEMBLER, changed);
+  repin(repo, 'CANVASKIT_ASSEMBLER_HASH', lfHash(changed));
+  commit(repo);
+
+  const product = expectDecision(repo, 'product', base, 'BUILD');
+  assert.equal(product.reason, 'unsupported_build_contract',
+    'the baseline cannot satisfy the new pin, so the guard must fire and BUILD');
+
+  // The other selectors do not run inspectGraph, so they CLASSIFY. That is where
+  // the helper's scope is observable: product-owned, not relevant to every
+  // project. They still build, but only because the shared engine changed.
+  for (const selector of ['marketing', 'storefront']) {
+    const other = expectDecision(repo, selector, base, 'BUILD');
+    assert.equal(other.reason, 'relevant_changes');
+    assert.ok(other.categories.shared_engine >= 1, `${selector} must build on the shared engine`);
+    assert.ok(other.categories.unconsumed_tools >= 1,
+      `${selector} must treat the helper as unconsumed, got ${JSON.stringify(other.categories)}`);
+    assert.ok(!other.categories.product_config,
+      `${selector} must not adopt product inputs, got ${JSON.stringify(other.categories)}`);
+  }
+});
+
+test('25 a helper change WITHOUT a re-pin fails the product selector closed', () => {
+  const { repo, base } = fixture();
+  put(repo, ASSEMBLER, readFileSync(join(repo, ASSEMBLER), 'utf8') + '\n// unpinned edit\n');
+  commit(repo);
+  const result = expectDecision(repo, 'product', base, 'BUILD');
+  assert.equal(result.reason, 'unsupported_build_contract', 'an unreviewed helper must never classify');
+});
+
+test('25 a deleted or moved helper fails the product selector closed', () => {
+  for (const mutate of [
+    (repo) => unlinkSync(join(repo, ASSEMBLER)),
+    (repo) => { const text = readFileSync(join(repo, ASSEMBLER)); unlinkSync(join(repo, ASSEMBLER)); put(repo, 'tools/moved_assembler.mjs', text); },
+  ]) {
+    const { repo, base } = fixture();
+    mutate(repo);
+    commit(repo);
+    const result = expectDecision(repo, 'product', base, 'BUILD');
+    assert.equal(result.reason, 'unsupported_build_contract');
+  }
+});
+
+test('25 a build script that stops invoking the helper fails closed', () => {
+  const { repo, base } = fixture();
+  const script = readFileSync(join(repo, 'tools/vercel_build_web.sh'), 'utf8');
+  assert.ok(script.includes(`node ${ASSEMBLER} apps/dashboard/build/web`), 'the fixture script must invoke the helper');
+  const without = script.replace(`node ${ASSEMBLER} apps/dashboard/build/web`, 'echo skip-assembly');
+  put(repo, 'tools/vercel_build_web.sh', without);
+  repin(repo, 'BUILD_SCRIPT_HASH', lfHash(without));
+  commit(repo);
+  // Even with a correct script pin, an orphaned helper is not a valid pipeline.
+  const result = expectDecision(repo, 'product', base, 'BUILD');
+  assert.equal(result.reason, 'unsupported_build_contract');
+});
+
+test('25 TRANSITION: a baseline that predates the helper fails safe to BUILD', () => {
+  // This is the first-release window, labelled separately from steady state: the
+  // OLD tree has neither the helper nor the new script hash, so the product
+  // selector cannot classify against it and fails closed. Designed, not a defect.
+  const { repo } = fixture();
+  unlinkSync(join(repo, ASSEMBLER));
+  const legacy = commit(repo, 'legacy tree without the helper');
+  put(repo, ASSEMBLER, readFileSync(join(SOURCE_ROOT, ASSEMBLER)));
+  put(repo, 'docs/transition.md', '# transition\n');
+  commit(repo);
+  const result = expectDecision(repo, 'product', legacy, 'BUILD');
+  assert.equal(result.reason, 'unsupported_build_contract');
+});
+
+test('25 STEADY STATE: docs-only changes still IGNORE under the new contract', () => {
+  // The counterpart to the transition case: once both trees carry the helper and
+  // the pins, ordinary changes classify normally. Without this, a permanent BUILD
+  // could hide behind the transition explanation.
+  const { repo, base } = fixture();
+  put(repo, 'docs/steady-state.md', '# steady state\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+  const product = expectDecision(repo, 'product', base, 'IGNORE');
+  assert.equal(product.reason, 'unaffected_changes');
+  assert.ok(product.categories.tests_docs >= 1, JSON.stringify(product.categories));
+});
+
+test('25 STEADY STATE: per-project isolation survives the new contract', () => {
+  for (const [path, marketing, product, storefront] of [
+    ['apps/pos/lib/probe.dart', 'IGNORE', 'BUILD', 'IGNORE'],
+    ['site/src/probe.js', 'BUILD', 'IGNORE', 'IGNORE'],
+    ['storefront/app/probe.tsx', 'IGNORE', 'IGNORE', 'BUILD'],
+  ]) {
+    const { repo, base } = fixture();
+    put(repo, path, '// probe\n');
+    commit(repo);
+    expectAll(repo, base, marketing, product, storefront);
+  }
+});
+
+test('25 the four authored bootstrap templates are product runtime inputs', () => {
+  const { repo, base } = fixture();
+  for (const app of APP_ROOTS) put(repo, `${app}/web/flutter_bootstrap.js`, '// authored template probe\n');
+  commit(repo);
+  const product = expectDecision(repo, 'product', base, 'BUILD');
+  assert.equal(product.reason, 'relevant_changes');
+  assert.ok(product.categories.product_runtime >= APP_ROOTS.length, JSON.stringify(product.categories));
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  expectDecision(repo, 'storefront', base, 'IGNORE');
 });

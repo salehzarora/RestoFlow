@@ -10,8 +10,17 @@ import { fileURLToPath } from 'node:url';
 // Absolute end assertion: JavaScript's $ alone also accepts a final newline.
 const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
-const BUILD_SCRIPT_HASH = '9ea4df7bef84320e65d416c490cd5562d97c6542f01c2c50ca965f52a51cac49';
+const BUILD_SCRIPT_HASH = '078a4528ba52c7cf08e526010a30428563c4790a895d5059ff48ef52d75e057a';
 const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c5d995f0d15e';
+// The product build delegates its CanvasKit assembly tail to this helper, so it
+// is a build-affecting input exactly like tools/vercel_build_web.sh. Anything
+// under tools/ that is not tools/vercel/ would otherwise classify as
+// unconsumed_tools and be irrelevant to every selector, which for a CONSUMED
+// helper is a false IGNORE. It is therefore pinned here and classified as a
+// product build input below, mirroring how SITE_BUILDER_HASH pins
+// site/scripts/build.mjs. A missing, moved or changed helper fails closed.
+const CANVASKIT_ASSEMBLER = 'tools/assemble_web_canvaskit.mjs';
+const CANVASKIT_ASSEMBLER_HASH = '9d7075dbf4d18c962e04e4d95612959f0a483cee2621fcd41aec01e072afde79';
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
 // until this pin is reviewed: that file decides what the build reads.
@@ -354,7 +363,12 @@ export function inspectGraph(repoRoot, revision = 'HEAD') {
   const controls = git(repoRoot, ['ls-tree', '-r', '-z', '--name-only', resolved]).text.split('\0');
   if (controls.some((file) => unsupportedEntrypoint(file, '', true))) fail('unsupported_build_contract');
   if (controls.some((file) => file === '.vercelignore' || file === 'pubspec_overrides.yaml' || members.some((member) => file === `${member}/pubspec_overrides.yaml` || file === `${member}/build.yaml` || below(file, `${member}/hook`) || below(file, `${member}/hooks`)))) fail('unsupported_build_contract');
-  const files = readBatch(repoRoot, resolved, [...members.map((member) => `${member}/pubspec.yaml`), 'tools/vercel_build_web.sh', 'vercel.json']);
+  // The helper must EXIST at this revision. Checked against the tracked-path
+  // listing so a revision that predates it fails closed with the accurate reason
+  // instead of a generic read error - and so there is no 'optional helper' path
+  // that a later edit could turn into a bypass.
+  if (!controls.includes(CANVASKIT_ASSEMBLER)) fail('unsupported_build_contract');
+  const files = readBatch(repoRoot, resolved, [...members.map((member) => `${member}/pubspec.yaml`), 'tools/vercel_build_web.sh', 'vercel.json', CANVASKIT_ASSEMBLER]);
   for (const member of members) {
     const parsed = parseManifest(files.get(`${member}/pubspec.yaml`));
     if (Object.keys(parsed).some((key) => !['name', 'description', 'publish_to', 'version', 'environment', 'resolution', 'dependencies', 'dev_dependencies', 'flutter'].includes(key))) fail('unsupported_graph');
@@ -384,6 +398,11 @@ export function inspectGraph(repoRoot, revision = 'HEAD') {
   if (hash(script) !== BUILD_SCRIPT_HASH) fail('unsupported_build_contract');
   const actualApps = [...script.matchAll(/^\(cd (apps\/[a-z0-9_]+) && "\$FLUTTER" build web /gm)].map((m) => m[1]);
   if (JSON.stringify(actualApps) !== JSON.stringify(APPS)) fail('unsupported_build_contract');
+  // The helper is pinned by content AND proven reachable from the builder. A hash
+  // alone would leave an orphaned file pinned while the script silently stopped
+  // calling it, or the reverse.
+  if (hash(files.get(CANVASKIT_ASSEMBLER)) !== CANVASKIT_ASSEMBLER_HASH) fail('unsupported_build_contract');
+  if (!script.includes(`node ${CANVASKIT_ASSEMBLER} apps/dashboard/build/web`)) fail('unsupported_build_contract');
   const config = JSON.parse(files.get('vercel.json'));
   if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'outputDirectory', 'ignoreCommand', 'rewrites', 'redirects', 'headers', 'cleanUrls', 'trailingSlash'].includes(key))) fail('unsupported_build_contract');
   if (config.buildCommand !== 'bash tools/vercel_build_web.sh' || config.outputDirectory !== 'apps/dashboard/build/web' || config.framework !== null || config.installCommand !== 'if [ ! -d flutter ]; then git clone https://github.com/flutter/flutter.git --depth 1 -b 3.44.2 flutter; fi && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get') fail('unsupported_build_contract');
@@ -711,6 +730,8 @@ function category(file, selector, graphs) {
   if (file === '.gitattributes' || file === '.vercelignore') return { relevant: true, name: 'checkout_config' };
   if (selector === 'product') {
     if (graphs.some((g) => g.assets.some((a) => file === a.path || (a.directory && below(file, a.path))))) return { relevant: true, name: 'declared_asset' };
+    // Consumed by the product build tail; must never reach the unconsumed_tools rule.
+    if (file === CANVASKIT_ASSEMBLER) return { relevant: true, name: 'product_config' };
     if (['pubspec.yaml', 'pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'pubspec_overrides.yaml', '.vercelignore'].includes(file) || /^(?:apps|packages)\/[^/]+\/pubspec(?:_overrides)?\.yaml$/.test(file)) return { relevant: true, name: 'product_config' };
     const runtime = new Set(graphs.flatMap((g) => g.reachableMembers));
     for (const member of runtime) {

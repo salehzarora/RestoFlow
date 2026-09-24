@@ -1499,3 +1499,169 @@ Preflight is the §13 procedure (confirm `supabase/.temp/project-ref` = `oqmevrn
 Any AFTER value other than the expected one = **STOP**: do not improvise; run the recovery script only with explicit owner approval, re-run the queries, and record the outcome.
 
 **Drift watch.** The `supabase_admin` default-privilege entries in `public` also contain `anon` but cannot be altered by `postgres` and do not apply to migration-created objects; a Supabase platform upgrade may re-apply the legacy `postgres` default. Re-run queries 1, 3 and 6 after every platform upgrade and before every Storefront ticket that adds an anon-callable RPC (D-037 allowlist).
+
+## 17. Versioned CanvasKit engine — one shared, revision-addressed copy
+
+**Local candidate only at the time of writing. Not deployed.** The hosted
+publication decision and the production-merge decision are separate gates.
+
+### 17.1 What ships, and why
+
+Each of the four public apps is built separately, and every web build emits its
+own complete copy of the CanvasKit engine. Assembling them under one output
+therefore shipped **four byte-identical 38,475,613-byte distributions**. The
+default loader does not even use them: with `engineRevision` present and
+`useLocalCanvasKit` absent, the SDK resolves CanvasKit to
+`https://www.gstatic.com/flutter-canvaskit/<engineRevision>/`, so the shipped
+copies were dead weight on the normal path and the engine was a third-party
+runtime dependency for in-store devices.
+
+The four apps now share **one** copy, addressed by engine revision:
+
+```
+/canvaskit/<engineRevision>/<relative distribution file>
+```
+
+Root-absolute, so all four base hrefs resolve to the same directory. Real files
+only — no symlink, junction, hardlink, `latest` alias, redirect or external CDN.
+
+**Why the revision is in the path.** The SDK default already carried it. A bare
+`/canvaskit/` would remove that discriminator, so after an SDK upgrade a browser
+holding a cached `canvaskit.wasm` from the old engine could pair it with a new
+`main.dart.js`. With the revision in the path an upgrade is a new URL, and stale
+bytes are simply never requested.
+
+### 17.2 The coupled changes
+
+| # | Change | Path |
+|---|---|---|
+| 1 | Authored bootstrap templates, byte-identical | `apps/{dashboard,pos,kds,kiosk}/web/flutter_bootstrap.js` |
+| 2 | Assembly tail delegates to the helper | `tools/vercel_build_web.sh` |
+| 3 | The assembler | `tools/assemble_web_canvaskit.mjs` |
+| 4 | Integrity pins and product-input classification | `tools/vercel/ignore-build.mjs` |
+| 5 | Engine-namespace miss rule and scoped cache headers | `vercel.json` |
+
+**These land together.** The bootstraps create demand for `/canvaskit/<rev>/`,
+which does not exist until the assembly step publishes it, so shipping them alone
+breaks all four apps. This ordering is the reverse of the earlier unversioned
+experiment.
+
+**The four web build command lines and the defines array are byte-identical to
+their previous form**, verified by diff. The SDK pin, renderer selection, base
+hrefs, release mode and service-worker semantics are unchanged, and no generated
+or minified loader is edited.
+
+### 17.3 The bootstrap contract
+
+The template reads the revision **at run time** from the SDK's own generated
+`_flutter.buildConfig.engineRevision`, validates it against a hex-token pattern —
+which also rejects `/`, `..`, empty and whitespace — and **throws** on a missing
+or malformed value. It never falls back to an unversioned path, to `latest`, or
+to the CDN. A Flutter marketing version such as `3.44.2` is not a cache key and
+is rejected by the same pattern: several SDK builds can share one, and it does
+not identify the engine bytes.
+
+> **Token trap.** Flutter substitutes its `{{…}}` template tokens **inside
+> comments too**, and the injected build config is multi-line, so a token named
+> in prose becomes live code. Never write a second build-config token. After any
+> edit, re-run the audit — each of the three tokens must appear exactly once. CI
+> asserts this.
+
+### 17.4 Integrity: two pins, and why a helper needs its own
+
+`inspectGraph` pins `tools/vercel_build_web.sh` by CRLF-normalised SHA-256 as
+`BUILD_SCRIPT_HASH`. A helper under `tools/` that is not `tools/vercel/` would
+classify as `unconsumed_tools`, which is irrelevant to **every** selector — a
+false IGNORE for a file the build actually reads. Re-pinning only the shell
+script would leave that hole.
+
+The helper therefore has its own pin, `CANVASKIT_ASSEMBLER_HASH`, mirroring how
+`SITE_BUILDER_HASH` pins `site/scripts/build.mjs`. The contract is three-part and
+all of it fails closed with `unsupported_build_contract`:
+
+1. the helper must **exist** at the inspected revision;
+2. its CRLF-normalised hash must match the pin;
+3. the build script must still **invoke** it — a hash alone would let an orphaned
+   file stay pinned while the script quietly stopped calling it.
+
+It is additionally classified as a **product** build input, ahead of the
+`unconsumed_tools` rule. That is defence in depth: in practice the integrity
+guard dominates, because `inspectGraph` validates **both** compared trees against
+the single running pin, so a tree holding a different helper can never classify.
+
+**Expected fail-closed window.** At a baseline revision that predates the helper,
+the product selector returns `unsupported_build_contract` — a BUILD — on the push
+and again on the merge. Ordinary `IGNORE` returns only once BOTH compared
+revisions satisfy the active pin set - it is NOT guaranteed merely because one
+more deployment has happened. If the older side of a comparison still predates
+the helper or the new pins, that comparison keeps failing closed. Predict it;
+do not discover it. The same applies to any future helper or build-script edit.
+
+`unsupported_build_contract` **returns BUILD**. It is a fail-safe decision to RUN
+the application build - not a successful application build, and not evidence that
+publishing was blocked or prevented.
+
+**Any change to either file must re-pin in the SAME commit.** Never disable or
+weaken the check to get a green run. CI re-derives both pins from the current
+bytes, so a forgotten re-pin fails there instead of on a deployment.
+
+### 17.5 Routing and cache
+
+Vercel gives the filesystem precedence over `rewrites`, so an existing engine
+asset is served correctly regardless of the catch-all. The routing change exists
+only for the **miss** case, which previously returned the Dashboard `index.html`
+with HTTP 200 — safe, in that no wrong bytes were ever served, but invisible to
+any monitor asserting only status.
+
+The final rewrite now excludes both the subtree and the bare path, so neither
+falls into the Dashboard SPA. The lookahead names those two exact shapes rather
+than the literal prefix, so an unrelated future route such as `/canvaskit-docs`
+still reaches the SPA. The legacy `routes` array is not an option: the deployment
+engine's `vercel.json` key allowlist excludes it, and using it would fail
+`unsupported_build_contract`.
+
+Cache headers are scoped to the **exact published files**, one rule per shipped
+asset, not a wildcard. A wildcard such as a `:path*` pattern would also match a
+**nonexistent** filename under a valid revision and could stamp a 404 as
+immutable. Naming each file makes that impossible by construction, and a wrong or
+malformed revision matches no rule at all.
+
+The long lifetime is sound **only** because the key is derived from the engine
+that produced the bytes. HTML, the bootstrap, `main.dart.js` and `version.json`
+must keep revalidating; giving them the same lifetime would pin an old document
+against a new deployment.
+
+**Release-checklist consequence.** The revision now appears in `vercel.json` as
+well as being derived at run time. A future engine bump changes the template's
+behaviour automatically and the header sources only by hand, so **CI asserts the
+two agree** and, when a build output is present, that the header set matches the
+published file set exactly.
+
+### 17.6 What the assembler's safety claim does and does not say
+
+Validation happens **before** any removal: revisions, agreement and byte-identical
+distributions are all checked first, and a validation failure removes nothing. That
+is not the same as "no failure can occur after a removal". A filesystem or
+post-placement error can still happen once copying has begun. What holds in that
+case is narrower and is the property that matters: the failure occurs inside the
+disposable build output and **aborts the build**, so a partial engine is never
+published.
+
+### 17.7 Evidence limits
+
+
+Local measurement only. Hosted routing, hosted `Cache-Control`, hosted
+compression and real transfer bytes are **not** verified by any local run and
+belong to a preview gate. Whether Vercel stamps `immutable` on a 404 inside a
+valid revision is **UNVERIFIED**; the exact-file header scoping is the
+mitigation.
+
+Real Safari on iOS/iPadOS and the actual Android tablets are **not** covered.
+Playwright's WebKit build is not Safari. On that build the engine `.wasm` was
+re-fetched on every navigation while the `.js` cached normally — carried forward
+as an open device question, not a resolved one.
+
+Removing the CanvasKit CDN dependency does **not** make the apps third-party-free:
+`fonts.gstatic.com` remains a separate observed dependency. The generated Flutter
+service worker is a self-unregistering stub that caches nothing, which says
+nothing about native app offline behaviour or in-app local-data workflows.
