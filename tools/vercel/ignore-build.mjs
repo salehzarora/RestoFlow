@@ -15,14 +15,16 @@ const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
 // until this pin is reviewed: that file decides what the build reads.
-export const STOREFRONT_CONFIG_HASH = '4aa433d21dba5868d85a1829de513eb1a7475125ac2c2dba0b287eaab471fd16';
+export const STOREFRONT_CONFIG_HASH = '59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705';
 const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
-// STAGE 7 R3 static-shell module contract: the ONLY bare specifiers storefront
-// source may import. Node builtins are deliberately absent. A static export has
-// no server runtime, so filesystem/process capability is unnecessary here, and
-// allowing it would let build-time code read repository paths this engine does
-// not track. Adding a BFF must re-review this list (SEC-002 / READ-001).
+// STAGE 7 R3 module contract: the ONLY bare specifiers storefront source may
+// import. Node builtins are deliberately absent. STOREFRONT-READ-001 re-reviewed
+// this list for the SERVER build: the live read uses the global `fetch` and
+// `process.env` (both platform globals, not bare imports), so no builtin and no
+// SDK was added; filesystem/process capability stays unnecessary, and allowing
+// it would let build-time code read repository paths this engine does not
+// track. Adding a BFF or a Node dependency must re-review this list again.
 const STOREFRONT_BARE_IMPORTS = ['react', 'react-dom', 'next'];
 // npm runs pre/post hooks around `npm ci` and `npm run build` on its own, so a
 // lifecycle entry is arbitrary code executing inside the build and outside this
@@ -50,9 +52,20 @@ function storefrontLocal(file) {
     || /^storefront\/(?:README(?:\.[^/]*)?|AGENTS\.md|\.gitignore|\.env\.example)(?![\s\S])/.test(file)
     || /^storefront\/(?:eslint\.config|\.eslintrc|\.prettierrc|vitest\.config|playwright\.config)[^/]*(?![\s\S])/.test(file);
 }
-// Approved static-export deployment values. `out` is Next's export target;
-// the ignore command must invoke THIS engine with the storefront selector.
-const STOREFRONT_OUTPUT_DIRECTORY = 'out';
+// Approved storefront deployment values. STOREFRONT-READ-001: the storefront is
+// a SERVER-RENDERED Next.js app (revalidate + expireTime, no `output: 'export'`);
+// the Next.js preset creates its function, so `functions` stays absent and the
+// ignore command must invoke THIS engine with the storefront selector.
+// HOST-FIX-001: the storefront config declares NO outputDirectory. Vercel's
+// Next.js preset locates the framework build directory (.next) itself; an
+// explicit outputDirectory in vercel.json overrides that lookup for the
+// deployment (it is not merely a project-settings default), and 'out' made the
+// hosted builder fail with NEXT_NO_ROUTES_MANIFEST after a successful next
+// build. Any explicit value - 'out', '.next', 'dist', null - is therefore
+// unsupported and fails safe to BUILD. STOREFRONT-READ-001: the pinned
+// next.config.mjs (below) is a SERVER build (no `output: 'export'`; the preset
+// creates the serverless function from .next); nothing is written to out/ by
+// the build - the local snapshot lane materialises out/ from a real next start.
 const STOREFRONT_IGNORE_COMMAND = `if node ../${ENGINE} storefront; then exit 0; else exit 1; fi`;
 const APPS = ['apps/dashboard', 'apps/pos', 'apps/kds', 'apps/kiosk'];
 // Three linked projects use main. First-preview fallback also checks the source
@@ -474,13 +487,19 @@ function tsconfigGraphRoot(entry) {
   return prefix.join('/') || '.';
 }
 
-// Guarded input contract for the static-export storefront, run at BOTH the
-// baseline and the head revision like inspectMarketing. Every failure BUILDs:
-// an input this engine does not understand must never be silently ignored.
+// Guarded input contract for the server-built storefront (STOREFRONT-READ-001:
+// a Next.js server build, no static export), run at BOTH the baseline and the
+// head revision like inspectMarketing. Every failure BUILDs: an input this
+// engine does not understand must never be silently ignored. Consequence: the
+// first push after a contract change (e.g. a STOREFRONT_CONFIG_HASH re-pin)
+// fails the guard at the OLD baseline and builds the storefront by fail-safe
+// exactly once; the next push classifies normally.
 function inspectStorefront(repo, revision) {
   const controls = git(repo, ['ls-tree', '-r', '-z', '--name-only', revision, '--', '.vercelignore', 'storefront']).text.split('\0');
-  // 1-2. No checkout override, and no request-time entrypoint: an exported
-  // site has none, so adding one must be a reviewed engine change.
+  // 1-2. No checkout override, and no repository-defined request-time
+  // entrypoint (api/, middleware, route handlers): the server build's only
+  // request handling is the Next.js preset's own page rendering, so adding an
+  // entrypoint must be a reviewed engine change.
   if (controls.some((file) => ['.vercelignore', 'storefront/.vercelignore'].includes(file) || unsupportedEntrypoint(file, 'storefront/', false))) fail('unsupported_build_contract');
   // 5. Pre-check existence: without it cat-file --batch prints "<spec> missing",
   // the header regex fails, and the reason degrades to unsupported_graph.
@@ -490,12 +509,13 @@ function inspectStorefront(repo, revision) {
   const files = readBatch(repo, revision, ['storefront/vercel.json', 'storefront/package.json', 'storefront/next.config.mjs', 'storefront/tsconfig.json']);
   // 3. Deployment config.
   const config = JSON.parse(files.get('storefront/vercel.json'));
-  if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'outputDirectory', 'ignoreCommand', 'trailingSlash', 'cleanUrls', 'headers', 'redirects', 'rewrites'].includes(key))) fail('unsupported_build_contract');
+  if (Object.keys(config).some((key) => !['$schema', 'framework', 'installCommand', 'buildCommand', 'ignoreCommand', 'trailingSlash', 'cleanUrls', 'headers', 'redirects', 'rewrites'].includes(key))) fail('unsupported_build_contract');
   if (config.framework !== 'nextjs' || config.installCommand !== 'npm ci' || config.buildCommand !== 'npm run build' || config.functions) fail('unsupported_build_contract');
-  // Exact values, not merely allowed keys: a different outputDirectory publishes a
-  // tree this contract never inspected, and a different ignoreCommand means the
-  // project is filtered by something other than this reviewed engine.
-  if (config.outputDirectory !== STOREFRONT_OUTPUT_DIRECTORY || config.ignoreCommand !== STOREFRONT_IGNORE_COMMAND) fail('unsupported_build_contract');
+  // Exact values, not merely allowed keys: an explicit outputDirectory (any value,
+  // null included - the key is what overrides the preset) is outside the
+  // contract, and a different ignoreCommand means the project is filtered by
+  // something other than this reviewed engine.
+  if (Object.hasOwn(config, 'outputDirectory') || config.ignoreCommand !== STOREFRONT_IGNORE_COMMAND) fail('unsupported_build_contract');
   for (const key of ['rewrites', 'redirects']) {
     if (config[key] != null && (!Array.isArray(config[key]) || config[key].length)) fail('unsupported_build_contract');
   }

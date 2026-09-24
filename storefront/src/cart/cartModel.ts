@@ -12,7 +12,7 @@ import { formatMoney } from '@/money/format';
 import { boundedSelection } from '@/money/pricing';
 import { clampQty, lineTotalMinor, subtotalMinor, unitPriceMinor } from '@/money/pricing';
 import { MAX_LINES } from './cartStorage';
-import { groupsFor } from '@/source/modifier-fixture';
+import { groupsFor } from '@/source/lookup';
 import type {
   CartLine,
   CartState,
@@ -49,10 +49,11 @@ function findItem(items: readonly MenuItem[], id: string): MenuItem | null {
 export function resolveLine(
   line: CartLine,
   items: readonly MenuItem[],
+  allGroups: readonly ModifierGroup[],
 ): ResolvedCartLine | null {
   const item = findItem(items, line.itemId);
   if (item === null) return null;
-  const groups = groupsFor(item.groupIds);
+  const groups = groupsFor(item.groupIds, allGroups);
   const optionNames: string[] = [];
   for (const group of groups) {
     for (const optionId of boundedSelection(group, line.selections[group.id] ?? [])) {
@@ -75,10 +76,14 @@ export function resolveLine(
   };
 }
 
-export function summarise(state: CartState, items: readonly MenuItem[]): CartSummary {
+export function summarise(
+  state: CartState,
+  items: readonly MenuItem[],
+  groups: readonly ModifierGroup[],
+): CartSummary {
   const lines: ResolvedCartLine[] = [];
   for (const line of state.lines) {
-    const resolved = resolveLine(line, items);
+    const resolved = resolveLine(line, items, groups);
     if (resolved !== null) lines.push(resolved);
   }
   return {

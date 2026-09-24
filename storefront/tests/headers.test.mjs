@@ -9,7 +9,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+import { MEDIA_ORIGIN } from '../scripts/budgets.mjs';
+
 const config = JSON.parse(readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+// MEDIA_ORIGIN (budgets.mjs): the Supabase project's API origin - the public
+// storage path of published storefront derivatives lives under it
+// (STOREFRONT-READ-001). A project ref is public information (every client
+// build embeds it); it is the ONLY remote origin the CSP names, as an <img>
+// origin only.
 
 const headersFor = (source) => {
   const rule = config.headers.find((h) => h.source === source);
@@ -44,7 +51,9 @@ test('the CSP is restrictive where it can be, with only the recorded exceptions'
   assert.deepEqual(directives['form-action'], ["'self'"]);
   assert.deepEqual(directives['connect-src'], ["'self'"]);
   assert.deepEqual(directives['font-src'], ["'self'"]);
-  assert.deepEqual(directives['img-src'], ["'self'", 'data:']);
+  // STOREFRONT-READ-001: images load from EXACTLY ONE additional origin - the
+  // Supabase project's public storage (published WebP derivatives only).
+  assert.deepEqual(directives['img-src'], ["'self'", 'data:', MEDIA_ORIGIN]);
   assert.ok('upgrade-insecure-requests' in directives);
 
   // D5 RESOLVED WITH EVIDENCE: the real exported output needs no style
@@ -62,8 +71,15 @@ test('the CSP is restrictive where it can be, with only the recorded exceptions'
 
   // No unsafe-eval anywhere in the served policy.
   assert.ok(!csp.includes("'unsafe-eval'"), 'unsafe-eval must never appear');
-  // No wildcard or remote origin.
-  assert.ok(!/\*|https?:\/\//.test(csp), 'no wildcard or remote origin in the CSP');
+  // No wildcard, and the ONE remote origin appears exactly once, in img-src only:
+  // connect-src stays 'self' (the browser never talks to the database origin).
+  assert.ok(!csp.includes('*'), 'no wildcard in the CSP');
+  const remote = csp.match(/https?:\/\/[^\s;]+/g) ?? [];
+  assert.deepEqual(remote, [MEDIA_ORIGIN], 'the media origin is the only remote origin in the CSP');
+  for (const [name, values] of Object.entries(directives)) {
+    if (name === 'img-src') continue;
+    assert.ok(!values.includes(MEDIA_ORIGIN), `${name} must not carry the media origin`);
+  }
 });
 
 test('immutable caching applies only to fingerprinted static assets', () => {

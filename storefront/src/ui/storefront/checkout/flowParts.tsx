@@ -16,7 +16,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
-import { formatMoney } from '@/money/format';
+import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import { ChevronIcon } from '../icons';
 import { TenantText } from '../TenantText';
@@ -132,12 +132,15 @@ export function Totals({
         </div>
       ) : null}
 
-      <div className={s.totalRow}>
-        {/* The rate lives in the translated label, which is why quote.taxRate
-            is pinned to it by test rather than interpolated here. */}
-        <span className={s.totalLabel}>{m.tax}</span>
-        <Money minor={quote.taxMinor} />
-      </div>
+      {/* The configured rate is INTERPOLATED into the translated label
+          (STOREFRONT-READ-001: a live tenant's rate is its branch's, not a
+          literal). No tax row at all when the tenant charges none. */}
+      {quote.taxRateBp === 0 ? null : (
+        <div className={s.totalRow}>
+          <span className={s.totalLabel}>{fill(m.tax, { p: formatRateBp(quote.taxRateBp) })}</span>
+          <Money minor={quote.taxMinor} />
+        </div>
+      )}
 
       <div className={`${s.totalRow} ${s.totalFinal}`}>
         <span className={s.totalLabel}>{m.total}</span>

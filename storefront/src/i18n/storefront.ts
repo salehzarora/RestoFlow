@@ -22,6 +22,19 @@ export interface StorefrontMessages {
   readonly paused: string;
   readonly closesAt: string;
   readonly opensAt: string;
+  /** "opens {d} {t}" - the next window on another day (STOREFRONT-READ-001 B). */
+  readonly opensOn: string;
+  /** "closed for now" - closed with no trustworthy next window. */
+  readonly closedNow: string;
+  readonly closedBodyOn: string;
+  readonly closedBodyNoHours: string;
+  readonly weekday0: string;
+  readonly weekday1: string;
+  readonly weekday2: string;
+  readonly weekday3: string;
+  readonly weekday4: string;
+  readonly weekday5: string;
+  readonly weekday6: string;
   readonly pickup: string;
   readonly delivery: string;
   readonly pickupOff: string;
@@ -65,6 +78,11 @@ export interface StorefrontMessages {
   readonly emptyMenuBody: string;
   readonly orderingClosed: string;
   readonly orderingPaused: string;
+  // STOREFRONT-READ-001 (owner decision D5): the ONE new family for a
+  // browse-only storefront - never a reuse of orderingPaused, which claims
+  // that the restaurant paused.
+  readonly orderingOfflineTitle: string;
+  readonly orderingOfflineBody: string;
   readonly callRestaurant: string;
   readonly menuLabel: string;
   readonly compactMenuLabel: string;

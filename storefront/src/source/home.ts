@@ -20,7 +20,7 @@ import type {
   Minor,
   Tenant,
 } from './types';
-import { CATEGORIES, HOME_MODULES, MENU_ITEMS, TAX_RATE } from './menu-fixture';
+import { CATEGORIES, HOME_MODULES, MENU_ITEMS, TAX_RATE_BP } from './menu-fixture';
 import { applyScenarioTenant, findScenario, SCENARIO_SLUGS } from './scenarios';
 import { fixtureSource } from './fixtures';
 
@@ -51,15 +51,16 @@ function buildCart(items: readonly MenuItem[], lines: typeof SEEDED_LINES): Cart
       optionSummary: line.options,
     });
   }
-  // Integer minor units throughout; rounding happens once, here.
-  const tax: Minor = Math.round(subtotal * TAX_RATE);
+  // Integer minor units throughout; rounding happens once, here, on an
+  // integer basis-point rate (never a float).
+  const tax: Minor = Math.round((subtotal * TAX_RATE_BP) / 10000);
   return {
     lines: views,
     itemCount: views.reduce((n, l) => n + l.quantity, 0),
     subtotalMinor: subtotal,
     taxMinor: tax,
     totalMinor: subtotal + tax,
-    taxRate: TAX_RATE,
+    taxRateBp: TAX_RATE_BP,
   };
 }
 

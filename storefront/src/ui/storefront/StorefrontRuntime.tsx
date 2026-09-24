@@ -27,9 +27,9 @@ import { useCart, type CartDraft } from '@/cart/useCart';
 import { findLine } from '@/cart/cartModel';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
-import { groupsFor } from '@/source/modifier-fixture';
-import type { MenuItem, MotionMode, ServiceState } from '@/source/types';
-import { CartScope } from './cart/CartRuntime';
+import { groupsFor } from '@/source/lookup';
+import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
+import { CartScope, type MenuData } from './cart/CartRuntime';
 import { ProductSheet, type SheetDraft } from './product/ProductSheet';
 import product from './product/product.module.css';
 
@@ -69,18 +69,35 @@ function searchWithItem(search: string, target: SheetTarget | null): string {
 }
 
 export function StorefrontRuntime({
+  source,
   slug,
   menuVersion,
   items,
+  groups,
+  zones,
+  taxRateBp,
+  orderingEnabled,
   locale,
   motion,
   state,
   opensAt,
   children,
 }: {
+  /** Which source rendered the route; `?fx=` demo tokens are honoured for `fixture` only. */
+  source: 'fixture' | 'live';
   slug: string;
   menuVersion: string;
   items: readonly MenuItem[];
+  /**
+   * STOREFRONT-READ-001: the groups, the zones and the tax rate arrive WITH the
+   * items from whichever source rendered the route - the fixture or the live
+   * adapter - so no island imports a fixture to price or describe a line.
+   */
+  groups: readonly ModifierGroup[];
+  zones: readonly DeliveryZone[];
+  taxRateBp: BasisPoints;
+  /** False for a browse-only storefront: every progression control states why. */
+  orderingEnabled: boolean;
   /**
    * The LOCALE, not the dictionary. A dictionary handed across the server ->
    * client boundary is serialised into every document's RSC payload - four
@@ -99,7 +116,8 @@ export function StorefrontRuntime({
   children?: ReactNode;
 }) {
   const m = storefrontMessages(locale);
-  const cart = useCart(slug, menuVersion, items);
+  const cart = useCart(slug, menuVersion, items, groups);
+  const menu: MenuData = { source, items, groups, zones, taxRateBp, menuVersion, orderingEnabled };
   const [target, setTarget] = useState<SheetTarget | null>(null);
   const [toast, setToast] = useState<{ text: string; nonce: number } | null>(null);
 
@@ -262,14 +280,14 @@ export function StorefrontRuntime({
     motion === 'calm' ? '' : motion === 'lively' ? product.motionLively : product.motionFull;
 
   return (
-    <CartScope cart={cart}>
+    <CartScope cart={cart} menu={menu}>
       {children}
 
       {openable && item !== null ? (
         <ProductSheet
           key={`${item.id}:${target?.lineId ?? ''}`}
           item={item}
-          groups={groupsFor(item.groupIds)}
+          groups={groupsFor(item.groupIds, groups)}
           m={m}
           motion={motion}
           initial={initial}

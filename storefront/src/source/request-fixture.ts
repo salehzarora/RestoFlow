@@ -39,8 +39,10 @@ import {
   type StatusSource,
 } from '@/ui/storefront/request/status';
 import { fixtureSource } from './fixtures';
+import { sourceMode as sourceModeRule } from './mode';
 import { DEMO_DISPLAY_CODE, DEMO_REQUEST_REF, DEMO_REQUEST_SLUG } from './request-ref';
-import { MENU_ITEMS, MENU_VERSION, TAX_RATE } from './menu-fixture';
+import { MENU_ITEMS, MENU_VERSION, TAX_RATE_BP } from './menu-fixture';
+import { MODIFIER_GROUPS } from './modifier-fixture';
 import { findZone } from './zones';
 
 // ------------------------------------------------------------- the one ref
@@ -49,8 +51,16 @@ export { DEMO_DISPLAY_CODE, DEMO_REQUEST_REF, DEMO_REQUEST_SLUG } from './reques
 /** REST.ttlMin (storefront-data.js:6). Configurability is OPEN_QUESTIONS.md:48. */
 export const REQUEST_TTL_MINUTES = 30;
 
-/** The refs a request route pre-renders. Evidence scenarios add none. */
+/**
+ * The refs a request route pre-renders. Evidence scenarios add none. In LIVE
+ * mode (STOREFRONT-READ-001) there is no request route at all: the list is
+ * empty and `dynamicParams = false` makes every `/r/*` URL the 404 document.
+ * Read inside the function, never at module scope, so the switch stays server-only.
+ */
 export function requestRefs(): readonly string[] {
+  // The same fail-closed rule as the slug routes (src/source/mode.ts): a
+  // provider build without an explicit source throws here too.
+  if (sourceModeRule() === 'live') return [];
   return [DEMO_REQUEST_REF];
 }
 
@@ -115,9 +125,10 @@ function priced(seed: Omit<RequestSeed, 'createdAt'>): {
       lines: seed.lines.map((l, i) => ({ lineId: `r${i}`, itemId: l.itemId, qty: l.qty, selections: l.selections, note: '' })),
     },
     items: MENU_ITEMS,
+    groups: MODIFIER_GROUPS,
     service: seed.service,
     zone,
-    taxRate: TAX_RATE,
+    taxRateBp: TAX_RATE_BP,
   });
   return {
     lines: quote.lines.map((l, i) => ({

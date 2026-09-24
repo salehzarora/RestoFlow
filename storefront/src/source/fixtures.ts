@@ -9,7 +9,7 @@
  * The demo tenant's colours are DATA. They arrive as arguments to the theme
  * derivation and are never written into a component or a stylesheet.
  */
-import type { ServiceState, StorefrontSource, Tenant } from './types';
+import type { FixtureTenantSource, ServiceState, Tenant } from './types';
 
 const MAPS_BURGER: Tenant = {
   slug: 'maps-burger',
@@ -23,12 +23,13 @@ const MAPS_BURGER: Tenant = {
     accent: '#FF8A2A',
     logo: '/tenant-maps-burger-logo.png',
   },
-  hours: { opens: '10:00', closes: '23:00' },
+  hours: { opens: '10:00', closes: '23:00', nextOpen: null, nextOpenAt: null, timezone: 'Asia/Jerusalem' },
   service: {
     state: 'open',
     pickupEnabled: true,
     deliveryEnabled: true,
     deliveryFromMinor: 1000,
+    orderingEnabled: true,
   },
   heroImage: '/tenant-maps-burger-hero.webp',
   currency: 'ILS',
@@ -71,7 +72,7 @@ export function applyScenario(tenant: Tenant, name: string | null): Tenant {
 
 export const FIXTURE_SCENARIOS: readonly string[] = Object.keys(SCENARIOS);
 
-export const fixtureSource: StorefrontSource = {
+export const fixtureSource: FixtureTenantSource = {
   kind: 'fixture',
   getTenant(slug: string): Tenant | null {
     return FIXTURES.find((t) => t.slug === slug) ?? null;

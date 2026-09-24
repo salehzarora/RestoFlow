@@ -363,7 +363,6 @@ export const HOME_MODULES: HomeModules = {
   popular: { enabled: true, ready: true },
 };
 
-/** Configured VAT rate. Configuration, not a legal decision by any component. */
 /**
  * Identifies THIS menu's id-space. A persisted cart stores item, group and
  * option IDS, so it is only meaningful against the menu those ids came from -
@@ -372,4 +371,9 @@ export const HOME_MODULES: HomeModules = {
  */
 export const MENU_VERSION = 'mb-1';
 
-export const TAX_RATE = 0.18;
+/**
+ * Configured VAT rate in INTEGER BASIS POINTS (1800 = 18%). Configuration, not
+ * a legal decision by any component, and never a float (D-007): the quote
+ * computes `round(base * rate_bp / 10000)`.
+ */
+export const TAX_RATE_BP = 1800;

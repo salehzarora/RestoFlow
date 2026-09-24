@@ -3,13 +3,18 @@
 /**
  * THE PHASE D RUNTIME - one client island shared by all four flow routes.
  *
- * WHY THE FIXTURE IS IMPORTED HERE RATHER THAN PASSED IN.
- * Every storefront route is a static document. A menu handed from a server
- * component to a client one is serialised into EVERY document's RSC payload;
- * measured, that cost 424,033 bytes across the sixteen Phase D documents. The
- * same module imported by the CLIENT lands in one shared chunk instead, for
- * 11,702 bytes total - a 412,331-byte saving against a hard 4 MiB ceiling this
- * phase may not raise. The same reasoning applies to the dictionaries.
+ * WHERE THE MENU COMES FROM. STOREFRONT-READ-001: the items, the groups, the
+ * zones, the tax rate and the cart key are PROPS from the server half
+ * (FlowScreen), resolved by the route's source. Phase D imported the fixture
+ * here to keep sixteen static documents small; a live tenant's menu exists
+ * only in its own document, so it now travels in the RSC payload by design
+ * and the output lane reports that cost per document. The dictionaries are
+ * still resolved client-side from the locale.
+ *
+ * BROWSE-ONLY (tenant.orderingEnabled = false, every live tenant in this
+ * slice): the eligibility answer is 'ordering-off' before anything else, the
+ * checkout / payment / review URLs bounce to the cart, and NO gateway is
+ * constructed - there is nothing a send could reach.
  *
  * WHY ALL FOUR SCREENS SHARE ONE RUNTIME. They share one cart, one quote and
  * one draft. Splitting them would mean four copies of that wiring and four
@@ -33,8 +38,7 @@ import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
 import { raceQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
-import { MENU_ITEMS, MENU_VERSION, TAX_RATE } from '@/source/menu-fixture';
-import { findZone } from '@/source/zones';
+import { zoneFor } from '@/source/lookup';
 import { withRequestScenario } from '@/source/request-scenarios';
 import {
   isQuoteRace,
@@ -44,7 +48,7 @@ import {
   sendOutcomeFor,
   withFlowScenario,
 } from '@/source/flow-scenarios';
-import type { MotionMode, ServiceState } from '@/source/types';
+import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
 import { cartPath, checkoutPath, menuPath, paymentPath, requestPath, reviewPath } from '@/routes/routes';
 import { useRequestHandoff, type RequestHandoff } from '../request/RequestHandoffProvider';
 import { EMPTY_DRAFT, useCheckoutDraft } from './CheckoutDraftProvider';
@@ -61,12 +65,25 @@ import s from './flow.module.css';
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
 export interface FlowProps {
+  /**
+   * Which source rendered the route. The `?fx=` demo scenario tokens (cart
+   * notices, readiness, send outcomes, the quote race) are honoured for
+   * `fixture` ONLY; a live tenant's flow ignores every URL token, so no
+   * fixture banner can be induced on a real cart (review finding C5).
+   */
+  readonly source: 'fixture' | 'live';
   readonly locale: Locale;
   readonly slug: string;
   readonly screen: FlowScreenName;
   readonly tenant: FlowTenant;
   readonly state: ServiceState;
   readonly motion: MotionMode;
+  /** The menu the route resolved (STOREFRONT-READ-001): never a fixture import. */
+  readonly items: readonly MenuItem[];
+  readonly groups: readonly ModifierGroup[];
+  readonly zones: readonly DeliveryZone[];
+  readonly taxRateBp: BasisPoints;
+  readonly menuVersion: string;
   /** Test seam. Production passes nothing and gets the fixture source. */
   readonly quoteSource?: QuoteSource;
   readonly gateway?: RequestGateway;
@@ -77,9 +94,14 @@ export function FlowRuntime(props: FlowProps) {
   const m = storefrontMessages(props.locale);
   return (
     <StorefrontRuntime
+      source={props.source}
       slug={props.slug}
-      menuVersion={MENU_VERSION}
-      items={MENU_ITEMS}
+      menuVersion={props.menuVersion}
+      items={props.items}
+      groups={props.groups}
+      zones={props.zones}
+      taxRateBp={props.taxRateBp}
+      orderingEnabled={props.tenant.orderingEnabled}
       locale={props.locale}
       motion={props.motion}
       state={props.state}
@@ -91,12 +113,18 @@ export function FlowRuntime(props: FlowProps) {
 }
 
 function FlowBody({
+  source: resolutionSource,
   locale,
   slug,
   screen,
   tenant,
   state,
   motion,
+  items,
+  groups,
+  zones,
+  taxRateBp,
+  menuVersion,
   quoteSource,
   gateway,
   onComplete,
@@ -110,26 +138,31 @@ function FlowBody({
   const [fx, setFx] = useState('');
   const [dismissed, setDismissed] = useState(false);
   const handoffApi = useRequestHandoff();
+  // Demo scenario tokens exist for the fixture only (review finding C5).
+  const fxEnabled = resolutionSource === 'fixture';
+  const readFx = useCallback((search: string) => (fxEnabled ? readFlowScenario(search) : ''), [fxEnabled]);
 
   // The URL is read AFTER hydration, never during render: the first client
   // render has to match the static document byte for byte.
   useLayoutEffect(() => {
-    setFx(readFlowScenario(window.location.search));
-    const onPop = () => setFx(readFlowScenario(window.location.search));
+    if (!fxEnabled) return undefined;
+    setFx(readFx(window.location.search));
+    const onPop = () => setFx(readFx(window.location.search));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [fxEnabled, readFx]);
 
-  const zone = findZone(draft.zoneId);
+  const zone = zoneFor(draft.zoneId, zones);
   const input: QuoteInput = useMemo(
     () => ({
-      cart: cart?.state ?? { schema: 1, slug, menuVersion: MENU_VERSION, lines: [] },
-      items: MENU_ITEMS,
+      cart: cart?.state ?? { schema: 1, slug, menuVersion, lines: [] },
+      items,
+      groups,
       service: draft.service,
       zone,
-      taxRate: TAX_RATE,
+      taxRateBp,
     }),
-    [cart?.state, draft.service, slug, zone],
+    [cart?.state, draft.service, groups, items, menuVersion, slug, taxRateBp, zone],
   );
   const source = quoteSource ?? (isQuoteRace(fx) ? raceQuoteSource : undefined);
   const { quote, pending } = useQuote(input, source);
@@ -183,8 +216,16 @@ function FlowBody({
    * readiness, the visitor's own cart, the current quote and the draft.
    * Every step control and the send read it; nothing else decides.
    */
-  const eligibility = submitEligibility({ state: liveState, ready, pending, quote, draft, services });
-  const blockedReason = orderingReason(orderingBlocker(liveState), m, tenant.opensAt);
+  const eligibility = submitEligibility({
+    orderingEnabled: tenant.orderingEnabled,
+    state: liveState,
+    ready,
+    pending,
+    quote,
+    draft,
+    services,
+  });
+  const blockedReason = orderingReason(orderingBlocker(liveState, tenant.orderingEnabled), m, tenant.opensAt);
 
   /*
    * ENTRY GUARDS.
@@ -201,6 +242,11 @@ function FlowBody({
    * reopens. (A redirect here would loop: no step is "the one where the
    * restaurant opens".)
    *
+   * A BROWSE-ONLY storefront (STOREFRONT-READ-001) is different: no later
+   * state ever admits a request, so the three checkout steps have no reason to
+   * exist and bounce to the cart, which still shows the lines and the reason.
+   * This is NEW behaviour, deliberately narrower than the closed/paused rule.
+   *
    * They run only once the visitor's OWN cart has been read: before that every
    * cart looks empty and the guard would bounce everyone off checkout.
    *
@@ -213,15 +259,16 @@ function FlowBody({
     const empty = quote.lines.length === 0;
     const details = validateCheckout(draft, quote, services);
     let target: string | null = null;
-    if (screen !== 'cart' && empty) target = hrefs.cart;
+    if (screen !== 'cart' && !tenant.orderingEnabled) target = hrefs.cart;
+    else if (screen !== 'cart' && empty) target = hrefs.cart;
     else if ((screen === 'payment' || screen === 'review') && !details.ok) target = hrefs.checkout;
     if (target === null) return;
     redirected.current = true;
     // The demo token rides along, as it does on every step navigation:
     // a redirect that dropped it made the readiness scenarios unreachable
     // from a deep link (evidence only; the shipped URL carries no token).
-    router.replace(withFlowScenario(target, readFlowScenario(window.location.search)));
-  }, [draft, hrefs, quote, ready, router, screen, services]);
+    router.replace(withFlowScenario(target, readFx(window.location.search)));
+  }, [draft, hrefs, quote, readFx, ready, router, screen, services, tenant.orderingEnabled]);
 
   /*
    * Step navigation CARRIES the scenario switch. Without it a demo state
@@ -295,9 +342,14 @@ function FlowBody({
    * queued, logged or retained.
    */
   const outcome = sendOutcomeFor(fx);
+  // NO gateway at all for a browse-only storefront: not the fixture, not a
+  // test seam. A send has nothing to reach (packet §4.6).
   const activeGateway = useMemo(
-    () => gateway ?? fixtureGateway({ outcome, delayMs: 900, readiness: () => liveStateRef.current }),
-    [gateway, outcome],
+    () =>
+      tenant.orderingEnabled
+        ? (gateway ?? fixtureGateway({ outcome, delayMs: 900, readiness: () => liveStateRef.current }))
+        : null,
+    [gateway, outcome, tenant.orderingEnabled],
   );
 
   /* Before the visitor's own cart has been read there is nothing truthful to
@@ -328,6 +380,7 @@ function FlowBody({
           quote={quote}
           menuHref={hrefs.menu}
           state={liveState}
+          orderingEnabled={tenant.orderingEnabled}
           opensAt={tenant.opensAt}
           motion={motion}
           notice={notice}
@@ -344,6 +397,7 @@ function FlowBody({
           set={draftApi?.set ?? (() => undefined)}
           quote={quote}
           tenant={tenant}
+          zones={zones}
           motion={motion}
           backHref={hrefs.cart}
           pending={pending}
@@ -371,7 +425,7 @@ function FlowBody({
           m={m}
           locale={locale}
           slug={slug}
-          menuVersion={MENU_VERSION}
+          menuVersion={menuVersion}
           cart={cart}
           draft={draft}
           quote={quote}

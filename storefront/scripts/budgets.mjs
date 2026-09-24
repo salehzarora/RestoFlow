@@ -4,11 +4,25 @@
 // = 2,097,152 bytes); the two JS ceilings are exact DECIMAL byte counts as
 // approved. The convention is spelled out here so a later reader cannot mistake
 // one for the other.
+/**
+ * STOREFRONT-READ-001: the storefront is server-rendered (no static export).
+ * `out/` is now the SNAPSHOT that scripts/snapshot-server.mjs materialises
+ * from a real `next start`: every canonical document, one RSC flight payload
+ * per document, `.next/static` and `public/`. Every ceiling below applies to
+ * that snapshot exactly as it applied to the export; the SERVER bundle is
+ * reported separately (out/SNAPSHOT.json `serverBundleBytes`) and never
+ * counted against a static ceiling. The one remote origin images may load
+ * from is named here once, for the CSP test and the output audit alike.
+ */
+export const MEDIA_ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
+export const MEDIA_PATH_PREFIX = `${MEDIA_ORIGIN}/storage/v1/object/public/storefront-media/`;
+
 export const BUDGETS = {
   // STOREFRONT-UI-001 approved ceiling (packet item 16): 4 MiB =
-  // 4,194,304 bytes for the whole out/ tree. This task may NOT raise it;
-  // Phase F may LOWER it once the real module set is measured.
-  totalOutBytes: 4 * 1024 * 1024,   // 4 MiB = 4,194,304 bytes, whole out/ tree
+  // 4,194,304 bytes for the whole out/ tree (now: the whole SNAPSHOT tree -
+  // documents + flight payloads + client static assets + public files). This
+  // task may NOT raise it; a later pass may LOWER it once measured.
+  totalOutBytes: 4 * 1024 * 1024,   // 4 MiB = 4,194,304 bytes, whole out/ snapshot tree
   singleFileBytes: 256 * 1024,      // 262,144 bytes; mirrors the engine's public/ rule
   // STOREFRONT-INFRA-001B approved dual axis. Both must pass: compression does
   // not remove parse/compile cost, so the uncompressed guard stays.
@@ -31,7 +45,11 @@ export const BUDGETS = {
   fontPreloadBytesPerRoute: 120000, // exact decimal bytes, the preloaded files summed
   sourceMaps: 0,
   referenceMedia: 0,
-  serverFunctions: 0,
+  // STOREFRONT-READ-001 PROPOSAL (packet §7.1), REPORTED and NOT enforced
+  // until the owner approves it as a budget row: decoded bytes of one served
+  // document (HTML), the figure that grows with a tenant's menu now that the
+  // catalog lives in the document rather than in a shared client chunk.
+  documentBytesProposal: 200000,
 };
 
 // Every direct-load route whose first-load cost is measured independently.

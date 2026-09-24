@@ -26,7 +26,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addLine, removeLine, summarise, updateLine, type CartSummary } from './cartModel';
 import { emptyCart, loadCart, saveCart } from './cartStorage';
-import type { CartState, MenuItem, ModifierSelections } from '@/source/types';
+import type { CartState, MenuItem, ModifierGroup, ModifierSelections } from '@/source/types';
 
 export interface CartDraft {
   readonly itemId: string;
@@ -56,6 +56,7 @@ export function useCart(
   slug: string,
   menuVersion: string,
   items: readonly MenuItem[],
+  groups: readonly ModifierGroup[],
 ): CartApi {
   const [state, setState] = useState<CartState>(() => emptyCart(slug, menuVersion));
   const [ready, setReady] = useState(false);
@@ -69,6 +70,8 @@ export function useCart(
   // undo the visitor's own changes.
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
 
   // The handlers below are called from event handlers, so they must see the
   // CURRENT state without being rebuilt whenever it changes. A ref synchronised
@@ -85,7 +88,7 @@ export function useCart(
     // uncountable and - with no cart screen in this phase - impossible for the
     // visitor to remove. Rewriting the pruned cart keeps what is stored equal
     // to what is shown.
-    const usable = summarise(stored, itemsRef.current);
+    const usable = summarise(stored, itemsRef.current, groupsRef.current);
     const pruned =
       usable.lines.length === stored.lines.length
         ? stored
@@ -126,7 +129,7 @@ export function useCart(
     commit(emptyCart(slug, menuVersion));
   }, [commit, menuVersion, slug]);
 
-  const summary = useMemo(() => summarise(state, items), [state, items]);
+  const summary = useMemo(() => summarise(state, items, groups), [state, items, groups]);
 
   return { summary, ready, add, update, remove, clear, state };
 }

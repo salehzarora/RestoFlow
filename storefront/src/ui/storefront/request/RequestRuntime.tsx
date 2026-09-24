@@ -33,6 +33,7 @@ import { optionSummary, resolveLine } from '@/cart/cartModel';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { MENU_ITEMS, MENU_VERSION } from '@/source/menu-fixture';
+import { MODIFIER_GROUPS } from '@/source/modifier-fixture';
 import { demoStatusSource } from '@/source/request-fixture';
 import { readRequestScenario, type RequestScenario } from '@/source/request-scenarios';
 import { displayCodeFor } from '@/source/request-ref';
@@ -83,6 +84,7 @@ function viewLines(
     const resolved = resolveLine(
       { lineId: `v${index}`, itemId: line.itemId, qty: line.qty, selections: line.selections, note: '' },
       MENU_ITEMS,
+      MODIFIER_GROUPS,
     );
     if (resolved === null) return;
     out.push({
@@ -111,7 +113,8 @@ export function RequestRuntime({
   const m = storefrontMessages(locale);
   const router = useRouter();
   const handoffApi = useRequestHandoff();
-  const cart = useCart(slug, MENU_VERSION, MENU_ITEMS);
+  // Fixture-only route (404 in live mode): the demo menu and its groups.
+  const cart = useCart(slug, MENU_VERSION, MENU_ITEMS, MODIFIER_GROUPS);
   const now = useMemo<Clock>(() => clock ?? (() => Date.now()), [clock]);
   const open = launcher ?? demoLauncher;
   const doCopy = copy ?? copyText;

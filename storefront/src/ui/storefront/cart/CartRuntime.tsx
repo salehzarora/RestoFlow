@@ -30,29 +30,61 @@ import {
 import type { CartApi } from '@/cart/useCart';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
-import type { MotionMode, ServiceState } from '@/source/types';
+import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
 import { LiveCartDock } from './LiveCartDock';
 import { LiveCartAside } from './LiveCartAside';
 import { EMPTY_DRAFT, useCheckoutDraft } from '../checkout/CheckoutDraftProvider';
 import { raceQuoteSource, useQuote } from '@/money/useQuote';
 import { isQuoteRace, readFlowScenario } from '@/source/flow-scenarios';
 import type { QuoteInput } from '@/money/quote';
-import { MENU_ITEMS, TAX_RATE } from '@/source/menu-fixture';
-import { findZone } from '@/source/zones';
+import { zoneFor } from '@/source/lookup';
 import type { CartState } from '@/source/types';
 
 /** A stable identity, so the quote key does not churn on every render. */
 const EMPTY_CART: CartState = { schema: 1, slug: '', menuVersion: '', lines: [] };
 
-const CartContext = createContext<CartApi | null>(null);
+/**
+ * THE MENU THE SCOPE WAS RENDERED WITH (STOREFRONT-READ-001). Items, groups,
+ * zones, the tax rate, the cart key and the browse-only flag come from the
+ * route's source through StorefrontRuntime; the aside reads them here instead
+ * of importing a fixture, so a live tenant's quote is priced on ITS menu.
+ */
+export interface MenuData {
+  /**
+   * Which source produced the menu. The `?fx=` demo scenario tokens are
+   * honoured for `fixture` ONLY; a live tenant's cart ignores every URL token
+   * (STOREFRONT-READ-001 review finding C5).
+   */
+  readonly source: 'fixture' | 'live';
+  readonly items: readonly MenuItem[];
+  readonly groups: readonly ModifierGroup[];
+  readonly zones: readonly DeliveryZone[];
+  readonly taxRateBp: BasisPoints;
+  readonly menuVersion: string;
+  readonly orderingEnabled: boolean;
+}
 
-export function CartScope({ cart, children }: { cart: CartApi; children: ReactNode }) {
-  return <CartContext.Provider value={cart}>{children}</CartContext.Provider>;
+const EMPTY_MENU: MenuData = { source: 'live', items: [], groups: [], zones: [], taxRateBp: 0, menuVersion: '', orderingEnabled: false };
+
+const CartContext = createContext<CartApi | null>(null);
+const MenuContext = createContext<MenuData>(EMPTY_MENU);
+
+export function CartScope({ cart, menu, children }: { cart: CartApi; menu: MenuData; children: ReactNode }) {
+  return (
+    <MenuContext.Provider value={menu}>
+      <CartContext.Provider value={cart}>{children}</CartContext.Provider>
+    </MenuContext.Provider>
+  );
 }
 
 /** Null outside a CartScope, so a slot rendered by mistake shows the fallback. */
 export function useCartApi(): CartApi | null {
   return useContext(CartContext);
+}
+
+/** The menu of the enclosing scope; an empty, browse-only menu outside one. */
+export function useMenuData(): MenuData {
+  return useContext(MenuContext);
 }
 
 export function DockSlot({
@@ -70,6 +102,7 @@ export function DockSlot({
   cartHref: string;
 }) {
   const cart = useCartApi();
+  const menu = useMenuData();
   const m = storefrontMessages(locale);
   // Nothing before the visitor's own cart has been read: an empty cart renders
   // no dock, and that is exactly what the static document must contain.
@@ -80,6 +113,7 @@ export function DockSlot({
       m={m}
       motion={motion}
       state={state}
+      orderingEnabled={menu.orderingEnabled}
       opensAt={opensAt}
       cartHref={cartHref}
     />
@@ -116,6 +150,7 @@ export function AsideSlot({
 }) {
   const m = storefrontMessages(locale);
   const cart = useCartApi();
+  const menu = useMenuData();
   const draftApi = useCheckoutDraft();
   const draft = draftApi?.draft ?? EMPTY_DRAFT;
   const ready = cart !== null && cart.ready;
@@ -130,22 +165,26 @@ export function AsideSlot({
    * match the static document byte for byte.
    */
   const [fx, setFx] = useState('');
+  const fxEnabled = menu.source === 'fixture';
   useLayoutEffect(() => {
+    // A live tenant never reads a demo token from the URL (review finding C5).
+    if (!fxEnabled) return undefined;
     setFx(readFlowScenario(window.location.search));
     const onPop = () => setFx(readFlowScenario(window.location.search));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [fxEnabled]);
 
   const input: QuoteInput = useMemo(
     () => ({
       cart: cart?.state ?? EMPTY_CART,
-      items: MENU_ITEMS,
+      items: menu.items,
+      groups: menu.groups,
       service: draft.service,
-      zone: findZone(draft.zoneId),
-      taxRate: TAX_RATE,
+      zone: zoneFor(draft.zoneId, menu.zones),
+      taxRateBp: menu.taxRateBp,
     }),
-    [cart?.state, draft.service, draft.zoneId],
+    [cart?.state, draft.service, draft.zoneId, menu],
   );
   const { quote, pending } = useQuote(input, isQuoteRace(fx) ? raceQuoteSource : undefined);
 
@@ -164,6 +203,7 @@ export function AsideSlot({
       remove={cart?.remove ?? null}
       m={m}
       state={state}
+      orderingEnabled={menu.orderingEnabled}
       opensAt={opensAt}
       checkoutHref={checkoutHref}
     />

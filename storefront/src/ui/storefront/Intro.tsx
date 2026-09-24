@@ -19,6 +19,7 @@ import { formatMoney } from '@/money/format';
 import { searchPath, storefrontPath } from '@/routes/routes';
 import type { MotionMode, Tenant } from '@/source/types';
 import { LanguageMenu } from './LanguageMenu';
+import { hoursLabel } from './home/hoursCopy';
 import { ChevronIcon, DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './Intro.module.css';
 
@@ -54,16 +55,19 @@ export function Intro({
   return (
     <div className={`${styles.screen} ${MOTION_CLASS[motion]}`}>
       <div className={styles.media}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className={styles.mediaImg}
-          src={tenant.heroImage}
-          alt=""
-          width={1600}
-          height={1067}
-          decoding="async"
-          fetchPriority="high"
-        />
+        {/* No hero published -> the brand-colour canvas alone (D11). */}
+        {tenant.heroImage === null ? null : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className={styles.mediaImg}
+            src={tenant.heroImage}
+            alt=""
+            width={1600}
+            height={1067}
+            decoding="async"
+            fetchPriority="high"
+          />
+        )}
       </div>
       <div className={styles.vignette} />
 
@@ -158,7 +162,7 @@ export function Intro({
           {m.poweredBy} <span className={styles.creditName}>BIZBOT</span>
           <span className={styles.srOnly}>
             {' · '}
-            {hours.opens}–{hours.closes}
+            {hoursLabel(tenant, m).text}
           </span>
         </p>
       </div>

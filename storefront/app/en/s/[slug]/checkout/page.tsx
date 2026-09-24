@@ -1,35 +1,29 @@
 import { notFound } from 'next/navigation';
-import { resolveHome, homeSlugs } from '@/source/home';
+import { getStorefront, storefrontSlugs } from '@/source/storefront';
 import { FlowScreen } from '@/ui/storefront/checkout/FlowScreen';
 
-export const dynamicParams = false;
-
 /*
- * The shipped export carries the canonical tenant and nothing else; a local
- * evidence build (SF_EVIDENCE_ROUTES=1) adds the demo slugs.
- *
- * EVERY demo slug gets the flow routes, not just the ones whose STATE this
- * screen renders. A narrower list looked cheaper and was wrong: the cart dock
- * and the wide aside on a demo MENU page link to that slug's cart and
- * checkout, so omitting them left a live control pointing at a 404 - which the
- * keyframe census caught as a failed request before any human would have.
+ * STOREFRONT-READ-001 route contract (owner decisions D2 / D13):
+ *   - a SERVER-RENDERED document, cached per URL for 60 s and served stale for
+ *     up to 300 s more while it regenerates (revalidate + expireTime in
+ *     next.config.mjs) - not a static export;
+ *   - dynamicParams = true: any slug renders on demand; an unknown, unpublished
+ *     or suspended one resolves to null and becomes the Unknown document;
+ *   - generateStaticParams pre-renders the fixture tenant in fixture mode and
+ *     nothing in live mode (the same literals cannot differ per mode);
+ *   - a transport failure THROWS (the framework error page; a cached URL keeps
+ *     its last good document) - never the fixture, never a fabricated menu.
  */
+export const dynamicParams = true;
+export const revalidate = 60;
+
 export function generateStaticParams() {
-  return homeSlugs().map((slug) => ({ slug }));
+  return storefrontSlugs().map((slug) => ({ slug }));
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const resolved = resolveHome(slug);
+  const resolved = await getStorefront(slug);
   if (resolved === null) notFound();
-  return (
-    <FlowScreen
-      tenant={resolved.view.tenant}
-      locale="en"
-      slug={slug}
-      screen="checkout"
-      preset={resolved.preset}
-      motion={resolved.view.motion}
-    />
-  );
+  return <FlowScreen resolution={resolved} locale="en" slug={slug} screen="checkout" />;
 }

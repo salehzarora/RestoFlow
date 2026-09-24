@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Post-build audit of storefront/out: size budgets, forbidden artefacts, the
-// required document set, and emitted lang/dir. Exits non-zero on any violation.
+// Post-build audit of storefront/out - since STOREFRONT-READ-001 the SNAPSHOT
+// that scripts/snapshot-server.mjs materialises from a real `next start` (the
+// storefront is server-rendered; there is no static export): size budgets,
+// forbidden artefacts, the required document set, and emitted lang/dir. Exits
+// non-zero on any violation.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUDGETS, MEDIA_EXTENSIONS, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
+import { BUDGETS, MEDIA_EXTENSIONS, MEDIA_PATH_PREFIX, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
 import { measure, checkBudgets, cssAcceptance } from './measure-firstload.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,7 +27,7 @@ export function walk(dir) {
 
 export function auditOutput(outDir = OUT) {
   const problems = [];
-  if (!existsSync(outDir)) return { problems: ['out/ does not exist - run npm run build first'], stats: null };
+  if (!existsSync(outDir)) return { problems: ['out/ does not exist - run npm run build, then node scripts/snapshot-server.mjs'], stats: null };
 
   const files = walk(outDir);
   const rel = (p) => path.relative(outDir, p).split(path.sep).join('/');
@@ -75,14 +78,23 @@ export function auditOutput(outDir = OUT) {
   // string: framework chunks embed documentation URLs such as react.dev/errors
   // inside error-message text, which is not a network request. Those are
   // recorded below as evidence instead of failed as violations.
+  //
+  // STOREFRONT-READ-001: EXACTLY ONE exception - an <img src> under the public
+  // storefront-media path of the Supabase origin (a published derivative, the
+  // CSP's img-src). Any other element, attribute or origin is still a violation.
   const offOrigin = (uri) => /^(?:https?:)?\/\//i.test(uri) && !/^https?:\/\/(?:localhost|127\.0\.0\.1)/i.test(uri);
+  const allowedImage = (uri) => uri.startsWith(MEDIA_PATH_PREFIX);
   for (const f of files) {
     const ext = path.extname(f.path).toLowerCase();
     if (ext !== '.html' && ext !== '.css') continue;
     const text = readFileSync(f.path, 'utf8');
     if (ext === '.html') {
+      const imgSrcs = new Set();
+      for (const m of text.matchAll(/<img\b[^>]*\ssrc\s*=\s*"([^"]+)"/gi)) imgSrcs.add(m[1]);
       for (const m of text.matchAll(/(?:src|href|action)\s*=\s*"([^"]+)"/gi)) {
-        if (offOrigin(m[1])) problems.push(`${rel(f.path)} loads off-origin resource: ${m[1]}`);
+        if (!offOrigin(m[1])) continue;
+        if (imgSrcs.has(m[1]) && allowedImage(m[1])) continue;
+        problems.push(`${rel(f.path)} loads off-origin resource: ${m[1]}`);
       }
     } else {
       for (const m of text.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {

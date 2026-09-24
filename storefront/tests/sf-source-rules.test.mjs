@@ -46,6 +46,14 @@ const PUBLIC_JSON = walk(path.join(ROOT, 'public')).filter((f) => f.endsWith('.j
 const TSX = ALL.filter((f) => /\.tsx?$/.test(f));
 const CSS = ALL.filter((f) => f.endsWith('.css'));
 
+/**
+ * The ONE module allowed to make a network request (STOREFRONT-READ-001): the
+ * server-only live read client. Every other file - client islands above all -
+ * stays network-free; the runtime guard, the import discipline test and the
+ * emitted-chunk scan (tests/output) are the other two layers.
+ */
+const LIVE_CLIENT_MODULE = 'src/source/live/client.ts';
+
 // The demo tenant's data legitimately contains its own brand colours.
 const FIXTURE_LAYER = [
   'src/source/fixtures.ts',
@@ -175,6 +183,101 @@ test('NEGATIVE CONTROL: the scenario rule catches every way of spelling it', () 
   }
 });
 
+/**
+ * STOREFRONT-READ-001 - the SERVER-ONLY boundary of the live read.
+ *
+ * The source switch (src/source/storefront.ts) and everything under
+ * src/source/live may be imported by route files (server components) only.
+ * A client module ('use client') that imported them would drag the env reads
+ * and the network client into a browser bundle; nothing under src/ui may
+ * import them at all. `process.env` is read in exactly the named server
+ * modules, never in a component.
+ */
+/**
+ * Every import specifier of a module, and the ones among them that reach the
+ * server-only live read: the switch (`source/storefront`) or anything under
+ * `source/live/`, spelled through the alias OR any relative path (review
+ * finding D2: a literal-prefix match let `'../../source/live/client'` through).
+ */
+// `from '…'` imports, side-effect `import '…'` and dynamic `import('…')` alike
+const IMPORT_SPECIFIER = /\b(?:from\s+|import\s*\(?\s*)['"]([^'"]+)['"]/g;
+const SERVER_ONLY_SPECIFIER = /(?:^|\/)source\/(?:storefront|live(?:\/|$))|^\.{1,2}\/live(?:\/|$)/;
+export function serverOnlyImports(src) {
+  return [...src.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]).filter((s) => SERVER_ONLY_SPECIFIER.test(s));
+}
+const ENV_READERS = ['src/source/storefront.ts', 'src/source/mode.ts', 'src/source/live/client.ts', 'src/source/home.ts'];
+
+test('the live read stays server-only: no client module and no UI module imports it, however the path is spelled', () => {
+  let matched = 0;
+  for (const f of TSX) {
+    const imports = serverOnlyImports(code(f));
+    if (imports.length === 0) continue;
+    matched += 1;
+    const where = rel(f);
+    assert.ok(!/^\s*'use client'/m.test(readFileSync(f, 'utf8')), `${where}: a client module imports the live read (${imports.join(', ')})`);
+    assert.ok(!where.startsWith('src/ui/'), `${where}: a UI module imports the live read (${imports.join(', ')})`);
+  }
+  // Non-vacuity: the 28 route files import the switch, and the switch itself imports the adapter.
+  const routes = TSX.filter((f) => rel(f).startsWith('app/') && serverOnlyImports(code(f)).includes('@/source/storefront'));
+  assert.equal(routes.length, 28, `expected the 28 slug route files to import the switch, got ${routes.length}`);
+  assert.ok(matched >= 29, `expected at least the routes and the switch to be inspected, got ${matched}`);
+});
+
+test('NEGATIVE CONTROL: a client module importing the live read by ANY path spelling is reported by the guard', () => {
+  const offenders = [
+    "'use client';\nimport { fetchStorefrontMenu } from '../../source/live/client';",
+    "'use client';\nimport { getStorefront } from '../source/storefront';",
+    "'use client';\nimport { liveStorefrontSource } from '@/source/live/adapter';",
+    "import { x } from \"@/source/storefront\";",
+    "import { adaptStorefront } from './live/adapter';",
+    "'use client';\nimport '@/source/live/client';",
+    "'use client';\nconst m = await import('@/source/live/client');",
+    "'use client';\nconst m = await import(\"../source/storefront\");",
+  ];
+  for (const src of offenders) assert.equal(serverOnlyImports(src).length, 1, `must be reported: ${src}`);
+  // ...and the pure lookups, the types and the mode rule are not the live read
+  for (const src of ["import { groupsFor } from '@/source/lookup';", "import type { Tenant } from '@/source/types';", "import { sourceMode } from './mode';", "import x from 'react';"]) {
+    assert.deepEqual(serverOnlyImports(src), [], `must not be reported: ${src}`);
+  }
+});
+
+test('process.env is read only in the named server modules, and never in a component', () => {
+  const readers = TSX.filter((f) => /\bprocess\.env\b/.test(code(f))).map(rel).sort();
+  assert.deepEqual(readers, [...ENV_READERS].sort());
+  for (const f of TSX) {
+    if (rel(f).endsWith('.tsx')) assert.ok(!/\bprocess\.env\b/.test(code(f)), `${rel(f)}: a component reads the environment`);
+  }
+  // Every env name is server-only: no NEXT_PUBLIC_ name anywhere in the CODE
+  // (a comment may name it while explaining why it is not used).
+  for (const f of TSX) assert.ok(!/NEXT_PUBLIC_/.test(code(f)), `${rel(f)}: NEXT_PUBLIC_ would reach the browser`);
+});
+
+test('the live client guards against a browser at runtime and names the two server-only variables', () => {
+  const src = code(path.join(ROOT, LIVE_CLIENT_MODULE));
+  assert.ok(src.includes("typeof window !== 'undefined'"), 'the runtime guard must exist');
+  assert.ok(src.includes('STOREFRONT_SUPABASE_URL') && src.includes('STOREFRONT_SUPABASE_ANON_KEY'));
+  assert.ok(src.includes('AbortSignal.timeout('), 'the read must be bounded by a timeout');
+  // Exactly one fetch( call site in the whole tree, and it is here.
+  const sites = TSX.filter((f) => code(f).includes('fetch(')).map(rel);
+  assert.deepEqual(sites, [LIVE_CLIENT_MODULE]);
+});
+
+test('the category icon path never comes from tenant data: the adapter resolves it from the registry', () => {
+  const adapter = code(path.join(ROOT, 'src/source/live/adapter.ts'));
+  assert.ok(adapter.includes('iconPath: iconPathFor(c.icon_key)'), 'iconPath must come from iconPathFor()');
+  assert.ok(!/iconPath:\s*c\.(?!icon_key)/.test(adapter), 'no wire field may become an SVG path');
+  const icons = code(path.join(ROOT, 'src/source/live/icons.ts'));
+  const keys = [...icons.matchAll(/^  ([a-z][a-z0-9_]*): '/gm)].map((m) => m[1]);
+  assert.equal(keys.length, 49, `the registry mirrors the 49 Dashboard keys, got ${keys.length}`);
+  assert.equal(new Set(keys).size, 49, 'no duplicate key');
+  for (const k of ['burger', 'pizza', 'coffee', 'salad', 'offers', 'menu']) assert.ok(keys.includes(k), `missing key ${k}`);
+  // Every path is 24-grid path data: digits, letters of the SVG path grammar, dots, spaces, minus.
+  for (const m of icons.matchAll(/^  [a-z][a-z0-9_]*: '([^']+)'/gm)) {
+    assert.match(m[1], /^[MmLlHhVvCcSsQqTtAaZz0-9 .,-]+$/, `path data only: ${m[1].slice(0, 30)}`);
+    assert.ok(m[1].startsWith('M'), 'every path starts with a moveto');
+  }
+});
+
 test('the Unknown screen receives no tenant data at all', () => {
   const src = code(path.join(ROOT, 'src/ui/storefront/Unknown.tsx'));
   for (const forbidden of ['Tenant', 'fixtureSource', 'buildTheme', 'storefront.module.css']) {
@@ -234,13 +337,14 @@ const CLIPBOARD_MODULE = 'src/ui/storefront/request/clipboard.ts';
 const STORE_OWNERS = [
   ['sessionStorage', UI_SESSION_MODULE],
   ['localStorage', CART_STORAGE_MODULE],
+  ['fetch(', LIVE_CLIENT_MODULE],
   // Any spelling of the clipboard object - navigator.clipboard, a local alias,
   // window.navigator.clipboard - contains this member access.
   ['.clipboard', CLIPBOARD_MODULE],
 ];
 
 /** Banned in EVERY app/ and src/ file, the allowlisted modules included. */
-const BANNED_EVERYWHERE = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
+const BANNED_EVERYWHERE = ['XMLHttpRequest', 'WebSocket', 'navigator.sendBeacon',
   'indexedDB', 'document.cookie',
   // Phase E: no real WhatsApp navigation of any kind (DEFERRED WA-001), and no
   // clipboard READ path anywhere - the write path has exactly one owner below.
@@ -340,6 +444,16 @@ test('NEGATIVE CONTROL: the storage rule fails on an unauthorised FILE and an un
     const crossedBack = storageOffence(relOf(cartCopy), readFileSync(cartCopy, 'utf8'));
     assert.ok(crossedBack !== null, 'the cart allowlist must NOT extend to the session store');
     assert.match(crossedBack, /sessionStorage is allowed ONLY/);
+
+    // An unauthorised file making a NETWORK request must be caught too
+    // (STOREFRONT-READ-001: fetch( has exactly one owner, the server client).
+    const islandCopy = copy('src/ui/storefront/StorefrontRuntime.tsx');
+    assert.equal(storageOffence(relOf(islandCopy), readFileSync(islandCopy, 'utf8')), null);
+    writeFileSync(islandCopy,
+      readFileSync(islandCopy, 'utf8') + "\nconst leak = fetch('/rest/v1/rpc/storefront_menu');\n", 'utf8');
+    const caughtFetch = storageOffence(relOf(islandCopy), readFileSync(islandCopy, 'utf8'));
+    assert.ok(caughtFetch !== null, 'the rule MISSED fetch( in a client island');
+    assert.match(caughtFetch, /fetch\( is allowed ONLY/);
 
     // An unauthorised file using the LONG-LIVED store must be caught too.
     // The checkout draft module is the sharpest subject for it: it is the one

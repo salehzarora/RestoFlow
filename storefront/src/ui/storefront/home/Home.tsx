@@ -14,8 +14,7 @@ import { storefrontMessages } from '@/i18n/storefront';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import { cartPath, checkoutPath, searchPath } from '@/routes/routes';
-import { MENU_VERSION } from '@/source/menu-fixture';
-import type { HomeView } from '@/source/types';
+import type { StorefrontResolution } from '@/source/types';
 import { LanguageMenu } from '../LanguageMenu';
 import { ThemeScope } from '../ThemeScope';
 import { MenuIcon, SearchIcon } from '../icons';
@@ -24,6 +23,7 @@ import {
   BrandLockup,
   CampaignHero,
   EmptyMenu,
+  OrderingOffNotice,
   PromoBanner,
   ServiceStatusStrip,
   SiteFooter,
@@ -43,18 +43,19 @@ const MOTION_CLASS = {
 } as const;
 
 export function Home({
-  view,
+  resolution,
   locale,
   slug,
-  preset = 'dark',
   hrefFor,
 }: {
-  view: HomeView;
+  /** Everything the route's source resolved: the view, its groups, zones, tax rate and cart key. */
+  resolution: StorefrontResolution;
   locale: Locale;
   slug: string;
-  preset?: Preset;
   hrefFor: (target: Locale) => string;
 }) {
+  const { view, groups, zones, taxRateBp, menuVersion } = resolution;
+  const preset: Preset = resolution.preset;
   const m = storefrontMessages(locale);
   // `view.cart` is DELIBERATELY not destructured: the fixture cart is test and
   // evidence data only, and nothing on this screen may render it.
@@ -118,9 +119,14 @@ export function Home({
         this visitor's own storage, after hydration, can put one there.
       */}
       <StorefrontRuntime
+        source={resolution.source}
         slug={slug}
-        menuVersion={MENU_VERSION}
+        menuVersion={menuVersion}
         items={items}
+        groups={groups}
+        zones={zones}
+        taxRateBp={taxRateBp}
+        orderingEnabled={tenant.service.orderingEnabled}
         locale={locale}
         motion={view.motion}
         state={tenant.service.state}
@@ -158,9 +164,14 @@ export function Home({
               }
               service={<ServiceStatusStrip tenant={tenant} m={m} />}
               notice={
-                tenant.service.state === 'open' ? null : (
-                  <StateNotice state={tenant.service.state} tenant={tenant} m={m} />
-                )
+                <>
+                  {/* Browse-only first (STOREFRONT-READ-001), then the hours state;
+                      both are `notice` modules, so the locked order still holds. */}
+                  {tenant.service.orderingEnabled ? null : <OrderingOffNotice m={m} />}
+                  {tenant.service.state === 'open' ? null : (
+                    <StateNotice state={tenant.service.state} tenant={tenant} m={m} />
+                  )}
+                </>
               }
             />
 

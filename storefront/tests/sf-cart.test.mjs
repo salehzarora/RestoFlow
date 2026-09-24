@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 const s = await import('../src/cart/cartStorage.ts');
 const model = await import('../src/cart/cartModel.ts');
 const { MENU_ITEMS, MENU_VERSION } = await import('../src/source/menu-fixture.ts');
+const { MODIFIER_GROUPS } = await import('../src/source/modifier-fixture.ts');
 
 const SLUG = 'maps-burger';
 const empty = () => s.emptyCart(SLUG, MENU_VERSION);
@@ -299,7 +300,7 @@ test('a line whose item has left the menu is SKIPPED, never rendered from stale 
     { lineId: 'l1', itemId: '1', qty: 1, selections: {}, note: '' },
     { lineId: 'l2', itemId: 'no-such-item', qty: 3, selections: {}, note: '' },
   ] };
-  const summary = model.summarise(state, MENU_ITEMS);
+  const summary = model.summarise(state, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(summary.lines.length, 1);
   assert.equal(summary.lines[0].item.id, '1');
   // The vanished line contributes NOTHING to the count or the subtotal.
@@ -311,7 +312,7 @@ test('the summary counts UNITS, not lines, and subtotals them', () => {
   let state = empty();
   state = model.addLine(state, { itemId: '1', qty: 2, selections: { bun: ['brioche'] }, note: '' });
   state = model.addLine(state, { itemId: '7', qty: 3, selections: { sauce: ['ranch'] }, note: '' });
-  const summary = model.summarise(state, MENU_ITEMS);
+  const summary = model.summarise(state, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(summary.lines.length, 2);
   assert.equal(summary.itemCount, 5);
   // (5500 + 500) * 2 + (2200 + 200) * 3
@@ -407,12 +408,14 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   const aside = readFileSync(
     new URL('../src/ui/storefront/cart/LiveCartAside.tsx', import.meta.url), 'utf8');
 
-  // It reads a resolved summary and a Quote; it never derives money.
+  // It reads a resolved summary and a Quote; it never derives money. It MAY
+  // read `quote.taxRateBp` to label the tax row (STOREFRONT-READ-001: the
+  // rate is the tenant's, interpolated into the label), so the guard bans the
+  // ARITHMETIC shapes, not the field name.
   assert.ok(aside.includes('summary: CartSummary | null'));
   assert.ok(aside.includes('quote: Quote | null'));
-  for (const banned of ['taxRate', 'Math.round', 'TAX_RATE']) {
-    assert.ok(!aside.includes(banned), `the aside must not compute money: found ${banned}`);
-  }
+  const offences = asideMoneyOffences(aside);
+  assert.deepEqual(offences, [], `the aside must not compute money: ${offences.join(' | ')}`);
 
   // The fee row is gated on feeApplies - never on a truthy amount, or a served
   // zone with free delivery would be presented as no delivery at all.
@@ -439,12 +442,52 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   assert.ok(runtime.includes('LiveCartAside'));
 });
 
-test('NEGATIVE CONTROL: the aside money guard would notice a hand-rolled total', () => {
-  // The rule above is worth something only if the banned strings really are
-  // the shape a drifting implementation would take.
-  const drifted = 'const taxMinor = Math.round(subtotal * TAX_RATE);';
-  const caught = ['taxRate', 'Math.round', 'TAX_RATE'].filter((b) => drifted.includes(b));
-  assert.deepEqual(caught, ['Math.round', 'TAX_RATE']);
+/**
+ * The aside money guard (STOREFRONT-READ-001, strengthened after review D1).
+ * The aside may READ the rate for its label - exactly `formatRateBp(quote.taxRateBp)`
+ * and the `quote.taxRateBp === 0` visibility check - and nothing else: every
+ * other occurrence of the rate, any rounding call, any rate constant, any
+ * basis-point division or decimal rate multiplication is an offence, with or
+ * without whitespace around the operators.
+ */
+const ASIDE_ALLOWED_RATE_READS = ['formatRateBp(quote.taxRateBp)', 'quote.taxRateBp === 0'];
+const ASIDE_MONEY_SHAPES = [
+  [/Math\.(?:round|trunc|floor|ceil)\s*\(/g, 'a rounding call'],
+  [/\bTAX_RATE\b/g, 'the fixture rate constant'],
+  [/\/\s*10000\b/g, 'a basis-point division'],
+  [/\*\s*0\.\d/g, 'a decimal rate multiplication'],
+  [/taxRateBp\s*[*/%+-]/g, 'arithmetic on the rate'],
+  [/[*/%+-]\s*(?:quote\.)?taxRateBp\b/g, 'arithmetic on the rate'],
+  // ...and no arithmetic between money fields either: the aside prints amounts, it never derives one
+  [/\b\w+Minor\b\s*[*/%+-](?!=)/g, 'arithmetic on a money field'],
+  [/[*/%+-]\s*(?:quote\.|line\.|summary\.)?\w+Minor\b/g, 'arithmetic on a money field'],
+];
+export function asideMoneyOffences(src) {
+  const offences = [];
+  for (const [shape, why] of ASIDE_MONEY_SHAPES) for (const m of src.matchAll(shape)) offences.push(`${why}: ${m[0]}`);
+  // every remaining read of the rate must be one of the two allowed forms
+  let stripped = src;
+  for (const allowed of ASIDE_ALLOWED_RATE_READS) stripped = stripped.split(allowed).join('');
+  for (const m of stripped.matchAll(/taxRateBp/g)) offences.push(`a rate read outside the allowed forms at ${m.index}`);
+  return offences;
+}
+
+test('NEGATIVE CONTROL: the aside money guard notices a hand-rolled total, spaced or not', () => {
+  const drifts = [
+    'const taxMinor = Math.round(subtotal * TAX_RATE);',
+    'const taxMinor = (subtotal * quote.taxRateBp) / 10000;',
+    'const taxMinor = Math.trunc(subtotal*quote.taxRateBp/10000);',
+    'const t=subtotal*quote.taxRateBp/10000;',
+    'const rate = quote.taxRateBp; const t = subtotal * rate;',
+    'const t = subtotal * 0.18;',
+    'const t = subtotal*quote.taxRateBp;',
+    'formatMoney(quote.subtotalMinor + quote.feeMinor)',
+    'formatMoney(quote.totalMinor-quote.subtotalMinor)',
+    'const each = line.totalMinor / line.qty;',
+  ];
+  for (const d of drifts) assert.ok(asideMoneyOffences(d).length > 0, `must be caught: ${d}`);
+  // ...and the legitimate label read and its visibility check are not offences.
+  assert.deepEqual(asideMoneyOffences('{quote.taxRateBp === 0 ? null : <span>{fill(m.tax, { p: formatRateBp(quote.taxRateBp) })}</span>}'), []);
 });
 
 test('a REMOVAL reads as a removal, never as an addition', () => {
@@ -456,7 +499,7 @@ test('a REMOVAL reads as a removal, never as an addition', () => {
     selections: { bun: ['brioche'], remove: ['onion'] },
     note: '',
   });
-  const resolved = model.resolveLine(state.lines[0], MENU_ITEMS);
+  const resolved = model.resolveLine(state.lines[0], MENU_ITEMS, MODIFIER_GROUPS);
   const summary = model.optionSummary(resolved);
 
   assert.ok(summary.includes('\u2715'), `removals must carry the marker: ${summary}`);
@@ -482,7 +525,7 @@ test('a resolved line is priced and summarised within the group bounds', () => {
     selections: { extras: ['cheese', 'bacon', 'egg', 'jal', 'avo'] },
     note: '',
   };
-  const resolved = model.resolveLine(line, MENU_ITEMS);
+  const resolved = model.resolveLine(line, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(resolved.optionNames.length, 3);
   assert.equal(resolved.unitMinor, 5500 + 600 + 800 + 500);
 });
@@ -500,7 +543,7 @@ test('lines naming an item the menu no longer has are PRUNED, not kept invisibly
       { lineId: 'l2bbb', itemId: 'gone', qty: 20, selections: {}, note: '' },
     ],
   };
-  const usable = model.summarise(withOrphan, MENU_ITEMS);
+  const usable = model.summarise(withOrphan, MENU_ITEMS, MODIFIER_GROUPS);
   assert.equal(usable.lines.length, 1);
   assert.equal(usable.itemCount, 1);
   // The pruned state is what useCart writes back; assert the shape it produces.
