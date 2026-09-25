@@ -14133,6 +14133,1572 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a password you haven’t used here before.'**
   String get authSamePassword;
+
+  /// STOREFRONT-PUBLISH-001: Settings card title for the public storefront editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Storefront'**
+  String get storefrontSectionTitle;
+
+  /// STOREFRONT-PUBLISH-001: Subtitle under the storefront card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Your restaurant\'s public, browse-only page: name, look, opening hours and images.'**
+  String get storefrontSectionSubtitle;
+
+  /// STOREFRONT-PUBLISH-001: Honest note when the editor runs in demo mode.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront editor is not available in demo mode.'**
+  String get storefrontDemoNote;
+
+  /// STOREFRONT-PUBLISH-001: Honest note when no authenticated transport / restaurant scope is wired.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront editor is not connected here.'**
+  String get storefrontUnavailableNote;
+
+  /// STOREFRONT-PUBLISH-001: The server answered not_found to the manager read; no fields are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot manage the storefront for this restaurant.'**
+  String get storefrontDeniedNote;
+
+  /// STOREFRONT-PUBLISH-001: The manager read failed (transport / database refusal / malformed).
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront settings could not be loaded.'**
+  String get storefrontLoadFailed;
+
+  /// STOREFRONT-PUBLISH-001: Retry button (reload, or replay the SAME request after an unknown outcome).
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get storefrontRetry;
+
+  /// STOREFRONT-PUBLISH-001: Intro of the create form (no profile yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Create the storefront: choose the branch it represents and its permanent web address.'**
+  String get storefrontCreateIntro;
+
+  /// STOREFRONT-PUBLISH-001: Label of the storefront branch picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Storefront branch'**
+  String get storefrontBranchLabel;
+
+  /// STOREFRONT-PUBLISH-001: Help text under the branch picker.
+  ///
+  /// In en, this message translates to:
+  /// **'The opening hours are read in this branch\'s time zone (the restaurant\'s, if the branch has none), and the branch\'s tax setting and menu are used.'**
+  String get storefrontBranchHelp;
+
+  /// STOREFRONT-PUBLISH-001: The branch list read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The branch list could not be loaded.'**
+  String get storefrontBranchesUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: Picker entry for a stored branch the branch list did not return.
+  ///
+  /// In en, this message translates to:
+  /// **'Current branch (not in the list)'**
+  String get storefrontBranchUnlisted;
+
+  /// STOREFRONT-PUBLISH-001: Label of the slug field / read-only slug.
+  ///
+  /// In en, this message translates to:
+  /// **'Web address (slug)'**
+  String get storefrontSlugLabel;
+
+  /// STOREFRONT-PUBLISH-001: Help text of the slug field in the create form.
+  ///
+  /// In en, this message translates to:
+  /// **'3–48 lowercase letters, digits and single hyphens. It cannot be changed later.'**
+  String get storefrontSlugHelp;
+
+  /// STOREFRONT-PUBLISH-001: Client-side slug grammar error.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 3–48 lowercase letters, digits and single hyphens; reserved words are not allowed.'**
+  String get storefrontSlugInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Note under the read-only slug after creation.
+  ///
+  /// In en, this message translates to:
+  /// **'The web address is permanent and cannot be changed.'**
+  String get storefrontSlugPermanentNote;
+
+  /// STOREFRONT-PUBLISH-001: Label of the plain-text /s/<slug> path.
+  ///
+  /// In en, this message translates to:
+  /// **'Public path'**
+  String get storefrontPathLabel;
+
+  /// STOREFRONT-PUBLISH-001: Why the path is text and not a link (no public origin yet).
+  ///
+  /// In en, this message translates to:
+  /// **'The public domain is not set up yet; this is the path the storefront will use.'**
+  String get storefrontPathNote;
+
+  /// STOREFRONT-PUBLISH-001: Save button of the create form.
+  ///
+  /// In en, this message translates to:
+  /// **'Create storefront'**
+  String get storefrontCreateAction;
+
+  /// STOREFRONT-PUBLISH-001: Title of the slug-permanence confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Create the storefront?'**
+  String get storefrontCreateConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Body of the slug-permanence confirmation (the path follows).
+  ///
+  /// In en, this message translates to:
+  /// **'This web address is permanent: it cannot be changed later.'**
+  String get storefrontCreateConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Confirm action of the create dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get storefrontCreateConfirmAction;
+
+  /// STOREFRONT-PUBLISH-001: Label of the display name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get storefrontDisplayNameLabel;
+
+  /// STOREFRONT-PUBLISH-001: Display name length error.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 1–60 characters.'**
+  String get storefrontDisplayNameInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Label of the tagline field.
+  ///
+  /// In en, this message translates to:
+  /// **'Tagline'**
+  String get storefrontTaglineLabel;
+
+  /// STOREFRONT-PUBLISH-001: Label of the public city field.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get storefrontCityLabel;
+
+  /// STOREFRONT-PUBLISH-001: Label of the public address field.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get storefrontAddressLabel;
+
+  /// STOREFRONT-PUBLISH-001: Label of the public phone field.
+  ///
+  /// In en, this message translates to:
+  /// **'Public phone'**
+  String get storefrontPhoneLabel;
+
+  /// STOREFRONT-PUBLISH-001: Help text of the phone field.
+  ///
+  /// In en, this message translates to:
+  /// **'International (+972…) or local (05X-XXX-XXXX). Leave empty for none.'**
+  String get storefrontPhoneHelp;
+
+  /// STOREFRONT-PUBLISH-001: Phone shape error.
+  ///
+  /// In en, this message translates to:
+  /// **'Use + and 7–15 digits, or a local number like 050-123-4567.'**
+  String get storefrontPhoneInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Field length error; {max} is the limit.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {max} characters.'**
+  String storefrontTooLong(int max);
+
+  /// STOREFRONT-PUBLISH-001: Sub-heading of the look fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Look'**
+  String get storefrontLookTitle;
+
+  /// STOREFRONT-PUBLISH-001: Label of the primary colour field.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary colour'**
+  String get storefrontPrimaryColorLabel;
+
+  /// STOREFRONT-PUBLISH-001: Label of the accent colour field.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent colour'**
+  String get storefrontAccentColorLabel;
+
+  /// STOREFRONT-PUBLISH-001: Help text of the colour fields.
+  ///
+  /// In en, this message translates to:
+  /// **'A #RRGGBB colour, e.g. #13322a.'**
+  String get storefrontColorHelp;
+
+  /// STOREFRONT-PUBLISH-001: Colour shape error.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a #RRGGBB colour.'**
+  String get storefrontColorInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Truthful warning mirroring the storefront's inspectPrimary rule.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront will replace this colour with its neutral green: white text on it would not reach the AA contrast level.'**
+  String get storefrontPrimaryContrastWarning;
+
+  /// STOREFRONT-PUBLISH-001: Label of the visual preset picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get storefrontVisualPresetLabel;
+
+  /// STOREFRONT-PUBLISH-001: Visual preset: dark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get storefrontVisualPresetDark;
+
+  /// STOREFRONT-PUBLISH-001: Visual preset: light.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get storefrontVisualPresetLight;
+
+  /// STOREFRONT-PUBLISH-001: Label of the default language picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Default language'**
+  String get storefrontLocaleLabel;
+
+  /// STOREFRONT-PUBLISH-001: Truthful help: locale_default is stored but not yet used by the public page.
+  ///
+  /// In en, this message translates to:
+  /// **'The public storefront currently chooses its language from the web address; this default is stored for later.'**
+  String get storefrontLocaleHelp;
+
+  /// STOREFRONT-PUBLISH-001: Language option: Arabic.
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic'**
+  String get storefrontLocaleAr;
+
+  /// STOREFRONT-PUBLISH-001: Language option: Hebrew.
+  ///
+  /// In en, this message translates to:
+  /// **'Hebrew'**
+  String get storefrontLocaleHe;
+
+  /// STOREFRONT-PUBLISH-001: Language option: English.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get storefrontLocaleEn;
+
+  /// STOREFRONT-PUBLISH-001: Label of the card mode picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu layout'**
+  String get storefrontCardModeLabel;
+
+  /// STOREFRONT-PUBLISH-001: Card mode: list.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get storefrontCardModeList;
+
+  /// STOREFRONT-PUBLISH-001: Card mode: grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get storefrontCardModeGrid;
+
+  /// STOREFRONT-PUBLISH-001: Label of the motion picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Motion'**
+  String get storefrontMotionLabel;
+
+  /// STOREFRONT-PUBLISH-001: Motion: calm.
+  ///
+  /// In en, this message translates to:
+  /// **'Calm'**
+  String get storefrontMotionCalm;
+
+  /// STOREFRONT-PUBLISH-001: Motion: full (the standard amount).
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get storefrontMotionFull;
+
+  /// STOREFRONT-PUBLISH-001: Motion: lively.
+  ///
+  /// In en, this message translates to:
+  /// **'Lively'**
+  String get storefrontMotionLively;
+
+  /// STOREFRONT-PUBLISH-001: Label of the pickup switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup available'**
+  String get storefrontPickupLabel;
+
+  /// STOREFRONT-PUBLISH-001: Truthful note under the pickup switch (ordering is off).
+  ///
+  /// In en, this message translates to:
+  /// **'Informational only: the storefront is browse-only in this release, so online ordering is off.'**
+  String get storefrontPickupHelp;
+
+  /// STOREFRONT-PUBLISH-001: Sub-heading of the pause fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporary pause'**
+  String get storefrontPauseTitle;
+
+  /// STOREFRONT-PUBLISH-001: Label of the pause end value.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused until'**
+  String get storefrontPausedUntilLabel;
+
+  /// STOREFRONT-PUBLISH-001: Pause end value when there is none.
+  ///
+  /// In en, this message translates to:
+  /// **'Not paused'**
+  String get storefrontNotPaused;
+
+  /// STOREFRONT-PUBLISH-001: Button opening the pause date/time pickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Set pause end'**
+  String get storefrontPauseSetAction;
+
+  /// STOREFRONT-PUBLISH-001: Button clearing the pause end.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear pause'**
+  String get storefrontPauseClearAction;
+
+  /// STOREFRONT-PUBLISH-001: Which offset the pause end is sent with; {offset} is like +03:00.
+  ///
+  /// In en, this message translates to:
+  /// **'Entered in this device\'s time zone (UTC{offset}).'**
+  String storefrontPauseDeviceZone(String offset);
+
+  /// STOREFRONT-PUBLISH-001: Label of the pause reason field.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause reason (staff only)'**
+  String get storefrontPauseReasonLabel;
+
+  /// STOREFRONT-PUBLISH-001: Truthful note: the public page never shows the pause reason.
+  ///
+  /// In en, this message translates to:
+  /// **'While paused, the public page shows a generic “paused” notice. It never shows the reason — the reason is for staff only.'**
+  String get storefrontPauseHelp;
+
+  /// STOREFRONT-PUBLISH-001: Sub-heading of the opening hours editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening hours'**
+  String get storefrontHoursTitle;
+
+  /// STOREFRONT-PUBLISH-001: Which IANA time zone the hours are interpreted in.
+  ///
+  /// In en, this message translates to:
+  /// **'Times are in the branch time zone: {timezone}.'**
+  String storefrontHoursTimezone(String timezone);
+
+  /// STOREFRONT-PUBLISH-001: Shown when the storefront branch has no time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'No time zone yet — set the branch time zone in Settings.'**
+  String get storefrontHoursNoTimezone;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 0.
+  ///
+  /// In en, this message translates to:
+  /// **'Sunday'**
+  String get storefrontHoursSunday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Monday'**
+  String get storefrontHoursMonday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 2.
+  ///
+  /// In en, this message translates to:
+  /// **'Tuesday'**
+  String get storefrontHoursTuesday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 3.
+  ///
+  /// In en, this message translates to:
+  /// **'Wednesday'**
+  String get storefrontHoursWednesday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 4.
+  ///
+  /// In en, this message translates to:
+  /// **'Thursday'**
+  String get storefrontHoursThursday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 5.
+  ///
+  /// In en, this message translates to:
+  /// **'Friday'**
+  String get storefrontHoursFriday;
+
+  /// STOREFRONT-PUBLISH-001: Weekday 6.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturday'**
+  String get storefrontHoursSaturday;
+
+  /// STOREFRONT-PUBLISH-001: A weekday without any window.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get storefrontHoursClosed;
+
+  /// STOREFRONT-PUBLISH-001: Adds a time range to a weekday.
+  ///
+  /// In en, this message translates to:
+  /// **'Add hours'**
+  String get storefrontHoursAddWindow;
+
+  /// STOREFRONT-PUBLISH-001: Removes a time range / special date.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get storefrontHoursRemove;
+
+  /// STOREFRONT-PUBLISH-001: Prefix of the opening time button.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens'**
+  String get storefrontHoursOpens;
+
+  /// STOREFRONT-PUBLISH-001: Prefix of the closing time button.
+  ///
+  /// In en, this message translates to:
+  /// **'Closes'**
+  String get storefrontHoursCloses;
+
+  /// STOREFRONT-PUBLISH-001: A window whose close is earlier than its open crosses midnight.
+  ///
+  /// In en, this message translates to:
+  /// **'Closes the next day'**
+  String get storefrontHoursOvernight;
+
+  /// STOREFRONT-PUBLISH-001: open == close is refused by the validator.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening and closing times must differ.'**
+  String get storefrontHoursOpenEqualsClose;
+
+  /// STOREFRONT-PUBLISH-001: Per-day window cap.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {max} time ranges per day.'**
+  String storefrontHoursDayCap(int max);
+
+  /// STOREFRONT-PUBLISH-001: Sub-heading of the exception dates.
+  ///
+  /// In en, this message translates to:
+  /// **'Special dates'**
+  String get storefrontHoursExceptionsTitle;
+
+  /// STOREFRONT-PUBLISH-001: Shown when there is no exception date.
+  ///
+  /// In en, this message translates to:
+  /// **'No special dates.'**
+  String get storefrontHoursExceptionsEmpty;
+
+  /// STOREFRONT-PUBLISH-001: Adds an exception date.
+  ///
+  /// In en, this message translates to:
+  /// **'Add date'**
+  String get storefrontHoursAddException;
+
+  /// STOREFRONT-PUBLISH-001: Exception shape: closed all day.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed all day'**
+  String get storefrontHoursExceptionClosed;
+
+  /// STOREFRONT-PUBLISH-001: Exception shape: one special window.
+  ///
+  /// In en, this message translates to:
+  /// **'Special hours'**
+  String get storefrontHoursExceptionWindow;
+
+  /// STOREFRONT-PUBLISH-001: The picked exception date already exists.
+  ///
+  /// In en, this message translates to:
+  /// **'That date is already listed.'**
+  String get storefrontHoursExceptionDuplicate;
+
+  /// STOREFRONT-PUBLISH-001: Exception date cap.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {max} special dates.'**
+  String storefrontHoursExceptionsCap(int max);
+
+  /// STOREFRONT-PUBLISH-001: The hours draft fails the client-side validator.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the opening hours before saving.'**
+  String get storefrontHoursInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Save button (sends only the changed fields).
+  ///
+  /// In en, this message translates to:
+  /// **'Save storefront'**
+  String get storefrontSaveAction;
+
+  /// STOREFRONT-PUBLISH-001: Resets the draft to the saved profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get storefrontDiscardAction;
+
+  /// STOREFRONT-PUBLISH-001: Shown while the draft differs from the saved profile.
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved changes.'**
+  String get storefrontUnsavedNote;
+
+  /// STOREFRONT-PUBLISH-001: A save committed.
+  ///
+  /// In en, this message translates to:
+  /// **'Storefront saved.'**
+  String get storefrontSaved;
+
+  /// STOREFRONT-PUBLISH-001: Shown while a field fails its client-side check.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the highlighted fields before saving.'**
+  String get storefrontFixFields;
+
+  /// STOREFRONT-PUBLISH-001: version_conflict: the authoritative profile was reloaded (no silent merge).
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else changed the storefront. The latest version is now shown; your unsaved changes were not applied.'**
+  String get storefrontErrorConflict;
+
+  /// STOREFRONT-PUBLISH-001: permission_denied on a save.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to change this storefront.'**
+  String get storefrontErrorDenied;
+
+  /// STOREFRONT-PUBLISH-001: A database refusal / unrecognised error: nothing committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront could not be saved right now. Nothing was changed.'**
+  String get storefrontErrorUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: Both attempts lost; a readback proved nothing committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection failed and the change was not saved. Try again.'**
+  String get storefrontErrorNotCommitted;
+
+  /// STOREFRONT-PUBLISH-001: Unknown outcome; Try again replays the same idempotency key.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not confirm whether the change was saved. Try again: it reuses the same request, so it cannot be applied twice.'**
+  String get storefrontErrorUncertain;
+
+  /// STOREFRONT-PUBLISH-001: Fallback for an unknown invalid reason code.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this change ({reason}).'**
+  String storefrontErrorInvalid(String reason);
+
+  /// STOREFRONT-PUBLISH-001: Writer reason slug_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The web address is not valid.'**
+  String get storefrontReasonSlugInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason slug_immutable.
+  ///
+  /// In en, this message translates to:
+  /// **'The web address cannot be changed after creation.'**
+  String get storefrontReasonSlugImmutable;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason slug_taken.
+  ///
+  /// In en, this message translates to:
+  /// **'This web address is already used by another restaurant.'**
+  String get storefrontReasonSlugTaken;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason branch_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The chosen branch does not belong to this restaurant.'**
+  String get storefrontReasonBranchInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason display_name_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The display name must be 1–60 characters.'**
+  String get storefrontReasonDisplayNameInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason tagline_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The tagline is too long (at most 90 characters).'**
+  String get storefrontReasonTaglineInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason public_city_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The city is too long (at most 60 characters).'**
+  String get storefrontReasonPublicCityInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason public_address_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The address is too long (at most 80 characters).'**
+  String get storefrontReasonPublicAddressInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason public_phone_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The phone number is not in a supported format.'**
+  String get storefrontReasonPublicPhoneInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason primary_color_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The primary colour must be a #RRGGBB colour.'**
+  String get storefrontReasonPrimaryColorInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason accent_color_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The accent colour must be a #RRGGBB colour.'**
+  String get storefrontReasonAccentColorInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason visual_preset_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The theme is not valid.'**
+  String get storefrontReasonVisualPresetInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason locale_default_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The default language is not valid.'**
+  String get storefrontReasonLocaleDefaultInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason card_mode_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu layout is not valid.'**
+  String get storefrontReasonCardModeInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason motion_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The motion setting is not valid.'**
+  String get storefrontReasonMotionInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason pickup_enabled_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup setting is not valid.'**
+  String get storefrontReasonPickupEnabledInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason paused_until_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The pause end time is not valid.'**
+  String get storefrontReasonPausedUntilInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason pause_reason_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The pause reason is too long (at most 120 characters).'**
+  String get storefrontReasonPauseReasonInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason opening_hours_invalid (the server stays authoritative).
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused the opening hours. Check each time range.'**
+  String get storefrontReasonOpeningHoursInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason logo_media_id_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The logo image is no longer published. Pick or publish another one.'**
+  String get storefrontReasonLogoMediaIdInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason hero_media_id_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The hero image is no longer published. Pick or publish another one.'**
+  String get storefrontReasonHeroMediaIdInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason is_published_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The publish setting is not valid.'**
+  String get storefrontReasonIsPublishedInvalid;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason branch_missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the storefront branch first.'**
+  String get storefrontReasonBranchMissing;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason slug_missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the web address first.'**
+  String get storefrontReasonSlugMissing;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason publish_precondition; the blocker codes are listed after it.
+  ///
+  /// In en, this message translates to:
+  /// **'Publishing requirements are not met; the change was refused:'**
+  String get storefrontReasonPublishPrecondition;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason unknown_field.
+  ///
+  /// In en, this message translates to:
+  /// **'This build sent a field the server does not accept.'**
+  String get storefrontReasonUnknownField;
+
+  /// STOREFRONT-PUBLISH-001: Writer reason patch_not_object.
+  ///
+  /// In en, this message translates to:
+  /// **'This build sent a malformed change.'**
+  String get storefrontReasonPatchNotObject;
+
+  /// STOREFRONT-PUBLISH-001: Heading of the server's publish blockers.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you can publish'**
+  String get storefrontBlockersTitle;
+
+  /// STOREFRONT-PUBLISH-001: The blockers are computed on the saved profile, not the draft.
+  ///
+  /// In en, this message translates to:
+  /// **'These checks use the SAVED storefront: save your changes first.'**
+  String get storefrontBlockersSavedNote;
+
+  /// STOREFRONT-PUBLISH-001: No publish blockers.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to publish.'**
+  String get storefrontReadyToPublish;
+
+  /// STOREFRONT-PUBLISH-001: Blocker slug_missing, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a web address (slug).'**
+  String get storefrontBlockerSlugMissing;
+
+  /// STOREFRONT-PUBLISH-001: Blocker branch_missing, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the storefront branch above.'**
+  String get storefrontBlockerBranchMissing;
+
+  /// STOREFRONT-PUBLISH-001: Blocker timezone_missing, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the branch time zone in Settings.'**
+  String get storefrontBlockerTimezoneMissing;
+
+  /// STOREFRONT-PUBLISH-001: Blocker currency_not_ils, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the restaurant\'s operating currency to ILS (₪) in Settings: the storefront supports ₪ only for now.'**
+  String get storefrontBlockerCurrencyNotIls;
+
+  /// STOREFRONT-PUBLISH-001: Blocker tax_not_exclusive, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'The branch tax is included in prices, but the storefront needs tax added on top of prices. The branch tax mode can only be changed by your RestoFlow administrator.'**
+  String get storefrontBlockerTaxNotExclusive;
+
+  /// STOREFRONT-PUBLISH-001: Blocker no_live_item, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one active menu item in Menu.'**
+  String get storefrontBlockerNoLiveItem;
+
+  /// STOREFRONT-PUBLISH-001: Blocker hours_missing, with where to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one weekly opening time in Opening hours.'**
+  String get storefrontBlockerHoursMissing;
+
+  /// STOREFRONT-PUBLISH-001: Fallback for an unknown blocker code.
+  ///
+  /// In en, this message translates to:
+  /// **'Another requirement is not met ({code}).'**
+  String storefrontBlockerUnknown(String code);
+
+  /// STOREFRONT-PUBLISH-001: Status of a published storefront with no blockers. Says only that the storefront is switched on — never that it is public (the availability note explains).
+  ///
+  /// In en, this message translates to:
+  /// **'Published.'**
+  String get storefrontPublishedStatus;
+
+  /// STOREFRONT-PUBLISH-001: The SERVER's unpublished state.
+  ///
+  /// In en, this message translates to:
+  /// **'Not published: the storefront is hidden.'**
+  String get storefrontUnpublishedStatus;
+
+  /// STOREFRONT-PUBLISH-001: Publish button / confirm action.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish storefront'**
+  String get storefrontPublishAction;
+
+  /// STOREFRONT-PUBLISH-001: Unpublish button / confirm action.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpublish'**
+  String get storefrontUnpublishAction;
+
+  /// STOREFRONT-PUBLISH-001: Publish confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish the storefront?'**
+  String get storefrontPublishConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Publish confirmation body (followed by the path). Does not claim the page is public right away (availability and exposure are separate).
+  ///
+  /// In en, this message translates to:
+  /// **'Once the storefront is available to visitors, anyone with this address can see your menu, hours and images:'**
+  String get storefrontPublishConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Unpublish confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpublish the storefront?'**
+  String get storefrontUnpublishConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Unpublish confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'The public page goes offline. Your settings and images are kept, and you can publish again later.'**
+  String get storefrontUnpublishConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Why Publish is disabled: unsaved edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Save your changes before publishing.'**
+  String get storefrontPublishNeedsSave;
+
+  /// STOREFRONT-PUBLISH-001: Why Publish is disabled: server blockers.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve the items above before publishing.'**
+  String get storefrontPublishNeedsBlockers;
+
+  /// STOREFRONT-PUBLISH-001: Publish committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront is published.'**
+  String get storefrontPublishDone;
+
+  /// STOREFRONT-PUBLISH-001: Unpublish committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront is unpublished.'**
+  String get storefrontUnpublishDone;
+
+  /// STOREFRONT-PUBLISH-001: Offer after publish_precondition: save the edits with is_published=false.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpublish and save changes'**
+  String get storefrontUnpublishAndSaveAction;
+
+  /// STOREFRONT-PUBLISH-001: Sub-heading of the storefront media slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get storefrontMediaTitle;
+
+  /// STOREFRONT-PUBLISH-001: Media slots are disabled until the profile exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Create the storefront first to add a logo or hero image.'**
+  String get storefrontMediaNeedsProfile;
+
+  /// STOREFRONT-PUBLISH-001: No Edge Function seam is wired.
+  ///
+  /// In en, this message translates to:
+  /// **'Image publishing is not available here.'**
+  String get storefrontMediaUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: Media actions are locked while the form has unsaved edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Save or discard your changes before changing images.'**
+  String get storefrontMediaSaveFirst;
+
+  /// STOREFRONT-PUBLISH-001: The logo slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo'**
+  String get storefrontSlotLogoTitle;
+
+  /// STOREFRONT-PUBLISH-001: The hero slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Hero image'**
+  String get storefrontSlotHeroTitle;
+
+  /// STOREFRONT-PUBLISH-001: Logo slot source rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Made from your current receipt logo (a 480 px public copy).'**
+  String get storefrontSlotLogoHelp;
+
+  /// STOREFRONT-PUBLISH-001: Hero slot source rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Made from your receipt logo or a menu item photo (a 960 px public copy).'**
+  String get storefrontSlotHeroHelp;
+
+  /// STOREFRONT-PUBLISH-001: The slot has no pointer.
+  ///
+  /// In en, this message translates to:
+  /// **'No image on the storefront yet.'**
+  String get storefrontSlotEmpty;
+
+  /// STOREFRONT-PUBLISH-001: Label of the current published derivative.
+  ///
+  /// In en, this message translates to:
+  /// **'On the storefront'**
+  String get storefrontSlotCurrentLabel;
+
+  /// STOREFRONT-PUBLISH-001: The derivative preview could not be shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable.'**
+  String get storefrontSlotPreviewUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: Label of the source picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Source image'**
+  String get storefrontSlotSourceLabel;
+
+  /// STOREFRONT-PUBLISH-001: Source option: the receipt logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Current receipt logo'**
+  String get storefrontSourceReceiptLogo;
+
+  /// STOREFRONT-PUBLISH-001: Source option: a menu item's original image.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu item: {name}'**
+  String storefrontSourceMenuItem(String name);
+
+  /// STOREFRONT-PUBLISH-001: The logo slot has no source (no receipt logo).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a receipt logo in “Receipt logo” first.'**
+  String get storefrontSourceNoReceiptLogo;
+
+  /// STOREFRONT-PUBLISH-001: A source read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Some source images could not be loaded.'**
+  String get storefrontSourcesUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: The hero slot has no source.
+  ///
+  /// In en, this message translates to:
+  /// **'No source images yet: upload a receipt logo or add a photo to a menu item.'**
+  String get storefrontSourceNone;
+
+  /// STOREFRONT-PUBLISH-001: Publishes a derivative of the chosen source.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish image'**
+  String get storefrontSlotPublishAction;
+
+  /// STOREFRONT-PUBLISH-001: Image publish confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish this image?'**
+  String get storefrontSlotPublishConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Media slot publish confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'A resized public copy is created and placed in this slot; it is shown whenever the storefront page is available. The original stays private.'**
+  String get storefrontSlotPublishConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Honest progress while the function runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Publishing the image… this can take a moment.'**
+  String get storefrontSlotPublishing;
+
+  /// STOREFRONT-PUBLISH-001: Media slot: published and assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is published and placed in this slot. It is shown whenever the storefront page is available.'**
+  String get storefrontSlotPublished;
+
+  /// STOREFRONT-PUBLISH-001: Published, but the slot assignment hit a version conflict.
+  ///
+  /// In en, this message translates to:
+  /// **'The image was published, but the storefront changed meanwhile, so it was not placed. Use it from the list below.'**
+  String get storefrontSlotNotPlaced;
+
+  /// STOREFRONT-PUBLISH-001: Published, but the slot assignment failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image was published but could not be placed on the storefront. Use it from the list below.'**
+  String get storefrontSlotPlaceFailed;
+
+  /// STOREFRONT-PUBLISH-001: Clears the slot pointer (the row stays live).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from storefront'**
+  String get storefrontSlotRemoveAction;
+
+  /// STOREFRONT-PUBLISH-001: Remove confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this image from the storefront?'**
+  String get storefrontSlotRemoveConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Remove confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'The public copy stays in the list below: you can use it again or retract it.'**
+  String get storefrontSlotRemoveConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Slot cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'The image was removed from the storefront.'**
+  String get storefrontSlotRemoved;
+
+  /// STOREFRONT-PUBLISH-001: Points the slot at an existing live copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Use here'**
+  String get storefrontSlotUseAction;
+
+  /// STOREFRONT-PUBLISH-001: Media slot: an existing live copy was assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is now placed in this slot. It is shown whenever the storefront page is available.'**
+  String get storefrontSlotAssigned;
+
+  /// STOREFRONT-PUBLISH-001: Heading of the slot's media rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Public copies'**
+  String get storefrontMediaListTitle;
+
+  /// STOREFRONT-PUBLISH-001: The slot has no media rows.
+  ///
+  /// In en, this message translates to:
+  /// **'No copies yet.'**
+  String get storefrontMediaListEmpty;
+
+  /// STOREFRONT-PUBLISH-001: The media list read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image list could not be loaded.'**
+  String get storefrontMediaListUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: Media state STAGED.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfinished'**
+  String get storefrontMediaStateStaged;
+
+  /// STOREFRONT-PUBLISH-001: Media state LIVE.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get storefrontMediaStateLive;
+
+  /// STOREFRONT-PUBLISH-001: Media state RETRACTED.
+  ///
+  /// In en, this message translates to:
+  /// **'Retracted'**
+  String get storefrontMediaStateRetracted;
+
+  /// STOREFRONT-PUBLISH-001: A profile slot points at this row.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get storefrontMediaInUse;
+
+  /// STOREFRONT-PUBLISH-001: Derivative dimensions.
+  ///
+  /// In en, this message translates to:
+  /// **'{width} × {height} px'**
+  String storefrontMediaDimensions(int width, int height);
+
+  /// STOREFRONT-PUBLISH-001: The row's source bucket: restaurant-logos.
+  ///
+  /// In en, this message translates to:
+  /// **'From the receipt logo'**
+  String get storefrontMediaFromReceiptLogo;
+
+  /// STOREFRONT-PUBLISH-001: The row's source bucket: menu-images.
+  ///
+  /// In en, this message translates to:
+  /// **'From a menu photo'**
+  String get storefrontMediaFromMenuImage;
+
+  /// STOREFRONT-PUBLISH-001: Retracts a live row (the file is kept).
+  ///
+  /// In en, this message translates to:
+  /// **'Retract'**
+  String get storefrontMediaRetractAction;
+
+  /// STOREFRONT-PUBLISH-001: Retract confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Retract this copy?'**
+  String get storefrontMediaRetractConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Retract confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'It stops being part of the public storefront. The file is kept, and publishing the same source again brings it back.'**
+  String get storefrontMediaRetractConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Retract committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The copy was retracted.'**
+  String get storefrontMediaRetracted;
+
+  /// STOREFRONT-PUBLISH-001: Discards (cancels) a staged row.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get storefrontMediaDiscardAction;
+
+  /// STOREFRONT-PUBLISH-001: Discard confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this unfinished copy?'**
+  String get storefrontMediaDiscardConfirmTitle;
+
+  /// STOREFRONT-PUBLISH-001: Discard confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'It was never shown on the storefront. Only its record is removed.'**
+  String get storefrontMediaDiscardConfirmBody;
+
+  /// STOREFRONT-PUBLISH-001: Discard committed.
+  ///
+  /// In en, this message translates to:
+  /// **'The unfinished copy was discarded.'**
+  String get storefrontMediaDiscarded;
+
+  /// STOREFRONT-PUBLISH-001: Retract refused: media_in_use; {slots} names the slots.
+  ///
+  /// In en, this message translates to:
+  /// **'This copy is still shown as: {slots}. Remove it from the storefront first.'**
+  String storefrontMediaInUseError(String slots);
+
+  /// STOREFRONT-PUBLISH-001: Why a live in-use row has no Retract button.
+  ///
+  /// In en, this message translates to:
+  /// **'In use in a slot: remove it from the slot before retracting.'**
+  String get storefrontMediaInUseNote;
+
+  /// STOREFRONT-PUBLISH-001: Retract refused: media_not_published.
+  ///
+  /// In en, this message translates to:
+  /// **'This copy was never published: discard it instead.'**
+  String get storefrontMediaNotPublishedError;
+
+  /// STOREFRONT-PUBLISH-001: Cancel refused: media_published.
+  ///
+  /// In en, this message translates to:
+  /// **'This copy is published: retract it instead.'**
+  String get storefrontMediaPublishedError;
+
+  /// STOREFRONT-PUBLISH-001: not_found on retract / cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'This copy no longer exists. The list was refreshed.'**
+  String get storefrontMediaNotFoundError;
+
+  /// STOREFRONT-PUBLISH-001: permission_denied on retract / cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to manage storefront images.'**
+  String get storefrontMediaDeniedError;
+
+  /// STOREFRONT-PUBLISH-001: A database refusal / unrecognised error on a media action.
+  ///
+  /// In en, this message translates to:
+  /// **'The action could not be completed right now. Nothing was changed.'**
+  String get storefrontMediaUnavailableError;
+
+  /// STOREFRONT-PUBLISH-001: Unknown outcome of a publish / media action; the state was refreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not confirm the result. The list below is the server\'s current state. Try again reuses the same request.'**
+  String get storefrontMediaUncertain;
+
+  /// STOREFRONT-PUBLISH-001: Function 403.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to publish images for this restaurant.'**
+  String get storefrontPublishDenied;
+
+  /// STOREFRONT-PUBLISH-001: Function 404 source_not_found.
+  ///
+  /// In en, this message translates to:
+  /// **'The original image is gone or cannot be read. Pick another source.'**
+  String get storefrontPublishSourceMissing;
+
+  /// STOREFRONT-PUBLISH-001: Function 409 restart_required (a new request id is used next time).
+  ///
+  /// In en, this message translates to:
+  /// **'This publish could not continue: the source image or its copy changed meanwhile (for example, the copy was retracted). The list below is the server\'s current state. Press Publish image again to start over.'**
+  String get storefrontPublishRestart;
+
+  /// STOREFRONT-PUBLISH-001: Function 401.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Sign in again, then retry.'**
+  String get storefrontPublishUnauthenticated;
+
+  /// STOREFRONT-PUBLISH-001: Function 409 object_conflict.
+  ///
+  /// In en, this message translates to:
+  /// **'A different file already exists for this image, so it was not published. The list below is the server\'s current state; contact support.'**
+  String get storefrontPublishObjectConflict;
+
+  /// STOREFRONT-PUBLISH-001: Function 400/405/413/415 (programming error).
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be processed. Nothing was changed; contact support.'**
+  String get storefrontPublishInvalidRequest;
+
+  /// STOREFRONT-PUBLISH-001: Appended to every 422 refusal.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick another source image.'**
+  String get storefrontRefusalPickAnother;
+
+  /// STOREFRONT-PUBLISH-001: Fallback for an unknown 422 refusal code.
+  ///
+  /// In en, this message translates to:
+  /// **'This image cannot be used ({code}).'**
+  String storefrontRefusalUnknown(String code);
+
+  /// STOREFRONT-PUBLISH-001: 422 unsupported_format.
+  ///
+  /// In en, this message translates to:
+  /// **'This image format is not supported.'**
+  String get storefrontRefusalUnsupportedFormat;
+
+  /// STOREFRONT-PUBLISH-001: 422 empty.
+  ///
+  /// In en, this message translates to:
+  /// **'The image file is empty.'**
+  String get storefrontRefusalEmpty;
+
+  /// STOREFRONT-PUBLISH-001: 422 input_too_large.
+  ///
+  /// In en, this message translates to:
+  /// **'The image file is too large.'**
+  String get storefrontRefusalInputTooLarge;
+
+  /// STOREFRONT-PUBLISH-001: 422 too_many_pixels.
+  ///
+  /// In en, this message translates to:
+  /// **'The image has too many pixels.'**
+  String get storefrontRefusalTooManyPixels;
+
+  /// STOREFRONT-PUBLISH-001: 422 dimensions_too_large.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is too wide or too tall.'**
+  String get storefrontRefusalDimensionsTooLarge;
+
+  /// STOREFRONT-PUBLISH-001: 422 aspect_ratio.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is too narrow or too elongated.'**
+  String get storefrontRefusalAspectRatio;
+
+  /// STOREFRONT-PUBLISH-001: 422 animated.
+  ///
+  /// In en, this message translates to:
+  /// **'Animated images are not supported.'**
+  String get storefrontRefusalAnimated;
+
+  /// STOREFRONT-PUBLISH-001: 422 truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'The image file is incomplete.'**
+  String get storefrontRefusalTruncated;
+
+  /// STOREFRONT-PUBLISH-001: 422 corrupt.
+  ///
+  /// In en, this message translates to:
+  /// **'The image file is damaged.'**
+  String get storefrontRefusalCorrupt;
+
+  /// STOREFRONT-PUBLISH-001: 422 metadata_too_large.
+  ///
+  /// In en, this message translates to:
+  /// **'The image carries too much embedded metadata.'**
+  String get storefrontRefusalMetadataTooLarge;
+
+  /// STOREFRONT-PUBLISH-001: 422 too_many_scans.
+  ///
+  /// In en, this message translates to:
+  /// **'This progressive image is too complex.'**
+  String get storefrontRefusalTooManyScans;
+
+  /// STOREFRONT-PUBLISH-001: 422 decode_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be read.'**
+  String get storefrontRefusalDecodeFailed;
+
+  /// STOREFRONT-PUBLISH-001: 422 decode_warning.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be read cleanly.'**
+  String get storefrontRefusalDecodeWarning;
+
+  /// STOREFRONT-PUBLISH-001: 422 output_too_large.
+  ///
+  /// In en, this message translates to:
+  /// **'The public copy would be too large.'**
+  String get storefrontRefusalOutputTooLarge;
+
+  /// STOREFRONT-PUBLISH-001: 422 self_check_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The public copy failed its quality check.'**
+  String get storefrontRefusalSelfCheckFailed;
+
+  /// STOREFRONT-PUBLISH-001: A publish answer that did not come from the function (e.g. the gateway 404 while it is not deployed).
+  ///
+  /// In en, this message translates to:
+  /// **'The image publishing service did not answer as expected (it may not be available yet). The list below is the server\'s current state; try again later.'**
+  String get storefrontPublishServiceUnavailable;
+
+  /// STOREFRONT-PUBLISH-001: version_conflict, and the re-read of the latest version failed too.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else changed the storefront first, and the latest version could not be loaded. Your unsaved changes were not applied.'**
+  String get storefrontErrorConflictNotReloaded;
+
+  /// STOREFRONT-PUBLISH-001: A write committed but the re-read failed: editing is locked until a reload.
+  ///
+  /// In en, this message translates to:
+  /// **'The latest version could not be loaded, so what is shown here may be out of date. Editing is locked until you reload.'**
+  String get storefrontStaleNote;
+
+  /// STOREFRONT-PUBLISH-001: Reloads the storefront settings after a failed re-read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get storefrontReloadAction;
+
+  /// STOREFRONT-PUBLISH-001: Error: the SAVED opening hours hold entries the editor cannot represent; they are preserved verbatim, the hours editor is locked and Publish is disabled until an explicit repair + save.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved opening hours contain entries this editor cannot read (probably written outside it). They are kept exactly as saved and are not shown below, and publishing is disabled until they are repaired: replace them with the hours shown below, adjust them if needed, then save.'**
+  String get storefrontHoursUnreadable;
+
+  /// STOREFRONT-PUBLISH-001: Marks the shown hours to replace the incomplete stored ones on the next save.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace them with the hours shown'**
+  String get storefrontHoursRepairAction;
+
+  /// STOREFRONT-PUBLISH-001: A slot change refused with publish_precondition (a published storefront is re-checked on every save); the blocker codes follow.
+  ///
+  /// In en, this message translates to:
+  /// **'The storefront is published but no longer meets its publishing requirements, so its images cannot be changed. Fix these, or unpublish the storefront first (Unpublish, above):'**
+  String get storefrontSlotPreconditionRefused;
+
+  /// STOREFRONT-PUBLISH-001: A publish succeeded but the slot assignment was refused; the reason follows.
+  ///
+  /// In en, this message translates to:
+  /// **'The image was published but not placed on the storefront; the copy stays in the list below.'**
+  String get storefrontSlotPublishedNotPlaced;
+
+  /// STOREFRONT-PUBLISH-001: Publish pressed with a receipt-logo source that is no longer the CURRENT receipt logo (re-read at the press): nothing was published.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt logo changed since this page was loaded, so this image was not published. The source list is now up to date: check it, then press Publish image again.'**
+  String get storefrontSourceLogoChanged;
+
+  /// STOREFRONT-PUBLISH-001: Publish pressed with a receipt-logo source, and the re-read shows there is no receipt logo any more: nothing was published.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt logo was removed since this page was loaded, so this image was not published.'**
+  String get storefrontSourceLogoRemoved;
+
+  /// STOREFRONT-PUBLISH-001: Publish pressed with a receipt-logo source, and the re-read of the current receipt logo failed: nothing was published.
+  ///
+  /// In en, this message translates to:
+  /// **'The current receipt logo could not be checked, so this image was not published. Try again.'**
+  String get storefrontSourceLogoUnverified;
+
+  /// STOREFRONT-PUBLISH-001: Published, but a blocker makes the public read answer not_found (branch, time zone, currency or tax).
+  ///
+  /// In en, this message translates to:
+  /// **'Published, but not available: because of the items below, visitors get a “not found” page. Fix them to bring it back.'**
+  String get storefrontPublishedOfflineStatus;
+
+  /// STOREFRONT-PUBLISH-001: Published, with only blockers under which the page is still served (no live item / no weekly hours) or unreadable saved hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Published, but incomplete: fix the items below.'**
+  String get storefrontPublishedIncompleteStatus;
+
+  /// STOREFRONT-PUBLISH-001: Published, with a blocker code this build does not know (its public effect is unknown).
+  ///
+  /// In en, this message translates to:
+  /// **'Published, but a requirement is no longer met: the public page may be unavailable until the items below are fixed.'**
+  String get storefrontPublishedUncheckedStatus;
+
+  /// STOREFRONT-PUBLISH-001: Heading of the server blockers when the storefront is already published.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix these on the published storefront'**
+  String get storefrontBlockersTitlePublished;
+
+  /// STOREFRONT-PUBLISH-001: A published storefront with no blockers.
+  ///
+  /// In en, this message translates to:
+  /// **'All publishing requirements are met.'**
+  String get storefrontPublishedChecksMet;
+
+  /// STOREFRONT-PUBLISH-001: Label of a pause end that has already passed (nothing is paused).
+  ///
+  /// In en, this message translates to:
+  /// **'Pause ended at'**
+  String get storefrontPauseEndedLabel;
+
+  /// STOREFRONT-PUBLISH-001: A pause end at or before now was picked (refused) or left unsaved until it passed.
+  ///
+  /// In en, this message translates to:
+  /// **'That time has already passed, so the storefront would not be paused. Pick a later time.'**
+  String get storefrontPausePast;
+
+  /// STOREFRONT-PUBLISH-001: Discard after an unknown save outcome re-read the authoritative profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Your unsaved changes were discarded and the latest saved version is shown. If the earlier save went through, it is included.'**
+  String get storefrontDiscardReloaded;
+
+  /// STOREFRONT-PUBLISH-001: Discard after an unknown save outcome could not re-read the profile: the draft and the same-request Try again are kept.
+  ///
+  /// In en, this message translates to:
+  /// **'The latest version could not be loaded, so nothing was discarded. It is still unknown whether the change was saved: Try again reuses the same request.'**
+  String get storefrontDiscardNotReloaded;
+
+  /// STOREFRONT-PUBLISH-001: Heading above the published / not published status line.
+  ///
+  /// In en, this message translates to:
+  /// **'Storefront status'**
+  String get storefrontStatusLabel;
+
+  /// STOREFRONT-PUBLISH-001: Shown whenever the storefront is published (Q-035 / OQ-3): published is a setting, not a guarantee that the public page is served or exposed.
+  ///
+  /// In en, this message translates to:
+  /// **'Published means the storefront is switched on. It does not guarantee that visitors can open it right now: the page is unavailable while the organization, restaurant or branch is suspended, or when it cannot be served for another reason, and whether the public web address is open to visitors is decided separately.'**
+  String get storefrontPublishedAvailabilityNote;
+
+  /// STOREFRONT-PUBLISH-001: Branch picker entry for a branch whose status is not active.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (suspended)'**
+  String storefrontBranchSuspendedOption(String name);
+
+  /// STOREFRONT-PUBLISH-001: Under the branch picker when the chosen branch is suspended (the public read answers not_found for it).
+  ///
+  /// In en, this message translates to:
+  /// **'This branch is suspended. While it is, the storefront is not available to visitors, even when published.'**
+  String get storefrontBranchSuspendedNote;
+
+  /// STOREFRONT-PUBLISH-001: ADVISORY warning under a weekday whose time ranges overlap (the server accepts it; Save stays enabled).
+  ///
+  /// In en, this message translates to:
+  /// **'Some of these time ranges overlap. You can still save, but the public page shows only one range\'s closing time, so it may announce an earlier closing time than the real one. Merge or adjust them.'**
+  String get storefrontHoursOverlapWarning;
+
+  /// STOREFRONT-PUBLISH-001: ADVISORY warning under a weekday that lists the same time range twice (Save stays enabled).
+  ///
+  /// In en, this message translates to:
+  /// **'The same time range is listed twice. You can still save, but remove the extra one.'**
+  String get storefrontHoursDuplicateWarning;
+
+  /// STOREFRONT-PUBLISH-001: ADVISORY warning under a weekday whose overnight range runs into the next weekday's range; {day} is that weekday's name.
+  ///
+  /// In en, this message translates to:
+  /// **'These overnight hours run into {day}\'s hours. You can still save, but the public page may announce an earlier closing time than the real one. Adjust one of them.'**
+  String storefrontHoursSpillWarning(String day);
+
+  /// STOREFRONT-PUBLISH-001: After the explicit repair of unreadable saved hours, before the save that writes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving replaces the unreadable saved entries with the hours shown below.'**
+  String get storefrontHoursRepairPending;
+
+  /// STOREFRONT-PUBLISH-001: The Dashboard's own publish blocker for unreadable saved opening hours (not a server code).
+  ///
+  /// In en, this message translates to:
+  /// **'The saved opening hours contain entries this editor cannot read: repair them in Opening hours, then save.'**
+  String get storefrontBlockerHoursUnreadable;
+
+  /// STOREFRONT-PUBLISH-001: Logo slot: the publish function refused the CURRENT receipt logo (recipe storefront-media-c4 envelope). {reason} is the refusal sentence. Publish stays disabled for that receipt logo until it is replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). This also changes the logo printed on receipts.'**
+  String storefrontLogoSourceRefused(String reason);
+
+  /// STOREFRONT-PUBLISH-001: A retract/discard REPLAY answered stale_request (DB-4): the row changed since (e.g. re-published); nothing is claimed and the list is re-read.
+  ///
+  /// In en, this message translates to:
+  /// **'This request no longer matches the copy: it changed after the request was sent (for example, it was published again). The list below is the server\'s current state; retract it again if needed.'**
+  String get storefrontMediaStaleRequest;
+
+  /// STOREFRONT-PUBLISH-001: Logo slot, after the receipt logo was refused: re-read the current receipt logo (a replaced logo lifts the block).
+  ///
+  /// In en, this message translates to:
+  /// **'Check the receipt logo again'**
+  String get storefrontLogoRecheckAction;
 }
 
 class _AppLocalizationsDelegate
