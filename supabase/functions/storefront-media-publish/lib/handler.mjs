@@ -38,7 +38,7 @@ import { derivedRequestId } from './ids.mjs';
 export const MAX_BODY_BYTES = 4096;
 const MAX_TOKEN_CHARS = 8192;
 const PUBLIC_BUCKET = 'storefront-media';
-const OBJECT_CACHE_SECONDS = 31536000; // content-addressed: the bytes behind a name never change
+const OBJECT_CACHE_SECONDS = 31536000; // content-addressed: on this path the bytes behind a name never change (Q-033)
 // public.storefront_media.object_key's own CHECK grammar (READ-001 migration)
 const OBJECT_KEY_RE = /^[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
 

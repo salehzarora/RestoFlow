@@ -75,7 +75,8 @@ class SupabaseStorefrontFunctionInvoker implements StorefrontFunctionInvoker {
 
   static const String functionName = 'storefront-media-publish';
 
-  /// The PUBLIC bucket that holds ONLY transformed derivatives (CONTRACT §0).
+  /// The PUBLIC bucket. The sanctioned path (this function) uploads only derivatives there; the
+  /// database proves only declared object metadata (OPEN QUESTION Q-036).
   static const String publicBucket = 'storefront-media';
 
   final SupabaseClient _client;

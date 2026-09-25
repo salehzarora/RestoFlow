@@ -8770,7 +8770,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String storefrontLogoSourceRefused(String reason) {
-    return '$reason The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). This also changes the logo printed on receipts.';
+    return '$reason The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). A 16-bit PNG must stay under about 4 megapixels, and a progressive JPEG saved without colour subsampling under about 5 megapixels. This also changes the logo printed on receipts.';
   }
 
   @override

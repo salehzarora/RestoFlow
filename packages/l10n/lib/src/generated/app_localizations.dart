@@ -15685,7 +15685,7 @@ abstract class AppLocalizations {
   /// STOREFRONT-PUBLISH-001: Logo slot: the publish function refused the CURRENT receipt logo (recipe storefront-media-c4 envelope). {reason} is the refusal sentence. Publish stays disabled for that receipt logo until it is replaced.
   ///
   /// In en, this message translates to:
-  /// **'{reason} The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). This also changes the logo printed on receipts.'**
+  /// **'{reason} The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). A 16-bit PNG must stay under about 4 megapixels, and a progressive JPEG saved without colour subsampling under about 5 megapixels. This also changes the logo printed on receipts.'**
   String storefrontLogoSourceRefused(String reason);
 
   /// STOREFRONT-PUBLISH-001: A retract/discard REPLAY answered stale_request (DB-4): the row changed since (e.g. re-published); nothing is claimed and the list is re-read.

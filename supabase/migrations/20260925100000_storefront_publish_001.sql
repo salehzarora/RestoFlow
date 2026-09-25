@@ -76,8 +76,8 @@
 --     therefore publish non-canonical bytes (for example an unstripped
 --     original) on THEIR OWN restaurant's storefront; the restaurant-bound
 --     prefix, the registration-keyed storage policies and the tenant checks
---     below keep it inside that tenant. Recorded as a residual OPEN QUESTION in
---     docs/OPEN_QUESTIONS.md (owned by docs/SECURITY_AND_THREAT_MODEL.md).
+--     below keep it inside that tenant. Recorded as the residual OPEN QUESTION
+--     Q-036 in docs/OPEN_QUESTIONS.md (owned by docs/SECURITY_AND_THREAT_MODEL.md).
 --   * Idempotent per (actor, client_request_id) through the RF-112 management
 --     ledger; typed failures are never claimed (a retry re-evaluates). A replay
 --     of stage / finalize / retract RE-READS its row: a row gone since is
