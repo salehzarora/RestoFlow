@@ -12,6 +12,7 @@ import '../branding/restaurant_logo_section.dart';
 import '../branding/restaurant_logo_storage.dart';
 import '../quick_notes/quick_notes_repository.dart';
 import '../quick_notes/quick_notes_section.dart';
+import '../storefront/storefront_section.dart';
 import 'branch_kitchen_workflow_repository.dart';
 import 'branch_shift_close_policy_repository.dart';
 import 'currency_change_guard.dart';
@@ -69,6 +70,7 @@ class RealSettingsView extends StatefulWidget {
     this.brandingStorage,
     this.kitchenWorkflowRepository,
     this.quickNotesRepository,
+    this.storefrontSeams,
     super.key,
   });
 
@@ -108,6 +110,12 @@ class RealSettingsView extends StatefulWidget {
   /// section is then omitted entirely rather than rendered as a control that
   /// cannot reach a server. (No branch is required: v1 is restaurant-wide.)
   final QuickNotesRepository? quickNotesRepository;
+
+  /// STOREFRONT-PUBLISH-001: the Storefront editor's seams (profile + media
+  /// repositories, branch list, source catalog, Edge Function publisher).
+  /// Null when there is no authenticated transport or no concrete restaurant
+  /// in scope — the Storefront card then shows an honest "not connected" note.
+  final StorefrontEditorSeams? storefrontSeams;
 
   @override
   State<RealSettingsView> createState() => _RealSettingsViewState();
@@ -691,6 +699,17 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             storage: widget.brandingStorage,
             organizationId: membership.organizationId,
             restaurantId: membership.restaurantId!,
+          ),
+        ],
+        // STOREFRONT-PUBLISH-001: the public storefront editor, restaurant-
+        // level like branding. READ BEFORE EDIT: the section shows nothing
+        // editable until the manager read answers, and the SERVER's verdict
+        // (not the client role) decides whether it is editable at all.
+        if (_hasRestaurant && membership.restaurantId != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          StorefrontSection(
+            seams: widget.storefrontSeams,
+            defaultDisplayName: membership.restaurantName,
           ),
         ],
         if (widget.kitchenWorkflowRepository != null) ...[

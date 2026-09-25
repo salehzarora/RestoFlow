@@ -7783,4 +7783,930 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authSamePassword => 'اختر كلمة مرور لم تستخدمها هنا من قبل.';
+
+  @override
+  String get storefrontSectionTitle => 'واجهة المتجر';
+
+  @override
+  String get storefrontSectionSubtitle =>
+      'صفحة مطعمك العامة للتصفّح فقط: الاسم والمظهر وساعات العمل والصور.';
+
+  @override
+  String get storefrontDemoNote =>
+      'محرّر واجهة المتجر غير متاح في الوضع التجريبي.';
+
+  @override
+  String get storefrontUnavailableNote => 'محرّر واجهة المتجر غير متصل هنا.';
+
+  @override
+  String get storefrontDeniedNote => 'لا يمكنك إدارة واجهة المتجر لهذا المطعم.';
+
+  @override
+  String get storefrontLoadFailed => 'تعذّر تحميل إعدادات واجهة المتجر.';
+
+  @override
+  String get storefrontRetry => 'أعد المحاولة';
+
+  @override
+  String get storefrontCreateIntro =>
+      'أنشئ واجهة المتجر: اختر الفرع الذي تمثّله وعنوانها الدائم على الويب.';
+
+  @override
+  String get storefrontBranchLabel => 'فرع واجهة المتجر';
+
+  @override
+  String get storefrontBranchHelp =>
+      'تُقرأ ساعات العمل بحسب المنطقة الزمنية لهذا الفرع (أو منطقة المطعم إن لم تكن للفرع منطقة زمنية)، ويُستخدم إعداد ضريبة الفرع وقائمة طعامه.';
+
+  @override
+  String get storefrontBranchesUnavailable => 'تعذّر تحميل قائمة الفروع.';
+
+  @override
+  String get storefrontBranchUnlisted => 'الفرع الحالي (غير موجود في القائمة)';
+
+  @override
+  String get storefrontSlugLabel => 'عنوان الويب (المعرّف)';
+
+  @override
+  String get storefrontSlugHelp =>
+      'من 3 إلى 48 حرفًا لاتينيًا صغيرًا وأرقامًا وشرطات مفردة. لا يمكن تغييره لاحقًا.';
+
+  @override
+  String get storefrontSlugInvalid =>
+      'استخدم من 3 إلى 48 حرفًا لاتينيًا صغيرًا وأرقامًا وشرطات مفردة؛ الكلمات المحجوزة غير مسموح بها.';
+
+  @override
+  String get storefrontSlugPermanentNote => 'عنوان الويب دائم ولا يمكن تغييره.';
+
+  @override
+  String get storefrontPathLabel => 'المسار العام';
+
+  @override
+  String get storefrontPathNote =>
+      'لم يُجهَّز النطاق العام بعد؛ هذا هو المسار الذي ستستخدمه واجهة المتجر.';
+
+  @override
+  String get storefrontCreateAction => 'إنشاء واجهة المتجر';
+
+  @override
+  String get storefrontCreateConfirmTitle => 'إنشاء واجهة المتجر؟';
+
+  @override
+  String get storefrontCreateConfirmBody =>
+      'عنوان الويب هذا دائم: لا يمكن تغييره لاحقًا.';
+
+  @override
+  String get storefrontCreateConfirmAction => 'إنشاء';
+
+  @override
+  String get storefrontDisplayNameLabel => 'الاسم المعروض';
+
+  @override
+  String get storefrontDisplayNameInvalid => 'أدخل من 1 إلى 60 حرفًا.';
+
+  @override
+  String get storefrontTaglineLabel => 'الشعار النصّي';
+
+  @override
+  String get storefrontCityLabel => 'المدينة';
+
+  @override
+  String get storefrontAddressLabel => 'العنوان';
+
+  @override
+  String get storefrontPhoneLabel => 'الهاتف العام';
+
+  @override
+  String get storefrontPhoneHelp =>
+      'دولي (+972…) أو محلي (05X-XXX-XXXX). اتركه فارغًا إن لم يوجد.';
+
+  @override
+  String get storefrontPhoneInvalid =>
+      'استخدم + ومن 7 إلى 15 رقمًا، أو رقمًا محليًا مثل 050-123-4567.';
+
+  @override
+  String storefrontTooLong(int max) {
+    return '$max حرفًا كحدّ أقصى.';
+  }
+
+  @override
+  String get storefrontLookTitle => 'المظهر';
+
+  @override
+  String get storefrontPrimaryColorLabel => 'اللون الأساسي';
+
+  @override
+  String get storefrontAccentColorLabel => 'لون التمييز';
+
+  @override
+  String get storefrontColorHelp => 'لون بصيغة #RRGGBB، مثل #13322a.';
+
+  @override
+  String get storefrontColorInvalid => 'استخدم لونًا بصيغة #RRGGBB.';
+
+  @override
+  String get storefrontPrimaryContrastWarning =>
+      'ستستبدل واجهة المتجر هذا اللون بلونها الأخضر المحايد: النص الأبيض عليه لن يبلغ مستوى التباين AA.';
+
+  @override
+  String get storefrontVisualPresetLabel => 'السمة';
+
+  @override
+  String get storefrontVisualPresetDark => 'داكنة';
+
+  @override
+  String get storefrontVisualPresetLight => 'فاتحة';
+
+  @override
+  String get storefrontLocaleLabel => 'اللغة الافتراضية';
+
+  @override
+  String get storefrontLocaleHelp =>
+      'تختار واجهة المتجر العامة لغتها حاليًا من عنوان الويب؛ يُحفظ هذا الإعداد الافتراضي لاستخدام لاحق.';
+
+  @override
+  String get storefrontLocaleAr => 'العربية';
+
+  @override
+  String get storefrontLocaleHe => 'العبرية';
+
+  @override
+  String get storefrontLocaleEn => 'الإنجليزية';
+
+  @override
+  String get storefrontCardModeLabel => 'تخطيط القائمة';
+
+  @override
+  String get storefrontCardModeList => 'قائمة';
+
+  @override
+  String get storefrontCardModeGrid => 'شبكة';
+
+  @override
+  String get storefrontMotionLabel => 'الحركة';
+
+  @override
+  String get storefrontMotionCalm => 'هادئة';
+
+  @override
+  String get storefrontMotionFull => 'قياسية';
+
+  @override
+  String get storefrontMotionLively => 'حيوية';
+
+  @override
+  String get storefrontPickupLabel => 'الاستلام متاح';
+
+  @override
+  String get storefrontPickupHelp =>
+      'للعرض فقط: واجهة المتجر للتصفّح فقط في هذا الإصدار، لذا الطلب عبر الإنترنت متوقف.';
+
+  @override
+  String get storefrontPauseTitle => 'إيقاف مؤقت';
+
+  @override
+  String get storefrontPausedUntilLabel => 'متوقف حتى';
+
+  @override
+  String get storefrontNotPaused => 'غير متوقف';
+
+  @override
+  String get storefrontPauseSetAction => 'تحديد نهاية الإيقاف';
+
+  @override
+  String get storefrontPauseClearAction => 'إلغاء الإيقاف';
+
+  @override
+  String storefrontPauseDeviceZone(String offset) {
+    return 'يُدخَل بتوقيت هذا الجهاز (UTC$offset).';
+  }
+
+  @override
+  String get storefrontPauseReasonLabel => 'سبب الإيقاف (للموظفين فقط)';
+
+  @override
+  String get storefrontPauseHelp =>
+      'أثناء الإيقاف تعرض الصفحة العامة إشعار «متوقف مؤقتًا» عامًا. لا تعرض السبب أبدًا — السبب للموظفين فقط.';
+
+  @override
+  String get storefrontHoursTitle => 'ساعات العمل';
+
+  @override
+  String storefrontHoursTimezone(String timezone) {
+    return 'الأوقات بتوقيت الفرع: $timezone.';
+  }
+
+  @override
+  String get storefrontHoursNoTimezone =>
+      'لا توجد منطقة زمنية بعد — حدّد المنطقة الزمنية للفرع في الإعدادات.';
+
+  @override
+  String get storefrontHoursSunday => 'الأحد';
+
+  @override
+  String get storefrontHoursMonday => 'الاثنين';
+
+  @override
+  String get storefrontHoursTuesday => 'الثلاثاء';
+
+  @override
+  String get storefrontHoursWednesday => 'الأربعاء';
+
+  @override
+  String get storefrontHoursThursday => 'الخميس';
+
+  @override
+  String get storefrontHoursFriday => 'الجمعة';
+
+  @override
+  String get storefrontHoursSaturday => 'السبت';
+
+  @override
+  String get storefrontHoursClosed => 'مغلق';
+
+  @override
+  String get storefrontHoursAddWindow => 'إضافة ساعات';
+
+  @override
+  String get storefrontHoursRemove => 'إزالة';
+
+  @override
+  String get storefrontHoursOpens => 'يفتح';
+
+  @override
+  String get storefrontHoursCloses => 'يغلق';
+
+  @override
+  String get storefrontHoursOvernight => 'يغلق في اليوم التالي';
+
+  @override
+  String get storefrontHoursOpenEqualsClose =>
+      'يجب أن يختلف وقت الفتح عن وقت الإغلاق.';
+
+  @override
+  String storefrontHoursDayCap(int max) {
+    return '$max فترات كحدّ أقصى في اليوم.';
+  }
+
+  @override
+  String get storefrontHoursExceptionsTitle => 'تواريخ خاصة';
+
+  @override
+  String get storefrontHoursExceptionsEmpty => 'لا توجد تواريخ خاصة.';
+
+  @override
+  String get storefrontHoursAddException => 'إضافة تاريخ';
+
+  @override
+  String get storefrontHoursExceptionClosed => 'مغلق طوال اليوم';
+
+  @override
+  String get storefrontHoursExceptionWindow => 'ساعات خاصة';
+
+  @override
+  String get storefrontHoursExceptionDuplicate => 'هذا التاريخ مدرج بالفعل.';
+
+  @override
+  String storefrontHoursExceptionsCap(int max) {
+    return '$max تاريخًا خاصًا كحدّ أقصى.';
+  }
+
+  @override
+  String get storefrontHoursInvalid => 'صحّح ساعات العمل قبل الحفظ.';
+
+  @override
+  String get storefrontSaveAction => 'حفظ واجهة المتجر';
+
+  @override
+  String get storefrontDiscardAction => 'تجاهل التغييرات';
+
+  @override
+  String get storefrontUnsavedNote => 'لديك تغييرات غير محفوظة.';
+
+  @override
+  String get storefrontSaved => 'تم حفظ واجهة المتجر.';
+
+  @override
+  String get storefrontFixFields => 'صحّح الحقول المميّزة قبل الحفظ.';
+
+  @override
+  String get storefrontErrorConflict =>
+      'قام شخص آخر بتغيير واجهة المتجر. تُعرض الآن أحدث نسخة؛ لم تُطبَّق تغييراتك غير المحفوظة.';
+
+  @override
+  String get storefrontErrorDenied => 'غير مسموح لك بتغيير واجهة المتجر هذه.';
+
+  @override
+  String get storefrontErrorUnavailable =>
+      'تعذّر حفظ واجهة المتجر الآن. لم يتغيّر شيء.';
+
+  @override
+  String get storefrontErrorNotCommitted =>
+      'فشل الاتصال ولم يُحفظ التغيير. أعد المحاولة.';
+
+  @override
+  String get storefrontErrorUncertain =>
+      'تعذّر علينا التأكد من حفظ التغيير. أعد المحاولة: يُعاد استخدام الطلب نفسه، فلا يمكن تطبيقه مرتين.';
+
+  @override
+  String storefrontErrorInvalid(String reason) {
+    return 'رفض الخادم هذا التغيير ($reason).';
+  }
+
+  @override
+  String get storefrontReasonSlugInvalid => 'عنوان الويب غير صالح.';
+
+  @override
+  String get storefrontReasonSlugImmutable =>
+      'لا يمكن تغيير عنوان الويب بعد الإنشاء.';
+
+  @override
+  String get storefrontReasonSlugTaken =>
+      'عنوان الويب هذا مستخدم من قِبل مطعم آخر.';
+
+  @override
+  String get storefrontReasonBranchInvalid =>
+      'الفرع المختار لا ينتمي إلى هذا المطعم.';
+
+  @override
+  String get storefrontReasonDisplayNameInvalid =>
+      'يجب أن يكون الاسم المعروض من 1 إلى 60 حرفًا.';
+
+  @override
+  String get storefrontReasonTaglineInvalid =>
+      'الشعار النصّي طويل جدًا (90 حرفًا كحدّ أقصى).';
+
+  @override
+  String get storefrontReasonPublicCityInvalid =>
+      'اسم المدينة طويل جدًا (60 حرفًا كحدّ أقصى).';
+
+  @override
+  String get storefrontReasonPublicAddressInvalid =>
+      'العنوان طويل جدًا (80 حرفًا كحدّ أقصى).';
+
+  @override
+  String get storefrontReasonPublicPhoneInvalid =>
+      'رقم الهاتف ليس بصيغة مدعومة.';
+
+  @override
+  String get storefrontReasonPrimaryColorInvalid =>
+      'يجب أن يكون اللون الأساسي بصيغة #RRGGBB.';
+
+  @override
+  String get storefrontReasonAccentColorInvalid =>
+      'يجب أن يكون لون التمييز بصيغة #RRGGBB.';
+
+  @override
+  String get storefrontReasonVisualPresetInvalid => 'السمة غير صالحة.';
+
+  @override
+  String get storefrontReasonLocaleDefaultInvalid =>
+      'اللغة الافتراضية غير صالحة.';
+
+  @override
+  String get storefrontReasonCardModeInvalid => 'تخطيط القائمة غير صالح.';
+
+  @override
+  String get storefrontReasonMotionInvalid => 'إعداد الحركة غير صالح.';
+
+  @override
+  String get storefrontReasonPickupEnabledInvalid => 'إعداد الاستلام غير صالح.';
+
+  @override
+  String get storefrontReasonPausedUntilInvalid =>
+      'وقت انتهاء الإيقاف غير صالح.';
+
+  @override
+  String get storefrontReasonPauseReasonInvalid =>
+      'سبب الإيقاف طويل جدًا (120 حرفًا كحدّ أقصى).';
+
+  @override
+  String get storefrontReasonOpeningHoursInvalid =>
+      'رفض الخادم ساعات العمل. تحقّق من كل فترة زمنية.';
+
+  @override
+  String get storefrontReasonLogoMediaIdInvalid =>
+      'صورة الشعار لم تعد منشورة. اختر صورة أخرى أو انشرها.';
+
+  @override
+  String get storefrontReasonHeroMediaIdInvalid =>
+      'الصورة الرئيسية لم تعد منشورة. اختر صورة أخرى أو انشرها.';
+
+  @override
+  String get storefrontReasonIsPublishedInvalid => 'إعداد النشر غير صالح.';
+
+  @override
+  String get storefrontReasonBranchMissing => 'اختر فرع واجهة المتجر أولًا.';
+
+  @override
+  String get storefrontReasonSlugMissing => 'حدّد عنوان الويب أولًا.';
+
+  @override
+  String get storefrontReasonPublishPrecondition =>
+      'شروط النشر غير مستوفاة؛ رُفض التغيير:';
+
+  @override
+  String get storefrontReasonUnknownField =>
+      'أرسل هذا الإصدار حقلًا لا يقبله الخادم.';
+
+  @override
+  String get storefrontReasonPatchNotObject =>
+      'أرسل هذا الإصدار تغييرًا مشوّهًا.';
+
+  @override
+  String get storefrontBlockersTitle => 'قبل أن تتمكّن من النشر';
+
+  @override
+  String get storefrontBlockersSavedNote =>
+      'تعتمد هذه الفحوصات على واجهة المتجر المحفوظة: احفظ تغييراتك أولًا.';
+
+  @override
+  String get storefrontReadyToPublish => 'جاهزة للنشر.';
+
+  @override
+  String get storefrontBlockerSlugMissing => 'حدّد عنوان ويب (معرّف).';
+
+  @override
+  String get storefrontBlockerBranchMissing => 'اختر فرع واجهة المتجر أعلاه.';
+
+  @override
+  String get storefrontBlockerTimezoneMissing =>
+      'حدّد المنطقة الزمنية للفرع في الإعدادات.';
+
+  @override
+  String get storefrontBlockerCurrencyNotIls =>
+      'اضبط عملة تشغيل المطعم على الشيكل (₪) في الإعدادات: واجهة المتجر تدعم الشيكل فقط حاليًا.';
+
+  @override
+  String get storefrontBlockerTaxNotExclusive =>
+      'ضريبة الفرع مشمولة في الأسعار، لكن واجهة المتجر تحتاج إلى ضريبة تُضاف فوق الأسعار. لا يمكن تغيير طريقة ضريبة الفرع إلا من قِبل مسؤول RestoFlow لديك.';
+
+  @override
+  String get storefrontBlockerNoLiveItem =>
+      'أضف صنفًا نشطًا واحدًا على الأقل في القائمة.';
+
+  @override
+  String get storefrontBlockerHoursMissing =>
+      'أضف وقت عمل أسبوعيًا واحدًا على الأقل في ساعات العمل.';
+
+  @override
+  String storefrontBlockerUnknown(String code) {
+    return 'هناك شرط آخر غير مستوفى ($code).';
+  }
+
+  @override
+  String get storefrontPublishedStatus => 'منشورة.';
+
+  @override
+  String get storefrontUnpublishedStatus => 'غير منشورة: واجهة المتجر مخفية.';
+
+  @override
+  String get storefrontPublishAction => 'نشر واجهة المتجر';
+
+  @override
+  String get storefrontUnpublishAction => 'إلغاء النشر';
+
+  @override
+  String get storefrontPublishConfirmTitle => 'نشر واجهة المتجر؟';
+
+  @override
+  String get storefrontPublishConfirmBody =>
+      'عندما تصبح واجهة المتجر متاحة للزوار، سيتمكّن أي شخص لديه هذا العنوان من رؤية قائمتك وساعات العمل والصور:';
+
+  @override
+  String get storefrontUnpublishConfirmTitle => 'إلغاء نشر واجهة المتجر؟';
+
+  @override
+  String get storefrontUnpublishConfirmBody =>
+      'ستتوقف الصفحة العامة. تُحفظ إعداداتك وصورك، ويمكنك النشر مجددًا لاحقًا.';
+
+  @override
+  String get storefrontPublishNeedsSave => 'احفظ تغييراتك قبل النشر.';
+
+  @override
+  String get storefrontPublishNeedsBlockers => 'عالج البنود أعلاه قبل النشر.';
+
+  @override
+  String get storefrontPublishDone => 'تم نشر واجهة المتجر.';
+
+  @override
+  String get storefrontUnpublishDone => 'تم إلغاء نشر واجهة المتجر.';
+
+  @override
+  String get storefrontUnpublishAndSaveAction => 'إلغاء النشر وحفظ التغييرات';
+
+  @override
+  String get storefrontMediaTitle => 'الصور';
+
+  @override
+  String get storefrontMediaNeedsProfile =>
+      'أنشئ واجهة المتجر أولًا لإضافة شعار أو صورة رئيسية.';
+
+  @override
+  String get storefrontMediaUnavailable => 'نشر الصور غير متاح هنا.';
+
+  @override
+  String get storefrontMediaSaveFirst =>
+      'احفظ تغييراتك أو تجاهلها قبل تغيير الصور.';
+
+  @override
+  String get storefrontSlotLogoTitle => 'الشعار';
+
+  @override
+  String get storefrontSlotHeroTitle => 'الصورة الرئيسية';
+
+  @override
+  String get storefrontSlotLogoHelp =>
+      'تُنشأ من شعار الإيصال الحالي (نسخة عامة بعرض 480 بكسل).';
+
+  @override
+  String get storefrontSlotHeroHelp =>
+      'تُنشأ من شعار الإيصال أو صورة صنف من القائمة (نسخة عامة بعرض 960 بكسل).';
+
+  @override
+  String get storefrontSlotEmpty => 'لا توجد صورة على واجهة المتجر بعد.';
+
+  @override
+  String get storefrontSlotCurrentLabel => 'على واجهة المتجر';
+
+  @override
+  String get storefrontSlotPreviewUnavailable => 'المعاينة غير متاحة.';
+
+  @override
+  String get storefrontSlotSourceLabel => 'الصورة المصدر';
+
+  @override
+  String get storefrontSourceReceiptLogo => 'شعار الإيصال الحالي';
+
+  @override
+  String storefrontSourceMenuItem(String name) {
+    return 'صنف من القائمة: $name';
+  }
+
+  @override
+  String get storefrontSourceNoReceiptLogo =>
+      'ارفع شعار إيصال في «شعار الإيصال» أولًا.';
+
+  @override
+  String get storefrontSourcesUnavailable => 'تعذّر تحميل بعض الصور المصدر.';
+
+  @override
+  String get storefrontSourceNone =>
+      'لا توجد صور مصدر بعد: ارفع شعار إيصال أو أضف صورة إلى صنف في القائمة.';
+
+  @override
+  String get storefrontSlotPublishAction => 'نشر الصورة';
+
+  @override
+  String get storefrontSlotPublishConfirmTitle => 'نشر هذه الصورة؟';
+
+  @override
+  String get storefrontSlotPublishConfirmBody =>
+      'تُنشأ نسخة عامة بحجم مُعدَّل وتوضع في هذا الموضع، وتُعرض كلما كانت صفحة واجهة المتجر متاحة. تبقى الصورة الأصلية خاصة.';
+
+  @override
+  String get storefrontSlotPublishing =>
+      'جارٍ نشر الصورة… قد يستغرق ذلك لحظات.';
+
+  @override
+  String get storefrontSlotPublished =>
+      'نُشرت الصورة ووُضعت في هذا الموضع. تُعرض كلما كانت صفحة واجهة المتجر متاحة.';
+
+  @override
+  String get storefrontSlotNotPlaced =>
+      'نُشرت الصورة، لكن واجهة المتجر تغيّرت في الأثناء فلم تُوضع. استخدمها من القائمة أدناه.';
+
+  @override
+  String get storefrontSlotPlaceFailed =>
+      'نُشرت الصورة لكن تعذّر وضعها على واجهة المتجر. استخدمها من القائمة أدناه.';
+
+  @override
+  String get storefrontSlotRemoveAction => 'إزالة من واجهة المتجر';
+
+  @override
+  String get storefrontSlotRemoveConfirmTitle =>
+      'إزالة هذه الصورة من واجهة المتجر؟';
+
+  @override
+  String get storefrontSlotRemoveConfirmBody =>
+      'تبقى النسخة العامة في القائمة أدناه: يمكنك استخدامها مجددًا أو سحبها.';
+
+  @override
+  String get storefrontSlotRemoved => 'أُزيلت الصورة من واجهة المتجر.';
+
+  @override
+  String get storefrontSlotUseAction => 'استخدام هنا';
+
+  @override
+  String get storefrontSlotAssigned =>
+      'وُضعت الصورة الآن في هذا الموضع. تُعرض كلما كانت صفحة واجهة المتجر متاحة.';
+
+  @override
+  String get storefrontMediaListTitle => 'النسخ العامة';
+
+  @override
+  String get storefrontMediaListEmpty => 'لا توجد نسخ بعد.';
+
+  @override
+  String get storefrontMediaListUnavailable => 'تعذّر تحميل قائمة الصور.';
+
+  @override
+  String get storefrontMediaStateStaged => 'غير مكتملة';
+
+  @override
+  String get storefrontMediaStateLive => 'منشورة';
+
+  @override
+  String get storefrontMediaStateRetracted => 'مسحوبة';
+
+  @override
+  String get storefrontMediaInUse => 'قيد الاستخدام';
+
+  @override
+  String storefrontMediaDimensions(int width, int height) {
+    return '$width × $height بكسل';
+  }
+
+  @override
+  String get storefrontMediaFromReceiptLogo => 'من شعار الإيصال';
+
+  @override
+  String get storefrontMediaFromMenuImage => 'من صورة في القائمة';
+
+  @override
+  String get storefrontMediaRetractAction => 'سحب';
+
+  @override
+  String get storefrontMediaRetractConfirmTitle => 'سحب هذه النسخة؟';
+
+  @override
+  String get storefrontMediaRetractConfirmBody =>
+      'لن تعود جزءًا من واجهة المتجر العامة. يُحتفظ بالملف، ونشر المصدر نفسه مجددًا يعيدها.';
+
+  @override
+  String get storefrontMediaRetracted => 'تم سحب النسخة.';
+
+  @override
+  String get storefrontMediaDiscardAction => 'إلغاء';
+
+  @override
+  String get storefrontMediaDiscardConfirmTitle =>
+      'إلغاء هذه النسخة غير المكتملة؟';
+
+  @override
+  String get storefrontMediaDiscardConfirmBody =>
+      'لم تُعرض على واجهة المتجر قطّ. يُزال سجلّها فقط.';
+
+  @override
+  String get storefrontMediaDiscarded => 'تم إلغاء النسخة غير المكتملة.';
+
+  @override
+  String storefrontMediaInUseError(String slots) {
+    return 'هذه النسخة ما زالت معروضة كـ: $slots. أزلها من واجهة المتجر أولًا.';
+  }
+
+  @override
+  String get storefrontMediaInUseNote =>
+      'مستخدمة في أحد المواضع: أزلها من موضعها قبل السحب.';
+
+  @override
+  String get storefrontMediaNotPublishedError =>
+      'لم تُنشر هذه النسخة قطّ: ألغِها بدلًا من ذلك.';
+
+  @override
+  String get storefrontMediaPublishedError =>
+      'هذه النسخة منشورة: اسحبها بدلًا من ذلك.';
+
+  @override
+  String get storefrontMediaNotFoundError =>
+      'لم تعد هذه النسخة موجودة. تم تحديث القائمة.';
+
+  @override
+  String get storefrontMediaDeniedError =>
+      'غير مسموح لك بإدارة صور واجهة المتجر.';
+
+  @override
+  String get storefrontMediaUnavailableError =>
+      'تعذّر إكمال الإجراء الآن. لم يتغيّر شيء.';
+
+  @override
+  String get storefrontMediaUncertain =>
+      'تعذّر علينا التأكد من النتيجة. القائمة أدناه هي الحالة الحالية على الخادم. «أعد المحاولة» يُعيد استخدام الطلب نفسه.';
+
+  @override
+  String get storefrontPublishDenied => 'غير مسموح لك بنشر الصور لهذا المطعم.';
+
+  @override
+  String get storefrontPublishSourceMissing =>
+      'الصورة الأصلية غير موجودة أو لا يمكن قراءتها. اختر مصدرًا آخر.';
+
+  @override
+  String get storefrontPublishRestart =>
+      'تعذّر إكمال هذا النشر: تغيّرت الصورة المصدر أو نسختها في الأثناء (مثلًا، سُحبت النسخة). القائمة أدناه هي الحالة الحالية على الخادم. اضغط «نشر الصورة» مجددًا للبدء من جديد.';
+
+  @override
+  String get storefrontPublishUnauthenticated =>
+      'انتهت جلستك. سجّل الدخول مجددًا ثم أعد المحاولة.';
+
+  @override
+  String get storefrontPublishObjectConflict =>
+      'يوجد ملف مختلف لهذه الصورة بالفعل، لذا لم تُنشر. القائمة أدناه هي الحالة الحالية على الخادم؛ تواصل مع الدعم.';
+
+  @override
+  String get storefrontPublishInvalidRequest =>
+      'تعذّرت معالجة الطلب. لم يتغيّر شيء؛ تواصل مع الدعم.';
+
+  @override
+  String get storefrontRefusalPickAnother => 'اختر صورة مصدر أخرى.';
+
+  @override
+  String storefrontRefusalUnknown(String code) {
+    return 'لا يمكن استخدام هذه الصورة ($code).';
+  }
+
+  @override
+  String get storefrontRefusalUnsupportedFormat =>
+      'صيغة هذه الصورة غير مدعومة.';
+
+  @override
+  String get storefrontRefusalEmpty => 'ملف الصورة فارغ.';
+
+  @override
+  String get storefrontRefusalInputTooLarge => 'ملف الصورة كبير جدًا.';
+
+  @override
+  String get storefrontRefusalTooManyPixels =>
+      'تحتوي الصورة على عدد كبير جدًا من البكسلات.';
+
+  @override
+  String get storefrontRefusalDimensionsTooLarge =>
+      'الصورة عريضة أو طويلة جدًا.';
+
+  @override
+  String get storefrontRefusalAspectRatio =>
+      'الصورة ضيقة أو مستطيلة أكثر من اللازم.';
+
+  @override
+  String get storefrontRefusalAnimated => 'الصور المتحركة غير مدعومة.';
+
+  @override
+  String get storefrontRefusalTruncated => 'ملف الصورة غير مكتمل.';
+
+  @override
+  String get storefrontRefusalCorrupt => 'ملف الصورة تالف.';
+
+  @override
+  String get storefrontRefusalMetadataTooLarge =>
+      'تحمل الصورة بيانات وصفية مضمّنة كثيرة جدًا.';
+
+  @override
+  String get storefrontRefusalTooManyScans =>
+      'هذه الصورة التدريجية معقّدة جدًا.';
+
+  @override
+  String get storefrontRefusalDecodeFailed => 'تعذّرت قراءة الصورة.';
+
+  @override
+  String get storefrontRefusalDecodeWarning => 'تعذّرت قراءة الصورة بشكل سليم.';
+
+  @override
+  String get storefrontRefusalOutputTooLarge =>
+      'ستكون النسخة العامة كبيرة جدًا.';
+
+  @override
+  String get storefrontRefusalSelfCheckFailed =>
+      'فشلت النسخة العامة في فحص الجودة.';
+
+  @override
+  String get storefrontPublishServiceUnavailable =>
+      'لم تستجب خدمة نشر الصور كما هو متوقع (قد لا تكون متاحة بعد). القائمة أدناه هي الحالة الحالية على الخادم؛ أعد المحاولة لاحقًا.';
+
+  @override
+  String get storefrontErrorConflictNotReloaded =>
+      'قام شخص آخر بتغيير واجهة المتجر أولًا، وتعذّر تحميل أحدث نسخة. لم تُطبَّق تغييراتك غير المحفوظة.';
+
+  @override
+  String get storefrontStaleNote =>
+      'تعذّر تحميل أحدث نسخة، لذا قد يكون المعروض هنا قديمًا. التعديل مقفل حتى تعيد التحميل.';
+
+  @override
+  String get storefrontReloadAction => 'إعادة التحميل';
+
+  @override
+  String get storefrontHoursUnreadable =>
+      'تحتوي ساعات العمل المحفوظة على إدخالات لا يستطيع هذا المحرر قراءتها (كُتبت على الأرجح خارجه). تبقى محفوظة كما هي تمامًا ولا تظهر أدناه، والنشر معطّل حتى تُصلَح: استبدلها بالساعات المعروضة أدناه، وعدّلها إن لزم، ثم احفظ.';
+
+  @override
+  String get storefrontHoursRepairAction => 'استبدلها بالساعات المعروضة';
+
+  @override
+  String get storefrontSlotPreconditionRefused =>
+      'واجهة المتجر منشورة لكنها لم تعد تستوفي متطلبات النشر، لذا لا يمكن تغيير صورها. أصلح ما يلي، أو ألغِ نشر واجهة المتجر أولًا («إلغاء النشر» أعلاه):';
+
+  @override
+  String get storefrontSlotPublishedNotPlaced =>
+      'نُشرت الصورة لكنها لم توضع على واجهة المتجر؛ تبقى النسخة في القائمة أدناه.';
+
+  @override
+  String get storefrontSourceLogoChanged =>
+      'تغيّر شعار الإيصال منذ تحميل هذه الصفحة، لذا لم تُنشر هذه الصورة. قائمة المصادر محدّثة الآن: راجعها ثم اضغط «نشر الصورة» مرة أخرى.';
+
+  @override
+  String get storefrontSourceLogoRemoved =>
+      'أُزيل شعار الإيصال منذ تحميل هذه الصفحة، لذا لم تُنشر هذه الصورة.';
+
+  @override
+  String get storefrontSourceLogoUnverified =>
+      'تعذّر التحقق من شعار الإيصال الحالي، لذا لم تُنشر هذه الصورة. أعد المحاولة.';
+
+  @override
+  String get storefrontPublishedOfflineStatus =>
+      'منشورة لكنها غير متاحة: بسبب البنود أدناه يرى الزوار صفحة «غير موجود». أصلحها لإعادتها.';
+
+  @override
+  String get storefrontPublishedIncompleteStatus =>
+      'منشورة لكنها غير مكتملة: أصلح البنود أدناه.';
+
+  @override
+  String get storefrontPublishedUncheckedStatus =>
+      'منشورة، لكن أحد المتطلبات لم يعد مستوفًى: قد لا تكون الصفحة العامة متاحة حتى تُصلح البنود أدناه.';
+
+  @override
+  String get storefrontBlockersTitlePublished =>
+      'يجب إصلاح ما يلي في واجهة المتجر المنشورة';
+
+  @override
+  String get storefrontPublishedChecksMet => 'جميع متطلبات النشر مستوفاة.';
+
+  @override
+  String get storefrontPauseEndedLabel => 'انتهى الإيقاف في';
+
+  @override
+  String get storefrontPausePast =>
+      'هذا الوقت قد مضى، لذا لن تُوقَف واجهة المتجر مؤقتًا. اختر وقتًا لاحقًا.';
+
+  @override
+  String get storefrontDiscardReloaded =>
+      'تم تجاهل تغييراتك غير المحفوظة، وتُعرض الآن أحدث نسخة محفوظة. إذا كان الحفظ السابق قد تمّ، فهو مشمول فيها.';
+
+  @override
+  String get storefrontDiscardNotReloaded =>
+      'تعذّر تحميل أحدث نسخة، لذا لم يُتجاهَل شيء. لا يزال غير معروف ما إذا كان التغيير قد حُفظ: «أعد المحاولة» يُعيد استخدام الطلب نفسه.';
+
+  @override
+  String get storefrontStatusLabel => 'حالة واجهة المتجر';
+
+  @override
+  String get storefrontPublishedAvailabilityNote =>
+      '«منشورة» تعني أن واجهة المتجر مُفعَّلة، لكنها لا تضمن أن الزوار يستطيعون فتحها الآن: تكون الصفحة غير متاحة ما دامت المؤسسة أو المطعم أو الفرع موقوفًا، أو عندما يتعذّر عرضها لسبب آخر، أما إتاحة العنوان العام للزوار فتُقرَّر بشكل منفصل.';
+
+  @override
+  String storefrontBranchSuspendedOption(String name) {
+    return '$name (موقوف)';
+  }
+
+  @override
+  String get storefrontBranchSuspendedNote =>
+      'هذا الفرع موقوف. ما دام كذلك، لا تكون واجهة المتجر متاحة للزوار حتى لو كانت منشورة.';
+
+  @override
+  String get storefrontHoursOverlapWarning =>
+      'بعض هذه الفترات الزمنية متداخلة. يمكنك الحفظ مع ذلك، لكن الصفحة العامة تعرض وقت إغلاق فترة واحدة فقط، فقد تُعلن وقت إغلاق أبكر من الحقيقي. ادمجها أو عدّلها.';
+
+  @override
+  String get storefrontHoursDuplicateWarning =>
+      'الفترة الزمنية نفسها مُدرجة مرتين. يمكنك الحفظ مع ذلك، لكن احذف الفترة الزائدة.';
+
+  @override
+  String storefrontHoursSpillWarning(String day) {
+    return 'تمتد هذه الساعات الليلية إلى ساعات يوم $day. يمكنك الحفظ مع ذلك، لكن الصفحة العامة قد تُعلن وقت إغلاق أبكر من الحقيقي. عدّل إحدى الفترتين.';
+  }
+
+  @override
+  String get storefrontHoursRepairPending =>
+      'عند الحفظ تُستبدل الإدخالات المحفوظة غير المقروءة بالساعات المعروضة أدناه.';
+
+  @override
+  String get storefrontBlockerHoursUnreadable =>
+      'تحتوي ساعات العمل المحفوظة على إدخالات لا يستطيع هذا المحرر قراءتها: أصلحها في «ساعات العمل» ثم احفظ.';
+
+  @override
+  String get storefrontHoursTouchingError =>
+      'هذه الفترات متلاصقة. ادمجها في فترة عمل واحدة متصلة.';
+
+  @override
+  String get storefrontBlockerHoursTouching =>
+      'تحتوي ساعات العمل المحفوظة على فترات متلاصقة: ادمجها في فترة واحدة متصلة في «ساعات العمل» ثم احفظ.';
+
+  @override
+  String storefrontLogoSourceRefused(String reason) {
+    return '$reason لا يمكن إنشاء شعار واجهة المتجر إلا من شعار الإيصال: لنشر شعار، استبدل شعار الإيصال في «شعار الإيصال» أعلاه بصورة PNG أو JPEG أو WebP لا تتجاوز 8 ميغابكسل (8,388,608 بكسل)، ولا يتجاوز كل ضلع منها 8192 بكسل، ولا يزيد عرضها على ثمانية أضعاف ارتفاعها (ولا ارتفاعها على ثمانية أضعاف عرضها). ويجب ألا تتجاوز صورة PNG بعمق 16 بت نحو 4 ميغابكسل، ولا صورة JPEG تدريجية محفوظة دون تقليل دقة الألوان نحو 5 ميغابكسل. سيؤدي ذلك أيضًا إلى تغيير الشعار المطبوع على الإيصالات.';
+  }
+
+  @override
+  String get storefrontMediaStaleRequest =>
+      'لم يعد هذا الطلب مطابقًا للنسخة: فقد تغيّرت بعد إرسال الطلب (مثلًا، نُشرت مجددًا). القائمة أدناه هي الحالة الحالية على الخادم؛ اسحبها مرة أخرى إذا لزم الأمر.';
+
+  @override
+  String get storefrontLogoRecheckAction => 'تحقّق من شعار الإيصال مجددًا';
 }

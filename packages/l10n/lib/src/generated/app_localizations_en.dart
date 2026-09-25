@@ -7840,4 +7840,951 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get authSamePassword =>
       'Choose a password you haven’t used here before.';
+
+  @override
+  String get storefrontSectionTitle => 'Storefront';
+
+  @override
+  String get storefrontSectionSubtitle =>
+      'Your restaurant\'s public, browse-only page: name, look, opening hours and images.';
+
+  @override
+  String get storefrontDemoNote =>
+      'The storefront editor is not available in demo mode.';
+
+  @override
+  String get storefrontUnavailableNote =>
+      'The storefront editor is not connected here.';
+
+  @override
+  String get storefrontDeniedNote =>
+      'You cannot manage the storefront for this restaurant.';
+
+  @override
+  String get storefrontLoadFailed =>
+      'The storefront settings could not be loaded.';
+
+  @override
+  String get storefrontRetry => 'Try again';
+
+  @override
+  String get storefrontCreateIntro =>
+      'Create the storefront: choose the branch it represents and its permanent web address.';
+
+  @override
+  String get storefrontBranchLabel => 'Storefront branch';
+
+  @override
+  String get storefrontBranchHelp =>
+      'The opening hours are read in this branch\'s time zone (the restaurant\'s, if the branch has none), and the branch\'s tax setting and menu are used.';
+
+  @override
+  String get storefrontBranchesUnavailable =>
+      'The branch list could not be loaded.';
+
+  @override
+  String get storefrontBranchUnlisted => 'Current branch (not in the list)';
+
+  @override
+  String get storefrontSlugLabel => 'Web address (slug)';
+
+  @override
+  String get storefrontSlugHelp =>
+      '3–48 lowercase letters, digits and single hyphens. It cannot be changed later.';
+
+  @override
+  String get storefrontSlugInvalid =>
+      'Use 3–48 lowercase letters, digits and single hyphens; reserved words are not allowed.';
+
+  @override
+  String get storefrontSlugPermanentNote =>
+      'The web address is permanent and cannot be changed.';
+
+  @override
+  String get storefrontPathLabel => 'Public path';
+
+  @override
+  String get storefrontPathNote =>
+      'The public domain is not set up yet; this is the path the storefront will use.';
+
+  @override
+  String get storefrontCreateAction => 'Create storefront';
+
+  @override
+  String get storefrontCreateConfirmTitle => 'Create the storefront?';
+
+  @override
+  String get storefrontCreateConfirmBody =>
+      'This web address is permanent: it cannot be changed later.';
+
+  @override
+  String get storefrontCreateConfirmAction => 'Create';
+
+  @override
+  String get storefrontDisplayNameLabel => 'Display name';
+
+  @override
+  String get storefrontDisplayNameInvalid => 'Enter 1–60 characters.';
+
+  @override
+  String get storefrontTaglineLabel => 'Tagline';
+
+  @override
+  String get storefrontCityLabel => 'City';
+
+  @override
+  String get storefrontAddressLabel => 'Address';
+
+  @override
+  String get storefrontPhoneLabel => 'Public phone';
+
+  @override
+  String get storefrontPhoneHelp =>
+      'International (+972…) or local (05X-XXX-XXXX). Leave empty for none.';
+
+  @override
+  String get storefrontPhoneInvalid =>
+      'Use + and 7–15 digits, or a local number like 050-123-4567.';
+
+  @override
+  String storefrontTooLong(int max) {
+    return 'At most $max characters.';
+  }
+
+  @override
+  String get storefrontLookTitle => 'Look';
+
+  @override
+  String get storefrontPrimaryColorLabel => 'Primary colour';
+
+  @override
+  String get storefrontAccentColorLabel => 'Accent colour';
+
+  @override
+  String get storefrontColorHelp => 'A #RRGGBB colour, e.g. #13322a.';
+
+  @override
+  String get storefrontColorInvalid => 'Use a #RRGGBB colour.';
+
+  @override
+  String get storefrontPrimaryContrastWarning =>
+      'The storefront will replace this colour with its neutral green: white text on it would not reach the AA contrast level.';
+
+  @override
+  String get storefrontVisualPresetLabel => 'Theme';
+
+  @override
+  String get storefrontVisualPresetDark => 'Dark';
+
+  @override
+  String get storefrontVisualPresetLight => 'Light';
+
+  @override
+  String get storefrontLocaleLabel => 'Default language';
+
+  @override
+  String get storefrontLocaleHelp =>
+      'The public storefront currently chooses its language from the web address; this default is stored for later.';
+
+  @override
+  String get storefrontLocaleAr => 'Arabic';
+
+  @override
+  String get storefrontLocaleHe => 'Hebrew';
+
+  @override
+  String get storefrontLocaleEn => 'English';
+
+  @override
+  String get storefrontCardModeLabel => 'Menu layout';
+
+  @override
+  String get storefrontCardModeList => 'List';
+
+  @override
+  String get storefrontCardModeGrid => 'Grid';
+
+  @override
+  String get storefrontMotionLabel => 'Motion';
+
+  @override
+  String get storefrontMotionCalm => 'Calm';
+
+  @override
+  String get storefrontMotionFull => 'Standard';
+
+  @override
+  String get storefrontMotionLively => 'Lively';
+
+  @override
+  String get storefrontPickupLabel => 'Pickup available';
+
+  @override
+  String get storefrontPickupHelp =>
+      'Informational only: the storefront is browse-only in this release, so online ordering is off.';
+
+  @override
+  String get storefrontPauseTitle => 'Temporary pause';
+
+  @override
+  String get storefrontPausedUntilLabel => 'Paused until';
+
+  @override
+  String get storefrontNotPaused => 'Not paused';
+
+  @override
+  String get storefrontPauseSetAction => 'Set pause end';
+
+  @override
+  String get storefrontPauseClearAction => 'Clear pause';
+
+  @override
+  String storefrontPauseDeviceZone(String offset) {
+    return 'Entered in this device\'s time zone (UTC$offset).';
+  }
+
+  @override
+  String get storefrontPauseReasonLabel => 'Pause reason (staff only)';
+
+  @override
+  String get storefrontPauseHelp =>
+      'While paused, the public page shows a generic “paused” notice. It never shows the reason — the reason is for staff only.';
+
+  @override
+  String get storefrontHoursTitle => 'Opening hours';
+
+  @override
+  String storefrontHoursTimezone(String timezone) {
+    return 'Times are in the branch time zone: $timezone.';
+  }
+
+  @override
+  String get storefrontHoursNoTimezone =>
+      'No time zone yet — set the branch time zone in Settings.';
+
+  @override
+  String get storefrontHoursSunday => 'Sunday';
+
+  @override
+  String get storefrontHoursMonday => 'Monday';
+
+  @override
+  String get storefrontHoursTuesday => 'Tuesday';
+
+  @override
+  String get storefrontHoursWednesday => 'Wednesday';
+
+  @override
+  String get storefrontHoursThursday => 'Thursday';
+
+  @override
+  String get storefrontHoursFriday => 'Friday';
+
+  @override
+  String get storefrontHoursSaturday => 'Saturday';
+
+  @override
+  String get storefrontHoursClosed => 'Closed';
+
+  @override
+  String get storefrontHoursAddWindow => 'Add hours';
+
+  @override
+  String get storefrontHoursRemove => 'Remove';
+
+  @override
+  String get storefrontHoursOpens => 'Opens';
+
+  @override
+  String get storefrontHoursCloses => 'Closes';
+
+  @override
+  String get storefrontHoursOvernight => 'Closes the next day';
+
+  @override
+  String get storefrontHoursOpenEqualsClose =>
+      'Opening and closing times must differ.';
+
+  @override
+  String storefrontHoursDayCap(int max) {
+    return 'At most $max time ranges per day.';
+  }
+
+  @override
+  String get storefrontHoursExceptionsTitle => 'Special dates';
+
+  @override
+  String get storefrontHoursExceptionsEmpty => 'No special dates.';
+
+  @override
+  String get storefrontHoursAddException => 'Add date';
+
+  @override
+  String get storefrontHoursExceptionClosed => 'Closed all day';
+
+  @override
+  String get storefrontHoursExceptionWindow => 'Special hours';
+
+  @override
+  String get storefrontHoursExceptionDuplicate =>
+      'That date is already listed.';
+
+  @override
+  String storefrontHoursExceptionsCap(int max) {
+    return 'At most $max special dates.';
+  }
+
+  @override
+  String get storefrontHoursInvalid => 'Fix the opening hours before saving.';
+
+  @override
+  String get storefrontSaveAction => 'Save storefront';
+
+  @override
+  String get storefrontDiscardAction => 'Discard changes';
+
+  @override
+  String get storefrontUnsavedNote => 'You have unsaved changes.';
+
+  @override
+  String get storefrontSaved => 'Storefront saved.';
+
+  @override
+  String get storefrontFixFields => 'Fix the highlighted fields before saving.';
+
+  @override
+  String get storefrontErrorConflict =>
+      'Someone else changed the storefront. The latest version is now shown; your unsaved changes were not applied.';
+
+  @override
+  String get storefrontErrorDenied =>
+      'You are not allowed to change this storefront.';
+
+  @override
+  String get storefrontErrorUnavailable =>
+      'The storefront could not be saved right now. Nothing was changed.';
+
+  @override
+  String get storefrontErrorNotCommitted =>
+      'The connection failed and the change was not saved. Try again.';
+
+  @override
+  String get storefrontErrorUncertain =>
+      'We could not confirm whether the change was saved. Try again: it reuses the same request, so it cannot be applied twice.';
+
+  @override
+  String storefrontErrorInvalid(String reason) {
+    return 'The server refused this change ($reason).';
+  }
+
+  @override
+  String get storefrontReasonSlugInvalid => 'The web address is not valid.';
+
+  @override
+  String get storefrontReasonSlugImmutable =>
+      'The web address cannot be changed after creation.';
+
+  @override
+  String get storefrontReasonSlugTaken =>
+      'This web address is already used by another restaurant.';
+
+  @override
+  String get storefrontReasonBranchInvalid =>
+      'The chosen branch does not belong to this restaurant.';
+
+  @override
+  String get storefrontReasonDisplayNameInvalid =>
+      'The display name must be 1–60 characters.';
+
+  @override
+  String get storefrontReasonTaglineInvalid =>
+      'The tagline is too long (at most 90 characters).';
+
+  @override
+  String get storefrontReasonPublicCityInvalid =>
+      'The city is too long (at most 60 characters).';
+
+  @override
+  String get storefrontReasonPublicAddressInvalid =>
+      'The address is too long (at most 80 characters).';
+
+  @override
+  String get storefrontReasonPublicPhoneInvalid =>
+      'The phone number is not in a supported format.';
+
+  @override
+  String get storefrontReasonPrimaryColorInvalid =>
+      'The primary colour must be a #RRGGBB colour.';
+
+  @override
+  String get storefrontReasonAccentColorInvalid =>
+      'The accent colour must be a #RRGGBB colour.';
+
+  @override
+  String get storefrontReasonVisualPresetInvalid => 'The theme is not valid.';
+
+  @override
+  String get storefrontReasonLocaleDefaultInvalid =>
+      'The default language is not valid.';
+
+  @override
+  String get storefrontReasonCardModeInvalid => 'The menu layout is not valid.';
+
+  @override
+  String get storefrontReasonMotionInvalid =>
+      'The motion setting is not valid.';
+
+  @override
+  String get storefrontReasonPickupEnabledInvalid =>
+      'The pickup setting is not valid.';
+
+  @override
+  String get storefrontReasonPausedUntilInvalid =>
+      'The pause end time is not valid.';
+
+  @override
+  String get storefrontReasonPauseReasonInvalid =>
+      'The pause reason is too long (at most 120 characters).';
+
+  @override
+  String get storefrontReasonOpeningHoursInvalid =>
+      'The server refused the opening hours. Check each time range.';
+
+  @override
+  String get storefrontReasonLogoMediaIdInvalid =>
+      'The logo image is no longer published. Pick or publish another one.';
+
+  @override
+  String get storefrontReasonHeroMediaIdInvalid =>
+      'The hero image is no longer published. Pick or publish another one.';
+
+  @override
+  String get storefrontReasonIsPublishedInvalid =>
+      'The publish setting is not valid.';
+
+  @override
+  String get storefrontReasonBranchMissing =>
+      'Choose the storefront branch first.';
+
+  @override
+  String get storefrontReasonSlugMissing => 'Set the web address first.';
+
+  @override
+  String get storefrontReasonPublishPrecondition =>
+      'Publishing requirements are not met; the change was refused:';
+
+  @override
+  String get storefrontReasonUnknownField =>
+      'This build sent a field the server does not accept.';
+
+  @override
+  String get storefrontReasonPatchNotObject =>
+      'This build sent a malformed change.';
+
+  @override
+  String get storefrontBlockersTitle => 'Before you can publish';
+
+  @override
+  String get storefrontBlockersSavedNote =>
+      'These checks use the SAVED storefront: save your changes first.';
+
+  @override
+  String get storefrontReadyToPublish => 'Ready to publish.';
+
+  @override
+  String get storefrontBlockerSlugMissing => 'Set a web address (slug).';
+
+  @override
+  String get storefrontBlockerBranchMissing =>
+      'Choose the storefront branch above.';
+
+  @override
+  String get storefrontBlockerTimezoneMissing =>
+      'Set the branch time zone in Settings.';
+
+  @override
+  String get storefrontBlockerCurrencyNotIls =>
+      'Set the restaurant\'s operating currency to ILS (₪) in Settings: the storefront supports ₪ only for now.';
+
+  @override
+  String get storefrontBlockerTaxNotExclusive =>
+      'The branch tax is included in prices, but the storefront needs tax added on top of prices. The branch tax mode can only be changed by your RestoFlow administrator.';
+
+  @override
+  String get storefrontBlockerNoLiveItem =>
+      'Add at least one active menu item in Menu.';
+
+  @override
+  String get storefrontBlockerHoursMissing =>
+      'Add at least one weekly opening time in Opening hours.';
+
+  @override
+  String storefrontBlockerUnknown(String code) {
+    return 'Another requirement is not met ($code).';
+  }
+
+  @override
+  String get storefrontPublishedStatus => 'Published.';
+
+  @override
+  String get storefrontUnpublishedStatus =>
+      'Not published: the storefront is hidden.';
+
+  @override
+  String get storefrontPublishAction => 'Publish storefront';
+
+  @override
+  String get storefrontUnpublishAction => 'Unpublish';
+
+  @override
+  String get storefrontPublishConfirmTitle => 'Publish the storefront?';
+
+  @override
+  String get storefrontPublishConfirmBody =>
+      'Once the storefront is available to visitors, anyone with this address can see your menu, hours and images:';
+
+  @override
+  String get storefrontUnpublishConfirmTitle => 'Unpublish the storefront?';
+
+  @override
+  String get storefrontUnpublishConfirmBody =>
+      'The public page goes offline. Your settings and images are kept, and you can publish again later.';
+
+  @override
+  String get storefrontPublishNeedsSave =>
+      'Save your changes before publishing.';
+
+  @override
+  String get storefrontPublishNeedsBlockers =>
+      'Resolve the items above before publishing.';
+
+  @override
+  String get storefrontPublishDone => 'The storefront is published.';
+
+  @override
+  String get storefrontUnpublishDone => 'The storefront is unpublished.';
+
+  @override
+  String get storefrontUnpublishAndSaveAction => 'Unpublish and save changes';
+
+  @override
+  String get storefrontMediaTitle => 'Images';
+
+  @override
+  String get storefrontMediaNeedsProfile =>
+      'Create the storefront first to add a logo or hero image.';
+
+  @override
+  String get storefrontMediaUnavailable =>
+      'Image publishing is not available here.';
+
+  @override
+  String get storefrontMediaSaveFirst =>
+      'Save or discard your changes before changing images.';
+
+  @override
+  String get storefrontSlotLogoTitle => 'Logo';
+
+  @override
+  String get storefrontSlotHeroTitle => 'Hero image';
+
+  @override
+  String get storefrontSlotLogoHelp =>
+      'Made from your current receipt logo (a 480 px public copy).';
+
+  @override
+  String get storefrontSlotHeroHelp =>
+      'Made from your receipt logo or a menu item photo (a 960 px public copy).';
+
+  @override
+  String get storefrontSlotEmpty => 'No image on the storefront yet.';
+
+  @override
+  String get storefrontSlotCurrentLabel => 'On the storefront';
+
+  @override
+  String get storefrontSlotPreviewUnavailable => 'Preview unavailable.';
+
+  @override
+  String get storefrontSlotSourceLabel => 'Source image';
+
+  @override
+  String get storefrontSourceReceiptLogo => 'Current receipt logo';
+
+  @override
+  String storefrontSourceMenuItem(String name) {
+    return 'Menu item: $name';
+  }
+
+  @override
+  String get storefrontSourceNoReceiptLogo =>
+      'Upload a receipt logo in “Receipt logo” first.';
+
+  @override
+  String get storefrontSourcesUnavailable =>
+      'Some source images could not be loaded.';
+
+  @override
+  String get storefrontSourceNone =>
+      'No source images yet: upload a receipt logo or add a photo to a menu item.';
+
+  @override
+  String get storefrontSlotPublishAction => 'Publish image';
+
+  @override
+  String get storefrontSlotPublishConfirmTitle => 'Publish this image?';
+
+  @override
+  String get storefrontSlotPublishConfirmBody =>
+      'A resized public copy is created and placed in this slot; it is shown whenever the storefront page is available. The original stays private.';
+
+  @override
+  String get storefrontSlotPublishing =>
+      'Publishing the image… this can take a moment.';
+
+  @override
+  String get storefrontSlotPublished =>
+      'The image is published and placed in this slot. It is shown whenever the storefront page is available.';
+
+  @override
+  String get storefrontSlotNotPlaced =>
+      'The image was published, but the storefront changed meanwhile, so it was not placed. Use it from the list below.';
+
+  @override
+  String get storefrontSlotPlaceFailed =>
+      'The image was published but could not be placed on the storefront. Use it from the list below.';
+
+  @override
+  String get storefrontSlotRemoveAction => 'Remove from storefront';
+
+  @override
+  String get storefrontSlotRemoveConfirmTitle =>
+      'Remove this image from the storefront?';
+
+  @override
+  String get storefrontSlotRemoveConfirmBody =>
+      'The public copy stays in the list below: you can use it again or retract it.';
+
+  @override
+  String get storefrontSlotRemoved =>
+      'The image was removed from the storefront.';
+
+  @override
+  String get storefrontSlotUseAction => 'Use here';
+
+  @override
+  String get storefrontSlotAssigned =>
+      'The image is now placed in this slot. It is shown whenever the storefront page is available.';
+
+  @override
+  String get storefrontMediaListTitle => 'Public copies';
+
+  @override
+  String get storefrontMediaListEmpty => 'No copies yet.';
+
+  @override
+  String get storefrontMediaListUnavailable =>
+      'The image list could not be loaded.';
+
+  @override
+  String get storefrontMediaStateStaged => 'Unfinished';
+
+  @override
+  String get storefrontMediaStateLive => 'Live';
+
+  @override
+  String get storefrontMediaStateRetracted => 'Retracted';
+
+  @override
+  String get storefrontMediaInUse => 'In use';
+
+  @override
+  String storefrontMediaDimensions(int width, int height) {
+    return '$width × $height px';
+  }
+
+  @override
+  String get storefrontMediaFromReceiptLogo => 'From the receipt logo';
+
+  @override
+  String get storefrontMediaFromMenuImage => 'From a menu photo';
+
+  @override
+  String get storefrontMediaRetractAction => 'Retract';
+
+  @override
+  String get storefrontMediaRetractConfirmTitle => 'Retract this copy?';
+
+  @override
+  String get storefrontMediaRetractConfirmBody =>
+      'It stops being part of the public storefront. The file is kept, and publishing the same source again brings it back.';
+
+  @override
+  String get storefrontMediaRetracted => 'The copy was retracted.';
+
+  @override
+  String get storefrontMediaDiscardAction => 'Discard';
+
+  @override
+  String get storefrontMediaDiscardConfirmTitle =>
+      'Discard this unfinished copy?';
+
+  @override
+  String get storefrontMediaDiscardConfirmBody =>
+      'It was never shown on the storefront. Only its record is removed.';
+
+  @override
+  String get storefrontMediaDiscarded => 'The unfinished copy was discarded.';
+
+  @override
+  String storefrontMediaInUseError(String slots) {
+    return 'This copy is still shown as: $slots. Remove it from the storefront first.';
+  }
+
+  @override
+  String get storefrontMediaInUseNote =>
+      'In use in a slot: remove it from the slot before retracting.';
+
+  @override
+  String get storefrontMediaNotPublishedError =>
+      'This copy was never published: discard it instead.';
+
+  @override
+  String get storefrontMediaPublishedError =>
+      'This copy is published: retract it instead.';
+
+  @override
+  String get storefrontMediaNotFoundError =>
+      'This copy no longer exists. The list was refreshed.';
+
+  @override
+  String get storefrontMediaDeniedError =>
+      'You are not allowed to manage storefront images.';
+
+  @override
+  String get storefrontMediaUnavailableError =>
+      'The action could not be completed right now. Nothing was changed.';
+
+  @override
+  String get storefrontMediaUncertain =>
+      'We could not confirm the result. The list below is the server\'s current state. Try again reuses the same request.';
+
+  @override
+  String get storefrontPublishDenied =>
+      'You are not allowed to publish images for this restaurant.';
+
+  @override
+  String get storefrontPublishSourceMissing =>
+      'The original image is gone or cannot be read. Pick another source.';
+
+  @override
+  String get storefrontPublishRestart =>
+      'This publish could not continue: the source image or its copy changed meanwhile (for example, the copy was retracted). The list below is the server\'s current state. Press Publish image again to start over.';
+
+  @override
+  String get storefrontPublishUnauthenticated =>
+      'Your session expired. Sign in again, then retry.';
+
+  @override
+  String get storefrontPublishObjectConflict =>
+      'A different file already exists for this image, so it was not published. The list below is the server\'s current state; contact support.';
+
+  @override
+  String get storefrontPublishInvalidRequest =>
+      'The request could not be processed. Nothing was changed; contact support.';
+
+  @override
+  String get storefrontRefusalPickAnother => 'Pick another source image.';
+
+  @override
+  String storefrontRefusalUnknown(String code) {
+    return 'This image cannot be used ($code).';
+  }
+
+  @override
+  String get storefrontRefusalUnsupportedFormat =>
+      'This image format is not supported.';
+
+  @override
+  String get storefrontRefusalEmpty => 'The image file is empty.';
+
+  @override
+  String get storefrontRefusalInputTooLarge => 'The image file is too large.';
+
+  @override
+  String get storefrontRefusalTooManyPixels => 'The image has too many pixels.';
+
+  @override
+  String get storefrontRefusalDimensionsTooLarge =>
+      'The image is too wide or too tall.';
+
+  @override
+  String get storefrontRefusalAspectRatio =>
+      'The image is too narrow or too elongated.';
+
+  @override
+  String get storefrontRefusalAnimated => 'Animated images are not supported.';
+
+  @override
+  String get storefrontRefusalTruncated => 'The image file is incomplete.';
+
+  @override
+  String get storefrontRefusalCorrupt => 'The image file is damaged.';
+
+  @override
+  String get storefrontRefusalMetadataTooLarge =>
+      'The image carries too much embedded metadata.';
+
+  @override
+  String get storefrontRefusalTooManyScans =>
+      'This progressive image is too complex.';
+
+  @override
+  String get storefrontRefusalDecodeFailed => 'The image could not be read.';
+
+  @override
+  String get storefrontRefusalDecodeWarning =>
+      'The image could not be read cleanly.';
+
+  @override
+  String get storefrontRefusalOutputTooLarge =>
+      'The public copy would be too large.';
+
+  @override
+  String get storefrontRefusalSelfCheckFailed =>
+      'The public copy failed its quality check.';
+
+  @override
+  String get storefrontPublishServiceUnavailable =>
+      'The image publishing service did not answer as expected (it may not be available yet). The list below is the server\'s current state; try again later.';
+
+  @override
+  String get storefrontErrorConflictNotReloaded =>
+      'Someone else changed the storefront first, and the latest version could not be loaded. Your unsaved changes were not applied.';
+
+  @override
+  String get storefrontStaleNote =>
+      'The latest version could not be loaded, so what is shown here may be out of date. Editing is locked until you reload.';
+
+  @override
+  String get storefrontReloadAction => 'Reload';
+
+  @override
+  String get storefrontHoursUnreadable =>
+      'The saved opening hours contain entries this editor cannot read (probably written outside it). They are kept exactly as saved and are not shown below, and publishing is disabled until they are repaired: replace them with the hours shown below, adjust them if needed, then save.';
+
+  @override
+  String get storefrontHoursRepairAction => 'Replace them with the hours shown';
+
+  @override
+  String get storefrontSlotPreconditionRefused =>
+      'The storefront is published but no longer meets its publishing requirements, so its images cannot be changed. Fix these, or unpublish the storefront first (Unpublish, above):';
+
+  @override
+  String get storefrontSlotPublishedNotPlaced =>
+      'The image was published but not placed on the storefront; the copy stays in the list below.';
+
+  @override
+  String get storefrontSourceLogoChanged =>
+      'The receipt logo changed since this page was loaded, so this image was not published. The source list is now up to date: check it, then press Publish image again.';
+
+  @override
+  String get storefrontSourceLogoRemoved =>
+      'The receipt logo was removed since this page was loaded, so this image was not published.';
+
+  @override
+  String get storefrontSourceLogoUnverified =>
+      'The current receipt logo could not be checked, so this image was not published. Try again.';
+
+  @override
+  String get storefrontPublishedOfflineStatus =>
+      'Published, but not available: because of the items below, visitors get a “not found” page. Fix them to bring it back.';
+
+  @override
+  String get storefrontPublishedIncompleteStatus =>
+      'Published, but incomplete: fix the items below.';
+
+  @override
+  String get storefrontPublishedUncheckedStatus =>
+      'Published, but a requirement is no longer met: the public page may be unavailable until the items below are fixed.';
+
+  @override
+  String get storefrontBlockersTitlePublished =>
+      'Fix these on the published storefront';
+
+  @override
+  String get storefrontPublishedChecksMet =>
+      'All publishing requirements are met.';
+
+  @override
+  String get storefrontPauseEndedLabel => 'Pause ended at';
+
+  @override
+  String get storefrontPausePast =>
+      'That time has already passed, so the storefront would not be paused. Pick a later time.';
+
+  @override
+  String get storefrontDiscardReloaded =>
+      'Your unsaved changes were discarded and the latest saved version is shown. If the earlier save went through, it is included.';
+
+  @override
+  String get storefrontDiscardNotReloaded =>
+      'The latest version could not be loaded, so nothing was discarded. It is still unknown whether the change was saved: Try again reuses the same request.';
+
+  @override
+  String get storefrontStatusLabel => 'Storefront status';
+
+  @override
+  String get storefrontPublishedAvailabilityNote =>
+      'Published means the storefront is switched on. It does not guarantee that visitors can open it right now: the page is unavailable while the organization, restaurant or branch is suspended, or when it cannot be served for another reason, and whether the public web address is open to visitors is decided separately.';
+
+  @override
+  String storefrontBranchSuspendedOption(String name) {
+    return '$name (suspended)';
+  }
+
+  @override
+  String get storefrontBranchSuspendedNote =>
+      'This branch is suspended. While it is, the storefront is not available to visitors, even when published.';
+
+  @override
+  String get storefrontHoursOverlapWarning =>
+      'Some of these time ranges overlap. You can still save, but the public page shows only one range\'s closing time, so it may announce an earlier closing time than the real one. Merge or adjust them.';
+
+  @override
+  String get storefrontHoursDuplicateWarning =>
+      'The same time range is listed twice. You can still save, but remove the extra one.';
+
+  @override
+  String storefrontHoursSpillWarning(String day) {
+    return 'These overnight hours run into $day\'s hours. You can still save, but the public page may announce an earlier closing time than the real one. Adjust one of them.';
+  }
+
+  @override
+  String get storefrontHoursRepairPending =>
+      'Saving replaces the unreadable saved entries with the hours shown below.';
+
+  @override
+  String get storefrontBlockerHoursUnreadable =>
+      'The saved opening hours contain entries this editor cannot read: repair them in Opening hours, then save.';
+
+  @override
+  String get storefrontHoursTouchingError =>
+      'These periods touch. Merge them into one continuous opening period.';
+
+  @override
+  String get storefrontBlockerHoursTouching =>
+      'The saved opening hours have periods that touch: merge them into one continuous period in Opening hours, then save.';
+
+  @override
+  String storefrontLogoSourceRefused(String reason) {
+    return '$reason The storefront logo can only be made from the receipt logo: to publish one, replace the receipt logo in “Receipt logo” above with a PNG, JPEG or WebP image of at most 8 megapixels (8,388,608 pixels), at most 8192 pixels on each side, and no more than 8 times as wide as it is tall (or as tall as it is wide). A 16-bit PNG must stay under about 4 megapixels, and a progressive JPEG saved without colour subsampling under about 5 megapixels. This also changes the logo printed on receipts.';
+  }
+
+  @override
+  String get storefrontMediaStaleRequest =>
+      'This request no longer matches the copy: it changed after the request was sent (for example, it was published again). The list below is the server\'s current state; retract it again if needed.';
+
+  @override
+  String get storefrontLogoRecheckAction => 'Check the receipt logo again';
 }
