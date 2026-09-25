@@ -1,0 +1,2099 @@
+THIRD-PARTY NOTICES - vendored server-side image codecs (Supabase Edge Function)
+
+This file covers exactly these ten vendored files. Each is byte-identical to the
+npm tarball copy; the sha256 values are listed below:
+
+  png/squoosh_png_bg.wasm        263d6e658808a74b72a1a99c5cc1d619237e70c150db6e41d5d84d3d117ab9be
+  png/squoosh_png.js             65ebe1192f970c46263d52a122edf6bd01be81174c6bf1736a16f1e6f0e9b411
+      from @jsquash/png 3.1.1 (codec/pkg/), jSquash git b7fa9ac9ec02f224847ad23d19d115f9e296a368
+  jpeg-dec/mozjpeg_dec.wasm      a7c4b12169817e779ff4af137981393ae924944e167ad1bd95747c9199162d3e
+  jpeg-dec/mozjpeg_dec.js        a6836b2d03d4fdda64b4aef380e6298d7421c070e7e1e4cf13ec129df7aa0b5e
+      from @jsquash/jpeg 1.6.0 (codec/dec/), jSquash git 1f62015f53e28bd18b2d7c8a3ca3326577efc445
+  webp-enc/webp_enc.wasm         b6085bb6702f144e9dc6016d58d230b34a84976bf0d080b7390b4b4b137d6ab7
+  webp-enc/webp_enc.js           5fd62301662e37785aec38e38807926f72933d4c8b919018a43faf1b1ca760f6
+  webp-dec/webp_dec.wasm         30fb52fa2a80166d25ba7debf902218904ba1f05ccce9f959f722beff9e2f344
+  webp-dec/webp_dec.js           c57971611f4d9ec04e4636ce7bb4a35c031b24cbdb013518f0a017d9f6014370
+      from @jsquash/webp 1.5.0 (codec/enc/ non-SIMD build, and codec/dec/), jSquash git 8bcd212da8c2be7c9c223e8f222eb3d9574a713b
+  resize/squoosh_resize_bg.wasm  5b1f702d502c4d0a70b99f78691bd554d566ba95859e4c57af5435955a1d74a5
+  resize/squoosh_resize.js       e974c442bb6a7f2b57a7c86a879f55a008ffd6fccea5f9ed9fee14900ae56225
+      from @jsquash/resize 2.1.1 (lib/resize/pkg/), jSquash git da47a2be3b302beb5a5ae164a2ab7aa21a041d90
+
+The LICENSE.codec.md files inside those npm packages are NOT used here:
+- The @jsquash/png file is libwebp's license text and does not apply to the PNG module.
+- The @jsquash/jpeg file is a later libjpeg-turbo text than the linked mozjpeg 3.3.1.
+- The @jsquash/webp and @jsquash/resize files are incomplete.
+
+License texts below are copied verbatim from the primary sources named in each
+section. A text that is identical for several components is reproduced once and
+referenced by section number.
+
+==============================================================================
+REQUIRED STATEMENTS
+==============================================================================
+1. mozjpeg_dec.wasm (IJG License, condition (2), README.ijg of mozjpeg 3.3.1):
+   This software is based in part on the work of the Independent JPEG Group.
+2. webp_enc.wasm and webp_dec.wasm contain libwebp. Google's "Additional IP Rights
+   Grant (Patents)" accompanies it and is reproduced in section 2b.
+3. webp_enc.wasm and squoosh_resize_bg.wasm contain code from the FreeBSD msun
+   math library. That code carries a Sun Microsystems notice that must be
+   preserved; it is reproduced in section 7.
+4. squoosh_png_bg.wasm contains tables from the Rust core library that are
+   derived from Unicode data. The Unicode, Inc. notice is reproduced in section 10.
+
+COMPONENT MAP (component / vendored files / section)
+  jSquash pre.js + jSquash C++ changes .................. all 10 files ................ 1 (Apache-2.0)
+  Squoosh C++ and Rust wrappers ......................... all 5 .wasm ................. 1 (Apache-2.0)
+  libwebp 1.1.0 (commit d2e245ea) ....................... webp_enc, webp_dec .......... 2
+  mozjpeg 3.3.1 ......................................... mozjpeg_dec ................. 3
+  Emscripten runtime + embind ........................... mozjpeg_dec, webp_enc, webp_dec (.wasm+.js) 4
+  LLVM libc++, libc++abi, compiler-rt ................... mozjpeg_dec, webp_enc, webp_dec ... 5 (+1)
+  musl libc ............................................. mozjpeg_dec, webp_enc, webp_dec;
+                                                          squoosh_resize_bg (libm is a musl port) 6
+  FreeBSD msun / Sun Microsystems notices ............... webp_enc, squoosh_resize_bg .. 7
+  Arm Limited math routines (in musl) ................... webp_enc .................... 8
+  dlmalloc (Doug Lea; public domain / CC0) .............. all 5 .wasm ................. 9
+  Rust standard library + Unicode tables ................ squoosh_png_bg, squoosh_resize_bg 10 (+1)
+  compiler_builtins ..................................... squoosh_png_bg, squoosh_resize_bg 11
+  Rust crates (MIT texts, one per copyright holder) ..... squoosh_png_bg, squoosh_resize_bg, both Rust .js 12 (+1)
+  adler 1.0.2 (compiled, no code reaches the binary) .... squoosh_png_bg .............. 13
+
+==============================================================================
+1. Apache License, Version 2.0 (the single full copy in this file)
+==============================================================================
+Source: https://raw.githubusercontent.com/jamsinclair/jSquash/1f62015f53e28bd18b2d7c8a3ca3326577efc445/LICENSE
+The same file is at all four jSquash gitHeads, and it is identical to package/LICENSE in all four npm
+tarballs. It matches https://www.apache.org/licenses/LICENSE-2.0.txt except for two things: the leading
+empty line is dropped, and the appendix line is filled in as "Copyright [2023] jamsinclair".
+
+Applies to:
+- Components under Apache-2.0 ONLY:
+  - jSquash: the pre.js shim in all five .js glue files, and the EXIF-orientation code in mozjpeg_dec.cpp.
+  - The Squoosh wrappers compiled into the .wasm files: webp_enc.cpp, webp_dec.cpp, mozjpeg_dec.cpp,
+    and the squoosh-png and squoosh-resize crates.
+  - The Squoosh repository LICENSE (https://raw.githubusercontent.com/GoogleChromeLabs/squoosh/dev/LICENSE)
+    is the unmodified apache.org text, with the placeholder "Copyright [yyyy] [name of copyright owner]".
+  - Neither jSquash nor Squoosh has a NOTICE file.
+- Components under Apache-2.0 WITH LLVM-exception: LLVM libc++, libc++abi and compiler-rt (section 5).
+- Components that offer Apache-2.0 as one of several options (section 12 reproduces their MIT text):
+  Rust standard library, compiler_builtins (per its Cargo.toml), dlmalloc, hashbrown, wasm-bindgen
+  (and its generated JS), js-sys, web-sys, png, fdeflate, flate2, miniz_oxide, crc32fast, bitflags,
+  cfg-if, bytemuck, console_error_panic_hook, adler, libm, libc, rustc-demangle, std_detect.
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [2023] jamsinclair
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+==============================================================================
+2. libwebp 1.1.0 (build source: commit d2e245ea9e959a5a79e1db0ed2085206947e98f2) - webp_enc.wasm, webp_dec.wasm
+==============================================================================
+License: BSD-3-Clause, plus Google's "Additional IP Rights Grant (Patents)".
+The jSquash/Squoosh webp_enc.cpp wrapper also contains code "duplicated from Encode in picture_enc.c" (libwebp).
+
+--- 2a. COPYING (verbatim) ---
+Source: https://raw.githubusercontent.com/webmproject/libwebp/d2e245ea9e959a5a79e1db0ed2085206947e98f2/COPYING
+
+Copyright (c) 2010, Google Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--- 2b. PATENTS (verbatim) ---
+Source: https://raw.githubusercontent.com/webmproject/libwebp/d2e245ea9e959a5a79e1db0ed2085206947e98f2/PATENTS
+
+Additional IP Rights Grant (Patents)
+------------------------------------
+
+"These implementations" means the copyrightable works that implement the WebM
+codecs distributed by Google as part of the WebM Project.
+
+Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable (except as stated in this section) patent license to
+make, have made, use, offer to sell, sell, import, transfer, and otherwise
+run, modify and propagate the contents of these implementations of WebM, where
+such license applies only to those patent claims, both currently owned by
+Google and acquired in the future, licensable by Google that are necessarily
+infringed by these implementations of WebM. This grant does not include claims
+that would be infringed only as a consequence of further modification of these
+implementations. If you or your agent or exclusive licensee institute or order
+or agree to the institution of patent litigation or any other patent
+enforcement activity against any entity (including a cross-claim or
+counterclaim in a lawsuit) alleging that any of these implementations of WebM
+or any code incorporated within any of these implementations of WebM
+constitute direct or contributory patent infringement, or inducement of
+patent infringement, then any patent rights granted to you under this License
+for these implementations of WebM shall terminate as of the date such
+litigation is filed.
+
+--- 2c. AUTHORS (verbatim; every libwebp source-file header refers to it) ---
+Source: https://raw.githubusercontent.com/webmproject/libwebp/d2e245ea9e959a5a79e1db0ed2085206947e98f2/AUTHORS
+
+Contributors:
+- Aidan O'Loan (aidanol at gmail dot com)
+- Alan Browning (browning at google dot com)
+- Charles Munger (clm at google dot com)
+- Cheng Yi (cyi at google dot com)
+- Christian Duvivier (cduvivier at google dot com)
+- Djordje Pesut (djordje dot pesut at imgtec dot com)
+- Hui Su (huisu at google dot com)
+- James Zern (jzern at google dot com)
+- Jan Engelhardt (jengelh at medozas dot de)
+- Jehan (jehan at girinstud dot io)
+- Johann Koenig (johann dot koenig at duck dot com)
+- Jovan Zelincevic (jovan dot zelincevic at imgtec dot com)
+- Jyrki Alakuijala (jyrki at google dot com)
+- Konstantin Ivlev (tomskside at gmail dot com)
+- Lode Vandevenne (lode at google dot com)
+- Lou Quillio (louquillio at google dot com)
+- Mans Rullgard (mans at mansr dot com)
+- Marcin Kowalczyk (qrczak at google dot com)
+- Martin Olsson (mnemo at minimum dot se)
+- Mikołaj Zalewski (mikolajz at google dot com)
+- Mislav Bradac (mislavm at google dot com)
+- Nico Weber (thakis at chromium dot org)
+- Noel Chromium (noel at chromium dot org)
+- Oliver Wolff (oliver dot wolff at qt dot io)
+- Owen Rodley (orodley at google dot com)
+- Parag Salasakar (img dot mips1 at gmail dot com)
+- Pascal Massimino (pascal dot massimino at gmail dot com)
+- Paweł Hajdan, Jr (phajdan dot jr at chromium dot org)
+- Pierre Joye (pierre dot php at gmail dot com)
+- Sam Clegg (sbc at chromium dot org)
+- Scott Hancher (seh at google dot com)
+- Scott LaVarnway (slavarnway at google dot com)
+- Scott Talbot (s at chikachow dot org)
+- Slobodan Prijic (slobodan dot prijic at imgtec dot com)
+- Somnath Banerjee (somnath dot banerjee at gmail dot com)
+- Sriraman Tallam (tmsriram at google dot com)
+- Tamar Levy (tamar dot levy at intel dot com)
+- Timothy Gu (timothygu99 at gmail dot com)
+- Urvang Joshi (urvang at google dot com)
+- Vikas Arora (vikasa at google dot com)
+- Vincent Rabaud (vrabaud at google dot com)
+- Vlad Tsyrklevich (vtsyrklevich at chromium dot org)
+- Yang Zhang (yang dot zhang at arm dot com)
+- Yannis Guyon (yguyon at google dot com)
+
+==============================================================================
+3. mozjpeg 3.3.1 (tag v3.3.1 = commit f154ccc091cbc22141cdfd531e5ad1fdc5bc53c7) - mozjpeg_dec.wasm
+==============================================================================
+Linked: libjpeg.a + rdswitch.o. Configure flags: --without-turbojpeg --without-simd --without-arith-enc
+--without-arith-dec.
+
+Licenses that apply to the linked code:
+- IJG, per README.ijg.
+- zlib, for jsimd_none.c, jsimd.h and jsimddct.h. These files point to the notice in simd/jsimdext.inc.
+
+The Modified BSD License in LICENSE.md covers the TurboJPEG API, which is not built.
+
+Copyright lines, from the JCOPYRIGHT and JCOPYRIGHT_SHORT strings in jversion.h at v3.3.1. The
+JCOPYRIGHT_SHORT string is present verbatim in mozjpeg_dec.wasm.
+  Copyright (C) 2009-2017 D. R. Commander
+  Copyright (C) 2011-2016 Siarhei Siamashka
+  Copyright (C) 2015-2016 Matthieu Darbois
+  Copyright (C) 2015 Google, Inc.
+  Copyright (C) 2014 Mozilla Corporation
+  Copyright (C) 2013-2014 MIPS Technologies, Inc.
+  Copyright (C) 2013 Linaro Limited
+  Copyright (C) 2009-2011 Nokia Corporation and/or its subsidiary(-ies)
+  Copyright (C) 2009 Pierre Ossman for Cendio AB
+  Copyright (C) 1999-2006 MIYASAKA Masaru
+  Copyright (C) 1991-2016 Thomas G. Lane, Guido Vollbeding
+  Copyright (C) 1991-2017 The libjpeg-turbo Project and many others
+
+--- 3a. LICENSE.md (verbatim) ---
+Source: https://raw.githubusercontent.com/mozilla/mozjpeg/v3.3.1/LICENSE.md
+
+libjpeg-turbo Licenses
+======================
+
+libjpeg-turbo is covered by three compatible BSD-style open source licenses:
+
+- The IJG (Independent JPEG Group) License, which is listed in
+  [README.ijg](README.ijg)
+
+  This license applies to the libjpeg API library and associated programs
+  (any code inherited from libjpeg, and any modifications to that code.)
+
+- The Modified (3-clause) BSD License, which is listed below
+
+  This license covers the TurboJPEG API library and associated programs.
+
+- The zlib License, which is listed below
+
+  This license is a subset of the other two, and it covers the libjpeg-turbo
+  SIMD extensions.
+
+
+Complying with the libjpeg-turbo Licenses
+=========================================
+
+This section provides a roll-up of the libjpeg-turbo licensing terms, to the
+best of our understanding.
+
+1.  If you are distributing a modified version of the libjpeg-turbo source,
+    then:
+
+    1.  You cannot alter or remove any existing copyright or license notices
+        from the source.
+
+        **Origin**
+        - Clause 1 of the IJG License
+        - Clause 1 of the Modified BSD License
+        - Clauses 1 and 3 of the zlib License
+
+    2.  You must add your own copyright notice to the header of each source
+        file you modified, so others can tell that you modified that file (if
+        there is not an existing copyright header in that file, then you can
+        simply add a notice stating that you modified the file.)
+
+        **Origin**
+        - Clause 1 of the IJG License
+        - Clause 2 of the zlib License
+
+    3.  You must include the IJG README file, and you must not alter any of the
+        copyright or license text in that file.
+
+        **Origin**
+        - Clause 1 of the IJG License
+
+2.  If you are distributing only libjpeg-turbo binaries without the source, or
+    if you are distributing an application that statically links with
+    libjpeg-turbo, then:
+
+    1.  Your product documentation must include a message stating:
+
+        This software is based in part on the work of the Independent JPEG
+        Group.
+
+        **Origin**
+        - Clause 2 of the IJG license
+
+    2.  If your binary distribution includes or uses the TurboJPEG API, then
+        your product documentation must include the text of the Modified BSD
+        License.
+
+        **Origin**
+        - Clause 2 of the Modified BSD License
+
+3.  You cannot use the name of the IJG or The libjpeg-turbo Project or the
+    contributors thereof in advertising, publicity, etc.
+
+    **Origin**
+    - IJG License
+    - Clause 3 of the Modified BSD License
+
+4.  The IJG and The libjpeg-turbo Project do not warrant libjpeg-turbo to be
+    free of defects, nor do we accept any liability for undesirable
+    consequences resulting from your use of the software.
+
+    **Origin**
+    - IJG License
+    - Modified BSD License
+    - zlib License
+
+
+The Modified (3-clause) BSD License
+===================================
+
+Copyright (C)\<YEAR\> \<AUTHOR\>.  All Rights Reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+
+The zlib License
+================
+
+Copyright (C) \<YEAR\>, \<AUTHOR\>.
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+--- 3b. README.ijg (verbatim; contains the IJG License under "LEGAL ISSUES") ---
+Source: https://raw.githubusercontent.com/mozilla/mozjpeg/v3.3.1/README.ijg
+
+libjpeg-turbo note:  This file has been modified by The libjpeg-turbo Project
+to include only information relevant to libjpeg-turbo, to wordsmith certain
+sections, and to remove impolitic language that existed in the libjpeg v8
+README.  It is included only for reference.  Please see README.md for
+information specific to libjpeg-turbo.
+
+
+The Independent JPEG Group's JPEG software
+==========================================
+
+This distribution contains a release of the Independent JPEG Group's free JPEG
+software.  You are welcome to redistribute this software and to use it for any
+purpose, subject to the conditions under LEGAL ISSUES, below.
+
+This software is the work of Tom Lane, Guido Vollbeding, Philip Gladstone,
+Bill Allombert, Jim Boucher, Lee Crocker, Bob Friesenhahn, Ben Jackson,
+Julian Minguillon, Luis Ortiz, George Phillips, Davide Rossi, Ge' Weijers,
+and other members of the Independent JPEG Group.
+
+IJG is not affiliated with the ISO/IEC JTC1/SC29/WG1 standards committee
+(also known as JPEG, together with ITU-T SG16).
+
+
+DOCUMENTATION ROADMAP
+=====================
+
+This file contains the following sections:
+
+OVERVIEW            General description of JPEG and the IJG software.
+LEGAL ISSUES        Copyright, lack of warranty, terms of distribution.
+REFERENCES          Where to learn more about JPEG.
+ARCHIVE LOCATIONS   Where to find newer versions of this software.
+FILE FORMAT WARS    Software *not* to get.
+TO DO               Plans for future IJG releases.
+
+Other documentation files in the distribution are:
+
+User documentation:
+  usage.txt         Usage instructions for cjpeg, djpeg, jpegtran,
+                    rdjpgcom, and wrjpgcom.
+  *.1               Unix-style man pages for programs (same info as usage.txt).
+  wizard.txt        Advanced usage instructions for JPEG wizards only.
+  change.log        Version-to-version change highlights.
+Programmer and internal documentation:
+  libjpeg.txt       How to use the JPEG library in your own programs.
+  example.c         Sample code for calling the JPEG library.
+  structure.txt     Overview of the JPEG library's internal structure.
+  coderules.txt     Coding style rules --- please read if you contribute code.
+
+Please read at least usage.txt.  Some information can also be found in the JPEG
+FAQ (Frequently Asked Questions) article.  See ARCHIVE LOCATIONS below to find
+out where to obtain the FAQ article.
+
+If you want to understand how the JPEG code works, we suggest reading one or
+more of the REFERENCES, then looking at the documentation files (in roughly
+the order listed) before diving into the code.
+
+
+OVERVIEW
+========
+
+This package contains C software to implement JPEG image encoding, decoding,
+and transcoding.  JPEG (pronounced "jay-peg") is a standardized compression
+method for full-color and grayscale images.  JPEG's strong suit is compressing
+photographic images or other types of images that have smooth color and
+brightness transitions between neighboring pixels.  Images with sharp lines or
+other abrupt features may not compress well with JPEG, and a higher JPEG
+quality may have to be used to avoid visible compression artifacts with such
+images.
+
+JPEG is lossy, meaning that the output pixels are not necessarily identical to
+the input pixels.  However, on photographic content and other "smooth" images,
+very good compression ratios can be obtained with no visible compression
+artifacts, and extremely high compression ratios are possible if you are
+willing to sacrifice image quality (by reducing the "quality" setting in the
+compressor.)
+
+This software implements JPEG baseline, extended-sequential, and progressive
+compression processes.  Provision is made for supporting all variants of these
+processes, although some uncommon parameter settings aren't implemented yet.
+We have made no provision for supporting the hierarchical or lossless
+processes defined in the standard.
+
+We provide a set of library routines for reading and writing JPEG image files,
+plus two sample applications "cjpeg" and "djpeg", which use the library to
+perform conversion between JPEG and some other popular image file formats.
+The library is intended to be reused in other applications.
+
+In order to support file conversion and viewing software, we have included
+considerable functionality beyond the bare JPEG coding/decoding capability;
+for example, the color quantization modules are not strictly part of JPEG
+decoding, but they are essential for output to colormapped file formats or
+colormapped displays.  These extra functions can be compiled out of the
+library if not required for a particular application.
+
+We have also included "jpegtran", a utility for lossless transcoding between
+different JPEG processes, and "rdjpgcom" and "wrjpgcom", two simple
+applications for inserting and extracting textual comments in JFIF files.
+
+The emphasis in designing this software has been on achieving portability and
+flexibility, while also making it fast enough to be useful.  In particular,
+the software is not intended to be read as a tutorial on JPEG.  (See the
+REFERENCES section for introductory material.)  Rather, it is intended to
+be reliable, portable, industrial-strength code.  We do not claim to have
+achieved that goal in every aspect of the software, but we strive for it.
+
+We welcome the use of this software as a component of commercial products.
+No royalty is required, but we do ask for an acknowledgement in product
+documentation, as described under LEGAL ISSUES.
+
+
+LEGAL ISSUES
+============
+
+In plain English:
+
+1. We don't promise that this software works.  (But if you find any bugs,
+   please let us know!)
+2. You can use this software for whatever you want.  You don't have to pay us.
+3. You may not pretend that you wrote this software.  If you use it in a
+   program, you must acknowledge somewhere in your documentation that
+   you've used the IJG code.
+
+In legalese:
+
+The authors make NO WARRANTY or representation, either express or implied,
+with respect to this software, its quality, accuracy, merchantability, or
+fitness for a particular purpose.  This software is provided "AS IS", and you,
+its user, assume the entire risk as to its quality and accuracy.
+
+This software is copyright (C) 1991-2016, Thomas G. Lane, Guido Vollbeding.
+All Rights Reserved except as specified below.
+
+Permission is hereby granted to use, copy, modify, and distribute this
+software (or portions thereof) for any purpose, without fee, subject to these
+conditions:
+(1) If any part of the source code for this software is distributed, then this
+README file must be included, with this copyright and no-warranty notice
+unaltered; and any additions, deletions, or changes to the original files
+must be clearly indicated in accompanying documentation.
+(2) If only executable code is distributed, then the accompanying
+documentation must state that "this software is based in part on the work of
+the Independent JPEG Group".
+(3) Permission for use of this software is granted only if the user accepts
+full responsibility for any undesirable consequences; the authors accept
+NO LIABILITY for damages of any kind.
+
+These conditions apply to any software derived from or based on the IJG code,
+not just to the unmodified library.  If you use our work, you ought to
+acknowledge us.
+
+Permission is NOT granted for the use of any IJG author's name or company name
+in advertising or publicity relating to this software or products derived from
+it.  This software may be referred to only as "the Independent JPEG Group's
+software".
+
+We specifically permit and encourage the use of this software as the basis of
+commercial products, provided that all warranty or liability claims are
+assumed by the product vendor.
+
+
+The Unix configuration script "configure" was produced with GNU Autoconf.
+It is copyright by the Free Software Foundation but is freely distributable.
+The same holds for its supporting scripts (config.guess, config.sub,
+ltmain.sh).  Another support script, install-sh, is copyright by X Consortium
+but is also freely distributable.
+
+The IJG distribution formerly included code to read and write GIF files.
+To avoid entanglement with the Unisys LZW patent (now expired), GIF reading
+support has been removed altogether, and the GIF writer has been simplified
+to produce "uncompressed GIFs".  This technique does not use the LZW
+algorithm; the resulting GIF files are larger than usual, but are readable
+by all standard GIF decoders.
+
+We are required to state that
+    "The Graphics Interchange Format(c) is the Copyright property of
+    CompuServe Incorporated.  GIF(sm) is a Service Mark property of
+    CompuServe Incorporated."
+
+
+REFERENCES
+==========
+
+We recommend reading one or more of these references before trying to
+understand the innards of the JPEG software.
+
+The best short technical introduction to the JPEG compression algorithm is
+	Wallace, Gregory K.  "The JPEG Still Picture Compression Standard",
+	Communications of the ACM, April 1991 (vol. 34 no. 4), pp. 30-44.
+(Adjacent articles in that issue discuss MPEG motion picture compression,
+applications of JPEG, and related topics.)  If you don't have the CACM issue
+handy, a PDF file containing a revised version of Wallace's article is
+available at http://www.ijg.org/files/Wallace.JPEG.pdf.  The file (actually
+a preprint for an article that appeared in IEEE Trans. Consumer Electronics)
+omits the sample images that appeared in CACM, but it includes corrections
+and some added material.  Note: the Wallace article is copyright ACM and IEEE,
+and it may not be used for commercial purposes.
+
+A somewhat less technical, more leisurely introduction to JPEG can be found in
+"The Data Compression Book" by Mark Nelson and Jean-loup Gailly, published by
+M&T Books (New York), 2nd ed. 1996, ISBN 1-55851-434-1.  This book provides
+good explanations and example C code for a multitude of compression methods
+including JPEG.  It is an excellent source if you are comfortable reading C
+code but don't know much about data compression in general.  The book's JPEG
+sample code is far from industrial-strength, but when you are ready to look
+at a full implementation, you've got one here...
+
+The best currently available description of JPEG is the textbook "JPEG Still
+Image Data Compression Standard" by William B. Pennebaker and Joan L.
+Mitchell, published by Van Nostrand Reinhold, 1993, ISBN 0-442-01272-1.
+Price US$59.95, 638 pp.  The book includes the complete text of the ISO JPEG
+standards (DIS 10918-1 and draft DIS 10918-2).
+
+The original JPEG standard is divided into two parts, Part 1 being the actual
+specification, while Part 2 covers compliance testing methods.  Part 1 is
+titled "Digital Compression and Coding of Continuous-tone Still Images,
+Part 1: Requirements and guidelines" and has document numbers ISO/IEC IS
+10918-1, ITU-T T.81.  Part 2 is titled "Digital Compression and Coding of
+Continuous-tone Still Images, Part 2: Compliance testing" and has document
+numbers ISO/IEC IS 10918-2, ITU-T T.83.
+
+The JPEG standard does not specify all details of an interchangeable file
+format.  For the omitted details we follow the "JFIF" conventions, revision
+1.02.  JFIF 1.02 has been adopted as an Ecma International Technical Report
+and thus received a formal publication status.  It is available as a free
+download in PDF format from
+http://www.ecma-international.org/publications/techreports/E-TR-098.htm.
+A PostScript version of the JFIF document is available at
+http://www.ijg.org/files/jfif.ps.gz.  There is also a plain text version at
+http://www.ijg.org/files/jfif.txt.gz, but it is missing the figures.
+
+The TIFF 6.0 file format specification can be obtained by FTP from
+ftp://ftp.sgi.com/graphics/tiff/TIFF6.ps.gz.  The JPEG incorporation scheme
+found in the TIFF 6.0 spec of 3-June-92 has a number of serious problems.
+IJG does not recommend use of the TIFF 6.0 design (TIFF Compression tag 6).
+Instead, we recommend the JPEG design proposed by TIFF Technical Note #2
+(Compression tag 7).  Copies of this Note can be obtained from
+http://www.ijg.org/files/.  It is expected that the next revision
+of the TIFF spec will replace the 6.0 JPEG design with the Note's design.
+Although IJG's own code does not support TIFF/JPEG, the free libtiff library
+uses our library to implement TIFF/JPEG per the Note.
+
+
+ARCHIVE LOCATIONS
+=================
+
+The "official" archive site for this software is www.ijg.org.
+The most recent released version can always be found there in
+directory "files".
+
+The JPEG FAQ (Frequently Asked Questions) article is a source of some
+general information about JPEG.
+It is available on the World Wide Web at http://www.faqs.org/faqs/jpeg-faq/
+and other news.answers archive sites, including the official news.answers
+archive at rtfm.mit.edu: ftp://rtfm.mit.edu/pub/usenet/news.answers/jpeg-faq/.
+If you don't have Web or FTP access, send e-mail to mail-server@rtfm.mit.edu
+with body
+	send usenet/news.answers/jpeg-faq/part1
+	send usenet/news.answers/jpeg-faq/part2
+
+
+FILE FORMAT WARS
+================
+
+The ISO/IEC JTC1/SC29/WG1 standards committee (also known as JPEG, together
+with ITU-T SG16) currently promotes different formats containing the name
+"JPEG" which are incompatible with original DCT-based JPEG.  IJG therefore does
+not support these formats (see REFERENCES).  Indeed, one of the original
+reasons for developing this free software was to help force convergence on
+common, interoperable format standards for JPEG files.
+Don't use an incompatible file format!
+(In any case, our decoder will remain capable of reading existing JPEG
+image files indefinitely.)
+
+
+TO DO
+=====
+
+Please send bug reports, offers of help, etc. to jpeg-info@jpegclub.org.
+
+--- 3c. simd/jsimdext.inc lines 1-25 (verbatim; the zlib notice that governs jsimd_none.c, jsimd.h, jsimddct.h) ---
+Source: https://raw.githubusercontent.com/mozilla/mozjpeg/v3.3.1/simd/jsimdext.inc
+
+;
+; jsimdext.inc - common declarations
+;
+; Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
+; Copyright (C) 2010, D. R. Commander.
+;
+; Based on the x86 SIMD extension for IJG JPEG library - version 1.02
+;
+; Copyright (C) 1999-2006, MIYASAKA Masaru.
+;
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+;
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+;
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+
+==============================================================================
+4. Emscripten runtime (generated JS glue incl. embind; libembind; Emscripten libc parts) - mozjpeg_dec (Emscripten 3.1.57), webp_enc/webp_dec (Emscripten 3.1.31-3.1.36)
+==============================================================================
+License: MIT OR NCSA. The file below is byte-identical (sha256 620a7808...) at tags 3.1.31, 3.1.34,
+3.1.36 and 3.1.57.
+The Node.js paragraph belongs to src/library_path.js. None of that code is present in the three glue files:
+0 occurrences of normalizeArray / PATH_FS / require(. The paragraph is reproduced only because it is
+part of the file.
+The Emscripten AUTHORS file is referenced and not reproduced:
+https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/AUTHORS
+
+--- LICENSE (verbatim) ---
+Source: https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/LICENSE
+
+Emscripten is available under 2 licenses, the MIT license and the
+University of Illinois/NCSA Open Source License.
+
+Both are permissive open source licenses, with little if any
+practical difference between them.
+
+The reason for offering both is that (1) the MIT license is
+well-known, while (2) the University of Illinois/NCSA Open Source
+License allows Emscripten's code to be integrated upstream into
+LLVM, which uses that license, should the opportunity arise.
+
+The full text of both licenses follows.
+
+==============================================================================
+
+Copyright (c) 2010-2014 Emscripten authors, see AUTHORS file.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+==============================================================================
+
+Copyright (c) 2010-2014 Emscripten authors, see AUTHORS file.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal with the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+    Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimers.
+
+    Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following disclaimers
+    in the documentation and/or other materials provided with the
+    distribution.
+
+    Neither the names of Mozilla,
+    nor the names of its contributors may be used to endorse
+    or promote products derived from this Software without specific prior
+    written permission. 
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR
+ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
+
+==============================================================================
+
+This program uses portions of Node.js source code located in src/library_path.js,
+in accordance with the terms of the MIT license. Node's license follows:
+
+    """
+        Copyright Joyent, Inc. and other Node contributors. All rights reserved.
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to
+        deal in the Software without restriction, including without limitation the
+        rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+        sell copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in
+        all copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+        FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+        IN THE SOFTWARE.
+    """
+
+The musl libc project is bundled in this repo, and it has the MIT license, see
+system/lib/libc/musl/COPYRIGHT
+
+The third_party/ subdirectory contains code with other licenses. None of it is
+used by default, but certain options use it (e.g., the optional closure compiler
+flag will run closure compiler from third_party/).
+
+==============================================================================
+5. LLVM libc++, libc++abi, compiler-rt (as bundled in Emscripten system/lib) - mozjpeg_dec, webp_enc, webp_dec
+==============================================================================
+License: Apache-2.0 WITH LLVM-exception. Legacy portions are under NCSA OR MIT.
+Sources (byte-identical at Emscripten 3.1.31, 3.1.34, 3.1.36 and 3.1.57):
+  https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/system/lib/libcxx/LICENSE.TXT     (sha256 539dd7ae...)
+  https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/system/lib/libcxxabi/LICENSE.TXT  (sha256 e2b35be4...)
+  https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/system/lib/compiler-rt/LICENSE.TXT (sha256 1a8f1058...)
+
+Deduplication note:
+- Lines 4-207 of each file are the Apache License 2.0, identical to section 1 after whitespace
+  normalisation; the LLVM copy indents some lines differently and keeps the appendix placeholder. They
+  are not repeated here.
+- Lines 1-3 and 208-311 of libc++'s file are reproduced verbatim below.
+- libc++abi's and compiler-rt's files differ from libc++'s only in the lines reproduced after it.
+The CREDITS.TXT files referenced by the legacy license are not reproduced.
+
+--- libc++ LICENSE.TXT, lines 1-3 (verbatim) ---
+==============================================================================
+The LLVM Project is under the Apache License v2.0 with LLVM Exceptions:
+==============================================================================
+[lines 4-207: Apache License 2.0 - see section 1]
+--- libc++ LICENSE.TXT, lines 208-311 (verbatim) ---
+---- LLVM Exceptions to the Apache 2.0 License ----
+
+As an exception, if, as a result of your compiling your source code, portions
+of this Software are embedded into an Object form of such source code, you
+may redistribute such embedded portions in such Object form without complying
+with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
+
+In addition, if you combine or link compiled forms of this Software with
+software that is licensed under the GPLv2 ("Combined Software") and if a
+court of competent jurisdiction determines that the patent provision (Section
+3), the indemnity provision (Section 9) or other Section of the License
+conflicts with the conditions of the GPLv2, you may retroactively and
+prospectively choose to deem waived or otherwise exclude such Section(s) of
+the License, but only in their entirety and only with respect to the Combined
+Software.
+
+==============================================================================
+Software from third parties included in the LLVM Project:
+==============================================================================
+The LLVM Project contains third party software which is under different license
+terms. All such code will be identified clearly using at least one of two
+mechanisms:
+1) It will be in a separate directory tree with its own `LICENSE.txt` or
+   `LICENSE` file at the top containing the specific license and restrictions
+   which apply to that software, or
+2) It will contain specific license and restriction terms at the top of every
+   file.
+
+==============================================================================
+Legacy LLVM License (https://llvm.org/docs/DeveloperPolicy.html#legacy):
+==============================================================================
+
+The libc++ library is dual licensed under both the University of Illinois
+"BSD-Like" license and the MIT license.  As a user of this code you may choose
+to use it under either license.  As a contributor, you agree to allow your code
+to be used under both.
+
+Full text of the relevant licenses is included below.
+
+==============================================================================
+
+University of Illinois/NCSA
+Open Source License
+
+Copyright (c) 2009-2019 by the contributors listed in CREDITS.TXT
+
+All rights reserved.
+
+Developed by:
+
+    LLVM Team
+
+    University of Illinois at Urbana-Champaign
+
+    http://llvm.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+==============================================================================
+
+Copyright (c) 2009-2014 by the contributors listed in CREDITS.TXT
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--- libc++abi LICENSE.TXT: identical to libc++'s except line 240, which reads (verbatim): ---
+The libc++abi library is dual licensed under both the University of Illinois
+--- compiler-rt LICENSE.TXT: identical to libc++'s except lines 240 and 293, which read (verbatim): ---
+The compiler_rt library is dual licensed under both the University of Illinois
+Copyright (c) 2009-2015 by the contributors listed in CREDITS.TXT
+
+==============================================================================
+6. musl libc (Emscripten system/lib/libc/musl: musl 1.2.5 in Emscripten 3.1.57, musl 1.2.3 in 3.1.31-3.1.36)
+==============================================================================
+Applies to: mozjpeg_dec.wasm, webp_enc.wasm and webp_dec.wasm. It also applies to
+squoosh_resize_bg.wasm, because the Rust libm code in it (via compiler_builtins 0.1.105) is "a port of
+MUSL's libm". libm's upstream LICENSE.txt, from 0.2.9 onward, states:
+
+Portions of this software are derived from third-party works licensed under
+terms compatible with the above MIT license:
+
+* musl libc https://www.musl-libc.org/. This library contains the following
+  copyright:
+
+      Copyright © 2005-2020 Rich Felker, et al.
+
+Source: https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/system/lib/libc/musl/COPYRIGHT
+This file is byte-identical (sha256 f9bc4423...) at 3.1.31, 3.1.34, 3.1.36 and 3.1.57. Do NOT use
+the copy on the emscripten "main" branch: it differs ("Lynn Ochs" in place of "Valentin Ochs").
+
+musl as a whole is licensed under the following standard MIT license:
+
+----------------------------------------------------------------------
+Copyright © 2005-2020 Rich Felker, et al.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+----------------------------------------------------------------------
+
+Authors/contributors include:
+
+A. Wilcox
+Ada Worcester
+Alex Dowad
+Alex Suykov
+Alexander Monakov
+Andre McCurdy
+Andrew Kelley
+Anthony G. Basile
+Aric Belsito
+Arvid Picciani
+Bartosz Brachaczek
+Benjamin Peterson
+Bobby Bingham
+Boris Brezillon
+Brent Cook
+Chris Spiegel
+Clément Vasseur
+Daniel Micay
+Daniel Sabogal
+Daurnimator
+David Carlier
+David Edelsohn
+Denys Vlasenko
+Dmitry Ivanov
+Dmitry V. Levin
+Drew DeVault
+Emil Renner Berthing
+Fangrui Song
+Felix Fietkau
+Felix Janda
+Gianluca Anzolin
+Hauke Mehrtens
+He X
+Hiltjo Posthuma
+Isaac Dunham
+Jaydeep Patil
+Jens Gustedt
+Jeremy Huntwork
+Jo-Philipp Wich
+Joakim Sindholt
+John Spencer
+Julien Ramseier
+Justin Cormack
+Kaarle Ritvanen
+Khem Raj
+Kylie McClain
+Leah Neukirchen
+Luca Barbato
+Luka Perkov
+M Farkas-Dyck (Strake)
+Mahesh Bodapati
+Markus Wichmann
+Masanori Ogino
+Michael Clark
+Michael Forney
+Mikhail Kremnyov
+Natanael Copa
+Nicholas J. Kain
+orc
+Pascal Cuoq
+Patrick Oppenlander
+Petr Hosek
+Petr Skocik
+Pierre Carrier
+Reini Urban
+Rich Felker
+Richard Pennington
+Ryan Fairfax
+Samuel Holland
+Segev Finer
+Shiz
+sin
+Solar Designer
+Stefan Kristiansson
+Stefan O'Rear
+Szabolcs Nagy
+Timo Teräs
+Trutz Behn
+Valentin Ochs
+Will Dietz
+William Haddon
+William Pitcock
+
+Portions of this software are derived from third-party works licensed
+under terms compatible with the above MIT license:
+
+The TRE regular expression implementation (src/regex/reg* and
+src/regex/tre*) is Copyright © 2001-2008 Ville Laurikari and licensed
+under a 2-clause BSD license (license text in the source files). The
+included version has been heavily modified by Rich Felker in 2012, in
+the interests of size, simplicity, and namespace cleanliness.
+
+Much of the math library code (src/math/* and src/complex/*) is
+Copyright © 1993,2004 Sun Microsystems or
+Copyright © 2003-2011 David Schultz or
+Copyright © 2003-2009 Steven G. Kargl or
+Copyright © 2003-2009 Bruce D. Evans or
+Copyright © 2008 Stephen L. Moshier or
+Copyright © 2017-2018 Arm Limited
+and labelled as such in comments in the individual source files. All
+have been licensed under extremely permissive terms.
+
+The ARM memcpy code (src/string/arm/memcpy.S) is Copyright © 2008
+The Android Open Source Project and is licensed under a two-clause BSD
+license. It was taken from Bionic libc, used on Android.
+
+The AArch64 memcpy and memset code (src/string/aarch64/*) are
+Copyright © 1999-2019, Arm Limited.
+
+The implementation of DES for crypt (src/crypt/crypt_des.c) is
+Copyright © 1994 David Burren. It is licensed under a BSD license.
+
+The implementation of blowfish crypt (src/crypt/crypt_blowfish.c) was
+originally written by Solar Designer and placed into the public
+domain. The code also comes with a fallback permissive license for use
+in jurisdictions that may not recognize the public domain.
+
+The smoothsort implementation (src/stdlib/qsort.c) is Copyright © 2011
+Valentin Ochs and is licensed under an MIT-style license.
+
+The x86_64 port was written by Nicholas J. Kain and is licensed under
+the standard MIT terms.
+
+The mips and microblaze ports were originally written by Richard
+Pennington for use in the ellcc project. The original code was adapted
+by Rich Felker for build system and code conventions during upstream
+integration. It is licensed under the standard MIT terms.
+
+The mips64 port was contributed by Imagination Technologies and is
+licensed under the standard MIT terms.
+
+The powerpc port was also originally written by Richard Pennington,
+and later supplemented and integrated by John Spencer. It is licensed
+under the standard MIT terms.
+
+All other files which have no copyright comments are original works
+produced specifically for use as part of this library, written either
+by Rich Felker, the main author of the library, or by one or more
+contibutors listed above. Details on authorship of individual files
+can be found in the git version control history of the project. The
+omission of copyright and license comments in each file is in the
+interest of source tree size.
+
+In addition, permission is hereby granted for all public header files
+(include/* and arch/*/bits/*) and crt files intended to be linked into
+applications (crt/*, ldso/dlstart.c, and arch/*/crt_arch.h) to omit
+the copyright notice and permission notice otherwise required by the
+license, and to use these files without any requirement of
+attribution. These files include substantial contributions from:
+
+Bobby Bingham
+John Spencer
+Nicholas J. Kain
+Rich Felker
+Richard Pennington
+Stefan Kristiansson
+Szabolcs Nagy
+
+all of whom have explicitly granted such permission.
+
+This file previously contained text expressing a belief that most of
+the files covered by the above exception were sufficiently trivial not
+to be subject to copyright, resulting in confusion over whether it
+negated the permissions granted in the license. In the spirit of
+permissive licensing, and of not having licensing issues being an
+obstacle to adoption, that text has been removed.
+
+==============================================================================
+7. FreeBSD msun / Sun Microsystems notices (SPDX: SunPro) - must be preserved
+==============================================================================
+Binary evidence for webp_enc.wasm: all 12 f64 constants of musl src/math/log10.c appear as f64.const
+immediates in the code section.
+Binary evidence for squoosh_resize_bg.wasm: 17 f32 constants of powf, the k_sinf/k_cosf coefficients, and
+9 f64 constants of rem_pio2_large appear in its code.
+No match was found in webp_dec.wasm, mozjpeg_dec.wasm or squoosh_png_bg.wasm.
+
+--- musl src/math/log10.c lines 1-11 (Emscripten 3.1.31-3.1.57, sha256 ef9b4b1f...) - webp_enc.wasm ---
+Source: https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.34/system/lib/libc/musl/src/math/log10.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_log10.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/powf.rs lines 1-14 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_powf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/sinf.rs lines 1-15 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_sinf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/k_sinf.rs lines 1-15 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_sinf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/k_cosf.rs lines 1-15 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_cosf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Debugged and optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/rem_pio2f.rs lines 1-15 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_rem_pio2f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Debugged and optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+--- libm/src/math/rem_pio2_large.rs lines 2-12 (compiler_builtins 0.1.105; identical in libm 0.2.8) - squoosh_resize_bg.wasm ---
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_rem_pio2.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+==============================================================================
+8. Arm Limited math routines in musl (log, pow, exp and their data tables) - webp_enc.wasm
+==============================================================================
+webp_enc.wasm contains these musl table values:
+- log_data.c: 529 of 529 values, in the data section.
+- pow_data.c: 211 of 323 values, in the data section.
+- exp_data.c: 13 of 14 values (12 in the data section, 1 as an f64.const).
+The per-file header below is identical in log.c, pow.c, exp.c, log_data.c, pow_data.c and exp_data.c,
+apart from the first description line. The MIT license text is the one in section 6, which lists
+"Copyright © 2017-2018 Arm Limited" among the math-library copyrights.
+Source: https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.34/system/lib/libc/musl/src/math/log.c
+
+/*
+ * Double-precision log(x) function.
+ *
+ * Copyright (c) 2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+==============================================================================
+9. dlmalloc (Doug Lea) - public domain / CC0 1.0; no notice is required
+==============================================================================
+Emscripten's default allocator (MALLOC="dlmalloc" in src/settings.js at 3.1.34 and 3.1.57; jSquash passes
+no -sMALLOC) is used in the three Emscripten modules. The Rust std allocator for wasm32-unknown-unknown is
+the dlmalloc crate, a port of the same code: 0.2.6 in squoosh_png_bg.wasm (string
+"/rust/deps/dlmalloc-0.2.6") and 0.2.4 in squoosh_resize_bg.wasm (per the rust-lang/rust Cargo.lock at
+7cf61ebde). The crate's MIT text is in section 12.1.
+Source: https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.57/system/lib/dlmalloc.c lines 53-59
+
+/*
+ This is a version (aka dlmalloc) of malloc/free/realloc written by
+ Doug Lea and released to the public domain, as explained at
+ http://creativecommons.org/publicdomain/zero/1.0/ Send questions,
+ comments, complaints, performance data, etc to dl@cs.oswego.edu
+ 
+ * Version 2.8.6 Wed Aug 29 06:57:58 2012  Doug Lea
+
+==============================================================================
+10. Rust standard library (core, alloc, std, panic_abort) - squoosh_png_bg.wasm (rustc 1.81.0-nightly d8a38b000), squoosh_resize_bg.wasm (rustc 1.77.1 7cf61ebde)
+==============================================================================
+License: MIT OR Apache-2.0 (Apache-2.0: section 1). COPYRIGHT and LICENSE-MIT are byte-identical at
+both commits.
+Sources:
+  https://raw.githubusercontent.com/rust-lang/rust/7cf61ebde7b22796c69757901dd346d0fe70bd97/COPYRIGHT
+  https://raw.githubusercontent.com/rust-lang/rust/7cf61ebde7b22796c69757901dd346d0fe70bd97/LICENSE-MIT
+  https://raw.githubusercontent.com/rust-lang/rust/7cf61ebde7b22796c69757901dd346d0fe70bd97/library/core/src/slice/memchr.rs
+
+--- COPYRIGHT, lines 9-19 (verbatim) ---
+Copyrights in the Rust project are retained by their contributors. No
+copyright assignment is required to contribute to the Rust project.
+
+Some files include explicit copyright notices and/or license notices.
+For full authorship information, see the version control history or
+https://thanks.rust-lang.org
+
+Except as otherwise noted (below and/or in individual files), Rust is
+licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
+<http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+<LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
+
+--- LICENSE-MIT (verbatim; the file has no copyright line) ---
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- COPYRIGHT, lines 343-391 (verbatim; SPDX Unicode-DFS-2016) ---
+Applies to squoosh_png_bg.wasm, which contains library/core/src/unicode/printable.rs and unicode_data.rs.
+
+* Portions of internationalization code use code or data from Unicode, which
+  carry the following license:
+
+      UNICODE, INC. LICENSE AGREEMENT - DATA FILES AND SOFTWARE
+
+    See Terms of Use <https://www.unicode.org/copyright.html>
+    for definitions of Unicode Inc.’s Data Files and Software.
+
+    NOTICE TO USER: Carefully read the following legal agreement.
+    BY DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING UNICODE INC.'S
+    DATA FILES ("DATA FILES"), AND/OR SOFTWARE ("SOFTWARE"),
+    YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+    TERMS AND CONDITIONS OF THIS AGREEMENT.
+    IF YOU DO NOT AGREE, DO NOT DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE
+    THE DATA FILES OR SOFTWARE.
+
+    COPYRIGHT AND PERMISSION NOTICE
+
+    Copyright © 1991-2022 Unicode, Inc. All rights reserved.
+    Distributed under the Terms of Use in https://www.unicode.org/copyright.html.
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of the Unicode data files and any associated documentation
+    (the "Data Files") or Unicode software and any associated documentation
+    (the "Software") to deal in the Data Files or Software
+    without restriction, including without limitation the rights to use,
+    copy, modify, merge, publish, distribute, and/or sell copies of
+    the Data Files or Software, and to permit persons to whom the Data Files
+    or Software are furnished to do so, provided that either
+    (a) this copyright and permission notice appear with all copies
+    of the Data Files or Software, or
+    (b) this copyright and permission notice appear in associated
+    Documentation.
+
+    THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+    ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+    WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS
+    NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL
+    DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+    DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+    TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright holder
+    shall not be used in advertising or otherwise to promote the sale,
+    use or other dealings in these Data Files or Software without prior
+    written authorization of the copyright holder.
+
+--- library/core/src/slice/memchr.rs, lines 1-2 (verbatim) ---
+// Original implementation taken from rust-memchr.
+// Copyright 2015 Andrew Gallant, bluss and Nicolas Koch
+
+==============================================================================
+11. compiler_builtins 0.1.109 (squoosh_png_bg.wasm) and 0.1.105 (squoosh_resize_bg.wasm) - Rust sysroot
+==============================================================================
+The crates supply memcpy/memset/memmove in both modules, and powf/sinf (via the vendored libm) in the
+resize module.
+The Cargo.toml license field says "MIT/Apache-2.0". The shipped LICENSE.txt, reproduced below
+(byte-identical in 0.1.105 and 0.1.109), says "NCSA or MIT". MIT is common to both declarations.
+CREDITS.TXT is referenced but not included in the crate.
+Source: https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.105.crate (LICENSE.txt)
+
+==============================================================================
+compiler-builtins License
+==============================================================================
+
+The compiler-builtins crate is dual licensed under both the University of
+Illinois "BSD-Like" license and the MIT license.  As a user of this code you may
+choose to use it under either license.  As a contributor, you agree to allow
+your code to be used under both.
+
+Full text of the relevant licenses is included below.
+
+==============================================================================
+
+University of Illinois/NCSA
+Open Source License
+
+Copyright (c) 2009-2016 by the contributors listed in CREDITS.TXT
+
+All rights reserved.
+
+Developed by:
+
+    LLVM Team
+
+    University of Illinois at Urbana-Champaign
+
+    http://llvm.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+==============================================================================
+
+Copyright (c) 2009-2015 by the contributors listed in CREDITS.TXT
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+==============================================================================
+Copyrights and Licenses for Third Party Software Distributed with LLVM:
+==============================================================================
+The LLVM software contains code written by third parties.  Such software will
+have its own individual LICENSE.TXT file in the directory in which it appears.
+This file will describe the copyrights, license, and restrictions which apply
+to that code.
+
+The disclaimer of warranty in the University of Illinois Open Source License
+applies to all code in the LLVM Distribution, and nothing in any of the
+other licenses gives permission to use the names of the LLVM Team or the
+University of Illinois to endorse or promote products derived from this
+Software.
+
+==============================================================================
+12. MIT License texts - one per copyright holder (Rust crates and generated JS glue)
+==============================================================================
+Each block is the crate's own MIT file, copied verbatim. Where the same holder has several files that
+differ only in the copyright line, the extra copyright lines are listed first; the permission text was
+verified to be identical. Crates marked "graph only" are in the build graph, but no code from them is
+evidenced in the binaries. They are listed to be conservative.
+
+--- 12.1 Alex Crichton: flate2 1.0.28, wasm-bindgen 0.2.89/0.2.92, js-sys 0.3.66, web-sys 0.3.66, cfg-if 1.0.0 and 0.1.10, dlmalloc 0.2.6/0.2.4, wasm-bindgen CLI generated JS (wasm-bindgen-cli-support 0.2.89/0.2.92, in squoosh_png.js/squoosh_resize.js), rustc-demangle 0.1.24/0.1.23 (graph only) - all these LICENSE-MIT files are byte-identical (sha256 378f5840...) ---
+Source: https://static.crates.io/crates/flate2/flate2-1.0.28.crate
+
+Copyright (c) 2014 Alex Crichton
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.2 nwin: png 0.17.10 ---
+Source: https://static.crates.io/crates/png/png-0.17.10.crate
+
+Copyright (c) 2015 nwin
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.3 fdeflate 0.3.3 (no copyright line in the file; Cargo authors "The image-rs Developers") ---
+Source: https://static.crates.io/crates/fdeflate/fdeflate-0.3.3.crate
+
+MIT License
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.4 Frommi: miniz_oxide 0.7.1 (MIT elected from MIT OR Zlib OR Apache-2.0) ---
+Source: https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.7.1.crate
+
+MIT License
+
+Copyright (c) 2017 Frommi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- 12.5 Sam Rijs, Alex Crichton and contributors: crc32fast 1.3.2 ---
+Source: https://static.crates.io/crates/crc32fast/crc32fast-1.3.2.crate
+
+MIT License
+
+Copyright (c) 2018 Sam Rijs, Alex Crichton and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- 12.6 Marvin Countryman: simd-adler32 0.3.7 (MIT only; it supplies the Adler-32 code in squoosh_png_bg.wasm) ---
+Source: https://static.crates.io/crates/simd-adler32/simd-adler32-0.3.7.crate
+
+MIT License
+
+Copyright (c) [2021] [Marvin Countryman]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- 12.7 The Rust Project Developers: bitflags 1.3.2; libc 0.2.155/0.2.150 (graph only); std_detect 0.1.5 (graph only) ---
+Source: https://static.crates.io/crates/bitflags/bitflags-1.3.2.crate (libc: https://static.crates.io/crates/libc/libc-0.2.150.crate; std_detect: rust-src 1.77.1 library/stdarch/crates/std_detect/LICENSE-MIT)
+Also: Copyright (c) 2014-2020 The Rust Project Developers
+Also: Copyright (c) 2017 The Rust Project Developers
+
+Copyright (c) 2014 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.8 Kornel: rgb 0.8.37 (MIT only) ---
+Source: https://static.crates.io/crates/rgb/rgb-0.8.37.crate
+
+MIT License
+
+Copyright (c) 2019 Kornel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- 12.9 Daniel "Lokathor" Gee: bytemuck 1.14.0 and 1.15.0 (MIT elected from Zlib OR Apache-2.0 OR MIT; the file uses CRLF line ends, shown here with LF) ---
+Source: https://static.crates.io/crates/bytemuck/bytemuck-1.14.0.crate
+
+MIT License
+
+Copyright (c) 2019 Daniel "Lokathor" Gee.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+--- 12.10 PistonDevelopers: resize 0.5.5 (MIT only) ---
+Source: https://static.crates.io/crates/resize/resize-0.5.5.crate
+
+The MIT License (MIT)
+
+Copyright (c) 2015 PistonDevelopers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- 12.11 Amanieu d'Antras: hashbrown 0.14.3 (vendored in the Rust std; squoosh_resize_bg.wasm) ---
+Source: https://static.crates.io/crates/hashbrown/hashbrown-0.14.3.crate
+
+Copyright (c) 2016 Amanieu d'Antras
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.12 Jorge Aparicio: libm (vendored in compiler_builtins 0.1.105; files identical to libm 0.2.8) - squoosh_resize_bg.wasm; see also sections 6 and 7 ---
+Source: https://static.crates.io/crates/libm/libm-0.2.8.crate
+
+Copyright (c) 2018 Jorge Aparicio
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--- 12.13 Nick Fitzgerald: console_error_panic_hook 0.1.7 (graph only; the resize wasm has zero imports, so no hook code is linked) ---
+Source: https://static.crates.io/crates/console_error_panic_hook/console_error_panic_hook-0.1.7.crate
+
+Copyright (c) 2018 Nick Fitzgerald
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+==============================================================================
+13. adler 1.0.2 - 0BSD OR MIT OR Apache-2.0 (compiled, but no code reaches squoosh_png_bg.wasm)
+==============================================================================
+png enables miniz_oxide's "simd" feature. miniz_oxide 0.7.1 src/shared.rs then uses simd_adler32 and not
+adler. The 0BSD option carries no notice condition; the text is reproduced for completeness.
+Source: https://static.crates.io/crates/adler/adler-1.0.2.crate (LICENSE-0BSD)
+
+Copyright (C) Jonas Schievink <jonasschievink@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+==============================================================================
+NOT INCLUDED (not present in the ten vendored files)
+==============================================================================
+- Host-only build crates (proc-macro2, quote, syn, unicode-ident, wasm-bindgen-macro/-backend/-shared,
+  bumpalo, log, once_cell) and dev-only crates (wasm-bindgen-test, futures, scoped-tls, ...).
+- wee_alloc (MPL-2.0) is not in either Cargo.lock.
+- Parts of the npm packages that are not vendored: @jsquash/resize lib/hqx and lib/magic-kernel,
+  webp_enc_simd.wasm, mozjpeg_enc.*, and the jSquash wrapper JS.
+  A future vendoring of any of these needs its own review.
