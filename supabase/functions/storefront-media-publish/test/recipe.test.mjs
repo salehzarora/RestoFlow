@@ -22,7 +22,7 @@ import { inflateExact, PIECE, PngRejected, pngRawSize, sanitizePng } from '../li
 import { applyOrientation } from '../lib/orient.mjs';
 import { boxReduce } from '../lib/box.mjs';
 import { codecs, deriver, readWasm } from './engine.mjs';
-import { fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256 } from './fixtures.mjs';
+import { chunk, fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256, PNG_SIGNATURE, withSofSize } from './fixtures.mjs';
 import { GOLDENS, REFUSALS, SPIKE_GOLDENS } from './goldens.mjs';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
@@ -140,7 +140,8 @@ test('R3. the recipe constants are c4 and frozen', () => {
   assert.ok(Object.isFrozen(RECIPE) && Object.isFrozen(RECIPE.caps) && Object.isFrozen(RECIPE.webp) && Object.isFrozen(RECIPE.engine.files));
   assert.deepEqual({ ...RECIPE.caps }, {
     decodeMaxPixels: 8388608, maxSide: 8192, maxPixels: 8388608, jpegMaxSide: 8192, jpegMaxPixels: 8388608, jpegMaxScans: 16,
-    jpegMaxProgressiveCoefficientBytes: 83886080, jpegMaxProgressiveScanWork: 400000000, maxAspect: 8, maxMetadataBytes: 1048576,
+    jpegMaxProgressiveCoefficientBytes: 33554432, jpegMaxProgressiveScanWork: 400000000, maxAspect: 8, maxMetadataBytes: 1048576,
+    pngMaxRawBytes: 33570816,
     pngMaxChunks: 65536, pngMaxAncillaryChunks: 32, pngMaxIccp: 1, pngMaxCompressedText: 4, webpMaxChunks: 16,
   });
   assert.deepEqual([...RECIPE.ladder], [82, 74, 66, 58, 50]);
@@ -368,6 +369,35 @@ test('R14. the 8 MiP cap edge: 4096 x 2048 (exactly 8,388,608 px) derives; one r
     const spec = fixtureSpec(name);
     await assert.rejects(d.derive(await fixture(name), { variant: spec.variants[0], source: spec.bucket, rung: 0 }), (e) => e.code === 'too_many_pixels', name);
   }
+});
+
+// ------------------------------------------------------------------ the memory envelope (reused workers)
+test('R14b. the PNG image-data budget (32 MiB, from the IHDR) and the progressive-JPEG coefficient budget (32 MiB) refuse before any inflate / decode', async () => {
+  const d = await deriver();
+  assert.equal(RECIPE.caps.pngMaxRawBytes, 33570816);
+  assert.equal(RECIPE.caps.jpegMaxProgressiveCoefficientBytes, 33554432);
+  // 16-bit RGBA, 2049 x 2048: ~4 MiP (under the pixel cap) but 33,572,864 B of image data -> refused on the header
+  const ihdr16 = (w, h, interlace) => { const b = Buffer.alloc(13); b.writeUInt32BE(w, 0); b.writeUInt32BE(h, 4); b[8] = 16; b[9] = 6; b[12] = interlace; return b; };
+  const header16 = (w, h, interlace = 0) => new Uint8Array(Buffer.concat([PNG_SIGNATURE, chunk('IHDR', ihdr16(w, h, interlace)), chunk('IDAT', Buffer.from([0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01])), chunk('IEND', Buffer.alloc(0))]));
+  assert.equal(pngRawSize(2049, 2048, 16, 6, 0), 33572864);
+  for (const [w, h, il] of [[2049, 2048, 0], [2049, 2048, 1], [2896, 2896, 0]]) {
+    const t = performance.now();
+    await assert.rejects(d.derive(header16(w, h, il), { variant: 'w960', source: 'menu-images', rung: 0 }), (e) => e instanceof SourceRejected && e.code === 'too_many_pixels' && /image data/.test(e.message), `${w}x${h} il${il}`);
+    assert.ok(performance.now() - t < 200, 'refused on the header alone');
+  }
+  // 16-bit RGBA 2048 x 2048 (33,556,480 B) is within the budget and reaches the image-data bound
+  assert.ok(pngRawSize(2048, 2048, 16, 6, 0) <= RECIPE.caps.pngMaxRawBytes);
+  await assert.rejects(d.derive(header16(2048, 2048), { variant: 'w960', source: 'menu-images', rung: 0 }), (e) => e.code === 'corrupt');
+  // every 8-bit RGBA PNG at the pixel cap stays admitted (R14), plain and Adam7, any shape up to the side cap
+  for (const [w, h] of [[4096, 2048], [2048, 4096], [8192, 1024], [1024, 8192], [2896, 2896]]) for (const il of [0, 1]) assert.ok(pngRawSize(w, h, 8, 6, il) <= RECIPE.caps.pngMaxRawBytes, w + "x" + h + " il" + il);
+  // progressive 4:4:4 at 8 MiP needs ~48 MiB of coefficients -> refused; 4:2:0 at 8 MiP (~24 MiB) passes the sniff
+  const base = await fixture('jpeg_prog_1600x1200');
+  const withComps = (j, w, h, sampling) => { const b = Buffer.from(withSofSize(j, w, h)); let o = 2; while (o < b.length) { const m = b[o + 1]; if (m === 0xc0 || m === 0xc1 || m === 0xc2) break; o += 2 + b.readUInt16BE(o + 2); } assert.equal(b[o + 9], 3); for (let i = 0; i < 3; i++) b[o + 11 + 3 * i] = sampling[i]; return new Uint8Array(b); };
+  const p444 = withComps(base, 4096, 2048, [0x11, 0x11, 0x11]);
+  assert.throws(() => sniffSource(p444, { ...RECIPE.caps, maxInputBytes: 5242880 }), (e) => e instanceof SourceRejected && e.code === 'too_many_pixels' && /coefficient/.test(e.message));
+  const p420 = withComps(base, 4096, 2048, [0x22, 0x11, 0x11]);
+  const info = sniffSource(p420, { ...RECIPE.caps, maxInputBytes: 5242880 });
+  assert.equal(info.width * info.height, RECIPE.caps.decodeMaxPixels);
 });
 
 // ------------------------------------------------------------------ alpha, orientation, metadata

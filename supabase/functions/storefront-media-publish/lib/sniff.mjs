@@ -79,7 +79,7 @@ function sniffPng(b, caps) {
   if (o !== b.length) throw new SourceRejected('corrupt', 'png bytes after IEND');
   if (!idatSeen) throw new SourceRejected('corrupt', 'png has no IDAT');
   if (colorType === 3 && !plte) throw new SourceRejected('corrupt', 'png palette image without PLTE');
-  return { type: 'png', width, height, bitDepth, colorType };
+  return { type: 'png', width, height, bitDepth, colorType, interlace };
 }
 
 // ---------------------------------------------------------------------------- JPEG

@@ -54,7 +54,7 @@
 // only when they are primitive strings (test/validation.test.mjs).
 
 import { SourceRejected, sniffSource, webpInfo } from './sniff.mjs';
-import { PngRejected, sanitizePng } from './pngbound.mjs';
+import { PngRejected, pngRawSize, sanitizePng } from './pngbound.mjs';
 import { applyOrientation, jpegExifOrientation } from './orient.mjs';
 import { boxReduce } from './box.mjs';
 import { loadCodecs } from './codecs.mjs';
@@ -113,10 +113,18 @@ export const RECIPE = Object.freeze({
     jpegMaxSide: 8192,
     jpegMaxPixels: 8388608, // = decodeMaxPixels (c4 always decodes a JPEG at full size)
     jpegMaxScans: 16,
-    jpegMaxProgressiveCoefficientBytes: 83886080, // 80 MiB of 16-bit DCT coefficients
+    // 32 MiB of 16-bit DCT coefficients: a progressive decode holds the whole coefficient buffer
+    // next to the RGBA raster; 32 MiB admits every 4:2:0 progressive JPEG under the 8 MiP cap and
+    // a 4:4:4 one up to ~5.3 MiP (memory envelope measured on the edge runtime, 256 MB workers).
+    jpegMaxProgressiveCoefficientBytes: 33554432,
     jpegMaxProgressiveScanWork: 400000000, // scans x coefficients
     maxAspect: 8, // mirrors kMaxLogoAspectRatio
     maxMetadataBytes: 1048576, // per chunk (PNG, WebP) / total APPn + COM payload (JPEG)
+    // The PNG decoder is one instance per worker (its heap never shrinks): its working set is the
+    // inflated image data + the 8-bit RGBA output. 32 MiB + 16 KiB of image data admits every 8-bit
+    // RGBA PNG under the 8 MiP cap (4 B/px + the filter bytes, Adam7 included) and a 16-bit RGBA one up
+    // to ~4 MiP (checked from the IHDR before any inflate).
+    pngMaxRawBytes: 33570816,
     pngMaxChunks: 65536,
     pngMaxAncillaryChunks: 32,
     pngMaxIccp: 1,
@@ -231,6 +239,8 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
     const info = sniffSource(bytes, { ...recipe.caps, maxInputBytes });
     let decodeInput = bytes;
     if (info.type === 'png') {
+      const raw = pngRawSize(info.width, info.height, info.bitDepth, info.colorType, info.interlace);
+      if (raw > recipe.caps.pngMaxRawBytes) throw new SourceRejected('too_many_pixels', `png image data ${raw} B > ${recipe.caps.pngMaxRawBytes} B`);
       try {
         decodeInput = await sanitizePng(bytes);
       } catch (e) {
