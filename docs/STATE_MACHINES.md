@@ -432,6 +432,37 @@ These are the load-bearing couplings tests must cover (full conflict/sync rules 
 - **Q-015** Arabic/Hebrew print encoding & connectivity — affects print_job `failed/retrying/abandoned` frequency (§8).
 - **Q-017** accountant role in MVP — if shipped, remains read-only and performs no transition in any machine.
 - **Q-007** currency model — single currency per order is assumed for payment transitions (§5).
+- **Q-032** / **Q-033** / **Q-036** storefront media — object removal, the registration-scoped storage policies, and the canonical recipe enforced outside the database bound what the derived `storefront_media` lifecycle (§13) can guarantee about the objects behind its rows.
+
+---
+
+## 13. Storefront media (derived lifecycle — STOREFRONT-PUBLISH-001, PROPOSED DECISION D-040)
+
+**Derived states:** `STAGED → LIVE → RETRACTED`, with `RETRACTED → LIVE` allowed; `STAGED` rows can also be deleted (cancelled).
+**Terminal:** none is terminal as a state; a cancelled row no longer exists.
+> This is **not** one of the ten **DECISION D-018** machines and stores **no status value**: the state of a `public.storefront_media` row is derived from its two timestamps — `STAGED` = `published_at is null`; `LIVE` = `published_at` set and `unpublished_at` null; `RETRACTED` = `unpublished_at` set. It therefore adds no state value to any D-018 enumeration. Fields, the LIVE-only live-source index and the content-addressed object key are owned by [DOMAIN_MODEL.md](DOMAIN_MODEL.md) §4.8; the RPCs that perform each transition by [API_CONTRACT.md](API_CONTRACT.md) §4.43 (driven by the Edge Function of §4.44 and by the Dashboard). The columns follow §0; every transition is server-authoritative and online-only (not a POS/KDS entity, never in the outbox), and runs through an `app.*` `SECURITY DEFINER` RPC that authorizes the actor and writes the audit row, hence `Yes(sensitive)`. `cancel` deletes a STAGED row outright: the §0 tombstone rule (**DECISION D-020**) covers sync-relevant rows, and `storefront_media` never syncs.
+
+### 13.1 Allowed transitions
+
+| From → To | Actor | Conditions | Reason/Approval | Audit | Offline | Reversible |
+| --- | --- | --- | --- | --- | --- | --- |
+| (create) → STAGED | manager / restaurant_owner / org_owner (rank ≥ 2) via `stage_storefront_media` — in practice the Edge Function acting as the signed-in user | the private original exists under this organization + restaurant; exact source bucket / variant (never `(menu-images, w480)`); no row yet at the content address `<prefix>/<sha256>.webp` (identical bytes return the existing row instead) | No | Yes(sensitive) (`settings.storefront.media.staged`) | No-online-only | Yes: cancel |
+| STAGED → LIVE | rank ≥ 2 via `finalize_storefront_media` (the Edge Function) | an object **row** exists in `storefront-media` under the registered key with declared type `image/webp` and exactly the staged size (a point-in-time check of declared metadata, not of the bytes — **OPEN QUESTION Q-036**); another LIVE row of the same (source, variant) is retracted first in the same transaction, and every profile slot using it moves to this row (profile `version + 1`) | No | Yes(sensitive) (`settings.storefront.media.published`; `…retracted` and `settings.storefront.updated` with reason `media_replaced` for a replacement) | No-online-only | Yes: retract |
+| STAGED → (row deleted) | rank ≥ 2 via `cancel_storefront_media` (the Dashboard's discard) | the row is STAGED; the uploaded object, if any, is kept but becomes unregistered (**OPEN QUESTION Q-032**) | No | Yes(sensitive) (`settings.storefront.media.cancelled`) | No-online-only | No (a later stage of the same bytes registers a new row) |
+| LIVE → RETRACTED | rank ≥ 2 via `retract_storefront_media` (the Dashboard); or the server inside `finalize` for a same-source replacement | via `retract`: no profile slot uses the row (otherwise `media_in_use`); via `finalize`: every profile slot using it moves to the new LIVE row in the same transaction (profile `version + 1`), so a slot never points at nothing; `unpublished_at = greatest(now(), published_at)`; the object is kept | Reason `media_replaced` when done by `finalize` | Yes(sensitive) (`settings.storefront.media.retracted`) | No-online-only | Yes: finalize again |
+| RETRACTED → LIVE | rank ≥ 2 via `finalize_storefront_media` with a **new** request id (the Edge Function) | the same object check as STAGED → LIVE; reported as `republished` — required because re-deriving the same bytes lands on the same content address, which cannot be registered twice | No | Yes(sensitive) (`settings.storefront.media.published`) | No-online-only | Yes: retract |
+
+> **Replays never move a state backwards and never report a stale state:** a replayed `stage` of a row cancelled since, a replayed `finalize` of a row retracted or deleted since, and a replayed `retract` of a row LIVE again or deleted since each answer `stale_request` and change nothing ([API_CONTRACT.md](API_CONTRACT.md) §4.43.0). Only a LIVE row can be referenced by a profile slot (the profile writer accepts only LIVE rows of the same restaurant) or served by `public.storefront_menu`.
+
+### 13.2 Forbidden / invalid transitions
+
+- `LIVE → (row deleted)`, `RETRACTED → (row deleted)` — **FORBIDDEN**: `cancel` answers `media_published`; a published row's history is kept.
+- `STAGED → RETRACTED` — **FORBIDDEN**: `retract` answers `media_not_published` (cancel it instead).
+- `LIVE → STAGED`, `RETRACTED → STAGED` — **FORBIDDEN**: `published_at` is never cleared.
+- Two LIVE rows of one (restaurant, source bucket, source key, variant) — **FORBIDDEN** by the LIVE-only unique index; several STAGED rows of one source may coexist with the LIVE row they would replace.
+- `LIVE → RETRACTED` through `retract` while a profile slot uses the row — **FORBIDDEN** (`media_in_use`); clear or replace the slot first (a same-source replacement inside `finalize` retracts it only while moving the slot to the new row in the same transaction).
+- Any transition by `anon`, by a rank-1 member (audited `permission_denied`), by a caller without a covering membership, or across tenants (`42501`) — **FORBIDDEN**.
+- Deleting a `storefront-media` object — no transition does it (**OPEN QUESTION Q-032**). The registration-scoped storage policies still let a manager of the restaurant overwrite or delete a registered object through the raw Storage API, outside this machine and unaudited (**OPEN QUESTION Q-033**).
 
 ---
 
