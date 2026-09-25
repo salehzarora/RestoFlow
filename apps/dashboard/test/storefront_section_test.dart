@@ -321,6 +321,34 @@ bool _enabled(WidgetTester tester, Key key) {
   throw StateError('not a button: $w');
 }
 
+/// DASH-V-2: a PUBLISHED card shows [status] (never the clean "Published."
+/// and never a "public" claim) AND the availability note right under it.
+void _expectPublishedWithNote(
+  WidgetTester tester,
+  AppLocalizations l10n, {
+  required String status,
+  required String reason,
+}) {
+  final statusFinder = find.byKey(const Key('storefront-published-status'));
+  final note = find.byKey(const Key('storefront-availability-note'));
+  expect(tester.widget<Text>(statusFinder).data, status, reason: reason);
+  expect(status, isNot(l10n.storefrontPublishedStatus), reason: reason);
+  expect(status.toLowerCase(), isNot(contains('public')), reason: reason);
+  expect(find.text(l10n.storefrontPublishedStatus), findsNothing);
+  expect(find.text(l10n.storefrontUnpublishedStatus), findsNothing);
+  expect(note, findsOneWidget, reason: reason);
+  expect(
+    tester.widget<Text>(note).data,
+    l10n.storefrontPublishedAvailabilityNote,
+    reason: reason,
+  );
+  expect(
+    tester.getTopLeft(note).dy,
+    greaterThan(tester.getTopLeft(statusFinder).dy),
+    reason: '$reason: the note sits under the status',
+  );
+}
+
 void main() {
   group('read before edit', () {
     testWidgets('unwired: an honest note, no fields', (tester) async {
@@ -1761,6 +1789,87 @@ void main() {
         findsNothing,
       );
       expect(find.byKey(const Key('storefront-status-label')), findsOneWidget);
+    });
+
+    // DASH-V-2: the note belongs to EVERY published state. The C11 test above
+    // pins it for the clean "Published." status only, so a note shown only
+    // while nothing needs fixing would still pass there (only the 360 px
+    // layout run would notice). The blocker states are exactly where the
+    // manager most needs to read that "published" is not "available".
+    testWidgets('DASH-V-2: published but OFFLINE (a blocker hides the page) '
+        'still shows the availability note, under a status that is not '
+        '"Published." and never says "public"', (tester) async {
+      final l10n = await _l10n();
+      for (final blockers in const [
+        ['currency_not_ils'],
+        ['branch_missing'],
+        // A hiding blocker wins over a page-online one.
+        ['tax_not_exclusive', 'no_live_item'],
+      ]) {
+        final repo = _FakeProfileRepo(
+          profile: _profileJson(published: true),
+          blockers: blockers,
+        );
+        await _pump(
+          tester,
+          StorefrontSection(key: UniqueKey(), seams: _seams(repo)),
+        );
+        _expectPublishedWithNote(
+          tester,
+          l10n,
+          status: l10n.storefrontPublishedOfflineStatus,
+          reason: '$blockers',
+        );
+        // The way out stays: Unpublish.
+        expect(_enabled(tester, const Key('storefront-unpublish')), isTrue);
+      }
+    });
+
+    testWidgets('DASH-V-2: published but INCOMPLETE (server blockers, or '
+        'saved hours this editor cannot read) still shows the availability '
+        'note, under a status that is not "Published." and never says '
+        '"public"', (tester) async {
+      final l10n = await _l10n();
+      final cases = <String, _FakeProfileRepo>{
+        'no_live_item': _FakeProfileRepo(
+          profile: _profileJson(published: true),
+          blockers: const ['no_live_item'],
+        ),
+        'hours_missing': _FakeProfileRepo(
+          profile: _profileJson(published: true),
+          blockers: const ['hours_missing'],
+        ),
+        'no_live_item + hours_missing': _FakeProfileRepo(
+          profile: _profileJson(published: true),
+          blockers: const ['no_live_item', 'hours_missing'],
+        ),
+        // No SERVER blocker at all: the card's own hours_unreadable makes it
+        // incomplete.
+        'unreadable hours': _FakeProfileRepo(
+          profile: _profileJson(
+            published: true,
+            openingHours: const {
+              'weekly': [
+                {'dow': 1, 'open': '09:00'},
+              ],
+            },
+          ),
+        ),
+      };
+      for (final entry in cases.entries) {
+        await _pump(
+          tester,
+          StorefrontSection(key: UniqueKey(), seams: _seams(entry.value)),
+        );
+        _expectPublishedWithNote(
+          tester,
+          l10n,
+          status: l10n.storefrontPublishedIncompleteStatus,
+          reason: entry.key,
+        );
+        expect(find.text(l10n.storefrontPublishedChecksMet), findsNothing);
+        expect(_enabled(tester, const Key('storefront-unpublish')), isTrue);
+      }
     });
 
     testWidgets('C11 / DASH-3: a suspended branch is marked in the picker, and '
