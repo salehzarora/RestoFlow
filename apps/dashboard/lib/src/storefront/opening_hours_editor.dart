@@ -226,6 +226,9 @@ class _OpeningHoursEditorState extends State<OpeningHoursEditor> {
     // DASH-2 / OQ-2: ADVISORY only — the server accepts overlapping windows
     // and Save stays enabled; the warnings say why they mislead visitors.
     final overlaps = _v.overlaps();
+    // Q-038: touching windows are an ERROR (Save and Publish stay disabled);
+    // the manager merges them — the editor never merges them itself.
+    final touching = _v.touchingWindows();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -237,7 +240,8 @@ class _OpeningHoursEditorState extends State<OpeningHoursEditor> {
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: RestoflowSpacing.sm),
-        for (var dow = 0; dow < 7; dow++) _day(l10n, theme, dow, overlaps),
+        for (var dow = 0; dow < 7; dow++)
+          _day(l10n, theme, dow, overlaps, touching),
         const Divider(height: RestoflowSpacing.xl),
         Text(
           l10n.storefrontHoursExceptionsTitle,
@@ -292,6 +296,7 @@ class _OpeningHoursEditorState extends State<OpeningHoursEditor> {
     ThemeData theme,
     int dow,
     List<OpeningHoursOverlap> overlaps,
+    List<OpeningHoursOverlap> touching,
   ) {
     final windows = _v.windowsFor(dow);
     final full =
@@ -359,6 +364,14 @@ class _OpeningHoursEditorState extends State<OpeningHoursEditor> {
               l10n.storefrontHoursOverlapWarning,
               Key('storefront-hours-overlap-$dow'),
               warning,
+            ),
+          if (touching.any((t) => t.dow == dow || t.otherDow == dow))
+            _advisory(
+              l10n.storefrontHoursTouchingError,
+              Key('storefront-hours-touching-$dow'),
+              theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           if (here.contains(OpeningHoursOverlapKind.overnightSpill))
             _advisory(

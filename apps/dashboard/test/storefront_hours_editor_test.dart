@@ -274,7 +274,7 @@ void main() {
       initial: const OpeningHours(
         weekly: [
           WeeklyWindow(dow: 0, open: '08:00', close: '12:00'),
-          WeeklyWindow(dow: 0, open: '12:00', close: '16:00'),
+          WeeklyWindow(dow: 0, open: '13:00', close: '16:00'),
           WeeklyWindow(dow: 0, open: '18:00', close: '02:00'),
         ],
       ),
@@ -283,11 +283,84 @@ void main() {
       final k = w.key;
       return k is ValueKey<String> &&
           RegExp(
-            r'^storefront-hours-(overlap|duplicate|spill)-',
+            r'^storefront-hours-(overlap|duplicate|spill|touching)-',
           ).hasMatch(k.value);
     });
     expect(warnings, findsNothing);
   });
+
+  testWidgets('Q-038: touching periods show an ERROR on their day(s), never '
+      'merged by the editor', (tester) async {
+    final l10n = await _l10n('en');
+    const hours = OpeningHours(
+      weekly: [
+        WeeklyWindow(dow: 1, open: '09:00', close: '12:00'),
+        WeeklyWindow(dow: 1, open: '12:00', close: '23:00'),
+        WeeklyWindow(dow: 5, open: '20:00', close: '02:00'),
+        WeeklyWindow(dow: 6, open: '02:00', close: '10:00'),
+        WeeklyWindow(dow: 3, open: '09:00', close: '12:00'),
+        WeeklyWindow(dow: 3, open: '12:01', close: '23:00'),
+      ],
+    );
+    await pump(tester, initial: hours);
+    final touching = find.byKey(const Key('storefront-hours-touching-1'));
+    expect(
+      tester.widget<Text>(touching).data,
+      l10n.storefrontHoursTouchingError,
+    );
+    expect(
+      tester.widget<Text>(touching).style?.color,
+      Theme.of(tester.element(touching)).colorScheme.error,
+    );
+    // Across midnight: shown on both weekdays involved.
+    expect(
+      find.byKey(const Key('storefront-hours-touching-5')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('storefront-hours-touching-6')),
+      findsOneWidget,
+    );
+    // A minute apart is fine; untouched days carry nothing.
+    for (final dow in [0, 2, 3, 4]) {
+      expect(
+        find.byKey(Key('storefront-hours-touching-$dow')),
+        findsNothing,
+        reason: '$dow',
+      );
+    }
+    // Not an advisory overlap, and the editor changed nothing by itself.
+    expect(find.byKey(const Key('storefront-hours-overlap-1')), findsNothing);
+    expect(emitted, isEmpty);
+  });
+
+  for (final code in ['ar', 'he']) {
+    testWidgets('Q-038: the touching error is localized ($code)', (
+      tester,
+    ) async {
+      final l10n = await _l10n(code);
+      final en = await _l10n('en');
+      await pump(
+        tester,
+        locale: code,
+        initial: const OpeningHours(
+          weekly: [
+            WeeklyWindow(dow: 2, open: '09:00', close: '12:00'),
+            WeeklyWindow(dow: 2, open: '12:00', close: '23:00'),
+          ],
+        ),
+      );
+      final text = tester
+          .widget<Text>(find.byKey(const Key('storefront-hours-touching-2')))
+          .data!;
+      expect(text, l10n.storefrontHoursTouchingError);
+      expect(text, isNot(en.storefrontHoursTouchingError));
+      expect(
+        l10n.storefrontBlockerHoursTouching,
+        isNot(en.storefrontBlockerHoursTouching),
+      );
+    });
+  }
 
   testWidgets('in Hebrew the spill warning names the next day in Hebrew', (
     tester,

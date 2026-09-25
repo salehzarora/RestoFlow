@@ -610,7 +610,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           _maxError(l10n, _pauseReason, 120),
         ].any((e) => e != null) ||
         _pauseDraftPast ||
-        !_hours.isValid;
+        !_hours.isValid ||
+        // Q-038: touching windows are refused here (the server accepts them).
+        _hours.hasTouchingWindows;
   }
 
   bool _canCreate(AppLocalizations l10n) =>
@@ -1721,9 +1723,15 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     // blocker — Publish stays disabled and "all requirements met" is never
     // claimed until the hours are repaired and saved.
     final hoursUnreadable = profile.openingHours.hasUnreadableEntries;
+    // Q-038: SAVED hours with touching windows (written before this check, or
+    // through the RPC directly) would announce a wrong closing time; the
+    // server's blockers cannot see them, so the card adds its own.
+    final hoursTouching =
+        !hoursUnreadable && profile.openingHours.hasTouchingWindows;
     final blockers = [
       ...derived.publishBlockers,
       if (hoursUnreadable) kStorefrontClientBlockerHoursUnreadable,
+      if (hoursTouching) kStorefrontClientBlockerHoursTouching,
     ];
     final canPublish = !published && blockers.isEmpty && !dirty && !_busy;
     // C11 (OQ-3 / Q-035 / DASH-3 / DASH-5): the status is the SERVER's
@@ -1739,7 +1747,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             RestoflowTone.neutral,
             Icons.public_off,
           )
-        : switch (hoursUnreadable && page == StorefrontPublishedPage.online
+        : switch ((hoursUnreadable || hoursTouching) &&
+                  page == StorefrontPublishedPage.online
               // Served, but with hours it cannot state correctly.
               ? StorefrontPublishedPage.incomplete
               : page) {

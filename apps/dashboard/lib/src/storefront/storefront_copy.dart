@@ -48,6 +48,13 @@ String storefrontReasonMessage(AppLocalizations l10n, String? reason) =>
 /// hours are repaired and saved.
 const String kStorefrontClientBlockerHoursUnreadable = 'hours_unreadable';
 
+/// The Dashboard's OWN publish blocker (not a server code): the SAVED opening
+/// hours hold windows that touch (`OpeningHours.touchingWindows`). The
+/// database accepts them (OPEN QUESTION Q-038), but the public read would
+/// announce the boundary as the closing time, so Publish stays disabled until
+/// the windows are merged and saved.
+const String kStorefrontClientBlockerHoursTouching = 'hours_touching';
+
 /// The localized label of a publish blocker, saying where to fix it (unknown
 /// codes fall back to a generic line carrying the code).
 String storefrontBlockerLabel(AppLocalizations l10n, String code) =>
@@ -61,5 +68,7 @@ String storefrontBlockerLabel(AppLocalizations l10n, String code) =>
       'hours_missing' => l10n.storefrontBlockerHoursMissing,
       kStorefrontClientBlockerHoursUnreadable =>
         l10n.storefrontBlockerHoursUnreadable,
+      kStorefrontClientBlockerHoursTouching =>
+        l10n.storefrontBlockerHoursTouching,
       _ => l10n.storefrontBlockerUnknown(code),
     };

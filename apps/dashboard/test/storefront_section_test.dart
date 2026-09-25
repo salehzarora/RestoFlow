@@ -6,6 +6,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
 import 'package:restoflow_dashboard/src/admin/supabase_settings_repository.dart';
 import 'package:restoflow_dashboard/src/admin/timezone_catalog.dart';
+import 'package:restoflow_dashboard/src/storefront/opening_hours_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
@@ -989,6 +990,146 @@ void main() {
       expect(error, findsNothing);
       expect(find.byKey(const Key('storefront-ready')), findsOneWidget);
       expect(_enabled(tester, const Key('storefront-publish')), isTrue);
+    });
+
+    testWidgets('Q-038: touching periods in the DRAFT disable Save; merging '
+        'them into one continuous period re-enables it', (tester) async {
+      final l10n = await _l10n();
+      final repo = _FakeProfileRepo(profile: _profileJson());
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-tagline')),
+        'Fresh',
+      );
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, const Key('storefront-save')), isTrue);
+      // Build 09:00-12:00 + 12:00-23:00 through the section's own seam.
+      final editor = tester.widget<OpeningHoursEditor>(
+        find.byKey(const Key('storefront-hours')),
+      );
+      editor.onChanged(
+        const OpeningHours(
+          weekly: [
+            WeeklyWindow(dow: 1, open: '09:00', close: '12:00'),
+            WeeklyWindow(dow: 1, open: '12:00', close: '23:00'),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('storefront-hours-touching-1')))
+            .data,
+        l10n.storefrontHoursTouchingError,
+      );
+      expect(_enabled(tester, const Key('storefront-save')), isFalse);
+      expect(repo.saves, isEmpty);
+      // 12:01 is a separate period: allowed.
+      editor.onChanged(
+        const OpeningHours(
+          weekly: [
+            WeeklyWindow(dow: 1, open: '09:00', close: '12:00'),
+            WeeklyWindow(dow: 1, open: '12:01', close: '23:00'),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('storefront-hours-touching-1')),
+        findsNothing,
+      );
+      expect(_enabled(tester, const Key('storefront-save')), isTrue);
+      // The merged period: allowed, and saved exactly as entered.
+      editor.onChanged(
+        const OpeningHours(
+          weekly: [WeeklyWindow(dow: 1, open: '09:00', close: '23:00')],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      expect((repo.saves.single.patch['opening_hours']! as Map)['weekly'], [
+        {'dow': 1, 'open': '09:00', 'close': '23:00'},
+      ]);
+    });
+
+    testWidgets('Q-038: SAVED touching periods (accepted by the database) '
+        'disable Publish with the card\'s own blocker and are never '
+        'merged silently', (tester) async {
+      final l10n = await _l10n();
+      const touching = {
+        'weekly': [
+          {'dow': 1, 'open': '09:00', 'close': '12:00'},
+          {'dow': 1, 'open': '12:00', 'close': '23:00'},
+        ],
+        'exceptions': <Object?>[],
+      };
+      final repo = _FakeProfileRepo(
+        profile: _profileJson(openingHours: touching),
+      );
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      // The server's blockers are empty, yet Publish is disabled.
+      expect(_enabled(tester, const Key('storefront-publish')), isFalse);
+      expect(find.byKey(const Key('storefront-ready')), findsNothing);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const Key('storefront-blocker-hours_touching')),
+            )
+            .data,
+        l10n.storefrontBlockerHoursTouching,
+      );
+      expect(
+        find.byKey(const Key('storefront-hours-touching-1')),
+        findsOneWidget,
+      );
+      // Another field's save cannot go through while the error stands, and
+      // nothing rewrote the stored value.
+      await tester.enterText(
+        find.byKey(const Key('storefront-tagline')),
+        'Fresh',
+      );
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, const Key('storefront-save')), isFalse);
+      expect(repo.saves, isEmpty);
+      expect(repo.profile!['opening_hours'], touching);
+      // Merge into one continuous period, save: Publish is enabled.
+      tester
+          .widget<OpeningHoursEditor>(find.byKey(const Key('storefront-hours')))
+          .onChanged(
+            const OpeningHours(
+              weekly: [WeeklyWindow(dow: 1, open: '09:00', close: '23:00')],
+            ),
+          );
+      await tester.pumpAndSettle();
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      expect(
+        find.byKey(const Key('storefront-blocker-hours_touching')),
+        findsNothing,
+      );
+      expect(_enabled(tester, const Key('storefront-publish')), isTrue);
+    });
+
+    testWidgets('Q-038: a PUBLISHED storefront with saved touching periods is '
+        'never shown as fully published', (tester) async {
+      final l10n = await _l10n();
+      final repo = _FakeProfileRepo(
+        profile: _profileJson(
+          published: true,
+          openingHours: const {
+            'weekly': [
+              {'dow': 1, 'open': '09:00', 'close': '12:00'},
+              {'dow': 1, 'open': '12:00', 'close': '23:00'},
+            ],
+            'exceptions': <Object?>[],
+          },
+        ),
+      );
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      expect(find.text(l10n.storefrontPublishedStatus), findsNothing);
+      expect(
+        find.text(l10n.storefrontPublishedIncompleteStatus),
+        findsOneWidget,
+      );
     });
 
     testWidgets('C10: a PUBLISHED storefront with unreadable hours is never '

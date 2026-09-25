@@ -15682,6 +15682,18 @@ abstract class AppLocalizations {
   /// **'The saved opening hours contain entries this editor cannot read: repair them in Opening hours, then save.'**
   String get storefrontBlockerHoursUnreadable;
 
+  /// STOREFRONT-PUBLISH-001 (Q-038): ERROR under a weekday where one opening period ends exactly when another begins; Save and Publish stay disabled until the manager merges them (the editor never merges them itself).
+  ///
+  /// In en, this message translates to:
+  /// **'These periods touch. Merge them into one continuous opening period.'**
+  String get storefrontHoursTouchingError;
+
+  /// STOREFRONT-PUBLISH-001 (Q-038): The Dashboard's own publish blocker for saved opening hours whose periods touch (not a server code).
+  ///
+  /// In en, this message translates to:
+  /// **'The saved opening hours have periods that touch: merge them into one continuous period in Opening hours, then save.'**
+  String get storefrontBlockerHoursTouching;
+
   /// STOREFRONT-PUBLISH-001: Logo slot: the publish function refused the CURRENT receipt logo (recipe storefront-media-c4 envelope). {reason} is the refusal sentence. Publish stays disabled for that receipt logo until it is replaced.
   ///
   /// In en, this message translates to:

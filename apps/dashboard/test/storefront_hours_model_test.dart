@@ -680,7 +680,8 @@ void main() {
     });
 
     test('touching, separate, early-morning and invalid windows are not '
-        'flagged', () {
+        'flagged as ADVISORY overlaps (touching is touchingWindows()\' '
+        'blocking concern)', () {
       for (final weekly in [
         // touching (one ends when the other starts)
         [
@@ -712,6 +713,139 @@ void main() {
       ]) {
         expect(hours(weekly).overlaps(), isEmpty, reason: '$weekly');
       }
+    });
+  });
+
+  group('touchingWindows() — Q-038: touching windows are BLOCKING', () {
+    OpeningHours hours(List<WeeklyWindow> weekly) =>
+        OpeningHours(weekly: weekly);
+    const w = WeeklyWindow.new;
+    OpeningHoursOverlap touch(int dow, int i, int otherDow, int j) =>
+        OpeningHoursOverlap(
+          OpeningHoursOverlapKind.touching,
+          dow: dow,
+          index: i,
+          otherDow: otherDow,
+          otherIndex: j,
+        );
+
+    test('09:00-12:00 + 12:00-23:00 touch (the reproduction)', () {
+      final h = hours([
+        w(dow: 1, open: '09:00', close: '12:00'),
+        w(dow: 1, open: '12:00', close: '23:00'),
+      ]);
+      expect(h.touchingWindows(), [touch(1, 0, 1, 1)]);
+      expect(h.hasTouchingWindows, isTrue);
+      // The server validator accepts it, and it is not an advisory overlap:
+      // only touchingWindows() refuses it.
+      expect(h.isValid, isTrue);
+      expect(OpeningHours.isValidJson(h.toJson()), isTrue);
+      expect(h.overlaps(), isEmpty);
+    });
+
+    test('the order of the windows does not matter', () {
+      final h = hours([
+        w(dow: 1, open: '12:00', close: '23:00'),
+        w(dow: 1, open: '09:00', close: '12:00'),
+      ]);
+      expect(h.touchingWindows(), [touch(1, 0, 1, 1)]);
+    });
+
+    test('09:00-12:00 + 12:01-23:00 do not touch; nor does a split shift', () {
+      for (final weekly in [
+        [
+          w(dow: 1, open: '09:00', close: '12:00'),
+          w(dow: 1, open: '12:01', close: '23:00'),
+        ],
+        [
+          w(dow: 0, open: '08:00', close: '12:00'),
+          w(dow: 0, open: '13:00', close: '17:00'),
+          w(dow: 0, open: '18:00', close: '02:00'),
+        ],
+        // a true overlap stays the ADVISORY overlap it was
+        [
+          w(dow: 2, open: '09:00', close: '12:00'),
+          w(dow: 2, open: '11:00', close: '23:00'),
+        ],
+      ]) {
+        expect(hours(weekly).touchingWindows(), isEmpty, reason: '$weekly');
+        expect(hours(weekly).hasTouchingWindows, isFalse, reason: '$weekly');
+      }
+      expect(
+        hours([
+          w(dow: 2, open: '09:00', close: '12:00'),
+          w(dow: 2, open: '11:00', close: '23:00'),
+        ]).overlaps().single.kind,
+        OpeningHoursOverlapKind.sameDay,
+      );
+    });
+
+    test('overnight boundaries: a window ending at midnight or past it '
+        'touching the next weekday, Saturday into Sunday, and the same '
+        "day's window ending when the overnight one opens", () {
+      // Friday 20:00-02:00 + Saturday 02:00-10:00
+      expect(
+        hours([
+          w(dow: 5, open: '20:00', close: '02:00'),
+          w(dow: 6, open: '02:00', close: '10:00'),
+        ]).touchingWindows(),
+        [touch(5, 0, 6, 0)],
+      );
+      // Monday 18:00-00:00 + Tuesday 00:00-02:00 (a close of 00:00 is
+      // midnight: the next weekday's window opening at 00:00 touches it)
+      expect(
+        hours([
+          w(dow: 1, open: '18:00', close: '00:00'),
+          w(dow: 2, open: '00:00', close: '02:00'),
+        ]).touchingWindows(),
+        [touch(1, 0, 2, 0)],
+      );
+      // Saturday 22:00-03:00 + Sunday 03:00-11:00 (the week wraps)
+      expect(
+        hours([
+          w(dow: 6, open: '22:00', close: '03:00'),
+          w(dow: 0, open: '03:00', close: '11:00'),
+        ]).touchingWindows(),
+        [touch(6, 0, 0, 0)],
+      );
+      // Wednesday 12:00-18:00 + Wednesday 18:00-02:00
+      expect(
+        hours([
+          w(dow: 3, open: '12:00', close: '18:00'),
+          w(dow: 3, open: '18:00', close: '02:00'),
+        ]).touchingWindows(),
+        [touch(3, 0, 3, 1)],
+      );
+      // A minute apart, or a spill into a later window, does not touch.
+      for (final weekly in [
+        [
+          w(dow: 5, open: '20:00', close: '02:00'),
+          w(dow: 6, open: '02:01', close: '10:00'),
+        ],
+        [
+          w(dow: 1, open: '18:00', close: '23:59'),
+          w(dow: 2, open: '00:00', close: '02:00'),
+        ],
+        // an overnight window and the SAME weekday's early window: the
+        // overnight one ends on the next weekday
+        [
+          w(dow: 4, open: '20:00', close: '02:00'),
+          w(dow: 4, open: '02:00', close: '06:00'),
+        ],
+      ]) {
+        expect(hours(weekly).touchingWindows(), isEmpty, reason: '$weekly');
+      }
+    });
+
+    test('windows the validator refuses are skipped', () {
+      expect(
+        hours([
+          w(dow: 4, open: '09:00', close: '09:00'),
+          w(dow: 4, open: '09:00', close: '12:00'),
+          w(dow: 4, open: '9:00', close: '17:00'),
+        ]).touchingWindows(),
+        isEmpty,
+      );
     });
   });
 

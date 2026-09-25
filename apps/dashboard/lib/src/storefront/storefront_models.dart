@@ -643,6 +643,12 @@ enum OpeningHoursOverlapKind {
   /// An overnight window that runs past midnight into a window of the NEXT
   /// weekday (Saturday runs into Sunday).
   overnightSpill,
+
+  /// Two windows that TOUCH: one closes at exactly the minute the other opens
+  /// (09:00–12:00 and 12:00–23:00), on one weekday or across midnight into the
+  /// next weekday. Unlike the kinds above this one is BLOCKING — reported by
+  /// [OpeningHours.touchingWindows], never by [OpeningHours.overlaps].
+  touching,
 }
 
 /// One advisory finding of [OpeningHours.overlaps]. [index] / [otherIndex]
@@ -1025,6 +1031,68 @@ class OpeningHours {
     }
     return out;
   }
+
+  /// The weekly windows that TOUCH ([OpeningHoursOverlapKind.touching]): one
+  /// closes at exactly the minute another opens — on one weekday, or an
+  /// overnight window closing at the minute the next weekday's window opens
+  /// (Saturday runs into Sunday). BLOCKING, unlike [overlaps]: the public read
+  /// (`app.storefront_service_window`) announces the closing time of ONE
+  /// window, so touching windows make the page say the restaurant closes at
+  /// the boundary although it stays open. The database validator accepts them
+  /// (OPEN QUESTION Q-038), so the editor refuses to save them and asks the
+  /// manager to merge them into one continuous window; it never merges them
+  /// itself. Windows the validator refuses are skipped ([validate] reports
+  /// them), and overlapping windows stay [overlaps]' advisory concern.
+  /// Exceptions are one window per date and are not compared.
+  List<OpeningHoursOverlap> touchingWindows() {
+    final out = <OpeningHoursOverlap>[];
+    for (var dow = 0; dow < 7; dow++) {
+      final day = windowsFor(dow);
+      final next = (dow + 1) % 7;
+      final nextDay = windowsFor(next);
+      for (var i = 0; i < day.length; i++) {
+        final a = _spanOf(day[i].open, day[i].close);
+        if (a == null) continue;
+        for (var j = i + 1; j < day.length; j++) {
+          final b = _spanOf(day[j].open, day[j].close);
+          if (b == null) continue;
+          if (a.$2 == b.$1 || b.$2 == a.$1) {
+            out.add(
+              OpeningHoursOverlap(
+                OpeningHoursOverlapKind.touching,
+                dow: dow,
+                index: i,
+                otherDow: dow,
+                otherIndex: j,
+              ),
+            );
+          }
+        }
+        // An overnight window (close at 00:00 included) closing at the minute
+        // a window of the next weekday opens.
+        final spillEnd = a.$2 - 1440;
+        if (spillEnd < 0) continue;
+        for (var k = 0; k < nextDay.length; k++) {
+          final b = _spanOf(nextDay[k].open, nextDay[k].close);
+          if (b != null && b.$1 == spillEnd) {
+            out.add(
+              OpeningHoursOverlap(
+                OpeningHoursOverlapKind.touching,
+                dow: dow,
+                index: i,
+                otherDow: next,
+                otherIndex: k,
+              ),
+            );
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Whether [touchingWindows] found anything: Save and Publish stay disabled.
+  bool get hasTouchingWindows => touchingWindows().isNotEmpty;
 
   /// The window "Add hours" seeds for weekday [dow] — never an exact
   /// duplicate of a window that day already has:
