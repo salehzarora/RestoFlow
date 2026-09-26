@@ -167,7 +167,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
         }
         if (e instanceof SourceRejected || e instanceof DerivationError) {
           // the source's typed refusal stands; a codec failure that left the engine untrusted
-          // (a one-per-worker wasm instance threw) also retires this worker
+          // (a wasm-bindgen instance threw) also retires this worker
           if (deriver.poisoned === true) {
             poisoned = true;
             retireWorker();

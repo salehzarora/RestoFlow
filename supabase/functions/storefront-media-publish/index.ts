@@ -58,7 +58,7 @@ function engine(): Promise<unknown> {
   return enginePromise;
 }
 
-// After an engine trap, a self-test mismatch, or an exception out of a one-per-worker
+// After an engine trap, a self-test mismatch, or an exception out of the PNG or resize
 // wasm instance, the engine is not trusted: the handler answers (a typed refusal or a
 // retryable 503) and this worker ends itself, so the runtime routes the next request
 // to a fresh isolate instead of a cheap-but-broken one. EDGE-2: ending the isolate may

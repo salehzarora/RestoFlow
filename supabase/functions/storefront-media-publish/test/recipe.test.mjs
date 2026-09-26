@@ -22,6 +22,7 @@ import { inflateExact, PIECE, PngRejected, pngRawSize, sanitizePng } from '../li
 import { applyOrientation } from '../lib/orient.mjs';
 import { boxReduce } from '../lib/box.mjs';
 import { codecs, deriver, readWasm } from './engine.mjs';
+import { loadCodecs } from '../lib/codecs.mjs';
 import { chunk, fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256, PNG_SIGNATURE, withSofSize } from './fixtures.mjs';
 import { GOLDENS, REFUSALS, SPIKE_GOLDENS } from './goldens.mjs';
 
@@ -468,7 +469,7 @@ test('R17. metadata is stripped: EXIF GPS in a JPEG, tEXt in a PNG, ICCP / EXIF 
 });
 
 // ------------------------------------------------------------------ typed failure mapping (fake codecs)
-test('R18. codec failures map to the public codes; a trap or an exception out of a one-per-worker module poisons the engine', async () => {
+test('R18. codec failures map to the public codes; a trap or an exception out of the PNG or resize module poisons the engine', async () => {
   const real = await codecs();
   const png = await fixture('logo_alpha_2000x1000');
   const jpeg = await fixture('jpeg_logo_900x450');
@@ -539,4 +540,170 @@ test('R20. a PNG refusal from the image-data bound keeps its code and passes onl
   const d = await deriver();
   await assert.rejects(d.derive(await fixture('bad_png_raw_too_short'), { variant: 'w480', source: 'restaurant-logos', rung: 0 }),
     (e) => e instanceof SourceRejected && e.code === 'corrupt' && /^corrupt: png image data inflates to \d+ of 320200 B$/.test(e.message));
+});
+
+// ------------------------------------------------------------------ codec instance lifecycle (STOREFRONT-MEDIA-MEMORY-001, D-041 point 3)
+const shaOf = (u8) => sha(Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength));
+
+/**
+ * Builds a fresh engine over the pinned wasm — the raw codecs (`make` = loadCodecs) or a verified deriver
+ * (`make` = createDeriver) — and records, while `run` executes, every compile, every WebAssembly.Module built
+ * from bytes, and every WebAssembly.Instance with the compiled module it came from (keyed png / resize /
+ * jpegDec / webpEnc / webpDec) and its own linear memory with its size at creation. The WebAssembly globals
+ * are restored afterwards.
+ */
+async function withInstanceLog(run, make = loadCodecs) {
+  const wasm = await readWasm();
+  const keyOf = new Map(Object.entries(wasm).map(([k, v]) => [v, k]));
+  const { Instance, Module, compile } = WebAssembly;
+  const log = { compiles: 0, modulesBuilt: 0, keys: new Map(), instances: [] };
+  WebAssembly.compile = async (bytes) => {
+    log.compiles++;
+    const m = await compile(bytes);
+    log.keys.set(m, keyOf.get(bytes) ?? 'unknown');
+    return m;
+  };
+  WebAssembly.Module = new Proxy(Module, { construct(t, a, n) { log.modulesBuilt++; return Reflect.construct(t, a, n); } });
+  WebAssembly.Instance = new Proxy(Instance, {
+    construct(t, a, n) {
+      const instance = Reflect.construct(t, a, n);
+      const memory = Object.values(instance.exports).find((v) => v instanceof WebAssembly.Memory) ?? null;
+      log.instances.push({ key: log.keys.get(a[0]) ?? 'unknown', module: a[0], instance, memory, bytesAtStart: memory ? memory.buffer.byteLength : null });
+      return instance;
+    },
+  });
+  try {
+    return await run(await make(wasm), log);
+  } finally {
+    Object.assign(WebAssembly, { Instance, Module, compile });
+  }
+}
+const of = (log, key) => log.instances.filter((x) => x.key === key);
+const size = (x) => x.memory.buffer.byteLength;
+
+test('R21. STOREFRONT-MEDIA-MEMORY-001: every PNG decode runs on a FRESH decoder instance with its own linear memory, from the ONE compiled module; nothing is compiled per call', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (c, log) => {
+    assert.equal(log.compiles, 5, 'the five modules are compiled once, when the codecs load');
+    assert.equal(log.instances.length, 0, 'loading the codecs creates no instance');
+    const a = await c.decodePng(src);
+    const first = size(of(log, 'png')[0]);
+    const b = await c.decodePng(src);
+    const png = of(log, 'png');
+    assert.equal(png.length, 2, 'one new PNG decoder instance per call');
+    assert.equal(log.instances.length, 2, 'a PNG decode instantiates nothing else');
+    assert.ok(png[0].instance !== png[1].instance, 'a new instance per call');
+    assert.ok(png[0].module === png[1].module, 'both instances come from the one compiled module');
+    assert.ok(png[0].memory && png[1].memory && png[0].memory !== png[1].memory, 'each call has its own linear memory');
+    assert.ok(first > png[0].bytesAtStart, 'the first decode ran on, and grew, its own instance');
+    assert.equal(png[1].bytesAtStart, png[0].bytesAtStart, 'the second instance starts from the initial size, never from the first call\'s grown heap');
+    assert.ok(size(png[1]) > png[1].bytesAtStart, 'the second decode ran on its own new instance (it grew)');
+    assert.equal(size(png[0]), first, 'the second decode never touched the first instance');
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.deepEqual([a.width, a.height, shaOf(a.data)], [b.width, b.height, shaOf(b.data)], 'fresh instances decode identical pixels');
+  });
+});
+
+test('R22. STOREFRONT-MEDIA-MEMORY-001: every resize runs on a FRESH resize instance with its own linear memory, from the ONE compiled module; nothing is compiled per call', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (c, log) => {
+    const img = await c.decodePng(src);
+    const px = new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.length);
+    const { method, premultiply, linearRGB } = RECIPE.resize;
+    const from = log.instances.length;
+    const a = c.resize(px, img.width, img.height, 960, 480, method, premultiply, linearRGB);
+    const first = size(log.instances[from]);
+    const b = c.resize(px, img.width, img.height, 960, 480, method, premultiply, linearRGB);
+    const rs = log.instances.slice(from);
+    assert.deepEqual(rs.map((x) => x.key), ['resize', 'resize'], 'one new resize instance per call, and nothing else');
+    assert.ok(rs[0].instance !== rs[1].instance, 'a new instance per call');
+    assert.ok(rs[0].module === rs[1].module, 'both instances come from the one compiled module');
+    assert.ok(rs[0].memory && rs[1].memory && rs[0].memory !== rs[1].memory, 'each call has its own linear memory');
+    assert.ok(first > rs[0].bytesAtStart, 'the first resize ran on, and grew, its own instance');
+    assert.equal(rs[1].bytesAtStart, rs[0].bytesAtStart, 'the second instance starts from the initial size, never from the first call\'s grown heap');
+    assert.ok(size(rs[1]) > rs[1].bytesAtStart, 'the second resize ran on its own new instance (it grew)');
+    assert.equal(size(rs[0]), first, 'the second resize never touched the first instance');
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.equal(a.length, 960 * 480 * 4);
+    assert.ok(a.buffer !== rs[0].memory.buffer, 'the output is a copy, never a view of the instance memory');
+    assert.equal(shaOf(a), shaOf(b), 'fresh instances resize to identical pixels');
+  });
+});
+
+test('R23. STOREFRONT-MEDIA-MEMORY-001: the Emscripten codecs keep a fresh instance per call (JPEG decode, WebP decode, WebP encode), each from its one compiled module', async () => {
+  const jpeg = await fixture('jpeg_prog_1600x1200');
+  const webpSrc = await fixture('webp_lossy_alpha_900x600');
+  await withInstanceLog(async (c, log) => {
+    const j1 = await c.decodeJpeg(jpeg);
+    const j2 = await c.decodeJpeg(jpeg);
+    const w1 = await c.decodeWebp(webpSrc);
+    const w2 = await c.decodeWebp(webpSrc);
+    const opts = { ...RECIPE.webp, quality: RECIPE.ladder[0] };
+    const e1 = new Uint8Array(await c.encodeWebp(w1.data, w1.width, w1.height, opts));
+    const e2 = new Uint8Array(await c.encodeWebp(w1.data, w1.width, w1.height, opts));
+    assert.deepEqual(log.instances.map((x) => x.key), ['jpegDec', 'jpegDec', 'webpDec', 'webpDec', 'webpEnc', 'webpEnc']);
+    for (let i = 0; i < 6; i += 2) {
+      assert.ok(log.instances[i].instance !== log.instances[i + 1].instance, `${log.instances[i].key}: a new instance per call`);
+      assert.ok(log.instances[i].module === log.instances[i + 1].module, `${log.instances[i].key}: one compiled module`);
+    }
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.equal(shaOf(j1.image.data), shaOf(j2.image.data));
+    assert.equal(shaOf(w1.data), shaOf(w2.data));
+    assert.equal(shaOf(e1), shaOf(e2));
+  });
+});
+
+test('R24. STOREFRONT-MEDIA-MEMORY-001: a failed PNG decode leaves nothing behind for the next call (a fresh instance decodes identically), and the conservative poison rule is unchanged', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  const bad = await fixture('bad_png_filter_type');
+  await withInstanceLog(async (c, log) => {
+    const before = await c.decodePng(good);
+    await assert.rejects(c.decodePng(bad), (e) => e instanceof Error && !(e instanceof WebAssembly.RuntimeError), 'a Rust error, not a trap');
+    const settled = of(log, 'png').map(size);
+    const after = await c.decodePng(good);
+    const png = of(log, 'png');
+    assert.equal(png.length, 3);
+    assert.equal(new Set(png.map((x) => x.instance)).size, 3, 'the failed call\'s instance is never reused');
+    assert.equal(png[2].bytesAtStart, png[0].bytesAtStart, 'the call after the failure starts from the initial size');
+    assert.ok(size(png[2]) > png[2].bytesAtStart, 'the call after the failure ran on its own new instance (it grew)');
+    assert.deepEqual(png.slice(0, 2).map(size), settled, 'the call after the failure never touched the earlier instances');
+    assert.deepEqual([after.width, after.height, shaOf(after.data)], [before.width, before.height, shaOf(before.data)]);
+  });
+  // the deriver still treats ANY exception out of the PNG decoder as poisoning (review FN-V1; kept by D-041).
+  // A separate deriver, so the shared one of this process stays trusted.
+  const d = await createDeriver(await readWasm());
+  await assert.rejects(d.derive(bad, { variant: 'w480', source: 'restaurant-logos', rung: 0 }), (e) => e instanceof DerivationError && e.code === 'decode_failed');
+  assert.equal(d.poisoned, true);
+  await assert.rejects(d.derive(good, { variant: 'w480', source: 'restaurant-logos', rung: 0 }), (e) => e instanceof DerivationError && e.code === 'engine_unavailable');
+});
+
+test('R25. STOREFRONT-MEDIA-MEMORY-001: two sequential derives through createDeriver (the function\'s own path, self-test included) each run on their own fresh PNG decoder and resize instances; the five modules are compiled once', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (d, log) => {
+    assert.equal(log.compiles, 5, 'the engine compiles the five modules once');
+    const selfTest = { png: of(log, 'png').length, resize: of(log, 'resize').length };
+    assert.deepEqual(selfTest, { png: 1, resize: 1 }, 'the EDGE-4 self-test ran on its own PNG and resize instances');
+    // w960: the 2000 x 1000 source is box-reduced to 1000 x 500 and resized to 960 x 480, so both instances must grow
+    const a = await d.derive(src, { variant: 'w960', source: 'restaurant-logos', rung: 0 });
+    const firstPng = of(log, 'png').map(size);
+    const firstRs = of(log, 'resize').map(size);
+    const b = await d.derive(src, { variant: 'w960', source: 'restaurant-logos', rung: 0 });
+    for (const [key, earlier] of [['png', firstPng], ['resize', firstRs]]) {
+      const all = of(log, key);
+      assert.equal(all.length, 3, `${key}: the self-test and each derive got their own instance`);
+      assert.equal(new Set(all.map((x) => x.instance)).size, 3, `${key}: never reused`);
+      assert.equal(new Set(all.map((x) => x.module)).size, 1, `${key}: one compiled module`);
+      assert.equal(all[2].bytesAtStart, all[1].bytesAtStart, `${key}: the second derive starts from the initial size`);
+      assert.ok(size(all[1]) > all[1].bytesAtStart && size(all[2]) > all[2].bytesAtStart, `${key}: each derive ran on its own instance`);
+      assert.deepEqual(all.slice(0, 2).map(size), earlier, `${key}: the second derive never touched an earlier instance`);
+    }
+    assert.equal(log.compiles, 5, 'no compile per derive');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per derive');
+    assert.equal(a.status, 'derived');
+    assert.equal(b.sha256, a.sha256, 'both derives produce the same bytes');
+    assert.equal(d.poisoned, false);
+  }, createDeriver);
 });

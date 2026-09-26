@@ -39,10 +39,11 @@
 // resize or encode); self_check_failed; output_too_large; unknown_variant /
 // unknown_source / unknown_rung. A WebAssembly trap is engine_unavailable (the
 // handler answers a retryable 503 and retires the worker). The PNG and resize
-// modules are one instance per worker, and a Rust error thrown out of them does
-// not unwind (leaked heap and shadow stack: repeated failures corrupt the
-// instance), so ANY exception from them also poisons this deriver: the request
-// still gets its typed refusal, and the handler then retires the worker.
+// modules are wasm-bindgen modules (a fresh instance per call since
+// STOREFRONT-CANARY-GATE-001 / D-041), and a Rust error thrown out of them does not
+// unwind (leaked heap and shadow stack), so ANY exception from them still
+// poisons this deriver (kept unchanged): the request gets its typed refusal,
+// and the handler then retires the worker.
 //
 // EDGE-4: createDeriver() derives one small EMBEDDED vector (SELF_TEST) before
 // it returns and compares the sha-256 with its pinned golden; a mismatch (for
@@ -120,7 +121,7 @@ export const RECIPE = Object.freeze({
     jpegMaxProgressiveScanWork: 400000000, // scans x coefficients
     maxAspect: 8, // mirrors kMaxLogoAspectRatio
     maxMetadataBytes: 1048576, // per chunk (PNG, WebP) / total APPn + COM payload (JPEG)
-    // The PNG decoder is one instance per worker (its heap never shrinks): its working set is the
+    // The PNG decoder's heap never shrinks within one instance (a fresh instance per call since D-041): its working set is the
     // inflated image data + the 8-bit RGBA output. 32 MiB + 16 KiB of image data admits every 8-bit
     // RGBA PNG under the 8 MiP cap (4 B/px + the filter bytes, Adam7 included) and a 16-bit RGBA one up
     // to ~4 MiP (checked from the IHDR before any inflate).
@@ -215,7 +216,7 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
   const codecFailure = (e, { taints }) => {
     if (e instanceof DerivationError || e instanceof SourceRejected) return e;
     if (isTrap(e)) { poisoned = true; return new DerivationError('engine_unavailable', detailOf(e)); }
-    if (taints) poisoned = true; // a one-per-worker wasm-bindgen instance threw: its state is not trusted
+    if (taints) poisoned = true; // a wasm-bindgen instance threw: kept conservative, the worker retires
     return new DerivationError('decode_failed', detailOf(e));
   };
 

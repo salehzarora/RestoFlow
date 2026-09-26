@@ -136,3 +136,132 @@ test('S7. index.ts reads exactly the five static wasm files (by URL relative to 
   assert.deepEqual(polyfills, ['lib/codecs.mjs']);
   await readFile(new URL('THIRD_PARTY_NOTICES.txt', VENDOR_DIR)); // the notices exist where the bundle ships them
 });
+
+test('S8. no fault or kill channel (a lexical guard; code review is the backstop): through any receiver, the function reads three request headers and never the URL, the query or the header map, and Deno.serve takes createHandler directly (STOREFRONT-CANARY-GATE-001); and the PNG decoder and resize module are instantiated per call from the one compiled module, never once per worker (STOREFRONT-MEDIA-MEMORY-001)', async () => {
+  // every `.headers` token, whatever its receiver, must be `<receiver>.headers.get('<literal>')` from this list
+  const ALLOWED = [
+    "lib/caller.mjs:res.headers.get('content-length')",
+    "lib/handler.mjs:req.headers.get('authorization')",
+    "lib/handler.mjs:req.headers.get('content-length')",
+    "lib/handler.mjs:req.headers.get('content-type')",
+    // the pinned glue's own streaming-load path, unreachable: the per-call factories return only initSync and decode / resize (L7 pins the text)
+    "lib/png_instance.mjs:module.headers.get('Content-Type')",
+    "lib/resize_instance.mjs:module.headers.get('Content-Type')",
+  ];
+  const strip = (s) => s.replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, "''");
+  const scan = (name, code) => {
+    const out = [];
+    for (const m of code.matchAll(/\.\s*headers\b/g)) {
+      const lit = /^\.headers\.get\('([^'\\]*)'\)/.exec(code.slice(m.index));
+      const recv = /([A-Za-z_$][\w$]*)$/.exec(code.slice(0, m.index));
+      out.push(lit && recv ? `${name}:${recv[1]}.headers.get('${lit[1]}')` : `${name}:BAD ${code.slice(m.index, m.index + 40)}`);
+    }
+    for (const m of code.matchAll(/\.\s*url\b/g)) {
+      if (code.slice(Math.max(0, m.index - 11), m.index) !== 'import.meta') out.push(`${name}:BAD url ${code.slice(Math.max(0, m.index - 20), m.index + 20)}`);
+    }
+    for (const m of code.matchAll(/Deno\.serve\(/g)) {
+      if (!code.startsWith('Deno.serve(createHandler({', m.index)) out.push(`${name}:BAD a wrapper around the handler`);
+    }
+    if (/\bsearchParams\b|\[\s*['"`](?:headers|url|searchParams)['"`]\s*\]/.test(code)) out.push(`${name}:BAD the query or a computed member`);
+    if (/(?:const|let|var)\s*\{[^}]*\b(?:headers|url)\b|\(\s*\{[^}]*\b(?:headers|url)\b[^}]*\}\s*\)\s*=>/.test(strip(code))) out.push(`${name}:BAD destructuring`);
+    return out;
+  };
+  const found = [];
+  let urls = 0;
+  for (const { name, text } of await sources()) {
+    const code = codeOf(text);
+    found.push(...scan(name, code));
+    for (const m of code.matchAll(/new URL\(/g)) {
+      assert.equal(name, 'index.ts', `${name} builds a URL`);
+      assert.ok(code.startsWith("new URL('./vendor/jsquash/", m.index), 'index.ts builds a URL other than a vendored static file');
+      urls++;
+    }
+  }
+  assert.deepEqual(found.sort(), [...ALLOWED].sort());
+  assert.equal(urls, 5, 'exactly the five static wasm URLs');
+  const index = (await sources()).find((s) => s.name === 'index.ts').text;
+  assert.equal([...codeOf(index).matchAll(/Deno\.serve\(/g)].length, 1, 'one Deno.serve');
+  // self-test: every shape below is caught when it appears in the handler; the allowlisted form is not
+  const caught = (src) => scan('lib/handler.mjs', src).some((e) => !ALLOWED.includes(e));
+  for (const bad of [
+    "new URL(req.url).searchParams.get('f')", "req.headers.has('x-f')", "req.headers['x-f']", 'req.headers.entries()',
+    'req.headers.get("x-kill")', 'req.headers.get(`x-kill`)', 'req.headers.get(name)', "request.headers.get('authorization')",
+    "request.url.endsWith('/kill')", "const h = req.headers; h.get('x-kill');", "const { headers } = req; headers.get('x-kill');",
+    "Deno.serve((request) => (request.headers.get('x-kill') ? kill() : handle(request)));", "req['headers'].get('x-kill')",
+  ]) assert.ok(caught(bad), bad);
+  assert.ok(!caught("req.headers.get('authorization')"), 'the allowlisted form is not flagged');
+
+  // STOREFRONT-MEDIA-MEMORY-001 (D-041 point 3): the PNG decoder and the resize module are instantiated per
+  // call from the one compiled module, never once per worker, and no glue state lives outside the per-call
+  // factory. A lexical lock that strips only full-line // comments, so no string literal can hide code from it.
+  const lineCode = (text) => text.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const PER_CALL = [
+    'decodePng: async (u8) => { const png = freshPng(); png.initSync(pngM); return png.decode(u8); },',
+    'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => { const r = freshResize(); r.initSync(resizeM); return r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear); },',
+  ];
+  const COMPILE_ONCE = ['const pngM = await WebAssembly.compile(bytes.png);', 'const resizeM = await WebAssembly.compile(bytes.resize);'];
+  const IMPORTS = ["import { freshPng } from './png_instance.mjs';", "import { freshResize } from './resize_instance.mjs';"];
+  const FACTORIES = [
+    ['lib/png_instance.mjs', 'freshPng', 'vendor/jsquash/png/squoosh_png.js', 'initSync, decode'],
+    ['lib/resize_instance.mjs', 'freshResize', 'vendor/jsquash/resize/squoosh_resize.js', 'initSync, resize'],
+  ];
+  // each factory file's whole code, rebuilt from the pinned glue by the rule L7 pins: nothing before, inside or after it may differ
+  const expected = new Map();
+  for (const [lib, fn, glue, ret] of FACTORIES) {
+    const src = (await readFile(new URL(glue, FUNCTION_DIR), 'utf8')).replace(/\r\n/g, '\n');
+    const body = src.slice(0, src.indexOf('async function __wbg_init(input) {')).replace(/^export (function|class) /gm, '$1 ');
+    expected.set(lib, lineCode(`export function ${fn}() {\nconst __wbg_init = {};\n${body}return { ${ret} };\n}\n`).trim());
+  }
+  const lifecycle = (files) => {
+    const bad = [];
+    const count = (s, re) => [...s.matchAll(re)].length;
+    for (const { name, text } of files) {
+      const code = lineCode(text);
+      if (/(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"`][^'"`]*squoosh_(?:png|resize)\.js['"`]/.test(code)) bad.push(`${name}: loads the per-worker glue module`);
+      if (/\bimport\s*\(\s*[^'"`\s]/.test(code)) bad.push(`${name}: a dynamic import with a computed specifier`);
+      if (!expected.has(name) && name !== 'lib/codecs.mjs' && /\bfresh(?:Png|Resize)\b/.test(code)) bad.push(`${name}: uses a codec factory outside lib/codecs.mjs`);
+    }
+    const codecs = files.find((f) => f.name === 'lib/codecs.mjs');
+    const flat = codecs ? lineCode(codecs.text).replace(/\s+/g, ' ') : '';
+    for (const form of [...PER_CALL, ...COMPILE_ONCE, ...IMPORTS]) if (!flat.includes(form)) bad.push(`lib/codecs.mjs: missing ${form.slice(0, 48)}`);
+    for (const [re, n, what] of [
+      [/\bfreshPng\b/g, 2, 'freshPng'], [/\bfreshResize\b/g, 2, 'freshResize'], [/\binitSync\b/g, 2, 'initSync'], [/\bpngM\b/g, 2, 'pngM'], [/\bresizeM\b/g, 2, 'resizeM'],
+      [/\bdecodePng\s*:/g, 1, 'the decodePng entry'], [/\bresize\s*:/g, 1, 'the resize entry'],
+    ]) if (count(flat, re) !== n) bad.push(`lib/codecs.mjs: ${what} x${count(flat, re)} (expected ${n})`);
+    for (const [lib] of FACTORIES) {
+      const f = files.find((x) => x.name === lib);
+      if (!f) bad.push(`${lib}: missing`);
+      else if (lineCode(f.text).trim() !== expected.get(lib)) bad.push(`${lib}: differs from the per-call factory rebuilt from the pinned glue`);
+    }
+    return bad;
+  };
+  const real = await sources();
+  assert.deepEqual(lifecycle(real), [], 'the per-call codec lifecycle holds');
+  // self-test: each regression to a per-worker, cached or shared PNG / resize instance or glue state is caught
+  const edit = (name, from, to) => real.map((f) => {
+    if (f.name !== name) return f;
+    assert.ok(f.text.includes(from), `probe anchor present in ${name}: ${from.slice(0, 40)}`);
+    return { name, text: f.text.replace(from, to) };
+  });
+  const [pngForm, resizeForm] = PER_CALL;
+  const hoist = (files, i, stmt) => files.map((f) => (f.name === 'lib/codecs.mjs' ? { ...f, text: f.text.replace(COMPILE_ONCE[i], `${COMPILE_ONCE[i]} ${stmt}`) } : f));
+  const append = (files, name, tail) => files.map((f) => (f.name === name ? { ...f, text: `${f.text}${tail}` } : f));
+  for (const [label, files] of [
+    ['a PNG instance hoisted to the worker', hoist(edit('lib/codecs.mjs', pngForm, 'decodePng: async (u8) => png.decode(u8),'), 0, 'const png = freshPng(); png.initSync(pngM);')],
+    ['a resize instance hoisted to the worker', hoist(edit('lib/codecs.mjs', resizeForm, 'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear),'), 1, 'const r = freshResize(); r.initSync(resizeM);')],
+    ['a PNG instance cached across calls', edit('lib/codecs.mjs', 'const png = freshPng();', 'const png = (cachedPng ??= freshPng());')],
+    ['a resize instance cached across calls', edit('lib/codecs.mjs', 'const r = freshResize();', 'const r = (cachedResize ??= freshResize());')],
+    ['a fresh PNG instance built but the first one reused', edit('lib/codecs.mjs', 'return png.decode(u8);', 'return (usedPng ??= png).decode(u8);')],
+    ['a second decodePng entry hidden between comment-like string literals', edit('lib/codecs.mjs', pngForm, `${pngForm} _a: '/*', decodePng: async (u8) => { const png = freshPng(); png.initSync(pngM); return (usedPng ??= png).decode(u8); }, _b: '*/',`)],
+    ['the factory aliased behind a memo', edit('lib/codecs.mjs', IMPORTS[0], "import { freshPng as makePng } from './png_instance.mjs'; const freshPng = once(makePng);")],
+    ['the per-worker PNG glue imported again', edit('lib/codecs.mjs', IMPORTS[0], `${IMPORTS[0]} import * as pngGlue from '../vendor/jsquash/png/squoosh_png.js';`)],
+    ['the per-worker resize glue loaded dynamically', edit('lib/recipe.mjs', "import { loadCodecs } from './codecs.mjs';", "import { loadCodecs } from './codecs.mjs'; const rs = await import('../vendor/jsquash/resize/squoosh_resize.js');")],
+    ['the per-worker resize glue loaded through a computed specifier', edit('lib/recipe.mjs', "import { loadCodecs } from './codecs.mjs';", "import { loadCodecs } from './codecs.mjs'; const rs = await import(RECIPE_GLUE);")],
+    ['a module-level instance before the PNG factory', edit('lib/png_instance.mjs', 'export function freshPng() {', 'let shared = null;\nexport function freshPng() {')],
+    ['the PNG factory memoised after its body (one instance per worker)', append(edit('lib/png_instance.mjs', 'return { initSync, decode };', 'return pngMemo ??= { initSync, decode };'), 'lib/png_instance.mjs', '\nlet pngMemo;\n')],
+    ['the resize factory memoised after its body (one instance per worker)', append(edit('lib/resize_instance.mjs', 'return { initSync, resize };', 'return rsMemo ??= { initSync, resize };'), 'lib/resize_instance.mjs', '\nlet rsMemo;\n')],
+    ['the PNG glue heap slab moved to module level (shared glue state)', append(edit('lib/png_instance.mjs', 'const heap = new Array(128).fill(undefined);', ''), 'lib/png_instance.mjs', '\nconst heap = new Array(128).fill(undefined);\n')],
+    ['a codec factory used outside lib/codecs.mjs', edit('lib/handler.mjs', 'export function createHandler(', "import { freshPng } from './png_instance.mjs';\nexport function createHandler(")],
+    ['the PNG module compiled per call', edit('lib/codecs.mjs', 'png.initSync(pngM);', 'png.initSync(new WebAssembly.Module(bytes.png));')],
+  ]) assert.ok(lifecycle(files).length > 0, `S8 catches: ${label}`);
+});

@@ -30,7 +30,8 @@ export function deriver() {
 /**
  * The raw codecs over the same wasm (fixture WebP encoding, the alpha proof's WebP
  * decode, and separate derivers whose poison flag must not touch the shared one).
- * The PNG / resize wasm-bindgen instance is per process, shared with deriver().
+ * Its modules are compiled separately from deriver()'s, and every PNG decode and resize gets a fresh
+ * instance (STOREFRONT-MEDIA-MEMORY-001, D-041).
  */
 export function codecs() {
   codecsPromise ??= deriver().then(() => readWasm()).then((wasm) => loadCodecs(wasm));

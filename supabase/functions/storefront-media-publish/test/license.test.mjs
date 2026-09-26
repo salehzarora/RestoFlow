@@ -109,3 +109,23 @@ test('L6. nothing under the function belongs to the previous engine: no path and
     assert.ok(!text.includes(banned), `file ${p}`);
   }
 });
+
+test('L7. the per-call PNG / resize factories are the pinned glue text verbatim (up to __wbg_init, `export ` dropped from declarations), and codecs.mjs imports no per-worker glue', async () => {
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  for (const [glue, lib, name, ret] of [
+    ['vendor/jsquash/png/squoosh_png.js', 'lib/png_instance.mjs', 'freshPng', 'initSync, decode'],
+    ['vendor/jsquash/resize/squoosh_resize.js', 'lib/resize_instance.mjs', 'freshResize', 'initSync, resize'],
+  ]) {
+    const src = lf(await readFile(new URL(glue, FUNCTION_DIR), 'utf8'));
+    const cut = src.indexOf('async function __wbg_init(input) {');
+    assert.ok(cut > 0, `${glue} has the __wbg_init marker`);
+    const body = src.slice(0, cut).replace(/^export (function|class) /gm, '$1 ');
+    const text = lf(await readFile(new URL(lib, FUNCTION_DIR), 'utf8'));
+    const head = `export function ${name}() {\nconst __wbg_init = {};\n`;
+    const at = text.indexOf(head);
+    assert.ok(at >= 0, `${lib} factory header`);
+    assert.equal(text.slice(at), `${head}${body}return { ${ret} };\n}\n`, `${lib} is the pinned glue verbatim`);
+  }
+  const codecs = await readFile(new URL('lib/codecs.mjs', FUNCTION_DIR), 'utf8');
+  assert.ok(!/squoosh_png\.js|squoosh_resize\.js/.test(codecs), 'codecs.mjs no longer imports the per-worker glue modules');
+});
