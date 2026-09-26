@@ -678,3 +678,46 @@ test('F37. TNV-8: the download cap is measured in bytes PULLED — a 64 MiB orig
   assert.equal(res.json.media.content_hash, LOGO_W480.hash);
   assert.equal(ok.fake.pulled, (await fixture('logo_opaque_rgb_1200x600')).length);
 });
+
+test('F38. STOREFRONT-CANARY-GATE-001: an API key is never a credential here (as the bearer or as the only credential it is 401 with no upstream call; a caller-sent apikey is never read or forwarded), and every answer the function authors carries exactly the contract CORS headers, never Allow-Credentials', async () => {
+  const CORS_KEYS = ['access-control-allow-origin', 'access-control-allow-methods', 'access-control-allow-headers', 'access-control-max-age'];
+  const cors = (res, label) => {
+    assert.equal(res.headers.get('access-control-allow-origin'), '*', label);
+    assert.equal(res.headers.get('access-control-allow-methods'), 'POST, OPTIONS', label);
+    assert.equal(res.headers.get('access-control-allow-headers'), 'authorization, x-client-info, apikey, content-type', label);
+    assert.equal(res.headers.get('access-control-max-age'), '600', label);
+    assert.equal(res.headers.get('access-control-allow-credentials'), null, label);
+    for (const [k] of res.headers) if (k.startsWith('access-control-')) assert.ok(CORS_KEYS.includes(k), `${label}: unexpected ${k}`);
+  };
+  const expectStatus = (res, status, label) => { assert.equal(res.status, status, `${label}: ${res.text}`); cors(res, label); };
+  const apiKey = (kind) => ['sb', kind, 'TestOnlyNotAKey0123456789'].join('_'); // built at run time: no secret-shaped literal in the source
+  const { handle, fake } = await setup();
+  for (const key of [apiKey('publishable'), apiKey('secret')]) {
+    const asBearer = await call(handle, post(body(), { token: key }));
+    assert.deepEqual([asBearer.status, asBearer.json], [401, { ok: false, status: 'unauthenticated' }], 'as the bearer');
+    cors(asBearer, '401 (API key as the bearer)');
+    const onlyKey = await call(handle, new Request('http://functions.test/storefront-media-publish', {
+      method: 'POST', headers: { 'content-type': 'application/json', apikey: key }, body: JSON.stringify(body()),
+    }));
+    assert.deepEqual([onlyKey.status, onlyKey.json], [401, { ok: false, status: 'unauthenticated' }], 'as the only credential');
+    cors(onlyKey, '401 (API key as the only credential)');
+  }
+  assert.equal(fake.calls.length, 0, 'an API key as the bearer or as the only credential reached no upstream service');
+  const ok = await call(handle, new Request('http://functions.test/storefront-media-publish', {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}`, apikey: apiKey('secret') }, body: JSON.stringify(body()),
+  }));
+  expectStatus(ok, 200, '200');
+  assert.ok(fake.calls.length > 0);
+  for (const c of fake.calls) assert.equal(c.headers.apikey, ANON, `${c.path}: the function's own anon key, never the caller's apikey`);
+  const pre = await handle(new Request('http://functions.test/storefront-media-publish', { method: 'OPTIONS' }));
+  assert.equal(pre.status, 204);
+  cors(pre, 'OPTIONS');
+  expectStatus(await call(handle, post(null, { method: 'GET' })), 405, '405');
+  expectStatus(await call(handle, post(body(), { contentType: 'text/plain' })), 415, '415');
+  expectStatus(await call(handle, post(body({ rung: 5 }))), 400, '400');
+  expectStatus(await call((await setup({ canManage: false })).handle, post(body())), 403, '403');
+  const engineThat = (derive, poisoned) => async () => ({ derive, poisoned });
+  expectStatus(await call((await setup({ engine: engineThat(async () => { throw new DerivationError('decode_failed', 'png'); }, false) })).handle, post(body())), 422, '422');
+  expectStatus(await call((await setup({ engine: engineThat(async () => { throw new TypeError('not a codec error'); }, false) })).handle, post(body())), 500, '500');
+  expectStatus(await call((await setup({ engine: engineThat(async () => { throw new DerivationError('engine_unavailable', 'trap'); }, true) })).handle, post(body())), 503, '503');
+});

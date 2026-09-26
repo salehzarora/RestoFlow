@@ -502,6 +502,32 @@ void main() {
       }
     });
 
+    test('platform failure answers (a runtime kill, an uncaught exception, '
+        'a boot or idle timeout) are unknown outcomes: retry once, then '
+        'uncertain (DEPLOYMENT §17.4 item 9)', () async {
+      for (final reply in [
+        _reply(546, {
+          'code': 'WORKER_RESOURCE_LIMIT',
+          'message':
+              'Function failed due to not having enough compute resources '
+              '(please check logs)',
+        }),
+        _reply(500, {
+          'code': 'WORKER_ERROR',
+          'message': 'Function failed to start or respond.',
+        }),
+        _reply(503),
+        _reply(504),
+      ]) {
+        final invoker = _FakeInvoker([reply]);
+        final r = await _publishLogo(invoker);
+        expect(r.status, StorefrontPublishStatus.uncertain);
+        expect(r.serverFlaggedUncertain, isFalse);
+        expect(invoker.bodies, hasLength(2));
+        expect(invoker.bodies[0], invoker.bodies[1]);
+      }
+    });
+
     test('an invoker that throws is a transport failure', () async {
       final invoker = _FakeInvoker([StateError('boom'), _published()]);
       final r = await _publishLogo(invoker);
