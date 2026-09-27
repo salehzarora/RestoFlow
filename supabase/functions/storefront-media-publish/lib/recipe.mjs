@@ -25,6 +25,14 @@
 //      VP8X,ALPH,VP8 when any alpha < 255, else VP8; no ICCP / EXIF / XMP /
 //      animation) -> width, height, bytes and sha-256 read from the ACTUAL output.
 //
+// Owned intermediates (STOREFRONT-MEDIA-MEMORY-001B): on every call whose encode returns (a derivative,
+// ladder_next, output_too_large or a refusal by the output's self-check), derive() detaches each raster it
+// alone owns (the sanitized PNG copy, the decoded RGBA, the box and resize outputs, the oriented raster) right
+// after its last use (releaseOwned), so it no longer stays counted against the worker's memory until a garbage
+// collection. A refusal thrown after the decode and before the encode returns (decode_warning; the defensive
+// corrupt, resize / orientation geometry and non-trap encoder refusals) still leaves the rasters it holds to
+// the GC. The caller's bytes and the returned output are never released; the output bytes are unchanged.
+//
 // Ladder contract (as c3): the rungs are evaluated in order, ONE per call. A call
 // for rung r returns the derivative (rung r fits in maxOutputBytes), a typed
 // `ladder_next` (it does not fit and a later rung still can), or a typed
@@ -204,6 +212,29 @@ const isTrap = (e) => e instanceof WebAssembly.RuntimeError;
 const detailOf = (e) => String(e && e.message ? e.message : e).slice(0, 160);
 
 /**
+ * STOREFRONT-MEDIA-MEMORY-001B: hands an intermediate raster that derive() alone owns back to the runtime
+ * at once. ArrayBuffer.prototype.transfer(0) detaches the buffer, so its backing store and V8's
+ * external-memory count drop immediately, instead of staying counted until a later garbage collection that
+ * the platform's memory check can see together with the next derive's growth. Only a view spanning its
+ * WHOLE, fixed-length, not yet detached ArrayBuffer is released: the codecs' own copies and the rasters
+ * derive() allocates. A partial view, a resizable buffer, a SharedArrayBuffer, a WebAssembly.Memory buffer
+ * (not detachable) and anything else is left alone. It never changes a byte that is read afterwards;
+ * derive() calls it only after the value's last use. Returns whether the buffer was detached (exported for
+ * the tests).
+ */
+export function releaseOwned(view) {
+  const buf = view && view.buffer;
+  if (!(buf instanceof ArrayBuffer) || buf.detached !== false || buf.resizable !== false || buf.byteLength === 0) return false;
+  if (view.byteOffset !== 0 || view.byteLength !== buf.byteLength) return false;
+  try {
+    buf.transfer(0);
+    return true;
+  } catch {
+    return false; // not detachable (a WebAssembly memory, or no transfer on this runtime): left to the GC
+  }
+}
+
+/**
  * The deriver over already-loaded codecs (createDeriver() is the verified entry point;
  * tests inject fakes here to reach the defensive branches).
  * Returns { derive, poison, poisoned }.
@@ -236,6 +267,9 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
     if (maxInputBytes === null) throw new DerivationError('unknown_source');
     if (!Number.isInteger(rung) || rung < 0 || rung >= recipe.ladder.length) throw new DerivationError('unknown_rung');
     if (poisoned) throw new DerivationError('engine_unavailable', 'engine state not trusted on this worker');
+    // STOREFRONT-MEDIA-MEMORY-001B: the five release points below hand each owned intermediate back right
+    // after its last use. The caller's bytes (a later rung re-derives from them) are never released.
+    const release = (view) => view.buffer !== bytes.buffer && releaseOwned(view);
 
     const info = sniffSource(bytes, { ...recipe.caps, maxInputBytes });
     let decodeInput = bytes;
@@ -271,6 +305,9 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
       throw new DerivationError('corrupt', `decoded ${decoded.width}x${decoded.height}, expected ${info.width}x${info.height}`);
     }
     const tDecode = performance.now();
+    // (release 1) the sanitized PNG copy: the decoder copied it into its own memory and its RGBA is a new
+    // array; nothing reads the copy again.
+    if (decodeInput !== bytes && decoded.data.buffer !== decodeInput.buffer) release(decodeInput);
 
     // Canonical geometry from the SOURCE header + EXIF orientation only.
     const swap = orientation >= 5;
@@ -281,6 +318,10 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
     const k = Math.floor(Math.min(pw / rw, ph / rh));
     if (k >= recipe.box.minFactor) { const r = boxReduce(px, pw, ph, k); px = r.data; pw = r.width; ph = r.height; }
     const tBox = performance.now();
+    // (release 2) the decoded RGBA once the box output replaced it: nothing reads `decoded` after the box
+    // reduction, so it goes BEFORE the resize allocates.
+    if (px.buffer !== decoded.data.buffer) release(decoded.data);
+    const resizeInput = px;
     if (rw !== pw || rh !== ph) {
       try {
         px = codecs.resize(px, pw, ph, rw, rh, recipe.resize.method, recipe.resize.premultiply, recipe.resize.linearRGB);
@@ -290,12 +331,18 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
       if (!px || px.length !== rw * rh * 4) throw new DerivationError('self_check_failed', 'resize geometry');
     }
     const tResize = performance.now();
+    // (release 3) the pre-resize raster (the box output, or the decoded RGBA when no box ran): the resize
+    // returned a new copy and nothing reads its input again.
+    if (px.buffer !== resizeInput.buffer) release(resizeInput);
     if (px.byteOffset % 4) px = px.slice();
     const oriented = applyOrientation(px, rw, rh, orientation);
     if (oriented.width !== out.width || oriented.height !== out.height) throw new DerivationError('self_check_failed', 'orientation geometry');
     let transparent = false;
     for (let i = 3; i < oriented.data.length; i += 4) if (oriented.data[i] !== 255) { transparent = true; break; }
     const tOrient = performance.now();
+    // (release 4) the pre-orientation raster (the resize output, else the box output or the decoded RGBA)
+    // when the orientation copied it into a new one (orientation 1 keeps it).
+    if (oriented.data.buffer !== px.buffer) release(px);
 
     const quality = recipe.ladder[rung];
     let outBytes;
@@ -306,6 +353,9 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
       throw codecFailure(e, { taints: false });
     }
     const tEncode = performance.now();
+    // (release 5) the oriented raster: the encoder copied it into its own memory and the output is a new
+    // array; nothing reads the raster again unless the caller asked for it with `inspect`.
+    if (!inspect && oriented.data.buffer !== outBytes.buffer) release(oriented.data);
 
     // Self-check: a still WebP of exactly the expected size, alpha iff expected, no metadata.
     let w;
