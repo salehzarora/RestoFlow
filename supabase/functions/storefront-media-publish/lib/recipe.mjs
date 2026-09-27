@@ -43,15 +43,21 @@
 // Failure codes are exactly the public sets the handler and the Dashboard know
 // (kStorefrontRefusalCodes / kStorefrontPublishFaultCodes): SourceRejected codes
 // from the sniff and the PNG bound; decode_warning; corrupt (decoded size differs
-// from the header); decode_failed for any NON-trap codec exception (decode,
-// resize or encode); self_check_failed; output_too_large; unknown_variant /
+// from the header); decode_failed for any NON-trap exception out of a codec
+// OPERATION (decode, resize or encode; a creation / initialisation failure of
+// the call's fresh PNG / resize instance is engine_unavailable, D-042 below);
+// self_check_failed; output_too_large; unknown_variant /
 // unknown_source / unknown_rung. A WebAssembly trap is engine_unavailable (the
 // handler answers a retryable 503 and retires the worker). The PNG and resize
 // modules are wasm-bindgen modules (a fresh instance per call since
 // STOREFRONT-CANARY-GATE-001 / D-041), and a Rust error thrown out of them does not
 // unwind (leaked heap and shadow stack), so ANY exception from them still
-// poisons this deriver (kept unchanged): the request gets its typed refusal,
-// and the handler then retires the worker.
+// poisons this deriver (kept unchanged). Which answer the request gets depends on
+// the STEP that threw (STOREFRONT-MEDIA-ENGINE-FAILURE-001 / D-042): a failure to
+// create or initialise the call's fresh instance (codecs.mjs marks it
+// CodecInitError; the source was never read) is engine_unavailable, an exception
+// out of the decode or resize OPERATION keeps the typed refusal decode_failed —
+// and in both cases the handler then retires the worker.
 //
 // EDGE-4: createDeriver() derives one small EMBEDDED vector (SELF_TEST) before
 // it returns and compares the sha-256 with its pinned golden; a mismatch (for
@@ -66,7 +72,7 @@ import { SourceRejected, sniffSource, webpInfo } from './sniff.mjs';
 import { PngRejected, pngRawSize, sanitizePng } from './pngbound.mjs';
 import { applyOrientation, jpegExifOrientation } from './orient.mjs';
 import { boxReduce } from './box.mjs';
-import { loadCodecs } from './codecs.mjs';
+import { CodecInitError, loadCodecs } from './codecs.mjs';
 
 // The ONLY accepted variant names and source buckets, exactly.
 const VARIANT_WIDTHS = new Map([['w480', 480], ['w960', 960]]);
@@ -243,9 +249,15 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
   let poisoned = false;
   const poison = () => { poisoned = true; };
 
-  /** A codec exception: a trap is engine_unavailable; anything else the given typed code. */
+  /**
+   * A codec exception: a failure to create or initialise the call's fresh PNG / resize instance (D-042) or a
+   * trap is engine_unavailable; anything else the given typed code.
+   */
   const codecFailure = (e, { taints }) => {
     if (e instanceof DerivationError || e instanceof SourceRejected) return e;
+    // D-042: the instance was never created, so the source was never read — an engine / runtime availability
+    // failure, never a verdict on the image; this worker is not trusted to derive
+    if (e instanceof CodecInitError) { poisoned = true; return new DerivationError('engine_unavailable', detailOf(e)); }
     if (isTrap(e)) { poisoned = true; return new DerivationError('engine_unavailable', detailOf(e)); }
     if (taints) poisoned = true; // a wasm-bindgen instance threw: kept conservative, the worker retires
     return new DerivationError('decode_failed', detailOf(e));

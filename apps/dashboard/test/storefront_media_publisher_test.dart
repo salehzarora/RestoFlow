@@ -473,6 +473,34 @@ void main() {
       expect(invoker.bodies, hasLength(2));
     });
 
+    test('D-042 point 6 / TESTING_STRATEGY §6 (11): the exact `503 '
+        'engine_unavailable` contract body (ok:false, retryable:true) twice '
+        '=> uncertain, never a refusal: refusalCode null, not server-flagged, '
+        'exactly 2 calls with the same id + rung', () async {
+      final invoker = _FakeInvoker([
+        _reply(503, {
+          'ok': false,
+          'status': 'engine_unavailable',
+          'retryable': true,
+        }),
+      ]);
+      final r = await _publishLogo(invoker);
+      expect(r.status, StorefrontPublishStatus.uncertain);
+      expect(r.refusalCode, isNull);
+      expect(r.serverFlaggedUncertain, isFalse);
+      expect(r.calls, 2);
+      expect(invoker.bodies, hasLength(2));
+      expect(invoker.rungs, [0, 0]);
+      expect(invoker.bodies[0], invoker.bodies[1]);
+      expect(invoker.bodies.map((b) => b['request_id']).toSet(), {_req});
+      expect(r.media, isNull);
+      expect(r.invalidField, isNull);
+      expect(r.invalidReason, isNull);
+      expect(r.refusedLocally, isFalse);
+      expect(r.rung, 0);
+      expect(r.requestId, _req);
+    });
+
     test('500 then transport failure => uncertain', () async {
       final invoker = _FakeInvoker([
         _reply(500, {

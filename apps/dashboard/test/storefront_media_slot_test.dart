@@ -589,6 +589,9 @@ void main() {
       'dimensions_too_large',
       'aspect_ratio',
       'unsupported_format',
+      // D-042 point 3 / TESTING_STRATEGY §6 (12): an OPERATION failure keeps
+      // its verdict and is still remembered for the receipt logo.
+      'decode_failed',
     ]) {
       testWidgets('$code: names the remedy (replace the receipt logo in '
           'Branding, which also changes printed receipts) and disables '
@@ -815,6 +818,185 @@ void main() {
     expect(rig.invoker.bodies[2]['rung'], 0);
     expect(rig.server.saves.single.patch, {'logo_media_id': _mediaLogo});
     expect(_message(tester, 'logo'), l10n.storefrontSlotPublished);
+  });
+
+  group('D-042 point 6 / TESTING_STRATEGY §6 (10) + (12): a 503 '
+      'engine_unavailable is never a source refusal', () {
+    // The exact contract body (API_CONTRACT §4.44): no `code`, no other field.
+    const engineUnavailable = StorefrontFunctionReply(
+      httpStatus: 503,
+      json: {'ok': false, 'status': 'engine_unavailable', 'retryable': true},
+    );
+    const decodeFailed = StorefrontFunctionReply(
+      httpStatus: 422,
+      json: {'ok': false, 'status': 'refused', 'code': 'decode_failed'},
+    );
+
+    testWidgets('logo: the exact 503 body on every call takes the unknown-'
+        'outcome path — two identical requests, refreshed state, Try again; '
+        'no refused note, no re-check, Publish still enabled; Try again '
+        'answered 200 publishes with the SAME request id; nothing is '
+        'remembered, not even across a reload of the card', (tester) async {
+      final l10n = await _l10n();
+      // A growable list: the last reply repeats, so EVERY call is answered
+      // 503 until the test appends the fresh worker's 200.
+      final rig = _Rig(replies: [engineUnavailable]);
+      await _pump(tester, rig);
+      final reads = rig.server.reads;
+      final lists = rig.media.lists;
+      await _tap(tester, find.byKey(const Key('storefront-slot-logo-publish')));
+      await _confirm(tester, 'storefront-slot-logo-publish-confirm');
+
+      // ONE same-request retry on the same rung, then uncertain.
+      expect(rig.invoker.bodies, hasLength(2));
+      expect(rig.invoker.bodies[1], rig.invoker.bodies[0]);
+      expect(rig.invoker.bodies[0]['rung'], 0);
+      expect(rig.invoker.bodies[0]['slot'], 'logo');
+      expect(rig.invoker.bodies[0]['source_bucket'], 'restaurant-logos');
+      expect(rig.invoker.bodies[0]['source_key'], _logoKey);
+      final requestId = rig.invoker.bodies[0]['request_id']! as String;
+      expect(isCanonicalUuid(requestId), isTrue);
+      expect(_message(tester, 'logo'), l10n.storefrontMediaUncertain);
+      expect(
+        _message(tester, 'logo'),
+        isNot(contains(l10n.storefrontRefusalPickAnother)),
+      );
+      expect(
+        find.byKey(const Key('storefront-slot-logo-retry')),
+        findsOneWidget,
+      );
+      // Never a verdict on the receipt logo: no remedy note, no "Check the
+      // receipt logo again", and Publish is NOT disabled for this key.
+      expect(
+        find.byKey(const Key('storefront-slot-logo-refused')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('storefront-slot-logo-recheck')),
+        findsNothing,
+      );
+      expect(
+        _enabled(tester, const Key('storefront-slot-logo-publish')),
+        isTrue,
+      );
+      // No profile write; the server's state was re-read (profile + list).
+      expect(rig.server.saves, isEmpty);
+      expect(rig.server.reads, greaterThan(reads));
+      expect(rig.media.lists, greaterThan(lists));
+      expect(
+        find.byKey(const Key('storefront-slot-logo-empty')),
+        findsOneWidget,
+      );
+
+      // The retired worker is gone; a fresh one serves the SAME request.
+      rig.invoker.replies.add(_published(_mediaLogo));
+      await _tap(tester, find.byKey(const Key('storefront-slot-logo-retry')));
+      expect(rig.invoker.bodies, hasLength(3));
+      expect(rig.invoker.bodies[2], rig.invoker.bodies[0]);
+      expect(rig.invoker.bodies[2]['request_id'], requestId);
+      expect(rig.invoker.bodies[2]['rung'], 0);
+      expect(rig.server.saves.single.patch, {'logo_media_id': _mediaLogo});
+      expect(_message(tester, 'logo'), l10n.storefrontSlotPublished);
+      expect(
+        find.byKey(const Key('storefront-slot-logo-remove')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('storefront-media-in-use-note-$_mediaLogo')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('storefront-slot-logo-refused')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('storefront-slot-logo-recheck')),
+        findsNothing,
+      );
+
+      // The section remembered nothing: the slots rebuilt from scratch (Reload
+      // after a save whose re-read failed) show no block either.
+      await tester.enterText(find.byKey(const Key('storefront-tagline')), 'x');
+      await tester.pumpAndSettle();
+      rig.server.failNextReads = 1;
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      expect(find.byKey(const Key('storefront-stale')), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('storefront-reload')));
+      expect(find.byKey(const Key('storefront-stale')), findsNothing);
+      expect(
+        find.byKey(const Key('storefront-slot-logo-refused')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('storefront-slot-logo-recheck')),
+        findsNothing,
+      );
+      expect(
+        _enabled(tester, const Key('storefront-slot-logo-publish')),
+        isTrue,
+      );
+      expect(rig.invoker.bodies, hasLength(3), reason: 'no further publish');
+    });
+
+    testWidgets('logo: a genuine 422 decode_failed that the same-request '
+        'retry receives from a fresh worker is the verdict — remembered for '
+        'the receipt logo, Publish disabled, re-check offered, no Try again', (
+      tester,
+    ) async {
+      final l10n = await _l10n();
+      final rig = _Rig(replies: const [engineUnavailable, decodeFailed]);
+      await _pump(tester, rig);
+      await _tap(tester, find.byKey(const Key('storefront-slot-logo-publish')));
+      await _confirm(tester, 'storefront-slot-logo-publish-confirm');
+      expect(rig.invoker.bodies, hasLength(2));
+      expect(rig.invoker.bodies[1], rig.invoker.bodies[0]);
+      expect(rig.server.saves, isEmpty);
+      final note = tester
+          .widget<Text>(find.byKey(const Key('storefront-slot-logo-refused')))
+          .data!;
+      expect(
+        note,
+        l10n.storefrontLogoSourceRefused(
+          storefrontRefusalMessage(l10n, 'decode_failed'),
+        ),
+      );
+      expect(note, isNot(contains(l10n.storefrontRefusalPickAnother)));
+      expect(
+        find.byKey(const Key('storefront-slot-logo-recheck')),
+        findsOneWidget,
+      );
+      expect(
+        _enabled(tester, const Key('storefront-slot-logo-publish')),
+        isFalse,
+      );
+      expect(find.byKey(const Key('storefront-slot-logo-retry')), findsNothing);
+      expect(
+        find.byKey(const Key('storefront-slot-logo-message')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('hero: a 422 decode_failed still says "pick another source" '
+        '(one call, nothing blocked)', (tester) async {
+      final l10n = await _l10n();
+      final rig = _Rig(replies: const [decodeFailed]);
+      await _pump(tester, rig);
+      await _tap(tester, find.byKey(const Key('storefront-slot-hero-publish')));
+      await _confirm(tester, 'storefront-slot-hero-publish-confirm');
+      expect(rig.invoker.bodies, hasLength(1), reason: 'never retried');
+      expect(
+        _message(tester, 'hero'),
+        '${storefrontRefusalMessage(l10n, 'decode_failed')} '
+        '${l10n.storefrontRefusalPickAnother}',
+      );
+      expect(rig.server.saves, isEmpty);
+      expect(find.byKey(const Key('storefront-slot-hero-refused')), findsNothing);
+      expect(find.byKey(const Key('storefront-slot-hero-retry')), findsNothing);
+      expect(_enabled(tester, const Key('storefront-slot-hero-publish')), isTrue);
+      // The logo slot is untouched by the hero's refusal.
+      expect(find.byKey(const Key('storefront-slot-logo-refused')), findsNothing);
+      expect(_enabled(tester, const Key('storefront-slot-logo-publish')), isTrue);
+    });
   });
 
   testWidgets('an uncertain slot assignment: Try again replays the SAME '

@@ -137,7 +137,7 @@ test('S7. index.ts reads exactly the five static wasm files (by URL relative to 
   await readFile(new URL('THIRD_PARTY_NOTICES.txt', VENDOR_DIR)); // the notices exist where the bundle ships them
 });
 
-test('S8. no fault or kill channel (a lexical guard; code review is the backstop): through any receiver, the function reads three request headers and never the URL, the query or the header map, and Deno.serve takes createHandler directly (STOREFRONT-CANARY-GATE-001); and the PNG decoder and resize module are instantiated per call from the one compiled module, never once per worker (STOREFRONT-MEDIA-MEMORY-001)', async () => {
+test('S8. no fault or kill channel (a lexical guard; code review is the backstop): through any receiver, the function reads three request headers and never the URL, the query or the header map, and Deno.serve takes createHandler directly (STOREFRONT-CANARY-GATE-001); the PNG decoder and resize module are instantiated per call from the one compiled module, never once per worker (STOREFRONT-MEDIA-MEMORY-001); and each per-call entry wraps EXACTLY its creation steps as CodecInitError, never the decode / resize operation, the marker\'s mapping in lib/recipe.mjs poisons the deriver, and the handler\'s engine_unavailable answer retires the worker (STOREFRONT-MEDIA-ENGINE-FAILURE-001)', async () => {
   // every `.headers` token, whatever its receiver, must be `<receiver>.headers.get('<literal>')` from this list
   const ALLOWED = [
     "lib/caller.mjs:res.headers.get('content-length')",
@@ -193,11 +193,19 @@ test('S8. no fault or kill channel (a lexical guard; code review is the backstop
 
   // STOREFRONT-MEDIA-MEMORY-001 (D-041 point 3): the PNG decoder and the resize module are instantiated per
   // call from the one compiled module, never once per worker, and no glue state lives outside the per-call
-  // factory. A lexical lock that strips only full-line // comments, so no string literal can hide code from it.
+  // factory. STOREFRONT-MEDIA-ENGINE-FAILURE-001 (D-042): each entry's try covers exactly the two creation
+  // steps (the factory and initSync) and marks their failure CodecInitError; the decode / resize call stays
+  // outside it. A lexical lock that strips only full-line // comments, so no string literal can hide code from it.
   const lineCode = (text) => text.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
   const PER_CALL = [
-    'decodePng: async (u8) => { const png = freshPng(); png.initSync(pngM); return png.decode(u8); },',
-    'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => { const r = freshResize(); r.initSync(resizeM); return r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear); },',
+    "decodePng: async (u8) => { let png; try { png = freshPng(); png.initSync(pngM); } catch (e) { throw new CodecInitError('png', e); } return png.decode(u8); },",
+    "resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => { let r; try { r = freshResize(); r.initSync(resizeM); } catch (e) { throw new CodecInitError('resize', e); } return r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear); },",
+  ];
+  // D-042: the marker's mapping poisons the deriver (lib/recipe.mjs), and the handler's engine_unavailable answer
+  // poisons the handler and retires the worker (lib/handler.mjs) — whitespace-flattened exact forms
+  const MAPPING = [
+    ['lib/recipe.mjs', "if (e instanceof CodecInitError) { poisoned = true; return new DerivationError('engine_unavailable', detailOf(e)); }"],
+    ['lib/handler.mjs', "if (e instanceof DerivationError && e.code === 'engine_unavailable') { poisoned = true; retireWorker(); return fail(503, 'engine_unavailable', { retryable: true }); }"],
   ];
   const COMPILE_ONCE = ['const pngM = await WebAssembly.compile(bytes.png);', 'const resizeM = await WebAssembly.compile(bytes.resize);'];
   const IMPORTS = ["import { freshPng } from './png_instance.mjs';", "import { freshResize } from './resize_instance.mjs';"];
@@ -227,7 +235,12 @@ test('S8. no fault or kill channel (a lexical guard; code review is the backstop
     for (const [re, n, what] of [
       [/\bfreshPng\b/g, 2, 'freshPng'], [/\bfreshResize\b/g, 2, 'freshResize'], [/\binitSync\b/g, 2, 'initSync'], [/\bpngM\b/g, 2, 'pngM'], [/\bresizeM\b/g, 2, 'resizeM'],
       [/\bdecodePng\s*:/g, 1, 'the decodePng entry'], [/\bresize\s*:/g, 1, 'the resize entry'],
+      [/\bnew CodecInitError\(/g, 2, 'the init marker thrown (once per creation try)'], [/\bclass CodecInitError\b/g, 1, 'the init marker class'],
     ]) if (count(flat, re) !== n) bad.push(`lib/codecs.mjs: ${what} x${count(flat, re)} (expected ${n})`);
+    for (const [name, form] of MAPPING) {
+      const f = files.find((x) => x.name === name);
+      if (!f || !lineCode(f.text).replace(/\s+/g, ' ').includes(form)) bad.push(`${name}: missing ${form.slice(0, 48)}`);
+    }
     for (const [lib] of FACTORIES) {
       const f = files.find((x) => x.name === lib);
       if (!f) bad.push(`${lib}: missing`);
@@ -243,20 +256,38 @@ test('S8. no fault or kill channel (a lexical guard; code review is the backstop
     assert.ok(f.text.includes(from), `probe anchor present in ${name}: ${from.slice(0, 40)}`);
     return { name, text: f.text.replace(from, to) };
   });
+  // like edit(), on LF-normalised text (the working tree may be CRLF) for a multi-line anchor
+  const editLF = (name, from, to) => real.map((f) => {
+    if (f.name !== name) return f;
+    const text = f.text.replace(/\r\n/g, '\n');
+    assert.ok(text.includes(from), `probe anchor present in ${name}: ${from.slice(0, 40)}`);
+    return { name, text: text.replace(from, to) };
+  });
   const [pngForm, resizeForm] = PER_CALL;
   const hoist = (files, i, stmt) => files.map((f) => (f.name === 'lib/codecs.mjs' ? { ...f, text: f.text.replace(COMPILE_ONCE[i], `${COMPILE_ONCE[i]} ${stmt}`) } : f));
   const append = (files, name, tail) => files.map((f) => (f.name === name ? { ...f, text: `${f.text}${tail}` } : f));
   for (const [label, files] of [
-    ['a PNG instance hoisted to the worker', hoist(edit('lib/codecs.mjs', pngForm, 'decodePng: async (u8) => png.decode(u8),'), 0, 'const png = freshPng(); png.initSync(pngM);')],
-    ['a resize instance hoisted to the worker', hoist(edit('lib/codecs.mjs', resizeForm, 'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear),'), 1, 'const r = freshResize(); r.initSync(resizeM);')],
-    ['a PNG instance cached across calls', edit('lib/codecs.mjs', 'const png = freshPng();', 'const png = (cachedPng ??= freshPng());')],
-    ['a resize instance cached across calls', edit('lib/codecs.mjs', 'const r = freshResize();', 'const r = (cachedResize ??= freshResize());')],
+    ['a PNG instance hoisted to the worker', hoist(edit('lib/codecs.mjs', pngForm, 'decodePng: async (u8) => png.decode(u8),'), 0, "let png; try { png = freshPng(); png.initSync(pngM); } catch (e) { throw new CodecInitError('png', e); }")],
+    ['a resize instance hoisted to the worker', hoist(edit('lib/codecs.mjs', resizeForm, 'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear),'), 1, "let r; try { r = freshResize(); r.initSync(resizeM); } catch (e) { throw new CodecInitError('resize', e); }")],
+    ['a PNG instance cached across calls', edit('lib/codecs.mjs', 'png = freshPng();', 'png = (cachedPng ??= freshPng());')],
+    ['a resize instance cached across calls', edit('lib/codecs.mjs', 'r = freshResize();', 'r = (cachedResize ??= freshResize());')],
     ['a fresh PNG instance built but the first one reused', edit('lib/codecs.mjs', 'return png.decode(u8);', 'return (usedPng ??= png).decode(u8);')],
     ['a second decodePng entry hidden between comment-like string literals', edit('lib/codecs.mjs', pngForm, `${pngForm} _a: '/*', decodePng: async (u8) => { const png = freshPng(); png.initSync(pngM); return (usedPng ??= png).decode(u8); }, _b: '*/',`)],
+    // STOREFRONT-MEDIA-ENGINE-FAILURE-001 (D-042): the creation / operation split of each entry is pinned
+    ['the PNG decode operation moved inside the creation try (an operation failure would answer 503)', edit('lib/codecs.mjs', pngForm, "decodePng: async (u8) => { let png; try { png = freshPng(); png.initSync(pngM); return png.decode(u8); } catch (e) { throw new CodecInitError('png', e); } },")],
+    ['the resize operation moved inside the creation try', edit('lib/codecs.mjs', resizeForm, "resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => { let r; try { r = freshResize(); r.initSync(resizeM); return r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear); } catch (e) { throw new CodecInitError('resize', e); } },")],
+    ['the PNG creation try removed (a creation failure would answer 422)', edit('lib/codecs.mjs', pngForm, 'decodePng: async (u8) => { const png = freshPng(); png.initSync(pngM); return png.decode(u8); },')],
+    ['the resize creation try removed', edit('lib/codecs.mjs', resizeForm, 'resize: (rgba, sw, sh, dw, dh, method, premultiply, linear) => { const r = freshResize(); r.initSync(resizeM); return r.resize(rgba, sw, sh, dw, dh, method, premultiply, linear); },')],
+    ['the PNG initSync left outside the creation try', edit('lib/codecs.mjs', pngForm, "decodePng: async (u8) => { let png; try { png = freshPng(); } catch (e) { throw new CodecInitError('png', e); } png.initSync(pngM); return png.decode(u8); },")],
+    ['the init marker thrown a third time (from an operation)', edit('lib/codecs.mjs', 'return png.decode(u8);', "try { return png.decode(u8); } catch (e) { throw new CodecInitError('png', e); }")],
+    ['the init marker mapped without poisoning the deriver', edit('lib/recipe.mjs', 'if (e instanceof CodecInitError) { poisoned = true; return', 'if (e instanceof CodecInitError) { return')],
+    ['the init marker mapped to decode_failed', edit('lib/recipe.mjs', "if (e instanceof CodecInitError) { poisoned = true; return new DerivationError('engine_unavailable', detailOf(e)); }", "if (e instanceof CodecInitError) { poisoned = true; return new DerivationError('decode_failed', detailOf(e)); }")],
+    ['an engine_unavailable answer without retiring the worker', editLF('lib/handler.mjs', "if (e instanceof DerivationError && e.code === 'engine_unavailable') {\n          poisoned = true;\n          retireWorker();", "if (e instanceof DerivationError && e.code === 'engine_unavailable') {\n          poisoned = true;")],
+    ['an engine_unavailable answer without poisoning the handler', editLF('lib/handler.mjs', "if (e instanceof DerivationError && e.code === 'engine_unavailable') {\n          poisoned = true;\n          retireWorker();", "if (e instanceof DerivationError && e.code === 'engine_unavailable') {\n          retireWorker();")],
     ['the factory aliased behind a memo', edit('lib/codecs.mjs', IMPORTS[0], "import { freshPng as makePng } from './png_instance.mjs'; const freshPng = once(makePng);")],
     ['the per-worker PNG glue imported again', edit('lib/codecs.mjs', IMPORTS[0], `${IMPORTS[0]} import * as pngGlue from '../vendor/jsquash/png/squoosh_png.js';`)],
-    ['the per-worker resize glue loaded dynamically', edit('lib/recipe.mjs', "import { loadCodecs } from './codecs.mjs';", "import { loadCodecs } from './codecs.mjs'; const rs = await import('../vendor/jsquash/resize/squoosh_resize.js');")],
-    ['the per-worker resize glue loaded through a computed specifier', edit('lib/recipe.mjs', "import { loadCodecs } from './codecs.mjs';", "import { loadCodecs } from './codecs.mjs'; const rs = await import(RECIPE_GLUE);")],
+    ['the per-worker resize glue loaded dynamically', edit('lib/recipe.mjs', "import { CodecInitError, loadCodecs } from './codecs.mjs';", "import { CodecInitError, loadCodecs } from './codecs.mjs'; const rs = await import('../vendor/jsquash/resize/squoosh_resize.js');")],
+    ['the per-worker resize glue loaded through a computed specifier', edit('lib/recipe.mjs', "import { CodecInitError, loadCodecs } from './codecs.mjs';", "import { CodecInitError, loadCodecs } from './codecs.mjs'; const rs = await import(RECIPE_GLUE);")],
     ['a module-level instance before the PNG factory', edit('lib/png_instance.mjs', 'export function freshPng() {', 'let shared = null;\nexport function freshPng() {')],
     ['the PNG factory memoised after its body (one instance per worker)', append(edit('lib/png_instance.mjs', 'return { initSync, decode };', 'return pngMemo ??= { initSync, decode };'), 'lib/png_instance.mjs', '\nlet pngMemo;\n')],
     ['the resize factory memoised after its body (one instance per worker)', append(edit('lib/resize_instance.mjs', 'return { initSync, resize };', 'return rsMemo ??= { initSync, resize };'), 'lib/resize_instance.mjs', '\nlet rsMemo;\n')],
