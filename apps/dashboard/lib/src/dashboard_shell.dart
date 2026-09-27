@@ -28,6 +28,11 @@ import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
 import 'state/setup_device_providers.dart';
+import 'storefront/storefront_media_publisher.dart';
+import 'storefront/storefront_media_repository.dart';
+import 'storefront/storefront_profile_repository.dart';
+import 'storefront/storefront_section.dart';
+import 'storefront/storefront_sources.dart';
 import 'analytics/dashboard_destination.dart';
 import 'support/support_mode_scope.dart';
 import 'widgets/language_selector.dart';
@@ -133,6 +138,7 @@ class DashboardShell extends StatefulWidget {
     this.printersRepository,
     this.staffRepository,
     this.tablesRepository,
+    this.storefrontFunctionInvoker,
     this.reportsTransport,
     this.onSignOut,
     this.debugOnSetupInvalidation,
@@ -172,6 +178,11 @@ class DashboardShell extends StatefulWidget {
   /// PRINT-BRANDING-LOGO-001: the restaurant-logo blob store (real mode only;
   /// null in demo -> the branding card shows an honest note).
   final RestaurantLogoStorage? brandingLogoStorage;
+
+  /// STOREFRONT-PUBLISH-001: the `storefront-media-publish` Edge Function seam
+  /// (app-lifetime, real mode only; null in demo -> the Storefront editor's
+  /// media slots show an honest "not available" note).
+  final StorefrontFunctionInvoker? storefrontFunctionInvoker;
 
   /// The REAL printers repository (null => labelled demo store).
   final PrintersRepository? printersRepository;
@@ -391,6 +402,66 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
+  /// STOREFRONT-PUBLISH-001: the Settings Storefront editor's seams, built
+  /// once per membership (restaurant-level, like branding). Null unless there
+  /// is an authenticated transport AND a concrete restaurant in scope -> the
+  /// card then shows an honest "not connected" note. The publisher exists
+  /// only when the app-lifetime Edge Function invoker was injected (real
+  /// mode); without it the media slots say publishing is not available here.
+  late final StorefrontEditorSeams? _storefrontSeams = _buildStorefrontSeams();
+
+  StorefrontEditorSeams? _buildStorefrontSeams() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    if (transport == null || membership == null || restaurantId == null) {
+      return null;
+    }
+    final organizationId = membership.organizationId;
+    final invoker = widget.storefrontFunctionInvoker;
+    return StorefrontEditorSeams(
+      // DASH-1: the editor's draft belongs to exactly this membership /
+      // organization / restaurant / role (the shell's own identity).
+      scopeIdentity: dashboardShellIdentity(
+        membership,
+        currencyCode: widget.currencyCode,
+      ),
+      profileRepository: SupabaseStorefrontProfileRepository(
+        transport: transport,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+      ),
+      mediaRepository: SupabaseStorefrontMediaRepository(
+        transport: transport,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+      ),
+      branchSource: SupabaseStorefrontBranchSource(
+        transport: transport,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+      ),
+      // Candidate originals: the CURRENT receipt logo (branding read) and the
+      // menu items' original images (the Dashboard menu read). Keys only —
+      // the function reads the private original as the caller.
+      sourceCatalog: DashboardStorefrontSourceCatalog(
+        logoRepository: _brandingRepo,
+        menuReadSource: widget.menuReadSource,
+        menuScope: _menuScope,
+      ),
+      publisher: invoker == null
+          ? null
+          : StorefrontMediaPublisher(
+              invoker: invoker,
+              organizationId: organizationId,
+              restaurantId: restaurantId,
+            ),
+      publicUrlFor: invoker is SupabaseStorefrontFunctionInvoker
+          ? invoker.publicMediaUrl
+          : null,
+    );
+  }
+
   /// Printers/Staff/Tables: real repository when injected, else the labelled
   /// demo store.
   late final PrintersRepository _printersRepo =
@@ -586,6 +657,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   brandingRepository: _brandingRepo,
                   brandingStorage: widget.brandingLogoStorage,
                   quickNotesRepository: _quickNotesRepo,
+                  storefrontSeams: _storefrontSeams,
                 ),
       },
     );
