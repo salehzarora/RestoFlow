@@ -24,7 +24,7 @@ import { inflateExact, PIECE, PngRejected, pngRawSize, sanitizePng } from '../li
 import { applyOrientation } from '../lib/orient.mjs';
 import { boxReduce } from '../lib/box.mjs';
 import { codecs, deriver, readWasm } from './engine.mjs';
-import { loadCodecs } from '../lib/codecs.mjs';
+import { CodecInitError, loadCodecs } from '../lib/codecs.mjs';
 import {
   chunk, fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256, logoRgba, png, PNG_SIGNATURE, rgbaFromRows, webp, withOrientation,
   withSofSize,
@@ -1059,4 +1059,207 @@ test('R31. STOREFRONT-MEDIA-MEMORY-001B: a buffer the caller owns is never relea
   assert.equal(r2.status, 'derived');
   assert.ok(decodeIn !== tiny && decodeIn.buffer.detached === false, 'the sanitized copy the RGBA views is not released');
   assert.ok(attached(tiny), 'the caller\'s bytes are attached');
+});
+
+// ------------------------------------------------------------------ creation / initialisation vs operation (STOREFRONT-MEDIA-ENGINE-FAILURE-001, D-042)
+/**
+ * Builds a fresh engine (`make` = createDeriver, or loadCodecs for the raw codecs) over the pinned wasm while
+ * every instantiation works, then, while `run` executes, makes the construction of a WebAssembly.Instance of
+ * ONE compiled module (`key`: png / resize / jpegDec / webpDec / webpEnc) throw `fail()` — the REAL initSync
+ * path of the per-call factory, with nothing edited in the pinned glue. Every other module instantiates
+ * normally; `log.attempts` counts the failed constructions and `log.created` the successful ones of that key.
+ * The WebAssembly globals are restored afterwards.
+ */
+async function withFailingInstance(key, fail, run, make = createDeriver) {
+  const wasm = await readWasm();
+  const keyOf = new Map(Object.entries(wasm).map(([k, v]) => [v, k]));
+  const { Instance, compile } = WebAssembly;
+  const keys = new Map();
+  const log = { armed: false, attempts: 0, created: 0 };
+  WebAssembly.compile = async (bytes) => { const m = await compile(bytes); keys.set(m, keyOf.get(bytes) ?? 'unknown'); return m; };
+  WebAssembly.Instance = new Proxy(Instance, {
+    construct(t, a, n) {
+      if (keys.get(a[0]) === key && log.armed) { log.attempts++; throw fail(); }
+      const instance = Reflect.construct(t, a, n);
+      if (keys.get(a[0]) === key) log.created++;
+      return instance;
+    },
+  });
+  try {
+    const engine = await make(wasm); // built, self-test included, while every instantiation works
+    Object.assign(log, { armed: true, attempts: 0, created: 0 }); // count only what `run` constructs
+    return await run(engine, log);
+  } finally {
+    Object.assign(WebAssembly, { Instance, compile });
+  }
+}
+const oom = () => new RangeError('WebAssembly.Instance(): Out of memory: Cannot allocate Wasm memory for new instance');
+const link = () => new WebAssembly.LinkError('WebAssembly.Instance(): Import #0 "wbg": module is not an object or function');
+const initTrap = () => new WebAssembly.RuntimeError('unreachable');
+const SRC = { variant: 'w480', source: 'restaurant-logos', rung: 0 };
+const isUnavailable = (e) => e instanceof DerivationError && e.code === 'engine_unavailable';
+const isDecodeFailed = (e) => e instanceof DerivationError && e.code === 'decode_failed';
+/** After a poisoning failure: a good source is refused engine_unavailable and never derived. */
+async function assertPoisoned(d, label) {
+  assert.equal(d.poisoned, true, `${label}: the deriver is poisoned`);
+  await assert.rejects(d.derive(await fixture('logo_opaque_rgb_1200x600'), SRC), isUnavailable, `${label}: a later derive is refused engine_unavailable`);
+}
+
+test('R32. D-042 (A): a failure of the PNG FACTORY step — the pinned glue\'s own module-level code throws while the per-call factory builds the instance, before any wasm is touched — is engine_unavailable, never a source refusal; the deriver is poisoned', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  const TD = globalThis.TextDecoder;
+  // the raw codecs: the marker itself
+  const c = await loadCodecs(await readWasm());
+  const d = await createDeriver(await readWasm());
+  assert.equal((await d.derive(good, SRC)).status, 'derived', 'control: the engine derives before the failure');
+  globalThis.TextDecoder = class { constructor() { throw oom(); } }; // freshPng() constructs its TextDecoder at factory time
+  try {
+    await assert.rejects(c.decodePng(good), (e) => e instanceof CodecInitError && e.codec === 'png' && e.cause instanceof RangeError && e.name === 'CodecInitError', 'the codecs mark the factory failure');
+    await assert.rejects(d.derive(good, SRC), isUnavailable, 'the deriver answers engine_unavailable');
+  } finally {
+    globalThis.TextDecoder = TD;
+  }
+  await assertPoisoned(d, 'PNG factory failure');
+  const again = await createDeriver(await readWasm());
+  assert.equal((await again.derive(good, SRC)).status, 'derived', 'control: with the runtime restored a fresh engine derives the same source');
+});
+
+test('R33. D-042 (B): a non-trap failure of the PNG initSync step — the WebAssembly.Instance of the cached compiled PNG module cannot be constructed (out of memory; a link error) — is engine_unavailable, never a source refusal; the deriver is poisoned and the source is never read', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  for (const [label, fail] of [['out of memory', oom], ['link error', link]]) {
+    await withFailingInstance('png', fail, async (c, log) => {
+      await assert.rejects(c.decodePng(good), (e) => e instanceof CodecInitError && e.codec === 'png' && e.cause.constructor === fail().constructor, `${label}: the codecs mark the initSync failure`);
+      assert.deepEqual([log.attempts, log.created], [1, 0], `${label}: one failed construction, no instance created, so the decode operation never ran`);
+    }, loadCodecs);
+    await withFailingInstance('png', fail, async (d, log) => {
+      await assert.rejects(d.derive(good, SRC), isUnavailable, `${label}: engine_unavailable`);
+      assert.deepEqual([log.attempts, log.created], [1, 0], `${label}: the instance was never created`);
+      await assertPoisoned(d, `PNG initSync ${label}`);
+    });
+  }
+});
+
+test('R34. D-042 (C, D): a failure to create or initialise the RESIZE instance is engine_unavailable and poisons the deriver — on a PNG source and on a JPEG source alike (the resize instance serves every source format); the factory step has no failing statement of its own, so its marker is proven through the codecs seam and the real path through initSync', async () => {
+  const png = await fixture('logo_opaque_rgb_1200x600');
+  const jpeg = await fixture('jpeg_logo_900x450');
+  // (C) the resize factory step: freshResize() only declares closures (L7 pins it as the glue text), so a real
+  // failure there cannot be induced without editing the pinned glue; the marker's mapping is proven here
+  const real = await codecs();
+  const factoryFailed = createDeriverFromCodecs({ ...real, resize: () => { throw new CodecInitError('resize', new Error('factory')); } });
+  await assert.rejects(factoryFailed.derive(png, SRC), isUnavailable, 'resize factory failure: engine_unavailable');
+  await assertPoisoned(factoryFailed, 'resize factory failure');
+  // (D) the real initSync path: the WebAssembly.Instance of the cached compiled resize module cannot be constructed
+  for (const [label, src, bucket] of [['PNG source', png, 'restaurant-logos'], ['JPEG source', jpeg, 'restaurant-logos']]) {
+    await withFailingInstance('resize', oom, async (c, log) => {
+      const img = src === png ? await c.decodePng(src) : (await c.decodeJpeg(src)).image;
+      const px = new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.length);
+      const { method, premultiply, linearRGB } = RECIPE.resize;
+      assert.throws(() => c.resize(px, img.width, img.height, 480, 240, method, premultiply, linearRGB), (e) => e instanceof CodecInitError && e.codec === 'resize' && e.cause instanceof RangeError, `${label}: the codecs mark the resize initSync failure`);
+      assert.deepEqual([log.attempts, log.created], [1, 0], `${label}: no resize instance was created, so the resize operation never ran`);
+    }, loadCodecs);
+    await withFailingInstance('resize', oom, async (d, log) => {
+      await assert.rejects(d.derive(src, { variant: 'w480', source: bucket, rung: 0 }), isUnavailable, `${label}: engine_unavailable`);
+      assert.deepEqual([log.attempts, log.created], [1, 0], `${label}: the decode succeeded and the resize instance was never created`);
+      await assertPoisoned(d, `resize initSync (${label})`);
+    });
+  }
+});
+
+test('R35. D-042 (E, F): an exception out of the decode or resize OPERATION, after its instance was created and initialised, keeps the typed refusal decode_failed (never engine_unavailable), and still poisons the deriver — the step that threw decides, never the exception\'s type', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  const bad = await fixture('bad_png_filter_type');
+  // (E) the real PNG operation failure: the instance is created (a construction of the PNG module succeeds) and
+  // then the Rust decoder throws a plain Error through wasm-bindgen
+  await withFailingInstance('png', oom, async (c, log) => {
+    log.armed = false; // nothing fails: the log only counts the constructions
+    await assert.rejects(c.decodePng(bad), (e) => e instanceof Error && !(e instanceof CodecInitError) && !(e instanceof WebAssembly.RuntimeError), 'a plain Error out of the operation, not the init marker');
+    assert.deepEqual([log.attempts, log.created], [0, 1], 'the PNG instance was created before the operation threw');
+  }, loadCodecs);
+  const d = await createDeriver(await readWasm());
+  await assert.rejects(d.derive(bad, SRC), isDecodeFailed, '(E) the operation failure keeps decode_failed');
+  await assertPoisoned(d, 'PNG operation failure');
+  // (F, real path) the resize instance is created and initialised, and then its OPERATION fails at the glue's
+  // first step — copying the input into the instance's own memory (the pinned resize module imports nothing,
+  // so a Rust failure inside it can only trap): the typed refusal stands and the deriver is poisoned
+  await withInstanceLog(async (d, log) => {
+    const { set } = Uint8Array.prototype;
+    const latestResizeMemory = () => { const rs = of(log, 'resize'); return rs.length && rs[rs.length - 1].memory ? rs[rs.length - 1].memory.buffer : null; };
+    Uint8Array.prototype.set = function patched(...args) {
+      if (this.buffer === latestResizeMemory()) throw new RangeError('offset is out of bounds');
+      return set.apply(this, args);
+    };
+    try {
+      const before = of(log, 'resize').length; // the self-test's instance
+      await assert.rejects(d.derive(good, SRC), isDecodeFailed, '(F) a real resize operation failure keeps decode_failed');
+      assert.equal(of(log, 'resize').length, before + 1, 'the resize instance was created and initialised before its operation threw');
+    } finally {
+      Uint8Array.prototype.set = set;
+    }
+    await assertPoisoned(d, 'real resize operation failure');
+  }, createDeriver);
+  // (F, seam) the same class through the codecs seam
+  const real = await codecs();
+  const opFailed = createDeriverFromCodecs({ ...real, resize: () => { throw new RangeError('Invalid typed array length'); } });
+  await assert.rejects(opFailed.derive(good, SRC), isDecodeFailed, '(F) the resize operation failure keeps decode_failed');
+  await assertPoisoned(opFailed, 'resize operation failure');
+  // the same RangeError type, thrown by the creation step instead, is the other class: the step decides
+  await withFailingInstance('resize', () => new RangeError('Invalid typed array length'), async (d2) => {
+    await assert.rejects(d2.derive(good, SRC), isUnavailable, 'the same exception type from the creation step is engine_unavailable');
+  });
+});
+
+test('R36. D-042 (G): a WebAssembly trap stays engine_unavailable wherever it comes from — the creation step of the PNG or resize instance (an instantiation trap), and the operation (R18)', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  for (const key of ['png', 'resize']) {
+    await withFailingInstance(key, initTrap, async (d, log) => {
+      await assert.rejects(d.derive(good, SRC), isUnavailable, `${key}: an instantiation trap is engine_unavailable`);
+      assert.equal(log.attempts, 1);
+      await assertPoisoned(d, `${key} instantiation trap`);
+    });
+  }
+});
+
+test('R37. D-042 (H): the JPEG decoder and the WebP decoder and encoder are unchanged — a non-trap failure to create their fresh Emscripten instance answers decode_failed WITHOUT poisoning, and an instantiation trap answers engine_unavailable and poisons (the marker is never raised for them)', async () => {
+  const jpeg = await fixture('jpeg_logo_900x450');
+  const webpSrc = await fixture('webp_lossy_alpha_900x600');
+  const png = await fixture('logo_opaque_rgb_1200x600');
+  for (const [key, src, bucket] of [['jpegDec', jpeg, 'restaurant-logos'], ['webpDec', webpSrc, 'menu-images'], ['webpEnc', png, 'restaurant-logos']]) {
+    await withFailingInstance(key, oom, async (d, log) => {
+      await assert.rejects(d.derive(src, { variant: 'w480', source: bucket, rung: 0 }), (e) => isDecodeFailed(e) && !(e instanceof CodecInitError), `${key}: a creation failure is decode_failed`);
+      assert.equal(log.attempts, 1, `${key}: the failed construction was the codec's`);
+      assert.equal(d.poisoned, false, `${key}: not poisoned`);
+      log.armed = false;
+      assert.equal((await d.derive(src, { variant: 'w480', source: bucket, rung: 0 })).status, 'derived', `${key}: the engine still derives afterwards`);
+    });
+    await withFailingInstance(key, initTrap, async (d) => {
+      await assert.rejects(d.derive(src, { variant: 'w480', source: bucket, rung: 0 }), isUnavailable, `${key}: an instantiation trap is engine_unavailable`);
+      assert.equal(d.poisoned, true, `${key}: a trap poisons`);
+    });
+  }
+});
+
+test('R38. D-042 control (TESTING_STRATEGY §6 item 9): a creation failure DURING the EDGE-4 self-test fails the engine start closed as engine_unavailable — no deriver escapes createDeriver (the handler answers a failed engine() with 503, F17)', async () => {
+  for (const [key, before] of [['png', []], ['resize', ['png']]]) {
+    const wasm = await readWasm();
+    const keyOf = new Map(Object.entries(wasm).map(([k, v]) => [v, k]));
+    const { Instance, compile } = WebAssembly;
+    const keys = new Map();
+    const constructed = [];
+    let attempts = 0;
+    WebAssembly.compile = async (bytes) => { const m = await compile(bytes); keys.set(m, keyOf.get(bytes) ?? 'unknown'); return m; };
+    WebAssembly.Instance = new Proxy(Instance, {
+      construct(t, a, n) {
+        if (keys.get(a[0]) === key) { attempts++; throw oom(); }
+        constructed.push(keys.get(a[0]));
+        return Reflect.construct(t, a, n);
+      },
+    });
+    try {
+      await assert.rejects(createDeriver(wasm), (e) => isUnavailable(e) && /self-test failed: engine_unavailable/.test(e.message), `${key}: the start fails closed as engine_unavailable (the self-test saw the creation failure, never decode_failed)`);
+      assert.equal(attempts, 1, `${key}: the self-test's creation step failed once`);
+      assert.deepEqual(constructed, before, `${key}: only the instances before the failing step were created`);
+    } finally {
+      Object.assign(WebAssembly, { Instance, compile });
+    }
+  }
 });
