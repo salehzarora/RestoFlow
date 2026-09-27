@@ -1,10 +1,18 @@
 # Vendored image codecs of `storefront-media-publish` (recipe `storefront-media-c4`)
 
-This directory holds the ONLY third-party code of the Edge Function: ten codec files
+This directory holds the vendored third-party code of the Edge Function: ten codec files
 from four jSquash npm packages, each **byte-identical to its npm tarball copy and
 unmodified** (no edit, no re-minification, no re-encoding, no line-ending change;
 `.gitattributes` marks `vendor/**` as `-text` and the `.wasm` files as `binary`), plus
 the third-party notices that cover exactly these files.
+
+Outside this directory, `lib/png_instance.mjs` and `lib/resize_instance.mjs` carry the
+leading part of the pinned PNG and resize glue (`jsquash/png/squoosh_png.js` and
+`jsquash/resize/squoosh_resize.js`, up to `async function __wbg_init(input) {`, with
+`export ` removed from its declarations), mechanically wrapped in a per-call factory so
+that every call instantiates a fresh codec (STOREFRONT-MEDIA-MEMORY-001, **DECISION D-041**
+point 3); `test/license.test.mjs` L7 proves that text against the pinned glue on every
+run, and `THIRD_PARTY_NOTICES.txt` covers it as part of those two packages.
 
 - `lib/recipe.mjs` (`RECIPE.engine.files`) pins the sha-256 of every file below;
   `createDeriver()` refuses to start unless each of the five `.wasm` files matches its

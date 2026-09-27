@@ -7,22 +7,28 @@
 // Adam7 raw size, ancillary chunks inflating to 1 GiB never reaching the decoder); the
 // 8 MiP decode-cap edge; alpha carried exactly (the derivative's alpha plane decoded
 // with the vendored WebP decoder equals the pre-encode alpha); the EXIF orientations;
-// metadata stripped; and the typed mapping of every codec failure, including which
-// failures poison the engine.
+// metadata stripped; the typed mapping of every codec failure, including which
+// failures poison the engine; the fresh per-call codec instances (STOREFRONT-MEDIA-MEMORY-001);
+// and the eager release of every owned intermediate raster on each call whose encode returns,
+// never the caller's bytes or the output (STOREFRONT-MEDIA-MEMORY-001B).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { createInflate, inflateSync } from 'node:zlib';
 import {
-  createDeriver, createDeriverFromCodecs, DerivationError, engineSelfTest, outputSize, RECIPE, SELF_TEST,
+  createDeriver, createDeriverFromCodecs, DerivationError, engineSelfTest, outputSize, RECIPE, releaseOwned, SELF_TEST,
 } from '../lib/recipe.mjs';
 import { SourceRejected, sniffSource, webpInfo } from '../lib/sniff.mjs';
 import { inflateExact, PIECE, PngRejected, pngRawSize, sanitizePng } from '../lib/pngbound.mjs';
 import { applyOrientation } from '../lib/orient.mjs';
 import { boxReduce } from '../lib/box.mjs';
 import { codecs, deriver, readWasm } from './engine.mjs';
-import { chunk, fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256, PNG_SIGNATURE, withSofSize } from './fixtures.mjs';
+import { loadCodecs } from '../lib/codecs.mjs';
+import {
+  chunk, fixture, fixtureSpec, GPS_MARKER, JPEG_FIXTURE_SHA256, logoRgba, png, PNG_SIGNATURE, rgbaFromRows, webp, withOrientation,
+  withSofSize,
+} from './fixtures.mjs';
 import { GOLDENS, REFUSALS, SPIKE_GOLDENS } from './goldens.mjs';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
@@ -468,7 +474,7 @@ test('R17. metadata is stripped: EXIF GPS in a JPEG, tEXt in a PNG, ICCP / EXIF 
 });
 
 // ------------------------------------------------------------------ typed failure mapping (fake codecs)
-test('R18. codec failures map to the public codes; a trap or an exception out of a one-per-worker module poisons the engine', async () => {
+test('R18. codec failures map to the public codes; a trap or an exception out of the PNG or resize module poisons the engine', async () => {
   const real = await codecs();
   const png = await fixture('logo_alpha_2000x1000');
   const jpeg = await fixture('jpeg_logo_900x450');
@@ -539,4 +545,518 @@ test('R20. a PNG refusal from the image-data bound keeps its code and passes onl
   const d = await deriver();
   await assert.rejects(d.derive(await fixture('bad_png_raw_too_short'), { variant: 'w480', source: 'restaurant-logos', rung: 0 }),
     (e) => e instanceof SourceRejected && e.code === 'corrupt' && /^corrupt: png image data inflates to \d+ of 320200 B$/.test(e.message));
+});
+
+// ------------------------------------------------------------------ codec instance lifecycle (STOREFRONT-MEDIA-MEMORY-001, D-041 point 3)
+const shaOf = (u8) => sha(Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength));
+
+/**
+ * Builds a fresh engine over the pinned wasm — the raw codecs (`make` = loadCodecs) or a verified deriver
+ * (`make` = createDeriver) — and records, while `run` executes, every compile, every WebAssembly.Module built
+ * from bytes, and every WebAssembly.Instance with the compiled module it came from (keyed png / resize /
+ * jpegDec / webpEnc / webpDec) and its own linear memory with its size at creation. The WebAssembly globals
+ * are restored afterwards.
+ */
+async function withInstanceLog(run, make = loadCodecs) {
+  const wasm = await readWasm();
+  const keyOf = new Map(Object.entries(wasm).map(([k, v]) => [v, k]));
+  const { Instance, Module, compile } = WebAssembly;
+  const log = { compiles: 0, modulesBuilt: 0, keys: new Map(), instances: [] };
+  WebAssembly.compile = async (bytes) => {
+    log.compiles++;
+    const m = await compile(bytes);
+    log.keys.set(m, keyOf.get(bytes) ?? 'unknown');
+    return m;
+  };
+  WebAssembly.Module = new Proxy(Module, { construct(t, a, n) { log.modulesBuilt++; return Reflect.construct(t, a, n); } });
+  WebAssembly.Instance = new Proxy(Instance, {
+    construct(t, a, n) {
+      const instance = Reflect.construct(t, a, n);
+      const memory = Object.values(instance.exports).find((v) => v instanceof WebAssembly.Memory) ?? null;
+      log.instances.push({ key: log.keys.get(a[0]) ?? 'unknown', module: a[0], instance, memory, bytesAtStart: memory ? memory.buffer.byteLength : null });
+      return instance;
+    },
+  });
+  try {
+    return await run(await make(wasm), log);
+  } finally {
+    Object.assign(WebAssembly, { Instance, Module, compile });
+  }
+}
+const of = (log, key) => log.instances.filter((x) => x.key === key);
+const size = (x) => x.memory.buffer.byteLength;
+
+test('R21. STOREFRONT-MEDIA-MEMORY-001: every PNG decode runs on a FRESH decoder instance with its own linear memory, from the ONE compiled module; nothing is compiled per call', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (c, log) => {
+    assert.equal(log.compiles, 5, 'the five modules are compiled once, when the codecs load');
+    assert.equal(log.instances.length, 0, 'loading the codecs creates no instance');
+    const a = await c.decodePng(src);
+    const first = size(of(log, 'png')[0]);
+    const b = await c.decodePng(src);
+    const png = of(log, 'png');
+    assert.equal(png.length, 2, 'one new PNG decoder instance per call');
+    assert.equal(log.instances.length, 2, 'a PNG decode instantiates nothing else');
+    assert.ok(png[0].instance !== png[1].instance, 'a new instance per call');
+    assert.ok(png[0].module === png[1].module, 'both instances come from the one compiled module');
+    assert.ok(png[0].memory && png[1].memory && png[0].memory !== png[1].memory, 'each call has its own linear memory');
+    assert.ok(first > png[0].bytesAtStart, 'the first decode ran on, and grew, its own instance');
+    assert.equal(png[1].bytesAtStart, png[0].bytesAtStart, 'the second instance starts from the initial size, never from the first call\'s grown heap');
+    assert.ok(size(png[1]) > png[1].bytesAtStart, 'the second decode ran on its own new instance (it grew)');
+    assert.equal(size(png[0]), first, 'the second decode never touched the first instance');
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.deepEqual([a.width, a.height, shaOf(a.data)], [b.width, b.height, shaOf(b.data)], 'fresh instances decode identical pixels');
+  });
+});
+
+test('R22. STOREFRONT-MEDIA-MEMORY-001: every resize runs on a FRESH resize instance with its own linear memory, from the ONE compiled module; nothing is compiled per call', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (c, log) => {
+    const img = await c.decodePng(src);
+    const px = new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.length);
+    const { method, premultiply, linearRGB } = RECIPE.resize;
+    const from = log.instances.length;
+    const a = c.resize(px, img.width, img.height, 960, 480, method, premultiply, linearRGB);
+    const first = size(log.instances[from]);
+    const b = c.resize(px, img.width, img.height, 960, 480, method, premultiply, linearRGB);
+    const rs = log.instances.slice(from);
+    assert.deepEqual(rs.map((x) => x.key), ['resize', 'resize'], 'one new resize instance per call, and nothing else');
+    assert.ok(rs[0].instance !== rs[1].instance, 'a new instance per call');
+    assert.ok(rs[0].module === rs[1].module, 'both instances come from the one compiled module');
+    assert.ok(rs[0].memory && rs[1].memory && rs[0].memory !== rs[1].memory, 'each call has its own linear memory');
+    assert.ok(first > rs[0].bytesAtStart, 'the first resize ran on, and grew, its own instance');
+    assert.equal(rs[1].bytesAtStart, rs[0].bytesAtStart, 'the second instance starts from the initial size, never from the first call\'s grown heap');
+    assert.ok(size(rs[1]) > rs[1].bytesAtStart, 'the second resize ran on its own new instance (it grew)');
+    assert.equal(size(rs[0]), first, 'the second resize never touched the first instance');
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.equal(a.length, 960 * 480 * 4);
+    assert.ok(a.buffer !== rs[0].memory.buffer, 'the output is a copy, never a view of the instance memory');
+    assert.equal(shaOf(a), shaOf(b), 'fresh instances resize to identical pixels');
+  });
+});
+
+test('R23. STOREFRONT-MEDIA-MEMORY-001: the Emscripten codecs keep a fresh instance per call (JPEG decode, WebP decode, WebP encode), each from its one compiled module', async () => {
+  const jpeg = await fixture('jpeg_prog_1600x1200');
+  const webpSrc = await fixture('webp_lossy_alpha_900x600');
+  await withInstanceLog(async (c, log) => {
+    const j1 = await c.decodeJpeg(jpeg);
+    const j2 = await c.decodeJpeg(jpeg);
+    const w1 = await c.decodeWebp(webpSrc);
+    const w2 = await c.decodeWebp(webpSrc);
+    const opts = { ...RECIPE.webp, quality: RECIPE.ladder[0] };
+    const e1 = new Uint8Array(await c.encodeWebp(w1.data, w1.width, w1.height, opts));
+    const e2 = new Uint8Array(await c.encodeWebp(w1.data, w1.width, w1.height, opts));
+    assert.deepEqual(log.instances.map((x) => x.key), ['jpegDec', 'jpegDec', 'webpDec', 'webpDec', 'webpEnc', 'webpEnc']);
+    for (let i = 0; i < 6; i += 2) {
+      assert.ok(log.instances[i].instance !== log.instances[i + 1].instance, `${log.instances[i].key}: a new instance per call`);
+      assert.ok(log.instances[i].module === log.instances[i + 1].module, `${log.instances[i].key}: one compiled module`);
+    }
+    assert.equal(log.compiles, 5, 'no compile per call');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per call');
+    assert.equal(shaOf(j1.image.data), shaOf(j2.image.data));
+    assert.equal(shaOf(w1.data), shaOf(w2.data));
+    assert.equal(shaOf(e1), shaOf(e2));
+  });
+});
+
+test('R24. STOREFRONT-MEDIA-MEMORY-001: a failed PNG decode leaves nothing behind for the next call (a fresh instance decodes identically), and the conservative poison rule is unchanged', async () => {
+  const good = await fixture('logo_opaque_rgb_1200x600');
+  const bad = await fixture('bad_png_filter_type');
+  await withInstanceLog(async (c, log) => {
+    const before = await c.decodePng(good);
+    await assert.rejects(c.decodePng(bad), (e) => e instanceof Error && !(e instanceof WebAssembly.RuntimeError), 'a Rust error, not a trap');
+    const settled = of(log, 'png').map(size);
+    const after = await c.decodePng(good);
+    const png = of(log, 'png');
+    assert.equal(png.length, 3);
+    assert.equal(new Set(png.map((x) => x.instance)).size, 3, 'the failed call\'s instance is never reused');
+    assert.equal(png[2].bytesAtStart, png[0].bytesAtStart, 'the call after the failure starts from the initial size');
+    assert.ok(size(png[2]) > png[2].bytesAtStart, 'the call after the failure ran on its own new instance (it grew)');
+    assert.deepEqual(png.slice(0, 2).map(size), settled, 'the call after the failure never touched the earlier instances');
+    assert.deepEqual([after.width, after.height, shaOf(after.data)], [before.width, before.height, shaOf(before.data)]);
+  });
+  // the deriver still treats ANY exception out of the PNG decoder as poisoning (review FN-V1; kept by D-041).
+  // A separate deriver, so the shared one of this process stays trusted.
+  const d = await createDeriver(await readWasm());
+  await assert.rejects(d.derive(bad, { variant: 'w480', source: 'restaurant-logos', rung: 0 }), (e) => e instanceof DerivationError && e.code === 'decode_failed');
+  assert.equal(d.poisoned, true);
+  await assert.rejects(d.derive(good, { variant: 'w480', source: 'restaurant-logos', rung: 0 }), (e) => e instanceof DerivationError && e.code === 'engine_unavailable');
+});
+
+test('R25. STOREFRONT-MEDIA-MEMORY-001: two sequential derives through createDeriver (the function\'s own path, self-test included) each run on their own fresh PNG decoder and resize instances; the five modules are compiled once', async () => {
+  const src = await fixture('logo_alpha_2000x1000');
+  await withInstanceLog(async (d, log) => {
+    assert.equal(log.compiles, 5, 'the engine compiles the five modules once');
+    const selfTest = { png: of(log, 'png').length, resize: of(log, 'resize').length };
+    assert.deepEqual(selfTest, { png: 1, resize: 1 }, 'the EDGE-4 self-test ran on its own PNG and resize instances');
+    // w960: the 2000 x 1000 source is box-reduced to 1000 x 500 and resized to 960 x 480, so both instances must grow
+    const a = await d.derive(src, { variant: 'w960', source: 'restaurant-logos', rung: 0 });
+    const firstPng = of(log, 'png').map(size);
+    const firstRs = of(log, 'resize').map(size);
+    const b = await d.derive(src, { variant: 'w960', source: 'restaurant-logos', rung: 0 });
+    for (const [key, earlier] of [['png', firstPng], ['resize', firstRs]]) {
+      const all = of(log, key);
+      assert.equal(all.length, 3, `${key}: the self-test and each derive got their own instance`);
+      assert.equal(new Set(all.map((x) => x.instance)).size, 3, `${key}: never reused`);
+      assert.equal(new Set(all.map((x) => x.module)).size, 1, `${key}: one compiled module`);
+      assert.equal(all[2].bytesAtStart, all[1].bytesAtStart, `${key}: the second derive starts from the initial size`);
+      assert.ok(size(all[1]) > all[1].bytesAtStart && size(all[2]) > all[2].bytesAtStart, `${key}: each derive ran on its own instance`);
+      assert.deepEqual(all.slice(0, 2).map(size), earlier, `${key}: the second derive never touched an earlier instance`);
+    }
+    assert.equal(log.compiles, 5, 'no compile per derive');
+    assert.equal(log.modulesBuilt, 0, 'no module is built from bytes per derive');
+    assert.equal(a.status, 'derived');
+    assert.equal(b.sha256, a.sha256, 'both derives produce the same bytes');
+    assert.equal(d.poisoned, false);
+  }, createDeriver);
+});
+
+// ------------------------------------------------------------------ owned-buffer release (STOREFRONT-MEDIA-MEMORY-001B)
+const goldenOf = (name, variant) => GOLDENS.find((g) => g[0] === name && g[1] === variant);
+const attached = (v) => v.buffer.detached === false;
+
+/**
+ * A deriver over `real` codecs that records every raster derive() hands to or gets from a codec (by role:
+ * decodeIn, decoded, resizeIn, resized, encodeIn) and, at each codec call, which of the rasters seen so far
+ * are already detached, plus the sha-256 of the raster the encoder was given.
+ */
+function observe(real) {
+  const seen = {};
+  const at = {};
+  const snap = () => Object.fromEntries(Object.entries(seen).map(([k, v]) => [k, v.buffer.detached]));
+  const decoder = (fn, image) => async (u8) => {
+    seen.decodeIn = u8;
+    at.decode = snap();
+    const r = await fn(u8);
+    seen.decoded = image(r).data;
+    return r;
+  };
+  const d = createDeriverFromCodecs({
+    ...real,
+    decodePng: decoder(real.decodePng, (r) => r),
+    decodeJpeg: decoder(real.decodeJpeg, (r) => r.image),
+    decodeWebp: decoder(real.decodeWebp, (r) => r),
+    resize: (rgba, ...rest) => {
+      seen.resizeIn = rgba;
+      at.resize = snap();
+      seen.resized = real.resize(rgba, ...rest);
+      return seen.resized;
+    },
+    encodeWebp: async (rgba, ...rest) => {
+      seen.encodeIn = rgba;
+      at.encode = snap();
+      at.encodeSha = shaOf(rgba);
+      return real.encodeWebp(rgba, ...rest);
+    },
+  });
+  const reset = () => { for (const o of [seen, at]) for (const k of Object.keys(o)) delete o[k]; };
+  return { d, seen, at, reset };
+}
+
+// Sources for the release paths that no golden takes (box without resize, rotation without resize, a JPEG box).
+// Each pinned hash is the BASE commit c3d530a7's own derivative of the same bytes: the release changes no byte.
+const EXTRA_SOURCES = new Map([
+  ['png_logo_1920x1080', { bucket: 'restaurant-logos', build: () => png({ width: 1920, height: 1080, channels: 4, rows: logoRgba(1920, 1080) }) }],
+  ['png_logo_960x540', { bucket: 'restaurant-logos', build: () => png({ width: 960, height: 540, channels: 4, rows: logoRgba(960, 540) }) }],
+  ['webp_photo_1920x1080', { bucket: 'menu-images', build: () => webp(1920, 1080, { alpha: false }) }],
+  ['jpeg_logo_900x450_orient_6', { bucket: 'restaurant-logos', build: async () => withOrientation(await fixture('jpeg_logo_900x450'), 6) }],
+]);
+const BASE_HASHES = new Map([
+  ['png_logo_1920x1080 w960', 'd8e3fe08c91e119539e9e8d4570690c6413e13c463e00caf1c29e61dea261af0'],
+  ['png_logo_960x540 w480', 'bcef7686ed5cc8f33cabc02694de36d58607132f1e47b258129c32b779d57a21'],
+  ['webp_photo_1920x1080 w960', 'ab2730a50a4cdc2ec21d2ac251827518005985f54fe6cb7283b708b46e0bbb96'],
+  ['jpeg_logo_900x450_orient_6 w960', '9f83a4a667df3ecb4ea34c15a0781bb97c6140d0da1871173053ed2730d5f4a1'],
+  ['jpeg_prog_1600x1200 w480', 'e69a9fff69c652251c4bb8014d80c133fe88172f9b37eedfd9537434923a02b2'],
+  ['jpeg_orient_6 w480', '1e3eeda98336fc92ae364bec9440b15483465a8f36a4b7eaa3d50243aa5f8c2a'],
+]);
+const builtExtra = new Map();
+async function releaseSource(name) {
+  if (!EXTRA_SOURCES.has(name)) return { bytes: await fixture(name), bucket: fixtureSpec(name).bucket };
+  if (!builtExtra.has(name)) builtExtra.set(name, Promise.resolve(EXTRA_SOURCES.get(name).build()).then((b) => new Uint8Array(b)));
+  return { bytes: await builtExtra.get(name), bucket: EXTRA_SOURCES.get(name).bucket };
+}
+const pinnedHash = (name, variant) => BASE_HASHES.get(`${name} ${variant}`) ?? goldenOf(name, variant)[2];
+
+test('R26. STOREFRONT-MEDIA-MEMORY-001B: each owned intermediate is detached after its LAST use and before the next codec call, never earlier, on every release path (box / resize / rotation, alone and combined, and none; PNG, JPEG, WebP); the caller\'s bytes and the output stay attached; the output is pinned', async () => {
+  const cases = [
+    // [source, variant, box ran, resize ran, the orientation made a new raster]
+    ['logo_alpha_2000x1000', 'w480', true, true, false], // PNG: box k = 4, then resize
+    ['webp_lossless_alpha_1200x800', 'w480', true, true, false], // WebP: box k = 2, then resize
+    ['jpeg_prog_1600x1200', 'w480', true, true, false], // JPEG: box k = 3, then resize
+    ['jpeg_orient_6', 'w480', true, true, true], // JPEG: box, resize, then a rotation
+    ['png_logo_1920x1080', 'w960', true, false, false], // PNG: box k = 2 lands on the target, no resize
+    ['png_logo_960x540', 'w480', true, false, false], // PNG: the same at w480
+    ['webp_photo_1920x1080', 'w960', true, false, false], // WebP: box only
+    ['logo_opaque_rgb_1200x600', 'w960', false, true, false], // PNG: resize only
+    ['jpeg_prog_1600x1200', 'w960', false, true, false], // JPEG: resize, orientation 1
+    ['jpeg_orient_6', 'w960', false, true, true], // JPEG: resize, then a rotation
+    ['jpeg_logo_900x450_orient_6', 'w960', false, false, true], // JPEG: rotation only (release 4 frees the decoded RGBA)
+    ['logo_small_300x150', 'w480', false, false, false], // PNG: neither
+    ['webp_lossy_alpha_900x600', 'w960', false, false, false], // WebP: neither
+  ];
+  const o = observe(await codecs());
+  for (const [name, variant, box, resize, rotate] of cases) {
+    const label = `${name} ${variant}`;
+    o.reset();
+    const { bytes, bucket } = await releaseSource(name);
+    const before = sha(bytes);
+    const type = sniffSource(bytes, { ...RECIPE.caps, maxInputBytes: 5242880 }).type;
+    const r = await o.d.derive(bytes, { variant, source: bucket, rung: 0 });
+    const { seen, at } = o;
+    assert.equal(r.sha256, pinnedHash(name, variant), `${label}: the pinned derivative`);
+    // the path really is the one named: the box output, the resize output and the rotated raster are each new arrays
+    assert.equal(Boolean(at.resize), resize, `${label}: the resize ${resize ? 'ran' : 'did not run'}`);
+    if (resize) {
+      assert.equal(seen.resizeIn.buffer !== seen.decoded.buffer, box, `${label}: the box ${box ? 'ran' : 'did not run'}`);
+      assert.equal(seen.encodeIn.buffer !== seen.resized.buffer, rotate, `${label}: the orientation ${rotate ? 'made' : 'kept'} the raster`);
+    } else {
+      assert.equal(seen.encodeIn.buffer !== seen.decoded.buffer, box || rotate, `${label}: the encoder ${box || rotate ? 'got a new raster' : 'got the decoded RGBA'}`);
+    }
+    // (release 1) the decoder's input: attached while decoded; a PNG's sanitized copy is gone before the next codec call
+    assert.equal(at.decode.decodeIn, false, `${label}: the decoder input is attached while decoded`);
+    if (type === 'png') {
+      assert.ok(seen.decodeIn !== bytes && seen.decodeIn.buffer !== bytes.buffer, `${label}: a PNG is decoded from a sanitized copy`);
+      if (resize) assert.equal(at.resize.decodeIn, true, `${label}: the sanitized copy is released before the resize`);
+      assert.equal(at.encode.decodeIn, true, `${label}: the sanitized copy is released before the encode`);
+    } else {
+      assert.equal(seen.decodeIn, bytes, `${label}: a ${type} is decoded from the caller's bytes`);
+    }
+    // (releases 2 / 3) the decoded RGBA and the resize input
+    if (resize) {
+      assert.equal(at.resize.resizeIn, false, `${label}: the resize input is attached while resized`);
+      assert.equal(at.resize.decoded, box, `${label}: the decoded RGBA is ${box ? 'released after the box, BEFORE the resize' : 'the resize input, still attached'}`);
+      assert.equal(at.encode.resizeIn, true, `${label}: the resize input is released before the encode`);
+      // (release 4) the resize output: released before the encode only when the orientation copied it
+      assert.equal(at.encode.resized, rotate, `${label}: the resize output ${rotate ? 'is released after the orientation' : 'is the encoder input, still attached'}`);
+    }
+    // releases 2, 3 and 4 between them free the decoded RGBA before the encode on every transforming path
+    assert.equal(at.encode.decoded, box || resize || rotate, `${label}: the decoded RGBA ${box || resize || rotate ? 'is released before the encode' : 'is the encoder input, still attached'}`);
+    // (release 5) the encoder's input: attached while encoded, released after it
+    assert.equal(at.encode.encodeIn, false, `${label}: the encoder input is attached while encoded`);
+    for (const [role, v] of Object.entries(seen)) {
+      if (v === bytes) continue;
+      assert.equal(v.buffer.detached, true, `${label}: ${role} is released by the end of the derive`);
+    }
+    assert.ok(attached(bytes) && sha(bytes) === before, `${label}: the caller's bytes are attached and unchanged`);
+    assert.ok(attached(r.bytes) && sha(r.bytes) === r.sha256, `${label}: the returned bytes are attached and are the reported hash`);
+  }
+  // inspect: the pre-encode raster the caller asked for is never released, and it is exactly what the encoder got
+  for (const [name, variant] of [['logo_alpha_2000x1000', 'w480'], ['jpeg_orient_6', 'w960'], ['logo_small_300x150', 'w480'], ['png_logo_1920x1080', 'w960']]) {
+    o.reset();
+    const { bytes, bucket } = await releaseSource(name);
+    const r = await o.d.derive(bytes, { variant, source: bucket, rung: 0, inspect: true });
+    assert.equal(r.sha256, pinnedHash(name, variant), `${name}: inspect does not change the bytes`);
+    assert.ok(attached(r.preEncode) && r.preEncode.length === r.width * r.height * 4, `${name}: preEncode is attached and whole`);
+    assert.ok(r.preEncode.buffer === o.seen.encodeIn.buffer && shaOf(r.preEncode) === o.at.encodeSha, `${name}: preEncode is the raster the encoder was given`);
+    assert.ok(attached(bytes) && attached(r.bytes), `${name}: the caller's bytes and the output stay attached`);
+    for (const [role, v] of Object.entries(o.seen)) {
+      if (v === bytes || v.buffer === r.preEncode.buffer) continue;
+      assert.equal(v.buffer.detached, true, `${name}: ${role} is still released under inspect`);
+    }
+  }
+});
+
+test('R26b. STOREFRONT-MEDIA-MEMORY-001B: a JPEG whose box output lands exactly on the target (no resize), with orientation 1 and with a rotation: the box output (seen through the Uint8Array constructor) is released by release 4 BEFORE the encode when rotated, by release 5 after it otherwise; the output is the base commit\'s', async () => {
+  const real = await codecs();
+  const W = 1920, H = 1440; // k = 4 at w480: the 480 x 360 box output IS the resize target
+  const pixels = rgbaFromRows(W, H, logoRgba(W, H), 4);
+  const BASE = new Map([[1, '380bed92e54c01dca7e504d7dc111e379e402035b0bf40dc5977c3e67f6ae62b'], [6, 'e69eeada0cf59e76cba0df31861c73eeeb1e544df5f04e2482644a0e656df7d5']]);
+  for (const [o, hash] of BASE) {
+    const bytes = withOrientation(withSofSize(await fixture('jpeg_logo_900x450'), W, H), o);
+    const before = sha(bytes);
+    let decoded = null, box = null, encodeIn = null, atEncode = null, decodedDone = false;
+    const made = [];
+    // a decoder answering a fresh copy of synthetic 1920 x 1440 pixels (like the real one: a whole JS-owned copy)
+    const d = createDeriverFromCodecs({
+      ...real,
+      decodeJpeg: async () => { decoded = new Uint8ClampedArray(pixels); decodedDone = true; return { image: { width: W, height: H, data: decoded }, warnings: [] }; },
+      resize: () => assert.fail('no resize on this path'),
+      encodeWebp: async (rgba, ...rest) => {
+        encodeIn = rgba;
+        box = made[0];
+        atEncode = { decoded: decoded.buffer.detached, box: box.buffer.detached, encodeIn: rgba.buffer.detached };
+        return real.encodeWebp(rgba, ...rest);
+      },
+    });
+    const Real = globalThis.Uint8Array;
+    globalThis.Uint8Array = new Proxy(Real, {
+      construct(t, a, n) {
+        const v = Reflect.construct(t, a, n);
+        if (decodedDone && !encodeIn && v.length === 480 * 360 * 4) made.push(v); // the rasters derive() builds between the decode and the encode
+        return v;
+      },
+    });
+    let r;
+    try {
+      r = await d.derive(bytes, { variant: 'w480', source: 'menu-images', rung: 0 });
+    } finally {
+      globalThis.Uint8Array = Real;
+    }
+    assert.equal(r.sha256, hash, `orientation ${o}: the base commit's derivative`);
+    assert.equal(made.length, o === 1 ? 1 : 2, `orientation ${o}: the box output${o === 1 ? '' : ' and the rotated copy'} were built`);
+    assert.equal(atEncode.decoded, true, `orientation ${o}: the decoded RGBA is released after the box, before the encode`);
+    assert.equal(atEncode.encodeIn, false, `orientation ${o}: the encoder input is attached while encoded`);
+    if (o === 1) assert.ok(encodeIn.buffer === box.buffer && atEncode.box === false, 'orientation 1: the box output IS the encoder input, attached while encoded');
+    else assert.ok(encodeIn.buffer === made[1].buffer && atEncode.box === true, 'orientation 6: release 4 freed the box output BEFORE the encode');
+    assert.ok(box.buffer.detached && encodeIn.buffer.detached && decoded.buffer.detached, `orientation ${o}: every owned raster is released by the end`);
+    assert.ok(attached(bytes) && sha(bytes) === before && attached(r.bytes), `orientation ${o}: the caller's bytes and the output stay attached`);
+  }
+});
+
+test('R27. STOREFRONT-MEDIA-MEMORY-001B: EVERY derive call (each golden\'s full ladder walk, both variants and every rung from ONE bytes object per fixture, and each refusal\'s rungs) releases every owned intermediate it created; the caller\'s bytes stay attached and byte-identical, and every returned derivative stays attached and golden after all the later derives', async () => {
+  const o = observe(await codecs());
+  const d = o.d;
+  const sources = new Map();
+  const source = async (name) => {
+    if (!sources.has(name)) { const bytes = await fixture(name); sources.set(name, { bytes, sha: sha(bytes) }); }
+    return sources.get(name);
+  };
+  const statuses = new Map();
+  const count = (k) => statuses.set(k, (statuses.get(k) ?? 0) + 1);
+  // one observed call: after it, every raster it handed to or got from a codec is released, except the caller's
+  // bytes, the returned output and (documented residual) what a decode_warning holds: it is thrown before release 1
+  const call = async (label, bytes, args) => {
+    o.reset();
+    let r = null, err = null;
+    try { r = await d.derive(bytes, args); } catch (e) { err = e; }
+    count(err ? `refused:${err.code}` : r.status);
+    if (!(err && err.code === 'decode_warning')) {
+      for (const [role, v] of Object.entries(o.seen)) {
+        if (v.buffer === bytes.buffer || (r && r.bytes && v.buffer === r.bytes.buffer)) continue;
+        assert.equal(v.buffer.detached, true, `${label}: ${role} is released after the call (${err ? err.code : r.status})`);
+      }
+    }
+    if (err) throw err;
+    return r;
+  };
+  const outputs = [];
+  for (const [name, variant, hash, , , , trace] of GOLDENS) {
+    const { bytes } = await source(name);
+    const bucket = fixtureSpec(name).bucket;
+    const steps = [];
+    let r = null;
+    for (let rung = 0; rung < RECIPE.ladder.length; rung++) {
+      r = await call(`${name} ${variant} rung ${rung}`, bytes, { variant, source: bucket, rung });
+      steps.push(`q${r.attempt.quality}:${r.attempt.bytes}${r.status === 'derived' ? '' : '>cap'}`);
+      if (r.status === 'derived') break;
+    }
+    assert.equal(steps.join(' '), trace, `${name} ${variant}: the ladder trace`);
+    assert.equal(r.sha256, hash, `${name} ${variant}: the golden`);
+    outputs.push([`${name} ${variant}`, r.bytes, hash]);
+  }
+  for (const [name, variant, code, rung] of REFUSALS) {
+    const { bytes } = await source(name);
+    const bucket = fixtureSpec(name).bucket;
+    for (let k = 0; k < rung; k++) assert.equal((await call(`${name} rung ${k}`, bytes, { variant, source: bucket, rung: k })).status, 'ladder_next', `${name} rung ${k}`);
+    await assert.rejects(call(`${name} rung ${rung}`, bytes, { variant, source: bucket, rung }), (e) => e.code === code, `${name}: ${code}`);
+  }
+  // the observation really covered derivatives, over-cap rungs and refusals after the encode
+  assert.ok(statuses.get('derived') === GOLDENS.length && statuses.get('ladder_next') >= 9 && statuses.get('refused:output_too_large') === 2, JSON.stringify([...statuses]));
+  for (const [name, { bytes, sha: pinned }] of sources) {
+    assert.ok(attached(bytes) && sha(bytes) === pinned, `${name}: the caller's bytes are attached and unchanged after every derive of them`);
+  }
+  assert.equal(outputs.length, GOLDENS.length);
+  for (const [label, bytes, hash] of outputs) assert.ok(attached(bytes) && sha(bytes) === hash, `${label}: the derivative is still attached and golden`);
+  assert.equal(d.poisoned, false);
+});
+
+test('R28. STOREFRONT-MEDIA-MEMORY-001B: derives keep working after earlier derives released their buffers (w960 then w480 of one source, other codecs in between, a refusal in between, a ladder walk, the first source again)', async () => {
+  const d = await deriver();
+  const steps = [
+    ['logo_alpha_2000x1000', 'w960'], ['logo_alpha_2000x1000', 'w480'], ['jpeg_prog_1600x1200', 'w960'],
+    ['bad_png_raw_too_short', 'w480', 'corrupt'], ['webp_lossless_alpha_1200x800', 'w960'], ['webp_lossless_alpha_1200x800', 'w480'],
+    ['band_q74', 'w960'], ['bad_jpeg_corrupt_entropy', 'w960', 'decode_warning'], ['jpeg_orient_6', 'w960'],
+    ['logo_alpha_2000x1000', 'w480'], ['logo_alpha_2000x1000', 'w960'],
+  ];
+  for (const [name, variant, code] of steps) {
+    const bytes = await fixture(name);
+    const bucket = fixtureSpec(name).bucket;
+    if (code) {
+      await assert.rejects(d.derive(bytes, { variant, source: bucket, rung: 0 }), (e) => e.code === code, `${name}: ${code}`);
+      continue;
+    }
+    const [, , hash, , , , trace] = goldenOf(name, variant);
+    const { r, trace: got } = await ladder(d, bytes, variant, bucket);
+    assert.deepEqual([r.sha256, got], [hash, trace], `${name} ${variant}`);
+  }
+  assert.equal(d.poisoned, false, 'no refusal poisoned the engine');
+});
+
+test('R29. STOREFRONT-MEDIA-MEMORY-001B: releaseOwned detaches only a view spanning its WHOLE fixed-length ArrayBuffer; a partial view, a resizable buffer, a WebAssembly memory, a SharedArrayBuffer, an empty or already detached buffer, or no view at all is left alone, and it never throws', () => {
+  const whole = new Uint8Array(64).fill(7);
+  assert.equal(releaseOwned(whole), true);
+  assert.ok(whole.buffer.detached && whole.length === 0, 'detached: the bytes are handed back');
+  assert.equal(releaseOwned(whole), false, 'an already detached buffer');
+  assert.equal(releaseOwned(new Uint8ClampedArray(16)), true, 'a clamped view (the decoders\' ImageData data)');
+  const parent = new Uint8Array(64).fill(9);
+  for (const [label, view] of [['a middle view', parent.subarray(8, 24)], ['a tail view', parent.subarray(8)], ['a head view', parent.subarray(0, 32)]]) {
+    assert.equal(releaseOwned(view), false, label);
+  }
+  assert.ok(!parent.buffer.detached && parent.every((v) => v === 9), 'the parent of a partial view is untouched');
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const all = new Uint8Array(memory.buffer);
+  all[0] = 5;
+  assert.equal(releaseOwned(all), false, 'a WebAssembly memory is never detached');
+  assert.ok(!memory.buffer.detached && memory.buffer.byteLength === 65536 && new Uint8Array(memory.buffer)[0] === 5, 'the memory is intact');
+  if (typeof SharedArrayBuffer === 'function') assert.equal(releaseOwned(new Uint8Array(new SharedArrayBuffer(16))), false, 'a SharedArrayBuffer');
+  const resizable = new Uint8Array(new ArrayBuffer(16, { maxByteLength: 64 }));
+  assert.equal(releaseOwned(resizable), false, 'a resizable buffer');
+  assert.ok(!resizable.buffer.detached && resizable.length === 16, 'the resizable buffer is intact');
+  assert.equal(releaseOwned(new Uint8Array(0)), false, 'an empty buffer');
+  for (const v of [null, undefined, {}, 'text', 7, new ArrayBuffer(8)]) assert.equal(releaseOwned(v), false, `not a view: ${String(v)}`);
+});
+
+test('R30. STOREFRONT-MEDIA-MEMORY-001B: the releases never touch a codec instance memory, and the fresh per-call instance lifecycle of STOREFRONT-MEDIA-MEMORY-001 is unchanged (one PNG or JPEG or WebP decoder, one resize, one encoder instance per derive)', async () => {
+  await withInstanceLog(async (c, log) => {
+    const o = observe(c);
+    for (const [name, variant, instances] of [
+      ['logo_alpha_2000x1000', 'w960', ['png', 'resize', 'webpEnc']],
+      ['jpeg_prog_1600x1200', 'w960', ['jpegDec', 'resize', 'webpEnc']],
+      ['webp_lossless_alpha_1200x800', 'w480', ['webpDec', 'resize', 'webpEnc']],
+      ['logo_small_300x150', 'w480', ['png', 'webpEnc']],
+    ]) {
+      o.reset();
+      const from = log.instances.length;
+      const r = await o.d.derive(await fixture(name), { variant, source: fixtureSpec(name).bucket, rung: 0 });
+      assert.equal(r.sha256, goldenOf(name, variant)[2], `${name} ${variant}: the golden`);
+      assert.deepEqual(log.instances.slice(from).map((x) => x.key), instances, `${name}: one fresh instance per codec call, nothing else`);
+      const memories = log.instances.map((x) => x.memory).filter(Boolean);
+      // (a WebAssembly memory's buffer cannot be detached at all; R29 proves releaseOwned refuses one without throwing)
+      for (const [role, v] of Object.entries(o.seen)) assert.ok(!memories.some((m) => m.buffer === v.buffer), `${name}: ${role} is never a codec memory`);
+    }
+    assert.equal(log.compiles, 5, 'no compile per derive');
+    assert.equal(log.modulesBuilt, 0);
+  });
+});
+
+test('R31. STOREFRONT-MEDIA-MEMORY-001B: a buffer the caller owns is never released even when a codec aliases it, a buffer that became the output is never released even when it is the raster\'s own, and a sanitized copy the decoded RGBA views is never released (fake codecs)', async () => {
+  const real = await codecs();
+  // a decoder whose RGBA shares the caller's buffer: the release points that would reach it (after the resize at
+  // w480, after the encode at w960) must leave it alone
+  const webp = await fixture('webp_lossy_alpha_900x600');
+  for (const variant of ['w960', 'w480']) {
+    const shared = new Uint8Array(900 * 600 * 4);
+    shared.set(webp, 0);
+    const bytes = shared.subarray(0, webp.length);
+    const d = createDeriverFromCodecs({ ...real, decodeWebp: async () => ({ width: 900, height: 600, data: new Uint8ClampedArray(shared.buffer) }) });
+    const r = await d.derive(bytes, { variant, source: 'menu-images', rung: 0 });
+    assert.ok(['derived', 'ladder_next'].includes(r.status), `${variant}: ${r.status}`);
+    assert.ok(!shared.buffer.detached && sha(bytes) === sha(webp), `${variant}: the caller's buffer is attached and unchanged`);
+  }
+  // an encoder that hands back the raster's own buffer as the output: the self-check refuses it, and the buffer
+  // that became the output is not released
+  let returned = null;
+  const d = createDeriverFromCodecs({ ...real, encodeWebp: async (rgba) => { returned = rgba.buffer; return rgba.buffer; } });
+  await assert.rejects(d.derive(await fixture('logo_small_300x150'), { variant: 'w480', source: 'restaurant-logos', rung: 0 }), (e) => e.code === 'self_check_failed');
+  assert.ok(returned && returned.detached === false, 'the output\'s buffer is never released');
+  // a PNG decoder whose RGBA is a view of its input (the sanitized copy): release 1 leaves the shared copy alone
+  const tiny = new Uint8Array(png({ width: 2, height: 2, channels: 4, rows: logoRgba(2, 2) }));
+  let decodeIn = null;
+  const aliasing = createDeriverFromCodecs({ ...real, decodePng: async (u8) => { decodeIn = u8; return { width: 2, height: 2, data: new Uint8ClampedArray(u8.buffer, 0, 16) }; } });
+  const r2 = await aliasing.derive(tiny, { variant: 'w480', source: 'restaurant-logos', rung: 0 });
+  assert.equal(r2.status, 'derived');
+  assert.ok(decodeIn !== tiny && decodeIn.buffer.detached === false, 'the sanitized copy the RGBA views is not released');
+  assert.ok(attached(tiny), 'the caller\'s bytes are attached');
 });

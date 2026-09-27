@@ -1,12 +1,13 @@
 // STOREFRONT-PUBLISH-001 — engine poisoning with the REAL codecs (its own test process:
-// it deliberately leaves this process's PNG module untrusted).
+// it deliberately leaves this process's shared deriver poisoned).
 //
-// The PNG decoder is a wasm-bindgen module with ONE instance per worker. A Rust error
-// comes out of it as a thrown JS Error WITHOUT unwinding: the Rust heap allocations and
-// the shadow-stack frame of the failed call are leaked (measured in the Q031 remediation:
-// ~700 failing decodes of a 600 x 300 image grew the instance to 700 MB and then made
-// every later decode trap). The recipe therefore treats ANY exception out of that module
-// as poisoning the engine: the source keeps its deterministic typed refusal
+// The PNG decoder is a wasm-bindgen module (a fresh instance per call since D-041,
+// STOREFRONT-MEDIA-MEMORY-001). A Rust error comes out of it as a thrown JS Error WITHOUT
+// unwinding: the Rust heap allocations and the shadow-stack frame of the failed call are
+// leaked (measured in the Q031 remediation with the former one-instance-per-worker design:
+// ~700 failing decodes of a 600 x 300 image grew the instance to 700 MB and then made every
+// later decode trap). The recipe still treats ANY exception out of that module as poisoning
+// the engine (kept by D-041): the source keeps its deterministic typed refusal
 // (decode_failed), the handler retires the worker, and the worker never derives again.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
