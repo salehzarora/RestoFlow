@@ -990,12 +990,24 @@ void main() {
         '${l10n.storefrontRefusalPickAnother}',
       );
       expect(rig.server.saves, isEmpty);
-      expect(find.byKey(const Key('storefront-slot-hero-refused')), findsNothing);
+      expect(
+        find.byKey(const Key('storefront-slot-hero-refused')),
+        findsNothing,
+      );
       expect(find.byKey(const Key('storefront-slot-hero-retry')), findsNothing);
-      expect(_enabled(tester, const Key('storefront-slot-hero-publish')), isTrue);
+      expect(
+        _enabled(tester, const Key('storefront-slot-hero-publish')),
+        isTrue,
+      );
       // The logo slot is untouched by the hero's refusal.
-      expect(find.byKey(const Key('storefront-slot-logo-refused')), findsNothing);
-      expect(_enabled(tester, const Key('storefront-slot-logo-publish')), isTrue);
+      expect(
+        find.byKey(const Key('storefront-slot-logo-refused')),
+        findsNothing,
+      );
+      expect(
+        _enabled(tester, const Key('storefront-slot-logo-publish')),
+        isTrue,
+      );
     });
   });
 
