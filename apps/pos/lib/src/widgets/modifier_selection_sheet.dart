@@ -287,10 +287,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// the sheet state, so a reused widget position never inherits it.
   bool _quickNotesExpanded = false;
 
-  /// True when the LAST chip tap was refused because the composed note would
-  /// have exceeded the 140-character contract. Shown inline, non-blocking, and
-  /// cleared as soon as the note changes — by typing, or by adding or removing
-  /// a chip. Nothing was added and nothing was truncated.
+  /// True when the LAST chip tap was refused by the 140-character contract
+  /// (`canAddQuickNote`, which keeps two characters in reserve for the
+  /// separator). Shown inline, non-blocking, and cleared as soon as the note
+  /// changes — by typing, or by adding or removing a chip. Nothing was added
+  /// and nothing was truncated.
   bool _quickNoteRefused = false;
 
   /// POS-MODIFIER-SHEET-QUANTITY-003 — how many units of THIS configuration the
@@ -356,7 +357,8 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// under the field can land below its visible part — out of reach of its
   /// own X. Scroll just far enough to show the row's end, and only when it is
   /// actually hidden: on a normal screen the row is already visible and
-  /// nothing moves.
+  /// nothing moves. The scroll is a jump, not an animation: a scrolling body
+  /// ignores taps, and the cashier's next tap must never be swallowed.
   void _revealQuickNoteTokens() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final tokens = _quickNoteTokensKey.currentContext;
@@ -364,8 +366,6 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       Scrollable.ensureVisible(
         tokens,
         alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
       );
     });
   }

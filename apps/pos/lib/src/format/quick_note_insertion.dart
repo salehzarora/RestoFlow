@@ -41,18 +41,18 @@ const Set<String> _clauseEnders = <String>{',', '،', ';', '؛'};
 /// The canonical separator between two notes on one line.
 const String _separator = ', ';
 
-/// What a chip tap would produce, or why it was refused.
+/// What joining one phrase onto a note produces, or why it was refused.
 class QuickNoteInsertion {
   const QuickNoteInsertion._(this.text, this.refusedForLength);
 
-  /// The tap composes [text] — apply it verbatim and move the caret to the end.
+  /// The phrase joins to give [text], verbatim.
   const QuickNoteInsertion.applied(String text) : this._(text, false);
 
-  /// The tap is refused: the composed note would exceed [kPosItemNoteMaxLength].
-  /// Nothing is written and nothing is trimmed.
+  /// Refused: the composed note would exceed the length limit. Nothing is
+  /// joined and nothing is trimmed.
   const QuickNoteInsertion.refused() : this._(null, true);
 
-  /// The exact text to write, or null when [refusedForLength].
+  /// The exact composed text, or null when [refusedForLength].
   final String? text;
 
   /// True when the only reason nothing happened is the length contract.
@@ -63,9 +63,11 @@ class QuickNoteInsertion {
 
 /// Composes [presetText] onto [currentText] under the rules in the library doc.
 ///
-/// [currentText] is the field's LIVE text, taken verbatim — its internal
-/// spacing, casing and punctuation are the cashier's and are never normalized.
-/// Only the trailing whitespace run is inspected, to decide the separator.
+/// [currentText] is the note so far — the cashier's typed text with any earlier
+/// phrases already joined on (see `composeQuickNote`) — taken verbatim: its
+/// internal spacing, casing and punctuation are the cashier's and are never
+/// normalized. Only the trailing whitespace run is inspected, to decide the
+/// separator.
 ///
 /// [presetText] is trimmed on the outside only: the server already stores it
 /// that way, so trimming here just makes a malformed row harmless rather than

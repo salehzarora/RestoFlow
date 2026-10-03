@@ -64,8 +64,8 @@ int quickNoteFreeTextBudget(
 }
 
 /// Whether [newLabel] may join [labels] as a chip while the field holds
-/// [freeText]. A refusal is whole, exactly like the pre-chip tap: nothing is
-/// added and nothing is truncated.
+/// [freeText]. A refusal is whole, like the pre-chip tap: nothing is added and
+/// nothing is truncated.
 ///
 /// All three must hold:
 ///  * the composed note stays within [maxLength] (the pre-chip measure);
@@ -73,6 +73,13 @@ int quickNoteFreeTextBudget(
 ///    given a zero length limit);
 ///  * the text already typed fits the new, smaller typing budget, so the field
 ///    is never put over its own limit.
+///
+/// The last two make this up to two characters stricter than the pre-chip
+/// tap: the typing budget always reserves the widest separator, so a tap whose
+/// note would still just fit (typed text ending in a space, a comma or a line
+/// break, which take a narrower separator) can be refused, and chips alone
+/// stop at 137 characters. That is the price of one fixed field limit, which
+/// lets Flutter's own limiter handle every keyboard's composing text.
 bool canAddQuickNote({
   required String freeText,
   required List<String> labels,

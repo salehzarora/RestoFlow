@@ -10,9 +10,11 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 /// a full 48dp target (a chip's built-in delete icon is only about 27dp wide),
 /// sits at the END edge so it follows the reading direction (left in Arabic
 /// and Hebrew, right in English), and uses Flutter's own localized "Delete"
-/// tooltip, so no new copy is needed. The label and the button are announced
-/// together ("No onions, Delete"), so a screen reader never meets several
-/// identical "Delete" buttons without knowing which phrase each removes.
+/// wording, so no new copy is needed. The box is ONE screen-reader node whose
+/// label is the phrase and then that word ("No onions, Delete"), so it never
+/// reads as several identical "Delete" buttons, nor as the bare phrase that
+/// the band chip also reads as. The word is in the LABEL, not only the
+/// tooltip, because Android does not announce tooltips on focus.
 class QuickNoteChip extends StatelessWidget {
   const QuickNoteChip({
     required this.label,
@@ -34,6 +36,7 @@ class QuickNoteChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final deleteLabel = MaterialLocalizations.of(context).deleteButtonTooltip;
     return MergeSemantics(
       child: Material(
         color: scheme.secondaryContainer,
@@ -61,18 +64,22 @@ class QuickNoteChip extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  key: removeKey,
-                  tooltip: MaterialLocalizations.of(
-                    context,
-                  ).deleteButtonTooltip,
-                  onPressed: onRemove,
-                  color: scheme.onSecondaryContainer,
-                  constraints: const BoxConstraints(
-                    minWidth: kMinInteractiveDimension,
-                    minHeight: kMinInteractiveDimension,
+                Tooltip(
+                  message: deleteLabel,
+                  excludeFromSemantics: true,
+                  child: Semantics(
+                    label: deleteLabel,
+                    child: IconButton(
+                      key: removeKey,
+                      onPressed: onRemove,
+                      color: scheme.onSecondaryContainer,
+                      constraints: const BoxConstraints(
+                        minWidth: kMinInteractiveDimension,
+                        minHeight: kMinInteractiveDimension,
+                      ),
+                      icon: const Icon(Icons.close, size: 18),
+                    ),
                   ),
-                  icon: const Icon(Icons.close, size: 18),
                 ),
               ],
             ),
