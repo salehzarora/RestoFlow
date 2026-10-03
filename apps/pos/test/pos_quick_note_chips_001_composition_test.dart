@@ -930,6 +930,14 @@ void main() {
         'Burger\n',
         [0],
       );
+      // Blank presets never come back as boxes, even where a blank label
+      // would otherwise "match" (after a kept line break).
+      expectSplit(
+        'Burger\nNo onions',
+        const <String>['No onions', '  ', ''],
+        'Burger\n',
+        [0],
+      );
       expectSplit('בלי בצל, חריף', const <String>['חריף'], 'בלי בצל', [0]);
       expectSplit(
         'بدون بصل، زيادة صوص',

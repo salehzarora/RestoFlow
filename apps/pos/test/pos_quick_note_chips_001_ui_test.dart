@@ -77,6 +77,12 @@ const PosQuickNotePreset _p3 = PosQuickNotePreset(
   displayOrder: 2,
 );
 
+const PosQuickNotePreset _p4 = PosQuickNotePreset(
+  id: 'p4',
+  label: 'Hot',
+  displayOrder: 3,
+);
+
 const List<PosQuickNotePreset> _pair = <PosQuickNotePreset>[_p1, _p2];
 
 List<PosQuickNotePreset> _numbered(int n) => <PosQuickNotePreset>[
@@ -230,7 +236,12 @@ Future<void> _reveal(WidgetTester tester, Finder finder) async {
     await tester.scrollUntilVisible(
       finder,
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find
+          .descendant(
+            of: find.byType(ModifierSelectionSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
   }
   await tester.ensureVisible(finder);
@@ -279,6 +290,10 @@ Finder _editable() => find.descendant(
   of: find.byKey(_noteKey),
   matching: find.byType(EditableText),
 );
+
+/// Whether box [id] sits on the same Wrap run as box [other] or a later one.
+bool _isAfterOrOn(WidgetTester tester, String id, String other) =>
+    tester.getRect(_token(id)).top >= tester.getRect(_token(other)).top - 0.5;
 
 bool _bandChipEnabled(WidgetTester tester, String id) =>
     tester.widget<ActionChip>(_bandChip(id)).onPressed != null;
@@ -447,7 +462,19 @@ void main() {
             findsOneWidget,
             reason: 'box $id must carry exactly one Delete tooltip',
           );
-          expect(tester.widget<IconButton>(_removeButton(id)).tooltip, tooltip);
+          expect(
+            tester
+                .widget<Tooltip>(
+                  find
+                      .ancestor(
+                        of: _removeButton(id),
+                        matching: find.byType(Tooltip),
+                      )
+                      .first,
+                )
+                .message,
+            tooltip,
+          );
         }
       });
     }
@@ -597,7 +624,10 @@ void main() {
 
     testWidgets('T11. a tap that would exceed 140 characters is refused whole '
         'and the warning clears on a text change', (tester) async {
-      await _openSheet(tester);
+      await _openSheet(
+        tester,
+        quickNotes: const <PosQuickNotePreset>[_p1, _p2, _p4],
+      );
       await _typeNote(tester, 'x' * 130);
       final before = _controller(tester).value;
 
@@ -612,6 +642,16 @@ void main() {
       expect(_bandChipEnabled(tester, 'p1'), isTrue);
       expect(_noteField(tester).maxLength, 140);
 
+      // A tap that DOES fit clears the warning by itself, with no typing:
+      // 130 + ', ' + 3 = 135, and 130 <= 140 - 2 - 3.
+      await _tapChip(tester, 'p4');
+      expect(_token('p4'), findsOneWidget);
+      expect(find.byKey(_warningKey), findsNothing);
+      await _removeToken(tester, 'p4');
+
+      // Refused again, then cleared by typing.
+      await _tapChip(tester, 'p1');
+      expect(find.byKey(_warningKey), findsOneWidget);
       await tester.enterText(find.byKey(_noteKey), 'x' * 129);
       await tester.pumpAndSettle();
       expect(find.byKey(_warningKey), findsNothing);
@@ -632,7 +672,6 @@ void main() {
 
       await _typeNote(tester, 'x' * 300);
       expect(_controller(tester).text, 'x' * 129);
-      expect(_noteField(tester).decoration!.errorText, isNull);
       expect(_renderedDecoration(tester).errorText, isNull);
 
       await _removeToken(tester, 'p1');
@@ -1025,9 +1064,22 @@ void main() {
   });
   group('F. review follow-ups', () {
     testWidgets('T22. with the landscape keyboard up, a box added below the '
-        'visible body is scrolled into reach of its X', (tester) async {
+        'visible body is scrolled just into reach of its X', (tester) async {
+      // Two long phrases already added fill the first box row(s), so the new
+      // box lands on a LATER row of the Wrap — well below the field.
+      const long1 = PosQuickNotePreset(
+        id: 'l1',
+        label: 'Please cut the burger in half and wrap each half',
+        displayOrder: 0,
+      );
+      const long2 = PosQuickNotePreset(
+        id: 'l2',
+        label: 'Sauce on the side with extra napkins for the bag',
+        displayOrder: 1,
+      );
       await _openSheet(
         tester,
+        quickNotes: const <PosQuickNotePreset>[long1, long2, _p1],
         size: const Size(1280, 800),
         groups: <PosModifierGroup>[
           for (var g = 0; g < 4; g++)
@@ -1045,6 +1097,12 @@ void main() {
             ),
         ],
       );
+      await _tapChip(tester, 'l1');
+      await _tapChip(tester, 'l2');
+
+      // The real sequence: the cashier taps into the field, the keyboard
+      // comes up, and the body keeps the caret on screen — so the field sits
+      // near the bottom of the now tiny viewport.
       await _reveal(tester, find.byKey(_noteKey));
       await tester.tap(find.byKey(_noteKey));
       await tester.pumpAndSettle();
@@ -1054,32 +1112,55 @@ void main() {
         find.byKey(const Key('modifier-sheet-scrolled-header')),
         findsOneWidget,
       );
-
-      // The real sequence: the field was focused, the keyboard came up and
-      // the body kept the caret on screen — so the field sits near the bottom
-      // of the now tiny viewport and the box row under it is cut off. The band
-      // chip above is in reach and is tapped where it is, without scrolling.
-      final viewport = tester.getRect(
-        find
-            .descendant(
-              of: find.byType(ModifierSelectionSheet),
-              matching: find.byType(Scrollable),
-            )
-            .first,
+      final bodyFinder = find
+          .descendant(
+            of: find.byType(ModifierSelectionSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final viewport = tester.getRect(bodyFinder);
+      // Where the caret reveal leaves it, made exact: the field's bottom edge
+      // on the viewport's bottom edge, so the box rows under it are hidden.
+      final body = tester.state<ScrollableState>(bodyFinder).position;
+      body.jumpTo(
+        body.pixels +
+            tester.getRect(find.byKey(_noteKey)).bottom -
+            viewport.bottom,
       );
-      expect(_bandChip('p1').hitTestable(), findsOneWidget);
+      await tester.pumpAndSettle();
       expect(
-        tester.getRect(find.byKey(_tokensRowKey)).bottom,
-        greaterThan(viewport.bottom),
-        reason: 'precondition: the box row starts below the visible body',
+        tester.getRect(find.byKey(_noteKey)).bottom,
+        moreOrLessEquals(viewport.bottom),
       );
+
+      // Precondition: the last box row is below the visible body, and a new
+      // box is laid out on that row or a later one — so it starts out of
+      // reach. (Measured before the tap: the reveal is applied within the
+      // frame that builds the new box.)
+      expect(
+        tester.getCenter(_token('l2')).dy,
+        greaterThan(viewport.bottom),
+        reason: 'precondition: the box rows start below the visible body',
+      );
+
+      // The band chip above is in reach and is tapped where it is.
+      expect(_bandChip('p1').hitTestable(), findsOneWidget);
       await tester.tap(_bandChip('p1'));
       await tester.pumpAndSettle();
-
       expect(_token('p1'), findsOneWidget);
+      expect(_isAfterOrOn(tester, 'p1', 'l2'), isTrue);
       // Reachable: the X is hit-testable where it is drawn, without the test
-      // scrolling for it.
+      // scrolling for it...
       expect(_removeButton('p1').hitTestable(), findsOneWidget);
+      // ...and the scroll went only as far as needed: the field the cashier
+      // is typing into is still on screen (a reveal that put the box row at
+      // the TOP of the viewport would hide it).
+      expect(find.byKey(_noteKey).hitTestable(), findsOneWidget);
+      expect(
+        tester.state<EditableTextState>(_editable()).widget.focusNode.hasFocus,
+        isTrue,
+      );
+
       await tester.tap(_removeButton('p1'));
       await tester.pumpAndSettle();
       expect(_token('p1'), findsNothing);
@@ -1087,33 +1168,70 @@ void main() {
     });
 
     testWidgets('T23. a screen reader hears each box as its phrase plus '
-        'Delete, not an anonymous Delete button', (tester) async {
+        'Delete, as one button — on every platform', (tester) async {
       final semantics = tester.ensureSemantics();
-      await _openSheet(tester);
-      await _tapChip(tester, 'p1');
-      await _tapChip(tester, 'p2');
-      final l10n = MaterialLocalizations.of(
-        tester.element(find.byType(ModifierSelectionSheet)),
+      try {
+        await _openSheet(tester);
+        await _tapChip(tester, 'p1');
+        await _tapChip(tester, 'p2');
+        final delete = MaterialLocalizations.of(
+          tester.element(find.byType(ModifierSelectionSheet)),
+        ).deleteButtonTooltip;
+        // The word is in the LABEL (Android does not announce tooltips on
+        // focus), after the phrase, and the node removes that phrase.
+        expect(
+          tester.getSemantics(_removeButton('p1')),
+          isSemantics(
+            label: '$_first\n$delete',
+            isButton: true,
+            hasTapAction: true,
+          ),
+        );
+        expect(
+          tester.getSemantics(_removeButton('p2')),
+          isSemantics(
+            label: '$_second\n$delete',
+            isButton: true,
+            hasTapAction: true,
+          ),
+        );
+      } finally {
+        // Disposed in the body: the end-of-test check runs before tear-downs.
+        semantics.dispose();
+      }
+    });
+
+    testWidgets('T25. two taps on one chip in the same frame add it once', (
+      tester,
+    ) async {
+      final h = await _openSheet(tester);
+      await _reveal(tester, _bandChip('p1'));
+      // No pump in between: the second tap reaches the chip before the
+      // rebuild that disables it.
+      await tester.tap(_bandChip('p1'));
+      await tester.tap(_bandChip('p1'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(_allBoxes(), findsOneWidget);
+      expect(await _confirm(tester, h), _first);
+    });
+
+    testWidgets('T26. a blank preset (bad data) adds nothing and warns of '
+        'nothing', (tester) async {
+      const blank = PosQuickNotePreset(
+        id: 'blank',
+        label: '   ',
+        displayOrder: 9,
       );
-      expect(
-        tester.getSemantics(_removeButton('p1')),
-        isSemantics(
-          label: _first,
-          tooltip: l10n.deleteButtonTooltip,
-          isButton: true,
-          hasTapAction: true,
-        ),
+      await _openSheet(
+        tester,
+        quickNotes: const <PosQuickNotePreset>[_p1, blank],
       );
-      expect(
-        tester.getSemantics(_removeButton('p2')),
-        isSemantics(
-          label: _second,
-          tooltip: l10n.deleteButtonTooltip,
-          isButton: true,
-          hasTapAction: true,
-        ),
-      );
-      semantics.dispose();
+      await _tapChip(tester, 'blank');
+      expect(_allBoxes(), findsNothing);
+      expect(find.byKey(_warningKey), findsNothing);
+      expect(_noteField(tester).maxLength, 140);
+      expect(_bandChipEnabled(tester, 'blank'), isTrue);
     });
 
     testWidgets('T24. if the presets disappear while boxes exist, the boxes '
