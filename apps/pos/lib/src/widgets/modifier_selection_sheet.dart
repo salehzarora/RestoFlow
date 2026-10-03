@@ -271,6 +271,12 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// the sheet confirms ([_note]). Reset with the rest of the sheet state.
   final List<PosQuickNotePreset> _appliedQuickNotes = <PosQuickNotePreset>[];
 
+  /// POS-QUICK-NOTE-CHIPS-001 — the box row, so a box just added below the
+  /// visible part of the body (the keyboard is up) can be scrolled into view.
+  final GlobalKey _quickNoteTokensKey = GlobalKey(
+    debugLabel: 'quick-note-tokens',
+  );
+
   /// POS-QUICK-NOTES-124 — how many chips are shown before the "more" control.
   /// Eight fits two comfortable rows on the narrowest supported sheet and still
   /// covers the phrases a service actually reaches for; past that the chips
@@ -318,8 +324,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 
   /// The note field's own length limit. With no chips it is the full
   /// 140-character contract, exactly as before; with chips it is what is left
-  /// for typing, so Flutter's own limiter (which already handles every
-  /// keyboard's composing text) keeps the whole note within the contract.
+  /// for typing, enforced by Flutter's own limiter, which already handles
+  /// every keyboard's composing text. That limiter counts characters as the
+  /// cashier sees them, so — exactly as without chips — an emoji or a combining
+  /// mark typed into the field can still take the stored note past 140 code
+  /// units; the chips themselves are always measured in code units.
   int get _noteMaxLength => _appliedQuickNotes.isEmpty
       ? kPosItemNoteMaxLength
       : quickNoteFreeTextBudget(_appliedQuickNoteLabels);
@@ -339,6 +348,25 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     setState(() {
       if (fits) _appliedQuickNotes.add(preset);
       _quickNoteRefused = !fits;
+    });
+    if (fits) _revealQuickNoteTokens();
+  }
+
+  /// With the keyboard up the body is only a few rows tall, and a box added
+  /// under the field can land below its visible part — out of reach of its
+  /// own X. Scroll just far enough to show the row's end, and only when it is
+  /// actually hidden: on a normal screen the row is already visible and
+  /// nothing moves.
+  void _revealQuickNoteTokens() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tokens = _quickNoteTokensKey.currentContext;
+      if (!mounted || tokens == null) return;
+      Scrollable.ensureVisible(
+        tokens,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -1060,13 +1088,15 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       // restaurant has presets (KEYBOARD-002 identity), with one row of height
       // reserved even while empty: the sheet sizes to its content from the
       // bottom edge, so a row appearing on the first tap would push the band
-      // up under the cashier's finger.
-      if (widget.quickNotes.isNotEmpty)
+      // up under the cashier's finger. Also kept while any box exists, so a
+      // phrase that will print can never be on the note without being shown.
+      if (widget.quickNotes.isNotEmpty || _appliedQuickNotes.isNotEmpty)
         Padding(
           key: const Key('modifier-quick-note-tokens-row'),
           padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
           child: TextFieldTapRegion(
             child: ConstrainedBox(
+              key: _quickNoteTokensKey,
               constraints: const BoxConstraints(
                 minHeight: kMinInteractiveDimension,
               ),
