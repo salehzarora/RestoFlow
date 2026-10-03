@@ -1,12 +1,17 @@
-/// POS-QUICK-NOTES-124 — the one place that decides what tapping a quick-note
-/// chip does to the item note field.
+/// POS-QUICK-NOTES-124 — the one place that decides how a quick-note phrase is
+/// joined onto the item note.
 ///
 /// The rules live here, not in the sheet, because they are the part that can be
-/// got subtly wrong: a chip writes ORDINARY TEXT into the same controller the
-/// cashier types into, so the composed string must be exactly what a careful
-/// person would have typed. There is no preset id, no marker token and no
-/// hidden metadata — after the tap the text field is the only source of truth,
-/// and the cashier may edit it freely.
+/// got subtly wrong: the composed note is ORDINARY TEXT, so it must be exactly
+/// what a careful person would have typed. There is no preset id, no marker
+/// token and no hidden metadata in it.
+///
+/// POS-QUICK-NOTE-CHIPS-001: a tap no longer writes into the field. The sheet
+/// keeps tapped phrases as removable chips, and when it confirms it folds them
+/// onto the typed text with THIS function (`composeQuickNote`), so the note is
+/// byte-identical to typing that text and then tapping the same chips under
+/// the pre-chip sheet. Whether a chip may be added is decided against the same
+/// 140-character contract (`canAddQuickNote`).
 ///
 /// Two consequences are deliberate:
 ///
@@ -15,10 +20,12 @@
 ///    contract before it is applied. A preset that would not fit is REFUSED
 ///    whole. Half a note ("no onions, extra cri") reaches the kitchen as an
 ///    instruction, and a cut-off instruction is worse than none.
-///  * **No duplicate detection.** Tapping a chip twice appends twice. Preset
-///    text may itself contain commas and line breaks, so any "is it already
-///    there?" heuristic would be unreliable exactly when it mattered; a plain,
-///    predictable append is safer than a clever one.
+///  * **No duplicate detection.** This function appends twice if asked twice.
+///    Preset text may itself contain commas and line breaks, so any "is it
+///    already there?" heuristic on TEXT would be unreliable exactly when it
+///    mattered; a plain, predictable append is safer than a clever one. (The
+///    sheet now prevents adding the same preset twice by its id, which needs
+///    no text heuristic.)
 library;
 
 /// The note contract shared by the POS item-note field and every quick-note
