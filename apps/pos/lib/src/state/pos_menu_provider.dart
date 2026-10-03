@@ -183,9 +183,11 @@ class PosMenuData {
 /// item-note field.
 ///
 /// Deliberately tiny. [id] exists only so the chip list has stable widget keys
-/// and a stable identity for tests; it is NEVER written into the note, sent
-/// with an order, or stored on a cart line. Tapping a chip produces plain text
-/// and nothing else (see `buildQuickNoteInsertion`).
+/// and a stable identity (the options sheet also uses it to add a preset at
+/// most once); it is NEVER written into the note, sent with an order, or
+/// stored on a cart line. A tapped chip becomes a removable box in the sheet,
+/// and the confirmed note is plain text and nothing else (see
+/// `composeQuickNote`).
 class PosQuickNotePreset {
   const PosQuickNotePreset({
     required this.id,
