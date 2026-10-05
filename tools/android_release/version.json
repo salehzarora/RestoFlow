@@ -99,6 +99,60 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.53",
+      "versionCode": 53,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / never installed / never uploaded - superseded by v54 (POS removable quick-note chips, PR #293) on 2026-10-05",
+      "applicationSourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+      "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+      "buildDate": "2026-09-06",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v53-28a9b42.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "a70605159d510723f59dc3bbf055bfdce78cfbc644a7d36a8264c8a8af153fdd"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v53-28a9b42.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "e8f97d8557ef5cd46cac6d4e4305300aa867d432062f661e6d7ecf24be4730d2"
+        }
+      },
+      "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (main = the PR #266 merge: transparent launcher icons, frameless POS lockup with the reverse wordmark, bar-centred identity chip, ledger advance)",
+      "notes": [
+        "Superseded by v54 for POS removable quick-note chips (PR #293) on 2026-10-05; v53 was never installed or uploaded, and code 53 stays consumed."
+      ],
+      "candidateNotes": [
+        "Built 2026-09-06 by tools/android_release/build_official_pair.ps1 from main at",
+        "28a9b422 (the PR #266 merge - application source and ledger in one commit).",
+        "Preflight: branch main, tracked tree clean, production signing identity check",
+        "OK (alias restoflow-production, fingerprint matches the pin, not the debug",
+        "certificate), hosted project + public key only, demo=false. Both artifacts",
+        "verified by verify_official_apk.ps1: not debuggable, Release/AOT, zipaligned,",
+        "apksigner-verified, production certificate matches the pin, hosted ref",
+        "present, forbidden ref absent, no localhost backend, no JWT-shaped token,",
+        "minSdk 24 / targetSdk 36, ABIs arm64-v8a armeabi-v7a x86_64,",
+        "application-label BIZBOT POS / BIZBOT KDS. SHA256SUMS.txt re-verified;",
+        "dist/official-v53/BUILD-METADATA.txt is the build record. Inside both APKs",
+        "the bundled brand assets hash-match the committed bizbot_symbol.png",
+        "(9f8d72e3...) / bizbot_wordmark_en.png (9b817af0...) - unchanged by this",
+        "release - and all ten committed launcher PNGs (legacy, now TRANSPARENT, and",
+        "adaptive foregrounds at 50 %) are present pixel-for-pixel (<= 2 levels of",
+        "AAPT re-encoding); the adaptive background layer is transparent; the AOT",
+        "snapshot contains no VEYRO string. Content vs v52: launcher icon with",
+        "nothing behind the symbol; POS navbar lockup directly on the bar (reverse",
+        "wordmark on dark bars); restaurant identity chip centred on the bar and as",
+        "tall as the lockup.",
+        "Handoff copies (same bytes): release/BIZBOT-Android-2026-09-06-28a9b42/",
+        "BIZBOT-POS-0.0.53-release.apk / BIZBOT-KDS-0.0.53-release.apk (local,",
+        "git-excluded). NOT installed, NOT uploaded, NOT distributed, no GitHub",
+        "Release, not published to any store or MDM. Promotion follows device",
+        "validation per docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md."
+      ]
+    },
+    {
       "versionName": "0.0.52",
       "versionCode": 52,
       "signing": "restoflow-production",
@@ -360,70 +414,26 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.53",
-    "versionCode": 53,
+    "versionName": "0.0.54",
+    "versionCode": 54,
     "signing": "restoflow-production",
-    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
-    "applicationSourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
-    "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
-    "buildDate": "2026-09-06",
-    "versionSymmetrySatisfied": true,
-    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
-    "artifacts": {
-      "pos": {
-        "filename": "RestoFlow-POS-official-v53-28a9b42.apk",
-        "packageId": "com.restoflow.pos",
-        "sha256": "a70605159d510723f59dc3bbf055bfdce78cfbc644a7d36a8264c8a8af153fdd"
-      },
-      "kds": {
-        "filename": "RestoFlow-KDS-official-v53-28a9b42.apk",
-        "packageId": "com.restoflow.kds",
-        "sha256": "e8f97d8557ef5cd46cac6d4e4305300aa867d432062f661e6d7ecf24be4730d2"
-      }
-    },
-    "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (main = the PR #266 merge: transparent launcher icons, frameless POS lockup with the reverse wordmark, bar-centred identity chip, ledger advance)",
+    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "main after the merge of this prep PR (carries PR #293, c94aebed); the exact SHA is recorded at build time",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V53 (2026-09-06): the owner asked, after seeing v52 on",
-      "the tablet, for a launcher icon with NO background behind the symbol",
-      "(adaptive background layer transparent, legacy icons transparent) and for",
-      "the POS navbar lockup without its Light Neutral plate. Both are app-code /",
-      "resource changes, so a new pair is needed; 53 is the next free code (52 was",
-      "consumed by the owner-installed v52). versionSymmetry holds: POS and KDS",
-      "both 0.0.53 / 53 from one main SHA; 53 > 52 > 51 keeps both lineages",
+      "BIZBOT-ANDROID-RELEASE-V54 (2026-10-05): POS removable quick-note chips",
+      "(PR #293, merged at c94aebed) require a new official pair. Code 53 was",
+      "consumed by the pair built from 28a9b422 on 2026-09-06, never installed",
+      "or uploaded; 54 is the next free code. versionSymmetry holds: POS and KDS",
+      "both 0.0.54 / 54 from one main SHA; 54 > 53 > 52 keeps both lineages",
       "strictly monotonic. Package ids, signing identity, RESTOFLOW_* names,",
-      "storage keys and channels unchanged: v53 updates IN PLACE over v52.",
+      "storage keys and channels unchanged: v54 updates IN PLACE over 0.0.52",
+      "or 0.0.53.",
       "Build with tools/android_release/build_official_pair.ps1 from main at the",
-      "intended source (tree clean, production signing, hosted project). The",
-      "runner never installs, uploads or publishes; device rollout stays a",
-      "separate owner step. Kiosk and dashboard keep their own lineages - see",
-      "kioskNextRelease and dashboardNextRelease."
-    ],
-    "candidateNotes": [
-      "Built 2026-09-06 by tools/android_release/build_official_pair.ps1 from main at",
-      "28a9b422 (the PR #266 merge - application source and ledger in one commit).",
-      "Preflight: branch main, tracked tree clean, production signing identity check",
-      "OK (alias restoflow-production, fingerprint matches the pin, not the debug",
-      "certificate), hosted project + public key only, demo=false. Both artifacts",
-      "verified by verify_official_apk.ps1: not debuggable, Release/AOT, zipaligned,",
-      "apksigner-verified, production certificate matches the pin, hosted ref",
-      "present, forbidden ref absent, no localhost backend, no JWT-shaped token,",
-      "minSdk 24 / targetSdk 36, ABIs arm64-v8a armeabi-v7a x86_64,",
-      "application-label BIZBOT POS / BIZBOT KDS. SHA256SUMS.txt re-verified;",
-      "dist/official-v53/BUILD-METADATA.txt is the build record. Inside both APKs",
-      "the bundled brand assets hash-match the committed bizbot_symbol.png",
-      "(9f8d72e3...) / bizbot_wordmark_en.png (9b817af0...) - unchanged by this",
-      "release - and all ten committed launcher PNGs (legacy, now TRANSPARENT, and",
-      "adaptive foregrounds at 50 %) are present pixel-for-pixel (<= 2 levels of",
-      "AAPT re-encoding); the adaptive background layer is transparent; the AOT",
-      "snapshot contains no VEYRO string. Content vs v52: launcher icon with",
-      "nothing behind the symbol; POS navbar lockup directly on the bar (reverse",
-      "wordmark on dark bars); restaurant identity chip centred on the bar and as",
-      "tall as the lockup.",
-      "Handoff copies (same bytes): release/BIZBOT-Android-2026-09-06-28a9b42/",
-      "BIZBOT-POS-0.0.53-release.apk / BIZBOT-KDS-0.0.53-release.apk (local,",
-      "git-excluded). NOT installed, NOT uploaded, NOT distributed, no GitHub",
-      "Release, not published to any store or MDM. Promotion follows device",
-      "validation per docs/ANDROID_FLEET_UPDATE_AND_ROLLBACK.md."
+      "intended source (tree clean, production signing, hosted project), only after",
+      "the prep PR is merged and the owner authorizes BUILD. The runner never",
+      "installs, uploads or publishes; device rollout stays a separate owner step.",
+      "Kiosk and dashboard keep their own lineages - see kioskNextRelease and",
+      "dashboardNextRelease."
     ]
   },
   "androidRendererPolicy": {
