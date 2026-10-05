@@ -1,12 +1,17 @@
-/// POS-QUICK-NOTES-124 — the one place that decides what tapping a quick-note
-/// chip does to the item note field.
+/// POS-QUICK-NOTES-124 — the one place that decides how a quick-note phrase is
+/// joined onto the item note.
 ///
 /// The rules live here, not in the sheet, because they are the part that can be
-/// got subtly wrong: a chip writes ORDINARY TEXT into the same controller the
-/// cashier types into, so the composed string must be exactly what a careful
-/// person would have typed. There is no preset id, no marker token and no
-/// hidden metadata — after the tap the text field is the only source of truth,
-/// and the cashier may edit it freely.
+/// got subtly wrong: the composed note is ORDINARY TEXT, so it must be exactly
+/// what a careful person would have typed. There is no preset id, no marker
+/// token and no hidden metadata in it.
+///
+/// POS-QUICK-NOTE-CHIPS-001: a tap no longer writes into the field. The sheet
+/// keeps tapped phrases as removable chips, and when it confirms it folds them
+/// onto the typed text with THIS function (`composeQuickNote`), so the note is
+/// byte-identical to typing that text and then tapping the same chips under
+/// the pre-chip sheet. Whether a chip may be added is decided against the same
+/// 140-character contract (`canAddQuickNote`).
 ///
 /// Two consequences are deliberate:
 ///
@@ -15,10 +20,12 @@
 ///    contract before it is applied. A preset that would not fit is REFUSED
 ///    whole. Half a note ("no onions, extra cri") reaches the kitchen as an
 ///    instruction, and a cut-off instruction is worse than none.
-///  * **No duplicate detection.** Tapping a chip twice appends twice. Preset
-///    text may itself contain commas and line breaks, so any "is it already
-///    there?" heuristic would be unreliable exactly when it mattered; a plain,
-///    predictable append is safer than a clever one.
+///  * **No duplicate detection.** This function appends twice if asked twice.
+///    Preset text may itself contain commas and line breaks, so any "is it
+///    already there?" heuristic on TEXT would be unreliable exactly when it
+///    mattered; a plain, predictable append is safer than a clever one. (The
+///    sheet now prevents adding the same preset twice by its id, which needs
+///    no text heuristic.)
 library;
 
 /// The note contract shared by the POS item-note field and every quick-note
@@ -34,18 +41,18 @@ const Set<String> _clauseEnders = <String>{',', '،', ';', '؛'};
 /// The canonical separator between two notes on one line.
 const String _separator = ', ';
 
-/// What a chip tap would produce, or why it was refused.
+/// What joining one phrase onto a note produces, or why it was refused.
 class QuickNoteInsertion {
   const QuickNoteInsertion._(this.text, this.refusedForLength);
 
-  /// The tap composes [text] — apply it verbatim and move the caret to the end.
+  /// The phrase joins to give [text], verbatim.
   const QuickNoteInsertion.applied(String text) : this._(text, false);
 
-  /// The tap is refused: the composed note would exceed [kPosItemNoteMaxLength].
-  /// Nothing is written and nothing is trimmed.
+  /// Refused: the composed note would exceed the length limit. Nothing is
+  /// joined and nothing is trimmed.
   const QuickNoteInsertion.refused() : this._(null, true);
 
-  /// The exact text to write, or null when [refusedForLength].
+  /// The exact composed text, or null when [refusedForLength].
   final String? text;
 
   /// True when the only reason nothing happened is the length contract.
@@ -56,9 +63,11 @@ class QuickNoteInsertion {
 
 /// Composes [presetText] onto [currentText] under the rules in the library doc.
 ///
-/// [currentText] is the field's LIVE text, taken verbatim — its internal
-/// spacing, casing and punctuation are the cashier's and are never normalized.
-/// Only the trailing whitespace run is inspected, to decide the separator.
+/// [currentText] is the note so far — the cashier's typed text with any earlier
+/// phrases already joined on (see `composeQuickNote`) — taken verbatim: its
+/// internal spacing, casing and punctuation are the cashier's and are never
+/// normalized. Only the trailing whitespace run is inspected, to decide the
+/// separator.
 ///
 /// [presetText] is trimmed on the outside only: the server already stores it
 /// that way, so trimming here just makes a malformed row harmless rather than

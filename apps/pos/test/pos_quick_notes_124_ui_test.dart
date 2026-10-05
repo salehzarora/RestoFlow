@@ -13,6 +13,13 @@ import 'package:restoflow_pos/src/widgets/modifier_selection_sheet.dart';
 /// to what `onConfirm` hands the cart. If those two ever differ, quick notes
 /// have quietly become a second note system — which is exactly what this
 /// feature is not allowed to be.
+///
+/// POS-QUICK-NOTE-CHIPS-001: a tap now adds a removable box under the field
+/// instead of writing into it, so the B group and D3 assert the boxes and the
+/// note `onConfirm` hands the cart rather than the field's text. D1 and D2 —
+/// the byte parity — are unchanged. D4 now prefills typed text that is not a
+/// preset: a prefilled preset phrase reopens as a box (covered by the
+/// POS-QUICK-NOTE-CHIPS-001 UI tests).
 
 const Key _noteKey = Key('modifier-item-note');
 const Key _chipsKey = Key('modifier-quick-notes');
@@ -111,14 +118,19 @@ _openSheet(
   return confirmed;
 }
 
-/// Brings [finder] into the lazy scroll viewport (the note band is the LAST
-/// body child, so it is not built until scrolled to).
+/// Scrolls [finder] into the sheet body's viewport (the note band sits at the
+/// end of the body, below the option groups).
 Future<void> _reveal(WidgetTester tester, Finder finder) async {
   if (finder.evaluate().isEmpty) {
     await tester.scrollUntilVisible(
       finder,
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find
+          .descendant(
+            of: find.byType(ModifierSelectionSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
   }
   await tester.ensureVisible(finder);
@@ -133,6 +145,28 @@ Future<void> _tapChip(WidgetTester tester, String presetId) async {
   await _reveal(tester, chip);
   await tester.tap(chip);
   await tester.pumpAndSettle();
+}
+
+/// POS-QUICK-NOTE-CHIPS-001 — the box an added preset becomes, and its X.
+Finder _token(String presetId) => find.byKey(Key('quick-note-token-$presetId'));
+
+Future<void> _removeToken(WidgetTester tester, String presetId) async {
+  final remove = find.byKey(Key('quick-note-token-remove-$presetId'));
+  await _reveal(tester, remove);
+  await tester.tap(remove);
+  await tester.pumpAndSettle();
+}
+
+/// Confirms the sheet and returns the note it handed the cart.
+Future<String?> _confirmNote(
+  WidgetTester tester,
+  List<({List<SelectedModifier> selections, String? note, int quantity})>
+  confirmed,
+) async {
+  await _reveal(tester, find.byKey(_confirmKey));
+  await tester.tap(find.byKey(_confirmKey));
+  await tester.pumpAndSettle();
+  return confirmed.single.note;
 }
 
 void main() {
@@ -219,54 +253,76 @@ void main() {
   });
 
   group('B. insertion through the real widget', () {
-    testWidgets('B1. tapping a chip fills an empty note', (tester) async {
-      await _openSheet(tester, quickNotes: _parityPresets());
-      await _tapChip(tester, 'p1');
-      expect(_noteText(tester), _first);
-    });
-
-    testWidgets('B2. a second chip appends with the canonical separator', (
+    testWidgets('B1. tapping a chip adds a box and leaves the field empty', (
       tester,
     ) async {
-      await _openSheet(tester, quickNotes: _parityPresets());
+      final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
+      await _tapChip(tester, 'p1');
+      expect(_token('p1'), findsOneWidget);
+      expect(_noteText(tester), isEmpty);
+      expect(await _confirmNote(tester, confirmed), _first);
+    });
+
+    testWidgets('B2. a second chip joins with the canonical separator', (
+      tester,
+    ) async {
+      final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
       await _tapChip(tester, 'p1');
       await _tapChip(tester, 'p2');
-      expect(_noteText(tester), _combined);
+      expect(_token('p1'), findsOneWidget);
+      expect(_token('p2'), findsOneWidget);
+      expect(
+        (await _confirmNote(tester, confirmed))!.codeUnits,
+        _combined.codeUnits,
+      );
     });
 
-    testWidgets('B3. the caret lands at the end, ready to keep typing', (
-      tester,
-    ) async {
-      await _openSheet(tester, quickNotes: _parityPresets());
-      await _tapChip(tester, 'p1');
-      final controller = tester
-          .widget<TextField>(find.byKey(_noteKey))
-          .controller!;
-      expect(controller.selection.baseOffset, controller.text.length);
-      expect(controller.selection.isCollapsed, isTrue);
-    });
-
-    testWidgets('B4. manual editing after a chip still works', (tester) async {
-      await _openSheet(tester, quickNotes: _parityPresets());
-      await _tapChip(tester, 'p1');
-      await tester.enterText(find.byKey(_noteKey), 'typed over');
-      await tester.pumpAndSettle();
-      expect(_noteText(tester), 'typed over');
-      // Clearing it restores the ordinary empty-note behaviour.
-      await tester.enterText(find.byKey(_noteKey), '');
-      await tester.pumpAndSettle();
-      expect(_noteText(tester), isEmpty);
-    });
-
-    testWidgets('B5. a chip appends onto text the cashier typed', (
+    testWidgets('B3. a chip tap leaves the typed text and caret untouched', (
       tester,
     ) async {
       await _openSheet(tester, quickNotes: _parityPresets());
       await _reveal(tester, find.byKey(_noteKey));
+      await tester.enterText(find.byKey(_noteKey), 'well done');
+      await tester.pumpAndSettle();
+      final controller = tester
+          .widget<TextField>(find.byKey(_noteKey))
+          .controller!;
+      final before = controller.value;
+      await _tapChip(tester, 'p1');
+      expect(controller.value, before);
+    });
+
+    testWidgets('B4. manual editing next to a chip still works', (
+      tester,
+    ) async {
+      final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
+      await _tapChip(tester, 'p1');
+      await tester.enterText(find.byKey(_noteKey), 'typed over');
+      await tester.pumpAndSettle();
+      expect(_noteText(tester), 'typed over');
+      // Typing never touches the box.
+      expect(_token('p1'), findsOneWidget);
+      // Clearing it restores the ordinary empty-note behaviour.
+      await tester.enterText(find.byKey(_noteKey), '');
+      await tester.pumpAndSettle();
+      expect(_noteText(tester), isEmpty);
+      await tester.enterText(find.byKey(_noteKey), 'typed over');
+      await tester.pumpAndSettle();
+      expect(await _confirmNote(tester, confirmed), 'typed over, $_first');
+    });
+
+    testWidgets('B5. a chip joins onto text the cashier typed', (tester) async {
+      final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
+      await _reveal(tester, find.byKey(_noteKey));
       await tester.enterText(find.byKey(_noteKey), _first);
       await tester.pumpAndSettle();
       await _tapChip(tester, 'p2');
-      expect(_noteText(tester), _combined);
+      // The field keeps only what was typed; the note joins both.
+      expect(_noteText(tester), _first);
+      expect(
+        (await _confirmNote(tester, confirmed))!.codeUnits,
+        _combined.codeUnits,
+      );
     });
 
     testWidgets('B6. an over-long tap is refused, inline, changing nothing', (
@@ -280,6 +336,7 @@ void main() {
       await _tapChip(tester, 'p1');
       // Refused: the note is untouched, and nothing was truncated to fit.
       expect(_noteText(tester), long);
+      expect(_token('p1'), findsNothing);
       expect(find.byKey(_warningKey), findsOneWidget);
     });
 
@@ -294,6 +351,14 @@ void main() {
       expect(find.byKey(_warningKey), findsOneWidget);
       await tester.enterText(find.byKey(_noteKey), 'short');
       await tester.pumpAndSettle();
+      expect(find.byKey(_warningKey), findsNothing);
+      // ...and also when the note changes by a box going away.
+      await tester.enterText(find.byKey(_noteKey), 'x' * 125);
+      await tester.pumpAndSettle();
+      await _tapChip(tester, 'p1');
+      await _tapChip(tester, 'p2');
+      expect(find.byKey(_warningKey), findsOneWidget);
+      await _removeToken(tester, 'p1');
       expect(find.byKey(_warningKey), findsNothing);
     });
 
@@ -357,9 +422,18 @@ void main() {
       );
       tester.view.viewInsets = const FakeViewPadding(bottom: 460);
       await tester.pumpAndSettle();
-      // It scrolls with the body rather than being clipped away.
+      // The keyboard really squeezed the sheet into its compact layout...
+      expect(
+        find.byKey(const Key('modifier-sheet-scrolled-header')),
+        findsOneWidget,
+      );
+      // ...and the band scrolls with the body rather than being clipped away:
+      // once scrolled to, a chip is actually tappable.
       await _reveal(tester, find.byKey(_chipsKey));
-      expect(find.byKey(_chipsKey), findsOneWidget);
+      expect(
+        find.byKey(const Key('quick-note-chip-q0')).hitTestable(),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -411,13 +485,21 @@ void main() {
     ) async {
       final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
       await _tapChip(tester, 'p1');
+      await _removeToken(tester, 'p1');
       await tester.enterText(find.byKey(_noteKey), '   ');
       await tester.pumpAndSettle();
-      await _reveal(tester, find.byKey(_confirmKey));
-      await tester.tap(find.byKey(_confirmKey));
-      await tester.pumpAndSettle();
       // The EXISTING trim-and-null rule, unchanged: whitespace is not a note.
-      expect(confirmed.single.note, isNull);
+      expect(await _confirmNote(tester, confirmed), isNull);
+    });
+
+    testWidgets('D3b. whitespace typed next to a chip adds nothing to it', (
+      tester,
+    ) async {
+      final confirmed = await _openSheet(tester, quickNotes: _parityPresets());
+      await _tapChip(tester, 'p1');
+      await tester.enterText(find.byKey(_noteKey), '   ');
+      await tester.pumpAndSettle();
+      expect(await _confirmNote(tester, confirmed), _first);
     });
 
     testWidgets('D4. an edit prefilled with a note appends, never replaces', (
@@ -426,13 +508,16 @@ void main() {
       final confirmed = await _openSheet(
         tester,
         quickNotes: _parityPresets(),
-        initialNote: _first,
+        initialNote: 'well done',
       );
+      // Typed text that is not a preset stays in the field...
+      expect(_noteText(tester), 'well done');
       await _tapChip(tester, 'p2');
       await _reveal(tester, find.byKey(_confirmKey));
       await tester.tap(find.byKey(_confirmKey));
       await tester.pumpAndSettle();
-      expect(confirmed.single.note, _combined);
+      // ...and the chip joins after it, exactly as typing would.
+      expect(confirmed.single.note, 'well done, $_second');
     });
   });
 }

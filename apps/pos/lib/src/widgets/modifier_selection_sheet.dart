@@ -4,12 +4,14 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../format/money_format.dart';
+import '../format/quick_note_composition.dart';
 import '../format/quick_note_insertion.dart';
 import '../media/pos_media_image.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_menu_provider.dart';
 import 'quantity_stepper.dart';
+import 'quick_note_chip.dart';
 
 /// Wraps a formatted money run in Unicode LTR ISOLATES (LRI...PDI) so bidi
 /// reordering inside an RTL phrase can never split the sign, currency symbol
@@ -116,9 +118,12 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// one-tap chips directly above the note field. Empty (the default) leaves
   /// this sheet EXACTLY as it was: no chips, no extra row, no layout change.
   ///
-  /// Tapping one writes plain text into [_noteController]. The chips are an
-  /// input aid, not a second note channel — the field remains the only source
-  /// of truth, and the cashier can edit or clear whatever a chip produced.
+  /// POS-QUICK-NOTE-CHIPS-001: tapping one adds it as a removable box under
+  /// the field instead of writing into it, so a phrase tapped by mistake goes
+  /// away in one tap. The chips are still an input aid, not a second note
+  /// channel: on confirm they are folded onto the typed text into the same
+  /// single plain note (see `composeQuickNote`), and nothing else leaves the
+  /// sheet.
   final List<PosQuickNotePreset> quickNotes;
 
   /// POS-MODIFIER-SHEET-QUANTITY-003: how many units the sheet opens on. 1 for
@@ -255,8 +260,22 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// touched, which makes "touched" explicit rather than inferred.
   final Map<String, SelectedModifier> _pristine = {};
 
-  /// The optional per-item cashier note ("بدون بصل").
+  /// The optional per-item cashier note ("بدون بصل"). Since
+  /// POS-QUICK-NOTE-CHIPS-001 it holds only what the cashier typed; added
+  /// quick notes live in [_appliedQuickNotes].
   final TextEditingController _noteController = TextEditingController();
+
+  /// POS-QUICK-NOTE-CHIPS-001 — the quick notes added to this item, in the
+  /// order they will print, at most once each (by preset id). Shown as
+  /// removable boxes under the field and folded onto the typed text only when
+  /// the sheet confirms ([_note]). Reset with the rest of the sheet state.
+  final List<PosQuickNotePreset> _appliedQuickNotes = <PosQuickNotePreset>[];
+
+  /// POS-QUICK-NOTE-CHIPS-001 — the box row, so a box just added below the
+  /// visible part of the body (the keyboard is up) can be scrolled into view.
+  final GlobalKey _quickNoteTokensKey = GlobalKey(
+    debugLabel: 'quick-note-tokens',
+  );
 
   /// POS-QUICK-NOTES-124 — how many chips are shown before the "more" control.
   /// Eight fits two comfortable rows on the narrowest supported sheet and still
@@ -268,10 +287,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// the sheet state, so a reused widget position never inherits it.
   bool _quickNotesExpanded = false;
 
-  /// True when the LAST chip tap was refused because the composed note would
-  /// have exceeded the 140-character contract. Shown inline, non-blocking, and
-  /// cleared as soon as the note changes — nothing was written and nothing was
-  /// truncated.
+  /// True when the LAST chip tap was refused by the 140-character contract
+  /// (`canAddQuickNote`, which keeps two characters in reserve for the
+  /// separator). Shown inline, non-blocking, and cleared as soon as the note
+  /// changes — by typing, or by adding or removing a chip. Nothing was added
+  /// and nothing was truncated.
   bool _quickNoteRefused = false;
 
   /// POS-MODIFIER-SHEET-QUANTITY-003 — how many units of THIS configuration the
@@ -287,32 +307,76 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     _noteController.addListener(_clearQuickNoteRefusal);
   }
 
-  /// Drops the length warning the moment the note changes — by typing, by
-  /// deleting, or by a chip that DID fit. Guarded so the ordinary keystroke
-  /// path costs nothing: without the check every character would rebuild this
-  /// whole sheet.
+  /// Drops the length warning the moment the typed text changes. Guarded so
+  /// the ordinary keystroke path costs nothing: without the check every
+  /// character would rebuild this whole sheet.
   void _clearQuickNoteRefusal() {
     if (!_quickNoteRefused) return;
     setState(() => _quickNoteRefused = false);
   }
 
-  /// POS-QUICK-NOTES-124 — the chip tap. Composes through the shared helper,
-  /// writes plain text, and leaves the caret at the end so the cashier can keep
-  /// typing. A refusal changes nothing at all: no partial paste, no truncation.
+  /// The labels of [_appliedQuickNotes], in print order.
+  List<String> get _appliedQuickNoteLabels => <String>[
+    for (final preset in _appliedQuickNotes) preset.label,
+  ];
+
+  bool _isQuickNoteApplied(PosQuickNotePreset preset) =>
+      _appliedQuickNotes.any((applied) => applied.id == preset.id);
+
+  /// The note field's own length limit. With no chips it is the full
+  /// 140-character contract, exactly as before; with chips it is what is left
+  /// for typing, enforced by Flutter's own limiter, which already handles
+  /// every keyboard's composing text. That limiter counts characters as the
+  /// cashier sees them, so — exactly as without chips — an emoji or a combining
+  /// mark typed into the field can still take the stored note past 140 code
+  /// units; the chips themselves are always measured in code units.
+  int get _noteMaxLength => _appliedQuickNotes.isEmpty
+      ? kPosItemNoteMaxLength
+      : quickNoteFreeTextBudget(_appliedQuickNoteLabels);
+
+  /// POS-QUICK-NOTE-CHIPS-001 — the chip tap. Adds the preset as a removable
+  /// box at the end; the typed text, caret and keyboard are left alone. An
+  /// already-added preset adds nothing (its band chip is disabled anyway; this
+  /// also covers a fast double tap). A tap that would break the 140-character
+  /// contract is refused whole, as before: nothing is added, nothing is cut.
   void _applyQuickNote(PosQuickNotePreset preset) {
-    final insertion = buildQuickNoteInsertion(
-      _noteController.text,
-      preset.label,
+    if (_isQuickNoteApplied(preset) || preset.label.trim().isEmpty) return;
+    final fits = canAddQuickNote(
+      freeText: _noteController.text,
+      labels: _appliedQuickNoteLabels,
+      newLabel: preset.label,
     );
-    final text = insertion.text;
-    if (text == null) {
-      setState(() => _quickNoteRefused = true);
-      return;
-    }
-    _noteController.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
+    setState(() {
+      if (fits) _appliedQuickNotes.add(preset);
+      _quickNoteRefused = !fits;
+    });
+    if (fits) _revealQuickNoteTokens();
+  }
+
+  /// With the keyboard up the body is only a few rows tall, and a box added
+  /// under the field can land below its visible part — out of reach of its
+  /// own X. Scroll just far enough to show the row's end, and only when it is
+  /// actually hidden: on a normal screen the row is already visible and
+  /// nothing moves. The scroll is a jump, not an animation: a scrolling body
+  /// ignores taps, and the cashier's next tap must never be swallowed.
+  void _revealQuickNoteTokens() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tokens = _quickNoteTokensKey.currentContext;
+      if (!mounted || tokens == null) return;
+      Scrollable.ensureVisible(
+        tokens,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
+  /// POS-QUICK-NOTE-CHIPS-001 — the X on one box: that whole phrase goes, the
+  /// others keep their order, and the preset can be tapped again.
+  void _removeQuickNote(PosQuickNotePreset preset) {
+    setState(() {
+      _appliedQuickNotes.removeWhere((applied) => applied.id == preset.id);
+      _quickNoteRefused = false;
+    });
   }
 
   @override
@@ -411,8 +475,14 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// MONEY-EDIT-INTEGRITY-002C: only selections that resolve to a live group we
   /// are ENTITLED to re-price against are seeded. An unresolved one is left out
   /// deliberately — and Save is blocked while any exists, so nothing is lost by
-  /// omitting it. The note is restored verbatim. This is also the reset path
-  /// when the represented product genuinely changes.
+  /// omitting it. This is also the reset path when the represented product
+  /// genuinely changes.
+  ///
+  /// POS-QUICK-NOTE-CHIPS-001: phrases at the end of the saved note that are
+  /// exactly a current preset come back as removable boxes; the rest of the
+  /// note goes into the field verbatim. The split is accepted only when it
+  /// recomposes to the saved bytes, so saving untouched never changes the
+  /// note, and anything it cannot prove is restored verbatim as before.
   void _applyInitialState() {
     _selected.clear();
     _pristine.clear();
@@ -426,7 +496,14 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       // can be saved back exactly as it was priced (see [_snapshotFor]).
       _pristine['${group.id}|${selection.optionId}'] = selection;
     }
-    _noteController.text = widget.initialNote ?? '';
+    final presets = widget.quickNotes;
+    final split = splitTrailingQuickNotes(widget.initialNote ?? '', <String>[
+      for (final preset in presets) preset.label,
+    ]);
+    _appliedQuickNotes
+      ..clear()
+      ..addAll([for (final i in split.labelIndexes) presets[i]]);
+    _noteController.text = split.freeText;
     _quantity = widget.initialQuantity < 1 ? 1 : widget.initialQuantity;
     _quickNotesExpanded = false;
     _quickNoteRefused = false;
@@ -722,9 +799,17 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
           ),
   ];
 
-  /// The trimmed note, or null when the field was left blank.
+  /// The trimmed note, or null when it is blank.
+  ///
+  /// POS-QUICK-NOTE-CHIPS-001: the typed text with the added quick notes
+  /// folded on in order — the same single plain string the field would have
+  /// held had the cashier typed first and then tapped the same chips. With no
+  /// chips this is exactly the field, as before.
   String? get _note {
-    final text = _noteController.text.trim();
+    final text = composeQuickNote(
+      _noteController.text,
+      _appliedQuickNoteLabels,
+    ).trim();
     return text.isEmpty ? null : text;
   }
 
@@ -963,7 +1048,10 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
         Padding(
           key: const Key('modifier-quick-notes-row'),
           padding: const EdgeInsets.only(top: RestoflowSpacing.md),
-          child: _quickNotesBand(theme, l10n),
+          // POS-QUICK-NOTE-CHIPS-001: a tap here counts as part of the note
+          // field, so on the hosted web POS (where a touch outside a field
+          // unfocuses it) adding a phrase does not drop the keyboard.
+          child: TextFieldTapRegion(child: _quickNotesBand(theme, l10n)),
         ),
       // Part F: the optional per-item note ("بدون بصل") — sent
       // with the order, shown under the cart line, on the KDS
@@ -977,16 +1065,58 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
         child: TextField(
           key: const Key('modifier-item-note'),
           controller: _noteController,
-          maxLength: kPosItemNoteMaxLength,
+          // POS-QUICK-NOTE-CHIPS-001: 140 with no chips (unchanged); with
+          // chips, the room left for typing (see [_noteMaxLength]).
+          maxLength: _noteMaxLength,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             labelText: l10n.posModifierItemNoteLabel,
-            hintText: l10n.posModifierItemNoteHint,
+            // The example would read like part of the note once real phrases
+            // sit right under the field.
+            hintText: _appliedQuickNotes.isEmpty
+                ? l10n.posModifierItemNoteHint
+                : null,
             counterText: '',
             prefixIcon: const Icon(Icons.sticky_note_2_outlined),
           ),
         ),
       ),
+      // POS-QUICK-NOTE-CHIPS-001: the added quick notes, one removable box
+      // each, directly UNDER the field — so reading the field and then the
+      // boxes, top to bottom, is reading the note as it prints. A keyed DIRECT
+      // scroll child that exists for the sheet's whole life whenever the
+      // restaurant has presets (KEYBOARD-002 identity), with one row of height
+      // reserved even while empty: the sheet sizes to its content from the
+      // bottom edge, so a row appearing on the first tap would push the band
+      // up under the cashier's finger. Also kept while any box exists, so a
+      // phrase that will print can never be on the note without being shown.
+      if (widget.quickNotes.isNotEmpty || _appliedQuickNotes.isNotEmpty)
+        Padding(
+          key: const Key('modifier-quick-note-tokens-row'),
+          padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+          child: TextFieldTapRegion(
+            child: ConstrainedBox(
+              key: _quickNoteTokensKey,
+              constraints: const BoxConstraints(
+                minHeight: kMinInteractiveDimension,
+              ),
+              child: Wrap(
+                key: const Key('modifier-quick-note-tokens'),
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.sm,
+                children: [
+                  for (final preset in _appliedQuickNotes)
+                    QuickNoteChip(
+                      key: Key('quick-note-token-${preset.id}'),
+                      removeKey: Key('quick-note-token-remove-${preset.id}'),
+                      label: preset.label,
+                      onRemove: () => _removeQuickNote(preset),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
     ];
 
     // Sticky footer: a hairline-topped strip holding the running total and the
@@ -1181,15 +1311,6 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     );
   }
 
-  /// The options of one group in their V2 responsive layout (real ordering,
-  /// selection rules, and keys unchanged):
-  ///  * single-choice groups: equal-width selectable CARDS — up to three per
-  ///    row on a wide modal, two on medium widths, a single column when
-  ///    narrow (never a horizontal scroller, never overflow);
-  ///  * multi-choice checkbox groups: compact tiles, two columns when the
-  ///    modal is wide enough, one otherwise;
-  ///  * quantity-stepper groups keep the full-width row so the −/+ pill and
-  ///    label never cramp.
   /// POS-QUICK-NOTES-124 — the chip band above the note field.
   ///
   /// A responsive [Wrap] so it reflows at any sheet width instead of scrolling
@@ -1201,6 +1322,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// Past [_quickNotesCollapsedCount] the extras hide behind a "more" chip
   /// rather than a scroller or a dialog: the cashier is mid-order, and the note
   /// FIELD must stay the visually primary thing here.
+  ///
+  /// POS-QUICK-NOTE-CHIPS-001: a preset already added below the field shows
+  /// disabled until its box is removed — same size, so the band never reflows,
+  /// and a nervous double tap can neither duplicate an instruction nor silently
+  /// take it away. Removal is only ever the box's own X.
   Widget _quickNotesBand(ThemeData theme, AppLocalizations l10n) {
     final presets = widget.quickNotes;
     final overflows =
@@ -1228,7 +1354,9 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 // The label is tenant text: shown verbatim, never truncated to
                 // an ellipsis by a fixed width, and allowed to wrap the row.
                 label: Text(preset.label),
-                onPressed: () => _applyQuickNote(preset),
+                onPressed: _isQuickNoteApplied(preset)
+                    ? null
+                    : () => _applyQuickNote(preset),
                 // A cashier taps these with a thumb, mid-service. The visual
                 // pill stays compact; `padded` keeps the HIT target at 48dp.
                 materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -1272,6 +1400,15 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     );
   }
 
+  /// The options of one group in their V2 responsive layout (real ordering,
+  /// selection rules, and keys unchanged):
+  ///  * single-choice groups: equal-width selectable CARDS — up to three per
+  ///    row on a wide modal, two on medium widths, a single column when
+  ///    narrow (never a horizontal scroller, never overflow);
+  ///  * multi-choice checkbox groups: compact tiles, two columns when the
+  ///    modal is wide enough, one otherwise;
+  ///  * quantity-stepper groups keep the full-width row so the −/+ pill and
+  ///    label never cramp.
   Widget _groupOptions(PosModifierGroup group) {
     return LayoutBuilder(
       builder: (context, constraints) {
