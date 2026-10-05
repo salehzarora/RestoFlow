@@ -63,6 +63,7 @@ void main() {
         (fn, p) => {
           'ok': true,
           'entity': 'device',
+          'server_now': '2035-01-01T12:00:00Z',
           'devices': [
             {
               'device_id': 'd1',
@@ -73,6 +74,8 @@ void main() {
               'status': 'paired',
               'device_pairing_id': 'p1',
               'has_open_session': true,
+              'session_expires_at': '2035-01-31T12:00:00Z',
+              'last_seen_at': '2035-01-01T11:00:00Z',
             },
             {
               'device_id': 'd2',
@@ -102,11 +105,79 @@ void main() {
       expect(devices[0].status, DeviceLifecycleStatus.paired);
       expect(devices[0].pairingId, 'p1');
       expect(devices[0].hasOpenSession, isTrue);
+      expect(devices[0].sessionExpiresAt, DateTime.utc(2035, 1, 31, 12));
+      expect(devices[0].lastSeenAt, DateTime.utc(2035, 1, 1, 11));
+      expect(devices[0].serverNow, DateTime.utc(2035, 1, 1, 12));
       expect(devices[0].branchLabel, 'Main');
       expect(devices[1].status, DeviceLifecycleStatus.none);
       expect(devices[1].pairingId, isNull);
       expect(devices[1].hasOpenSession, isFalse);
     });
+
+    for (final sample
+        in <
+          ({
+            String name,
+            Map<String, Object?> envelope,
+            Map<String, Object?> row,
+            bool active,
+          })
+        >[
+          (name: 'old server', envelope: {}, row: {}, active: false),
+          (
+            name: 'missing expiry',
+            envelope: {'server_now': '2035-01-01T12:00:00Z'},
+            row: {},
+            active: false,
+          ),
+          (
+            name: 'malformed expiry',
+            envelope: {'server_now': '2035-01-01T12:00:00Z'},
+            row: {'session_expires_at': 'invalid'},
+            active: false,
+          ),
+          (
+            name: 'malformed server clock',
+            envelope: {'server_now': 123},
+            row: {'session_expires_at': null},
+            active: false,
+          ),
+          (
+            name: 'explicit legacy NULL',
+            envelope: {'server_now': '2035-01-01T12:00:00Z'},
+            row: {'session_expires_at': null},
+            active: true,
+          ),
+        ]) {
+      test(
+        '${sample.name} session metadata is handled conservatively',
+        () async {
+          final transport = _FakeTransport(
+            (_, _) => {
+              'ok': true,
+              ...sample.envelope,
+              'devices': [
+                {
+                  'device_id': 'd1',
+                  'status': 'active',
+                  'has_open_session': true,
+                  'last_seen_at': {'malformed': true},
+                  ...sample.row,
+                },
+              ],
+            },
+          );
+          final result = await _repo(transport).loadDevices();
+          final device = result.fold(
+            (rows) => rows.single,
+            (_) => fail('load failed'),
+          );
+          expect(device.hasOpenSession, sample.active);
+          expect(device.isSessionActive, sample.active);
+          expect(device.lastSeenAt, isNull);
+        },
+      );
+    }
 
     test('an org-wide scope sends null restaurant/branch', () async {
       final t = _FakeTransport((fn, p) => {'ok': true, 'devices': []});

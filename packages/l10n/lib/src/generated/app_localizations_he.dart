@@ -2928,6 +2928,16 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminSessionOpen => 'המושב פעיל';
 
   @override
+  String get adminSessionExpired => 'תוקף המושב פג';
+
+  @override
+  String get adminNewCodeForDevice => 'קוד חדש למכשיר הזה';
+
+  @override
+  String get adminNewCodeForDeviceConfirm =>
+      'ליצור קוד חדש למכשיר הזה? צימוד באמצעות הקוד החדש יסיים את ההפעלות הקודמות שלו.';
+
+  @override
   String get adminDeviceCreated => 'המכשיר נוסף';
 
   @override

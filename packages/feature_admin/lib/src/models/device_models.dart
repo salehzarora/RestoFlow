@@ -32,6 +32,9 @@ class AdminDevice {
     required this.status,
     this.pairingId,
     this.hasOpenSession = false,
+    this.sessionExpiresAt,
+    this.lastSeenAt,
+    this.serverNow,
   });
 
   final String id;
@@ -45,13 +48,35 @@ class AdminDevice {
   /// The current pairing id (null when [status] is none).
   final String? pairingId;
 
-  /// True once a device session has been started (demo flag).
+  /// Server-confirmed active, unrevoked, unexpired session (or demo flag).
   final bool hasOpenSession;
+
+  /// Expiry of the selected session; null also supports legacy sessions.
+  final DateTime? sessionExpiresAt;
+  final DateTime? lastSeenAt;
+
+  /// Server time when the session metadata was read; never the browser clock.
+  final DateTime? serverNow;
+
+  bool get isSessionActive =>
+      hasOpenSession &&
+      (sessionExpiresAt == null ||
+          (serverNow != null && sessionExpiresAt!.isAfter(serverNow!)));
+
+  /// A missing session, or a revoked pairing, is not an expired session.
+  bool get isSessionExpired =>
+      status == DeviceLifecycleStatus.active &&
+      sessionExpiresAt != null &&
+      serverNow != null &&
+      !sessionExpiresAt!.isAfter(serverNow!);
 
   AdminDevice copyWith({
     DeviceLifecycleStatus? status,
     String? pairingId,
     bool? hasOpenSession,
+    DateTime? sessionExpiresAt,
+    DateTime? lastSeenAt,
+    DateTime? serverNow,
   }) => AdminDevice(
     id: id,
     label: label,
@@ -60,6 +85,9 @@ class AdminDevice {
     status: status ?? this.status,
     pairingId: pairingId ?? this.pairingId,
     hasOpenSession: hasOpenSession ?? this.hasOpenSession,
+    sessionExpiresAt: sessionExpiresAt ?? this.sessionExpiresAt,
+    lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+    serverNow: serverNow ?? this.serverNow,
   );
 }
 

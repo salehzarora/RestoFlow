@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -16,13 +18,53 @@ import '../widgets/one_time_secret_dialog.dart';
 /// session reveal a server one-time secret exactly once. approve = pending→paired,
 /// activate = paired→active, start-session requires active; pending→active is
 /// impossible (the lifecycle note + the per-status action make this explicit).
-class AdminDevicesScreen extends ConsumerWidget {
+class AdminDevicesScreen extends ConsumerStatefulWidget {
   const AdminDevicesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDevicesScreen> createState() => _AdminDevicesScreenState();
+}
+
+class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
+    with WidgetsBindingObserver {
+  bool _refreshOnMount = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // A provider can outlive the screen when another listener retains it.
+    // Never restart a server-relative expiry countdown from that cached row.
+    _refreshOnMount = ref.exists(adminDevicesProvider);
+    if (_refreshOnMount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.invalidate(adminDevicesProvider);
+        setState(() => _refreshOnMount = false);
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(adminDevicesProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final devices = ref.watch(adminDevicesProvider);
+    final snapshot = ref.watch(adminDevicesProvider);
+    final devices = _refreshOnMount
+        ? const AsyncLoading<List<AdminDevice>>()
+        : snapshot;
     final scope = ref.watch(adminScopeProvider);
     final manage = canManage(scope.actingRole);
 
@@ -45,6 +87,7 @@ class AdminDevicesScreen extends ConsumerWidget {
         ),
         Expanded(
           child: devices.when(
+            skipLoadingOnRefresh: false,
             loading: AdminStateView.loading,
             error: (e, _) => AdminStateView.fromFailure(
               context,
@@ -91,7 +134,11 @@ class AdminDevicesScreen extends ConsumerWidget {
                       padding: const EdgeInsetsDirectional.only(
                         bottom: RestoflowSpacing.sm,
                       ),
-                      child: _DeviceTile(device: d, canManage: manage),
+                      child: _DeviceTile(
+                        key: ValueKey(d.id),
+                        device: d,
+                        canManage: manage,
+                      ),
                     ),
                   if (revoked.isNotEmpty) ...[
                     const SizedBox(height: RestoflowSpacing.sm),
@@ -214,7 +261,11 @@ class _RevokedDevicesSection extends StatelessWidget {
               padding: const EdgeInsetsDirectional.only(
                 bottom: RestoflowSpacing.sm,
               ),
-              child: _DeviceTile(device: d, canManage: false),
+              child: _DeviceTile(
+                key: ValueKey(d.id),
+                device: d,
+                canManage: false,
+              ),
             ),
         ],
       ),
@@ -223,7 +274,7 @@ class _RevokedDevicesSection extends StatelessWidget {
 }
 
 class _DeviceTile extends ConsumerStatefulWidget {
-  const _DeviceTile({required this.device, required this.canManage});
+  const _DeviceTile({super.key, required this.device, required this.canManage});
   final AdminDevice device;
   final bool canManage;
   @override
@@ -232,6 +283,51 @@ class _DeviceTile extends ConsumerStatefulWidget {
 
 class _DeviceTileState extends ConsumerState<_DeviceTile> {
   bool _busy = false;
+  bool _confirmingCode = false;
+  bool _sessionExpiryReached = false;
+  Timer? _sessionExpiryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _watchSessionExpiry();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeviceTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.device != widget.device) _watchSessionExpiry();
+  }
+
+  void _watchSessionExpiry() {
+    _sessionExpiryTimer?.cancel();
+    _sessionExpiryReached = false;
+    final device = widget.device;
+    final expiresAt = device.sessionExpiresAt;
+    final serverNow = device.serverNow;
+    if (!device.isSessionActive || expiresAt == null || serverNow == null) {
+      return;
+    }
+    final remaining = expiresAt.difference(serverNow);
+    const maxDelay = Duration(days: 1);
+    // Re-read when expiry is reached: activity may have renewed it meanwhile.
+    // Cap long delays to stay within web timer limits, using server-relative
+    // durations rather than trusting the browser's wall clock.
+    _sessionExpiryTimer = Timer(
+      remaining > maxDelay ? maxDelay : remaining,
+      () {
+        if (!mounted) return;
+        setState(() => _sessionExpiryReached = remaining <= maxDelay);
+        ref.invalidate(adminDevicesProvider);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sessionExpiryTimer?.cancel();
+    super.dispose();
+  }
 
   AdminController get _ctrl => ref.read(adminControllerProvider);
 
@@ -244,6 +340,39 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
 
   void _snack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  Future<void> _replaceCode() async {
+    if (_busy || _confirmingCode) return;
+    final l10n = AppLocalizations.of(context);
+    final deviceId = widget.device.id;
+    setState(() => _confirmingCode = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.adminNewCodeForDevice),
+        content: Text(l10n.adminNewCodeForDeviceConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.adminCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.adminIssueCode),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _confirmingCode = false);
+    if (confirmed != true ||
+        widget.device.id != deviceId ||
+        !widget.canManage ||
+        widget.device.status != DeviceLifecycleStatus.active) {
+      return;
+    }
+    await _issueCode();
+  }
 
   Future<void> _issueCode() async {
     // LIVE-OPS-001: prefer the host-provided QR pairing panel (Dashboard); when
@@ -388,11 +517,16 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
             icon: Icons.vpn_key_outlined,
             run: _startSession,
           ),
+          DeviceLifecycleStatus.active => (
+            label: l10n.adminNewCodeForDevice,
+            icon: Icons.qr_code_2,
+            run: _replaceCode,
+          ),
           _ => null,
         };
     if (spec == null) return null;
     return FilledButton.tonalIcon(
-      onPressed: _busy ? null : spec.run,
+      onPressed: _busy || _confirmingCode ? null : spec.run,
       icon: _busy
           ? const RestoflowInlineSpinner(size: 16)
           : Icon(spec.icon, size: RestoflowIconSizes.sm),
@@ -410,6 +544,18 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
         RestoflowSemanticColors.of(theme.brightness);
     final visual = deviceStatusVisual(context, widget.device.status);
     final warningStyle = RestoflowTone.warning.styleOf(theme);
+    final sessionActive =
+        widget.device.isSessionActive && !_sessionExpiryReached;
+    final sessionExpired =
+        widget.device.isSessionExpired ||
+        (_sessionExpiryReached &&
+            widget.device.status == DeviceLifecycleStatus.active);
+    final lastSeen = widget.device.lastSeenAt?.toLocal();
+    final material = MaterialLocalizations.of(context);
+    final lastActivity = lastSeen == null
+        ? '—'
+        : '${material.formatShortDate(lastSeen)} '
+              '${material.formatTimeOfDay(TimeOfDay.fromDateTime(lastSeen))}';
     // KIOSK-001-DEVICE-088: explicit THREE-way presentation — POS, KDS and
     // KIOSK each get a distinct icon + tinted badge, and an UNKNOWN future
     // type renders a neutral raw-type fallback instead of masquerading as POS.
@@ -522,25 +668,40 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                 ),
               ],
             ),
-            if (widget.device.hasOpenSession) ...[
+            if (sessionActive || sessionExpired) ...[
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
                   Icon(
-                    Icons.bolt,
+                    sessionActive ? Icons.bolt : Icons.timer_off_outlined,
                     size: RestoflowIconSizes.xs,
-                    color: semantic.success,
+                    color: sessionActive
+                        ? semantic.success
+                        : warningStyle.accent,
                   ),
                   const SizedBox(width: RestoflowSpacing.xs),
-                  Text(
-                    l10n.adminSessionOpen,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: semantic.success,
+                  Expanded(
+                    child: Text(
+                      sessionActive
+                          ? l10n.adminSessionOpen
+                          : l10n.adminSessionExpired,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: sessionActive
+                            ? semantic.success
+                            : warningStyle.accent,
+                      ),
                     ),
                   ),
                 ],
               ),
             ],
+            const SizedBox(height: RestoflowSpacing.sm),
+            Text(
+              '${l10n.adminLastActivityLabel}: $lastActivity',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
             // Real backend: the device redeems its code itself (RF-161) — say so
             // instead of showing a manual redeem button.
             if (!_ctrl.supportsManualLifecycle &&
@@ -595,7 +756,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                   if (_revocable)
                     TextButton.icon(
                       style: RestoflowButtonStyles.dangerGhost(context),
-                      onPressed: _busy ? null : _revoke,
+                      onPressed: _busy || _confirmingCode ? null : _revoke,
                       icon: const Icon(
                         Icons.block,
                         size: RestoflowIconSizes.sm,
