@@ -85,7 +85,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
 
   Future<void> _restore(DeviceSessionManager manager) async {
     final generation = ++_restoreGeneration;
-    DeviceContext? restored;
+    DeviceContext? restored = _device;
     var offline = false;
     var unavailable = false;
     if (manager is DeviceSessionOutcomeManager) {
@@ -96,6 +96,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
       unavailable = outcome is DeviceSessionRestoreUnavailable;
       if (outcome case DeviceSessionRestored(:final context))
         restored = context;
+      if (outcome is DeviceSessionRestoreRejected) restored = null;
     } else {
       restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
     }
@@ -148,14 +149,25 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
         ),
       );
     }
-    if (_offline) {
+    if (_offline && _device == null) {
       return OfflineBootView(
         onRetry: () => _restore(widget.repository as DeviceSessionManager),
       );
     }
-    if (_unavailable) {
+    if (_unavailable && _device == null) {
       return DeviceSessionUnavailableView(
         onRetry: () => _restore(widget.repository as DeviceSessionManager),
+        repairManager: widget.repository is DeviceSessionLocalRepairManager
+            ? widget.repository as DeviceSessionLocalRepairManager
+            : null,
+        onRepaired: () {
+          if (!mounted) return;
+          setState(() {
+            _unavailable = false;
+            _device = null;
+          });
+          _publish(null);
+        },
       );
     }
     // Enter ONLY for a paired device of THIS surface's type; the repo enforces

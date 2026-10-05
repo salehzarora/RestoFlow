@@ -13,7 +13,8 @@ class SupabaseDevicePairingRepository
     implements
         DevicePairingRepository,
         DeviceSessionOutcomeManager,
-        DeviceSessionHeartbeatManager {
+        DeviceSessionHeartbeatManager,
+        DeviceSessionLocalRepairManager {
   SupabaseDevicePairingRepository({
     required SyncRpcTransport transport,
     required DeviceSessionSecretStore secretStore,
@@ -28,6 +29,11 @@ class SupabaseDevicePairingRepository
   bool _protectedBlocked = false;
   String? _expectedDeviceType;
   Future<void> _mutations = Future<void>.value();
+  Future<void>? _unpairDone;
+  int _malformedReplies = 0;
+  bool _restorePending = false;
+  @override
+  int get consecutiveUnavailable => _malformedReplies;
 
   @override
   DeviceContext? get activeDevice => _activeDevice;
@@ -57,6 +63,8 @@ class SupabaseDevicePairingRepository
   }
 
   void _allow() {
+    _restorePending = false;
+    _malformedReplies = 0;
     _protectedBlocked = false;
     if (_transport case final DeviceSessionGuardedTransport guarded)
       guarded.allow();
@@ -78,6 +86,8 @@ class SupabaseDevicePairingRepository
     required String deviceType,
   }) async {
     final generation = ++_generation;
+    _restorePending = false;
+    _unpairDone = null; // Only a new pairing supersedes explicit local unpair.
     _expectedDeviceType = deviceType;
     _block();
     _publish(null);
@@ -130,17 +140,27 @@ class SupabaseDevicePairingRepository
   Future<DeviceRestoreOutcome> restoreOutcome({
     String? expectedDeviceType,
   }) async {
+    final waitingGeneration = _generation;
+    while (_unpairDone != null) {
+      await _unpairDone;
+      if (waitingGeneration != _generation) {
+        return const DeviceSessionRestoreUnavailable();
+      }
+    }
     _expectedDeviceType = expectedDeviceType;
+    _restorePending = true;
     final generation = ++_generation;
     final DeviceSessionCredential? cred;
     try {
       cred = await _store.read();
     } catch (_) {
-      return _unavailable(generation);
+      _malformedReplies = 0;
+      return DeviceSessionRestoreOffline(cachedContext: _activeDevice);
     }
     if (generation != _generation)
       return const DeviceSessionRestoreUnavailable();
     if (cred == null) {
+      _restorePending = false;
       _block();
       _publish(null);
       await _mutate(generation, _clearContextCache);
@@ -152,23 +172,20 @@ class SupabaseDevicePairingRepository
         'p_device_id': cred.deviceId,
         'p_session_token': cred.sessionToken,
       });
-    } on SyncTransportException catch (e) {
+    } catch (_) {
       if (generation != _generation)
         return const DeviceSessionRestoreUnavailable();
-      if (e.kind == SyncTransportErrorKind.transient) {
-        if (_protectedBlocked) return _unavailable(generation);
-        final cached = await _readContextCache(
-          expectedDeviceId: cred.deviceId,
-          expectedDeviceType: expectedDeviceType,
-        );
-        if (generation != _generation)
-          return const DeviceSessionRestoreUnavailable();
-        if (cached != null) _publish(cached);
-        return DeviceSessionRestoreOffline(cachedContext: cached);
-      }
-      return _unavailable(generation);
-    } catch (_) {
-      return _unavailable(generation);
+      _malformedReplies = 0;
+      final cached =
+          _activeDevice ??
+          await _readContextCache(
+            expectedDeviceId: cred.deviceId,
+            expectedDeviceType: expectedDeviceType,
+          );
+      if (generation != _generation)
+        return const DeviceSessionRestoreUnavailable();
+      if (cached != null && _activeDevice == null) _publish(cached);
+      return DeviceSessionRestoreOffline(cachedContext: cached);
     }
     if (generation != _generation)
       return const DeviceSessionRestoreUnavailable();
@@ -183,7 +200,13 @@ class SupabaseDevicePairingRepository
     if (context == null ||
         (expectedDeviceType != null &&
             context.deviceType != expectedDeviceType)) {
-      return _unavailable(generation);
+      final cached =
+          _activeDevice ??
+          await _readContextCache(
+            expectedDeviceId: cred.deviceId,
+            expectedDeviceType: expectedDeviceType,
+          );
+      return _unavailable(generation, cached);
     }
     if (!await _mutate(generation, () => _writeContextCache(context))) {
       return const DeviceSessionRestoreUnavailable();
@@ -193,31 +216,46 @@ class SupabaseDevicePairingRepository
     return DeviceSessionRestored(context);
   }
 
-  DeviceSessionRestoreUnavailable _unavailable(int generation) {
+  DeviceSessionRestoreUnavailable _unavailable(
+    int generation,
+    DeviceContext? cached,
+  ) {
     if (generation == _generation) {
-      _block();
-      _publish(null, unavailable: true);
+      _recordMalformed();
+      _publish(cached, unavailable: true);
     }
-    return const DeviceSessionRestoreUnavailable();
+    return DeviceSessionRestoreUnavailable(cachedContext: cached);
+  }
+
+  void _recordMalformed() {
+    _malformedReplies++;
+    if (_malformedReplies >= 2) _block();
+  }
+
+  DeviceHeartbeatResult _offline() {
+    _malformedReplies = 0;
+    return DeviceHeartbeatResult.offline;
   }
 
   @override
   Future<DeviceHeartbeatResult> heartbeat() async {
     final generation = _generation;
     final context = _activeDevice;
-    if (context == null) return DeviceHeartbeatResult.superseded;
+    if (context == null) {
+      return _restorePending && _expectedDeviceType != null
+          ? _restoreHeartbeat(_expectedDeviceType)
+          : DeviceHeartbeatResult.superseded;
+    }
     final DeviceSessionCredential? cred;
     try {
       cred = await _store.read();
     } catch (_) {
       if (generation != _generation) return DeviceHeartbeatResult.superseded;
-      _block();
-      return DeviceHeartbeatResult.unavailable;
+      return _offline();
     }
     if (generation != _generation) return DeviceHeartbeatResult.superseded;
     if (cred == null || cred.deviceId != context.deviceId) {
-      _block();
-      return DeviceHeartbeatResult.unavailable;
+      return _offline();
     }
     final Object? raw;
     try {
@@ -229,19 +267,17 @@ class SupabaseDevicePairingRepository
       if (generation != _generation) return DeviceHeartbeatResult.superseded;
       // PostgREST schema-cache miss and PostgreSQL undefined_function:
       // additive deployment, not a revoked device. Retry at the next cadence.
-      if (e.code == 'PGRST202' || e.code == '42883') {
-        return _protectedBlocked
-            ? DeviceHeartbeatResult.unavailable
-            : DeviceHeartbeatResult.unsupported;
+      if (e.code == 'PGRST202' || e.code == '42883' || e.code == '404') {
+        if (_protectedBlocked) {
+          return _restoreHeartbeat(_expectedDeviceType ?? context.deviceType);
+        }
+        _malformedReplies = 0;
+        return DeviceHeartbeatResult.unsupported;
       }
-      if (e.kind == SyncTransportErrorKind.transient)
-        return DeviceHeartbeatResult.offline;
-      _block();
-      return DeviceHeartbeatResult.unavailable;
+      return _offline();
     } catch (_) {
       if (generation != _generation) return DeviceHeartbeatResult.superseded;
-      _block();
-      return DeviceHeartbeatResult.unavailable;
+      return _offline();
     }
     if (generation != _generation) return DeviceHeartbeatResult.superseded;
     if (_invalidSession(raw)) {
@@ -258,7 +294,7 @@ class SupabaseDevicePairingRepository
         returned.restaurantId != context.restaurantId ||
         returned.branchId != context.branchId ||
         returned.deviceType != context.deviceType) {
-      _block();
+      _recordMalformed();
       return DeviceHeartbeatResult.unavailable;
     }
     _allow();
@@ -267,6 +303,7 @@ class SupabaseDevicePairingRepository
 
   Future<bool> _reject(int generation) async {
     if (generation != _generation) return false;
+    _restorePending = false;
     _block();
     if (await _mutate(generation, () async {
       await _store.clear();
@@ -278,27 +315,54 @@ class SupabaseDevicePairingRepository
     return false;
   }
 
+  Future<DeviceHeartbeatResult> _restoreHeartbeat(String? expectedType) async {
+    final outcome = await restoreOutcome(expectedDeviceType: expectedType);
+    return switch (outcome) {
+      DeviceSessionRestored() => DeviceHeartbeatResult.active,
+      DeviceSessionRestoreRejected() => DeviceHeartbeatResult.invalidSession,
+      DeviceSessionRestoreOffline() => DeviceHeartbeatResult.offline,
+      DeviceSessionRestoreUnavailable() => DeviceHeartbeatResult.unavailable,
+    };
+  }
+
   @override
-  Future<void> unpair() async {
+  Future<void> unpair() => _unpair(localOnly: false);
+
+  @override
+  Future<void> clearLocalPairing() => _unpair(localOnly: true);
+
+  Future<void> _unpair({required bool localOnly}) async {
+    _restorePending = false;
+    _malformedReplies = 0;
+    final done = Completer<void>();
+    _unpairDone = done.future;
     final generation = ++_generation;
     _block();
     _publish(null);
-    final cred = await _store.read();
-    if (generation != _generation) return;
-    if (cred != null) {
+    try {
+      DeviceSessionCredential? cred;
       try {
-        await _transport.invoke('revoke_device_session', {
-          'p_device_id': cred.deviceId,
-          'p_session_token': cred.sessionToken,
-        });
-      } catch (_) {
-        // Explicit local unpair remains available offline.
+        cred = await _store.read();
+      } catch (_) {}
+      if (generation != _generation) return;
+      if (!localOnly && cred != null) {
+        try {
+          await _transport.invoke('revoke_device_session', {
+            'p_device_id': cred.deviceId,
+            'p_session_token': cred.sessionToken,
+          });
+        } catch (_) {
+          // Explicit local unpair remains available offline.
+        }
       }
+      await _mutate(generation, () async {
+        await _store.clear();
+        await _clearContextCache();
+      });
+    } finally {
+      if (identical(_unpairDone, done.future)) _unpairDone = null;
+      done.complete();
     }
-    await _mutate(generation, () async {
-      await _store.clear();
-      await _clearContextCache();
-    });
   }
 
   Future<void> _writeContextCache(DeviceContext context) async {

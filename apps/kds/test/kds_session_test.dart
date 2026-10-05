@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -41,6 +42,93 @@ KdsRealSessionConfig _ctx() => KdsRealSessionConfig.fromValues(
 )!;
 
 void main() {
+  test(
+    'F1 KDS heartbeat outage and unknown verdict never latch reauth and polling recovers',
+    () async {
+      var mode = 'valid';
+      final wire = _RecordingTransport((fn, _) async {
+        if (fn == 'heartbeat_device_session') {
+          if (mode == 'offline')
+            throw const SyncTransportException(
+              SyncTransportErrorKind.server,
+              code: 'PGRST001',
+            );
+          if (mode == 'unknown') return {'ok': true};
+        }
+        if (fn == 'sync_pull')
+          return {
+            'ok': true,
+            'server_ts': '2026-10-06T10:00:00Z',
+            'changes': <String, Object?>{},
+            'operation_statuses': {
+              'rows': [],
+              'next_cursor': null,
+              'has_more': false,
+            },
+          };
+        return {
+          'ok': true,
+          'device_id': 'device',
+          'device_session_id': 'session',
+          'organization_id': 'org',
+          'restaurant_id': 'restaurant',
+          'branch_id': 'branch',
+          'device_type': 'kds',
+        };
+      });
+      final guard = DeviceSessionGuardedTransport(wire);
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(
+          deviceId: 'device',
+          sessionToken: 'token',
+        ),
+      );
+      final pairing = SupabaseDevicePairingRepository(
+        transport: guard,
+        secretStore: store,
+      );
+      await pairing.restoreOutcome(expectedDeviceType: 'kds');
+      final ticks = StreamController<void>();
+      final retry = Completer<void>();
+      final sync = KdsSyncCoordinator(
+        api: SyncPullApi(guard),
+        session: const SyncSession(pinSessionId: 'pin', deviceId: 'device'),
+        ticks: ticks.stream,
+        delay: (_) => retry.future,
+      );
+      addTearDown(() async {
+        await sync.dispose();
+        await ticks.close();
+      });
+      await sync.start();
+      expect(sync.state.status, KdsSyncStatus.data);
+      mode = 'offline';
+      expect(await pairing.heartbeat(), DeviceHeartbeatResult.offline);
+      ticks.add(null);
+      for (var i = 0; i < 8; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(wire.functions.where((f) => f == 'sync_pull'), hasLength(2));
+      mode = 'unknown';
+      await pairing.heartbeat();
+      await pairing.heartbeat();
+      await sync.refresh();
+      expect(sync.state.status, KdsSyncStatus.offlineStale);
+      mode = 'valid';
+      await pairing.heartbeat();
+      retry.complete();
+      for (var i = 0; i < 8; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(sync.state.status, KdsSyncStatus.data);
+      ticks.add(null);
+      for (var i = 0; i < 8; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(wire.functions.where((f) => f == 'sync_pull'), hasLength(4));
+    },
+  );
   ProviderContainer containerFor({
     required bool isDemoMode,
     SyncRpcTransport? transport,

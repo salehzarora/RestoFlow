@@ -20,12 +20,11 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show MethodCall, MethodChannel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
-    show DeviceContext;
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
-import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
@@ -53,11 +52,15 @@ class _ScriptedTransport implements SyncRpcTransport {
   _ScriptedTransport({this.onSyncPush});
 
   Object? Function(Map<String, dynamic> params)? onSyncPush;
+  Object? Function()? onDevice;
   final List<(String, Map<String, dynamic>)> calls = [];
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     calls.add((function, params));
+    if (function == 'restore_device_session' ||
+        function == 'heartbeat_device_session')
+      return onDevice?.call();
     if (function == 'start_pin_session') return 'pin-1';
     if (function == 'sync_push' && onSyncPush != null) {
       return onSyncPush!(params);
@@ -206,6 +209,111 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     }
   }
+
+  test(
+    'F1 live PIN and SharedPrefs pending order survive heartbeat error and unknown verdict then deliver',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = SharedPrefsOutboxStore(prefs);
+      final wire = _ScriptedTransport(
+        onSyncPush: (_) => throw const SyncTransportException(
+          SyncTransportErrorKind.transient,
+          code: '502',
+        ),
+      );
+      final response = {
+        'ok': true,
+        'device_id': 'dev-1',
+        'device_session_id': 'ds-1',
+        'organization_id': 'org-1',
+        'restaurant_id': 'rest-1',
+        'branch_id': 'branch-1',
+        'device_type': 'pos',
+      };
+      wire.onDevice = () => response;
+      final guard = DeviceSessionGuardedTransport(wire);
+      final secrets = InMemoryDeviceSessionSecretStore();
+      await secrets.write(
+        const DeviceSessionCredential(deviceId: 'dev-1', sessionToken: 'token'),
+      );
+      final pairing = SupabaseDevicePairingRepository(
+        transport: guard,
+        secretStore: secrets,
+      );
+      await pairing.restoreOutcome(expectedDeviceType: 'pos');
+      final c = realContainer(
+        transport: guard,
+        extra: [durableOutboxStoreProvider.overrideWithValue(store)],
+      );
+      final controller = c.read(posSessionControllerProvider.notifier)
+        ..clock = DateTime.now;
+      expect(
+        await controller.signInWithPin(
+          device: _device,
+          deviceId: 'dev-1',
+          deviceSessionId: 'ds-1',
+          employeeProfileId: 'emp-1',
+          pin: '4321',
+        ),
+        isNull,
+      );
+      await settle();
+      final original = _orderEntry();
+      await c.read(outboxRepositoryProvider).enqueue(original);
+      wire.onDevice = () => throw const SyncTransportException(
+        SyncTransportErrorKind.server,
+        code: '502',
+      );
+      expect(await pairing.heartbeat(), DeviceHeartbeatResult.offline);
+      final outbox = c.read(outboxControllerProvider.notifier);
+      await outbox.pushEntry(original.id);
+      await settle();
+      expect(c.read(posSyncSessionProvider)?.pinSessionId, 'pin-1');
+      expect(c.read(posSessionReauthNoticeProvider), isFalse);
+      expect(
+        outbox.entryById(original.id)!.syncState,
+        isNot(OutboxSyncState.authHold),
+      );
+      wire.onDevice = () => {'ok': true};
+      await pairing.heartbeat();
+      await pairing.heartbeat();
+      await outbox.retryEntry(original.id);
+      await settle();
+      expect(c.read(posSyncSessionProvider)?.pinSessionId, 'pin-1');
+      expect(c.read(posSessionReauthNoticeProvider), isFalse);
+      final restarted = RealOutboxRepository(
+        guard,
+        const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
+        store: SharedPrefsOutboxStore(prefs),
+      );
+      final pending = (await restarted.recentEntries()).single;
+      expect(pending.syncState, isNot(OutboxSyncState.authHold));
+      expect(pending.payloadJson, original.payloadJson);
+      expect(pending.localOperationId, original.localOperationId);
+      wire.onDevice = () => response;
+      wire.onSyncPush = _appliedEnvelope;
+      expect(await pairing.heartbeat(), DeviceHeartbeatResult.active);
+      await outbox.retryEntry(original.id);
+      await settle();
+      expect(outbox.entryById(original.id)!.syncState, OutboxSyncState.applied);
+      expect(c.read(posSyncSessionProvider)?.pinSessionId, 'pin-1');
+      final sent = wire.calls
+          .where(
+            (c) =>
+                c.$1 == 'sync_push' &&
+                ((c.$2['p_operations'] as List).single
+                        as Map)['operation_type'] ==
+                    'order.submit',
+          )
+          .toList();
+      expect(sent, hasLength(2));
+      expect(
+        (sent.first.$2['p_operations'] as List).single,
+        (sent.last.$2['p_operations'] as List).single,
+      );
+    },
+  );
 
   group('C6 — persist on establish (spec test 5)', () {
     test('a successful ONLINE sign-in persists the bounded record — '

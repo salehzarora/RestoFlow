@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,13 +10,18 @@ import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/main.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
+import 'package:restoflow_pos/src/pos_pairing_gate.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 
 class _HeartbeatWire implements SyncRpcTransport {
   bool revoked = false;
+  bool malformed = false;
+  int revocations = 0;
   int heartbeats = 0;
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (function == 'revoke_device_session') revocations++;
+    if (malformed) return {'ok': true};
     if (function == 'heartbeat_device_session') heartbeats++;
     if (revoked)
       return {'ok': false, 'error': 'invalid_session', 'reason': 'revoked'};
@@ -63,6 +69,7 @@ class _FakeOutcome extends _FakeRestorable
     implements DeviceSessionOutcomeManager {
   _FakeOutcome(this.outcome) : super(null);
   DeviceRestoreOutcome outcome;
+  Future<DeviceRestoreOutcome>? pending;
   int calls = 0;
   @override
   Future<DeviceRestoreOutcome> restoreOutcome({
@@ -70,6 +77,7 @@ class _FakeOutcome extends _FakeRestorable
   }) async {
     calls++;
     lastExpectedDeviceType = expectedDeviceType;
+    if (pending != null) return await pending!;
     return outcome;
   }
 }
@@ -129,6 +137,93 @@ Future<void> _pump(WidgetTester tester, Widget app) async {
 }
 
 void main() {
+  testWidgets(
+    'S4 completed local unpair ignores a late upgrade restore verdict',
+    (tester) async {
+      final repository = _FakeOutcome(const DeviceSessionRestoreRejected());
+      final pending = Completer<DeviceRestoreOutcome>();
+      repository.pending = pending.future;
+      final upgrade = UpgradableSyncTransport();
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: PosPairingGate(
+              repository: repository,
+              upgradeSignal: upgrade,
+              initialDevice: const DeviceContext(
+                organizationId: 'o',
+                restaurantId: 'r',
+                branchId: 'b',
+                deviceId: 'd',
+                deviceType: 'pos',
+                deviceSessionId: 'ds',
+              ),
+              signedInChild: const Text('live POS'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      upgrade.upgrade(_HeartbeatWire());
+      await tester.pump();
+      expect(repository.calls, 1);
+      await repository.unpair();
+      c.read(posDeviceContextProvider.notifier).set(null);
+      await tester.pumpAndSettle();
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      pending.complete(const DeviceSessionRestoreUnavailable());
+      await tester.pumpAndSettle();
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+    },
+  );
+  testWidgets(
+    'S3 cold unknown gate offers confirmed local repair after third automatic verdict',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(deviceId: 'd', sessionToken: 'token'),
+      );
+      final wire = _HeartbeatWire()..malformed = true;
+      final repo = SupabaseDevicePairingRepository(
+        transport: DeviceSessionGuardedTransport(wire),
+        secretStore: store,
+      );
+      await _pump(
+        tester,
+        PosApp(
+          demoMode: false,
+          devicePairingRepository: repo,
+          deviceStaffRepository: _FakeStaffDirectory(),
+        ),
+      );
+      expect(repo.consecutiveUnavailable, 2);
+      expect(find.byKey(const Key('device-session-repair')), findsNothing);
+      await tester.pump(const Duration(minutes: 15));
+      await tester.pumpAndSettle();
+      expect(repo.consecutiveUnavailable, 3);
+      await tester.tap(find.byKey(const Key('device-session-repair')));
+      await tester.pumpAndSettle();
+      expect(await store.read(), isNotNull);
+      await tester.tap(find.byKey(const Key('device-session-repair-cancel')));
+      await tester.pumpAndSettle();
+      expect(await store.read(), isNotNull);
+      await tester.tap(find.byKey(const Key('device-session-repair')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('device-session-repair-confirm')));
+      await tester.pumpAndSettle();
+      expect(await store.read(), isNull);
+      expect(wire.revocations, 0);
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'BIZBOT real repository heartbeat returns rejected device to activation',
     (tester) async {

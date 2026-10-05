@@ -205,7 +205,7 @@ void main() {
         SharedPrefsOutboxStore(await SharedPreferences.getInstance());
 
     test(
-      'BIZBOT device guard persists AUTH_HOLD with unchanged operation across restart',
+      'BIZBOT device guard keeps retryable work with unchanged operation across restart',
       () async {
         final wire = _RecordingTransport(
           (_, p) async => _envelope({
@@ -223,7 +223,10 @@ void main() {
         final entry = _entry();
         await first.enqueue(entry);
         final held = await first.push(entry.id);
-        expect(held.syncState, OutboxSyncState.authHold);
+        expect(held.syncState, OutboxSyncState.rejected);
+        expect(held.outcome, PosOrderOutcome.deliveryUnconfirmed);
+        expect(held.hasDefinitiveVerdict, isFalse);
+        expect(held.lastErrorKind, 'transient');
         expect(held.payloadJson, entry.payloadJson);
         expect(wire.params, isEmpty);
         final persisted = (await SharedPreferences.getInstance()).getString(
@@ -236,17 +239,10 @@ void main() {
           store: await freshStore(),
         );
         final restored = (await restarted.recentEntries()).single;
-        expect(restored.syncState, OutboxSyncState.authHold);
+        expect(restored.syncState, OutboxSyncState.rejected);
         expect(restored.localOperationId, entry.localOperationId);
         expect(restored.payloadJson, entry.payloadJson);
         guard.allow();
-        // A device heartbeat alone never releases a human-session auth hold.
-        expect(
-          (await restarted.push(entry.id)).syncState,
-          OutboxSyncState.authHold,
-        );
-        expect(wire.params, isEmpty);
-        expect(await restarted.releaseAuthHold(), 1);
         expect(
           (await restarted.push(entry.id)).syncState,
           OutboxSyncState.applied,

@@ -1,8 +1,8 @@
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 /// Stops NEW protected RPCs after an unproven or rejected device-session
-/// verdict. Recovery calls remain available. The auth refusal uses the existing
-/// POS AUTH_HOLD path; no queued operation or payload is changed here.
+/// verdict. Recovery calls remain available. This is retryable transport
+/// evidence, never human-session rejection or POS AUTH_HOLD.
 class DeviceSessionGuardedTransport implements SyncRpcTransport {
   DeviceSessionGuardedTransport(this._inner);
 
@@ -25,8 +25,8 @@ class DeviceSessionGuardedTransport implements SyncRpcTransport {
     if (_blocked && !_recovery.contains(function)) {
       return Future<Object?>.error(
         const SyncTransportException(
-          SyncTransportErrorKind.auth,
-          code: 'device_session_unavailable',
+          SyncTransportErrorKind.transient,
+          code: 'device_session_unverified',
         ),
       );
     }

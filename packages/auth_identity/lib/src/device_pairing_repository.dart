@@ -119,9 +119,17 @@ final class DeviceSessionRestoreRejected extends DeviceRestoreOutcome {
 enum DeviceSessionRejectionReason { expired, revoked, invalid }
 
 /// Unknown, malformed or wrong-surface replies prove no authority. Preserve
-/// the credential for a retry, but never offer cached scope as offline proof.
+/// the credential for a retry. Previously verified cached scope may support
+/// the POS's independently bounded offline PIN path; it is not new authority.
 final class DeviceSessionRestoreUnavailable extends DeviceRestoreOutcome {
-  const DeviceSessionRestoreUnavailable();
+  const DeviceSessionRestoreUnavailable({this.cachedContext});
+  final DeviceContext? cachedContext;
+}
+
+/// An explicitly confirmed local recovery action, separate from server revoke.
+abstract interface class DeviceSessionLocalRepairManager {
+  int get consecutiveUnavailable;
+  Future<void> clearLocalPairing();
 }
 
 /// The server could not be reached (transport-level failure); stored state is

@@ -29,11 +29,43 @@ class _Wire implements SyncRpcTransport {
 
 void main() {
   test(
+    'S1 monotonic resume freshness skips 59 seconds and verifies at 60',
+    () async {
+      var elapsed = Duration.zero;
+      var calls = 0;
+      final scheduler = DeviceSessionHeartbeatScheduler(
+        elapsed: () => elapsed,
+        heartbeat: () async {
+          calls++;
+          return DeviceHeartbeatResult.active;
+        },
+        onResult: (_) {},
+        periodicTimer: (_, callback) => _Timer(callback),
+      );
+      scheduler.replaceSession(active: true);
+      scheduler.setForeground(true);
+      await _flush();
+      elapsed = const Duration(seconds: 59);
+      scheduler.setForeground(false);
+      scheduler.setForeground(true);
+      await _flush();
+      expect(calls, 1);
+      elapsed = const Duration(seconds: 60);
+      scheduler.setForeground(false);
+      scheduler.setForeground(true);
+      await _flush();
+      expect(calls, 2);
+      scheduler.dispose();
+    },
+  );
+  test(
     'foreground startup, 15 minute cadence, resume; no background/unpaired work',
     () async {
       var calls = 0;
       final timers = <_Timer>[];
+      var elapsed = Duration.zero;
       final scheduler = DeviceSessionHeartbeatScheduler(
+        elapsed: () => elapsed,
         heartbeat: () async {
           calls++;
           return DeviceHeartbeatResult.active;
@@ -58,6 +90,7 @@ void main() {
       expect(timers.last.isActive, isFalse);
       scheduler.request();
       expect(calls, 2);
+      elapsed = const Duration(seconds: 60);
       scheduler.setForeground(true);
       await _flush();
       expect(calls, 3);
@@ -105,7 +138,7 @@ void main() {
     },
   );
   test(
-    'blocked protected calls produce auth hold evidence without changing payloads',
+    'blocked protected calls produce retryable transient evidence without changing payloads',
     () async {
       final wire = _Wire();
       final guard = DeviceSessionGuardedTransport(wire)..block();
@@ -125,7 +158,7 @@ void main() {
             isA<SyncTransportException>().having(
               (e) => e.kind,
               'kind',
-              SyncTransportErrorKind.auth,
+              SyncTransportErrorKind.transient,
             ),
           ),
         );

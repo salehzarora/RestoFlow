@@ -42,9 +42,11 @@ class DeviceSessionHeartbeatScheduler {
     required void Function(DeviceHeartbeatResult) onResult,
     Duration interval = const Duration(minutes: 15),
     Timer Function(Duration, void Function())? periodicTimer,
+    Duration Function()? elapsed,
   }) : _heartbeat = heartbeat,
        _onResult = onResult,
        _interval = interval,
+       _elapsed = elapsed ?? _monotonicClock(),
        _periodicTimer =
            periodicTimer ??
            ((delay, tick) => Timer.periodic(delay, (_) => tick()));
@@ -52,6 +54,13 @@ class DeviceSessionHeartbeatScheduler {
   final Future<DeviceHeartbeatResult> Function() _heartbeat;
   final void Function(DeviceHeartbeatResult) _onResult;
   final Duration _interval;
+  final Duration Function() _elapsed;
+  Duration? _lastSuccess;
+  static Duration Function() _monotonicClock() {
+    final stopwatch = Stopwatch()..start();
+    return () => stopwatch.elapsed;
+  }
+
   final Timer Function(Duration, void Function()) _periodicTimer;
   Timer? _timer;
   bool _active = false;
@@ -62,27 +71,42 @@ class DeviceSessionHeartbeatScheduler {
   int _generation = 0;
 
   void replaceSession({required bool active}) {
+    _lastSuccess = null;
     _generation++;
     _active = active;
     _restart();
   }
 
-  void setForeground(bool foreground) {
-    if (_foreground == foreground || _disposed) return;
+  void setForeground(bool foreground, {bool resume = false}) {
+    if (_disposed) return;
+    if (_foreground == foreground) {
+      if (foreground && resume) _requestOnResume();
+      return;
+    }
     _generation++;
     _foreground = foreground;
-    _restart();
+    _restart(resume: foreground);
   }
 
   bool get _mayRun => !_disposed && _active && _foreground;
 
-  void _restart() {
+  void _restart({bool resume = false}) {
     _timer?.cancel();
     _timer = null;
     _pending = false;
     if (!_mayRun) return;
     _timer = _periodicTimer(_interval, request);
-    request();
+    if (resume) {
+      _requestOnResume();
+    } else {
+      request();
+    }
+  }
+
+  void _requestOnResume() {
+    final last = _lastSuccess;
+    if (last == null || _elapsed() - last >= const Duration(seconds: 60))
+      request();
   }
 
   void request() {
@@ -101,10 +125,13 @@ class DeviceSessionHeartbeatScheduler {
     try {
       result = await _heartbeat();
     } catch (_) {
-      result = DeviceHeartbeatResult.unavailable;
+      result = DeviceHeartbeatResult.offline;
     }
     _inFlight = false;
-    if (_mayRun && generation == _generation) _onResult(result);
+    if (_mayRun && generation == _generation) {
+      if (result == DeviceHeartbeatResult.active) _lastSuccess = _elapsed();
+      _onResult(result);
+    }
     if (_pending && _mayRun) {
       _pending = false;
       request();

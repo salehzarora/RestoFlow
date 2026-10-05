@@ -145,7 +145,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
         DeviceSessionRestored(:final context) => context,
         DeviceSessionRestoreOffline(:final cachedContext) => cachedContext,
         DeviceSessionRestoreRejected() => null,
-        DeviceSessionRestoreUnavailable() => null,
+        DeviceSessionRestoreUnavailable(:final cachedContext) => cachedContext,
       };
     } else {
       restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
@@ -239,7 +239,12 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
         });
       }
       if (next == null && _device != null) {
-        setState(() => _device = null);
+        _restoreGeneration++;
+        setState(() {
+          _device = null;
+          _unavailable = false;
+          _offline = false;
+        });
       }
     });
     if (_restoring) {
@@ -248,6 +253,17 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
     if (_unavailable && _device == null) {
       return DeviceSessionUnavailableView(
         onRetry: () => _restore(widget.repository as DeviceSessionManager),
+        repairManager: widget.repository is DeviceSessionLocalRepairManager
+            ? widget.repository as DeviceSessionLocalRepairManager
+            : null,
+        onRepaired: () {
+          if (!mounted) return;
+          setState(() {
+            _unavailable = false;
+            _device = null;
+          });
+          _publish(null);
+        },
       );
     }
     if (_offline) {

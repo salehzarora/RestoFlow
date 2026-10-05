@@ -204,7 +204,7 @@ void main() {
     });
 
     test(
-      'an AUTH-kind transport failure is unavailable WITHOUT evidence and '
+      'an AUTH-kind transport failure is offline WITHOUT evidence and '
       'clears nothing (matching the pre-existing keep-the-secret rule)',
       () async {
         final store = await seededStore();
@@ -218,7 +218,7 @@ void main() {
           store,
         );
         final outcome = await repo.restoreOutcome(expectedDeviceType: 'pos');
-        expect(outcome, isA<DeviceSessionRestoreUnavailable>());
+        expect(outcome, isA<DeviceSessionRestoreOffline>());
         expect(await store.read(), _cred);
         expect(
           await store.readCachedContext(expectedDeviceId: 'dev-1'),

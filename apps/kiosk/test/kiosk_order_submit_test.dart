@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show displayOrderCode;
 import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_live_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_menu_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_order_submit.dart';
 import 'package:restoflow_kiosk/src/screens/kiosk_shell.dart';
+import 'package:restoflow_kiosk/src/screens/kiosk_activation.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_flow_controller.dart';
 import 'package:restoflow_kiosk/src/state/kiosk_live_runtime.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -214,6 +216,52 @@ Future<void> _fillCart(ProviderContainer c, {String note = ''}) async {
 }
 
 void main() {
+  testWidgets(
+    'S2 invalidation outside active gate then pairing permits an order',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final h = _harness();
+      addTearDown(h.container.dispose);
+      final pairing = _RepairPairing();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: h.container,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            locale: const Locale('en'),
+            home: KioskPairingGate(
+              outcomes: pairing,
+              pairing: pairing,
+              shellBuilder: (_) => const SizedBox(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      h.container.read(kioskLiveProvider.notifier).signalSessionInvalid();
+      await tester.pump();
+      expect(h.container.read(kioskLiveProvider).sessionInvalid, isTrue);
+      await tester.enterText(
+        find.byKey(const Key('kiosk-activation-code')),
+        'REPAIR',
+      );
+      await tester.tap(find.byKey(const Key('kiosk-activation-submit')));
+      await tester.pumpAndSettle();
+      await _fillCart(h.container);
+      h.container.read(kioskFlowProvider.notifier).placeOrder();
+      await tester.pumpAndSettle();
+      expect(h.container.read(kioskLiveProvider).sessionInvalid, isFalse);
+      expect(h.container.read(kioskFlowProvider).screen, KioskScreen.confirm);
+      expect(
+        h.rpc.calls.where((c) => c.$1 == 'kiosk_submit_order'),
+        hasLength(1),
+      );
+    },
+  );
   group('tax math (server parity, integer only)', () {
     const excl = KioskBranchTax(enabled: true, rateBp: 1700, mode: 'exclusive');
     const incl = KioskBranchTax(enabled: true, rateBp: 1700, mode: 'inclusive');
@@ -1964,6 +2012,32 @@ void main() {
       reject = false;
     });
   });
+}
+
+class _RepairPairing
+    implements DevicePairingRepository, DeviceSessionOutcomeManager {
+  @override
+  Future<DeviceRestoreOutcome> restoreOutcome({
+    String? expectedDeviceType,
+  }) async => const DeviceSessionRestoreRejected();
+  @override
+  Future<DeviceContext?> restore({String? expectedDeviceType}) async => null;
+  @override
+  Future<void> unpair() async {}
+  @override
+  Future<Result<DeviceContext, PairingFailure>> pairWithCode({
+    required String code,
+    required String deviceType,
+  }) async => const Success(
+    DeviceContext(
+      organizationId: 'org',
+      restaurantId: 'restaurant',
+      branchId: 'branch',
+      deviceId: 'dev-1',
+      deviceSessionId: 'session',
+      deviceType: 'kiosk',
+    ),
+  );
 }
 
 extension on ProviderContainer {

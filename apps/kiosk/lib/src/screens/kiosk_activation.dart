@@ -72,6 +72,7 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     if (!mounted || generation != _restoreGeneration) return;
     switch (outcome) {
       case DeviceSessionRestored(:final context):
+        ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
         widget.onActivated?.call(context);
         setState(() => _phase = _GatePhase.active);
       case DeviceSessionRestoreRejected():
@@ -86,6 +87,7 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
 
   void _onPaired(DeviceContext context) {
     _restoreGeneration++;
+    ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
     widget.onActivated?.call(context);
     setState(() => _phase = _GatePhase.active);
   }
@@ -115,7 +117,15 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
       _GatePhase.offline => _KioskGateScaffold(
         child: _KioskReconnectPanel(onRetry: _restore),
       ),
-      _GatePhase.unavailable => DeviceSessionUnavailableView(onRetry: _restore),
+      _GatePhase.unavailable => DeviceSessionUnavailableView(
+        onRetry: _restore,
+        repairManager: widget.outcomes is DeviceSessionLocalRepairManager
+            ? widget.outcomes as DeviceSessionLocalRepairManager
+            : null,
+        onRepaired: () {
+          if (mounted) setState(() => _phase = _GatePhase.needsActivation);
+        },
+      ),
       _GatePhase.needsActivation => KioskActivationScreen(
         pairing: widget.pairing,
         onPaired: _onPaired,

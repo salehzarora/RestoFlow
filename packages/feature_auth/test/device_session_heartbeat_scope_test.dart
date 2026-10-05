@@ -15,12 +15,23 @@ const _device = DeviceContext(
   deviceSessionId: 'session',
 );
 
-class _Manager implements DeviceSessionHeartbeatManager {
+class _Manager
+    implements DeviceSessionHeartbeatManager, DeviceSessionLocalRepairManager {
   final changes = StreamController<DeviceSessionChange>.broadcast();
   @override
   DeviceContext? activeDevice;
   DeviceHeartbeatResult result = DeviceHeartbeatResult.active;
   int calls = 0;
+  int repairs = 0;
+  @override
+  int get consecutiveUnavailable =>
+      result == DeviceHeartbeatResult.unavailable ? calls : 0;
+  @override
+  Future<void> clearLocalPairing() async {
+    repairs++;
+    change(null);
+  }
+
   @override
   Stream<DeviceSessionChange> get sessionChanges => changes.stream;
   @override
@@ -55,8 +66,28 @@ class _CartState extends State<_Cart> {
 
 class _RestoreWire implements SyncRpcTransport {
   bool malformed = false;
+  bool oldServer = false;
+  bool offline = false;
+  int restoreCalls = 0;
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (oldServer && function == 'heartbeat_device_session') {
+      throw const SyncTransportException(
+        SyncTransportErrorKind.server,
+        code: 'PGRST202',
+      );
+    }
+    if (function == 'restore_device_session') {
+      restoreCalls++;
+      if (offline) {
+        // Bound a broken immediate-retry loop so this regression fails promptly.
+        if (restoreCalls > 5) return {'ok': true};
+        throw const SyncTransportException(
+          SyncTransportErrorKind.server,
+          code: '502',
+        );
+      }
+    }
     if (malformed && function == 'restore_device_session') return {'ok': true};
     return {
       'ok': true,
@@ -74,8 +105,10 @@ Widget _app(
   DeviceSessionHeartbeatManager manager, {
   VoidCallback? invalid,
   ValueChanged<DeviceContext>? restored,
+  bool isWeb = false,
 }) => DeviceSessionAppHost(
   manager: manager,
+  isWeb: isWeb,
   onInvalidSession: invalid ?? () {},
   onRestored: restored ?? (_) {},
   buildApp: (navigatorKey, sessionBuilder) => MaterialApp(
@@ -88,8 +121,127 @@ Widget _app(
   ),
 );
 void main() {
+  testWidgets('S1 visible web inactive keeps fifteen minute heartbeats', (
+    tester,
+  ) async {
+    final manager = _Manager()..activeDevice = _device;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(_app(manager, isWeb: true));
+    await tester.pumpAndSettle();
+    expect(manager.calls, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(minutes: 15));
+    await tester.pumpAndSettle();
+    expect(manager.calls, 2);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump(const Duration(minutes: 15));
+    expect(manager.calls, 2);
+    await tester.pumpWidget(const SizedBox());
+    await manager.changes.close();
+  });
   testWidgets(
-    'unknown restore gates existing dialog and retries without replacing navigator or cart',
+    'F3 old server restore outage retries at cadence without immediate loop',
+    (tester) async {
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(
+          deviceId: 'device',
+          sessionToken: 'token',
+        ),
+      );
+      final wire = _RestoreWire();
+      final guard = DeviceSessionGuardedTransport(wire);
+      final repo = SupabaseDevicePairingRepository(
+        transport: guard,
+        secretStore: store,
+      );
+      await repo.restoreOutcome(expectedDeviceType: 'pos');
+      wire.malformed = true;
+      await repo.restoreOutcome(expectedDeviceType: 'pos');
+      await repo.restoreOutcome(expectedDeviceType: 'pos');
+      expect(guard.isBlocked, isTrue);
+      wire.oldServer = true;
+      wire.offline = true;
+      wire.restoreCalls = 0;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(_app(repo));
+      await tester.pumpAndSettle();
+      expect(wire.restoreCalls, 1);
+      expect(find.byKey(const Key('cart')), findsOneWidget);
+      wire.offline = false;
+      wire.malformed = false;
+      await tester.pump(const Duration(minutes: 15));
+      await tester.pumpAndSettle();
+      expect(guard.isBlocked, isFalse);
+      expect(wire.restoreCalls, 2);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets('F1 unknown heartbeat keeps navigator interactive', (
+    tester,
+  ) async {
+    final manager = _Manager()
+      ..activeDevice = _device
+      ..result = DeviceHeartbeatResult.unavailable;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(_app(manager));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cart')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('cart')));
+    await tester.pump();
+    expect(find.text('cart 1'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await manager.changes.close();
+  });
+  testWidgets('S1 resume within sixty seconds skips redundant heartbeat', (
+    tester,
+  ) async {
+    final manager = _Manager()..activeDevice = _device;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(_app(manager));
+    await tester.pumpAndSettle();
+    expect(manager.calls, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(manager.calls, 1);
+    await tester.pumpWidget(const SizedBox());
+    await manager.changes.close();
+  });
+  testWidgets(
+    'S3 third unavailable offers local repair only after confirmation',
+    (tester) async {
+      final manager = _Manager()
+        ..activeDevice = _device
+        ..result = DeviceHeartbeatResult.unavailable;
+      var invalidations = 0;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(_app(manager, invalid: () => invalidations++));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('device-session-repair')), findsNothing);
+      await tester.tap(find.byKey(const Key('device-session-retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('device-session-repair')), findsNothing);
+      await tester.tap(find.byKey(const Key('device-session-retry')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('device-session-repair')));
+      await tester.pumpAndSettle();
+      expect(manager.repairs, 0);
+      await tester.tap(find.byKey(const Key('device-session-repair-cancel')));
+      await tester.pumpAndSettle();
+      expect(manager.repairs, 0);
+      await tester.tap(find.byKey(const Key('device-session-repair')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('device-session-repair-confirm')));
+      await tester.pumpAndSettle();
+      expect(manager.repairs, 1);
+      expect(invalidations, 1);
+      await tester.pumpWidget(const SizedBox());
+      await manager.changes.close();
+    },
+  );
+  testWidgets(
+    'unknown restore preserves existing dialog and retries without replacing navigator or cart',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final store = InMemoryDeviceSessionSecretStore();
@@ -122,7 +274,7 @@ void main() {
       wire.malformed = true;
       await repo.restoreOutcome(expectedDeviceType: 'pos');
       await tester.pumpAndSettle();
-      expect(find.text('protected dialog'), findsNothing);
+      expect(find.text('protected dialog'), findsOneWidget);
       expect(find.byType(DeviceSessionUnavailableView), findsOneWidget);
       wire.malformed = false;
       await tester.tap(find.byKey(const Key('device-session-retry')));
@@ -165,7 +317,7 @@ void main() {
   testWidgets(
     'startup, restore, foreground cadence and resume cancel correctly',
     (tester) async {
-      final manager = _Manager();
+      final manager = _Manager()..result = DeviceHeartbeatResult.offline;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpWidget(_app(manager));
       await tester.pumpAndSettle();
@@ -190,7 +342,7 @@ void main() {
     },
   );
   testWidgets(
-    'unknown hides protected navigator including dialogs; retry preserves cart',
+    'unknown keeps navigator and dialogs usable; retry preserves cart',
     (tester) async {
       final manager = _Manager()..activeDevice = _device;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -210,7 +362,7 @@ void main() {
       manager.result = DeviceHeartbeatResult.unavailable;
       await tester.pump(const Duration(minutes: 15));
       await tester.pumpAndSettle();
-      expect(find.text('protected dialog'), findsNothing);
+      expect(find.text('protected dialog'), findsOneWidget);
       expect(find.byType(DeviceSessionUnavailableView), findsOneWidget);
       expect(find.byType(DevicePairingScreen), findsNothing);
       manager.result = DeviceHeartbeatResult.active;

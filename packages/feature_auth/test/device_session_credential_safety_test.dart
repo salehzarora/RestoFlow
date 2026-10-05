@@ -149,6 +149,8 @@ void main() {
           await SharedPreferencesDeviceSessionSecretStore(prefs).read(),
           _credential,
         );
+        expect(guard.isBlocked, isFalse);
+        await repo.restoreOutcome(expectedDeviceType: 'pos');
         expect(guard.isBlocked, isTrue);
         expect(prefs.getString('outbox-sentinel'), 'queued-order');
       },
@@ -254,6 +256,7 @@ void main() {
       ]) {
         transport.handler = (_, _) => reply;
         expect(await repo.heartbeat(), DeviceHeartbeatResult.unavailable);
+        await repo.heartbeat();
         expect(await store.read(), _credential);
         expect(guard.isBlocked, isTrue);
         await expectLater(
@@ -262,7 +265,7 @@ void main() {
             isA<SyncTransportException>().having(
               (e) => e.kind,
               'kind',
-              SyncTransportErrorKind.auth,
+              SyncTransportErrorKind.transient,
             ),
           ),
         );
@@ -279,7 +282,7 @@ void main() {
         SyncTransportErrorKind.server,
         code: 'PGRST202',
       );
-      expect(await repo.heartbeat(), DeviceHeartbeatResult.unavailable);
+      expect(await repo.heartbeat(), DeviceHeartbeatResult.offline);
       expect(
         guard.isBlocked,
         isTrue,
