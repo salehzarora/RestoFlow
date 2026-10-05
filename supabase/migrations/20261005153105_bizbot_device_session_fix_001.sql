@@ -37,6 +37,7 @@ declare
   v_restaurant public.restaurants%rowtype;
   v_organization public.organizations%rowtype;
   v_now timestamptz := now();
+  v_renewed boolean := false;
   v_invalid jsonb := jsonb_build_object('ok', false, 'error', 'invalid_session',
                                        'entity', 'device_session', 'reason', 'invalid');
 begin
@@ -54,24 +55,26 @@ begin
   v_sid := v_session.id;
 
   -- Lock hierarchy before device -> pairing -> session. Scope SHARE locks permit
-  -- peer heartbeats but serialize tombstone/suspension. NO KEY UPDATE on the
+  -- peer heartbeats but serialize scope changes. Suspension is reversible and
+  -- never destroys device authority; each operational RPC retains its own
+  -- active-scope gate before calling renewal. NO KEY UPDATE on the
   -- identity rows avoids conflicting with FK KEY SHARE locks during redemption.
   -- Owner revoke orders device -> pairing -> session; PIN revoke pairing ->
   -- session; self-unpair session only. Recheck AFTER waiting, never revive flags.
   select o.* into v_organization from public.organizations o
     where o.id = v_session.organization_id for share;
-  if not found or v_organization.deleted_at is not null or v_organization.status <> 'active' then
+  if not found or v_organization.deleted_at is not null then
     return v_invalid;
   end if;
   select r.* into v_restaurant from public.restaurants r
     where r.id = v_session.restaurant_id and r.organization_id = v_organization.id for share;
-  if not found or v_restaurant.deleted_at is not null or v_restaurant.status <> 'active' then
+  if not found or v_restaurant.deleted_at is not null then
     return v_invalid;
   end if;
   select b.* into v_branch from public.branches b
     where b.id = v_session.branch_id and b.organization_id = v_organization.id
       and b.restaurant_id = v_restaurant.id for share;
-  if not found or v_branch.deleted_at is not null or v_branch.status <> 'active' then
+  if not found or v_branch.deleted_at is not null then
     return v_invalid;
   end if;
   select d.* into v_device from public.devices d
@@ -111,8 +114,15 @@ begin
     update public.device_sessions
       set expires_at = v_now + app.device_session_idle_window()
       where id = v_sid;
-    update public.devices set last_seen_at = v_now where id = p_device_id;
     v_session.expires_at := v_now + app.device_session_idle_window();
+    v_renewed := true;
+  end if;
+  -- Renewal always records activity. Even when the deadline is throttled,
+  -- initialize fresh devices and refresh activity at most hourly. Read from the
+  -- locked device row, so an older concurrent transaction never moves it back.
+  if v_renewed or v_device.last_seen_at is null
+     or v_device.last_seen_at < v_now - interval '1 hour' then
+    update public.devices set last_seen_at = v_now where id = p_device_id;
   end if;
 
   return jsonb_build_object('ok', true, 'entity', 'device_session',
@@ -124,7 +134,7 @@ end;
 $$;
 revoke all on function app.renew_device_session(uuid, text) from public, anon, authenticated;
 comment on function app.renew_device_session(uuid, text) is
-  'BIZBOT-DEVICE-SESSION-FIX-001 internal token-proven renewal. Full live scope, device, pairing and session validation; serialized against revocation. NULL or a deadline strictly below now()+30d-1h renews to now()+30d and updates devices.last_seen_at. Expired/revoked/inactive never revive. No token rotation, employee authority, absolute cap, or direct client grant.';
+  'BIZBOT-DEVICE-SESSION-FIX-001 internal token-proven renewal. Full non-deleted scope, device, pairing and session validation; reversible scope suspension is allowed; serialized against revocation. NULL or a deadline strictly below now()+30d-1h renews to now()+30d and updates devices.last_seen_at. Throttled valid calls also refresh NULL or older-than-1h activity. Expired/revoked/inactive never revive. No token rotation, employee authority, absolute cap, or direct client grant.';
 
 create or replace function app.restore_device_session(
   p_device_id uuid,
@@ -974,8 +984,11 @@ begin
     join public.devices d on d.id = ds.device_id
     join public.branches b on b.organization_id = ds.organization_id
       and b.restaurant_id = ds.restaurant_id and b.id = ds.branch_id and b.deleted_at is null
+      and b.status = 'active'
     join public.restaurants r on r.organization_id = ds.organization_id
-      and r.id = ds.restaurant_id and r.deleted_at is null
+      and r.id = ds.restaurant_id and r.deleted_at is null and r.status = 'active'
+    join public.organizations org on org.id = ds.organization_id
+      and org.deleted_at is null and org.status = 'active'
     where ds.device_id = p_device_id
       and ds.session_token_ref = v_hash
       and ds.is_active and ds.revoked_at is null
@@ -983,7 +996,9 @@ begin
       and dp.status = 'active' and dp.revoked_at is null and dp.deleted_at is null
       and d.is_active and d.deleted_at is null
       and d.device_type = 'kiosk';                          -- kiosk-only capability gate
-  -- BIZBOT-DEVICE-SESSION-FIX-001: context consumers are VOLATILE below.
+  -- BIZBOT-DEVICE-SESSION-FIX-001: operational active-scope gates run
+  -- BEFORE renewal. Restore/heartbeat keep a suspended scope paired.
+  -- Context consumers are VOLATILE below.
   if o_session is not null
      and not (app.renew_device_session(p_device_id, p_session_token) ->> 'ok')::boolean then
     o_session := null; o_org := null; o_rest := null; o_branch := null;
@@ -1040,6 +1055,7 @@ begin
       'branch_label',      b.name,
       'status',            coalesce(lp.status, 'none'),
       'device_pairing_id', lp.id,
+      'code_expires_at',   lp.code_expires_at,
       'has_open_session',  coalesce(ls.is_valid, false),
       'session_expires_at', ls.expires_at,
       'last_seen_at',      d.last_seen_at
@@ -1047,15 +1063,16 @@ begin
     from public.devices d
     join public.branches b on b.id = d.branch_id
     left join lateral (
-      select p.id, p.status
+      select p.id, p.status, p.code_expires_at
       from public.device_pairings p
       where p.device_id = d.id and p.deleted_at is null
-      order by p.created_at desc
+      order by p.created_at desc, p.id desc
       limit 1
     ) lp on true
     -- Prefer the newest usable session; otherwise expose the newest historical
     -- deadline. The flag and expiry describe the SAME row even for legacy
-    -- devices with multiple sessions. NULL expiry remains valid until activity.
+    -- devices with multiple sessions. Reversible scope suspension is not
+    -- session expiry. NULL expiry remains valid until activity.
     left join lateral (
       select ds.expires_at,
         (ds.is_active and ds.revoked_at is null
@@ -1064,9 +1081,9 @@ begin
           and d.is_active
           and ds.organization_id = d.organization_id
           and ds.restaurant_id = d.restaurant_id and ds.branch_id = d.branch_id
-          and b.status = 'active' and b.deleted_at is null
-          and r.status = 'active' and r.deleted_at is null
-          and org.status = 'active' and org.deleted_at is null) as is_valid
+          and b.deleted_at is null
+          and r.deleted_at is null
+          and org.deleted_at is null) as is_valid
       from public.device_sessions ds
       join public.device_pairings dp on dp.id = ds.device_pairing_id
         and dp.device_id = ds.device_id and dp.organization_id = ds.organization_id
