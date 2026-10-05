@@ -901,7 +901,7 @@
   "adminTokenStartedTitle": "מושב המכשיר התחיל",
   "adminTokenStartedSubtitle": "טען אסימון מושב זה למכשיר כדי לאמת אותו.",
   "adminSessionOpen": "המושב פעיל",
-  "adminSessionExpired": "תוקף המושב פג",
+  "adminSessionExpired": "תוקף ההפעלה פג",
   "adminNewCodeForDevice": "קוד חדש למכשיר הזה",
   "adminNewCodeForDeviceConfirm": "ליצור קוד חדש למכשיר הזה? צימוד באמצעות הקוד החדש יסיים את ההפעלות הקודמות שלו.",
   "adminDeviceCreated": "המכשיר נוסף",

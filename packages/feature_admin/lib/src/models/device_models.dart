@@ -22,6 +22,21 @@ enum DeviceLifecycleStatus {
 /// enforces (kiosk added by KIOSK-001; the customer self-service surface).
 const List<String> kDeviceTypes = ['pos', 'kds', 'kiosk'];
 
+/// A monotonic clock owned by a fetched snapshot, never by a mounted tile.
+/// Start it before the request so network latency cannot extend a deadline.
+class AdminDeviceSnapshotClock {
+  AdminDeviceSnapshotClock({Duration Function()? elapsed})
+    : _elapsed = elapsed ?? _startStopwatch();
+
+  final Duration Function() _elapsed;
+  Duration get elapsed => _elapsed();
+
+  static Duration Function() _startStopwatch() {
+    final watch = Stopwatch()..start();
+    return () => watch.elapsed;
+  }
+}
+
 /// One device + its current pairing state, shown on the Devices screen.
 class AdminDevice {
   const AdminDevice({
@@ -35,6 +50,8 @@ class AdminDevice {
     this.sessionExpiresAt,
     this.lastSeenAt,
     this.serverNow,
+    this.codeExpiresAt,
+    this.snapshotClock,
   });
 
   final String id;
@@ -57,18 +74,30 @@ class AdminDevice {
 
   /// Server time when the session metadata was read; never the browser clock.
   final DateTime? serverNow;
+  final DateTime? codeExpiresAt;
+  final AdminDeviceSnapshotClock? snapshotClock;
+
+  DateTime? get estimatedServerNow =>
+      serverNow?.add(snapshotClock?.elapsed ?? Duration.zero);
+
+  bool get isCodeExpired =>
+      status == DeviceLifecycleStatus.codeIssued &&
+      codeExpiresAt != null &&
+      estimatedServerNow != null &&
+      !codeExpiresAt!.isAfter(estimatedServerNow!);
 
   bool get isSessionActive =>
       hasOpenSession &&
       (sessionExpiresAt == null ||
-          (serverNow != null && sessionExpiresAt!.isAfter(serverNow!)));
+          (estimatedServerNow != null &&
+              sessionExpiresAt!.isAfter(estimatedServerNow!)));
 
   /// A missing session, or a revoked pairing, is not an expired session.
   bool get isSessionExpired =>
       status == DeviceLifecycleStatus.active &&
       sessionExpiresAt != null &&
-      serverNow != null &&
-      !sessionExpiresAt!.isAfter(serverNow!);
+      estimatedServerNow != null &&
+      !sessionExpiresAt!.isAfter(estimatedServerNow!);
 
   AdminDevice copyWith({
     DeviceLifecycleStatus? status,
@@ -77,6 +106,7 @@ class AdminDevice {
     DateTime? sessionExpiresAt,
     DateTime? lastSeenAt,
     DateTime? serverNow,
+    DateTime? codeExpiresAt,
   }) => AdminDevice(
     id: id,
     label: label,
@@ -88,6 +118,8 @@ class AdminDevice {
     sessionExpiresAt: sessionExpiresAt ?? this.sessionExpiresAt,
     lastSeenAt: lastSeenAt ?? this.lastSeenAt,
     serverNow: serverNow ?? this.serverNow,
+    codeExpiresAt: codeExpiresAt ?? this.codeExpiresAt,
+    snapshotClock: snapshotClock,
   );
 }
 

@@ -81,4 +81,33 @@ void main() {
     expect(copied.serverNow, now);
     expect(copied.lastSeenAt, now);
   });
+
+  test('snapshot elapsed time expires session and code without wall clock', () {
+    var elapsed = Duration.zero;
+    final clock = AdminDeviceSnapshotClock(elapsed: () => elapsed);
+    final session = AdminDevice(
+      id: 'device',
+      label: 'POS',
+      deviceType: 'pos',
+      branchLabel: 'Branch',
+      status: DeviceLifecycleStatus.active,
+      hasOpenSession: true,
+      serverNow: now,
+      sessionExpiresAt: now.add(const Duration(seconds: 5)),
+      codeExpiresAt: now.add(const Duration(seconds: 5)),
+      snapshotClock: clock,
+    );
+    final code = session.copyWith(status: DeviceLifecycleStatus.codeIssued);
+    expect(session.isSessionActive, isTrue);
+    expect(code.isCodeExpired, isFalse);
+    elapsed = const Duration(seconds: 5);
+    expect(session.isSessionActive, isFalse);
+    expect(session.isSessionExpired, isTrue);
+    expect(code.isCodeExpired, isTrue);
+    expect(code.snapshotClock, same(clock));
+    expect(
+      code.copyWith(status: DeviceLifecycleStatus.revoked).isCodeExpired,
+      isFalse,
+    );
+  });
 }

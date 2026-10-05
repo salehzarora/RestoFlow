@@ -2928,7 +2928,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminSessionOpen => 'המושב פעיל';
 
   @override
-  String get adminSessionExpired => 'תוקף המושב פג';
+  String get adminSessionExpired => 'תוקף ההפעלה פג';
 
   @override
   String get adminNewCodeForDevice => 'קוד חדש למכשיר הזה';

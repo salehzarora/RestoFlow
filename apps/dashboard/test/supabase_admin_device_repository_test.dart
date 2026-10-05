@@ -58,6 +58,55 @@ final _uuidRe = RegExp(
 
 void main() {
   group('loadDevices', () {
+    test(
+      'fetch clock starts before transport and is shared by rows and copies',
+      () async {
+        var elapsed = Duration.zero;
+        var started = false;
+        final t = _FakeTransport((_, _) {
+          expect(started, isTrue);
+          elapsed = const Duration(seconds: 3);
+          return {
+            'ok': true,
+            'server_now': '2035-01-01T12:00:00Z',
+            'devices': [
+              for (final id in ['d1', 'd2'])
+                {
+                  'device_id': id,
+                  'status': 'code_issued',
+                  'has_open_session': true,
+                  'session_expires_at': '2035-01-01T12:00:05Z',
+                  'code_expires_at': '2035-01-01T12:00:05Z',
+                },
+            ],
+          };
+        });
+        final repo = SupabaseAdminDeviceRepository(
+          transport: t,
+          scope: _branchScope,
+          currentUserId: () => 'user-1',
+          snapshotClock: () {
+            started = true;
+            return AdminDeviceSnapshotClock(elapsed: () => elapsed);
+          },
+        );
+        final result = await repo.loadDevices();
+        final devices =
+            (result as Success<List<AdminDevice>, AdminFailure>).value;
+        expect(
+          devices.first.estimatedServerNow,
+          DateTime.utc(2035, 1, 1, 12, 0, 3),
+        );
+        expect(devices.first.snapshotClock, same(devices.last.snapshotClock));
+        final copied = devices.first.copyWith();
+        expect(copied.snapshotClock, same(devices.first.snapshotClock));
+        expect(copied.isCodeExpired, isFalse);
+        elapsed = const Duration(seconds: 5);
+        expect(copied.isCodeExpired, isTrue);
+        expect(copied.isSessionActive, isFalse);
+      },
+    );
+
     test('sends the scope + parses the device rows', () async {
       final t = _FakeTransport(
         (fn, p) => {

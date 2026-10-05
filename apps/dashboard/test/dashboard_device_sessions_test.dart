@@ -20,6 +20,9 @@ class _Transport implements SyncRpcTransport {
   int loads = 0;
   Completer<void>? loadingGate;
   final issuedFor = <String>[];
+  final revokedFor = <String>[];
+  DateTime? codeExpiresAt;
+  bool hideDevice = false;
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
@@ -30,36 +33,44 @@ class _Transport implements SyncRpcTransport {
         'ok': true,
         if (metadata) 'server_now': now.toIso8601String(),
         'devices': [
-          {
-            'device_id': 'existing-device',
-            'label': 'Counter POS',
-            'device_type': 'pos',
-            'branch_label': 'Main',
-            'status': status,
-            'device_pairing_id': status == 'none' ? null : 'pairing',
-            'has_open_session':
-                !expired && status != 'revoked' && status != 'none',
-            if (metadata)
-              'session_expires_at': legacyNull
-                  ? null
-                  : (expired ? now : now.add(lifetime)).toIso8601String(),
-            if (metadata)
-              'last_seen_at': now
-                  .subtract(const Duration(days: 1))
-                  .toIso8601String(),
-          },
+          if (!hideDevice)
+            {
+              'device_id': 'existing-device',
+              'label': 'Counter POS',
+              'device_type': 'pos',
+              'branch_label': 'Main',
+              'status': status,
+              'device_pairing_id': status == 'none' ? null : 'pairing',
+              'code_expires_at': codeExpiresAt?.toIso8601String(),
+              'has_open_session':
+                  !expired && status != 'revoked' && status != 'none',
+              if (metadata)
+                'session_expires_at': legacyNull
+                    ? null
+                    : (expired ? now : now.add(lifetime)).toIso8601String(),
+              if (metadata)
+                'last_seen_at': now
+                    .subtract(const Duration(days: 1))
+                    .toIso8601String(),
+            },
         ],
       };
     }
     if (function == 'issue_device_enrollment_code') {
       issuedFor.add(params['p_device_id'] as String);
       status = 'code_issued';
+      codeExpiresAt = now.add(const Duration(minutes: 5));
       return {
         'ok': true,
         'device_id': params['p_device_id'],
         'device_pairing_id': 'replacement-pairing',
         'enrollment_code': 'test-code',
       };
+    }
+    if (function == 'revoke_device_management') {
+      revokedFor.add(params['p_device_id'] as String);
+      status = 'revoked';
+      return {'ok': true};
     }
     throw StateError('Unexpected RPC $function');
   }
@@ -117,6 +128,197 @@ Future<void> _pump(
 }
 
 void main() {
+  for (final elapsedOffscreen in [4, 8]) {
+    testWidgets(
+      'recreated tile retains fetch deadline after $elapsedOffscreen seconds offscreen',
+      (tester) async {
+        var elapsed = Duration.zero;
+        final transport = _Transport()..lifetime = const Duration(seconds: 6);
+        final repository = SupabaseAdminDeviceRepository(
+          transport: transport,
+          scope: AdminScope.demo,
+          currentUserId: () => 'manager',
+          snapshotClock: () => AdminDeviceSnapshotClock(elapsed: () => elapsed),
+        );
+        final result = await repository.loadDevices();
+        final retained = result.fold((rows) => rows, (_) => <AdminDevice>[]);
+        var visible = true;
+        final container = ProviderContainer(
+          overrides: [
+            ...adminFeatureOverrides(
+              scope: AdminScope.demo,
+              repository: repository,
+            ),
+            adminDevicesProvider.overrideWith(
+              (ref) async =>
+                  visible ? [retained.single.copyWith()] : <AdminDevice>[],
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await _pump(tester, transport, cachedContainer: container);
+        expect(find.text('Session active'), findsOneWidget);
+        visible = false;
+        container.invalidate(adminDevicesProvider);
+        await tester.pumpAndSettle();
+        expect(find.text('Counter POS'), findsNothing);
+        elapsed = Duration(seconds: elapsedOffscreen);
+        visible = true;
+        container.invalidate(adminDevicesProvider);
+        await tester.pumpAndSettle();
+        if (elapsedOffscreen < 6) {
+          expect(find.text('Session active'), findsOneWidget);
+          elapsed = const Duration(seconds: 6);
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('Session active'), findsNothing);
+        expect(find.text('Session expired'), findsOneWidget);
+        expect(transport.loads, 1, reason: 'The same snapshot was retained.');
+      },
+    );
+  }
+
+  testWidgets('unused code expires while the list remains mounted', (
+    tester,
+  ) async {
+    final transport = _Transport(status: 'code_issued');
+    transport.codeExpiresAt = transport.now.add(const Duration(seconds: 2));
+    await _pump(tester, transport, pairingPanel: (_, _) async {});
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.adminDevStatusCodeExpired), findsNothing);
+    transport.now = transport.codeExpiresAt!;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.adminDevStatusCodeExpired), findsOneWidget);
+    expect(find.text('New code for this device'), findsOneWidget);
+    expect(transport.loads, 2);
+  });
+
+  for (final action in ['Revoke', 'New code for this device']) {
+    for (final removeTile in [false, true]) {
+      testWidgets(
+        'confirmed $action survives resume${removeTile ? ' and tile removal' : ''}',
+        (tester) async {
+          final transport = _Transport();
+          PairingPanelRequest? shown;
+          await _pump(
+            tester,
+            transport,
+            pairingPanel: (context, request) async {
+              expect(context.mounted, isTrue);
+              expect(Navigator.of(context), isNotNull);
+              shown = request;
+            },
+          );
+          await tester.tap(find.text(action));
+          await tester.pumpAndSettle();
+          final gate = Completer<void>();
+          transport.loadingGate = gate;
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pump();
+          await tester.pump();
+          if (removeTile) {
+            transport.hideDevice = true;
+            gate.complete();
+            await tester.pumpAndSettle();
+            expect(find.text('Counter POS'), findsNothing);
+          }
+          await tester.tap(
+            find.widgetWithText(
+              FilledButton,
+              action == 'Revoke' ? 'Revoke' : 'Issue code',
+            ),
+          );
+          await tester.pump();
+          if (!gate.isCompleted) gate.complete();
+          await tester.pumpAndSettle();
+          expect(
+            action == 'Revoke' ? transport.revokedFor : transport.issuedFor,
+            ['existing-device'],
+          );
+          if (action != 'Revoke') expect(shown?.code, 'test-code');
+          if (action == 'Revoke') {
+            final l10n = await AppLocalizations.delegate.load(
+              const Locale('en'),
+            );
+            expect(find.text(l10n.adminDeviceUpdated), findsOneWidget);
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('removed tile still presents its one-time replacement code', (
+    tester,
+  ) async {
+    final transport = _Transport();
+    await _pump(tester, transport);
+    await tester.tap(find.text('New code for this device'));
+    await tester.pumpAndSettle();
+    transport.hideDevice = true;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Counter POS'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Issue code'));
+    await tester.pumpAndSettle();
+    expect(transport.issuedFor, ['existing-device']);
+    expect(find.text('test-code'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'refresh keeps tile mounted without authoritative session labels',
+    (tester) async {
+      final transport = _Transport();
+      await _pump(tester, transport);
+      final tile = tester.element(
+        find.byKey(const ValueKey('existing-device')),
+      );
+      final gate = Completer<void>();
+      transport.loadingGate = gate;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Counter POS'), findsOneWidget);
+      expect(
+        tester.element(find.byKey(const ValueKey('existing-device'))),
+        same(tile),
+      );
+      expect(find.text('Session active'), findsNothing);
+      expect(find.text('Session expired'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Session active'), findsOneWidget);
+    },
+  );
+
+  testWidgets('unused code can be replaced before and after expiry', (
+    tester,
+  ) async {
+    final transport = _Transport(status: 'none');
+    await _pump(tester, transport, pairingPanel: (_, _) async {});
+    await tester.tap(find.text('Issue code'));
+    await tester.pumpAndSettle();
+    expect(transport.issuedFor, ['existing-device']);
+    expect(find.text('New code for this device'), findsOneWidget);
+    transport.now = transport.codeExpiresAt!;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.adminDevStatusCodeExpired), findsOneWidget);
+    await tester.tap(find.text('New code for this device'));
+    await tester.pumpAndSettle();
+    expect(transport.issuedFor, hasLength(1));
+    await tester.tap(find.widgetWithText(FilledButton, 'Issue code'));
+    await tester.pumpAndSettle();
+    expect(transport.issuedFor, ['existing-device', 'existing-device']);
+  });
+
   for (final delayed in [false, true]) {
     testWidgets(
       'cached active snapshot is refreshed on screen entry${delayed ? ' without displaying stale data' : ''}',

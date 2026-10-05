@@ -37,10 +37,12 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
     required AdminScope scope,
     required String? Function() currentUserId,
     int Function()? nonce,
+    AdminDeviceSnapshotClock Function()? snapshotClock,
   }) : _t = transport,
        _scope = scope,
        _uid = currentUserId,
-       _nonce = nonce ?? _microNonce;
+       _nonce = nonce ?? _microNonce,
+       _snapshotClock = snapshotClock ?? AdminDeviceSnapshotClock.new;
 
   final SyncRpcTransport _t;
   final AdminScope _scope;
@@ -51,6 +53,7 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
   /// button actions, never an auto-retry loop (unlike RF-151 onboarding), so a
   /// per-call id is correct here. Injectable for deterministic tests.
   final int Function() _nonce;
+  final AdminDeviceSnapshotClock Function() _snapshotClock;
 
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 
@@ -58,6 +61,7 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
 
   @override
   Future<AdminResult<List<AdminDevice>>> loadDevices() async {
+    final clock = _snapshotClock();
     final Object? raw;
     try {
       raw = await _t.invoke('list_devices', <String, dynamic>{
@@ -97,6 +101,8 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
           sessionExpiresAt: expiresAt,
           lastSeenAt: _timestamp(row['last_seen_at']),
           serverNow: serverNow,
+          codeExpiresAt: _timestamp(row['code_expires_at']),
+          snapshotClock: clock,
         ),
       );
     }

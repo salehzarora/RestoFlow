@@ -62,9 +62,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final snapshot = ref.watch(adminDevicesProvider);
-    final devices = _refreshOnMount
-        ? const AsyncLoading<List<AdminDevice>>()
-        : snapshot;
+    final refreshing = _refreshOnMount || snapshot.isLoading;
     final scope = ref.watch(adminScopeProvider);
     final manage = canManage(scope.actingRole);
 
@@ -85,9 +83,14 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
             ),
           ],
         ),
+        SizedBox(
+          height: 2,
+          child: refreshing && snapshot.hasValue
+              ? const LinearProgressIndicator()
+              : null,
+        ),
         Expanded(
-          child: devices.when(
-            skipLoadingOnRefresh: false,
+          child: snapshot.when(
             loading: AdminStateView.loading,
             error: (e, _) => AdminStateView.fromFailure(
               context,
@@ -138,6 +141,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
                         key: ValueKey(d.id),
                         device: d,
                         canManage: manage,
+                        sessionMetadataFresh: !refreshing,
                       ),
                     ),
                   if (revoked.isNotEmpty) ...[
@@ -274,9 +278,15 @@ class _RevokedDevicesSection extends StatelessWidget {
 }
 
 class _DeviceTile extends ConsumerStatefulWidget {
-  const _DeviceTile({super.key, required this.device, required this.canManage});
+  const _DeviceTile({
+    super.key,
+    required this.device,
+    required this.canManage,
+    this.sessionMetadataFresh = true,
+  });
   final AdminDevice device;
   final bool canManage;
+  final bool sessionMetadataFresh;
   @override
   ConsumerState<_DeviceTile> createState() => _DeviceTileState();
 }
@@ -285,6 +295,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   bool _busy = false;
   bool _confirmingCode = false;
   bool _sessionExpiryReached = false;
+  bool _codeExpiryReached = false;
   Timer? _sessionExpiryTimer;
 
   @override
@@ -302,12 +313,20 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   void _watchSessionExpiry() {
     _sessionExpiryTimer?.cancel();
     _sessionExpiryReached = false;
+    _codeExpiryReached = false;
     final device = widget.device;
-    final expiresAt = device.sessionExpiresAt;
-    final serverNow = device.serverNow;
-    if (!device.isSessionActive || expiresAt == null || serverNow == null) {
-      return;
-    }
+    final serverNow = device.estimatedServerNow;
+    if (serverNow == null) return;
+    final deadlines = [
+      if (device.isSessionActive && device.sessionExpiresAt != null)
+        device.sessionExpiresAt!,
+      if (device.status == DeviceLifecycleStatus.codeIssued &&
+          !device.isCodeExpired &&
+          device.codeExpiresAt != null)
+        device.codeExpiresAt!,
+    ]..sort();
+    if (deadlines.isEmpty) return;
+    final expiresAt = deadlines.first;
     final remaining = expiresAt.difference(serverNow);
     const maxDelay = Duration(days: 1);
     // Re-read when expiry is reached: activity may have renewed it meanwhile.
@@ -317,7 +336,12 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
       remaining > maxDelay ? maxDelay : remaining,
       () {
         if (!mounted) return;
-        setState(() => _sessionExpiryReached = remaining <= maxDelay);
+        setState(() {
+          _sessionExpiryReached =
+              remaining <= maxDelay && expiresAt == device.sessionExpiresAt;
+          _codeExpiryReached =
+              remaining <= maxDelay && expiresAt == device.codeExpiresAt;
+        });
         ref.invalidate(adminDevicesProvider);
       },
     );
@@ -341,66 +365,65 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   void _snack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
-  Future<void> _replaceCode() async {
+  Future<void> _replaceCode() => _issueCode(confirmReplacement: true);
+
+  Future<void> _issueCode({bool confirmReplacement = false}) async {
     if (_busy || _confirmingCode) return;
     final l10n = AppLocalizations.of(context);
-    final deviceId = widget.device.id;
-    setState(() => _confirmingCode = true);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.adminNewCodeForDevice),
-        content: Text(l10n.adminNewCodeForDeviceConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.adminCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.adminIssueCode),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    setState(() => _confirmingCode = false);
-    if (confirmed != true ||
-        widget.device.id != deviceId ||
-        !widget.canManage ||
-        widget.device.status != DeviceLifecycleStatus.active) {
-      return;
-    }
-    await _issueCode();
-  }
-
-  Future<void> _issueCode() async {
-    // LIVE-OPS-001: prefer the host-provided QR pairing panel (Dashboard); when
-    // absent, keep the plain one-time-code dialog. Read the seam before the await.
+    final device = widget.device;
+    final controller = _ctrl;
     final present = ref.read(devicePairingPanelProvider);
-    setState(() => _busy = true);
-    final r = await _ctrl.issueEnrollmentCode(widget.device.id);
-    if (!mounted) return;
-    setState(() => _busy = false);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(rootNavigator.context);
+    if (confirmReplacement) {
+      setState(() => _confirmingCode = true);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(l10n.adminNewCodeForDevice),
+          content: Text(l10n.adminNewCodeForDeviceConfirm),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.adminCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.adminIssueCode),
+            ),
+          ],
+        ),
+      );
+      if (mounted) setState(() => _confirmingCode = false);
+      if (confirmed != true) return;
+    }
+    // Confirmation belongs to the selected device, even if a refresh removes
+    // its tile. Authorization remains server-side; feedback belongs to the root.
+    if (mounted) setState(() => _busy = true);
+    final r = await controller.issueEnrollmentCode(device.id);
+    if (mounted) setState(() => _busy = false);
     final issued = r.fold<EnrollmentCodeIssued?>((v) => v, (f) {
-      _onFailure(f);
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(adminFailureMessage(l10n, f))),
+        );
+      }
       return null;
     });
-    if (issued == null || !mounted) return;
+    if (issued == null || !rootNavigator.mounted) return;
     if (present != null) {
       await present(
-        context,
+        rootNavigator.context,
         PairingPanelRequest(
-          deviceLabel: widget.device.label,
-          deviceType: widget.device.deviceType,
+          deviceLabel: device.label,
+          deviceType: device.deviceType,
           code: issued.code,
         ),
       );
       return;
     }
-    final l10n = AppLocalizations.of(context);
     await OneTimeSecretDialog.show(
-      context,
+      rootNavigator.context,
       title: l10n.adminCodeIssuedTitle,
       subtitle: l10n.adminCodeIssuedSubtitle,
       secret: issued.code,
@@ -439,7 +462,13 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   }
 
   Future<void> _revoke() async {
+    if (_busy || _confirmingCode) return;
     final l10n = AppLocalizations.of(context);
+    final controller = _ctrl;
+    final deviceId = widget.device.id;
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(rootNavigator.context);
+    setState(() => _confirmingCode = true);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -457,8 +486,22 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
-    await _transition(() => _ctrl.revokeDevice(widget.device.id));
+    if (mounted) setState(() => _confirmingCode = false);
+    if (confirmed != true) return;
+    if (mounted) setState(() => _busy = true);
+    final result = await controller.revokeDevice(deviceId);
+    if (mounted) setState(() => _busy = false);
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.fold(
+            (_) => l10n.adminDeviceUpdated,
+            (failure) => adminFailureMessage(l10n, failure),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Whether the device currently has a revocable pairing/session.
@@ -490,9 +533,12 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
           // "you don't have permission" toast. So it is NOT offered here (a
           // revoked device is terminal). none/codeExpired/rejected are still
           // active devices where re-issuing a fresh code is valid.
-          DeviceLifecycleStatus.none ||
-          DeviceLifecycleStatus.codeExpired ||
-          DeviceLifecycleStatus.rejected => (
+          DeviceLifecycleStatus.codeExpired when manual => (
+            label: l10n.adminIssueCode,
+            icon: Icons.qr_code_2,
+            run: _issueCode,
+          ),
+          DeviceLifecycleStatus.none || DeviceLifecycleStatus.rejected => (
             label: l10n.adminIssueCode,
             icon: Icons.qr_code_2,
             run: _issueCode,
@@ -517,7 +563,9 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
             icon: Icons.vpn_key_outlined,
             run: _startSession,
           ),
-          DeviceLifecycleStatus.active => (
+          DeviceLifecycleStatus.active ||
+          DeviceLifecycleStatus.codeIssued ||
+          DeviceLifecycleStatus.codeExpired => (
             label: l10n.adminNewCodeForDevice,
             icon: Icons.qr_code_2,
             run: _replaceCode,
@@ -542,14 +590,22 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     final semantic =
         theme.extension<RestoflowSemanticColors>() ??
         RestoflowSemanticColors.of(theme.brightness);
-    final visual = deviceStatusVisual(context, widget.device.status);
+    final visual = deviceStatusVisual(
+      context,
+      widget.device.isCodeExpired || _codeExpiryReached
+          ? DeviceLifecycleStatus.codeExpired
+          : widget.device.status,
+    );
     final warningStyle = RestoflowTone.warning.styleOf(theme);
     final sessionActive =
-        widget.device.isSessionActive && !_sessionExpiryReached;
+        widget.sessionMetadataFresh &&
+        widget.device.isSessionActive &&
+        !_sessionExpiryReached;
     final sessionExpired =
-        widget.device.isSessionExpired ||
-        (_sessionExpiryReached &&
-            widget.device.status == DeviceLifecycleStatus.active);
+        widget.sessionMetadataFresh &&
+        (widget.device.isSessionExpired ||
+            (_sessionExpiryReached &&
+                widget.device.status == DeviceLifecycleStatus.active));
     final lastSeen = widget.device.lastSeenAt?.toLocal();
     final material = MaterialLocalizations.of(context);
     final lastActivity = lastSeen == null
