@@ -547,30 +547,31 @@ class PosBootCoordinator {
       return null;
     }
     final upgradable = UpgradableSyncTransport();
+    final transport = DeviceSessionGuardedTransport(upgradable);
     return _degradedSeams = (
       pairing: SupabaseDevicePairingRepository(
-        transport: upgradable,
+        transport: transport,
         secretStore: store,
       ),
       staff: SupabaseDeviceStaffRepository(
-        transport: upgradable,
+        transport: transport,
         secretStore: store,
       ),
-      transport: upgradable,
+      transport: transport,
       // No authenticated client exists: images are absent (imageless cards)…
       imageResolver: const _AbsentDeviceImageUrlResolver(),
       printerAssignments: SupabaseDevicePrinterAssignmentsRepository(
-        transport: upgradable,
+        transport: transport,
         secretStore: store,
       ),
       // …and the receipt logo is absent (text-only receipts). Both fail-soft.
       receiptLogo: const _AbsentDeviceReceiptLogoReader(),
       shiftClosePolicy: SupabaseDeviceShiftClosePolicyRepository(
-        transport: upgradable,
+        transport: transport,
         secretStore: store,
       ),
       branchTax: SupabaseDeviceBranchTaxRepository(
-        transport: upgradable,
+        transport: transport,
         secretStore: store,
       ),
       upgradable: upgradable,
@@ -582,7 +583,7 @@ class PosBootCoordinator {
 
   /// The normal ONLINE seams — unchanged wiring from before Pass A.
   PosDeviceSeams _realSeams(PosAnonymousDeviceSession session) {
-    final transport = session.transport;
+    final transport = DeviceSessionGuardedTransport(session.transport);
     final store = _secretStore;
     return (
       pairing: SupabaseDevicePairingRepository(
@@ -744,21 +745,38 @@ class PosApp extends ConsumerWidget {
           }
         : gate;
 
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context).posAppTitle,
-      localizationsDelegates: restoflowLocalizationsDelegates,
-      supportedLocales: kSupportedLocales,
-      // RF-118 fix B: the user-selected language drives the app (RTL for ar/he).
-      locale: ref.watch(localeControllerProvider),
-      localeResolutionCallback: restoflowResolveLocale,
-      debugShowCheckedModeBanner: false,
-      // POS-THEME-NAVBAR-POLISH-001: the shared light brand theme + the
-      // bundled Alexandria / Rubik / Inter pairing, built for THIS device's
-      // chosen theme pair (persisted per device; default Navy + Ember). The
-      // MaterialApp rebuilds when the choice changes, so every surface —
-      // including modal sheets on the root navigator — follows it.
-      theme: posPremiumTheme(pair: ref.watch(posDeviceThemePairProvider)),
-      home: home,
+    final locale = ref.watch(localeControllerProvider);
+    final theme = posPremiumTheme(pair: ref.watch(posDeviceThemePairProvider));
+    return DeviceSessionAppHost(
+      manager: !demo && pairingRepo is DeviceSessionHeartbeatManager
+          ? pairingRepo as DeviceSessionHeartbeatManager
+          : null,
+      onInvalidSession: () {
+        ref
+            .read(posSessionControllerProvider.notifier)
+            .handleServerAuthRefusal();
+        ref.read(posDeviceContextProvider.notifier).set(null);
+      },
+      onRestored: (context) =>
+          ref.read(posDeviceContextProvider.notifier).set(context),
+      buildApp: (navigatorKey, sessionBuilder) => MaterialApp(
+        onGenerateTitle: (context) => AppLocalizations.of(context).posAppTitle,
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        // RF-118 fix B: the user-selected language drives the app (RTL for ar/he).
+        locale: locale,
+        localeResolutionCallback: restoflowResolveLocale,
+        debugShowCheckedModeBanner: false,
+        // POS-THEME-NAVBAR-POLISH-001: the shared light brand theme + the
+        // bundled Alexandria / Rubik / Inter pairing, built for THIS device's
+        // chosen theme pair (persisted per device; default Navy + Ember). The
+        // MaterialApp rebuilds when the choice changes, so every surface —
+        // including modal sheets on the root navigator — follows it.
+        theme: theme,
+        home: home,
+        navigatorKey: navigatorKey,
+        builder: sessionBuilder,
+      ),
     );
   }
 }

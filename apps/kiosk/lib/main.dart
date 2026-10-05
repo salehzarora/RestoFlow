@@ -109,6 +109,7 @@ Widget buildKioskBootRoot({
     return ProviderScope(
       overrides: kioskRealOverrides(seams),
       child: KioskApp(
+        heartbeatManager: seams.pairing,
         home: KioskTicker(
           child: Consumer(
             builder: (context, ref, _) => KioskPairingGate(
@@ -175,7 +176,7 @@ Future<KioskBootResult> kioskBootstrap(SharedPreferences prefs) async {
     final session = await SupabaseAuthBootstrap(
       config: config,
     ).createAnonymousDeviceSession();
-    transport = session.transport;
+    transport = DeviceSessionGuardedTransport(session.transport);
     // The POS-proven egress cache: one signing batch per menu load, reused
     // until near expiry — never a per-image request storm.
     images = CachingDeviceImageUrlResolver(session.imageUrlResolver);
@@ -403,23 +404,35 @@ class _KioskGateApp extends StatelessWidget {
 }
 
 class KioskApp extends ConsumerWidget {
-  const KioskApp({super.key, this.home});
+  const KioskApp({super.key, this.home, this.heartbeatManager});
 
   /// Real mode injects the gated tree; null = the Phase-1 fixture shell.
   final Widget? home;
+  final DeviceSessionHeartbeatManager? heartbeatManager;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(kioskFlowProvider.select((s) => s.lang));
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context).kioskStart,
-      debugShowCheckedModeBanner: false,
-      theme: kioskTheme(),
-      locale: Locale(lang),
-      localizationsDelegates: restoflowLocalizationsDelegates,
-      supportedLocales: kSupportedLocales,
-      localeResolutionCallback: restoflowResolveLocale,
-      home: home ?? const KioskTicker(child: KioskShell()),
+    return DeviceSessionAppHost(
+      manager: heartbeatManager,
+      onInvalidSession: () {
+        ref.read(kioskDeviceContextProvider.notifier).state = null;
+        ref.read(kioskLiveProvider.notifier).signalSessionInvalid();
+      },
+      onRestored: (context) =>
+          ref.read(kioskDeviceContextProvider.notifier).state = context,
+      buildApp: (navigatorKey, sessionBuilder) => MaterialApp(
+        onGenerateTitle: (context) => AppLocalizations.of(context).kioskStart,
+        debugShowCheckedModeBanner: false,
+        theme: kioskTheme(),
+        locale: Locale(lang),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        localeResolutionCallback: restoflowResolveLocale,
+        home: home ?? const KioskTicker(child: KioskShell()),
+        navigatorKey: navigatorKey,
+        builder: sessionBuilder,
+      ),
     );
   }
 }

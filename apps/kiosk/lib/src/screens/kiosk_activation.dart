@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show pairingCodeFromUrl;
+    show pairingCodeFromUrl, DeviceSessionUnavailableView;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kiosk_fixtures.dart';
 import '../design/kiosk_theme.dart';
 import '../state/kiosk_live_runtime.dart';
+import '../state/kiosk_staff_access.dart' show kioskDeviceContextProvider;
 import '../widgets/kiosk_chrome.dart';
 
 /// KIOSK-001 Phase 3 — the STAFF/deployment device gate around the customer
@@ -17,7 +18,7 @@ import '../widgets/kiosk_chrome.dart';
 /// Launch order (§owner spec): restore the stored device session through the
 /// canonical `restore_device_session` path with `expectedDeviceType: 'kiosk'`
 /// — Restored enters the customer attract flow; Rejected (missing/revoked/
-/// expired/wrong-type; the repository has already CLEARED the local
+/// expired; the repository has already CLEARED the local
 /// credential) lands on the branded activation screen; Offline shows the
 /// V2 reconnect state with retry (ONLINE-REQUIRED: a kiosk never enters the
 /// customer flow on stale evidence, and no device is ever created here —
@@ -50,9 +51,10 @@ class KioskPairingGate extends ConsumerStatefulWidget {
   ConsumerState<KioskPairingGate> createState() => _KioskPairingGateState();
 }
 
-enum _GatePhase { restoring, needsActivation, offline, active }
+enum _GatePhase { restoring, needsActivation, offline, active, unavailable }
 
 class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
+  int _restoreGeneration = 0;
   _GatePhase _phase = _GatePhase.restoring;
 
   @override
@@ -62,11 +64,12 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
   }
 
   Future<void> _restore() async {
+    final generation = ++_restoreGeneration;
     setState(() => _phase = _GatePhase.restoring);
     final outcome = await widget.outcomes.restoreOutcome(
       expectedDeviceType: KioskPairingGate.expectedDeviceType,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _restoreGeneration) return;
     switch (outcome) {
       case DeviceSessionRestored(:final context):
         widget.onActivated?.call(context);
@@ -76,16 +79,22 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
       case DeviceSessionRestoreOffline():
         // ONLINE-REQUIRED: no cached entry into the customer flow.
         setState(() => _phase = _GatePhase.offline);
+      case DeviceSessionRestoreUnavailable():
+        setState(() => _phase = _GatePhase.unavailable);
     }
   }
 
   void _onPaired(DeviceContext context) {
+    _restoreGeneration++;
     widget.onActivated?.call(context);
     setState(() => _phase = _GatePhase.active);
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(kioskDeviceContextProvider, (previous, next) {
+      if (next != null && _phase == _GatePhase.unavailable) _onPaired(next);
+    });
     // A live read proved the session dead → re-validate (the repository
     // clears rejected credentials, landing back on activation).
     ref.listen(kioskLiveProvider.select((s) => s.sessionInvalid), (
@@ -106,6 +115,7 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
       _GatePhase.offline => _KioskGateScaffold(
         child: _KioskReconnectPanel(onRetry: _restore),
       ),
+      _GatePhase.unavailable => DeviceSessionUnavailableView(onRetry: _restore),
       _GatePhase.needsActivation => KioskActivationScreen(
         pairing: widget.pairing,
         onPaired: _onPaired,

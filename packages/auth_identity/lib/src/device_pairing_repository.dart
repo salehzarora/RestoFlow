@@ -67,7 +67,7 @@ abstract interface class DevicePairingRepository {
 /// the backend and returns the server-validated [DeviceContext], or null when there
 /// is no valid stored session (fail-closed — the caller then shows the pairing UI).
 /// When [expectedDeviceType] is given (`pos`/`kds`), a restored session for any
-/// OTHER device type is rejected (null) and its LOCAL secret is cleared, so a
+/// OTHER device type is rejected (null) while its LOCAL secret is preserved, so a
 /// misplaced token can never unlock the wrong surface (a KDS session must never
 /// unlock a POS); the session is NOT revoked server-side — it may legitimately
 /// belong to the real device of that type.
@@ -86,7 +86,7 @@ abstract interface class DeviceSessionManager {
 ///  * [DeviceSessionRestored] — the server re-verified the stored token; the
 ///    authoritative context is fresh.
 ///  * [DeviceSessionRestoreRejected] — a SERVER VERDICT (invalid/revoked
-///    session, or a valid session of the wrong surface type). The stored
+///    session). The stored
 ///    secret AND the cached pairing scope have been cleared (fail closed).
 ///  * [DeviceSessionRestoreOffline] — a TRANSPORT-level failure: nothing was
 ///    proven either way, so the secret and cached scope are PRESERVED for a
@@ -109,7 +109,19 @@ final class DeviceSessionRestored extends DeviceRestoreOutcome {
 /// A server VERDICT rejected the stored session; secret + cached scope are
 /// cleared by the repository before this is returned.
 final class DeviceSessionRestoreRejected extends DeviceRestoreOutcome {
-  const DeviceSessionRestoreRejected();
+  const DeviceSessionRestoreRejected({
+    this.reason = DeviceSessionRejectionReason.invalid,
+  });
+
+  final DeviceSessionRejectionReason reason;
+}
+
+enum DeviceSessionRejectionReason { expired, revoked, invalid }
+
+/// Unknown, malformed or wrong-surface replies prove no authority. Preserve
+/// the credential for a retry, but never offer cached scope as offline proof.
+final class DeviceSessionRestoreUnavailable extends DeviceRestoreOutcome {
+  const DeviceSessionRestoreUnavailable();
 }
 
 /// The server could not be reached (transport-level failure); stored state is

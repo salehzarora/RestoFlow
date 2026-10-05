@@ -56,6 +56,9 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
 
   DeviceContext? _device;
   bool _restoring = false;
+  bool _offline = false;
+  bool _unavailable = false;
+  int _restoreGeneration = 0;
 
   @override
   void initState() {
@@ -81,13 +84,27 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
-    final restored = await manager.restore(
-      expectedDeviceType: _expectedDeviceType,
-    );
-    if (!mounted) return;
+    final generation = ++_restoreGeneration;
+    DeviceContext? restored;
+    var offline = false;
+    var unavailable = false;
+    if (manager is DeviceSessionOutcomeManager) {
+      final outcome = await manager.restoreOutcome(
+        expectedDeviceType: _expectedDeviceType,
+      );
+      offline = outcome is DeviceSessionRestoreOffline;
+      unavailable = outcome is DeviceSessionRestoreUnavailable;
+      if (outcome case DeviceSessionRestored(:final context))
+        restored = context;
+    } else {
+      restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
+    }
+    if (!mounted || generation != _restoreGeneration) return;
     setState(() {
       _device = restored;
       _restoring = false;
+      _offline = offline;
+      _unavailable = unavailable;
     });
     _publish(restored);
   }
@@ -101,6 +118,13 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
     // the session, so the app falls back to this gate which then restores to
     // a cleared secret store => pairing screen.)
     ref.listen<DeviceContext?>(kdsDeviceContextProvider, (previous, next) {
+      if (next != null && _unavailable) {
+        setState(() {
+          _device = next;
+          _unavailable = false;
+          _offline = false;
+        });
+      }
       if (next == null && _device != null) {
         setState(() => _device = null);
       }
@@ -124,6 +148,16 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
         ),
       );
     }
+    if (_offline) {
+      return OfflineBootView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+      );
+    }
+    if (_unavailable) {
+      return DeviceSessionUnavailableView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+      );
+    }
     // Enter ONLY for a paired device of THIS surface's type; the repo enforces
     // this on restore too, but the gate re-checks so an injected/restored
     // context of the wrong type can never unlock the kitchen board.
@@ -138,6 +172,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
       repository: widget.repository,
       deviceType: _expectedDeviceType,
       onPaired: (context) {
+        _restoreGeneration++;
         setState(() => _device = context);
         _publish(context);
       },
