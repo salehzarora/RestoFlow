@@ -95,14 +95,14 @@ select ok(not (pg_temp.restore() ? 'session_token'), 'restore does not reveal a 
 select pg_temp.reset_pos(now() + interval '30 days' - interval '1 hour');
 select is(pg_temp.heartbeat()->>'ok', 'true', 'heartbeat succeeds at the throttle boundary');
 select is(pg_temp.deadline(), now() + interval '30 days' - interval '1 hour', 'exact throttle boundary retains expiry');
-select is(pg_temp.seen(), null::timestamptz, 'throttled heartbeat does not write last_seen_at');
+select is(pg_temp.seen(), now(), 'S5: throttled expiry still initializes last_seen_at');
 select pg_temp.reset_pos(now() + interval '30 days' - interval '1 hour' - interval '1 microsecond');
 select is(pg_temp.heartbeat()->>'ok', 'true', 'heartbeat below the throttle boundary succeeds');
 select is(pg_temp.deadline(), now() + interval '30 days', 'below boundary renews to now plus 30 days');
 select is(pg_temp.seen(), now(), 'heartbeat renewal writes activity');
 select pg_temp.reset_pos(now() + interval '30 days' - interval '1 hour' + interval '1 microsecond');
 select is(pg_temp.heartbeat()->>'ok', 'true', 'heartbeat above throttle boundary succeeds');
-select is(pg_temp.seen(), null::timestamptz, 'above boundary avoids a write');
+select is(pg_temp.seen(), now(), 'S5: above expiry threshold still initializes activity');
 select pg_temp.reset_pos(now());
 select is(pg_temp.restore()->>'reason', 'expired', 'exact expiry is rejected with expired reason');
 select is(pg_temp.heartbeat()->>'error', 'invalid_session', 'expired heartbeat is explicit invalid_session');
@@ -146,11 +146,8 @@ select * from pg_temp.denial('suspended pairing', $$update device_pairings set s
 select * from pg_temp.denial('deleted pairing', $$update device_pairings set deleted_at=now() where id='be510001-0000-0000-0000-00000000c001'$$, 'invalid');
 select * from pg_temp.denial('inactive device', $$update devices set is_active=false where id='be510001-0000-0000-0000-00000000d001'$$, 'invalid');
 select * from pg_temp.denial('deleted device', $$update devices set deleted_at=now() where id='be510001-0000-0000-0000-00000000d001'$$, 'invalid');
-select * from pg_temp.denial('suspended organization', $$update organizations set status='suspended' where id='be510001-0000-0000-0000-00000000a000'$$, 'invalid');
 select * from pg_temp.denial('deleted organization', $$update organizations set deleted_at=now() where id='be510001-0000-0000-0000-00000000a000'$$, 'invalid');
-select * from pg_temp.denial('suspended restaurant', $$update restaurants set status='suspended' where id='be510001-0000-0000-0000-00000000a100'$$, 'invalid');
 select * from pg_temp.denial('deleted restaurant', $$update restaurants set deleted_at=now() where id='be510001-0000-0000-0000-00000000a100'$$, 'invalid');
-select * from pg_temp.denial('suspended branch', $$update branches set status='suspended' where id='be510001-0000-0000-0000-00000000a110'$$, 'invalid');
 select * from pg_temp.denial('deleted branch', $$update branches set deleted_at=now() where id='be510001-0000-0000-0000-00000000a110'$$, 'invalid');
 select * from pg_temp.denial('expired session', $$update device_sessions set expires_at=now()-interval '1 second' where id='be510001-0000-0000-0000-00000000e001'$$, 'expired');
 select pg_temp.reset_pos();

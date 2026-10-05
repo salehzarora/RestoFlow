@@ -22,7 +22,9 @@ create temp table bds_fixtures (scenario text primary key, device_id uuid, pairi
 insert into bds_fixtures values
   ('a', 'bf510000-0000-0000-0000-000000000101', 'bf510000-0000-0000-0000-000000000201', 'bf510000-0000-0000-0000-000000000301', 'synthetic-bizbot-session-race-a'),
   ('b', 'bf510000-0000-0000-0000-000000000102', 'bf510000-0000-0000-0000-000000000202', 'bf510000-0000-0000-0000-000000000302', 'synthetic-bizbot-session-race-b'),
-  ('c', 'bf510000-0000-0000-0000-000000000103', 'bf510000-0000-0000-0000-000000000203', 'bf510000-0000-0000-0000-000000000303', 'synthetic-bizbot-session-race-c');
+  ('c', 'bf510000-0000-0000-0000-000000000103', 'bf510000-0000-0000-0000-000000000203', 'bf510000-0000-0000-0000-000000000303', 'synthetic-bizbot-session-race-c'),
+  ('d', 'bf510000-0000-0000-0000-000000000104', 'bf510000-0000-0000-0000-000000000204', 'bf510000-0000-0000-0000-000000000304', 'synthetic-bizbot-session-race-d'),
+  ('e', 'bf510000-0000-0000-0000-000000000105', 'bf510000-0000-0000-0000-000000000205', 'bf510000-0000-0000-0000-000000000305', 'synthetic-bizbot-session-race-e');
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type, is_active, last_seen_at)
   select device_id, 'bf510000-0000-0000-0000-000000000001', 'bf510000-0000-0000-0000-000000000002',
     'bf510000-0000-0000-0000-000000000003', 'pos', true, '2000-01-01 00:00:00+00'::timestamptz
@@ -40,6 +42,20 @@ insert into device_sessions (id, organization_id, restaurant_id, branch_id, devi
     app.hash_provisioning_secret(token), true, now() + interval '1 day'
   from bds_fixtures
   on conflict (id) do update set is_active = true, revoked_at = null, expires_at = excluded.expires_at;
+
+-- S8: replacement pairings are inert synthetic fixtures. Redemption runs as
+-- an anonymous device (no human actor / auth uid), so it creates no audit rows.
+create temp table bds_codes(scenario text primary key, pairing_id uuid, code text);
+insert into bds_codes values
+  ('d','bf510000-0000-0000-0000-000000000404','synthetic-bizbot-redeem-race-d'),
+  ('e','bf510000-0000-0000-0000-000000000405','synthetic-bizbot-redeem-race-e');
+insert into device_pairings(id,organization_id,restaurant_id,branch_id,device_id,status,enrollment_code_hash,code_expires_at)
+select c.pairing_id,'bf510000-0000-0000-0000-000000000001','bf510000-0000-0000-0000-000000000002',
+ 'bf510000-0000-0000-0000-000000000003',f.device_id,'code_issued',app.hash_provisioning_secret(c.code),now()+interval '1 hour'
+from bds_codes c join bds_fixtures f using(scenario);
+create function pg_temp.bds_redeem_sql(p_scenario text) returns text language sql as $$
+ select format('select app.redeem_device_pairing(%L,''pos'')::text',code) from bds_codes where scenario=p_scenario
+$$;
 
 create function pg_temp.bds_state(p_scenario text) returns jsonb language sql stable as $$
   select jsonb_build_object('expires_at', s.expires_at, 'last_seen_at', d.last_seen_at,
@@ -104,7 +120,7 @@ begin
 end;
 $$;
 
-select plan(36);
+select plan(56);
 select dblink_connect('bds_fix_a', (select cs from bds_conn));
 select dblink_connect('bds_fix_b', (select cs from bds_conn));
 select dblink_exec('bds_fix_a', 'set statement_timeout = ''15s''');
@@ -195,6 +211,59 @@ select is((pg_temp.bds_state('c') ->> 'updated_at')::timestamptz,
   (select (result ->> 'server_now')::timestamptz from bds_c_winner), 'C9: second call performs no session update');
 select ok(pg_temp.bds_state('c') @> '{"session_active":true,"revoked":false}'::jsonb, 'C10: concurrent renewal leaves session active and unrevoked');
 
+-- D: redemption owns the old session first; renewal waits, then sees revoke.
+select dblink_exec('bds_fix_a','begin');
+create temp table bds_d_redeem as
+ select result::jsonb as result from dblink('bds_fix_a',pg_temp.bds_redeem_sql('d')) as r(result text);
+select is((select result->>'ok' from bds_d_redeem),'true','S8 D1: replacement redemption succeeds in open transaction');
+select dblink_exec('bds_fix_b','begin');
+select dblink_send_query('bds_fix_b',pg_temp.bds_heartbeat_sql('d'));
+select ok(pg_temp.bds_wait_for_lock('bds_fix_b',(select pid from bds_pids where connection='b'),
+ (select pid from bds_pids where connection='a')),'S8 D2: old-token renewal really waits for redemption');
+select is(dblink_is_busy('bds_fix_b'),1,'S8 D3: renewal stays pending until redemption commit');
+select is(pg_temp.bds_state('d')->>'session_active','true','S8 D4: observer sees old active session before redemption commit');
+select dblink_exec('bds_fix_a','commit');
+create temp table bds_d_renew as select pg_temp.bds_drain('bds_fix_b')::jsonb as result;
+select dblink_exec('bds_fix_b','commit');
+select is((select result->>'reason' from bds_d_renew),'revoked','S8 D5: waiting old token receives revoked reason');
+select is(pg_temp.bds_state('d')->>'expires_at',(select state->>'expires_at' from bds_before where scenario='d'),
+ 'S8 D6: waiting renewal never extends redeemed-away session');
+select is(pg_temp.bds_state('d')->>'last_seen_at',(select state->>'last_seen_at' from bds_before where scenario='d'),
+ 'S8 D7: rejected old token records no activity');
+select is((select count(*)::integer from device_sessions where device_id=(select device_id from bds_fixtures where scenario='d') and is_active and revoked_at is null),1,
+ 'S8 D8: exactly the replacement remains active');
+select is((select device_pairing_id from device_sessions where id=(select (result->>'device_session_id')::uuid from bds_d_redeem)),
+ (select pairing_id from bds_codes where scenario='d'),'S8 D9: live replacement belongs to new pairing');
+select is((select expires_at from device_sessions where id=(select (result->>'device_session_id')::uuid from bds_d_redeem)),
+ (select started_at+interval '30 days' from device_sessions where id=(select (result->>'device_session_id')::uuid from bds_d_redeem)),
+ 'S8 D10: replacement has its own full idle window');
+
+-- E: renewal owns the old session first; redemption waits and revokes it last.
+select dblink_exec('bds_fix_a','begin');
+create temp table bds_e_renew as
+ select result::jsonb as result from dblink('bds_fix_a',pg_temp.bds_heartbeat_sql('e')) as r(result text);
+select is((select result->>'ok' from bds_e_renew),'true','S8 E1: renewal succeeds before redemption waits');
+select dblink_exec('bds_fix_b','begin');
+select dblink_send_query('bds_fix_b',pg_temp.bds_redeem_sql('e'));
+select ok(pg_temp.bds_wait_for_lock('bds_fix_b',(select pid from bds_pids where connection='b'),
+ (select pid from bds_pids where connection='a')),'S8 E2: redemption really waits for renewing transaction');
+select is(dblink_is_busy('bds_fix_b'),1,'S8 E3: redemption stays pending until renewal commit');
+select is(pg_temp.bds_state('e')->>'expires_at',(select state->>'expires_at' from bds_before where scenario='e'),
+ 'S8 E4: uncommitted renewal remains invisible');
+select dblink_exec('bds_fix_a','commit');
+create temp table bds_e_redeem as select pg_temp.bds_drain('bds_fix_b')::jsonb as result;
+select dblink_exec('bds_fix_b','commit');
+select is((select result->>'ok' from bds_e_redeem),'true','S8 E5: waiting redemption completes after renewal commit');
+select ok(pg_temp.bds_state('e') @> '{"session_active":false,"revoked":true}'::jsonb,'S8 E6: final old session stays revoked');
+select is((pg_temp.bds_state('e')->>'expires_at')::timestamptz,(select (result->>'session_expires_at')::timestamptz from bds_e_renew),
+ 'S8 E7: redemption preserves old deadline without reviving session');
+select is((pg_temp.bds_state('e')->>'last_seen_at')::timestamptz,(select (result->>'server_now')::timestamptz from bds_e_renew),
+ 'S8 E8: activity belongs only to successful pre-redemption renewal');
+select is(public.heartbeat_device_session('bf510000-0000-0000-0000-000000000105','synthetic-bizbot-session-race-e')->>'reason',
+ 'revoked','S8 E9: old token cannot renew after racing redemption');
+select is((select count(*)::integer from device_sessions where device_id=(select device_id from bds_fixtures where scenario='e') and is_active and revoked_at is null),1,
+ 'S8 E10: only replacement session remains usable');
+
 select dblink_disconnect('bds_fix_a');
 select dblink_disconnect('bds_fix_b');
 select is((select count(*)::integer from audit_events where organization_id = 'bf510000-0000-0000-0000-000000000001'),
@@ -204,10 +273,10 @@ select is((select count(*)::integer from sync_operations where organization_id =
 select is((select count(*)::integer from pin_sessions where organization_id = 'bf510000-0000-0000-0000-000000000001'),
   0, 'R3: renewal created no employee PIN authority');
 select is((select count(*)::integer from device_sessions where id in (select session_id from bds_fixtures)),
-  3, 'R4: concurrent calls neither minted nor deleted a session');
+  5, 'R4: every original synthetic session is retained');
 -- Exact private fixture ids ONLY; never touch append-only audit rows.
-delete from device_sessions where id in (select session_id from bds_fixtures);
-delete from device_pairings where id in (select pairing_id from bds_fixtures);
+delete from device_sessions where device_id in (select device_id from bds_fixtures);
+delete from device_pairings where device_id in (select device_id from bds_fixtures);
 delete from devices where id in (select device_id from bds_fixtures);
 delete from branches where id = 'bf510000-0000-0000-0000-000000000003';
 delete from restaurants where id = 'bf510000-0000-0000-0000-000000000002';
