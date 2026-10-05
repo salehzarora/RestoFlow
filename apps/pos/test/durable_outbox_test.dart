@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
@@ -202,6 +203,57 @@ void main() {
 
     Future<SharedPrefsOutboxStore> freshStore() async =>
         SharedPrefsOutboxStore(await SharedPreferences.getInstance());
+
+    test(
+      'BIZBOT device guard persists AUTH_HOLD with unchanged operation across restart',
+      () async {
+        final wire = _RecordingTransport(
+          (_, p) async => _envelope({
+            'local_operation_id': _localOpOf(p),
+            'status': 'applied',
+            'ok': true,
+          }),
+        );
+        final guard = DeviceSessionGuardedTransport(wire)..block();
+        final first = RealOutboxRepository(
+          guard,
+          _session,
+          store: await freshStore(),
+        );
+        final entry = _entry();
+        await first.enqueue(entry);
+        final held = await first.push(entry.id);
+        expect(held.syncState, OutboxSyncState.authHold);
+        expect(held.payloadJson, entry.payloadJson);
+        expect(wire.params, isEmpty);
+        final persisted = (await SharedPreferences.getInstance()).getString(
+          _prefsKey,
+        )!;
+        SharedPreferences.setMockInitialValues({_prefsKey: persisted});
+        final restarted = RealOutboxRepository(
+          guard,
+          _session,
+          store: await freshStore(),
+        );
+        final restored = (await restarted.recentEntries()).single;
+        expect(restored.syncState, OutboxSyncState.authHold);
+        expect(restored.localOperationId, entry.localOperationId);
+        expect(restored.payloadJson, entry.payloadJson);
+        guard.allow();
+        // A device heartbeat alone never releases a human-session auth hold.
+        expect(
+          (await restarted.push(entry.id)).syncState,
+          OutboxSyncState.authHold,
+        );
+        expect(wire.params, isEmpty);
+        expect(await restarted.releaseAuthHold(), 1);
+        expect(
+          (await restarted.push(entry.id)).syncState,
+          OutboxSyncState.applied,
+        );
+        expect(_localOpOf(wire.params.single), entry.localOperationId);
+      },
+    );
 
     test('a queued order survives repo/app RECREATION (durable)', () async {
       // A backend that never answers: the order is enqueued but not delivered.

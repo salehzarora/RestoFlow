@@ -76,7 +76,8 @@ final class _ScriptedRealTransport implements SyncRpcTransport {
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     calls.add((function, params));
-    if (function == 'restore_device_session') {
+    if (function == 'restore_device_session' ||
+        function == 'heartbeat_device_session') {
       // The SAME pairing scope the cached context carries — the gate's
       // post-upgrade re-verify must keep the live tree untouched.
       return <String, dynamic>{

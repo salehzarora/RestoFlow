@@ -3,7 +3,8 @@
 //
 // Pins the new contract of SupabaseDevicePairingRepository:
 //  * pair success and restore success WRITE the cached scope;
-//  * `rejected` (server verdict / wrong surface type) clears secret + cache;
+//  * `rejected` (explicit invalid_session verdict) clears secret + cache;
+//  * wrong surface / unknown replies preserve both and return unavailable;
 //  * `offline` preserves both — and surfaces the cached scope ONLY for the
 //    TRANSIENT transport kind (genuine offline evidence), never for
 //    auth/server/unknown transport failures;
@@ -108,20 +109,26 @@ void main() {
       expect(await store.readCachedContext(expectedDeviceId: 'dev-1'), isNull);
     });
 
-    test('a valid session of the WRONG surface type', () async {
-      final store = InMemoryDeviceSessionSecretStore();
-      await store.write(_cred);
-      final t = _FakeTransport((fn, p) => _restoreOk(deviceType: 'kds'));
-      final repo = _repo(t, store);
-      expect(
-        await repo.restoreOutcome(expectedDeviceType: 'pos'),
-        isA<DeviceSessionRestoreRejected>(),
-      );
-      expect(await store.read(), isNull);
-      expect(await store.readCachedContext(expectedDeviceId: 'dev-1'), isNull);
-      // NOT revoked server-side (it may be the real KDS device's session).
-      expect(t.calls.map((c) => c.$1), ['restore_device_session']);
-    });
+    test(
+      'a valid session of the WRONG surface type preserves the credential',
+      () async {
+        final store = InMemoryDeviceSessionSecretStore();
+        await store.write(_cred);
+        final t = _FakeTransport((fn, p) => _restoreOk(deviceType: 'kds'));
+        final repo = _repo(t, store);
+        expect(
+          await repo.restoreOutcome(expectedDeviceType: 'pos'),
+          isA<DeviceSessionRestoreUnavailable>(),
+        );
+        expect(await store.read(), _cred);
+        expect(
+          await store.readCachedContext(expectedDeviceId: 'dev-1'),
+          isNull,
+        );
+        // NOT revoked server-side (it may be the real KDS device's session).
+        expect(t.calls.map((c) => c.$1), ['restore_device_session']);
+      },
+    );
 
     test('nothing stored -> rejected, and an orphaned cached scope is '
         'removed', () async {
@@ -197,7 +204,7 @@ void main() {
     });
 
     test(
-      'an AUTH-kind transport failure is offline WITHOUT evidence and '
+      'an AUTH-kind transport failure is unavailable WITHOUT evidence and '
       'clears nothing (matching the pre-existing keep-the-secret rule)',
       () async {
         final store = await seededStore();
@@ -211,8 +218,7 @@ void main() {
           store,
         );
         final outcome = await repo.restoreOutcome(expectedDeviceType: 'pos');
-        expect(outcome, isA<DeviceSessionRestoreOffline>());
-        expect((outcome as DeviceSessionRestoreOffline).cachedContext, isNull);
+        expect(outcome, isA<DeviceSessionRestoreUnavailable>());
         expect(await store.read(), _cred);
         expect(
           await store.readCachedContext(expectedDeviceId: 'dev-1'),
@@ -281,7 +287,7 @@ void main() {
       await rejectedStore.write(_cred);
       expect(
         await _repo(
-          _FakeTransport((fn, p) => {'ok': false}),
+          _FakeTransport((fn, p) => {'ok': false, 'error': 'invalid_session'}),
           rejectedStore,
         ).restore(expectedDeviceType: 'pos'),
         isNull,

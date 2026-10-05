@@ -3,12 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/main.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
+
+class _HeartbeatWire implements SyncRpcTransport {
+  bool revoked = false;
+  int heartbeats = 0;
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (function == 'heartbeat_device_session') heartbeats++;
+    if (revoked)
+      return {'ok': false, 'error': 'invalid_session', 'reason': 'revoked'};
+    return {
+      'ok': true,
+      'device_id': 'd',
+      'device_session_id': 'ds-1',
+      'organization_id': 'o',
+      'restaurant_id': 'r',
+      'branch_id': 'b',
+      'device_type': 'pos',
+    };
+  }
+}
 
 class _FakePairing implements DevicePairingRepository {
   _FakePairing(this.result);
@@ -38,6 +59,21 @@ class _FakeStaffDirectory implements DeviceStaffRepository {
 /// IGNORES [expectedDeviceType] (recording it only), so wrong-type tests prove
 /// the GATE itself rejects a mismatched restored context (belt-and-suspenders
 /// on top of the repo-level enforcement, which has its own unit tests).
+class _FakeOutcome extends _FakeRestorable
+    implements DeviceSessionOutcomeManager {
+  _FakeOutcome(this.outcome) : super(null);
+  DeviceRestoreOutcome outcome;
+  int calls = 0;
+  @override
+  Future<DeviceRestoreOutcome> restoreOutcome({
+    String? expectedDeviceType,
+  }) async {
+    calls++;
+    lastExpectedDeviceType = expectedDeviceType;
+    return outcome;
+  }
+}
+
 class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
   _FakeRestorable(this._restored);
   final DeviceContext? _restored;
@@ -93,6 +129,89 @@ Future<void> _pump(WidgetTester tester, Widget app) async {
 }
 
 void main() {
+  testWidgets(
+    'BIZBOT real repository heartbeat returns rejected device to activation',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(
+          deviceId: 'd',
+          sessionToken: 'test-token',
+        ),
+      );
+      final wire = _HeartbeatWire();
+      final repo = SupabaseDevicePairingRepository(
+        transport: DeviceSessionGuardedTransport(wire),
+        secretStore: store,
+      );
+      await _pump(
+        tester,
+        PosApp(
+          demoMode: false,
+          devicePairingRepository: repo,
+          deviceStaffRepository: _FakeStaffDirectory(),
+        ),
+      );
+      expect(find.byType(PinLoginScreen), findsOneWidget);
+      expect(wire.heartbeats, 1);
+      wire.revoked = true;
+      await tester.pump(const Duration(minutes: 15));
+      await tester.pumpAndSettle();
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      expect(find.byType(PinLoginScreen), findsNothing);
+      expect(await store.read(), isNull);
+      final count = wire.heartbeats;
+      await tester.pump(const Duration(minutes: 30));
+      expect(wire.heartbeats, count);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  for (final offline in [true, false]) {
+    testWidgets(
+      'BIZBOT ${offline ? "offline" : "unknown"} restore is retryable without activation',
+      (tester) async {
+        final pairing = _FakeOutcome(
+          offline
+              ? const DeviceSessionRestoreOffline()
+              : const DeviceSessionRestoreUnavailable(),
+        );
+        await _pump(
+          tester,
+          PosApp(
+            demoMode: false,
+            devicePairingRepository: pairing,
+            deviceStaffRepository: _FakeStaffDirectory(),
+          ),
+        );
+        expect(find.byType(DevicePairingScreen), findsNothing);
+        expect(
+          find.byType(offline ? OfflineBootView : DeviceSessionUnavailableView),
+          findsOneWidget,
+        );
+        pairing.outcome = const DeviceSessionRestored(
+          DeviceContext(
+            organizationId: 'o',
+            branchId: 'b',
+            restaurantId: 'r',
+            deviceId: 'd',
+            deviceType: 'pos',
+            deviceSessionId: 'ds-1',
+          ),
+        );
+        await tester.tap(
+          find.byKey(
+            Key(offline ? 'offline-boot-retry' : 'device-session-retry'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(pairing.calls, 2);
+        expect(pairing.lastExpectedDeviceType, 'pos');
+        expect(find.byType(PinLoginScreen), findsOneWidget);
+        expect(find.byType(DevicePairingScreen), findsNothing);
+      },
+    );
+  }
   testWidgets('DEMO mode is unchanged — the menu, never the pairing screen', (
     tester,
   ) async {

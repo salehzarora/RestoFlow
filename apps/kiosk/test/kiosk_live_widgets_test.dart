@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_kiosk/main.dart' show KioskApp;
 import 'package:restoflow_kiosk/src/data/kiosk_fixtures.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_live_data.dart';
 import 'package:restoflow_kiosk/src/data/kiosk_menu_data.dart';
@@ -16,6 +19,24 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// activation (+ every typed error), the pairing gate's three routes, the
 /// live-menu presentation states, the live table picker, the stale-cart
 /// banner and the Phase-3 ordering gate.
+class _KioskHeartbeatWire implements SyncRpcTransport {
+  bool revoked = false;
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (revoked)
+      return {'ok': false, 'error': 'invalid_session', 'reason': 'revoked'};
+    return {
+      'ok': true,
+      'device_id': 'dev-1',
+      'device_session_id': 'sess-1',
+      'organization_id': 'org-1',
+      'restaurant_id': 'rest-1',
+      'branch_id': 'branch-1',
+      'device_type': 'kiosk',
+    };
+  }
+}
+
 class _FakePairing
     implements DevicePairingRepository, DeviceSessionOutcomeManager {
   _FakePairing({this.pairResult, this.restoreResult});
@@ -164,6 +185,75 @@ void main() {
   });
 
   group('pairing gate', () {
+    testWidgets(
+      'real KioskApp heartbeat rejection removes live customer path',
+      (tester) async {
+        _useKioskViewport(tester);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        final store = InMemoryDeviceSessionSecretStore();
+        await store.write(
+          const DeviceSessionCredential(
+            deviceId: 'dev-1',
+            sessionToken: 'test-token',
+          ),
+        );
+        final wire = _KioskHeartbeatWire();
+        final repo = SupabaseDevicePairingRepository(
+          transport: DeviceSessionGuardedTransport(wire),
+          secretStore: store,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            child: KioskApp(
+              heartbeatManager: repo,
+              home: KioskPairingGate(
+                outcomes: repo,
+                pairing: repo,
+                shellBuilder: (_) => const Text('CUSTOMER-SHELL'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('CUSTOMER-SHELL'), findsOneWidget);
+        wire.revoked = true;
+        await tester.pump(const Duration(minutes: 15));
+        await tester.pumpAndSettle();
+        expect(find.text('CUSTOMER-SHELL'), findsNothing);
+        expect(find.byType(KioskActivationScreen), findsOneWidget);
+        expect(await store.read(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+    testWidgets(
+      'unknown restore shows retry without customer flow or activation',
+      (tester) async {
+        _useKioskViewport(tester);
+        final pairing = _FakePairing(
+          restoreResult: const DeviceSessionRestoreUnavailable(),
+        );
+        await tester.pumpWidget(
+          _app(
+            KioskPairingGate(
+              outcomes: pairing,
+              pairing: pairing,
+              shellBuilder: (_) => const Text('CUSTOMER-SHELL'),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byType(DeviceSessionUnavailableView), findsOneWidget);
+        expect(find.byType(KioskActivationScreen), findsNothing);
+        expect(find.text('CUSTOMER-SHELL'), findsNothing);
+        pairing.restoreResult = DeviceSessionRestored(_FakePairing.context());
+        await tester.tap(find.byKey(const Key('device-session-retry')));
+        await tester.pump();
+        expect(find.text('CUSTOMER-SHELL'), findsOneWidget);
+        expect(pairing.restoreCalls, 2);
+      },
+    );
     testWidgets('rejected restore lands on activation (never the shell)', (
       tester,
     ) async {
