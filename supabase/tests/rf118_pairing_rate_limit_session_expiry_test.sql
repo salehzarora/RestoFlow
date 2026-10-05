@@ -110,11 +110,11 @@ select is(
   0, 'a successful redeem resets (deletes) the principal failure counter');
 
 -- ===== Device-session expiry (RF-118) =====
--- (10) the minted session carries expires_at ~ now() + app.device_session_max_age() (7 days).
+-- (10) BIZBOT-DEVICE-SESSION-FIX-001: new sessions use the 30-day idle window.
 select ok(
-  (select expires_at > now() + interval '6 days' and expires_at < now() + interval '8 days'
+  (select expires_at = now() + interval '30 days'
      from device_sessions where id = (select sid from _s)),
-  'redeem mints device_sessions.expires_at ~ now() + the device-session max age (7d)');
+  'redeem mints device_sessions.expires_at = now() + the 30-day idle window');
 -- (11) restore works while the session is unexpired.
 select is(
   (app.restore_device_session('00000000-0000-0000-0000-000000118d01', (select token from _s)) ->> 'device_session_id'),
