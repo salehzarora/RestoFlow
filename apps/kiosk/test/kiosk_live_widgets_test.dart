@@ -23,8 +23,9 @@ class _KioskHeartbeatWire implements SyncRpcTransport {
   bool revoked = false;
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
-    if (revoked)
+    if (revoked) {
       return {'ok': false, 'error': 'invalid_session', 'reason': 'revoked'};
+    }
     return {
       'ok': true,
       'device_id': 'dev-1',
