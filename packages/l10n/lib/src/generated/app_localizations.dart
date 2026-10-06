@@ -9331,7 +9331,7 @@ abstract class AppLocalizations {
   /// POS-CASH-DRAWER-MANUAL-OPEN-001: explains the drawer permission switch.
   ///
   /// In en, this message translates to:
-  /// **'Opens the drawer from the POS without a sale; the cashier enters their PIN on first use. Every open is logged. Off by default.'**
+  /// **'Opens the drawer from the POS without a sale; the cashier enters their PIN once per sign-in. Every open is logged. Off by default.'**
   String get staffCapOpenCashDrawerHint;
 
   /// FULL-COMP-PERMISSION-001: honest note that these switches apply only to cashiers - managers/owners hold these rights by role and are not affected by the toggles.
@@ -9927,6 +9927,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kitchen acknowledgement required'**
   String get activityLogFieldKitchenAckRequired;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log field label: the manual drawer open was made while the till was offline and reached the server later (boolean).
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded offline'**
+  String get activityLogFieldRecordedOffline;
 
   /// Activity Log field label for the availability before/after value.
   ///
@@ -10933,7 +10939,7 @@ abstract class AppLocalizations {
   /// POS-CASH-DRAWER-MANUAL-OPEN-001: body of the unlock dialog. The PIN is the signed-in employee's OWN sign-in PIN, verified by the server.
   ///
   /// In en, this message translates to:
-  /// **'Enter your PIN. The drawer stays unlocked until you lock it or sign out.'**
+  /// **'Enter your PIN. The drawer button stays unlocked until you lock it or sign out.'**
   String get posCashDrawerUnlockBody;
 
   /// POS-CASH-DRAWER-MANUAL-OPEN-001: submit button of the unlock dialog; on success the drawer opens immediately.

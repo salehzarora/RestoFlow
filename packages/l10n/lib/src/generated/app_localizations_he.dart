@@ -5042,11 +5042,11 @@ class AppLocalizationsHe extends AppLocalizations {
       'דורש את הרשאת ההנחה שלמעלה.';
 
   @override
-  String get staffCapOpenCashDrawer => 'רשאי לפתוח את מגירת המזומנים ידנית';
+  String get staffCapOpenCashDrawer => 'יכול לפתוח את מגירת המזומנים ידנית';
 
   @override
   String get staffCapOpenCashDrawerHint =>
-      'פתיחת המגירה מהקופה ללא מכירה; הקופאי מזין את קוד ה-PIN שלו בשימוש הראשון. כל פתיחה נרשמת. כבוי כברירת מחדל.';
+      'פתיחת המגירה מהקופה ללא מכירה; הקופאי מזין את קוד ה-PIN שלו פעם אחת בכל כניסה. כל פתיחה נרשמת. כבוי כברירת מחדל.';
 
   @override
   String get staffCapabilitiesRoleNote =>
@@ -5382,6 +5382,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogFieldKitchenAckRequired => 'נדרש אישור מטבח';
+
+  @override
+  String get activityLogFieldRecordedOffline => 'נרשם ללא חיבור';
 
   @override
   String get activityLogFieldAvailability => 'זמינות';

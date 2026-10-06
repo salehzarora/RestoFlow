@@ -5082,7 +5082,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get staffCapOpenCashDrawerHint =>
-      'فتح الدرج من نقطة البيع دون عملية بيع؛ يُدخل الكاشير رمزه عند أول استخدام. كل فتح يُسجَّل. مُطفأ افتراضيًا.';
+      'فتح الدرج من نقطة البيع دون عملية بيع؛ يُدخل الكاشير رمزه مرة واحدة في كل تسجيل دخول. كل فتح يُسجَّل. مُعطَّل افتراضيًا.';
 
   @override
   String get staffCapabilitiesRoleNote =>
@@ -5397,7 +5397,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogTitleTableUnlinkDenied => 'تم رفض فك ربط الطاولة';
 
   @override
-  String get activityLogTitleDrawerNoSaleOpened => 'فتح درج النقود يدويًا';
+  String get activityLogTitleDrawerNoSaleOpened => 'تم فتح درج النقود يدويًا';
 
   @override
   String get activityLogTitleDrawerNoSaleDenied => 'رُفض فتح درج النقود';
@@ -5423,6 +5423,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogFieldKitchenAckRequired => 'يتطلب تأكيد المطبخ';
+
+  @override
+  String get activityLogFieldRecordedOffline => 'سُجّل دون اتصال';
 
   @override
   String get activityLogFieldAvailability => 'التوفر';

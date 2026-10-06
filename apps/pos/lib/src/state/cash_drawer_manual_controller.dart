@@ -8,12 +8,16 @@
 ///  * once unlocked, ONE tap opens the drawer, until the employee locks it again
 ///    (a long press) or the PIN session changes / ends (automatic lock);
 ///  * EVERY open is recorded server-side (D-013) BEFORE the pulse when the
-///    server is reachable; when it is not, the record is written to a durable
-///    on-device journal FIRST and the pulse follows — only while the unlocked
-///    session's server window still allows the record to land under the same
-///    actor. With neither, the drawer does NOT open (the physical key remains);
-///  * repeated taps inside a short window are de-bounced, and nothing is ever
-///    re-pulsed automatically (PRINTERS_AND_HARDWARE_SPEC section 11).
+///    server is reachable; when it is not (no answer at all), the record is
+///    written to a durable on-device journal FIRST and the pulse follows — only
+///    inside the unlocked session's server window (measured in SERVER time).
+///    A journaled record is never dropped for want of a live session: it is
+///    re-sent under whoever is signed in next, still attributed to the employee
+///    who opened the drawer. A server that answers without a verdict, or no
+///    usable journal, means the drawer does NOT open (the physical key remains);
+///  * one open at a time; repeated taps inside a short window after a pulse are
+///    de-bounced, and nothing is ever re-pulsed automatically
+///    (PRINTERS_AND_HARDWARE_SPEC section 11).
 library;
 
 import 'dart:async';
@@ -36,8 +40,8 @@ import 'pos_session.dart';
 const Duration kManualDrawerCooldown = Duration(seconds: 3);
 
 /// An offline open is allowed only while the unlocked PIN session still has at
-/// least this long to live on the server, so its journaled record can still be
-/// recorded under the same actor when the connection returns.
+/// least this long to live on the server (in server time), so the open always
+/// falls inside the lifetime the server checks when the record arrives late.
 const Duration kManualDrawerOfflineMargin = Duration(minutes: 10);
 
 /// How often a non-empty journal retries reaching the server.
@@ -60,8 +64,8 @@ enum ManualDrawerOpenOutcome {
   /// The PIN session is no longer valid server-side. The button locks.
   sessionEnded,
 
-  /// The open could not be recorded (no server, no usable journal / offline
-  /// window) — the drawer was NOT pulsed.
+  /// The open could not be recorded (no verdict from the server, no usable
+  /// journal / offline window) — the drawer was NOT pulsed.
   cannotRecord,
 
   /// No receipt printer with a drawer port is configured on this till.
@@ -157,6 +161,7 @@ class ManualDrawerState {
   const ManualDrawerState({
     this.unlockedPinSessionId,
     this.sessionExpiresAt,
+    this.serverClockOffset = Duration.zero,
     this.busy = false,
   });
 
@@ -167,6 +172,11 @@ class ManualDrawerState {
   /// offline opens.
   final DateTime? sessionExpiresAt;
 
+  /// Server clock minus device clock, measured at the unlock. Offline windows
+  /// and record times use device time + this offset, so a wrong device clock
+  /// can neither stretch the window nor mis-date a record.
+  final Duration serverClockOffset;
+
   /// An unlock or open is in flight.
   final bool busy;
 
@@ -176,6 +186,7 @@ class ManualDrawerState {
   ManualDrawerState copyWith({bool? busy}) => ManualDrawerState(
     unlockedPinSessionId: unlockedPinSessionId,
     sessionExpiresAt: sessionExpiresAt,
+    serverClockOffset: serverClockOffset,
     busy: busy ?? this.busy,
   );
 }
@@ -187,7 +198,13 @@ final posCashDrawerManualControllerProvider =
 
 class CashDrawerManualController extends Notifier<ManualDrawerState> {
   DateTime? _lastOpenAt;
+
+  /// The ONE in-flight guard, set synchronously before any await: an unlock
+  /// and an open (or two opens) can never overlap, whatever rebuilds the
+  /// state meanwhile.
+  bool _inFlight = false;
   bool _flushing = false;
+  bool _disposed = false;
   Timer? _retryTimer;
 
   @override
@@ -196,12 +213,13 @@ class CashDrawerManualController extends Notifier<ManualDrawerState> {
     // session replaced by a new one) re-locks the button: an unlock is bound to
     // exactly one session.
     ref.listen<SyncSession?>(posSyncSessionProvider, (previous, next) {
-      if (!state.isUnlockedFor(next?.pinSessionId)) {
-        state = const ManualDrawerState();
-      }
+      if (!state.isUnlockedFor(next?.pinSessionId)) _relock();
       if (next != null) unawaited(flushJournal());
     });
-    ref.onDispose(() => _retryTimer?.cancel());
+    ref.onDispose(() {
+      _disposed = true;
+      _retryTimer?.cancel();
+    });
     // A journal left by a previous run (app restart while offline) is retried
     // as soon as this controller exists.
     Future<void>.microtask(flushJournal);
@@ -213,49 +231,71 @@ class CashDrawerManualController extends Notifier<ManualDrawerState> {
       state.isUnlockedFor(ref.read(posSyncSessionProvider)?.pinSessionId);
 
   /// Locks the button (long press / menu). The next open asks for the PIN.
-  void lock() => state = const ManualDrawerState();
+  void lock() => _relock();
+
+  void _relock() {
+    _lastOpenAt = null;
+    state = ManualDrawerState(busy: _inFlight);
+  }
+
+  /// Locks only while still unlocked for [pinSessionId]: a late refusal for an
+  /// earlier session never locks a fresh unlock of the next one.
+  void _relockIfFor(String pinSessionId) {
+    if (state.unlockedPinSessionId == pinSessionId) _relock();
+  }
+
+  DateTime _serverNow() =>
+      ref.read(posSyncClockProvider)().add(state.serverClockOffset);
 
   /// Verifies the signed-in employee's own [pin] with the server and, on
   /// success, unlocks the button for the current session.
   Future<DrawerUnlockResult> unlock(String pin) async {
     final session = ref.read(posSyncSessionProvider);
     if (session == null) return DrawerUnlockResult.sessionInvalid;
-    if (state.busy) return DrawerUnlockResult.unavailable;
+    if (_inFlight) return DrawerUnlockResult.unavailable;
+    _inFlight = true;
     state = state.copyWith(busy: true);
-    DrawerUnlockOutcome outcome;
     try {
-      outcome = await ref
-          .read(posCashDrawerManualRepositoryProvider)
-          .verifyPin(pin);
-    } catch (_) {
-      outcome = const DrawerUnlockOutcome(DrawerUnlockResult.unavailable);
+      DrawerUnlockOutcome outcome;
+      try {
+        outcome = await ref
+            .read(posCashDrawerManualRepositoryProvider)
+            .verifyPin(pin);
+      } catch (_) {
+        outcome = const DrawerUnlockOutcome(DrawerUnlockResult.unavailable);
+      }
+      if (_disposed) return DrawerUnlockResult.unavailable;
+      // The session may have changed while the server answered: an unlock for
+      // a session that is no longer current unlocks nothing.
+      final current = ref.read(posSyncSessionProvider);
+      if (outcome.result == DrawerUnlockResult.unlocked) {
+        if (current?.pinSessionId != session.pinSessionId) {
+          return DrawerUnlockResult.sessionInvalid;
+        }
+        final serverNow = outcome.serverNow;
+        state = ManualDrawerState(
+          unlockedPinSessionId: session.pinSessionId,
+          sessionExpiresAt: outcome.sessionExpiresAt,
+          serverClockOffset: serverNow == null
+              ? Duration.zero
+              : serverNow.difference(ref.read(posSyncClockProvider)()),
+          busy: true,
+        );
+        unawaited(flushJournal());
+      }
+      return outcome.result;
+    } finally {
+      _inFlight = false;
+      if (!_disposed) state = state.copyWith(busy: false);
     }
-    // The session may have changed while the server answered: an unlock for a
-    // session that is no longer current unlocks nothing.
-    final current = ref.read(posSyncSessionProvider);
-    if (outcome.result == DrawerUnlockResult.unlocked &&
-        current?.pinSessionId == session.pinSessionId) {
-      state = ManualDrawerState(
-        unlockedPinSessionId: session.pinSessionId,
-        sessionExpiresAt: outcome.sessionExpiresAt,
-      );
-      unawaited(flushJournal());
-      return DrawerUnlockResult.unlocked;
-    }
-    state = state.copyWith(busy: false);
-    if (outcome.result == DrawerUnlockResult.unlocked) {
-      return DrawerUnlockResult.sessionInvalid;
-    }
-    return outcome.result;
   }
 
   /// Opens the drawer once (see the library doc for the exact order).
   Future<ManualDrawerOpenOutcome> open() async {
-    if (state.busy) return ManualDrawerOpenOutcome.ignored;
+    if (_inFlight) return ManualDrawerOpenOutcome.ignored;
     final clock = ref.read(posSyncClockProvider);
-    final now = clock();
     final last = _lastOpenAt;
-    if (last != null && now.difference(last) < kManualDrawerCooldown) {
+    if (last != null && clock().difference(last) < kManualDrawerCooldown) {
       return ManualDrawerOpenOutcome.ignored;
     }
     final session = ref.read(posSyncSessionProvider);
@@ -266,33 +306,34 @@ class CashDrawerManualController extends Notifier<ManualDrawerState> {
     if (!state.isUnlockedFor(session.pinSessionId)) {
       return ManualDrawerOpenOutcome.needsUnlock;
     }
-    final kicker = ref.read(posManualDrawerKickerProvider);
-    if (!await kicker.isAvailable()) return ManualDrawerOpenOutcome.noPrinter;
-
+    _inFlight = true;
     state = state.copyWith(busy: true);
     try {
+      final kicker = ref.read(posManualDrawerKickerProvider);
+      if (!await kicker.isAvailable()) return ManualDrawerOpenOutcome.noPrinter;
       final record = NoSaleRecord(
         localOperationId: ref.read(clientIdGeneratorProvider).newId(),
         pinSessionId: session.pinSessionId,
         deviceId: session.deviceId,
-        occurredAt: now,
+        occurredAt: _serverNow(),
       );
       final push = await ref
           .read(posCashDrawerManualRepositoryProvider)
           .pushNoSale(record);
       switch (push) {
         case NoSalePushResult.recorded:
-          return await _pulse(kicker, now);
+          return await _pulse(kicker);
         case NoSalePushResult.denied:
-          state = const ManualDrawerState(busy: true);
+          _relockIfFor(session.pinSessionId);
           return ManualDrawerOpenOutcome.denied;
         case NoSalePushResult.sessionInvalid:
-          state = const ManualDrawerState(busy: true);
+          _relockIfFor(session.pinSessionId);
           return ManualDrawerOpenOutcome.sessionEnded;
         case NoSalePushResult.rejected:
+        case NoSalePushResult.unconfirmed:
           return ManualDrawerOpenOutcome.cannotRecord;
         case NoSalePushResult.offline:
-          if (!_offlineAllowed(clock())) {
+          if (!_offlineAllowed(session.pinSessionId)) {
             return ManualDrawerOpenOutcome.cannotRecord;
           }
           // Journal FIRST: a pulse without a durable record is exactly what the
@@ -302,28 +343,29 @@ class CashDrawerManualController extends Notifier<ManualDrawerState> {
               .append(session.deviceId, record);
           if (!persisted) return ManualDrawerOpenOutcome.cannotRecord;
           _scheduleRetry();
-          return await _pulse(kicker, now);
+          return await _pulse(kicker);
       }
     } finally {
-      state = state.copyWith(busy: false);
+      _inFlight = false;
+      if (!_disposed) state = state.copyWith(busy: false);
     }
   }
 
-  Future<ManualDrawerOpenOutcome> _pulse(
-    ManualDrawerKicker kicker,
-    DateTime now,
-  ) async {
-    _lastOpenAt = now;
+  /// ONE pulse, never retried. The cooldown runs from the pulse itself.
+  Future<ManualDrawerOpenOutcome> _pulse(ManualDrawerKicker kicker) async {
     final ok = await kicker.kick();
+    _lastOpenAt = ref.read(posSyncClockProvider)();
     return ok
         ? ManualDrawerOpenOutcome.opened
         : ManualDrawerOpenOutcome.sendFailed;
   }
 
-  bool _offlineAllowed(DateTime now) {
+  bool _offlineAllowed(String pinSessionId) {
+    // Re-locked while the push was in flight: no offline open.
+    if (!state.isUnlockedFor(pinSessionId)) return false;
     final expires = state.sessionExpiresAt;
     if (expires == null) return false; // unknown server window: fail closed
-    if (!now.isBefore(expires.subtract(kManualDrawerOfflineMargin))) {
+    if (!_serverNow().isBefore(expires.subtract(kManualDrawerOfflineMargin))) {
       return false;
     }
     // The bounded offline window of an offline-restored session still applies.
@@ -331,31 +373,41 @@ class CashDrawerManualController extends Notifier<ManualDrawerState> {
   }
 
   void _scheduleRetry() {
+    if (_disposed) return;
     _retryTimer?.cancel();
     _retryTimer = Timer(kManualDrawerJournalRetry, () => flushJournal());
   }
 
-  /// Sends every journaled record (oldest first) under its OWN session. A final
-  /// server verdict removes a record; an offline result stops the pass and
-  /// schedules a retry. A record whose session is dead can never land and is
-  /// dropped (the offline window above keeps that case narrow).
+  /// Sends every journaled record (oldest first) under the CURRENT session; each
+  /// record names its own origin session, so the server attributes it to the
+  /// employee who opened the drawer. A record leaves the journal ONLY on a
+  /// server verdict that is itself recorded server-side (recorded / denied /
+  /// a ledgered rejection). No answer or no verdict keeps it and retries; a
+  /// refused current session keeps it until the next sign-in (which flushes).
   Future<void> flushJournal() async {
-    if (_flushing) return;
-    final deviceId = ref.read(posSyncSessionProvider)?.deviceId;
-    if (deviceId == null) return;
+    if (_flushing || _disposed) return;
     _flushing = true;
     try {
+      final deviceId = ref.read(posSyncSessionProvider)?.deviceId;
+      if (deviceId == null) return;
       final journal = ref.read(posCashDrawerNoSaleJournalProvider);
       final pending = await journal.pending(deviceId);
       if (pending.isEmpty) return;
       final repo = ref.read(posCashDrawerManualRepositoryProvider);
       for (final record in pending) {
-        final result = await repo.pushNoSale(record);
-        if (result == NoSalePushResult.offline) {
-          _scheduleRetry();
-          return;
+        if (_disposed) return;
+        switch (await repo.pushNoSale(record)) {
+          case NoSalePushResult.recorded:
+          case NoSalePushResult.denied:
+          case NoSalePushResult.rejected:
+            await journal.remove(deviceId, record.localOperationId);
+          case NoSalePushResult.sessionInvalid:
+            return;
+          case NoSalePushResult.offline:
+          case NoSalePushResult.unconfirmed:
+            _scheduleRetry();
+            return;
         }
-        await journal.remove(deviceId, record.localOperationId);
       }
     } catch (_) {
       _scheduleRetry();

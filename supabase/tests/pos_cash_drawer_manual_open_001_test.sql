@@ -9,6 +9,9 @@
 -- invalid session / device type / device mismatch); the cash_drawer.no_sale_open
 -- sync op (applied + audited with actor/device/shift, replay is idempotent,
 -- denied for an ungranted cashier / kitchen staff, revoked-device path ledgered);
+-- the LATE-REPLAY path (an offline open recorded under another session, attributed
+-- to the origin employee, bound to the shift open at that moment, refused for a
+-- foreign / out-of-lifetime origin); a malformed occurrence time degrades to NULL;
 -- CHECK constraint, ACLs and the global public surface. Fixtures as BYPASSRLS;
 -- hex UUIDs (prefix d7).
 -- ============================================================================
@@ -16,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(56);
+select plan(69);
 
 insert into organizations (id, name, slug, default_currency) values
   ('d7000000-0000-0000-0000-0000000000a0', 'Org Drawer', 'drawer-a', 'ILS');
@@ -56,6 +59,9 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('d7000000-0000-0000-0000-00000000c505', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-0000000005a1', 'd7000000-0000-0000-0000-0000000ef005', 'd7000000-0000-0000-0000-00000000ab05', now() + interval '6 hours'),
   ('d7000000-0000-0000-0000-00000000c506', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-0000000005a1', 'd7000000-0000-0000-0000-0000000ef006', 'd7000000-0000-0000-0000-00000000ab06', now() + interval '6 hours'),
   ('d7000000-0000-0000-0000-00000000c524', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-0000000005a2', 'd7000000-0000-0000-0000-0000000ef004', 'd7000000-0000-0000-0000-00000000ab04', now() + interval '6 hours');
+-- cashier A's EARLIER session on the POS till: started 9h ago, expired 1h ago.
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, started_at, expires_at) values
+  ('d7000000-0000-0000-0000-00000000c5e3', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-0000000005a1', 'd7000000-0000-0000-0000-0000000ef003', 'd7000000-0000-0000-0000-00000000ab03', now() - interval '9 hours', now() - interval '1 hour');
 
 -- ===== (1-4) the grant-only resolver ==========================================
 select is(app.cashier_capability_granted('cashier', '{}'::jsonb, 'open_cash_drawer'), false,
@@ -92,6 +98,16 @@ select is((select (app.audit_safe_detail('staff.capabilities_updated', new_value
             where organization_id = 'd7000000-0000-0000-0000-0000000000a0' and action = 'staff.capabilities_updated'
             order by created_at desc limit 1),
   true, 'the staff.capabilities_updated Activity Log projection carries open_cash_drawer');
+
+-- the drawer flag is part of the idempotency fingerprint: the SAME request id with a
+-- different drawer value is a conflict, never a silent replay of the first result
+set local role authenticated;
+set local app.current_app_user_id = 'd7000000-0000-0000-0000-00000000ee01';
+select throws_ok(
+  $$select app.set_staff_capabilities('d7000000-0000-0000-0000-00000000cc01'::uuid, 'd7000000-0000-0000-0000-0000000ef003'::uuid, true, true, true, false, true, true, false)$$,
+  '42501', NULL,
+  'reusing a request id with a different drawer flag is refused (the flag is fingerprinted)');
+reset role;
 
 -- an OLDER client (8 positional args; p_open_cash_drawer omitted = NULL) leaves it untouched
 set local role authenticated;
@@ -159,8 +175,10 @@ select is((select count(*)::int from audit_events where organization_id = 'd7000
              and action = 'cash_drawer.no_sale_denied' and actor_employee_profile_id = 'd7000000-0000-0000-0000-0000000ef005'
              and new_values->>'stage' = 'unlock'),
   1, 'the refused unlock is audited as cash_drawer.no_sale_denied (stage unlock)');
+select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c505', 'd7000000-0000-0000-0000-00000000da11', '0000') ->> 'error'),
+  'permission_denied', 'an ungranted cashier with a WRONG PIN also gets permission_denied (no PIN oracle)');
 select is((select count(*)::int from pin_attempt_states where employee_profile_id = 'd7000000-0000-0000-0000-0000000ef005'),
-  0, 'a refused (unpermitted) unlock does no PIN work at all');
+  0, 'a refused (unpermitted) unlock does no PIN work at all -- right or wrong PIN');
 
 -- ===== (24-27) verify: a wrong PIN ============================================
 create temp table t_wrong as select app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da11', '9999') as res;
@@ -201,6 +219,8 @@ select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c506', 'd7
   'permission_denied', 'kitchen staff can never unlock the drawer');
 select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-0000000fffff', 'd7000000-0000-0000-0000-00000000da11', '1234') ->> 'error'),
   'invalid_session', 'an unknown PIN session collapses to invalid_session');
+select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c5e3', 'd7000000-0000-0000-0000-00000000da11', '1234') ->> 'error'),
+  'invalid_session', 'an EXPIRED PIN session cannot unlock');
 select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c524', 'd7000000-0000-0000-0000-00000000da22', '4321') ->> 'error'),
   'invalid_device_type', 'only a POS till can unlock a drawer (a KDS session is refused)');
 select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da22', '1234') ->> 'error'),
@@ -209,7 +229,8 @@ select is((app.pos_verify_drawer_pin('d7000000-0000-0000-0000-00000000c503', 'd7
 -- ===== (38-43) the no-sale op through sync_push (no open shift yet) ============
 create temp table t_ns1 as select public.sync_push('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da11',
   jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-ns-1', 'operation_type', 'cash_drawer.no_sale_open',
-    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', '2026-10-06T10:00:00Z')))) as res;
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now(),
+      'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c503')))) as res;
 select is((select r->>'status' from t_ns1, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-ns-1'),
   'applied', 'sync_push applies cash_drawer.no_sale_open for a granted cashier');
 select is((select count(*)::int from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
@@ -218,7 +239,10 @@ select is((select count(*)::int from audit_events where organization_id = 'd7000
   1, 'the open is audited with the actor, the device and the branch');
 select is((select (new_values->>'client_occurred_at')::timestamptz from audit_events
             where organization_id = 'd7000000-0000-0000-0000-0000000000a0' and action = 'cash_drawer.no_sale_opened'),
-  '2026-10-06T10:00:00Z'::timestamptz, 'the client occurrence time rides in new_values (occurred_at stays server time)');
+  now(), 'the client occurrence time rides in new_values (occurred_at stays server time)');
+select is((select new_values ? 'recorded_offline' from audit_events
+            where organization_id = 'd7000000-0000-0000-0000-0000000000a0' and action = 'cash_drawer.no_sale_opened'),
+  false, 'a fresh open under its own session is NOT flagged recorded_offline');
 select is((select new_values->>'shift_id' from audit_events
             where organization_id = 'd7000000-0000-0000-0000-0000000000a0' and action = 'cash_drawer.no_sale_opened'),
   null, 'with no open shift the event binds no shift');
@@ -226,7 +250,8 @@ select is((select new_values->>'shift_id' from audit_events
 -- replay: the SAME local_operation_id returns the stored result; still ONE audit row
 create temp table t_ns1b as select public.sync_push('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da11',
   jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-ns-1', 'operation_type', 'cash_drawer.no_sale_open',
-    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', '2026-10-06T10:00:00Z')))) as res;
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now(),
+      'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c503')))) as res;
 select is((select (r->>'idempotency_replay')::boolean from t_ns1b, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-ns-1'),
   true, 'a replayed no-sale returns the stored result (D-022)');
 select is((select count(*)::int from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
@@ -240,13 +265,16 @@ insert into cash_drawer_sessions (id, organization_id, restaurant_id, branch_id,
   ('d7000000-0000-0000-0000-000000006d01', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-00000000da11', 'd7000000-0000-0000-0000-000000005f01', 'd7000000-0000-0000-0000-0000000ef003', 0, 'drawer-drawer-open');
 create temp table t_ns2 as select public.sync_push('d7000000-0000-0000-0000-00000000c504', 'd7000000-0000-0000-0000-00000000da11',
   jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-ns-2', 'operation_type', 'cash_drawer.no_sale_open',
-    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', '2026-10-06T11:00:00Z')))) as res;
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', 'not-a-time')))) as res;
 select is((select new_values->>'shift_id' from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
              and action = 'cash_drawer.no_sale_opened' and actor_employee_profile_id = 'd7000000-0000-0000-0000-0000000ef004'),
   'd7000000-0000-0000-0000-000000005f01', 'a manager''s open binds the till''s open shift');
 select is((select new_values->>'cash_drawer_session_id' from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
              and action = 'cash_drawer.no_sale_opened' and actor_employee_profile_id = 'd7000000-0000-0000-0000-0000000ef004'),
   'd7000000-0000-0000-0000-000000006d01', '...and its active drawer session');
+select is((select new_values->>'client_occurred_at' from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
+             and action = 'cash_drawer.no_sale_opened' and actor_employee_profile_id = 'd7000000-0000-0000-0000-0000000ef004'),
+  null, 'a MALFORMED client time degrades to NULL -- the physical open is still recorded');
 select is((select count(*)::int from cash_drawer_sessions where id = 'd7000000-0000-0000-0000-000000006d01' and status = 'active' and revision = 1),
   1, 'a no-sale is audit-only: the drawer session state is untouched');
 
@@ -266,6 +294,70 @@ create temp table t_ns4 as select public.sync_push('d7000000-0000-0000-0000-0000
 select is((select r->>'error' from t_ns4, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-ns-4'),
   'permission_denied', 'kitchen staff are refused');
 
+-- the SAME local_operation_id with a DIFFERENT payload is a ledger conflict
+create temp table t_ns1c as select public.sync_push('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-ns-1', 'operation_type', 'cash_drawer.no_sale_open',
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '1 minute')))) as res;
+select is((select r->>'status' from t_ns1c, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-ns-1'),
+  'conflict', 'a reused operation id with a different payload is a conflict, not a second open');
+
+-- ===== LATE REPLAY: an offline open journaled under cashier A's (now EXPIRED)
+--       session arrives under the MANAGER's current session ====================
+insert into shifts (id, organization_id, restaurant_id, branch_id, device_id, opened_by_employee_profile_id, resolved_membership_id, local_operation_id, status, opened_at, closed_at) values
+  ('d7000000-0000-0000-0000-000000005f00', 'd7000000-0000-0000-0000-0000000000a0', 'd7000000-0000-0000-0000-0000000000a1', 'd7000000-0000-0000-0000-00000000a1b1', 'd7000000-0000-0000-0000-00000000da11', 'd7000000-0000-0000-0000-0000000ef003', 'd7000000-0000-0000-0000-00000000ab03', 'drawer-shift-earlier', 'closed', now() - interval '5 hours', now() - interval '2 hours');
+create temp table t_late as select public.sync_push('d7000000-0000-0000-0000-00000000c504', 'd7000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-late-1', 'operation_type', 'cash_drawer.no_sale_open',
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '3 hours',
+      'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c5e3')))) as res;
+select is((select r->>'status' from t_late, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-late-1'),
+  'applied', 'a journaled offline open is recorded even though its own session has expired');
+select is((select count(*)::int from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
+             and action = 'cash_drawer.no_sale_opened' and actor_employee_profile_id = 'd7000000-0000-0000-0000-0000000ef003'
+             and (new_values->>'recorded_offline')::boolean
+             and new_values->>'submitted_by_employee_profile_id' = 'd7000000-0000-0000-0000-0000000ef004'),
+  1, '...attributed to the employee who OPENED it (not the one signed in now), flagged recorded_offline');
+select is((select new_values->>'shift_id' from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
+             and action = 'cash_drawer.no_sale_opened' and (new_values->>'recorded_offline')::boolean),
+  'd7000000-0000-0000-0000-000000005f00', '...and bound to the shift that was open on the till AT THAT MOMENT');
+select is(app.audit_safe_detail('cash_drawer.no_sale_opened', (select new_values from audit_events
+            where organization_id = 'd7000000-0000-0000-0000-0000000000a0' and action = 'cash_drawer.no_sale_opened'
+              and (new_values->>'recorded_offline')::boolean))::text,
+  '{"role": "cashier", "recorded_offline": true}',
+  'the Activity Log projection shows the role + recorded_offline, never the session/employee ids');
+
+-- refusals of the late path (each a typed per-op rejection, ledgered)
+create temp table t_late_bad as select public.sync_push('d7000000-0000-0000-0000-00000000c504', 'd7000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(
+    jsonb_build_object('local_operation_id', 'drawer-late-kds', 'operation_type', 'cash_drawer.no_sale_open',
+      -- inside c524's lifetime, so ONLY the device check can refuse it
+      'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '1 minute',
+        'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c524')),
+    jsonb_build_object('local_operation_id', 'drawer-late-old', 'operation_type', 'cash_drawer.no_sale_open',
+      'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '12 hours',
+        'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c5e3')),
+    -- 30 minutes AFTER that session expired (beyond the 10-minute tolerance)
+    jsonb_build_object('local_operation_id', 'drawer-late-after', 'operation_type', 'cash_drawer.no_sale_open',
+      'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '30 minutes',
+        'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c5e3')),
+    jsonb_build_object('local_operation_id', 'drawer-late-notime', 'operation_type', 'cash_drawer.no_sale_open',
+      'target_entity', 'cash_drawer', 'payload', jsonb_build_object('origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c5e3')))) as res;
+select is((select string_agg(r->>'local_operation_id' || '=' || (r->>'error'), ',' order by r->>'local_operation_id')
+             from t_late_bad, jsonb_array_elements(res->'results') r),
+  'drawer-late-after=invalid_origin_session,drawer-late-kds=invalid_origin_session,drawer-late-notime=invalid_origin_session,drawer-late-old=invalid_origin_session',
+  'a late record from ANOTHER device, before / after the origin session''s lifetime, or without a time is refused');
+select is((select count(*)::int from audit_events where organization_id = 'd7000000-0000-0000-0000-0000000000a0'
+             and action = 'sync.operation_rejected' and reason = 'invalid_origin_session'),
+  4, '...and each refusal leaves a server trace (sync.operation_rejected)');
+
+-- a same-session record older than 2 minutes is LATE too: the fact is recorded even
+-- though this cashier holds no grant (the gate was the till's online unlock)
+create temp table t_late_same as select public.sync_push('d7000000-0000-0000-0000-00000000c505', 'd7000000-0000-0000-0000-00000000da11',
+  jsonb_build_array(jsonb_build_object('local_operation_id', 'drawer-late-same', 'operation_type', 'cash_drawer.no_sale_open',
+    'target_entity', 'cash_drawer', 'payload', jsonb_build_object('client_occurred_at', now() - interval '5 minutes',
+      'origin_pin_session_id', 'd7000000-0000-0000-0000-00000000c505')))) as res;
+select is((select r->>'status' from t_late_same, jsonb_array_elements(res->'results') r where r->>'local_operation_id' = 'drawer-late-same'),
+  'applied', 'a same-session late record is recorded as the open it was');
+
 -- revoked device: the op is still ledgered + audited (it is in the revoked-path allowlist)
 update device_sessions set revoked_at = now(), is_active = false where id = 'd7000000-0000-0000-0000-0000000005a1';
 create temp table t_ns5 as select public.sync_push('d7000000-0000-0000-0000-00000000c503', 'd7000000-0000-0000-0000-00000000da11',
@@ -283,8 +375,9 @@ select ok((select pg_get_constraintdef(c.oid) like '%cash_drawer.no_sale_open%' 
   'the sync_operations CHECK admits cash_drawer.no_sale_open');
 select ok(has_function_privilege('authenticated', 'public.pos_verify_drawer_pin(uuid,uuid,text)', 'execute')
           and not has_function_privilege('anon', 'public.pos_verify_drawer_pin(uuid,uuid,text)', 'execute')
-          and not has_function_privilege('anon', 'app.pos_record_drawer_no_sale(uuid,uuid,timestamptz)', 'execute'),
-  'the verify wrapper is authenticated-only and the no-sale body is not anon-callable');
+          and not has_function_privilege('anon', 'app.pos_record_drawer_no_sale(uuid,uuid,timestamptz,uuid)', 'execute')
+          and not has_function_privilege('authenticated', 'app.pos_record_drawer_no_sale(uuid,uuid,timestamptz,uuid)', 'execute'),
+  'the verify wrapper is authenticated-only; the no-sale body is callable by NO client role (only via sync_push)');
 select hasnt_function('public', 'pos_record_drawer_no_sale', 'the no-sale body has NO public wrapper (reached only via sync_push)');
 select is(app.audit_category('cash_drawer.no_sale_opened') || '/' || app.audit_safe_detail('cash_drawer.no_sale_denied',
             '{"role":"cashier","denied_reason":"permission_denied","resolved_membership_id":"x"}'::jsonb)::text,

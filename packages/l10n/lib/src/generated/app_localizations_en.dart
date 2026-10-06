@@ -5116,7 +5116,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get staffCapOpenCashDrawerHint =>
-      'Opens the drawer from the POS without a sale; the cashier enters their PIN on first use. Every open is logged. Off by default.';
+      'Opens the drawer from the POS without a sale; the cashier enters their PIN once per sign-in. Every open is logged. Off by default.';
 
   @override
   String get staffCapabilitiesRoleNote =>
@@ -5458,6 +5458,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activityLogFieldKitchenAckRequired =>
       'Kitchen acknowledgement required';
+
+  @override
+  String get activityLogFieldRecordedOffline => 'Recorded offline';
 
   @override
   String get activityLogFieldAvailability => 'Availability';
@@ -6042,7 +6045,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posCashDrawerUnlockBody =>
-      'Enter your PIN. The drawer stays unlocked until you lock it or sign out.';
+      'Enter your PIN. The drawer button stays unlocked until you lock it or sign out.';
 
   @override
   String get posCashDrawerUnlockSubmit => 'Unlock and open';

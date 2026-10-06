@@ -10,16 +10,20 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/cash_drawer_manual_repository.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
+import 'package:restoflow_pos/src/data/order_submission.dart' show OutboxEntry;
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/cash_drawer_manual_controller.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
 import 'package:restoflow_pos/src/state/order_sync_controller.dart'
     show posSyncClockProvider;
+import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart'
     show posSyncSessionProvider;
 import 'package:restoflow_pos/src/state/pos_shift_close_policy.dart'
     show posShiftCloseEnabledProvider;
+import 'package:restoflow_pos/src/state/ready_notifications_controller.dart';
 import 'package:restoflow_pos/src/widgets/cash_drawer_button.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,10 +35,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// B. the durable journal (append / pending / remove; unreadable never
 ///    overwritten);
 /// C. the controller (locked by default, unlock binds one session, record
-///    BEFORE pulse online, journal BEFORE pulse offline, the offline window,
-///    refusals lock, cooldown, flush under the record's own session);
-/// D. the widgets (hidden unless available, lock badge, PIN dialog, long-press
-///    lock, compact ⋮ menu home).
+///    BEFORE pulse online, journal BEFORE pulse offline, the offline window in
+///    SERVER time, refusals lock, one open at a time, cooldown from the pulse,
+///    a journaled record leaves only on a server-traced verdict);
+/// D. the widgets (hidden unless available, lock badge, PIN dialog that cannot
+///    be dismissed mid-check, long-press lock, the ⋮ menu below
+///    kPosDrawerInlineMinWidth, the controller alive while hidden);
+/// E. the real POS bar with the drawer button (the BIZBOT symbol keeps its
+///    room in en/ar/he).
 ///
 /// Fakes only — no command ever reaches a real printer or server.
 
@@ -61,6 +69,9 @@ class _FakeRepo implements CashDrawerManualRepository {
     sessionExpiresAt: DateTime.utc(2026, 10, 6, 18),
   );
   NoSalePushResult pushResult = NoSalePushResult.recorded;
+  Future<void>? pushGate;
+  Future<void>? unlockGate;
+  void Function()? onPush;
   final pins = <String>[];
   final pushed = <NoSaleRecord>[];
   final log = <String>[];
@@ -68,6 +79,7 @@ class _FakeRepo implements CashDrawerManualRepository {
   @override
   Future<DrawerUnlockOutcome> verifyPin(String pin) async {
     pins.add(pin);
+    if (unlockGate != null) await unlockGate;
     return unlockOutcome;
   }
 
@@ -75,6 +87,8 @@ class _FakeRepo implements CashDrawerManualRepository {
   Future<NoSalePushResult> pushNoSale(NoSaleRecord record) async {
     pushed.add(record);
     log.add('push');
+    if (pushGate != null) await pushGate;
+    onPush?.call();
     return pushResult;
   }
 }
@@ -170,6 +184,7 @@ void main() {
         (_, _) async => {
           'ok': true,
           'session_expires_at': '2026-10-06T18:00:00Z',
+          'server_now': '2026-10-06T10:00:30Z',
         },
       );
       final out = await RealCashDrawerManualRepository(
@@ -178,6 +193,7 @@ void main() {
       ).verifyPin('1234');
       expect(out.result, DrawerUnlockResult.unlocked);
       expect(out.sessionExpiresAt, DateTime.utc(2026, 10, 6, 18));
+      expect(out.serverNow, DateTime.utc(2026, 10, 6, 10, 0, 30));
     });
 
     test(
@@ -251,13 +267,27 @@ void main() {
         NoSalePushResult.rejected,
       );
       expect(
-        parse(env({'status': 'applied'}), 'op-OTHER'),
+        parse(
+          env({'status': 'rejected', 'error': 'invalid_origin_session'}),
+          'op-1',
+        ),
         NoSalePushResult.rejected,
       );
-      expect(parse('garbage', 'op-1'), NoSalePushResult.rejected);
+      expect(
+        parse(env({'status': 'conflict'}), 'op-1'),
+        NoSalePushResult.rejected,
+      );
+      // No verdict about THIS record: kept and retried, never an online open.
+      expect(
+        parse(env({'status': 'applied'}), 'op-OTHER'),
+        NoSalePushResult.unconfirmed,
+      );
+      expect(parse({'ok': true}, 'op-1'), NoSalePushResult.unconfirmed);
+      expect(parse('garbage', 'op-1'), NoSalePushResult.unconfirmed);
     });
 
-    test('push sends the record under ITS OWN session, byte-stable', () async {
+    test('push sends under the CURRENT session; the payload names the '
+        'session that made the open; byte-stable', () async {
       final t = _FakeTransport(
         (_, p) async => {
           'results': [
@@ -276,13 +306,17 @@ void main() {
       expect(await repo.pushNoSale(record), NoSalePushResult.recorded);
       final (fn, params) = t.calls.single;
       expect(fn, 'sync_push');
-      expect(params['p_pin_session_id'], 'pin-a');
+      expect(params['p_pin_session_id'], 'pin-b');
+      expect(params['p_device_id'], 'dev-1');
       expect(params['p_operations'], [
         {
           'local_operation_id': 'op-9',
           'operation_type': 'cash_drawer.no_sale_open',
           'target_entity': 'cash_drawer',
-          'payload': {'client_occurred_at': '2026-10-06T09:30:00.000Z'},
+          'payload': {
+            'client_occurred_at': '2026-10-06T09:30:00.000Z',
+            'origin_pin_session_id': 'pin-a',
+          },
         },
       ]);
       expect(record.toOperation(), params['p_operations'][0]);
@@ -314,6 +348,41 @@ void main() {
         NoSalePushResult.offline,
       );
       expect(await run(() => TimeoutException('t')), NoSalePushResult.offline);
+      // A server that ANSWERED, an unproven device session (the request never
+      // left the till) or an unexpected error is NOT "offline": no online open.
+      expect(
+        await run(
+          () => const SyncTransportException(SyncTransportErrorKind.server),
+        ),
+        NoSalePushResult.unconfirmed,
+      );
+      expect(
+        await run(
+          () => const SyncTransportException(SyncTransportErrorKind.unknown),
+        ),
+        NoSalePushResult.unconfirmed,
+      );
+      expect(
+        await run(
+          () => const SyncTransportException(
+            SyncTransportErrorKind.transient,
+            code: 'device_session_unverified',
+          ),
+        ),
+        NoSalePushResult.unconfirmed,
+      );
+      expect(await run(() => StateError('x')), NoSalePushResult.unconfirmed);
+      expect(
+        await const RealCashDrawerManualRepository(null, null).pushNoSale(
+          NoSaleRecord(
+            localOperationId: 'x',
+            pinSessionId: 'pin-a',
+            deviceId: 'dev-1',
+            occurredAt: DateTime.utc(2026),
+          ),
+        ),
+        NoSalePushResult.offline,
+      );
       final slow = RealCashDrawerManualRepository(
         _FakeTransport((_, _) => Completer<Object?>().future),
         _sessionA,
@@ -357,6 +426,39 @@ void main() {
       await j.remove('dev-1', 'b');
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(posNoSaleJournalStorageKey('dev-1')), isNull);
+    });
+
+    test(
+      'a malformed RECORD survives every rewrite (never silently dropped)',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          posNoSaleJournalStorageKey(
+            'dev-1',
+          ): '{"v":1,"records":[{"id":"bad"},{"id":"a","pin_session_id":"pin-a",'
+              '"device_id":"dev-1","at":"2026-10-06T10:00:00.000Z"}]}',
+        });
+        final j = CashDrawerNoSaleJournal();
+        expect((await j.pending('dev-1')).map((r) => r.localOperationId), [
+          'a',
+        ]);
+        expect(await j.append('dev-1', rec('b')), isTrue);
+        await j.remove('dev-1', 'a');
+        await j.remove('dev-1', 'b');
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.getString(posNoSaleJournalStorageKey('dev-1')),
+          contains('"id":"bad"'),
+        );
+      },
+    );
+
+    test('the journal is bounded: past the cap an append is refused', () async {
+      final j = CashDrawerNoSaleJournal();
+      for (var i = 0; i < kPosNoSaleJournalLimit; i++) {
+        expect(await j.append('dev-1', rec('r$i')), isTrue);
+      }
+      expect(await j.append('dev-1', rec('one-too-many')), isFalse);
+      expect(await j.pending('dev-1'), hasLength(kPosNoSaleJournalLimit));
     });
 
     test('an unreadable envelope is never overwritten', () async {
@@ -428,12 +530,110 @@ void main() {
       }
     });
 
-    test('an unrecognised server rejection never pulses', () async {
+    test('a ledgered rejection or a server answer without a verdict never '
+        'pulses (and journals nothing)', () async {
+      for (final push in [
+        NoSalePushResult.rejected,
+        NoSalePushResult.unconfirmed,
+      ]) {
+        final journal = CashDrawerNoSaleJournal();
+        final t = _container(journal: journal);
+        await _ctrl(t.c).unlock('1234');
+        t.repo.pushResult = push;
+        expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.cannotRecord);
+        expect(t.kicker.kicks, 0, reason: '$push');
+        expect(await journal.pending('dev-1'), isEmpty, reason: '$push');
+      }
+    });
+
+    test(
+      'ONE open at a time: a second tap while one is in flight is ignored',
+      () async {
+        final t = _container();
+        await _ctrl(t.c).unlock('1234');
+        final gate = Completer<void>();
+        t.repo.pushGate = gate.future;
+        final first = _ctrl(t.c).open();
+        expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.ignored);
+        expect(await _ctrl(t.c).unlock('1234'), DrawerUnlockResult.unavailable);
+        gate.complete();
+        expect(await first, ManualDrawerOpenOutcome.opened);
+        expect(t.repo.pushed, hasLength(1));
+        expect(t.kicker.kicks, 1);
+      },
+    );
+
+    test('the cooldown runs from the PULSE, not from the tap', () async {
       final t = _container();
       await _ctrl(t.c).unlock('1234');
-      t.repo.pushResult = NoSalePushResult.rejected;
-      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.cannotRecord);
+      // A slow record: tapped at 10:00:00, recorded (and pulsed) at 10:00:05.
+      t.repo.onPush = () =>
+          t.c.read(_now.notifier).state = DateTime.utc(2026, 10, 6, 10, 0, 5);
+      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.opened);
+      t.repo.onPush = null;
+      t.c.read(_now.notifier).state = DateTime.utc(2026, 10, 6, 10, 0, 6);
+      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.ignored);
+      expect(t.kicker.kicks, 1);
+    });
+
+    test('a session switch during an open keeps the in-flight guard', () async {
+      final t = _container();
+      final sub = t.c.listen(posCashDrawerManualControllerProvider, (_, _) {});
+      addTearDown(sub.close);
+      await _ctrl(t.c).unlock('1234');
+      final gate = Completer<void>();
+      t.repo.pushGate = gate.future;
+      t.repo.pushResult = NoSalePushResult.denied;
+      final first = _ctrl(t.c).open();
+      t.c.read(_sessionState.notifier).state = _sessionB;
+      await Future<void>.delayed(Duration.zero);
+      expect(t.c.read(posCashDrawerManualControllerProvider).busy, isTrue);
+      expect(await _ctrl(t.c).unlock('5555'), DrawerUnlockResult.unavailable);
+      gate.complete();
+      expect(await first, ManualDrawerOpenOutcome.denied);
       expect(t.kicker.kicks, 0);
+      expect(t.c.read(posCashDrawerManualControllerProvider).busy, isFalse);
+    });
+
+    test(
+      'locked while an offline push was in flight: no offline open',
+      () async {
+        final journal = CashDrawerNoSaleJournal();
+        final t = _container(journal: journal);
+        await _ctrl(t.c).unlock('1234');
+        final gate = Completer<void>();
+        t.repo.pushGate = gate.future;
+        t.repo.pushResult = NoSalePushResult.offline;
+        final first = _ctrl(t.c).open();
+        _ctrl(t.c).lock();
+        gate.complete();
+        expect(await first, ManualDrawerOpenOutcome.cannotRecord);
+        expect(t.kicker.kicks, 0);
+        expect(await journal.pending('dev-1'), isEmpty);
+      },
+    );
+
+    test('the offline window and the record time are SERVER time', () async {
+      final journal = CashDrawerNoSaleJournal();
+      final t = _container(journal: journal);
+      // The till's clock is 2h BEHIND: server 12:00 while the device says
+      // 10:00. The session expires at 12:05 server time.
+      t.repo.unlockOutcome = DrawerUnlockOutcome(
+        DrawerUnlockResult.unlocked,
+        sessionExpiresAt: DateTime.utc(2026, 10, 6, 12, 5),
+        serverNow: DateTime.utc(2026, 10, 6, 12),
+      );
+      await _ctrl(t.c).unlock('1234');
+      // Online: the record carries server time.
+      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.opened);
+      expect(t.repo.pushed.single.occurredAt, DateTime.utc(2026, 10, 6, 12));
+      // Offline: 5 minutes left in SERVER time is inside the 10-minute margin,
+      // even though the device clock "sees" 2h05 left.
+      t.c.read(_now.notifier).state = DateTime.utc(2026, 10, 6, 10, 0, 10);
+      t.repo.pushResult = NoSalePushResult.offline;
+      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.cannotRecord);
+      expect(t.kicker.kicks, 1);
+      expect(await journal.pending('dev-1'), isEmpty);
     });
 
     test(
@@ -458,6 +658,68 @@ void main() {
         );
       },
     );
+
+    test('a journaled record leaves ONLY on a server-traced verdict', () async {
+      final expectations = <NoSalePushResult, bool>{
+        NoSalePushResult.recorded: true,
+        NoSalePushResult.denied: true,
+        NoSalePushResult.rejected: true,
+        // The current session refused / no answer / no verdict: KEPT.
+        NoSalePushResult.sessionInvalid: false,
+        NoSalePushResult.offline: false,
+        NoSalePushResult.unconfirmed: false,
+      };
+      for (final entry in expectations.entries) {
+        final journal = CashDrawerNoSaleJournal();
+        final t = _container(journal: journal);
+        await _ctrl(t.c).unlock('1234');
+        t.repo.pushResult = NoSalePushResult.offline;
+        expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.opened);
+        t.repo.pushResult = entry.key;
+        await _ctrl(t.c).flushJournal();
+        expect(
+          (await journal.pending('dev-1')).isEmpty,
+          entry.value,
+          reason: '${entry.key}',
+        );
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+      }
+    });
+
+    test('an expired session keeps the record; the NEXT sign-in sends it, '
+        'still naming the session that opened the drawer', () async {
+      final journal = CashDrawerNoSaleJournal();
+      final t = _container(journal: journal);
+      final sub = t.c.listen(posCashDrawerManualControllerProvider, (_, _) {});
+      addTearDown(sub.close);
+      await _ctrl(t.c).unlock('1234');
+      t.repo.pushResult = NoSalePushResult.offline;
+      expect(await _ctrl(t.c).open(), ManualDrawerOpenOutcome.opened);
+      // Back online, but A's session has expired meanwhile.
+      t.repo.pushResult = NoSalePushResult.sessionInvalid;
+      await _ctrl(t.c).flushJournal();
+      expect(await journal.pending('dev-1'), hasLength(1));
+      // B signs in: the session change flushes, and the record lands.
+      t.repo.pushResult = NoSalePushResult.recorded;
+      t.c.read(_sessionState.notifier).state = _sessionB;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(await journal.pending('dev-1'), isEmpty);
+      expect(t.repo.pushed.last.pinSessionId, 'pin-a');
+    });
+
+    test('a disposed controller never schedules work', () async {
+      final repo = _FakeRepo()..pushResult = NoSalePushResult.offline;
+      final c = ProviderContainer(
+        overrides: [
+          posSyncSessionProvider.overrideWithValue(_sessionA),
+          posCashDrawerManualRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      final ctrl = c.read(posCashDrawerManualControllerProvider.notifier);
+      c.dispose();
+      await ctrl.flushJournal();
+      expect(repo.pushed, isEmpty);
+    });
 
     test('offline near the session expiry: the drawer does NOT open', () async {
       final journal = CashDrawerNoSaleJournal();
@@ -573,7 +835,7 @@ void main() {
       WidgetTester tester, {
       required bool visible,
       double width = 1280,
-      Widget? extraAction,
+      Locale locale = const Locale('en'),
     }) async {
       tester.view.physicalSize = Size(width, 800);
       tester.view.devicePixelRatio = 1.0;
@@ -601,7 +863,7 @@ void main() {
             clientIdGeneratorProvider.overrideWithValue(_Ids()),
           ],
           child: MaterialApp(
-            locale: const Locale('en'),
+            locale: locale,
             localizationsDelegates: restoflowLocalizationsDelegates,
             supportedLocales: kSupportedLocales,
             home: Scaffold(
@@ -619,9 +881,107 @@ void main() {
     testWidgets('hidden when this till cannot pulse a drawer', (tester) async {
       await pump(tester, visible: false);
       expect(find.byKey(const Key('cash-drawer-button')), findsNothing);
+      // ...but the controller (and the journal it re-sends) is alive anyway.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(Scaffold)),
+      );
+      expect(container.exists(posCashDrawerManualControllerProvider), isTrue);
       await tester.tap(find.byKey(const Key('device-settings-menu')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('cash-drawer-menu-item')), findsNothing);
+    });
+
+    testWidgets('the PIN dialog cannot be dismissed while the server checks', (
+      tester,
+    ) async {
+      final repo = await pump(tester, visible: true);
+      final gate = Completer<void>();
+      repo.unlockGate = gate.future;
+      await tester.tap(find.byKey(const Key('cash-drawer-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('cash-drawer-pin-input')),
+        '1234',
+      );
+      await tester.tap(find.byKey(const Key('cash-drawer-unlock-submit')));
+      await tester.pump();
+      await tester.tapAt(const Offset(5, 795)); // the barrier
+      await tester.pump();
+      expect(find.text('Unlock the cash drawer'), findsOneWidget);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock the cash drawer'), findsNothing);
+      expect(repo.log, ['push', 'kick']);
+    });
+
+    for (final locale in const [Locale('ar'), Locale('he')]) {
+      testWidgets('${locale.languageCode}: button, PIN dialog and menu render '
+          'localized (RTL)', (tester) async {
+        await pump(tester, visible: true, locale: locale);
+        final l10n = await AppLocalizations.delegate.load(locale);
+        await tester.tap(find.byKey(const Key('cash-drawer-button')));
+        await tester.pumpAndSettle();
+        expect(find.text(l10n.posCashDrawerUnlockTitle), findsOneWidget);
+        expect(
+          Directionality.of(
+            tester.element(find.text(l10n.posCashDrawerUnlockTitle)),
+          ),
+          TextDirection.rtl,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(const Key('cash-drawer-unlock-cancel')));
+        await tester.pumpAndSettle();
+        tester.view.physicalSize = const Size(390, 800);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('device-settings-menu')));
+        await tester.pumpAndSettle();
+        expect(find.text(l10n.posCashDrawerManualOpen), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('the app-bar button needs kPosDrawerInlineMinWidth; below it '
+        'the ⋮ menu carries the action', (tester) async {
+      await pump(tester, visible: true, width: kPosDrawerInlineMinWidth - 40);
+      expect(find.byKey(const Key('cash-drawer-button')), findsNothing);
+      await tester.tap(find.byKey(const Key('device-settings-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('cash-drawer-menu-item')), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      tester.view.physicalSize = const Size(kPosDrawerInlineMinWidth, 800);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('cash-drawer-button')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('device-settings-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('cash-drawer-menu-item')), findsNothing);
+    });
+
+    testWidgets('selecting the ⋮ entry runs the same unlock-then-open path', (
+      tester,
+    ) async {
+      final repo = await pump(tester, visible: true, width: 390);
+      await tester.tap(find.byKey(const Key('device-settings-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('cash-drawer-menu-item')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('cash-drawer-pin-input')),
+        '1234',
+      );
+      await tester.tap(find.byKey(const Key('cash-drawer-unlock-submit')));
+      await tester.pumpAndSettle();
+      expect(repo.log, ['push', 'kick']);
+      // Let the "opened" snackbar clear before the next one.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      // Unlocked now: the menu offers the lock entry, and it locks.
+      await tester.tap(find.byKey(const Key('device-settings-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('cash-drawer-lock-menu-item')));
+      await tester.pumpAndSettle();
+      expect(find.text('Cash drawer button locked'), findsOneWidget);
     });
 
     testWidgets(
@@ -693,6 +1053,76 @@ void main() {
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  group('E. the real POS bar with the drawer button', () {
+    for (final locale in const [Locale('en'), Locale('ar'), Locale('he')]) {
+      for (final width in const [
+        520.0,
+        kPosDrawerInlineMinWidth,
+        820.0,
+        1280.0,
+      ]) {
+        testWidgets('${locale.languageCode} @ ${width.toInt()}px: the button '
+            'placement and the BIZBOT symbol keeps its room', (tester) async {
+          tester.view.physicalSize = Size(width, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                posReadyNotificationsControllerProvider.overrideWith(
+                  _QuietReady.new,
+                ),
+                outboxControllerProvider.overrideWith(_QuietOutbox.new),
+                posManualDrawerVisibleProvider.overrideWithValue(true),
+              ],
+              child: MaterialApp(
+                locale: locale,
+                localizationsDelegates: restoflowLocalizationsDelegates,
+                supportedLocales: kSupportedLocales,
+                home: const PosMenuScreen(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          final inline = width >= kPosDrawerInlineMinWidth;
+          expect(
+            find.byKey(const Key('cash-drawer-button')),
+            inline ? findsOneWidget : findsNothing,
+            reason: 'below the threshold the ⋮ menu carries the action',
+          );
+          final plate = tester.getRect(find.byKey(const Key('pos-brand-tile')));
+          expect(
+            plate.width,
+            greaterThanOrEqualTo(40),
+            reason: 'the symbol plate is never squeezed out by the button',
+          );
+          if (inline) {
+            expect(
+              plate.overlaps(
+                tester.getRect(find.byKey(const Key('cash-drawer-button'))),
+              ),
+              isFalse,
+            );
+          }
+        });
+      }
+    }
+  });
+}
+
+class _QuietReady extends PosReadyNotificationsController {
+  @override
+  PosReadyNotificationsState build() =>
+      const PosReadyNotificationsState(initialized: true, records: []);
+}
+
+class _QuietOutbox extends OutboxController {
+  @override
+  List<OutboxEntry> build() => const [];
 }
 
 class _GatedRepo implements CashDrawerManualRepository {

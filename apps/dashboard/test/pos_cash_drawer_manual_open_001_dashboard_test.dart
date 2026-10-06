@@ -8,6 +8,8 @@ import 'package:restoflow_dashboard/src/data/audit_log_presentation.dart';
 import 'package:restoflow_dashboard/src/staff/staff_models.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
 import 'package:restoflow_dashboard/src/staff/staff_screen.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart'
+    show RestoflowTone;
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminResult, AdminScope;
@@ -32,34 +34,39 @@ class _FakeTransport implements SyncRpcTransport {
 }
 
 int _n = 0;
-SupabaseStaffRepository _repo(_FakeTransport t) => SupabaseStaffRepository(
-  transport: t,
-  scope: AdminScope.demo,
-  currentUserId: () => 'u',
-  nonce: () => ++_n,
-);
+SupabaseStaffRepository _repo(_FakeTransport t, {int Function()? nonce}) =>
+    SupabaseStaffRepository(
+      transport: t,
+      scope: AdminScope.demo,
+      currentUserId: () => 'u',
+      nonce: nonce ?? () => ++_n,
+    );
 
-Map<String, Object?> _listStaff({bool drawer = false}) => {
-  'ok': true,
-  'staff': [
+/// A `list_staff` reply. [newServer] = false models a server that predates the
+/// migration: it never returns the `open_cash_drawer` key and only has the
+/// 8-arg `set_staff_capabilities`.
+Map<String, Object?> _listStaff({bool drawer = false, bool newServer = true}) =>
     {
-      'employee_profile_id': 'emp-1',
-      'display_name': 'Cashier One',
-      'role': 'cashier',
-      'has_pin': true,
-      'employment_status': 'active',
-      'capabilities': {
-        'apply_discount': true,
-        'void_order': true,
-        'close_shift': true,
-        'apply_full_comp': false,
-        'manage_menu_availability': true,
-        'manage_table_operations': true,
-        'open_cash_drawer': drawer,
-      },
-    },
-  ],
-};
+      'ok': true,
+      'staff': [
+        {
+          'employee_profile_id': 'emp-1',
+          'display_name': 'Cashier One',
+          'role': 'cashier',
+          'has_pin': true,
+          'employment_status': 'active',
+          'capabilities': {
+            'apply_discount': true,
+            'void_order': true,
+            'close_shift': true,
+            'apply_full_comp': false,
+            'manage_menu_availability': true,
+            'manage_table_operations': true,
+            if (newServer) 'open_cash_drawer': drawer,
+          },
+        },
+      ],
+    };
 
 Map<String, dynamic> _capsCall(_FakeTransport t) =>
     t.calls.lastWhere((c) => c.$1 == 'set_staff_capabilities').$2;
@@ -68,6 +75,7 @@ class _RecordingRepo implements StaffRepository {
   _RecordingRepo(this._staff);
   final List<StaffMember> _staff;
   final List<(String, StaffCapabilities)> capabilityCalls = [];
+  final List<StaffCapabilities?> createCalls = [];
 
   @override
   Future<AdminResult<List<StaffMember>>> load() async => Success(_staff);
@@ -78,16 +86,19 @@ class _RecordingRepo implements StaffRepository {
     required MembershipRole role,
     StaffCapabilities? capabilities,
     String? clientRequestId,
-  }) async => Success(
-    StaffMember(
-      employeeProfileId: 'new',
-      displayName: displayName,
-      role: role,
-      hasPin: false,
-      employmentStatus: 'active',
-      capabilities: capabilities,
-    ),
-  );
+  }) async {
+    createCalls.add(capabilities);
+    return Success(
+      StaffMember(
+        employeeProfileId: 'new',
+        displayName: displayName,
+        role: role,
+        hasPin: false,
+        employmentStatus: 'active',
+        capabilities: capabilities,
+      ),
+    );
+  }
 
   @override
   Future<AdminResult<void>> setPin({
@@ -178,9 +189,11 @@ void main() {
 
   // ===== B. The wire payload ===============================================
   group('B. the RPC payload sends the drawer toggle only when it changed', () {
-    test('B1 unchanged since load -> p_open_cash_drawer is OMITTED', () async {
+    test('B1 OLD server, unchanged since load -> p_open_cash_drawer is '
+        'OMITTED (the 8-arg function still resolves)', () async {
       final t = _FakeTransport(
-        (fn, _) => fn == 'list_staff' ? _listStaff() : {'ok': true},
+        (fn, _) =>
+            fn == 'list_staff' ? _listStaff(newServer: false) : {'ok': true},
       );
       final repo = _repo(t);
       await repo.load();
@@ -232,9 +245,10 @@ void main() {
       expect(_capsCall(t)['p_open_cash_drawer'], isFalse);
     });
 
-    test('B5 a successful save becomes the new baseline', () async {
+    test('B5 OLD server: a successful save becomes the new baseline', () async {
       final t = _FakeTransport(
-        (fn, _) => fn == 'list_staff' ? _listStaff() : {'ok': true},
+        (fn, _) =>
+            fn == 'list_staff' ? _listStaff(newServer: false) : {'ok': true},
       );
       final repo = _repo(t);
       await repo.load();
@@ -252,39 +266,38 @@ void main() {
       expect(_capsCall(t).containsKey('p_open_cash_drawer'), isFalse);
     });
 
-    test(
-      'B6 a FAILED save keeps the old baseline (the grant is resent)',
-      () async {
-        var fail = true;
-        final t = _FakeTransport((fn, _) {
-          if (fn == 'list_staff') return _listStaff();
-          if (fail) {
-            fail = false;
-            return {'ok': false, 'error': 'permission_denied'};
-          }
-          return {'ok': true};
-        });
-        final repo = _repo(t);
-        await repo.load();
-        const granted = StaffCapabilities(openCashDrawer: true);
-        final first = await repo.setCapabilities(
-          employeeProfileId: 'emp-1',
-          capabilities: granted,
-        );
-        expect(first, isA<Failure<void, Object>>());
-        await repo.setCapabilities(
-          employeeProfileId: 'emp-1',
-          capabilities: granted,
-        );
-        expect(_capsCall(t)['p_open_cash_drawer'], isTrue);
-      },
-    );
+    test('B6 OLD server: a FAILED save keeps the old baseline (the grant is '
+        'resent)', () async {
+      var fail = true;
+      final t = _FakeTransport((fn, _) {
+        if (fn == 'list_staff') return _listStaff(newServer: false);
+        if (fail) {
+          fail = false;
+          return {'ok': false, 'error': 'permission_denied'};
+        }
+        return {'ok': true};
+      });
+      final repo = _repo(t);
+      await repo.load();
+      const granted = StaffCapabilities(openCashDrawer: true);
+      final first = await repo.setCapabilities(
+        employeeProfileId: 'emp-1',
+        capabilities: granted,
+      );
+      expect(first, isA<Failure<void, Object>>());
+      await repo.setCapabilities(
+        employeeProfileId: 'emp-1',
+        capabilities: granted,
+      );
+      expect(_capsCall(t)['p_open_cash_drawer'], isTrue);
+    });
 
     test('B7 the request id changes when ONLY the drawer flips', () async {
       final t = _FakeTransport(
         (fn, _) => fn == 'list_staff' ? _listStaff() : {'ok': true},
       );
-      final repo = _repo(t);
+      // A FIXED nonce: the id can only differ through its input parts.
+      final repo = _repo(t, nonce: () => 7);
       await repo.load();
       await repo.setCapabilities(
         employeeProfileId: 'emp-1',
@@ -298,6 +311,55 @@ void main() {
       expect(_capsCall(t)['p_client_request_id'], isNot(grantId));
       expect(_capsCall(t)['p_open_cash_drawer'], isFalse);
     });
+
+    test('B9 NEW server: the toggle is ALWAYS sent, exactly as shown — a '
+        'stale baseline can neither drop nor invent a change', () async {
+      final t = _FakeTransport(
+        (fn, _) => fn == 'list_staff' ? _listStaff(drawer: true) : {'ok': true},
+      );
+      final repo = _repo(t);
+      await repo.load();
+      await repo.setCapabilities(
+        employeeProfileId: 'emp-1',
+        capabilities: const StaffCapabilities(openCashDrawer: true),
+      );
+      expect(
+        _capsCall(t)['p_open_cash_drawer'],
+        isTrue,
+        reason: 'unchanged, but a new server always receives the value',
+      );
+      await repo.setCapabilities(
+        employeeProfileId: 'emp-1',
+        capabilities: const StaffCapabilities(),
+      );
+      expect(_capsCall(t)['p_open_cash_drawer'], isFalse);
+    });
+
+    test(
+      'B10 once a reload shows the NEW server, the key is always sent',
+      () async {
+        var newServer = false;
+        final t = _FakeTransport(
+          (fn, _) => fn == 'list_staff'
+              ? _listStaff(newServer: newServer)
+              : {'ok': true},
+        );
+        final repo = _repo(t);
+        await repo.load();
+        await repo.setCapabilities(
+          employeeProfileId: 'emp-1',
+          capabilities: const StaffCapabilities(),
+        );
+        expect(_capsCall(t).containsKey('p_open_cash_drawer'), isFalse);
+        newServer = true; // the migration lands
+        await repo.load();
+        await repo.setCapabilities(
+          employeeProfileId: 'emp-1',
+          capabilities: const StaffCapabilities(),
+        );
+        expect(_capsCall(t)['p_open_cash_drawer'], isFalse);
+      },
+    );
 
     test('B8 create sends ONLY a grant, never a deny', () async {
       final t = _FakeTransport(
@@ -376,17 +438,48 @@ void main() {
       });
     }
 
-    testWidgets('C5 the switch survives a narrow (phone) layout', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        _RecordingRepo([_cashier()]),
-        size: const Size(390 * 3, 844 * 3),
-      );
+    // A 1366x768 laptop browser leaves ~625 logical px of viewport. Before
+    // the dialogs scrolled, the extra switch overflowed here and sat below
+    // the dialog's own buttons, out of reach.
+    const laptop = Size(1366, 625);
+
+    testWidgets('C5 EDIT dialog on a short laptop viewport: no overflow, the '
+        'switch is reachable and the grant persists', (tester) async {
+      final repo = _RecordingRepo([_cashier()]);
+      await _pump(tester, repo, size: laptop);
       await _openEditDialog(tester);
-      expect(find.byKey(const Key('cap-open-cash-drawer')), findsOneWidget);
       expect(tester.takeException(), isNull);
+      final sw = find.byKey(const Key('cap-open-cash-drawer'));
+      await tester.ensureVisible(sw);
+      await tester.pumpAndSettle();
+      await tester.tap(sw);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(repo.capabilityCalls.single.$2.openCashDrawer, isTrue);
+    });
+
+    testWidgets('C6 CREATE dialog on a short laptop viewport: the drawer can '
+        'be granted at creation', (tester) async {
+      final repo = _RecordingRepo([]);
+      await _pump(tester, repo, size: laptop);
+      await tester.tap(find.text('Add staff member'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.enterText(find.byType(TextFormField).first, 'New Cashier');
+      // Let the field's own scroll-into-view settle before scrolling down.
+      await tester.pumpAndSettle();
+      final sw = find.byKey(const Key('cap-open-cash-drawer'));
+      await tester.ensureVisible(sw);
+      await tester.pumpAndSettle();
+      await tester.tap(sw);
+      await tester.pumpAndSettle();
+      expect(_drawerSwitch(tester).value, isTrue);
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(repo.createCalls.single?.openCashDrawer, isTrue);
     });
   });
 
@@ -460,6 +553,43 @@ void main() {
         );
       });
     }
+
+    testWidgets('D5 a late (offline) open says so; a wrong PIN reads as a '
+        'warning', (tester) async {
+      for (final code in ['en', 'ar', 'he']) {
+        final l10n = await AppLocalizations.delegate.load(Locale(code));
+        final late = view(
+          l10n,
+          const AuditEvent(
+            eventId: 'late',
+            action: 'cash_drawer.no_sale_opened',
+            category: 'shifts',
+            occurredAtLabel: '2026-10-06 12:00',
+            newValues: {'role': 'cashier', 'recorded_offline': true},
+          ),
+        );
+        expect(
+          late.changes.map((c) => c.label),
+          contains(l10n.activityLogFieldRecordedOffline),
+          reason: code,
+        );
+        expect(
+          l10n.activityLogFieldRecordedOffline,
+          isNot('activityLogFieldRecordedOffline'),
+        );
+        final failed = view(
+          l10n,
+          const AuditEvent(
+            eventId: 'f',
+            action: 'cash_drawer.unlock_failed',
+            category: 'shifts',
+            occurredAtLabel: '2026-10-06 12:00',
+            newValues: {'failed_attempt_count': 3, 'locked': false},
+          ),
+        );
+        expect(failed.tone, RestoflowTone.warning, reason: code);
+      }
+    });
 
     testWidgets('D3 internal ids in the payload never render', (tester) async {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));

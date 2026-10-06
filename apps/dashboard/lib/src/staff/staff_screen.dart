@@ -352,9 +352,14 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
     super.dispose();
   }
 
+  // Every toggle the server fingerprints is part of the retry signature, so
+  // changing any of them after a lost response mints a fresh request id rather
+  // than reusing one with different input (POS-CASH-DRAWER-MANUAL-OPEN-001).
   String _sig() =>
       '${_name.text.trim()}|${_role.name}|${_caps.applyDiscount},'
-      '${_caps.voidOrder},${_caps.closeShift}';
+      '${_caps.voidOrder},${_caps.closeShift},${_caps.applyFullComp},'
+      '${_caps.manageMenuAvailability},${_caps.manageTableOperations},'
+      '${_caps.openCashDrawer}';
 
   Future<void> _submit() async {
     if (_busy) return; // synchronous double-tap guard
@@ -387,6 +392,9 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.staffAdd),
+      // POS-CASH-DRAWER-MANUAL-OPEN-001: the permission switches no longer fit
+      // a laptop-height viewport, so the dialog scrolls instead of overflowing.
+      scrollable: true,
       content: Form(
         key: _formKey,
         child: Column(
@@ -638,6 +646,9 @@ class _CapabilitiesDialogState extends State<_CapabilitiesDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.staffCapabilitiesTitle),
+      // POS-CASH-DRAWER-MANUAL-OPEN-001: scrolls on short viewports (see the
+      // create dialog).
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

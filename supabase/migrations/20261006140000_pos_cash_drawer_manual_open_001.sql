@@ -29,7 +29,9 @@
 --   6. app.audit_safe_detail          -- nested capabilities allowlist + the new key.
 --   7. sync_operations CHECK          -- + 'cash_drawer.no_sale_open'.
 --   8. app.pos_record_drawer_no_sale  -- NEW business function (reached ONLY via
---      sync_push): permission gate + audit cash_drawer.no_sale_opened / _denied.
+--      sync_push): permission gate + audit cash_drawer.no_sale_opened / _denied,
+--      plus the LATE-REPLAY path that records an offline open (already physical)
+--      under the employee who made it, even after that PIN session has ended.
 --   9. app.sync_push                  -- re-emitted from its LIVE body with the new
 --      op in BOTH allowlists (valid + revoked-device paths) and ONE dispatch arm.
 --  10. app/public.pos_verify_drawer_pin -- NEW authenticated-only PIN check for the
@@ -762,7 +764,11 @@ begin
     -- settings.branch.updated projects full branch-row snapshots, so the mode
     -- and revision now also surface there — both are safe display state, the
     -- timezone/name class.
-    'kitchen_workflow_mode','kitchen_workflow_mode_revision','resolution','reason_code'
+    'kitchen_workflow_mode','kitchen_workflow_mode_revision','resolution','reason_code',
+    -- POS-CASH-DRAWER-MANUAL-OPEN-001: a manual drawer open that reached the
+    -- server LATE (made offline, journaled on the till). A boolean -- never
+    -- money, never an identifier (T-003 holds).
+    'recorded_offline'
   ] loop
     -- PSC-001C correction (Finding 6): the four service-round actions are
     -- MONEY-FREE by approved contract — any *_minor key (hostile, manual, or
@@ -815,9 +821,10 @@ alter table public.sync_operations add constraint sync_operations_operation_type
 --    the actor lacks the right. A no-sale open is an AUDIT-ONLY event: it changes no
 --    shift / drawer-session state (STATE_MACHINES section 7, D-018) and moves no money.
 create function app.pos_record_drawer_no_sale(
-  p_pin_session_id      uuid,
-  p_device_id           uuid,
-  p_client_occurred_at  timestamptz default null
+  p_pin_session_id         uuid,
+  p_device_id              uuid,
+  p_client_occurred_at     timestamptz default null,
+  p_origin_pin_session_id  uuid default null
 )
   returns jsonb
   language plpgsql
@@ -842,6 +849,15 @@ declare
   v_dtype      text;
   v_shift_id   uuid;
   v_drawer_id  uuid;
+  v_o_org      uuid;
+  v_o_rest     uuid;
+  v_o_branch   uuid;
+  v_o_emp      uuid;
+  v_o_member   uuid;
+  v_o_started  timestamptz;
+  v_o_until    timestamptz;
+  v_o_device   uuid;
+  v_o_role     text;
 begin
   -- (a) canonical PIN-session preamble (the app.pos_set_table_status shape: a dead
   --     session/device/membership RAISES 42501, which app.sync_push records as a
@@ -874,6 +890,66 @@ begin
             jsonb_build_object('role', v_role, 'denied_reason', 'permission_denied', 'device_type', v_dtype,
                                'client_occurred_at', p_client_occurred_at, 'resolved_membership_id', v_membership));
     return jsonb_build_object('ok', false, 'error', 'invalid_device_type', 'entity', 'cash_drawer');
+  end if;
+
+  -- (b2) LATE REPLAY. The till opened the drawer while OFFLINE and journaled this
+  --      record first (the open is already physical); it arrives now -- possibly
+  --      under ANOTHER employee's session (the original one may have expired or
+  --      been replaced while the till was offline), and possibly after the grant
+  --      changed. It is recorded as the FACT it is: no_sale_opened, attributed to
+  --      the employee whose session made the open, flagged recorded_offline. The
+  --      gate for that open was the online, server-verified unlock (the till only
+  --      opens offline after one). It is accepted ONLY for a PIN session of THIS
+  --      device in THIS branch, with an occurrence time inside that session's
+  --      lifetime (10-minute clock tolerance); anything else is a typed refusal
+  --      (invalid_origin_session -> app.sync_push audits sync.operation_rejected).
+  --      A record is LATE when its origin is another session, or when it is more
+  --      than 2 minutes old (a same-session replay after reconnecting).
+  if (p_origin_pin_session_id is not null and p_origin_pin_session_id <> p_pin_session_id)
+     or (p_client_occurred_at is not null and p_client_occurred_at < now() - interval '2 minutes') then
+    select ps.organization_id, ps.restaurant_id, ps.branch_id, ps.employee_profile_id,
+           ps.resolved_membership_id, ps.started_at,
+           least(coalesce(ps.expires_at, 'infinity'::timestamptz), coalesce(ps.ended_at, 'infinity'::timestamptz)),
+           ds.device_id
+      into v_o_org, v_o_rest, v_o_branch, v_o_emp, v_o_member, v_o_started, v_o_until, v_o_device
+      from public.pin_sessions ps
+      join public.device_sessions ds on ds.id = ps.device_session_id
+      where ps.id = coalesce(p_origin_pin_session_id, p_pin_session_id);
+    if not found
+       or v_o_org is distinct from v_org or v_o_branch is distinct from v_branch
+       or v_o_device is distinct from p_device_id
+       or p_client_occurred_at is null
+       or p_client_occurred_at < v_o_started - interval '10 minutes'
+       or p_client_occurred_at > v_o_until + interval '10 minutes'
+       or p_client_occurred_at > now() + interval '10 minutes' then
+      return jsonb_build_object('ok', false, 'error', 'invalid_origin_session', 'entity', 'cash_drawer');
+    end if;
+    select m.role into v_o_role
+      from public.memberships m where m.id = v_o_member and m.organization_id = v_org;
+    -- The shift that was open on THIS till at that moment (not today's).
+    select s.id into v_shift_id
+      from public.shifts s
+      where s.organization_id = v_org and s.branch_id = v_branch and s.device_id = p_device_id
+        and s.opened_at <= p_client_occurred_at
+        and (s.closed_at is null or s.closed_at >= p_client_occurred_at)
+      order by s.opened_at desc
+      limit 1;
+    if v_shift_id is not null then
+      select cds.id into v_drawer_id
+        from public.cash_drawer_sessions cds
+        where cds.organization_id = v_org and cds.shift_id = v_shift_id
+        order by cds.created_at desc
+        limit 1;
+    end if;
+    insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+    values (v_org, v_o_rest, v_o_branch, null, v_o_emp, p_device_id, 'cash_drawer.no_sale_opened', null, null,
+            jsonb_build_object('role', v_o_role, 'shift_id', v_shift_id, 'cash_drawer_session_id', v_drawer_id,
+                               'client_occurred_at', p_client_occurred_at, 'resolved_membership_id', v_o_member,
+                               'recorded_offline', true,
+                               'origin_pin_session_id', coalesce(p_origin_pin_session_id, p_pin_session_id),
+                               'submitted_by_employee_profile_id', v_emp));
+    return jsonb_build_object('ok', true, 'entity', 'cash_drawer', 'recorded', true, 'recorded_offline', true,
+                              'shift_id', v_shift_id, 'cash_drawer_session_id', v_drawer_id);
   end if;
 
   -- (c) the permission: manager+ BY ROLE, or a cashier GRANTED open_cash_drawer.
@@ -914,12 +990,14 @@ begin
 end;
 $$;
 
-comment on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz) is
-  'POS-CASH-DRAWER-MANUAL-OPEN-001 (D-013, PRINTERS_AND_HARDWARE_SPEC section 11): records a MANUAL ("no-sale") cash-drawer open from a POS till. Canonical PIN-session preamble (dead session/device/membership RAISE 42501 -> sync_push per-op rejection). POS devices only (invalid_device_type). Permission: manager+ BY ROLE or a cashier GRANTED open_cash_drawer (grant-only, default OFF); kitchen_staff/accountant never. A refusal audits cash_drawer.no_sale_denied and RETURNS permission_denied. Success audits cash_drawer.no_sale_opened with actor, device, role and the bound open shift / active drawer session (null when none). AUDIT-ONLY: no shift/drawer state change, no money. Reached ONLY via app.sync_push (cash_drawer.no_sale_open), which owns D-022 idempotency.';
+comment on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz, uuid) is
+  'POS-CASH-DRAWER-MANUAL-OPEN-001 (D-013, PRINTERS_AND_HARDWARE_SPEC section 11): records a MANUAL ("no-sale") cash-drawer open from a POS till. Canonical PIN-session preamble (dead session/device/membership RAISE 42501 -> sync_push per-op rejection). POS devices only (invalid_device_type). Permission: manager+ BY ROLE or a cashier GRANTED open_cash_drawer (grant-only, default OFF); kitchen_staff/accountant never. A refusal audits cash_drawer.no_sale_denied and RETURNS permission_denied. Success audits cash_drawer.no_sale_opened with actor, device, role and the bound open shift / active drawer session (null when none). LATE REPLAY (an offline open journaled on the till; origin = another PIN session, or older than 2 minutes): recorded as the fact it is -- no_sale_opened attributed to the ORIGIN session employee, recorded_offline=true, bound to the shift open on the till at that moment -- only for a session of this device + branch with an occurrence time inside its lifetime (10-minute tolerance), else invalid_origin_session. AUDIT-ONLY: no shift/drawer state change, no money. Reached ONLY via app.sync_push (cash_drawer.no_sale_open), which owns D-022 idempotency.';
 
-revoke all on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz) from public;
-revoke all on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz) from anon;
-grant execute on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz) to authenticated;
+-- Reached ONLY through the SECURITY DEFINER app.sync_push (owner-executed), so no
+-- client role holds EXECUTE: a direct call would bypass the D-022 ledger.
+revoke all on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz, uuid) from public;
+revoke all on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz, uuid) from anon;
+revoke all on function app.pos_record_drawer_no_sale(uuid, uuid, timestamptz, uuid) from authenticated;
 
 -- 9. app.sync_push -- re-emitted from its LIVE body
 --    (20260905090001_sync_push_precondition_detail_002) with ONLY: the new op in
@@ -1621,14 +1699,19 @@ begin
           -- POS-CASH-DRAWER-MANUAL-OPEN-001: a MANUAL ("no-sale") drawer open
           -- recorded from the POS. Actor/org/branch/device come from the PIN
           -- session (NEVER the payload); the payload contributes ONLY the
-          -- client's own occurrence time (display only -- the audit's
-          -- occurred_at stays server time). The permission is enforced inside;
-          -- typed refusals (permission_denied / invalid_device_type) RETURN
-          -- through verbatim. Transport dedup (sync_operations) makes a replay
-          -- return the stored result -- one open, one audit row. MONEY-FREE.
+          -- client's own occurrence time and, for a journaled offline open, the
+          -- PIN session that made it (validated inside against THIS device +
+          -- branch). A malformed occurrence time degrades to NULL rather than
+          -- rejecting the record of a physical open. The permission is enforced
+          -- inside; typed refusals (permission_denied / invalid_device_type /
+          -- invalid_origin_session) RETURN through verbatim. Transport dedup
+          -- (sync_operations) makes a replay return the stored result -- one
+          -- open, one audit row. MONEY-FREE.
           v_dispatch := app.pos_record_drawer_no_sale(
             p_pin_session_id, p_device_id,
-            nullif(v_payload ->> 'client_occurred_at', '')::timestamptz);
+            case when pg_input_is_valid(v_payload ->> 'client_occurred_at', 'timestamptz')
+                 then (v_payload ->> 'client_occurred_at')::timestamptz end,
+            nullif(v_payload ->> 'origin_pin_session_id', '')::uuid);
         when 'order.void_ack' then
           -- PSC-001D: the kitchen's cancellation acknowledgement. Mirrors the
           -- order.status branch â€” actor/org/branch come from the PIN session

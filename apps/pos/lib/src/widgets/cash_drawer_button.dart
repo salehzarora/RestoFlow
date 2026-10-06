@@ -4,7 +4,6 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/cash_drawer_manual_repository.dart';
-import '../pos_palette.dart' show kPosCompactAppBarWidth;
 import '../state/cash_drawer_manual_controller.dart';
 import '../state/pos_session.dart';
 
@@ -19,21 +18,25 @@ import '../state/pos_session.dart';
 /// known to lack the permission — so web tills, KDS-style setups and demo mode
 /// see an unchanged app bar.
 ///
-/// On compact (phone-width) bars the five-action cluster stays as it is and the
-/// same action lives in the ⋮ device menu instead ([CashDrawerMenuItems]).
+/// Below [kPosDrawerInlineMinWidth] the bar keeps its existing cluster and the
+/// same action lives in the ⋮ device menu instead ([cashDrawerMenuItems]).
 class CashDrawerButton extends ConsumerWidget {
   const CashDrawerButton({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watched BEFORE any early return: the controller (and with it the journal
+    // of offline opens it re-sends) lives as long as the POS screen does —
+    // whoever is signed in, whatever the bar width.
+    final drawer = ref.watch(posCashDrawerManualControllerProvider);
     if (!ref.watch(posManualDrawerVisibleProvider)) {
       return const SizedBox.shrink();
     }
-    if (MediaQuery.sizeOf(context).width < kPosCompactAppBarWidth) {
+    if (MediaQuery.sizeOf(context).width < kPosDrawerInlineMinWidth) {
       return const SizedBox.shrink();
     }
     final l10n = AppLocalizations.of(context);
-    final drawer = ref.watch(posCashDrawerManualControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
     final session = ref.watch(posSyncSessionProvider);
     final unlocked = drawer.isUnlockedFor(session?.pinSessionId);
     const glyph = Icon(Icons.inbox_outlined);
@@ -47,7 +50,8 @@ class CashDrawerButton extends ConsumerWidget {
           : Badge(
               key: const Key('cash-drawer-lock-badge'),
               padding: const EdgeInsets.all(1),
-              label: const Icon(Icons.lock, size: 10, color: Colors.white),
+              backgroundColor: scheme.error,
+              label: Icon(Icons.lock, size: 10, color: scheme.onError),
               child: glyph,
             ),
       onPressed: drawer.busy ? null : () => runManualDrawerOpen(context, ref),
@@ -56,10 +60,16 @@ class CashDrawerButton extends ConsumerWidget {
   }
 }
 
-/// The compact-bar ⋮ menu entries for the same action: "Open cash drawer" and,
-/// once unlocked, "Lock the cash drawer button". Empty when the button would
-/// not render on a wide bar either, or when the bar is wide (the app-bar button
-/// owns the action there).
+/// The bar width from which the drawer button sits in the app bar. Narrower
+/// bars keep the existing cluster: measured on PosMenuScreen (en/ar/he), an
+/// extra 48 px action below ~560 px squeezes the BIZBOT symbol out of the bar
+/// entirely, so there the action lives in the ⋮ menu.
+const double kPosDrawerInlineMinWidth = 600;
+
+/// The ⋮ menu entries for the same action on a narrower bar: "Open cash drawer"
+/// and, once unlocked, "Lock the cash drawer button". Empty when the button
+/// would not render on a wide bar either, or when the bar is wide enough for
+/// the app-bar button (which owns the action there).
 List<PopupMenuEntry<T>> cashDrawerMenuItems<T>({
   required BuildContext context,
   required WidgetRef ref,
@@ -67,7 +77,7 @@ List<PopupMenuEntry<T>> cashDrawerMenuItems<T>({
   required T lockValue,
 }) {
   if (!ref.read(posManualDrawerVisibleProvider)) return const [];
-  if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) {
+  if (MediaQuery.sizeOf(context).width >= kPosDrawerInlineMinWidth) {
     return const [];
   }
   final l10n = AppLocalizations.of(context);
@@ -235,95 +245,100 @@ class _CashDrawerUnlockDialogState
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final name = ref.watch(posSignedInStaffNameProvider);
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(RestoflowSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Icon(
-                Icons.lock_outline,
-                size: 32,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(height: RestoflowSpacing.sm),
-              Text(
-                l10n.posCashDrawerUnlockTitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge,
-              ),
-              if (name != null) ...[
+    // While the server checks the PIN the dialog cannot be dismissed (barrier,
+    // back): its result decides whether the drawer opens.
+    return PopScope(
+      canPop: !_busy,
+      child: Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(RestoflowSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 32,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                Text(
+                  l10n.posCashDrawerUnlockTitle,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge,
+                ),
+                if (name != null) ...[
+                  const SizedBox(height: RestoflowSpacing.xs),
+                  Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ],
                 const SizedBox(height: RestoflowSpacing.xs),
                 Text(
-                  name,
+                  l10n.posCashDrawerUnlockBody,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ],
-              const SizedBox(height: RestoflowSpacing.xs),
-              Text(
-                l10n.posCashDrawerUnlockBody,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: RestoflowSpacing.lg),
-              TextField(
-                key: const Key('cash-drawer-pin-input'),
-                controller: _pin,
-                autofocus: true,
-                enabled: !_busy && !_locked,
-                obscureText: true,
-                // The dialog carries its own keypad; the soft keyboard stays
-                // down (a hardware keyboard and tests still type).
-                keyboardType: TextInputType.none,
-                maxLength: _maxPinLength,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  labelText: l10n.pinFieldLabel,
-                  counterText: '',
-                  errorText: _error,
-                  errorMaxLines: 3,
-                ),
-              ),
-              const SizedBox(height: RestoflowSpacing.md),
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 300),
-                  child: RestoflowNumericKeypad(
-                    onDigit: _digit,
-                    onBackspace: _backspace,
-                    enabled: !_busy && !_locked,
-                    buttonHeight: 48,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-              ),
-              const SizedBox(height: RestoflowSpacing.lg),
-              FilledButton(
-                key: const Key('cash-drawer-unlock-submit'),
-                onPressed: (_busy || _locked) ? null : _submit,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
+                const SizedBox(height: RestoflowSpacing.lg),
+                TextField(
+                  key: const Key('cash-drawer-pin-input'),
+                  controller: _pin,
+                  autofocus: true,
+                  enabled: !_busy && !_locked,
+                  obscureText: true,
+                  // The dialog carries its own keypad; the soft keyboard stays
+                  // down (a hardware keyboard and tests still type).
+                  keyboardType: TextInputType.none,
+                  maxLength: _maxPinLength,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    labelText: l10n.pinFieldLabel,
+                    counterText: '',
+                    errorText: _error,
+                    errorMaxLines: 3,
+                  ),
                 ),
-                child: _busy
-                    ? const RestoflowInlineSpinner()
-                    : Text(l10n.posCashDrawerUnlockSubmit),
-              ),
-              const SizedBox(height: RestoflowSpacing.sm),
-              TextButton(
-                key: const Key('cash-drawer-unlock-cancel'),
-                onPressed: _busy
-                    ? null
-                    : () => Navigator.of(context).pop(false),
-                child: Text(l10n.posShiftCancelAction),
-              ),
-            ],
+                const SizedBox(height: RestoflowSpacing.md),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: RestoflowNumericKeypad(
+                      onDigit: _digit,
+                      onBackspace: _backspace,
+                      enabled: !_busy && !_locked,
+                      buttonHeight: 48,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: RestoflowSpacing.lg),
+                FilledButton(
+                  key: const Key('cash-drawer-unlock-submit'),
+                  onPressed: (_busy || _locked) ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: _busy
+                      ? const RestoflowInlineSpinner()
+                      : Text(l10n.posCashDrawerUnlockSubmit),
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                TextButton(
+                  key: const Key('cash-drawer-unlock-cancel'),
+                  onPressed: _busy
+                      ? null
+                      : () => Navigator.of(context).pop(false),
+                  child: Text(l10n.posShiftCancelAction),
+                ),
+              ],
+            ),
           ),
         ),
       ),

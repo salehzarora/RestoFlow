@@ -183,6 +183,13 @@ class SupabaseStaffRepository implements StaffRepository {
   /// toggle actually changed.
   final Map<String, StaffCapabilities> _loadedCapabilities = {};
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: true once `list_staff` has returned the
+  /// `open_cash_drawer` key, i.e. the server has the 9-arg
+  /// `set_staff_capabilities`. From then on the drawer toggle is ALWAYS sent
+  /// (exactly what the dialog shows, like every other toggle), so a stale
+  /// [_loadedCapabilities] entry can never drop or invent a change.
+  bool _serverHasDrawerArg = false;
+
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 
   @override
@@ -219,6 +226,15 @@ class SupabaseStaffRepository implements StaffRepository {
               : null,
         ),
       );
+    }
+    if ((raw['staff'] as List?)?.any(
+          (r) =>
+              r is Map &&
+              r['capabilities'] is Map &&
+              (r['capabilities'] as Map).containsKey('open_cash_drawer'),
+        ) ??
+        false) {
+      _serverHasDrawerArg = true;
     }
     _loadedCapabilities
       ..clear()
@@ -341,13 +357,16 @@ class SupabaseStaffRepository implements StaffRepository {
     required String employeeProfileId,
     required StaffCapabilities capabilities,
   }) async {
-    // POS-CASH-DRAWER-MANUAL-OPEN-001: the grant-only drawer toggle rides the
-    // call ONLY when it differs from the last loaded state (or that state is
-    // unknown). The server reads an omitted p_open_cash_drawer as "leave
-    // unchanged", so a save that never touched the drawer switch stays
-    // compatible with a server that predates it.
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: on a server known to have the drawer
+    // argument the toggle is always sent. Until then (the window between a
+    // Dashboard deploy and the migration) it rides the call ONLY when it
+    // differs from the last loaded state (or that state is unknown): the
+    // server reads an omitted p_open_cash_drawer as "leave unchanged", so a
+    // save that never touched the drawer switch still works on the old
+    // 8-arg function, and a real change fails visibly instead of vanishing.
     final previous = _loadedCapabilities[employeeProfileId];
     final sendDrawer =
+        _serverHasDrawerArg ||
         previous == null ||
         previous.openCashDrawer != capabilities.openCashDrawer;
     final Object? raw;

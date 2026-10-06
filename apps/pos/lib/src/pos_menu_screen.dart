@@ -179,9 +179,10 @@ class PosMenuScreen extends StatelessWidget {
                     ReadyNotificationBell(),
                     RecentOrdersButton(),
                     // POS-CASH-DRAWER-MANUAL-OPEN-001: renders nothing unless
-                    // this till can pulse a drawer, and never on a compact bar
-                    // (the ⋮ menu carries it there), so the five-action
-                    // cluster is unchanged wherever it cannot help.
+                    // this till can pulse a drawer, and never below
+                    // kPosDrawerInlineMinWidth (the ⋮ menu carries it there),
+                    // so the existing cluster is unchanged wherever it cannot
+                    // help.
                     CashDrawerButton(),
                     OutboxStatusIndicator(),
                     LanguageSelector(),

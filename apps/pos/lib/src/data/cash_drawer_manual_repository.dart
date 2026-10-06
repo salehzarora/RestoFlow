@@ -11,9 +11,12 @@
 ///    hash of it) never lives on the device (D-006), so the unlock needs the
 ///    server; it shares the sign-in lockout (5 attempts / 15 minutes).
 ///  * `public.sync_push` with ONE `cash_drawer.no_sale_open` operation — records
-///    who opened which till's drawer (D-013). The server owns idempotency
-///    (D-022: device + local_operation_id), so re-sending a journaled record after
-///    a timeout can never write a second audit row.
+///    who opened which till's drawer (D-013). It is always sent under the
+///    CURRENT PIN session; the payload names the session that made the open
+///    (`origin_pin_session_id`), so a record journaled offline by cashier A still
+///    lands — attributed to A — when B is signed in, or after A's session has
+///    expired. The server owns idempotency (D-022: device + local_operation_id),
+///    so re-sending a journaled record can never write a second audit row.
 ///
 /// Every result the UI sees is a closed, safe enum — never raw backend text.
 library;
@@ -59,12 +62,19 @@ enum DrawerUnlockResult {
 }
 
 /// [DrawerUnlockResult] plus, on success, the server PIN-session expiry that
-/// bounds how long OFFLINE opens may still be recorded under this session.
+/// bounds how long OFFLINE opens may still be made under this session, and the
+/// server's clock at that moment (offline windows are measured in server time,
+/// never against a device clock that may be wrong).
 class DrawerUnlockOutcome {
-  const DrawerUnlockOutcome(this.result, {this.sessionExpiresAt});
+  const DrawerUnlockOutcome(
+    this.result, {
+    this.sessionExpiresAt,
+    this.serverNow,
+  });
 
   final DrawerUnlockResult result;
   final DateTime? sessionExpiresAt;
+  final DateTime? serverNow;
 }
 
 /// The outcome of pushing ONE no-sale record.
@@ -76,14 +86,21 @@ enum NoSalePushResult {
   /// a POS till). The refusal itself is audited server-side.
   denied,
 
-  /// The PIN session the record belongs to is dead — it can never be recorded
-  /// under its original actor.
+  /// The CURRENT PIN session was refused for the whole batch (expired / ended,
+  /// revoked binding). Nothing ran; a journaled record waits for the next
+  /// sign-in.
   sessionInvalid,
 
-  /// Transport failure / timeout — the authoritative outcome is unknown.
+  /// No answer at all (network failure / timeout): the till is offline.
   offline,
 
-  /// Any other non-applied result or a malformed envelope.
+  /// A server answered, but not with a verdict about this record (a server
+  /// error, an unproven device session, a malformed envelope). The open is NOT
+  /// made online, and a journaled record is kept and retried.
+  unconfirmed,
+
+  /// An explicit per-operation refusal the server ledgered (e.g. a revoked
+  /// till, an invalid origin session) — final, and traced server-side.
   rejected,
 }
 
@@ -103,8 +120,9 @@ class NoSaleRecord {
   final String pinSessionId;
   final String deviceId;
 
-  /// The device clock at the moment of the open (display only; the server's
-  /// audit `occurred_at` stays server time).
+  /// When the open happened, in SERVER time (the device clock corrected by the
+  /// offset measured at the unlock). The server checks a late record's time
+  /// against its origin session's lifetime.
   final DateTime occurredAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -134,13 +152,15 @@ class NoSaleRecord {
   }
 
   /// The exact `sync_push` envelope. Built from the record alone, so a re-send
-  /// is byte-identical (same local_operation_id + payload => same fingerprint).
+  /// is byte-identical (same local_operation_id + payload => same fingerprint),
+  /// whichever session carries it.
   Map<String, dynamic> toOperation() => <String, dynamic>{
     'local_operation_id': localOperationId,
     'operation_type': kNoSaleOperationType,
     'target_entity': 'cash_drawer',
     'payload': <String, dynamic>{
       'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      'origin_pin_session_id': pinSessionId,
     },
   };
 }
@@ -150,7 +170,8 @@ abstract class CashDrawerManualRepository {
   /// Verifies the signed-in employee's own [pin] for the current session.
   Future<DrawerUnlockOutcome> verifyPin(String pin);
 
-  /// Records [record] through `sync_push` under the record's own session.
+  /// Records [record] through `sync_push` under the CURRENT session (the
+  /// record itself names the session that made the open).
   Future<NoSalePushResult> pushNoSale(NoSaleRecord record);
 }
 
@@ -197,9 +218,11 @@ class RealCashDrawerManualRepository implements CashDrawerManualRepository {
     }
     if (raw['ok'] == true) {
       final expires = raw['session_expires_at'];
+      final serverNow = raw['server_now'];
       return DrawerUnlockOutcome(
         DrawerUnlockResult.unlocked,
         sessionExpiresAt: expires is String ? DateTime.tryParse(expires) : null,
+        serverNow: serverNow is String ? DateTime.tryParse(serverNow) : null,
       );
     }
     return DrawerUnlockOutcome(switch (raw['error']) {
@@ -215,37 +238,50 @@ class RealCashDrawerManualRepository implements CashDrawerManualRepository {
   @override
   Future<NoSalePushResult> pushNoSale(NoSaleRecord record) async {
     final transport = _transport;
+    final session = _session;
     if (transport == null) return NoSalePushResult.offline;
+    if (session == null) return NoSalePushResult.sessionInvalid;
     final Object? raw;
     try {
       raw = await transport
           .invoke('sync_push', <String, dynamic>{
-            'p_pin_session_id': record.pinSessionId,
-            'p_device_id': record.deviceId,
+            'p_pin_session_id': session.pinSessionId,
+            'p_device_id': session.deviceId,
             'p_operations': <dynamic>[record.toOperation()],
           })
           .timeout(pushTimeout);
     } on TimeoutException {
       return NoSalePushResult.offline;
     } on SyncTransportException catch (e) {
-      return switch (e.kind) {
-        // The whole batch was refused for the session itself (expired / ended
-        // PIN session, revoked device binding): this record can never land.
-        SyncTransportErrorKind.auth => NoSalePushResult.sessionInvalid,
-        SyncTransportErrorKind.transient => NoSalePushResult.offline,
-        _ => NoSalePushResult.offline,
-      };
+      return classifyTransportFailure(e);
     } catch (_) {
-      return NoSalePushResult.offline;
+      return NoSalePushResult.unconfirmed;
     }
     return parseNoSalePush(raw, record.localOperationId);
   }
 
-  /// Maps one `sync_push` envelope to the record's result.
+  /// Only a real absence of the server is "offline" (journal, then open). A
+  /// server that ANSWERED without a verdict, or a device session the local
+  /// guard has not proven (the request never left the till), must not open
+  /// the drawer online.
+  static NoSalePushResult classifyTransportFailure(SyncTransportException e) {
+    if (e.kind == SyncTransportErrorKind.auth) {
+      return NoSalePushResult.sessionInvalid;
+    }
+    if (e.kind == SyncTransportErrorKind.transient) {
+      return e.code == 'device_session_unverified'
+          ? NoSalePushResult.unconfirmed
+          : NoSalePushResult.offline;
+    }
+    return NoSalePushResult.unconfirmed;
+  }
+
+  /// Maps one `sync_push` envelope to the record's result. Only an explicit
+  /// per-operation answer is a verdict; anything else is [unconfirmed].
   static NoSalePushResult parseNoSalePush(Object? raw, String localOpId) {
-    if (raw is! Map) return NoSalePushResult.rejected;
+    if (raw is! Map) return NoSalePushResult.unconfirmed;
     final results = raw['results'];
-    if (results is! List) return NoSalePushResult.rejected;
+    if (results is! List) return NoSalePushResult.unconfirmed;
     for (final r in results) {
       if (r is! Map || r['local_operation_id'] != localOpId) continue;
       if (r['status'] == 'applied' && r['ok'] != false) {
@@ -256,9 +292,11 @@ class RealCashDrawerManualRepository implements CashDrawerManualRepository {
         return NoSalePushResult.denied;
       }
       if (r['detail'] == 'revoked_employee') return NoSalePushResult.denied;
-      return NoSalePushResult.rejected;
+      return r['status'] == 'rejected' || r['status'] == 'conflict'
+          ? NoSalePushResult.rejected
+          : NoSalePushResult.unconfirmed;
     }
-    return NoSalePushResult.rejected;
+    return NoSalePushResult.unconfirmed;
   }
 }
 
@@ -293,7 +331,9 @@ const int kPosNoSaleJournalLimit = 500;
 /// reached the server yet. The house shared_preferences JSON-envelope pattern
 /// (see `PosCashDrawerClaimStore`): every write swaps one whole versioned value,
 /// writes are serialized through one chain, and an unreadable envelope is never
-/// overwritten (evidence is kept; that till simply opens nothing offline).
+/// overwritten (evidence is kept; that till simply opens nothing offline). A
+/// single unreadable RECORD inside a readable envelope is carried along
+/// verbatim by every rewrite, never silently dropped.
 class CashDrawerNoSaleJournal {
   CashDrawerNoSaleJournal({Future<SharedPreferences> Function()? prefs})
     : _resolvePrefs = prefs ?? SharedPreferences.getInstance;
@@ -313,12 +353,15 @@ class CashDrawerNoSaleJournal {
   Future<bool> append(String deviceId, NoSaleRecord record) => _run(() async {
     final prefs = await _resolvePrefs();
     final key = posNoSaleJournalStorageKey(deviceId);
-    final current = _decode(prefs.getString(key));
+    final current = _decodeRaw(prefs.getString(key));
     if (current == null) return false;
-    if (current.any((r) => r.localOperationId == record.localOperationId)) {
+    if (current.any(
+      (r) =>
+          NoSaleRecord.fromJson(r)?.localOperationId == record.localOperationId,
+    )) {
       return true;
     }
-    final next = <NoSaleRecord>[...current, record];
+    final next = <Object?>[...current, record.toJson()];
     if (next.length > kPosNoSaleJournalLimit) return false;
     return prefs.setString(key, _encode(next));
   }, false);
@@ -326,38 +369,45 @@ class CashDrawerNoSaleJournal {
   /// The pending records, oldest first (empty when none or unreadable).
   Future<List<NoSaleRecord>> pending(String deviceId) => _run(() async {
     final prefs = await _resolvePrefs();
-    return _decode(prefs.getString(posNoSaleJournalStorageKey(deviceId))) ??
-        const <NoSaleRecord>[];
+    final raw = _decodeRaw(
+      prefs.getString(posNoSaleJournalStorageKey(deviceId)),
+    );
+    return <NoSaleRecord>[
+      for (final r in raw ?? const <Object?>[])
+        if (NoSaleRecord.fromJson(r) case final record?) record,
+    ];
   }, const <NoSaleRecord>[]);
 
   /// Removes the record [localOperationId] (it reached a final server verdict).
-  Future<void> remove(String deviceId, String localOperationId) =>
-      _run(() async {
-        final prefs = await _resolvePrefs();
-        final key = posNoSaleJournalStorageKey(deviceId);
-        final current = _decode(prefs.getString(key));
-        if (current == null) return;
-        final next = [
-          for (final r in current)
-            if (r.localOperationId != localOperationId) r,
-        ];
-        if (next.length == current.length) return;
-        if (next.isEmpty) {
-          await prefs.remove(key);
-        } else {
-          await prefs.setString(key, _encode(next));
-        }
-      }, null);
+  Future<void> remove(String deviceId, String localOperationId) => _run(
+    () async {
+      final prefs = await _resolvePrefs();
+      final key = posNoSaleJournalStorageKey(deviceId);
+      final current = _decodeRaw(prefs.getString(key));
+      if (current == null) return;
+      final next = [
+        for (final r in current)
+          if (NoSaleRecord.fromJson(r)?.localOperationId != localOperationId) r,
+      ];
+      if (next.length == current.length) return;
+      if (next.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, _encode(next));
+      }
+    },
+    null,
+  );
 
-  static String _encode(List<NoSaleRecord> records) =>
-      jsonEncode(<String, Object?>{
-        'v': kPosNoSaleJournalSchemaVersion,
-        'records': [for (final r in records) r.toJson()],
-      });
+  static String _encode(List<Object?> records) => jsonEncode(<String, Object?>{
+    'v': kPosNoSaleJournalSchemaVersion,
+    'records': records,
+  });
 
-  /// Null means UNREADABLE (never treated as empty, never overwritten).
-  static List<NoSaleRecord>? _decode(String? raw) {
-    if (raw == null || raw.isEmpty) return <NoSaleRecord>[];
+  /// The raw record entries, malformed ones included. Null means the envelope
+  /// itself is UNREADABLE (never treated as empty, never overwritten).
+  static List<Object?>? _decodeRaw(String? raw) {
+    if (raw == null || raw.isEmpty) return <Object?>[];
     final Object? decoded;
     try {
       decoded = jsonDecode(raw);
@@ -369,12 +419,7 @@ class CashDrawerNoSaleJournal {
         decoded['records'] is! List) {
       return null;
     }
-    final out = <NoSaleRecord>[];
-    for (final r in decoded['records'] as List) {
-      final parsed = NoSaleRecord.fromJson(r);
-      if (parsed != null) out.add(parsed);
-    }
-    return out;
+    return List<Object?>.of(decoded['records'] as List);
   }
 }
 
