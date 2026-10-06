@@ -14,6 +14,7 @@ class SupabaseDevicePairingRepository
         DevicePairingRepository,
         DeviceSessionOutcomeManager,
         DeviceSessionHeartbeatManager,
+        DeviceSessionRecoveryManager,
         DeviceSessionLocalRepairManager {
   SupabaseDevicePairingRepository({
     required SyncRpcTransport transport,
@@ -27,6 +28,11 @@ class SupabaseDevicePairingRepository
   DeviceContext? _activeDevice;
   int _generation = 0;
   bool _protectedBlocked = false;
+  final _blockChanges = StreamController<bool>.broadcast();
+  @override
+  bool get protectedCallsBlocked => _protectedBlocked;
+  @override
+  Stream<bool> get protectedCallBlockChanges => _blockChanges.stream;
   String? _expectedDeviceType;
   Future<void> _mutations = Future<void>.value();
   Future<void>? _unpairDone;
@@ -57,12 +63,14 @@ class SupabaseDevicePairingRepository
   }
 
   void _block() {
+    if (!_protectedBlocked) _blockChanges.add(true);
     _protectedBlocked = true;
     if (_transport case final DeviceSessionGuardedTransport guarded)
       guarded.block();
   }
 
   void _allow() {
+    if (_protectedBlocked) _blockChanges.add(false);
     _restorePending = false;
     _malformedReplies = 0;
     _protectedBlocked = false;
@@ -144,7 +152,7 @@ class SupabaseDevicePairingRepository
     while (_unpairDone != null) {
       await _unpairDone;
       if (waitingGeneration != _generation) {
-        return const DeviceSessionRestoreUnavailable();
+        return const DeviceSessionRestoreSuperseded();
       }
     }
     _expectedDeviceType = expectedDeviceType;
@@ -154,11 +162,13 @@ class SupabaseDevicePairingRepository
     try {
       cred = await _store.read();
     } catch (_) {
+      if (generation != _generation)
+        return const DeviceSessionRestoreSuperseded();
       _malformedReplies = 0;
       return DeviceSessionRestoreOffline(cachedContext: _activeDevice);
     }
     if (generation != _generation)
-      return const DeviceSessionRestoreUnavailable();
+      return const DeviceSessionRestoreSuperseded();
     if (cred == null) {
       _restorePending = false;
       _block();
@@ -174,7 +184,7 @@ class SupabaseDevicePairingRepository
       });
     } catch (_) {
       if (generation != _generation)
-        return const DeviceSessionRestoreUnavailable();
+        return const DeviceSessionRestoreSuperseded();
       _malformedReplies = 0;
       final cached =
           _activeDevice ??
@@ -183,15 +193,15 @@ class SupabaseDevicePairingRepository
             expectedDeviceType: expectedDeviceType,
           );
       if (generation != _generation)
-        return const DeviceSessionRestoreUnavailable();
+        return const DeviceSessionRestoreSuperseded();
       if (cached != null && _activeDevice == null) _publish(cached);
       return DeviceSessionRestoreOffline(cachedContext: cached);
     }
     if (generation != _generation)
-      return const DeviceSessionRestoreUnavailable();
+      return const DeviceSessionRestoreSuperseded();
     if (_invalidSession(raw)) {
       if (!await _reject(generation))
-        return const DeviceSessionRestoreUnavailable();
+        return const DeviceSessionRestoreSuperseded();
       return DeviceSessionRestoreRejected(reason: _reason(raw));
     }
     final context = raw is Map && raw['ok'] == true
@@ -209,21 +219,18 @@ class SupabaseDevicePairingRepository
       return _unavailable(generation, cached);
     }
     if (!await _mutate(generation, () => _writeContextCache(context))) {
-      return const DeviceSessionRestoreUnavailable();
+      return const DeviceSessionRestoreSuperseded();
     }
     _allow();
     _publish(context);
     return DeviceSessionRestored(context);
   }
 
-  DeviceSessionRestoreUnavailable _unavailable(
-    int generation,
-    DeviceContext? cached,
-  ) {
-    if (generation == _generation) {
-      _recordMalformed();
-      _publish(cached, unavailable: true);
-    }
+  DeviceRestoreOutcome _unavailable(int generation, DeviceContext? cached) {
+    if (generation != _generation)
+      return const DeviceSessionRestoreSuperseded();
+    _recordMalformed();
+    _publish(cached, unavailable: true);
     return DeviceSessionRestoreUnavailable(cachedContext: cached);
   }
 
@@ -268,7 +275,7 @@ class SupabaseDevicePairingRepository
       // PostgREST schema-cache miss and PostgreSQL undefined_function:
       // additive deployment, not a revoked device. Retry at the next cadence.
       if (e.code == 'PGRST202' || e.code == '42883' || e.code == '404') {
-        if (_protectedBlocked) {
+        if (_protectedBlocked || _restorePending) {
           return _restoreHeartbeat(_expectedDeviceType ?? context.deviceType);
         }
         _malformedReplies = 0;
@@ -322,6 +329,7 @@ class SupabaseDevicePairingRepository
       DeviceSessionRestoreRejected() => DeviceHeartbeatResult.invalidSession,
       DeviceSessionRestoreOffline() => DeviceHeartbeatResult.offline,
       DeviceSessionRestoreUnavailable() => DeviceHeartbeatResult.unavailable,
+      DeviceSessionRestoreSuperseded() => DeviceHeartbeatResult.superseded,
     };
   }
 
@@ -332,6 +340,10 @@ class SupabaseDevicePairingRepository
   Future<void> clearLocalPairing() => _unpair(localOnly: true);
 
   Future<void> _unpair({required bool localOnly}) async {
+    final previousContext = _activeDevice;
+    final previousBlocked = _protectedBlocked;
+    final previousUnavailable = _malformedReplies;
+    final previousRestorePending = _restorePending;
     _restorePending = false;
     _malformedReplies = 0;
     final done = Completer<void>();
@@ -359,6 +371,17 @@ class SupabaseDevicePairingRepository
         await _store.clear();
         await _clearContextCache();
       });
+    } catch (_) {
+      if (generation == _generation) {
+        if (localOnly && !previousBlocked) _allow();
+        _malformedReplies = previousUnavailable;
+        _restorePending = previousRestorePending || _protectedBlocked;
+        _publish(
+          previousContext,
+          unavailable: _protectedBlocked || previousUnavailable > 0,
+        );
+      }
+      rethrow;
     } finally {
       if (identical(_unpairDone, done.future)) _unpairDone = null;
       done.complete();

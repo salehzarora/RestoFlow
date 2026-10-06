@@ -33,6 +33,12 @@ abstract interface class DeviceSessionHeartbeatManager {
   Future<DeviceHeartbeatResult> heartbeat();
 }
 
+/// Optional observable state for recoverable online-call verification blocks.
+abstract interface class DeviceSessionRecoveryManager {
+  bool get protectedCallsBlocked;
+  Stream<bool> get protectedCallBlockChanges;
+}
+
 /// One foreground schedule per app, above its PIN and device gates. HTTP work
 /// already in flight cannot be unsent, but a superseded result cannot affect a
 /// new pairing. At most one follow-up is queued across resume/re-pair events.
@@ -43,10 +49,14 @@ class DeviceSessionHeartbeatScheduler {
     Duration interval = const Duration(minutes: 15),
     Timer Function(Duration, void Function())? periodicTimer,
     Duration Function()? elapsed,
+    DateTime Function()? wallClock,
+    bool Function()? recoveryRequired,
   }) : _heartbeat = heartbeat,
        _onResult = onResult,
        _interval = interval,
        _elapsed = elapsed ?? _monotonicClock(),
+       _wallClock = wallClock ?? DateTime.now,
+       _recoveryRequired = recoveryRequired ?? (() => false),
        _periodicTimer =
            periodicTimer ??
            ((delay, tick) => Timer.periodic(delay, (_) => tick()));
@@ -55,7 +65,12 @@ class DeviceSessionHeartbeatScheduler {
   final void Function(DeviceHeartbeatResult) _onResult;
   final Duration _interval;
   final Duration Function() _elapsed;
+  final DateTime Function() _wallClock;
+  final bool Function() _recoveryRequired;
   Duration? _lastSuccess;
+  DateTime? _lastSuccessWall;
+  bool _recovering = false;
+  int _recoverySeconds = 60;
   static Duration Function() _monotonicClock() {
     final stopwatch = Stopwatch()..start();
     return () => stopwatch.elapsed;
@@ -72,6 +87,9 @@ class DeviceSessionHeartbeatScheduler {
 
   void replaceSession({required bool active}) {
     _lastSuccess = null;
+    _lastSuccessWall = null;
+    _recovering = _recoveryRequired();
+    _recoverySeconds = 60;
     _generation++;
     _active = active;
     _restart();
@@ -90,12 +108,37 @@ class DeviceSessionHeartbeatScheduler {
 
   bool get _mayRun => !_disposed && _active && _foreground;
 
+  /// Re-arm after an external restore changes the guard, without an extra RPC.
+  void refreshRecoveryState() {
+    if (_disposed) return;
+    final blocked = _recoveryRequired();
+    if (_recovering == blocked) return;
+    _recovering = blocked;
+    _recoverySeconds = 60;
+    _armTimer();
+  }
+
+  void _armTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (!_mayRun) return;
+    final delay = _recovering ? Duration(seconds: _recoverySeconds) : _interval;
+    _timer = _periodicTimer(delay, () {
+      _timer?.cancel();
+      _timer = null;
+      if (_recovering) {
+        _recoverySeconds = (_recoverySeconds * 2).clamp(60, 300);
+      }
+      request();
+    });
+  }
+
   void _restart({bool resume = false}) {
     _timer?.cancel();
     _timer = null;
     _pending = false;
     if (!_mayRun) return;
-    _timer = _periodicTimer(_interval, request);
+    _armTimer();
     if (resume) {
       _requestOnResume();
     } else {
@@ -105,8 +148,18 @@ class DeviceSessionHeartbeatScheduler {
 
   void _requestOnResume() {
     final last = _lastSuccess;
-    if (last == null || _elapsed() - last >= const Duration(seconds: 60))
-      request();
+    final wall = _lastSuccessWall;
+    final monotonicDelta = last == null ? null : _elapsed() - last;
+    final wallDelta = wall == null ? null : _wallClock().difference(wall);
+    const fresh = Duration(seconds: 60);
+    final recentlyVerified =
+        monotonicDelta != null &&
+        wallDelta != null &&
+        monotonicDelta >= Duration.zero &&
+        monotonicDelta < fresh &&
+        wallDelta >= Duration.zero &&
+        wallDelta < fresh;
+    if (_recoveryRequired() || !recentlyVerified) request();
   }
 
   void request() {
@@ -129,8 +182,13 @@ class DeviceSessionHeartbeatScheduler {
     }
     _inFlight = false;
     if (_mayRun && generation == _generation) {
-      if (result == DeviceHeartbeatResult.active) _lastSuccess = _elapsed();
+      if (result == DeviceHeartbeatResult.active) {
+        _lastSuccess = _elapsed();
+        _lastSuccessWall = _wallClock();
+      }
+      refreshRecoveryState();
       _onResult(result);
+      _armTimer();
     }
     if (_pending && _mayRun) {
       _pending = false;

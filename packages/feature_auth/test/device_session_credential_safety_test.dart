@@ -71,7 +71,7 @@ void main() {
       await store.entered.future;
       final newPair = repo.pairWithCode(code: 'new-code', deviceType: 'pos');
       store.release.complete();
-      expect(await oldRestore, isA<DeviceSessionRestoreUnavailable>());
+      expect(await oldRestore, isA<DeviceSessionRestoreSuperseded>());
       expect(await newPair, isA<Success<DeviceContext, PairingFailure>>());
       expect(
         await store.read(),

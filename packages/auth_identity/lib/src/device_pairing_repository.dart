@@ -99,6 +99,11 @@ sealed class DeviceRestoreOutcome {
   const DeviceRestoreOutcome();
 }
 
+/// A newer pairing/unpair operation owns state. Ignore this stale response.
+final class DeviceSessionRestoreSuperseded extends DeviceRestoreOutcome {
+  const DeviceSessionRestoreSuperseded();
+}
+
 /// The server re-verified the stored session: [context] is authoritative.
 final class DeviceSessionRestored extends DeviceRestoreOutcome {
   const DeviceSessionRestored(this.context);
