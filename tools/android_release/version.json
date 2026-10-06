@@ -99,6 +99,43 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.54",
+      "versionCode": 54,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / owner-installed on the tablet and reported working on 2026-10-05 / never uploaded",
+      "applicationSourceSha": "3e5b57904e828dc0941c6a5b55610ca5f6b12ba3",
+      "sourceSha": "3e5b57904e828dc0941c6a5b55610ca5f6b12ba3",
+      "buildDate": "2026-10-05",
+      "installDate": "2026-10-05",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v54-3e5b579.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "f3a0e5b49a2d629f8372eb09ab52bf7f719a372a486d2e586947ff1ee5ae9c3d"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v54-3e5b579.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "442f6991cebffdec3e68afc8c07dc0cd759e98aa5fbe1fe5b2483dc24de590cd"
+        }
+      },
+      "intendedSource": "3e5b57904e828dc0941c6a5b55610ca5f6b12ba3 (main = the PR #294 prep merge, carrying POS removable quick-note chips from PR #293)",
+      "notes": [
+        "Built 2026-10-05 by tools/android_release/build_official_pair.ps1 from main at",
+        "3e5b57904e828dc0941c6a5b55610ca5f6b12ba3 (the PR #294 prep merge).",
+        "POS and KDS both 0.0.54 / 54; production certificate matches the ledger pin.",
+        "Output folder: dist/official-v54; artifact names and public SHA-256 values",
+        "are recorded above. The pair carries POS removable quick-note chips (PR #293).",
+        "Owner-installed on the tablet and reported working on 2026-10-05; never uploaded.",
+        "Build and install facts are recorded from the owner's release evidence.",
+        "No formal device acceptance matrix is recorded here; v54 stays in release",
+        "history and currentOfficialRelease remains the accepted v27, as directed",
+        "by the owner. Code 54 stays consumed."
+      ]
+    },
+    {
       "versionName": "0.0.53",
       "versionCode": 53,
       "signing": "restoflow-production",
@@ -414,26 +451,23 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.54",
-    "versionCode": 54,
+    "versionName": "0.0.55",
+    "versionCode": 55,
     "signing": "restoflow-production",
     "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main after the merge of this prep PR (carries PR #293, c94aebed); the exact SHA is recorded at build time",
+    "intendedSource": "main after the merge of this prep PR (carries PR #295, 4cedca2f); the exact SHA is recorded at build time",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V54 (2026-10-05): POS removable quick-note chips",
-      "(PR #293, merged at c94aebed) require a new official pair. Code 53 was",
-      "consumed by the pair built from 28a9b422 on 2026-09-06, never installed",
-      "or uploaded; 54 is the next free code. versionSymmetry holds: POS and KDS",
-      "both 0.0.54 / 54 from one main SHA; 54 > 53 > 52 keeps both lineages",
-      "strictly monotonic. Package ids, signing identity, RESTOFLOW_* names,",
-      "storage keys and channels unchanged: v54 updates IN PLACE over 0.0.52",
-      "or 0.0.53.",
+      "BIZBOT-ANDROID-RELEASE-V55 (2026-10-06): BIZBOT device-session heartbeat",
+      "(PR #295, merged at 4cedca2f) requires a new official POS/KDS pair.",
+      "versionSymmetry holds: POS and KDS both 0.0.55 / 55 from one main SHA;",
+      "55 > 54 keeps both lineages strictly monotonic. Package ids, signing",
+      "identity, RESTOFLOW_* names, storage keys and channels are unchanged:",
+      "v55 updates IN PLACE over 0.0.54.",
       "Build with tools/android_release/build_official_pair.ps1 from main at the",
-      "intended source (tree clean, production signing, hosted project), only after",
-      "the prep PR is merged and the owner authorizes BUILD. The runner never",
-      "installs, uploads or publishes; device rollout stays a separate owner step.",
-      "Kiosk and dashboard keep their own lineages - see kioskNextRelease and",
-      "dashboardNextRelease."
+      "intended source only after this prep PR merges and the owner authorizes BUILD.",
+      "The runner never installs, uploads or publishes; rollout is a separate owner step.",
+      "Kiosk 0.2.24 / 26 is planned from the same source for its Android tablet.",
+      "Dashboard keeps its existing independent lineage."
     ]
   },
   "androidRendererPolicy": {
@@ -464,6 +498,41 @@
     "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
   },
   "kioskReleases": [
+    {
+      "versionName": "0.2.23",
+      "versionCode": 25,
+      "signing": "restoflow-production",
+      "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
+      "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
+      "buildDate": "2026-09-06",
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifact": {
+        "filename": "RestoFlow-Kiosk-official-v25-28a9b42.apk",
+        "packageId": "com.restoflow.kiosk",
+        "sha256": "3d7059d3d6bc67a933ec00f2ae1bb7756803cca0662c972113b7b5b63b0ce995"
+      },
+      "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (the same main SHA as the v53 pair)",
+      "notes": [
+        "Independent lineage outside the POS/KDS pair contract: v2..v24 consumed",
+        "(latest 0.2.22 / 24, owner-installed on the test tablet). versionName follows",
+        "the established 0.2.<code-2> progression; 25 is the next free code. Built",
+        "from the same main SHA as the v53 pair with the pair runner's flags and",
+        "verified with verify_official_apk.ps1 (com.restoflow.kiosk, production",
+        "certificate). Content vs v24: transparent launcher icon (adaptive background",
+        "layer transparent, legacy icons transparent)."
+      ],
+      "candidateNotes": [
+        "Built 2026-09-06 from the same main HEAD 28a9b422 as the v53 pair with the pair",
+        "runner's flags (build-name 0.2.23, build-number 25, RESTOFLOW_DEMO_MODE=false,",
+        "hosted project URL + public anon key), production signing via",
+        "RESTOFLOW_ANDROID_SIGNING_PROPERTIES. verify_official_apk.ps1 PASS:",
+        "com.restoflow.kiosk, 0.2.23 / 25, production certificate, application-label",
+        "BIZBOT Kiosk, minSdk 24 / targetSdk 36, AOT. Transparent launcher icon",
+        "(10/10 committed PNGs pixel-matched, adaptive background transparent).",
+        "Handoff copy: release/BIZBOT-Android-2026-09-06-28a9b42/",
+        "BIZBOT-Kiosk-0.2.23-release.apk. NOT installed, NOT uploaded."
+      ]
+    },
     {
       "versionName": "0.2.22",
       "versionCode": 24,
@@ -534,38 +603,25 @@
     }
   ],
   "kioskNextRelease": {
-    "versionName": "0.2.23",
-    "versionCode": 25,
+    "versionName": "0.2.24",
+    "versionCode": 26,
     "signing": "restoflow-production",
-    "status": "built - official candidate / Production-signed / NOT installed / NOT uploaded",
-    "sourceSha": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa",
-    "buildDate": "2026-09-06",
-    "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
-    "artifact": {
-      "filename": "RestoFlow-Kiosk-official-v25-28a9b42.apk",
-      "packageId": "com.restoflow.kiosk",
-      "sha256": "3d7059d3d6bc67a933ec00f2ae1bb7756803cca0662c972113b7b5b63b0ce995"
-    },
-    "intendedSource": "28a9b4221bb036ca9b49ebee3128e129c5f74bfa (the same main SHA as the v53 pair)",
+    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "main after the merge of this prep PR (carries PR #295, 4cedca2f); the exact SHA is recorded at build time",
     "notes": [
-      "Independent lineage outside the POS/KDS pair contract: v2..v24 consumed",
-      "(latest 0.2.22 / 24, owner-installed on the test tablet). versionName follows",
-      "the established 0.2.<code-2> progression; 25 is the next free code. Built",
-      "from the same main SHA as the v53 pair with the pair runner's flags and",
-      "verified with verify_official_apk.ps1 (com.restoflow.kiosk, production",
-      "certificate). Content vs v24: transparent launcher icon (adaptive background",
-      "layer transparent, legacy icons transparent)."
-    ],
-    "candidateNotes": [
-      "Built 2026-09-06 from the same main HEAD 28a9b422 as the v53 pair with the pair",
-      "runner's flags (build-name 0.2.23, build-number 25, RESTOFLOW_DEMO_MODE=false,",
-      "hosted project URL + public anon key), production signing via",
-      "RESTOFLOW_ANDROID_SIGNING_PROPERTIES. verify_official_apk.ps1 PASS:",
-      "com.restoflow.kiosk, 0.2.23 / 25, production certificate, application-label",
-      "BIZBOT Kiosk, minSdk 24 / targetSdk 36, AOT. Transparent launcher icon",
-      "(10/10 committed PNGs pixel-matched, adaptive background transparent).",
-      "Handoff copy: release/BIZBOT-Android-2026-09-06-28a9b42/",
-      "BIZBOT-Kiosk-0.2.23-release.apk. NOT installed, NOT uploaded."
+      "BIZBOT-ANDROID-RELEASE-V55 (2026-10-06): BIZBOT device-session heartbeat",
+      "(PR #295, merged at 4cedca2f) also requires a new production Kiosk build",
+      "for the Android tablet. The portrait kiosk UI is unchanged.",
+      "Independent lineage outside the POS/KDS pair contract: 0.2.23 / 25 is",
+      "already built and recorded in kioskReleases with its original status.",
+      "0.2.24 / 26 follows the established 0.2.<code-2> progression; 26 > 25.",
+      "Build from the same main SHA as the v55 pair with the pair runner's flags",
+      "(flutter build apk --release, build-name 0.2.24, build-number 26,",
+      "RESTOFLOW_DEMO_MODE=false, hosted project URL + public anon key),",
+      "production signing via RESTOFLOW_ANDROID_SIGNING_PROPERTIES; verify with",
+      "verify_official_apk.ps1 (com.restoflow.kiosk, production certificate).",
+      "Build only after the prep PR merges and the owner authorizes BUILD;",
+      "installation and rollout remain separate owner steps."
     ]
   },
   "dashboardReleases": [
