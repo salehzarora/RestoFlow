@@ -262,6 +262,8 @@ const List<String> _capabilityKeys = [
   'void_order',
   'close_shift',
   'apply_full_comp',
+  // POS-CASH-DRAWER-MANUAL-OPEN-001: the grant-only manual drawer permission.
+  'open_cash_drawer',
 ];
 
 /// Substrings that mark a key as secret-bearing — a final client guard on top of
@@ -430,6 +432,10 @@ class AuditEventPresenter {
     'table.link_denied' => l10n.activityLogTitleTableLinkDenied,
     'table.tables_unlinked' => l10n.activityLogTitleTablesUnlinked,
     'table.unlink_denied' => l10n.activityLogTitleTableUnlinkDenied,
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: manual cash-drawer opens.
+    'cash_drawer.no_sale_opened' => l10n.activityLogTitleDrawerNoSaleOpened,
+    'cash_drawer.no_sale_denied' => l10n.activityLogTitleDrawerNoSaleDenied,
+    'cash_drawer.unlock_failed' => l10n.activityLogTitleDrawerUnlockFailed,
     // KITCHEN-MODE-001B: printer configuration (settings category; the former
     // intentional-'other' deferral is resolved).
     'printer.printer_device.created' => l10n.activityLogTitlePrinterCreated,
@@ -640,6 +646,7 @@ class AuditEventPresenter {
     'void_order' => l10n.activityLogCapVoidOrder,
     'close_shift' => l10n.activityLogCapCloseShift,
     'apply_full_comp' => l10n.activityLogCapApplyFullComp,
+    'open_cash_drawer' => l10n.activityLogCapOpenCashDrawer,
     _ => cap,
   };
 

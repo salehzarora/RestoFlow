@@ -87,6 +87,21 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   'shift.reconciled': AuditActionSpec(category: 'shifts', hasTitle: true),
   'shift.reconcile_denied': AuditActionSpec(category: 'shifts'),
   'cash_drawer.closed': AuditActionSpec(category: 'shifts'),
+  // POS-CASH-DRAWER-MANUAL-OPEN-001: the manual ("no-sale") drawer open from a
+  // POS till, its refusal, and a wrong PIN on the drawer unlock. Same 'shifts'
+  // category the server's app.audit_category assigns to cash_drawer.%.
+  'cash_drawer.no_sale_opened': AuditActionSpec(
+    category: 'shifts',
+    hasTitle: true,
+  ),
+  'cash_drawer.no_sale_denied': AuditActionSpec(
+    category: 'shifts',
+    hasTitle: true,
+  ),
+  'cash_drawer.unlock_failed': AuditActionSpec(
+    category: 'shifts',
+    hasTitle: true,
+  ),
   // --- staff ----------------------------------------------------------------
   'staff.created': AuditActionSpec(category: 'staff', hasTitle: true),
   'staff.create_denied': AuditActionSpec(category: 'staff'),

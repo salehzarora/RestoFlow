@@ -5078,6 +5078,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get staffCapApplyFullCompNeedsDiscount => 'يتطلب صلاحية الخصم أعلاه.';
 
   @override
+  String get staffCapOpenCashDrawer => 'يمكنه فتح درج النقود يدويًا';
+
+  @override
+  String get staffCapOpenCashDrawerHint =>
+      'فتح الدرج من نقطة البيع دون عملية بيع؛ يُدخل الكاشير رمزه عند أول استخدام. كل فتح يُسجَّل. مُطفأ افتراضيًا.';
+
+  @override
   String get staffCapabilitiesRoleNote =>
       'المديرون والمالكون يمتلكون هذه الصلاحيات أصلًا.';
 
@@ -5090,6 +5097,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogCapApplyFullComp => 'جعل الطلب مجانيًا';
+
+  @override
+  String get activityLogCapOpenCashDrawer => 'فتح درج النقود يدويًا';
 
   @override
   String get activityLogDeniedFullCompPermissionRequired =>
@@ -5385,6 +5395,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogTitleTableUnlinkDenied => 'تم رفض فك ربط الطاولة';
+
+  @override
+  String get activityLogTitleDrawerNoSaleOpened => 'فتح درج النقود يدويًا';
+
+  @override
+  String get activityLogTitleDrawerNoSaleDenied => 'رُفض فتح درج النقود';
+
+  @override
+  String get activityLogTitleDrawerUnlockFailed =>
+      'رمز خاطئ لفتح قفل درج النقود';
 
   @override
   String get activityLogFieldFromStatus => 'من الحالة';
@@ -5958,6 +5978,55 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posCashDrawerOpenFailed => 'تم تسجيل الدفعة — لم يُفتح درج النقود';
+
+  @override
+  String get posCashDrawerManualOpen => 'فتح درج النقود';
+
+  @override
+  String get posCashDrawerManualLockedTooltip =>
+      'فتح درج النقود — مقفول، يحتاج رمزك';
+
+  @override
+  String get posCashDrawerManualUnlockedTooltip =>
+      'فتح درج النقود — اضغط مطولًا للقفل';
+
+  @override
+  String get posCashDrawerUnlockTitle => 'فتح قفل درج النقود';
+
+  @override
+  String get posCashDrawerUnlockBody =>
+      'أدخل رمزك. يبقى زر الدرج مفتوح القفل حتى تقفله أو تسجّل الخروج.';
+
+  @override
+  String get posCashDrawerUnlockSubmit => 'فتح القفل وفتح الدرج';
+
+  @override
+  String get posCashDrawerOpened => 'تم فتح درج النقود';
+
+  @override
+  String get posCashDrawerManualOpenFailed =>
+      'لم يُفتح درج النقود — تحقّق من طابعة الفواتير';
+
+  @override
+  String get posCashDrawerLockedNotice => 'تم قفل زر درج النقود';
+
+  @override
+  String get posCashDrawerLockAction => 'قفل زر درج النقود';
+
+  @override
+  String get posCashDrawerNoPermission => 'ليس لديك صلاحية فتح درج النقود.';
+
+  @override
+  String get posCashDrawerNeedsConnection =>
+      'فتح قفل الدرج يحتاج اتصالًا بالإنترنت.';
+
+  @override
+  String get posCashDrawerSessionEnded =>
+      'انتهت جلستك — سجّل الدخول من جديد لفتح الدرج.';
+
+  @override
+  String get posCashDrawerCannotRecord =>
+      'لا يمكن فتح الدرج الآن — تعذّر تسجيل العملية. تحقّق من الاتصال.';
 
   @override
   String get posDeviceAccentTitle => 'لون التمييز لهذا الجهاز';

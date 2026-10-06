@@ -17,6 +17,7 @@ class PosStaffCapabilities {
     required this.applyFullComp,
     this.manageMenuAvailability = false,
     this.manageTableOperations = false,
+    this.openCashDrawer = false,
     this.role,
   });
 
@@ -26,6 +27,7 @@ class PosStaffCapabilities {
     applyFullComp: false,
     manageMenuAvailability: false,
     manageTableOperations: false,
+    openCashDrawer: false,
     role: null,
   );
 
@@ -64,6 +66,11 @@ class PosStaffCapabilities {
   /// status, link/unlink) from the POS. Server-authoritative.
   final bool manageTableOperations;
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: may open the cash drawer manually (a
+  /// "no-sale" open). Grant-only for a cashier (default OFF), held by role by a
+  /// manager/owner. Server-authoritative — the unlock and every open re-check it.
+  final bool openCashDrawer;
+
   /// Parses the `capabilities` object from `public.pin_session_capabilities`.
   ///
   /// All use `== true`, so a missing field, an old server that does not send the
@@ -77,6 +84,7 @@ class PosStaffCapabilities {
     applyFullComp: json['apply_full_comp'] == true,
     manageMenuAvailability: json['manage_menu_availability'] == true,
     manageTableOperations: json['manage_table_operations'] == true,
+    openCashDrawer: json['open_cash_drawer'] == true,
     role: role is String ? role : null,
   );
 }

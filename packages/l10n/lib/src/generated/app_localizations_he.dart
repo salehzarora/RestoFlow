@@ -5042,6 +5042,13 @@ class AppLocalizationsHe extends AppLocalizations {
       'דורש את הרשאת ההנחה שלמעלה.';
 
   @override
+  String get staffCapOpenCashDrawer => 'רשאי לפתוח את מגירת המזומנים ידנית';
+
+  @override
+  String get staffCapOpenCashDrawerHint =>
+      'פתיחת המגירה מהקופה ללא מכירה; הקופאי מזין את קוד ה-PIN שלו בשימוש הראשון. כל פתיחה נרשמת. כבוי כברירת מחדל.';
+
+  @override
   String get staffCapabilitiesRoleNote =>
       'למנהלים ולבעלים כבר יש את כל ההרשאות האלה.';
 
@@ -5054,6 +5061,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogCapApplyFullComp => 'מתן הזמנה חינם';
+
+  @override
+  String get activityLogCapOpenCashDrawer => 'פתיחת מגירת המזומנים ידנית';
 
   @override
   String get activityLogDeniedFullCompPermissionRequired =>
@@ -5344,6 +5354,16 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogTitleTableUnlinkDenied => 'ביטול קישור השולחן נדחה';
+
+  @override
+  String get activityLogTitleDrawerNoSaleOpened => 'מגירת המזומנים נפתחה ידנית';
+
+  @override
+  String get activityLogTitleDrawerNoSaleDenied => 'פתיחת מגירת המזומנים נדחתה';
+
+  @override
+  String get activityLogTitleDrawerUnlockFailed =>
+      'קוד PIN שגוי לשחרור מגירת המזומנים';
 
   @override
   String get activityLogFieldFromStatus => 'מסטטוס';
@@ -5919,6 +5939,56 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posCashDrawerOpenFailed => 'התשלום נרשם — מגירת המזומנים לא נפתחה';
+
+  @override
+  String get posCashDrawerManualOpen => 'פתיחת מגירת המזומנים';
+
+  @override
+  String get posCashDrawerManualLockedTooltip =>
+      'פתיחת מגירת המזומנים — נעול, נדרש קוד ה-PIN שלך';
+
+  @override
+  String get posCashDrawerManualUnlockedTooltip =>
+      'פתיחת מגירת המזומנים — לחיצה ארוכה לנעילה';
+
+  @override
+  String get posCashDrawerUnlockTitle => 'שחרור נעילת מגירת המזומנים';
+
+  @override
+  String get posCashDrawerUnlockBody =>
+      'הזן את קוד ה-PIN שלך. הכפתור יישאר משוחרר עד שתנעל אותו או תתנתק.';
+
+  @override
+  String get posCashDrawerUnlockSubmit => 'שחרור ופתיחה';
+
+  @override
+  String get posCashDrawerOpened => 'מגירת המזומנים נפתחה';
+
+  @override
+  String get posCashDrawerManualOpenFailed =>
+      'מגירת המזומנים לא נפתחה — בדוק את מדפסת הקבלות';
+
+  @override
+  String get posCashDrawerLockedNotice => 'כפתור מגירת המזומנים ננעל';
+
+  @override
+  String get posCashDrawerLockAction => 'נעילת כפתור מגירת המזומנים';
+
+  @override
+  String get posCashDrawerNoPermission =>
+      'אין לך הרשאה לפתוח את מגירת המזומנים.';
+
+  @override
+  String get posCashDrawerNeedsConnection =>
+      'שחרור נעילת המגירה דורש חיבור לאינטרנט.';
+
+  @override
+  String get posCashDrawerSessionEnded =>
+      'ההפעלה שלך הסתיימה — היכנס מחדש כדי לפתוח את המגירה.';
+
+  @override
+  String get posCashDrawerCannotRecord =>
+      'לא ניתן לפתוח את המגירה כרגע — לא ניתן לרשום את הפעולה. בדוק את החיבור.';
 
   @override
   String get posDeviceAccentTitle => 'צבע הדגשה למסוף זה';

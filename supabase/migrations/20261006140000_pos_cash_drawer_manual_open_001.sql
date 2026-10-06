@@ -871,7 +871,7 @@ begin
   if v_dtype is distinct from 'pos' then
     insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
     values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'cash_drawer.no_sale_denied', null, null,
-            jsonb_build_object('role', v_role, 'denied_reason', 'invalid_device_type', 'device_type', v_dtype,
+            jsonb_build_object('role', v_role, 'denied_reason', 'permission_denied', 'device_type', v_dtype,
                                'client_occurred_at', p_client_occurred_at, 'resolved_membership_id', v_membership));
     return jsonb_build_object('ok', false, 'error', 'invalid_device_type', 'entity', 'cash_drawer');
   end if;

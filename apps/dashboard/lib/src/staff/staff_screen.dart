@@ -574,6 +574,25 @@ class _CapabilitiesSwitches extends StatelessWidget {
               ? (v) => onChanged(value.copyWith(manageTableOperations: v))
               : null,
         ),
+        // POS-CASH-DRAWER-MANUAL-OPEN-001: GRANT-ONLY (default OFF). Opening the
+        // drawer outside a sale is a sensitive cash action: every open is logged
+        // and the cashier proves their PIN once per session on the POS.
+        SwitchListTile(
+          key: const Key('cap-open-cash-drawer'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapOpenCashDrawer),
+          subtitle: Text(
+            l10n.staffCapOpenCashDrawerHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          value: value.openCashDrawer,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(openCashDrawer: v))
+              : null,
+        ),
         const SizedBox(height: RestoflowSpacing.xxs),
         // Honest: these switches are cashier-only. A manager/owner already holds
         // every one of these rights BY ROLE and is unaffected by them.
