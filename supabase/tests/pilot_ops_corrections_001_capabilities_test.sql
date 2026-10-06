@@ -126,13 +126,15 @@ select is(
     order by created_at limit 1),
   true, 'the staff.capabilities_updated audit projection carries manage_menu_availability');
 
--- ===== (16-18) ACLs on the 8-arg set_staff_capabilities =======================
+-- ===== (16-18) ACLs on the CURRENT set_staff_capabilities ====================
+-- POS-CASH-DRAWER-MANUAL-OPEN-001 added a 9th argument (p_open_cash_drawer,
+-- DEFAULT NULL = unchanged); the 8 positional calls above still resolve to it.
 select is(
-  (select has_function_privilege('authenticated', 'app.set_staff_capabilities(uuid,uuid,boolean,boolean,boolean,boolean,boolean,boolean)', 'execute')),
-  true, 'authenticated may execute the 8-arg app.set_staff_capabilities');
+  (select has_function_privilege('authenticated', 'app.set_staff_capabilities(uuid,uuid,boolean,boolean,boolean,boolean,boolean,boolean,boolean)', 'execute')),
+  true, 'authenticated may execute the current (9-arg) app.set_staff_capabilities');
 select is(
-  (select has_function_privilege('anon', 'public.set_staff_capabilities(uuid,uuid,boolean,boolean,boolean,boolean,boolean,boolean)', 'execute')),
-  false, 'anon may NOT execute the 8-arg public.set_staff_capabilities');
+  (select has_function_privilege('anon', 'public.set_staff_capabilities(uuid,uuid,boolean,boolean,boolean,boolean,boolean,boolean,boolean)', 'execute')),
+  false, 'anon may NOT execute the current (9-arg) public.set_staff_capabilities');
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'app' and p.proname = 'set_staff_capabilities'),
