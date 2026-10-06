@@ -234,13 +234,15 @@ void main() {
     // Primary KPIs sit above the dominant analytics row.
     expect(topOf('kpi-gross-sales'), lessThan(topOf('sales-by-hour-card')));
     // The analytics row sits above the secondary operational cards.
-    expect(topOf('sales-by-hour-card'), lessThan(topOf('kpi-cash-sales')));
-    expect(topOf('payment-mix-card'), lessThan(topOf('kpi-cash-sales')));
+    expect(topOf('sales-by-hour-card'), lessThan(topOf('kpi-unpaid')));
+    expect(topOf('payment-mix-card'), lessThan(topOf('kpi-unpaid')));
     // The secondary cards sit above the lower detail sections.
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('top-items-card')));
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('recent-orders-card')));
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('payment-summary-card')));
-    // Secondary values/captions preserved through the move.
+    expect(topOf('kpi-unpaid'), lessThan(topOf('top-items-card')));
+    expect(topOf('kpi-unpaid'), lessThan(topOf('recent-orders-card')));
+    expect(topOf('kpi-unpaid'), lessThan(topOf('payment-summary-card')));
+    expect(topOf('kpi-cash-sales'), lessThan(topOf('sales-by-hour-card')));
+    expect(topOf('kpi-completed'), lessThan(topOf('sales-by-hour-card')));
+    // Values/captions preserved through the move.
     expect(
       tester
           .widget<RestoflowMetricCard>(find.byKey(const Key('kpi-cash-sales')))
@@ -281,7 +283,10 @@ void main() {
     // its own non-fabricating states, never a ranked list.
     expect(find.byKey(const Key('top-items-card')), findsOneWidget);
     expect(find.byKey(const Key('top-items-list')), findsNothing);
-    expect(find.byType(RestoflowRankRow), findsNothing);
+    expect(
+      find.byWidgetPredicate((widget) => widget is RestoflowRankRow),
+      findsNothing,
+    );
 
     // The limited panel sits in the analytics position: below the primary
     // KPIs, above the secondary operational cards, and above the legacy
@@ -293,7 +298,7 @@ void main() {
         .getTopLeft(find.byKey(const Key('kpi-gross-sales')))
         .dy;
     final secondaryY = tester
-        .getTopLeft(find.byKey(const Key('kpi-cash-sales')))
+        .getTopLeft(find.byKey(const Key('kpi-unpaid')))
         .dy;
     final paymentY = tester
         .getTopLeft(find.byKey(const Key('payment-summary-card')))

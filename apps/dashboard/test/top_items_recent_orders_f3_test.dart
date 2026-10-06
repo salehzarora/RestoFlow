@@ -598,7 +598,10 @@ void main() {
 
       expect(find.byKey(const Key('top-items-card')), findsOneWidget);
       expect(find.byKey(const Key('top-items-list')), findsOneWidget);
-      expect(find.byType(RestoflowRankRow), findsWidgets);
+      expect(
+        find.byWidgetPredicate((widget) => widget is RestoflowRankRow),
+        findsWidgets,
+      );
 
       expect(find.byKey(const Key('recent-orders-card')), findsOneWidget);
       expect(find.byKey(const Key('recent-orders-list')), findsOneWidget);

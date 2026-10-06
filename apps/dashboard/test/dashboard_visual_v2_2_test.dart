@@ -409,7 +409,7 @@ void main() {
       // ...and both stay above the secondary operational cards.
       expect(
         topOf(tester, 'period-comparison-card'),
-        lessThan(topOf(tester, 'kpi-cash-sales')),
+        lessThan(topOf(tester, 'kpi-unpaid')),
       );
     });
 

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:restoflow_design_system/restoflow_design_system.dart';
+
+import '../overview/overview_visuals.dart';
 
 /// A simple leading-label / trailing-value row for a section card (RF-141C: the
-/// section container is now the shared [RestoflowSectionCard]). [label] and
+/// section container uses Overview-local chrome). [label] and
 /// [trailingValue] are pre-built data strings; [secondary] is an optional muted
 /// sub-line under the label (e.g. an item quantity).
 class SectionRow extends StatelessWidget {
@@ -10,60 +11,60 @@ class SectionRow extends StatelessWidget {
     required this.label,
     required this.trailingValue,
     this.secondary,
+    this.icon,
     super.key,
   });
 
   final String label;
   final String trailingValue;
   final String? secondary;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
-      child: Row(
+    final content = OverviewValueRow(
+      label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (secondary != null)
-                  Text(
-                    secondary!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: RestoflowSpacing.md),
-          // CLIENT-D: flexible with a LOOSE fit — natural width whenever there
-          // is room (so nothing that renders today moves), ellipsized only when
-          // a four-figure amount at a large text scale would otherwise push the
-          // row past the card edge.
-          Flexible(
-            child: Text(
-              trailingValue,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.primary,
+          Text(label, style: theme.textTheme.titleSmall),
+          if (secondary != null)
+            Text(
+              secondary!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          ),
         ],
       ),
+      value: Text(
+        trailingValue,
+        textAlign: TextAlign.end,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.primary,
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: icon == null
+          ? content
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: OverviewVisuals.softMint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, size: 18, color: OverviewVisuals.deep),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: content),
+              ],
+            ),
     );
   }
 }
