@@ -401,7 +401,15 @@ class SupabaseDevicePairingRepository
       });
     } catch (_) {
       if (generation == _generation) {
-        if (localOnly) _pendingCredentialRepair = credential;
+        if (localOnly) {
+          _pendingCredentialRepair = credential;
+          // Minimize the crash window after a partially completed deletion.
+          // If storage is still unavailable, later verification retries this.
+          try {
+            await _repairCredential(generation);
+          } catch (_) {}
+        }
+        if (generation != _generation) rethrow;
         if (localOnly && !previousBlocked) _allow();
         _malformedReplies = previousUnavailable;
         _restorePending = previousRestorePending || _protectedBlocked;

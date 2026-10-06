@@ -94,6 +94,16 @@ _rig({bool restore = true}) async {
 Future<void> _flush() async => Future<void>.delayed(Duration.zero);
 void main() {
   test(
+    'H5 partial clear restores durable token before surfacing repair failure',
+    () async {
+      final h = await _rig();
+      h.store.failAfterClear = true;
+      await expectLater(h.repo.clearLocalPairing(), throwsStateError);
+      expect(await h.store.read(), _credential);
+      expect(h.repo.activeDevice?.deviceId, 'device');
+    },
+  );
+  test(
     'H5 partially cleared credential survives write outage and recovers without pairing',
     () async {
       final h = await _rig();
@@ -102,9 +112,9 @@ void main() {
       await h.repo.heartbeat();
       await h.repo.heartbeat();
       h.store.failAfterClear = true;
+      h.store.failWrite = true;
       await expectLater(h.repo.clearLocalPairing(), throwsStateError);
       expect(h.repo.activeDevice?.deviceId, 'device');
-      h.store.failWrite = true;
       expect(await h.repo.heartbeat(), DeviceHeartbeatResult.offline);
       expect(h.repo.activeDevice?.deviceId, 'device');
       h.store.failWrite = false;
