@@ -178,6 +178,18 @@ class SupabaseStaffRepository implements StaffRepository {
   final String? Function() _uid;
   final int Function() _nonce;
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: the capabilities last loaded (or saved)
+  /// per employee, so [setCapabilities] can tell whether the grant-only drawer
+  /// toggle actually changed.
+  final Map<String, StaffCapabilities> _loadedCapabilities = {};
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: true once `list_staff` has returned the
+  /// `open_cash_drawer` key, i.e. the server has the 9-arg
+  /// `set_staff_capabilities`. From then on the drawer toggle is ALWAYS sent
+  /// (exactly what the dialog shows, like every other toggle), so a stale
+  /// [_loadedCapabilities] entry can never drop or invent a change.
+  bool _serverHasDrawerArg = false;
+
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 
   @override
@@ -215,6 +227,21 @@ class SupabaseStaffRepository implements StaffRepository {
         ),
       );
     }
+    if ((raw['staff'] as List?)?.any(
+          (r) =>
+              r is Map &&
+              r['capabilities'] is Map &&
+              (r['capabilities'] as Map).containsKey('open_cash_drawer'),
+        ) ??
+        false) {
+      _serverHasDrawerArg = true;
+    }
+    _loadedCapabilities
+      ..clear()
+      ..addAll({
+        for (final s in staff)
+          if (s.capabilities != null) s.employeeProfileId: s.capabilities!,
+      });
     return Success(staff);
   }
 
@@ -256,6 +283,8 @@ class SupabaseStaffRepository implements StaffRepository {
           'manage_menu_availability': 'false',
         if (!capabilities.manageTableOperations)
           'manage_table_operations': 'false',
+        // POS-CASH-DRAWER-MANUAL-OPEN-001: default-OFF, so only a GRANT is sent.
+        if (capabilities.openCashDrawer) 'open_cash_drawer': 'true',
       },
     };
     final params = <String, dynamic>{
@@ -328,6 +357,18 @@ class SupabaseStaffRepository implements StaffRepository {
     required String employeeProfileId,
     required StaffCapabilities capabilities,
   }) async {
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: on a server known to have the drawer
+    // argument the toggle is always sent. Until then (the window between a
+    // Dashboard deploy and the migration) it rides the call ONLY when it
+    // differs from the last loaded state (or that state is unknown): the
+    // server reads an omitted p_open_cash_drawer as "leave unchanged", so a
+    // save that never touched the drawer switch still works on the old
+    // 8-arg function, and a real change fails visibly instead of vanishing.
+    final previous = _loadedCapabilities[employeeProfileId];
+    final sendDrawer =
+        _serverHasDrawerArg ||
+        previous == null ||
+        previous.openCashDrawer != capabilities.openCashDrawer;
     final Object? raw;
     try {
       raw = await _t.invoke('set_staff_capabilities', <String, dynamic>{
@@ -346,6 +387,7 @@ class SupabaseStaffRepository implements StaffRepository {
           // write, not a stale replay.
           '${capabilities.manageMenuAvailability}',
           '${capabilities.manageTableOperations}',
+          if (sendDrawer) '${capabilities.openCashDrawer}',
         ]),
         'p_employee_profile_id': employeeProfileId,
         'p_apply_discount': capabilities.applyDiscount,
@@ -354,6 +396,7 @@ class SupabaseStaffRepository implements StaffRepository {
         'p_apply_full_comp': capabilities.applyFullComp,
         'p_manage_menu_availability': capabilities.manageMenuAvailability,
         'p_manage_table_operations': capabilities.manageTableOperations,
+        if (sendDrawer) 'p_open_cash_drawer': capabilities.openCashDrawer,
       });
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));
@@ -361,6 +404,7 @@ class SupabaseStaffRepository implements StaffRepository {
       return const Failure(AdminTransient());
     }
     if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
+    _loadedCapabilities[employeeProfileId] = capabilities;
     return const Success(null);
   }
 

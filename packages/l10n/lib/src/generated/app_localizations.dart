@@ -9322,6 +9322,18 @@ abstract class AppLocalizations {
   /// **'Needs the discount permission above.'**
   String get staffCapApplyFullCompNeedsDiscount;
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 staff-permission switch: allows this cashier to open the cash drawer from the POS without a sale. Grant-only, OFF by default; managers and owners hold it by role.
+  ///
+  /// In en, this message translates to:
+  /// **'Can open the cash drawer manually'**
+  String get staffCapOpenCashDrawer;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: explains the drawer permission switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens the drawer from the POS without a sale; the cashier enters their PIN once per sign-in. Every open is logged. Off by default.'**
+  String get staffCapOpenCashDrawerHint;
+
   /// FULL-COMP-PERMISSION-001: honest note that these switches apply only to cashiers - managers/owners hold these rights by role and are not affected by the toggles.
   ///
   /// In en, this message translates to:
@@ -9345,6 +9357,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Make an order free'**
   String get activityLogCapApplyFullComp;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log label of the open_cash_drawer capability row (Enabled/Disabled, before→after) on staff.capabilities_updated / staff.created.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cash drawer manually'**
+  String get activityLogCapOpenCashDrawer;
 
   /// FULL-COMP-PERMISSION-001 Activity-log VALUE for denied_reason=full_comp_permission_required: the discount would have made the order free and the actor lacks the separate full-comp permission.
   ///
@@ -9856,6 +9874,24 @@ abstract class AppLocalizations {
   /// **'Table unlink denied'**
   String get activityLogTitleTableUnlinkDenied;
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log title for cash_drawer.no_sale_opened (a manual, no-sale drawer open from a POS till; actor + device shown by the row).
+  ///
+  /// In en, this message translates to:
+  /// **'Cash drawer opened manually'**
+  String get activityLogTitleDrawerNoSaleOpened;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log title for cash_drawer.no_sale_denied (the actor lacked the open_cash_drawer permission, or the device is not a POS till).
+  ///
+  /// In en, this message translates to:
+  /// **'Cash drawer open denied'**
+  String get activityLogTitleDrawerNoSaleDenied;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log title for cash_drawer.unlock_failed (a wrong PIN on the drawer unlock; counts toward the shared sign-in lockout).
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN to unlock the cash drawer'**
+  String get activityLogTitleDrawerUnlockFailed;
+
   /// Activity Log field label for the table manual status before a change.
   ///
   /// In en, this message translates to:
@@ -9891,6 +9927,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kitchen acknowledgement required'**
   String get activityLogFieldKitchenAckRequired;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001 Activity-log field label: the manual drawer open was made while the till was offline and reached the server later (boolean).
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded offline'**
+  String get activityLogFieldRecordedOffline;
 
   /// Activity Log field label for the availability before/after value.
   ///
@@ -10869,6 +10911,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment recorded — cash drawer did not open'**
   String get posCashDrawerOpenFailed;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: label of the manual ("no-sale") cash-drawer open action (app-bar button tooltip prefix and the compact ⋮ menu item). Every manual open is recorded in the owner Activity Log.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cash drawer'**
+  String get posCashDrawerManualOpen;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: tooltip of the drawer button while it is LOCKED for the current PIN session; the first open asks for the signed-in employee's own PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cash drawer — locked, needs your PIN'**
+  String get posCashDrawerManualLockedTooltip;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: tooltip of the drawer button once UNLOCKED: a tap opens the drawer at once; a long press locks the button again.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cash drawer — long-press to lock'**
+  String get posCashDrawerManualUnlockedTooltip;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: title of the PIN dialog that unlocks the drawer button for the current PIN session.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock the cash drawer'**
+  String get posCashDrawerUnlockTitle;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: body of the unlock dialog. The PIN is the signed-in employee's OWN sign-in PIN, verified by the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your PIN. The drawer button stays unlocked until you lock it or sign out.'**
+  String get posCashDrawerUnlockBody;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: submit button of the unlock dialog; on success the drawer opens immediately.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock and open'**
+  String get posCashDrawerUnlockSubmit;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: snackbar after the manual open pulse was handed to the receipt printer (best effort: no hardware acknowledgement exists).
+  ///
+  /// In en, this message translates to:
+  /// **'Cash drawer opened'**
+  String get posCashDrawerOpened;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: snackbar when the manual drawer pulse could not be sent to the receipt printer (never retried automatically).
+  ///
+  /// In en, this message translates to:
+  /// **'The cash drawer did not open — check the receipt printer'**
+  String get posCashDrawerManualOpenFailed;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: snackbar after the employee locked the drawer button (long press, or the compact menu item); the next open asks for the PIN again.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash drawer button locked'**
+  String get posCashDrawerLockedNotice;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: compact ⋮ menu item that locks the unlocked drawer button (the long press of the app-bar button on wide screens).
+  ///
+  /// In en, this message translates to:
+  /// **'Lock the cash drawer button'**
+  String get posCashDrawerLockAction;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: the server refused the manual open or the unlock because this employee lacks the open_cash_drawer permission (granted per cashier from the Dashboard).
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to open the cash drawer.'**
+  String get posCashDrawerNoPermission;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: the PIN is verified only by the server, so the FIRST unlock of a session needs a connection; once unlocked the drawer keeps working offline.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlocking the drawer needs an internet connection.'**
+  String get posCashDrawerNeedsConnection;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: the PIN session is no longer valid server-side; the drawer button locks.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session ended — sign in again to open the drawer.'**
+  String get posCashDrawerSessionEnded;
+
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: every manual open must be recorded; when neither the server nor the on-device journal can record it (or the offline window of this session has ended) the drawer is NOT pulsed.
+  ///
+  /// In en, this message translates to:
+  /// **'The drawer can\'t open right now — the open couldn\'t be recorded. Check the connection.'**
+  String get posCashDrawerCannotRecord;
 
   /// Title of the per-device appearance setting choosing this terminal's secondary accent color (POS-PREMIUM-VISUAL-POLISH-001). The accent colors small highlights only (selected-category marker, focus rings, hover tints, cart count badge) — never semantic states, prices, or the primary action.
   ///

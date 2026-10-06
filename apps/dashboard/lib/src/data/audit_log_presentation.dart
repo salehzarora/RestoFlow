@@ -173,6 +173,9 @@ const Map<String, _Kind> _displayableKeys = {
   'voided_from_status': _Kind.text,
   'device_type': _Kind.text,
   'kitchen_ack_required': _Kind.boolean,
+  // POS-CASH-DRAWER-MANUAL-OPEN-001: a manual drawer open made while the till
+  // was offline, recorded when it reconnected (boolean, never an identifier).
+  'recorded_offline': _Kind.boolean,
   // PSC-001C: service rounds — a position in the order and a line count.
   // Never money, never identifiers (T-003 holds).
   'round_number': _Kind.count,
@@ -241,6 +244,7 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'voided_from_status' => l10n.activityLogFieldVoidedFromStatus,
   'device_type' => l10n.activityLogFieldDeviceType,
   'kitchen_ack_required' => l10n.activityLogFieldKitchenAckRequired,
+  'recorded_offline' => l10n.activityLogFieldRecordedOffline,
   // PSC-001C: service-round safe scalars.
   'round_number' => l10n.activityLogFieldRoundNumber,
   'added_item_count' => l10n.activityLogFieldAddedItemCount,
@@ -262,6 +266,8 @@ const List<String> _capabilityKeys = [
   'void_order',
   'close_shift',
   'apply_full_comp',
+  // POS-CASH-DRAWER-MANUAL-OPEN-001: the grant-only manual drawer permission.
+  'open_cash_drawer',
 ];
 
 /// Substrings that mark a key as secret-bearing — a final client guard on top of
@@ -430,6 +436,10 @@ class AuditEventPresenter {
     'table.link_denied' => l10n.activityLogTitleTableLinkDenied,
     'table.tables_unlinked' => l10n.activityLogTitleTablesUnlinked,
     'table.unlink_denied' => l10n.activityLogTitleTableUnlinkDenied,
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: manual cash-drawer opens.
+    'cash_drawer.no_sale_opened' => l10n.activityLogTitleDrawerNoSaleOpened,
+    'cash_drawer.no_sale_denied' => l10n.activityLogTitleDrawerNoSaleDenied,
+    'cash_drawer.unlock_failed' => l10n.activityLogTitleDrawerUnlockFailed,
     // KITCHEN-MODE-001B: printer configuration (settings category; the former
     // intentional-'other' deferral is resolved).
     'printer.printer_device.created' => l10n.activityLogTitlePrinterCreated,
@@ -443,6 +453,11 @@ class AuditEventPresenter {
   /// regardless of category; voids/revocations read as danger.
   (RestoflowTone, IconData) _toneIcon(AuditEvent e) {
     if (e.isDenied) return (RestoflowTone.warning, Icons.block_outlined);
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: a wrong PIN on the drawer unlock counts
+    // toward the shared sign-in lockout, so it reads as a warning, not routine.
+    if (e.action == 'cash_drawer.unlock_failed') {
+      return (RestoflowTone.warning, Icons.lock_outline);
+    }
     return switch (e.category) {
       'voids' => (RestoflowTone.danger, Icons.remove_circle_outline),
       'discounts' => (RestoflowTone.info, Icons.percent_outlined),
@@ -640,6 +655,7 @@ class AuditEventPresenter {
     'void_order' => l10n.activityLogCapVoidOrder,
     'close_shift' => l10n.activityLogCapCloseShift,
     'apply_full_comp' => l10n.activityLogCapApplyFullComp,
+    'open_cash_drawer' => l10n.activityLogCapOpenCashDrawer,
     _ => cap,
   };
 

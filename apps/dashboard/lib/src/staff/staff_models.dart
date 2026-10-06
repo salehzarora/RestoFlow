@@ -19,6 +19,7 @@ class StaffCapabilities {
     this.applyFullComp = false,
     this.manageMenuAvailability = true,
     this.manageTableOperations = true,
+    this.openCashDrawer = false,
   });
 
   /// Applying order/item discounts. Default ON.
@@ -43,9 +44,14 @@ class StaffCapabilities {
   /// (manual status, link/unlink). Default ON.
   final bool manageTableOperations;
 
+  /// POS-CASH-DRAWER-MANUAL-OPEN-001: opening the cash drawer from the POS
+  /// without a sale. GRANT-ONLY: default OFF; a manager/owner holds it by role.
+  final bool openCashDrawer;
+
   /// True when none of the DEFAULT-ON capabilities is disabled (a new cashier's
-  /// preset). [applyFullComp] is deliberately NOT part of this: it is default-OFF,
-  /// so a fresh cashier having it off is the norm, not a deviation.
+  /// preset). [applyFullComp] and [openCashDrawer] are deliberately NOT part of
+  /// this: they are default-OFF, so a fresh cashier having them off is the norm,
+  /// not a deviation.
   bool get allEnabled =>
       applyDiscount &&
       voidOrder &&
@@ -65,6 +71,7 @@ class StaffCapabilities {
     bool? applyFullComp,
     bool? manageMenuAvailability,
     bool? manageTableOperations,
+    bool? openCashDrawer,
   }) => StaffCapabilities(
     applyDiscount: applyDiscount ?? this.applyDiscount,
     voidOrder: voidOrder ?? this.voidOrder,
@@ -73,6 +80,7 @@ class StaffCapabilities {
     manageMenuAvailability:
         manageMenuAvailability ?? this.manageMenuAvailability,
     manageTableOperations: manageTableOperations ?? this.manageTableOperations,
+    openCashDrawer: openCashDrawer ?? this.openCashDrawer,
   );
 
   /// Parses the `capabilities` object from `list_staff` (effective booleans).
@@ -92,6 +100,9 @@ class StaffCapabilities {
     // server that does not send it) resolves to ON, matching the role default.
     manageMenuAvailability: json['manage_menu_availability'] != false,
     manageTableOperations: json['manage_table_operations'] != false,
+    // POS-CASH-DRAWER-MANUAL-OPEN-001: GRANT-ONLY (default OFF), so only an
+    // explicit true grants — an older server that does not send it reads OFF.
+    openCashDrawer: json['open_cash_drawer'] == true,
   );
 }
 

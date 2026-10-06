@@ -352,9 +352,14 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
     super.dispose();
   }
 
+  // Every toggle the server fingerprints is part of the retry signature, so
+  // changing any of them after a lost response mints a fresh request id rather
+  // than reusing one with different input (POS-CASH-DRAWER-MANUAL-OPEN-001).
   String _sig() =>
       '${_name.text.trim()}|${_role.name}|${_caps.applyDiscount},'
-      '${_caps.voidOrder},${_caps.closeShift}';
+      '${_caps.voidOrder},${_caps.closeShift},${_caps.applyFullComp},'
+      '${_caps.manageMenuAvailability},${_caps.manageTableOperations},'
+      '${_caps.openCashDrawer}';
 
   Future<void> _submit() async {
     if (_busy) return; // synchronous double-tap guard
@@ -387,6 +392,9 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.staffAdd),
+      // POS-CASH-DRAWER-MANUAL-OPEN-001: the permission switches no longer fit
+      // a laptop-height viewport, so the dialog scrolls instead of overflowing.
+      scrollable: true,
       content: Form(
         key: _formKey,
         child: Column(
@@ -574,6 +582,25 @@ class _CapabilitiesSwitches extends StatelessWidget {
               ? (v) => onChanged(value.copyWith(manageTableOperations: v))
               : null,
         ),
+        // POS-CASH-DRAWER-MANUAL-OPEN-001: GRANT-ONLY (default OFF). Opening the
+        // drawer outside a sale is a sensitive cash action: every open is logged
+        // and the cashier proves their PIN once per session on the POS.
+        SwitchListTile(
+          key: const Key('cap-open-cash-drawer'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapOpenCashDrawer),
+          subtitle: Text(
+            l10n.staffCapOpenCashDrawerHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          value: value.openCashDrawer,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(openCashDrawer: v))
+              : null,
+        ),
         const SizedBox(height: RestoflowSpacing.xxs),
         // Honest: these switches are cashier-only. A manager/owner already holds
         // every one of these rights BY ROLE and is unaffected by them.
@@ -619,6 +646,9 @@ class _CapabilitiesDialogState extends State<_CapabilitiesDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.staffCapabilitiesTitle),
+      // POS-CASH-DRAWER-MANUAL-OPEN-001: scrolls on short viewports (see the
+      // create dialog).
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

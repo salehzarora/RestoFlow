@@ -5112,6 +5112,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Needs the discount permission above.';
 
   @override
+  String get staffCapOpenCashDrawer => 'Can open the cash drawer manually';
+
+  @override
+  String get staffCapOpenCashDrawerHint =>
+      'Opens the drawer from the POS without a sale; the cashier enters their PIN once per sign-in. Every open is logged. Off by default.';
+
+  @override
   String get staffCapabilitiesRoleNote =>
       'Managers and owners can already do all of this.';
 
@@ -5125,6 +5132,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogCapApplyFullComp => 'Make an order free';
+
+  @override
+  String get activityLogCapOpenCashDrawer => 'Open cash drawer manually';
 
   @override
   String get activityLogDeniedFullCompPermissionRequired =>
@@ -5420,6 +5430,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogTitleTableUnlinkDenied => 'Table unlink denied';
 
   @override
+  String get activityLogTitleDrawerNoSaleOpened =>
+      'Cash drawer opened manually';
+
+  @override
+  String get activityLogTitleDrawerNoSaleDenied => 'Cash drawer open denied';
+
+  @override
+  String get activityLogTitleDrawerUnlockFailed =>
+      'Wrong PIN to unlock the cash drawer';
+
+  @override
   String get activityLogFieldFromStatus => 'From status';
 
   @override
@@ -5437,6 +5458,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activityLogFieldKitchenAckRequired =>
       'Kitchen acknowledgement required';
+
+  @override
+  String get activityLogFieldRecordedOffline => 'Recorded offline';
 
   @override
   String get activityLogFieldAvailability => 'Availability';
@@ -6004,6 +6028,56 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posCashDrawerOpenFailed =>
       'Payment recorded — cash drawer did not open';
+
+  @override
+  String get posCashDrawerManualOpen => 'Open cash drawer';
+
+  @override
+  String get posCashDrawerManualLockedTooltip =>
+      'Open cash drawer — locked, needs your PIN';
+
+  @override
+  String get posCashDrawerManualUnlockedTooltip =>
+      'Open cash drawer — long-press to lock';
+
+  @override
+  String get posCashDrawerUnlockTitle => 'Unlock the cash drawer';
+
+  @override
+  String get posCashDrawerUnlockBody =>
+      'Enter your PIN. The drawer button stays unlocked until you lock it or sign out.';
+
+  @override
+  String get posCashDrawerUnlockSubmit => 'Unlock and open';
+
+  @override
+  String get posCashDrawerOpened => 'Cash drawer opened';
+
+  @override
+  String get posCashDrawerManualOpenFailed =>
+      'The cash drawer did not open — check the receipt printer';
+
+  @override
+  String get posCashDrawerLockedNotice => 'Cash drawer button locked';
+
+  @override
+  String get posCashDrawerLockAction => 'Lock the cash drawer button';
+
+  @override
+  String get posCashDrawerNoPermission =>
+      'You don\'t have permission to open the cash drawer.';
+
+  @override
+  String get posCashDrawerNeedsConnection =>
+      'Unlocking the drawer needs an internet connection.';
+
+  @override
+  String get posCashDrawerSessionEnded =>
+      'Your session ended — sign in again to open the drawer.';
+
+  @override
+  String get posCashDrawerCannotRecord =>
+      'The drawer can\'t open right now — the open couldn\'t be recorded. Check the connection.';
 
   @override
   String get posDeviceAccentTitle => 'Terminal accent color';

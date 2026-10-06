@@ -17,6 +17,7 @@ import 'state/recent_orders_controller.dart'
     show posRecentOrdersControllerProvider;
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
+import 'widgets/cash_drawer_button.dart';
 import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
 import 'widgets/menu_availability_sheet.dart';
@@ -177,6 +178,12 @@ class PosMenuScreen extends StatelessWidget {
                     // group.
                     ReadyNotificationBell(),
                     RecentOrdersButton(),
+                    // POS-CASH-DRAWER-MANUAL-OPEN-001: renders nothing unless
+                    // this till can pulse a drawer, and never below
+                    // kPosDrawerInlineMinWidth (the ⋮ menu carries it there),
+                    // so the existing cluster is unchanged wherever it cannot
+                    // help.
+                    CashDrawerButton(),
                     OutboxStatusIndicator(),
                     LanguageSelector(),
                     DeviceSettingsMenu(),

@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_shift_close_policy.dart';
+import 'cash_drawer_button.dart';
 import 'device_settings_sheet.dart';
 import 'shift_close_sheet.dart';
 
@@ -28,6 +29,10 @@ class DeviceSettingsMenu extends ConsumerWidget {
       icon: const Icon(Icons.more_vert),
       onSelected: (action) => switch (action) {
         _DeviceMenuAction.settings => PosDeviceSettingsSheet.show(context),
+        // POS-CASH-DRAWER-MANUAL-OPEN-001: the compact-bar home of the manual
+        // drawer action (the app-bar button owns it on wider bars).
+        _DeviceMenuAction.openCashDrawer => runManualDrawerOpen(context, ref),
+        _DeviceMenuAction.lockCashDrawer => lockManualDrawer(context, ref),
         // [POS-OFFLINE-OPERATIONS-002] C11 — the shift close is a
         // server-authoritative reconciliation; while the POS operates from the
         // offline snapshot the entry refuses with the one localized reason
@@ -44,7 +49,9 @@ class DeviceSettingsMenu extends ConsumerWidget {
           value: _DeviceMenuAction.settings,
           child: Row(
             children: [
-              const Icon(Icons.tune, size: 20),
+              // The menu inherits the app bar's light glyph IconTheme; the
+              // explicit ink keeps every item icon readable on the light menu.
+              Icon(Icons.tune, size: 20, color: _menuInk(context)),
               const SizedBox(width: 12),
               Text(l10n.deviceSettingsTitle),
             ],
@@ -59,15 +66,28 @@ class DeviceSettingsMenu extends ConsumerWidget {
             value: _DeviceMenuAction.closeShift,
             child: Row(
               children: [
-                const Icon(Icons.point_of_sale_outlined, size: 20),
+                Icon(
+                  Icons.point_of_sale_outlined,
+                  size: 20,
+                  color: _menuInk(context),
+                ),
                 const SizedBox(width: 12),
                 Text(l10n.posShiftCloseMenuItem),
               ],
             ),
           ),
+        ...cashDrawerMenuItems<_DeviceMenuAction>(
+          context: context,
+          ref: ref,
+          openValue: _DeviceMenuAction.openCashDrawer,
+          lockValue: _DeviceMenuAction.lockCashDrawer,
+        ),
       ],
     );
   }
+
+  static Color _menuInk(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurfaceVariant;
 }
 
-enum _DeviceMenuAction { settings, closeShift }
+enum _DeviceMenuAction { settings, closeShift, openCashDrawer, lockCashDrawer }
