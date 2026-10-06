@@ -70,7 +70,7 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     await _restore();
   }
 
-  Future<void> _restore() async {
+  Future<void> _restore({int supersededRetries = 0}) async {
     final generation = ++_restoreGeneration;
     setState(() => _phase = _GatePhase.restoring);
     final outcome = await widget.outcomes.restoreOutcome(
@@ -79,12 +79,19 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     if (!mounted || generation != _restoreGeneration) return;
     switch (outcome) {
       case DeviceSessionRestoreSuperseded():
+        // Another restore may own the latest proof. Retry only a bounded wave;
+        // a successful publication can also advance this gate while we await.
+        if (supersededRetries < 2) {
+          await _restore(supersededRetries: supersededRetries + 1);
+        } else {
+          setState(() => _phase = _GatePhase.unavailable);
+        }
         return;
       case DeviceSessionRestored(:final context):
         _lastSuccessfulRestore = ref.read(kioskClockProvider)();
         ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
-        widget.onActivated?.call(context);
         setState(() => _phase = _GatePhase.active);
+        widget.onActivated?.call(context);
       case DeviceSessionRestoreRejected():
         setState(() => _phase = _GatePhase.needsActivation);
       case DeviceSessionRestoreOffline():
@@ -100,8 +107,8 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     _lastSuccessfulRestore = ref.read(kioskClockProvider)();
     _stableUnavailable = false;
     ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
-    widget.onActivated?.call(context);
     setState(() => _phase = _GatePhase.active);
+    widget.onActivated?.call(context);
   }
 
   @override
@@ -109,7 +116,9 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     ref.listen(kioskDeviceContextProvider, (previous, next) {
       if (next != null &&
           !_stableUnavailable &&
-          (_phase == _GatePhase.unavailable || _phase == _GatePhase.offline)) {
+          (_phase == _GatePhase.unavailable ||
+              _phase == _GatePhase.offline ||
+              _phase == _GatePhase.restoring)) {
         _onPaired(next);
       }
     });

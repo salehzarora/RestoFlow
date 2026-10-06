@@ -38,6 +38,8 @@ class _Wire implements SyncRpcTransport {
 
 class _Superseded
     implements DeviceSessionOutcomeManager, DevicePairingRepository {
+  int calls = 0;
+  DeviceRestoreOutcome outcome = const DeviceSessionRestoreSuperseded();
   @override
   Future<DeviceContext?> restore({String? expectedDeviceType}) async => null;
   @override
@@ -45,7 +47,11 @@ class _Superseded
   @override
   Future<DeviceRestoreOutcome> restoreOutcome({
     String? expectedDeviceType,
-  }) async => const DeviceSessionRestoreSuperseded();
+  }) async {
+    calls++;
+    return outcome;
+  }
+
   @override
   Future<Result<DeviceContext, PairingFailure>> pairWithCode({
     required String code,
@@ -74,7 +80,7 @@ class _MenuState extends ConsumerState<_Menu> {
 
 void main() {
   testWidgets(
-    'H3 Kiosk ignores superseded cold restore without changing gate verdict',
+    'K1 Kiosk bounds superseded retries and explicit Retry starts a fresh wave',
     (tester) async {
       final repo = _Superseded();
       await tester.pumpWidget(
@@ -88,11 +94,37 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
-      await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(repo.calls, 3, reason: 'initial restore plus at most two retries');
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(DeviceSessionUnavailableView), findsOneWidget);
       expect(find.byKey(const Key('kiosk-activation-code')), findsNothing);
+      await tester.pump(const Duration(minutes: 3));
+      expect(repo.calls, 3);
+      await tester.tap(find.byKey(const Key('device-session-retry')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(repo.calls, 6, reason: 'manual Retry resets the bounded wave');
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(DeviceSessionUnavailableView), findsOneWidget);
+      repo.outcome = const DeviceSessionRestored(
+        DeviceContext(
+          organizationId: 'o',
+          restaurantId: 'r',
+          branchId: 'b',
+          deviceId: 'd',
+          deviceSessionId: 's',
+          deviceType: 'kiosk',
+        ),
+      );
+      await tester.tap(find.byKey(const Key('device-session-retry')));
+      await tester.pumpAndSettle();
+      expect(repo.calls, 7);
+      expect(find.text('customer menu'), findsOneWidget);
+      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
