@@ -20,12 +20,30 @@ Map<String, Object?> _ok() => {
 
 class _Store extends InMemoryDeviceSessionSecretStore {
   bool failClear = false;
+  bool failAfterClear = false;
+  bool failWrite = false;
+  Completer<void>? clearCacheEntered;
+  Completer<void>? clearCacheRelease;
   Completer<DeviceContext?>? cacheRead;
   Completer<void>? cacheEntered;
   @override
   Future<void> clear() async {
     if (failClear) throw StateError('local store temporarily unavailable');
     await super.clear();
+    if (failAfterClear) throw StateError('partial local clear');
+  }
+
+  @override
+  Future<void> write(DeviceSessionCredential value) async {
+    if (failWrite) throw StateError('local write unavailable');
+    await super.write(value);
+  }
+
+  @override
+  Future<void> clearCachedContext() async {
+    clearCacheEntered?.complete();
+    await clearCacheRelease?.future;
+    await super.clearCachedContext();
   }
 
   @override
@@ -75,6 +93,48 @@ _rig({bool restore = true}) async {
 
 Future<void> _flush() async => Future<void>.delayed(Duration.zero);
 void main() {
+  test(
+    'H5 partially cleared credential survives write outage and recovers without pairing',
+    () async {
+      final h = await _rig();
+      h.wire.handler = (_, _) => {'ok': true};
+      await h.repo.heartbeat();
+      await h.repo.heartbeat();
+      await h.repo.heartbeat();
+      h.store.failAfterClear = true;
+      await expectLater(h.repo.clearLocalPairing(), throwsStateError);
+      expect(h.repo.activeDevice?.deviceId, 'device');
+      h.store.failWrite = true;
+      expect(await h.repo.heartbeat(), DeviceHeartbeatResult.offline);
+      expect(h.repo.activeDevice?.deviceId, 'device');
+      h.store.failWrite = false;
+      h.wire.handler = (_, _) => _ok();
+      expect(await h.repo.heartbeat(), DeviceHeartbeatResult.active);
+      expect(await h.store.read(), _credential);
+      expect(h.guard.isBlocked, isFalse);
+      expect(
+        h.wire.calls.where((fn) => fn == 'redeem_device_pairing'),
+        isEmpty,
+      );
+    },
+  );
+  test(
+    'H3 empty-secret restore cannot reject a newer pairing after cache clear',
+    () async {
+      final h = await _rig(restore: false);
+      await h.store.clear();
+      h.store.clearCacheEntered = Completer<void>();
+      h.store.clearCacheRelease = Completer<void>();
+      final old = h.repo.restoreOutcome(expectedDeviceType: 'pos');
+      await h.store.clearCacheEntered!.future;
+      h.wire.handler = (_, _) => {..._ok(), 'session_token': 'new-token'};
+      final paired = h.repo.pairWithCode(code: 'NEW', deviceType: 'pos');
+      h.store.clearCacheRelease!.complete();
+      await paired;
+      expect(await old, isA<DeviceSessionRestoreSuperseded>());
+      expect((await h.store.read())?.sessionToken, 'new-token');
+    },
+  );
   test(
     'H2 block transition remains visible through offline and recovery emits exactly once',
     () async {

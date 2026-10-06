@@ -38,6 +38,9 @@ class SupabaseDevicePairingRepository
   Future<void>? _unpairDone;
   int _malformedReplies = 0;
   bool _restorePending = false;
+  // A local clear may remove the token before another key deletion throws.
+  // Keep the pre-clear secret in memory until a serialized write repairs it.
+  DeviceSessionCredential? _pendingCredentialRepair;
   @override
   int get consecutiveUnavailable => _malformedReplies;
 
@@ -88,12 +91,27 @@ class SupabaseDevicePairingRepository
     return next;
   }
 
+  Future<bool> _repairCredential(int generation) async {
+    final credential = _pendingCredentialRepair;
+    if (credential == null) return generation == _generation;
+    final context = _activeDevice;
+    final written = await _mutate(generation, () async {
+      await _store.write(credential);
+      if (context != null) await _writeContextCache(context);
+    });
+    if (written && identical(_pendingCredentialRepair, credential)) {
+      _pendingCredentialRepair = null;
+    }
+    return written;
+  }
+
   @override
   Future<Result<DeviceContext, PairingFailure>> pairWithCode({
     required String code,
     required String deviceType,
   }) async {
     final generation = ++_generation;
+    _pendingCredentialRepair = null;
     _restorePending = false;
     _unpairDone = null; // Only a new pairing supersedes explicit local unpair.
     _expectedDeviceType = deviceType;
@@ -160,6 +178,8 @@ class SupabaseDevicePairingRepository
     final generation = ++_generation;
     final DeviceSessionCredential? cred;
     try {
+      if (!await _repairCredential(generation))
+        return const DeviceSessionRestoreSuperseded();
       cred = await _store.read();
     } catch (_) {
       if (generation != _generation)
@@ -173,7 +193,8 @@ class SupabaseDevicePairingRepository
       _restorePending = false;
       _block();
       _publish(null);
-      await _mutate(generation, _clearContextCache);
+      if (!await _mutate(generation, _clearContextCache))
+        return const DeviceSessionRestoreSuperseded();
       return const DeviceSessionRestoreRejected();
     }
     final Object? raw;
@@ -255,6 +276,8 @@ class SupabaseDevicePairingRepository
     }
     final DeviceSessionCredential? cred;
     try {
+      if (!await _repairCredential(generation))
+        return DeviceHeartbeatResult.superseded;
       cred = await _store.read();
     } catch (_) {
       if (generation != _generation) return DeviceHeartbeatResult.superseded;
@@ -310,6 +333,7 @@ class SupabaseDevicePairingRepository
 
   Future<bool> _reject(int generation) async {
     if (generation != _generation) return false;
+    _pendingCredentialRepair = null;
     _restorePending = false;
     _block();
     if (await _mutate(generation, () async {
@@ -344,6 +368,8 @@ class SupabaseDevicePairingRepository
     final previousBlocked = _protectedBlocked;
     final previousUnavailable = _malformedReplies;
     final previousRestorePending = _restorePending;
+    DeviceSessionCredential? credential = _pendingCredentialRepair;
+    _pendingCredentialRepair = null;
     _restorePending = false;
     _malformedReplies = 0;
     final done = Completer<void>();
@@ -352,11 +378,13 @@ class SupabaseDevicePairingRepository
     _block();
     _publish(null);
     try {
-      DeviceSessionCredential? cred;
       try {
-        cred = await _store.read();
-      } catch (_) {}
+        credential ??= await _store.read();
+      } catch (_) {
+        if (localOnly) rethrow;
+      }
       if (generation != _generation) return;
+      final cred = credential;
       if (!localOnly && cred != null) {
         try {
           await _transport.invoke('revoke_device_session', {
@@ -373,6 +401,7 @@ class SupabaseDevicePairingRepository
       });
     } catch (_) {
       if (generation == _generation) {
+        if (localOnly) _pendingCredentialRepair = credential;
         if (localOnly && !previousBlocked) _allow();
         _malformedReplies = previousUnavailable;
         _restorePending = previousRestorePending || _protectedBlocked;
