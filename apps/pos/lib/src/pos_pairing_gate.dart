@@ -115,8 +115,9 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
   /// settings sprint) so the ⋮ settings sheet can read it. Deferred a frame:
   /// provider writes are illegal while the tree is building.
   void _publish(DeviceContext? device) {
+    final generation = _restoreGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || generation != _restoreGeneration) return;
       ref.read(posDeviceContextProvider.notifier).set(device);
     });
   }
@@ -137,6 +138,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
       final outcome = await manager.restoreOutcome(
         expectedDeviceType: _expectedDeviceType,
       );
+      if (outcome is DeviceSessionRestoreSuperseded) return;
       unavailable = outcome is DeviceSessionRestoreUnavailable;
       offline =
           outcome is DeviceSessionRestoreOffline &&
@@ -145,6 +147,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
         DeviceSessionRestored(:final context) => context,
         DeviceSessionRestoreOffline(:final cachedContext) => cachedContext,
         DeviceSessionRestoreRejected() => null,
+        DeviceSessionRestoreSuperseded() => null,
         DeviceSessionRestoreUnavailable(:final cachedContext) => cachedContext,
       };
     } else {
@@ -207,6 +210,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
         });
         _publish(null);
       case DeviceSessionRestoreOffline():
+      case DeviceSessionRestoreSuperseded():
         break;
       case DeviceSessionRestoreUnavailable():
         setState(() => _unavailable = true);
@@ -231,7 +235,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
     // screen. Guarded on `_device != null` so the gate's own publishes (which
     // never null once paired) can't loop.
     ref.listen<DeviceContext?>(posDeviceContextProvider, (previous, next) {
-      if (next != null && _unavailable) {
+      if (next != null && (_unavailable || _offline)) {
         setState(() {
           _device = next;
           _unavailable = false;
@@ -258,7 +262,10 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
             : null,
         onRepaired: () {
           if (!mounted) return;
+          _restoreGeneration++;
           setState(() {
+            _offline = false;
+            _restoring = false;
             _unavailable = false;
             _device = null;
           });

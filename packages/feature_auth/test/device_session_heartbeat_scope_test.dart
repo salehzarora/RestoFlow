@@ -110,6 +110,7 @@ Widget _app(
   manager: manager,
   isWeb: isWeb,
   onInvalidSession: invalid ?? () {},
+  onLocalUnpair: invalid ?? () {},
   onRestored: restored ?? (_) {},
   buildApp: (navigatorKey, sessionBuilder) => MaterialApp(
     navigatorKey: navigatorKey,

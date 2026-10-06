@@ -403,6 +403,10 @@ class _KdsMaterialApp extends ConsumerWidget {
         ref.read(kdsSessionControllerProvider.notifier).endSession();
         ref.read(kdsDeviceContextProvider.notifier).set(null);
       },
+      onLocalUnpair: () {
+        ref.read(kdsSessionControllerProvider.notifier).endSession();
+        ref.read(kdsDeviceContextProvider.notifier).set(null);
+      },
       onRestored: (context) =>
           ref.read(kdsDeviceContextProvider.notifier).set(context),
       buildApp: (navigatorKey, sessionBuilder) => MaterialApp(

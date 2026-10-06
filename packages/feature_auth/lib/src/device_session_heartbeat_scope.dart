@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -13,6 +14,9 @@ class DeviceSessionAppHost extends StatefulWidget {
     required this.onInvalidSession,
     required this.onRestored,
     required this.buildApp,
+    this.onLocalUnpair,
+    this.onRecovered,
+    this.staffOnlyRepair = false,
     this.isWeb = kIsWeb,
     super.key,
   });
@@ -20,6 +24,9 @@ class DeviceSessionAppHost extends StatefulWidget {
   final VoidCallback onInvalidSession;
   final ValueChanged<DeviceContext> onRestored;
   final Widget Function(GlobalKey<NavigatorState>, TransitionBuilder) buildApp;
+  final VoidCallback? onLocalUnpair;
+  final VoidCallback? onRecovered;
+  final bool staffOnlyRepair;
   final bool isWeb;
   @override
   State<DeviceSessionAppHost> createState() => _DeviceSessionAppHostState();
@@ -35,10 +42,28 @@ class _DeviceSessionAppHostState extends State<DeviceSessionAppHost> {
       navigatorKey: _navigatorKey,
       isWeb: widget.isWeb,
       onInvalidSession: () {
+        if (!mounted) return;
         setState(() => _navigatorKey = GlobalKey<NavigatorState>());
         widget.onInvalidSession();
       },
       onRestored: widget.onRestored,
+      onRecovered: widget.onRecovered,
+      staffOnlyRepair: widget.staffOnlyRepair,
+      onLocalUnpair: () {
+        if (!mounted) return;
+        final message = AppLocalizations.of(context).deviceUnpairedSnack;
+        setState(() => _navigatorKey = GlobalKey<NavigatorState>());
+        widget.onLocalUnpair?.call();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final navigatorContext = _navigatorKey.currentContext;
+          if (navigatorContext != null) {
+            ScaffoldMessenger.maybeOf(
+              navigatorContext,
+            )?.showSnackBar(SnackBar(content: Text(message)));
+          }
+        });
+      },
       child: child!,
     ),
   );
@@ -53,6 +78,9 @@ class DeviceSessionHeartbeatScope extends StatefulWidget {
     required this.onInvalidSession,
     this.onRestored,
     this.navigatorKey,
+    this.onLocalUnpair,
+    this.onRecovered,
+    this.staffOnlyRepair = false,
     this.isWeb = kIsWeb,
     required this.child,
     super.key,
@@ -62,6 +90,9 @@ class DeviceSessionHeartbeatScope extends StatefulWidget {
   final VoidCallback onInvalidSession;
   final ValueChanged<DeviceContext>? onRestored;
   final GlobalKey<NavigatorState>? navigatorKey;
+  final VoidCallback? onLocalUnpair;
+  final VoidCallback? onRecovered;
+  final bool staffOnlyRepair;
   final bool isWeb;
   final Widget child;
 
@@ -75,14 +106,23 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
   StreamSubscription<DeviceSessionChange>? _subscription;
   bool _unavailable = false;
   bool _restoreUnavailable = false;
+  // Offline changes the displayed verdict, but does not discharge a cold
+  // restore's obligation to publish the next authoritative context to its gate.
+  bool _restoreRecoveryPending = false;
+  bool _blocked = false;
+  bool _repairing = false;
+  StreamSubscription<bool>? _blockSubscription;
+  DeviceContext? _blockedContext;
   bool _scheduled = false;
   int _unavailableCount = 0;
 
   void _invalidate() {
+    if (!mounted) return;
     _scheduler!.replaceSession(active: false);
     setState(() {
       _unavailable = false;
       _restoreUnavailable = false;
+      _restoreRecoveryPending = false;
       _unavailableCount = 0;
       _scheduled = false;
     });
@@ -102,7 +142,36 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
     _scheduler = DeviceSessionHeartbeatScheduler(
       heartbeat: manager.heartbeat,
       onResult: _onResult,
+      recoveryRequired: () =>
+          manager is DeviceSessionRecoveryManager &&
+          (manager as DeviceSessionRecoveryManager).protectedCallsBlocked,
     );
+    if (manager is DeviceSessionRecoveryManager) {
+      final recovery = manager as DeviceSessionRecoveryManager;
+      _blocked = recovery.protectedCallsBlocked;
+      _blockedContext = _blocked ? manager.activeDevice : null;
+      _blockSubscription = recovery.protectedCallBlockChanges.listen((blocked) {
+        if (!mounted) return;
+        final previous = _blocked;
+        final previousContext = _blockedContext;
+        setState(() => _blocked = blocked);
+        if (blocked) _blockedContext = manager.activeDevice;
+        _scheduler?.refreshRecoveryState();
+        if (previous && !blocked && previousContext != null) {
+          // Pair/unpair also change the guard. Only recovery of the SAME live
+          // session resumes its existing outbox, after repository publication.
+          scheduleMicrotask(() {
+            if (!mounted || _blocked || _repairing) return;
+            final current = manager.activeDevice;
+            if (current != null &&
+                current.deviceId == previousContext.deviceId &&
+                current.deviceSessionId == previousContext.deviceSessionId) {
+              widget.onRecovered?.call();
+            }
+          });
+        }
+      });
+    }
     _subscription = manager.sessionChanges.listen((change) {
       if (!mounted) return;
       if (change.invalidSession) {
@@ -115,19 +184,23 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
         setState(() {
           _unavailable = true;
           _restoreUnavailable = true;
+          _restoreRecoveryPending = true;
           _unavailableCount = _countUnavailable();
         });
       } else {
-        _scheduled = change.context != null;
-        _scheduler!.replaceSession(active: _scheduled);
-        if (change.context != null && _unavailable) {
-          final wasRestoreUnavailable = _restoreUnavailable;
+        final active = change.context != null;
+        // Re-publication during restore is not another scheduling transition.
+        // In particular an old server must not create an unsupported/restore loop.
+        if (active != _scheduled) {
+          _scheduled = active;
+          _scheduler!.replaceSession(active: active);
+        }
+        if (active && !_blocked && _unavailable) {
           setState(() {
             _unavailable = false;
             _restoreUnavailable = false;
             _unavailableCount = 0;
           });
-          if (wasRestoreUnavailable) widget.onRestored?.call(change.context!);
         }
       }
     });
@@ -153,9 +226,14 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.manager, widget.manager)) return;
     _subscription?.cancel();
+    _blockSubscription?.cancel();
     _scheduler?.dispose();
     _unavailable = false;
     _restoreUnavailable = false;
+    _restoreRecoveryPending = false;
+    _blocked = false;
+    _blockedContext = null;
+    _scheduled = false;
     _unavailableCount = 0;
     _connect();
   }
@@ -164,10 +242,11 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
     if (!mounted) return;
     switch (result) {
       case DeviceHeartbeatResult.active:
-        final restore = _restoreUnavailable;
+        final restore = _restoreRecoveryPending;
         setState(() {
           _unavailable = false;
           _restoreUnavailable = false;
+          _restoreRecoveryPending = false;
           _unavailableCount = 0;
         });
         if (restore && widget.manager?.activeDevice != null) {
@@ -185,6 +264,7 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
         _invalidate();
       case DeviceHeartbeatResult.offline:
         setState(() {
+          _restoreUnavailable = false;
           _unavailable = false;
           _unavailableCount = 0;
         });
@@ -207,77 +287,125 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _subscription?.cancel();
+    _blockSubscription?.cancel();
     _scheduler?.dispose();
     super.dispose();
+  }
+
+  void _localUnpair() {
+    if (!mounted) return;
+    _scheduler?.replaceSession(active: false);
+    setState(() {
+      _scheduled = false;
+      _unavailable = false;
+      _restoreUnavailable = false;
+      _restoreRecoveryPending = false;
+      _unavailableCount = 0;
+      _repairing = false;
+    });
+    widget.onLocalUnpair?.call();
   }
 
   @override
   Widget build(BuildContext context) => _RecoveryProgress(
     count: _unavailableCount,
-    child: Stack(
-      fit: StackFit.expand,
+    onLocalUnpair: _localUnpair,
+    child: Column(
       children: [
-        // Unknown evidence never disables the navigator or bounded offline work.
-        widget.child,
-        if (_unavailable && widget.manager?.activeDevice != null)
+        // Own layout space above the navigator: no cart, checkout, or kitchen
+        // control can be obscured by the retry notice, including on a phone.
+        if ((_unavailable || _restoreUnavailable || _blocked || _repairing) &&
+            (widget.manager?.activeDevice != null || _repairing))
           SafeArea(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: DeviceSessionUnavailableView(
-                  compact: true,
-                  onRetry: _retry,
-                  repairManager:
-                      _unavailableCount >= 3 &&
-                          widget.manager is DeviceSessionLocalRepairManager
-                      ? widget.manager as DeviceSessionLocalRepairManager
-                      : null,
-                  onRepaired: _invalidate,
-                  dialogContext: () =>
-                      widget.navigatorKey?.currentContext ?? context,
-                ),
-              ),
+            bottom: false,
+            child: DeviceSessionUnavailableView(
+              compact: true,
+              staffOnlyRepair: widget.staffOnlyRepair,
+              onRetry: _retry,
+              repairManager: widget.manager is DeviceSessionLocalRepairManager
+                  ? widget.manager as DeviceSessionLocalRepairManager
+                  : null,
+              onRepairState: (repairing) {
+                if (mounted) setState(() => _repairing = repairing);
+              },
+              dialogContext: () =>
+                  widget.navigatorKey?.currentContext ?? context,
             ),
           ),
+        Expanded(
+          key: const ValueKey('device-session-navigator'),
+          child: LayoutBuilder(
+            builder: (context, constraints) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(size: constraints.biggest),
+              child: widget.child,
+            ),
+          ),
+        ),
       ],
     ),
   );
 }
 
 // The mounted cold-start gate also observes automatic heartbeat verdicts.
-// Rebuilding this inherited value leaves the navigator and cart state intact.
+// Rebuilding this value leaves the navigator and cart state intact.
 class _RecoveryProgress extends InheritedWidget {
-  const _RecoveryProgress({required this.count, required super.child});
+  const _RecoveryProgress({
+    required this.count,
+    required this.onLocalUnpair,
+    required super.child,
+  });
   final int count;
+  final VoidCallback onLocalUnpair;
   @override
   bool updateShouldNotify(_RecoveryProgress oldWidget) =>
       count != oldWidget.count;
 }
 
-/// Retryable unknown server state; deliberately distinct from activation and
-/// network-offline screens. Never exposes a raw error or session credential.
-class DeviceSessionUnavailableView extends StatelessWidget {
+/// Retryable unknown state. Kiosk local repair is revealed only to staff by a
+/// deliberate five-second title hold; the customer never sees it by default.
+class DeviceSessionUnavailableView extends StatefulWidget {
   const DeviceSessionUnavailableView({
     required this.onRetry,
     this.compact = false,
+    this.staffOnlyRepair = false,
     this.repairManager,
     this.onRepaired,
+    this.onRepairState,
     this.dialogContext,
     super.key,
   });
   final VoidCallback onRetry;
   final bool compact;
+  final bool staffOnlyRepair;
   final DeviceSessionLocalRepairManager? repairManager;
   final VoidCallback? onRepaired;
+  final ValueChanged<bool>? onRepairState;
   final BuildContext Function()? dialogContext;
 
-  Future<void> _repair(BuildContext context) async {
-    final manager = repairManager;
-    if (manager == null || manager.consecutiveUnavailable < 3) return;
+  @override
+  State<DeviceSessionUnavailableView> createState() => _UnavailableViewState();
+}
+
+class _UnavailableViewState extends State<DeviceSessionUnavailableView> {
+  bool _staffRevealed = false;
+  bool _confirming = false;
+  bool _repairing = false;
+  bool _repairFailed = false;
+
+  Future<void> _repair() async {
+    final manager = widget.repairManager;
+    if (manager == null ||
+        manager.consecutiveUnavailable < 3 ||
+        _repairing ||
+        _confirming)
+      return;
     final l10n = AppLocalizations.of(context);
+    final rootRepair = context
+        .getInheritedWidgetOfExactType<_RecoveryProgress>()
+        ?.onLocalUnpair;
+    setState(() => _confirming = true);
     final confirmed = await showDialog<bool>(
-      context: dialogContext?.call() ?? context,
+      context: widget.dialogContext?.call() ?? context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deviceUnpairAction),
         content: Text(l10n.deviceUnpairWarning),
@@ -295,9 +423,31 @@ class DeviceSessionUnavailableView extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
-    await manager.clearLocalPairing();
-    onRepaired?.call();
+    if (mounted) setState(() => _confirming = false);
+    // A heartbeat can recover the device while the confirmation is open.
+    if (!mounted ||
+        confirmed != true ||
+        !identical(manager, widget.repairManager) ||
+        manager.consecutiveUnavailable < 3)
+      return;
+    setState(() {
+      _repairing = true;
+      _repairFailed = false;
+    });
+    widget.onRepairState?.call(true);
+    try {
+      await manager.clearLocalPairing();
+      if (!mounted) return;
+      widget.onRepaired?.call();
+      rootRepair?.call();
+    } catch (_) {
+      if (mounted) setState(() => _repairFailed = true);
+    } finally {
+      if (mounted) {
+        setState(() => _repairing = false);
+        widget.onRepairState?.call(false);
+      }
+    }
   }
 
   @override
@@ -305,31 +455,89 @@ class DeviceSessionUnavailableView extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final progress = context
         .dependOnInheritedWidgetOfExactType<_RecoveryProgress>();
-    final unavailableCount =
-        progress?.count ?? repairManager?.consecutiveUnavailable ?? 0;
+    final count =
+        progress?.count ?? widget.repairManager?.consecutiveUnavailable ?? 0;
+    final canRepair =
+        widget.repairManager != null &&
+        count >= 3 &&
+        (!widget.staffOnlyRepair || _staffRevealed);
+    final title = RawGestureDetector(
+      key: const Key('device-session-unavailable-title'),
+      gestures: widget.staffOnlyRepair
+          ? {
+              LongPressGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                    LongPressGestureRecognizer
+                  >(
+                    () => LongPressGestureRecognizer(
+                      duration: const Duration(seconds: 5),
+                    ),
+                    (instance) => instance.onLongPress = () {
+                      if (mounted) setState(() => _staffRevealed = true);
+                    },
+                  ),
+            }
+          : const {},
+      child: Text(
+        l10n.pinLoginUnavailable,
+        maxLines: widget.compact ? 2 : null,
+        overflow: widget.compact ? TextOverflow.ellipsis : null,
+        textAlign: widget.compact ? TextAlign.start : TextAlign.center,
+      ),
+    );
+    final retry = widget.compact
+        ? IconButton(
+            key: const Key('device-session-retry'),
+            onPressed: _repairing ? null : widget.onRetry,
+            icon: Icon(Icons.refresh, semanticLabel: l10n.authTryAgain),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          )
+        : FilledButton(
+            key: const Key('device-session-retry'),
+            onPressed: _repairing ? null : widget.onRetry,
+            child: Text(l10n.authTryAgain),
+          );
+    final repair = widget.compact
+        ? IconButton(
+            key: const Key('device-session-repair'),
+            onPressed: _repairing || _confirming ? null : _repair,
+            icon: Icon(Icons.link_off, semanticLabel: l10n.deviceUnpairAction),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          )
+        : TextButton(
+            key: const Key('device-session-repair'),
+            onPressed: _repairing || _confirming ? null : _repair,
+            child: Text(l10n.deviceUnpairAction),
+          );
     final contents = Padding(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(widget.compact ? 8 : 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(l10n.pinLoginUnavailable, textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          FilledButton(
-            key: const Key('device-session-retry'),
-            onPressed: onRetry,
-            child: Text(l10n.authTryAgain),
-          ),
-          if (repairManager != null && unavailableCount >= 3)
-            TextButton(
-              key: const Key('device-session-repair'),
-              onPressed: () => _repair(context),
-              child: Text(l10n.deviceUnpairAction),
+          if (widget.compact)
+            Row(
+              children: [
+                Expanded(child: title),
+                retry,
+                if (canRepair) repair,
+              ],
+            )
+          else ...[
+            title,
+            const SizedBox(height: 24),
+            retry,
+            if (canRepair) repair,
+          ],
+          if (_repairFailed)
+            Text(
+              l10n.pinLoginUnavailable,
+              key: const Key('device-session-repair-error'),
             ),
         ],
       ),
     );
-    return compact
-        ? Material(elevation: 8, child: contents)
+    return widget.compact
+        ? Material(elevation: 2, child: contents)
         : Scaffold(body: Center(child: contents));
   }
 }

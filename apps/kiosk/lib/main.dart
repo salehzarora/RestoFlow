@@ -415,7 +415,12 @@ class KioskApp extends ConsumerWidget {
     final lang = ref.watch(kioskFlowProvider.select((s) => s.lang));
     return DeviceSessionAppHost(
       manager: heartbeatManager,
+      staffOnlyRepair: true,
       onInvalidSession: () {
+        ref.read(kioskDeviceContextProvider.notifier).state = null;
+        ref.read(kioskLiveProvider.notifier).signalSessionInvalid();
+      },
+      onLocalUnpair: () {
         ref.read(kioskDeviceContextProvider.notifier).state = null;
         ref.read(kioskLiveProvider.notifier).signalSessionInvalid();
       },

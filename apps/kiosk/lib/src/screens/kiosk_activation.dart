@@ -55,12 +55,19 @@ enum _GatePhase { restoring, needsActivation, offline, active, unavailable }
 
 class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
   int _restoreGeneration = 0;
+  DateTime? _lastSuccessfulRestore;
+  bool _stableUnavailable = false;
   _GatePhase _phase = _GatePhase.restoring;
 
   @override
   void initState() {
     super.initState();
     _restore();
+  }
+
+  Future<void> _retry() async {
+    _stableUnavailable = false;
+    await _restore();
   }
 
   Future<void> _restore() async {
@@ -71,7 +78,10 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     );
     if (!mounted || generation != _restoreGeneration) return;
     switch (outcome) {
+      case DeviceSessionRestoreSuperseded():
+        return;
       case DeviceSessionRestored(:final context):
+        _lastSuccessfulRestore = ref.read(kioskClockProvider)();
         ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
         widget.onActivated?.call(context);
         setState(() => _phase = _GatePhase.active);
@@ -87,6 +97,8 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
 
   void _onPaired(DeviceContext context) {
     _restoreGeneration++;
+    _lastSuccessfulRestore = ref.read(kioskClockProvider)();
+    _stableUnavailable = false;
     ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
     widget.onActivated?.call(context);
     setState(() => _phase = _GatePhase.active);
@@ -95,7 +107,11 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
   @override
   Widget build(BuildContext context) {
     ref.listen(kioskDeviceContextProvider, (previous, next) {
-      if (next != null && _phase == _GatePhase.unavailable) _onPaired(next);
+      if (next != null &&
+          !_stableUnavailable &&
+          (_phase == _GatePhase.unavailable || _phase == _GatePhase.offline)) {
+        _onPaired(next);
+      }
     });
     // A live read proved the session dead → re-validate (the repository
     // clears rejected credentials, landing back on activation).
@@ -105,7 +121,15 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
     ) {
       if (invalid && _phase == _GatePhase.active) {
         ref.read(kioskLiveProvider.notifier).acknowledgeSessionInvalid();
-        _restore();
+        final lastRestore = _lastSuccessfulRestore;
+        if (lastRestore != null &&
+            ref.read(kioskClockProvider)().difference(lastRestore) <
+                const Duration(seconds: 30)) {
+          _stableUnavailable = true;
+          setState(() => _phase = _GatePhase.unavailable);
+        } else {
+          _restore();
+        }
       }
     });
 
@@ -115,15 +139,19 @@ class _KioskPairingGateState extends ConsumerState<KioskPairingGate> {
         child: _KioskGateSpinner(),
       ),
       _GatePhase.offline => _KioskGateScaffold(
-        child: _KioskReconnectPanel(onRetry: _restore),
+        child: _KioskReconnectPanel(onRetry: _retry),
       ),
       _GatePhase.unavailable => DeviceSessionUnavailableView(
-        onRetry: _restore,
+        onRetry: _retry,
+        staffOnlyRepair: true,
         repairManager: widget.outcomes is DeviceSessionLocalRepairManager
             ? widget.outcomes as DeviceSessionLocalRepairManager
             : null,
         onRepaired: () {
-          if (mounted) setState(() => _phase = _GatePhase.needsActivation);
+          if (!mounted) return;
+          _restoreGeneration++;
+          _stableUnavailable = false;
+          setState(() => _phase = _GatePhase.needsActivation);
         },
       ),
       _GatePhase.needsActivation => KioskActivationScreen(
@@ -337,17 +365,19 @@ class _KioskGateScaffold extends StatelessWidget {
   final Widget child;
 
   @override
-  // Material(transparency) so the TextField works without a Scaffold —
-  // the same rule KioskStage applies for the customer shell. Scrollable so
-  // the staff surface stays usable at ANY viewport, never clipped.
-  Widget build(BuildContext context) => Material(
-    type: MaterialType.transparency,
-    child: ColoredBox(
-      color: KioskColors.canvasBottom,
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(60),
-          child: child,
+  // The staff gate owns a Scaffold for neutral local-unpair feedback.
+  // Its transparent Material preserves the kiosk styling, and scrolling
+  // keeps activation controls reachable on every supported viewport.
+  Widget build(BuildContext context) => Scaffold(
+    body: Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: KioskColors.canvasBottom,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(60),
+            child: child,
+          ),
         ),
       ),
     ),

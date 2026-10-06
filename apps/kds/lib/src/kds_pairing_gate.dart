@@ -77,8 +77,9 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
   /// renders without this gate in its tree — can read it. Deferred a frame:
   /// provider writes are illegal while the tree is building.
   void _publish(DeviceContext? device) {
+    final generation = _restoreGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || generation != _restoreGeneration) return;
       ref.read(kdsDeviceContextProvider.notifier).set(device);
     });
   }
@@ -93,6 +94,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
         expectedDeviceType: _expectedDeviceType,
       );
       offline = outcome is DeviceSessionRestoreOffline;
+      if (outcome is DeviceSessionRestoreSuperseded) return;
       unavailable = outcome is DeviceSessionRestoreUnavailable;
       if (outcome case DeviceSessionRestored(:final context))
         restored = context;
@@ -119,7 +121,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
     // the session, so the app falls back to this gate which then restores to
     // a cleared secret store => pairing screen.)
     ref.listen<DeviceContext?>(kdsDeviceContextProvider, (previous, next) {
-      if (next != null && _unavailable) {
+      if (next != null && (_unavailable || _offline)) {
         setState(() {
           _device = next;
           _unavailable = false;
@@ -127,7 +129,12 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
         });
       }
       if (next == null && _device != null) {
-        setState(() => _device = null);
+        _restoreGeneration++;
+        setState(() {
+          _device = null;
+          _offline = false;
+          _unavailable = false;
+        });
       }
     });
     if (_restoring) {
@@ -162,7 +169,10 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
             : null,
         onRepaired: () {
           if (!mounted) return;
+          _restoreGeneration++;
           setState(() {
+            _offline = false;
+            _restoring = false;
             _unavailable = false;
             _device = null;
           });

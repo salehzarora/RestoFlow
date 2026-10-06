@@ -43,6 +43,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   int _seq = 0;
   bool _disposed = false;
   bool _sweeping = false;
+  int _generation = 0;
+
+  bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
   /// [POS-OFFLINE-OPERATIONS-002 Pass B] A pending request to reset every
   /// retryable entry's backoff schedule (reconnect / resume / manual sync-now).
@@ -53,6 +56,12 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
   @override
   List<OutboxEntry> build() {
+    // Riverpod retains this Notifier when its PIN-bound repository rebuilds.
+    // Start a fresh runtime while fencing continuations of the old session.
+    _generation++;
+    _disposed = false;
+    _sweeping = false;
+    _resetRequested = false;
     _repo = ref.watch(outboxRepositoryProvider);
     ref.onDispose(() => _disposed = true);
     // [POS-OFFLINE-OPERATIONS-002 Pass B] Reconnect evidence: the offline
@@ -94,13 +103,15 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// Fail-closed: if the real outbox has no session/transport yet it throws, so
   /// we simply skip — a later rebuild (after PIN sign-in) re-runs this.
   Future<void> _recover() async {
+    final generation = _generation;
+    final repo = _repo;
     final List<OutboxEntry> loaded;
     try {
-      loaded = await _repo.recentEntries();
+      loaded = await repo.recentEntries();
     } catch (_) {
       return;
     }
-    if (_disposed || loaded.isEmpty) return;
+    if (!_isCurrent(generation) || loaded.isEmpty) return;
     state = loaded;
     await _sweep();
   }
@@ -122,6 +133,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// extra attempts safe.
   Future<void> _sweep() async {
     if (_sweeping || _disposed) return;
+    final generation = _generation;
     _sweeping = true;
     try {
       // Consume a pending backoff reset INSIDE the latch, before the lists are
@@ -148,7 +160,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
           if (e.syncState.isPending) e.id,
       ];
       for (final id in failed) {
-        if (_disposed) return;
+        if (!_isCurrent(generation)) return;
         try {
           await retryEntry(id);
         } catch (_) {
@@ -156,7 +168,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         }
       }
       for (final id in pending) {
-        if (_disposed) return;
+        if (!_isCurrent(generation)) return;
         final cur = entryById(id);
         if (cur == null || !cur.syncState.isPending) continue;
         try {
@@ -166,7 +178,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         }
       }
     } finally {
-      _sweeping = false;
+      if (_isCurrent(generation)) {
+        _sweeping = false;
+        // A successful device recovery can arrive while this sweep is still
+        // persisting a guard refusal. Consume its coalesced reset immediately
+        // after release, rather than waiting for the next periodic timer.
+        if (_resetRequested) unawaited(_sweep());
+      }
     }
   }
 
@@ -536,6 +554,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
   /// Demo-pushes [entryId]: shows "Sending…" then the delivered/failed result.
   Future<void> pushEntry(String entryId) async {
+    final generation = _generation;
+    final repo = _repo;
+    if (!_isCurrent(generation)) return;
     // POS-DEFINITIVE-REJECTION-PUSH-BOUNDARY-FIX-025 — THE PUSH BOUNDARY ITSELF.
     //
     // 024 closed `retryEntry`, `retryAllFailed` and the automatic sweep, but
@@ -574,8 +595,11 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         else
           e,
     ];
-    await _repo.push(entryId);
-    state = await _repo.recentEntries();
+    await repo.push(entryId);
+    if (!_isCurrent(generation)) return;
+    final entries = await repo.recentEntries();
+    if (!_isCurrent(generation)) return;
+    state = entries;
     // [POS-OFFLINE-OPERATIONS-002] The push we just recorded may have landed a
     // batch-level auth refusal (AUTH_HOLD) — the ONE failure that is also a
     // verdict about the PIN SESSION itself. Signal the session seam exactly
@@ -653,11 +677,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// only burns an attempt and, for an `order.submit`, re-asks about an order
   /// that provably does not exist.
   Future<void> retryEntry(String entryId) async {
+    final generation = _generation;
+    final repo = _repo;
+    if (!_isCurrent(generation)) return;
     for (final e in state) {
       if (e.id == entryId && e.hasDefinitiveVerdict) return;
     }
-    await _repo.retry(entryId);
-    state = await _repo.recentEntries();
+    await repo.retry(entryId);
+    if (!_isCurrent(generation)) return;
+    final entries = await repo.recentEntries();
+    if (!_isCurrent(generation)) return;
+    state = entries;
     await pushEntry(entryId);
   }
 

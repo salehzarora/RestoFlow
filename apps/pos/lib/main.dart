@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +30,7 @@ import 'src/data/sync_cursor_store.dart';
 import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
+import 'src/media/clear_pairing_media.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
 import 'src/state/order_sync_controller.dart';
@@ -757,6 +760,17 @@ class PosApp extends ConsumerWidget {
             .handleServerAuthRefusal();
         ref.read(posDeviceContextProvider.notifier).set(null);
       },
+      onLocalUnpair: () {
+        ref.read(posSessionReauthNoticeProvider.notifier).clear();
+        ref.read(posSessionControllerProvider.notifier).endSession();
+        clearPosPairingMedia(ref.read(posImageUrlResolverProvider));
+        ref.read(posDeviceContextProvider.notifier).set(null);
+      },
+      onRecovered: () => unawaited(
+        ref
+            .read(outboxControllerProvider.notifier)
+            .pushQueued(resetBackoff: true),
+      ),
       onRestored: (context) =>
           ref.read(posDeviceContextProvider.notifier).set(context),
       buildApp: (navigatorKey, sessionBuilder) => MaterialApp(

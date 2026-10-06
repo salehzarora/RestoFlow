@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -7,6 +9,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_kds/main.dart';
 import 'package:restoflow_kds/src/kitchen_orders_home.dart';
+import 'package:restoflow_kds/src/kds_pairing_gate.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 class _HeartbeatWire implements SyncRpcTransport {
@@ -61,6 +64,7 @@ class _FakeOutcome extends _FakeRestorable
     implements DeviceSessionOutcomeManager {
   _FakeOutcome(this.outcome) : super(null);
   DeviceRestoreOutcome outcome;
+  Future<DeviceRestoreOutcome>? pending;
   int calls = 0;
   @override
   Future<DeviceRestoreOutcome> restoreOutcome({
@@ -68,8 +72,18 @@ class _FakeOutcome extends _FakeRestorable
   }) async {
     calls++;
     lastExpectedDeviceType = expectedDeviceType;
+    if (pending != null) return await pending!;
     return outcome;
   }
+}
+
+class _RepairOutcome extends _FakeOutcome
+    implements DeviceSessionLocalRepairManager {
+  _RepairOutcome() : super(const DeviceSessionRestoreUnavailable());
+  @override
+  int get consecutiveUnavailable => 3;
+  @override
+  Future<void> clearLocalPairing() async {}
 }
 
 class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
@@ -126,6 +140,77 @@ Future<void> _pump(WidgetTester tester, Widget app) async {
 }
 
 void main() {
+  testWidgets('H5 KDS local repair fences an older in-flight restore reply', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _RepairOutcome();
+    final pending = Completer<DeviceRestoreOutcome>();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: KdsPairingGate(
+            repository: repo,
+            signedInChild: const Text('live protected app'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    repo.pending = pending.future;
+    await tester.tap(find.byKey(const Key('device-session-retry')));
+    await tester.pump();
+    expect(repo.calls, 2);
+    await tester.tap(find.byKey(const Key('device-session-repair')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('device-session-repair-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    pending.complete(
+      const DeviceSessionRestored(
+        DeviceContext(
+          organizationId: 'o',
+          restaurantId: 'r',
+          branchId: 'b',
+          deviceId: 'd',
+          deviceSessionId: 's',
+          deviceType: 'kds',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.text('live protected app'), findsNothing);
+    expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'H3 KDS ignores superseded cold restore without changing gate verdict',
+    (tester) async {
+      final repository = _FakeOutcome(const DeviceSessionRestoreSuperseded());
+      await tester.pumpWidget(
+        ProviderScope(
+          child: KdsApp(
+            demoMode: false,
+            devicePairingRepository: repository,
+            deviceStaffRepository: _FakeStaffDirectory(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+      expect(find.byType(DevicePairingScreen), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets(
     'BIZBOT real repository heartbeat returns rejected device to activation',
     (tester) async {

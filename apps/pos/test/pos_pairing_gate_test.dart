@@ -16,11 +16,14 @@ import 'package:restoflow_pos/src/state/pos_device_context.dart';
 class _HeartbeatWire implements SyncRpcTransport {
   bool revoked = false;
   bool malformed = false;
+  bool offline = false;
   int revocations = 0;
   int heartbeats = 0;
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     if (function == 'revoke_device_session') revocations++;
+    if (offline)
+      throw const SyncTransportException(SyncTransportErrorKind.transient);
     if (malformed) return {'ok': true};
     if (function == 'heartbeat_device_session') heartbeats++;
     if (revoked)
@@ -82,6 +85,15 @@ class _FakeOutcome extends _FakeRestorable
   }
 }
 
+class _RepairOutcome extends _FakeOutcome
+    implements DeviceSessionLocalRepairManager {
+  _RepairOutcome() : super(const DeviceSessionRestoreUnavailable());
+  @override
+  int get consecutiveUnavailable => 3;
+  @override
+  Future<void> clearLocalPairing() async {}
+}
+
 class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
   _FakeRestorable(this._restored);
   final DeviceContext? _restored;
@@ -137,6 +149,119 @@ Future<void> _pump(WidgetTester tester, Widget app) async {
 }
 
 void main() {
+  testWidgets('H5 POS local repair fences an older in-flight restore reply', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _RepairOutcome();
+    final pending = Completer<DeviceRestoreOutcome>();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: PosPairingGate(
+            repository: repo,
+            signedInChild: const Text('live protected app'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    repo.pending = pending.future;
+    await tester.tap(find.byKey(const Key('device-session-retry')));
+    await tester.pump();
+    expect(repo.calls, 2);
+    await tester.tap(find.byKey(const Key('device-session-repair')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('device-session-repair-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    pending.complete(
+      const DeviceSessionRestored(
+        DeviceContext(
+          organizationId: 'o',
+          restaurantId: 'r',
+          branchId: 'b',
+          deviceId: 'd',
+          deviceSessionId: 's',
+          deviceType: 'pos',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.text('live protected app'), findsNothing);
+    expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'H3 POS ignores superseded cold restore without changing gate verdict',
+    (tester) async {
+      final repository = _FakeOutcome(const DeviceSessionRestoreSuperseded());
+      await tester.pumpWidget(
+        ProviderScope(
+          child: PosApp(
+            demoMode: false,
+            devicePairingRepository: repository,
+            deviceStaffRepository: _FakeStaffDirectory(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+      expect(find.byType(DevicePairingScreen), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'H3 cold unknown then offline recovers to real PIN gate automatically',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(deviceId: 'd', sessionToken: 'token'),
+      );
+      final wire = _HeartbeatWire()..malformed = true;
+      final repo = SupabaseDevicePairingRepository(
+        transport: DeviceSessionGuardedTransport(wire),
+        secretStore: store,
+      );
+      await _pump(
+        tester,
+        PosApp(
+          demoMode: false,
+          devicePairingRepository: repo,
+          deviceStaffRepository: _FakeStaffDirectory(),
+        ),
+      );
+      expect(repo.activeDevice, isNull);
+      expect(repo.consecutiveUnavailable, 2);
+      wire.offline = true;
+      await tester.pump(const Duration(seconds: 60));
+      await tester.pumpAndSettle();
+      expect(repo.consecutiveUnavailable, 0);
+      expect(repo.protectedCallsBlocked, isTrue);
+      expect(find.byType(PinLoginScreen), findsNothing);
+      wire.offline = false;
+      wire.malformed = false;
+      await tester.pump(const Duration(seconds: 120));
+      await tester.pumpAndSettle();
+      expect(repo.protectedCallsBlocked, isFalse);
+      expect(find.byType(PinLoginScreen), findsOneWidget);
+      expect(find.byType(DeviceSessionUnavailableView), findsNothing);
+      expect(find.byType(OfflineBootView), findsNothing);
+      expect(await store.read(), isNotNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets(
     'S4 completed local unpair ignores a late upgrade restore verdict',
     (tester) async {
@@ -205,7 +330,7 @@ void main() {
       );
       expect(repo.consecutiveUnavailable, 2);
       expect(find.byKey(const Key('device-session-repair')), findsNothing);
-      await tester.pump(const Duration(minutes: 15));
+      await tester.pump(const Duration(seconds: 60));
       await tester.pumpAndSettle();
       expect(repo.consecutiveUnavailable, 3);
       await tester.tap(find.byKey(const Key('device-session-repair')));
