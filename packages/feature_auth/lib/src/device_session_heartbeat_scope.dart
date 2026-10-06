@@ -307,43 +307,55 @@ class _HeartbeatScopeState extends State<DeviceSessionHeartbeatScope>
   }
 
   @override
-  Widget build(BuildContext context) => _RecoveryProgress(
-    count: _unavailableCount,
-    onLocalUnpair: _localUnpair,
-    child: Column(
-      children: [
-        // Own layout space above the navigator: no cart, checkout, or kitchen
-        // control can be obscured by the retry notice, including on a phone.
-        if ((_unavailable || _restoreUnavailable || _blocked || _repairing) &&
-            (widget.manager?.activeDevice != null || _repairing))
-          SafeArea(
-            bottom: false,
-            child: DeviceSessionUnavailableView(
-              compact: true,
-              staffOnlyRepair: widget.staffOnlyRepair,
-              onRetry: _retry,
-              repairManager: widget.manager is DeviceSessionLocalRepairManager
-                  ? widget.manager as DeviceSessionLocalRepairManager
-                  : null,
-              onRepairState: (repairing) {
-                if (mounted) setState(() => _repairing = repairing);
-              },
-              dialogContext: () =>
-                  widget.navigatorKey?.currentContext ?? context,
+  Widget build(BuildContext context) {
+    final bannerVisible =
+        (_unavailable || _restoreUnavailable || _blocked || _repairing) &&
+        (widget.manager?.activeDevice != null || _repairing);
+    return _RecoveryProgress(
+      count: _unavailableCount,
+      onLocalUnpair: _localUnpair,
+      child: Column(
+        children: [
+          // Own layout space above the navigator: no cart, checkout, or kitchen
+          // control can be obscured by the retry notice, including on a phone.
+          if (bannerVisible)
+            SafeArea(
+              bottom: false,
+              child: DeviceSessionUnavailableView(
+                compact: true,
+                staffOnlyRepair: widget.staffOnlyRepair,
+                onRetry: _retry,
+                repairManager: widget.manager is DeviceSessionLocalRepairManager
+                    ? widget.manager as DeviceSessionLocalRepairManager
+                    : null,
+                onRepairState: (repairing) {
+                  if (mounted) setState(() => _repairing = repairing);
+                },
+                dialogContext: () =>
+                    widget.navigatorKey?.currentContext ?? context,
+              ),
+            ),
+          Expanded(
+            key: const ValueKey('device-session-navigator'),
+            child: LayoutBuilder(
+              builder: (context, constraints) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(size: constraints.biggest),
+                child: Builder(
+                  builder: (context) => MediaQuery.removePadding(
+                    context: context,
+                    removeTop: bannerVisible,
+                    child: widget.child,
+                  ),
+                ),
+              ),
             ),
           ),
-        Expanded(
-          key: const ValueKey('device-session-navigator'),
-          child: LayoutBuilder(
-            builder: (context, constraints) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(size: constraints.biggest),
-              child: widget.child,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 // The mounted cold-start gate also observes automatic heartbeat verdicts.
@@ -388,9 +400,36 @@ class DeviceSessionUnavailableView extends StatefulWidget {
 
 class _UnavailableViewState extends State<DeviceSessionUnavailableView> {
   bool _staffRevealed = false;
+  Timer? _staffRevealTimer;
   bool _confirming = false;
   bool _repairing = false;
   bool _repairFailed = false;
+
+  void _hideStaffRepair() {
+    _staffRevealTimer?.cancel();
+    _staffRevealTimer = null;
+    if (mounted && _staffRevealed) {
+      setState(() => _staffRevealed = false);
+    }
+  }
+
+  void _revealStaffRepair() {
+    if (!mounted) return;
+    _staffRevealTimer?.cancel();
+    setState(() => _staffRevealed = true);
+    _staffRevealTimer = Timer(const Duration(seconds: 30), _hideStaffRepair);
+  }
+
+  void _retry() {
+    _hideStaffRepair();
+    widget.onRetry();
+  }
+
+  @override
+  void dispose() {
+    _staffRevealTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _repair() async {
     final manager = widget.repairManager;
@@ -472,9 +511,7 @@ class _UnavailableViewState extends State<DeviceSessionUnavailableView> {
                     () => LongPressGestureRecognizer(
                       duration: const Duration(seconds: 5),
                     ),
-                    (instance) => instance.onLongPress = () {
-                      if (mounted) setState(() => _staffRevealed = true);
-                    },
+                    (instance) => instance.onLongPress = _revealStaffRepair,
                   ),
             }
           : const {},
@@ -488,13 +525,13 @@ class _UnavailableViewState extends State<DeviceSessionUnavailableView> {
     final retry = widget.compact
         ? IconButton(
             key: const Key('device-session-retry'),
-            onPressed: _repairing ? null : widget.onRetry,
+            onPressed: _repairing ? null : _retry,
             icon: Icon(Icons.refresh, semanticLabel: l10n.authTryAgain),
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           )
         : FilledButton(
             key: const Key('device-session-retry'),
-            onPressed: _repairing ? null : widget.onRetry,
+            onPressed: _repairing ? null : _retry,
             child: Text(l10n.authTryAgain),
           );
     final repair = widget.compact
