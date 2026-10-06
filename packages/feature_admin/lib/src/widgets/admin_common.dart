@@ -355,6 +355,8 @@ String adminFailureMessage(AppLocalizations l10n, AdminFailure failure) =>
     switch (failure) {
       AdminPermissionDenied() => l10n.adminPermissionDeniedTitle,
       AdminValidation(:final message) => _validationMessage(l10n, message),
+      AdminConflict(message: 'device_changed') =>
+        l10n.activityLogTitleDeviceRevoked,
       AdminConflict() => l10n.adminConflictMessage,
       AdminNotFound() => l10n.adminStateErrorTitle,
       AdminTransient() => l10n.adminActionProblem,

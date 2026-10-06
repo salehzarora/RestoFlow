@@ -2947,6 +2947,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminSessionOpen => 'الجلسة نشطة';
 
   @override
+  String get adminSessionExpired => 'انتهت صلاحية الجلسة';
+
+  @override
+  String get adminNewCodeForDevice => 'رمز جديد لهذا الجهاز';
+
+  @override
+  String get adminNewCodeForDeviceConfirm =>
+      'هل تريد إنشاء رمز جديد لهذا الجهاز؟ سيؤدي الاقتران بالرمز الجديد إلى إنهاء جلساته السابقة.';
+
+  @override
   String get adminDeviceCreated => 'تمت إضافة الجهاز';
 
   @override

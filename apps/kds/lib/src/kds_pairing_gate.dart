@@ -56,6 +56,9 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
 
   DeviceContext? _device;
   bool _restoring = false;
+  bool _offline = false;
+  bool _unavailable = false;
+  int _restoreGeneration = 0;
 
   @override
   void initState() {
@@ -74,20 +77,37 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
   /// renders without this gate in its tree — can read it. Deferred a frame:
   /// provider writes are illegal while the tree is building.
   void _publish(DeviceContext? device) {
+    final generation = _restoreGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || generation != _restoreGeneration) return;
       ref.read(kdsDeviceContextProvider.notifier).set(device);
     });
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
-    final restored = await manager.restore(
-      expectedDeviceType: _expectedDeviceType,
-    );
-    if (!mounted) return;
+    final generation = ++_restoreGeneration;
+    DeviceContext? restored = _device;
+    var offline = false;
+    var unavailable = false;
+    if (manager is DeviceSessionOutcomeManager) {
+      final outcome = await manager.restoreOutcome(
+        expectedDeviceType: _expectedDeviceType,
+      );
+      offline = outcome is DeviceSessionRestoreOffline;
+      if (outcome is DeviceSessionRestoreSuperseded) return;
+      unavailable = outcome is DeviceSessionRestoreUnavailable;
+      if (outcome case DeviceSessionRestored(:final context))
+        restored = context;
+      if (outcome is DeviceSessionRestoreRejected) restored = null;
+    } else {
+      restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
+    }
+    if (!mounted || generation != _restoreGeneration) return;
     setState(() {
       _device = restored;
       _restoring = false;
+      _offline = offline;
+      _unavailable = unavailable;
     });
     _publish(restored);
   }
@@ -101,8 +121,20 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
     // the session, so the app falls back to this gate which then restores to
     // a cleared secret store => pairing screen.)
     ref.listen<DeviceContext?>(kdsDeviceContextProvider, (previous, next) {
+      if (next != null && (_unavailable || _offline)) {
+        setState(() {
+          _device = next;
+          _unavailable = false;
+          _offline = false;
+        });
+      }
       if (next == null && _device != null) {
-        setState(() => _device = null);
+        _restoreGeneration++;
+        setState(() {
+          _device = null;
+          _offline = false;
+          _unavailable = false;
+        });
       }
     });
     if (_restoring) {
@@ -124,6 +156,30 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
         ),
       );
     }
+    if (_offline && _device == null) {
+      return OfflineBootView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+      );
+    }
+    if (_unavailable && _device == null) {
+      return DeviceSessionUnavailableView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+        repairManager: widget.repository is DeviceSessionLocalRepairManager
+            ? widget.repository as DeviceSessionLocalRepairManager
+            : null,
+        onRepaired: () {
+          if (!mounted) return;
+          _restoreGeneration++;
+          setState(() {
+            _offline = false;
+            _restoring = false;
+            _unavailable = false;
+            _device = null;
+          });
+          _publish(null);
+        },
+      );
+    }
     // Enter ONLY for a paired device of THIS surface's type; the repo enforces
     // this on restore too, but the gate re-checks so an injected/restored
     // context of the wrong type can never unlock the kitchen board.
@@ -138,6 +194,7 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
       repository: widget.repository,
       deviceType: _expectedDeviceType,
       onPaired: (context) {
+        _restoreGeneration++;
         setState(() => _device = context);
         _publish(context);
       },

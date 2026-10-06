@@ -37,10 +37,12 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
     required AdminScope scope,
     required String? Function() currentUserId,
     int Function()? nonce,
+    AdminDeviceSnapshotClock Function()? snapshotClock,
   }) : _t = transport,
        _scope = scope,
        _uid = currentUserId,
-       _nonce = nonce ?? _microNonce;
+       _nonce = nonce ?? _microNonce,
+       _snapshotClock = snapshotClock ?? AdminDeviceSnapshotClock.new;
 
   final SyncRpcTransport _t;
   final AdminScope _scope;
@@ -51,6 +53,7 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
   /// button actions, never an auto-retry loop (unlike RF-151 onboarding), so a
   /// per-call id is correct here. Injectable for deterministic tests.
   final int Function() _nonce;
+  final AdminDeviceSnapshotClock Function() _snapshotClock;
 
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 
@@ -58,6 +61,7 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
 
   @override
   Future<AdminResult<List<AdminDevice>>> loadDevices() async {
+    final clock = _snapshotClock();
     final Object? raw;
     try {
       raw = await _t.invoke('list_devices', <String, dynamic>{
@@ -72,9 +76,18 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
     }
     if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
     final rows = (raw['devices'] as List?) ?? const [];
+    final serverNow = _timestamp(raw['server_now']);
     final devices = <AdminDevice>[];
     for (final row in rows) {
       if (row is! Map) continue;
+      final expiresAt = _timestamp(row['session_expires_at']);
+      // Old servers used an unrevoked-only flag. Without the additive metadata
+      // we cannot claim a session is active. Explicit NULL remains valid for
+      // legacy sessions; an absent or malformed field is not that guarantee.
+      final sessionMetadataKnown =
+          serverNow != null &&
+          row.containsKey('session_expires_at') &&
+          (row['session_expires_at'] == null || expiresAt != null);
       devices.add(
         AdminDevice(
           id: (row['device_id'] ?? '').toString(),
@@ -83,12 +96,21 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
           branchLabel: (row['branch_label'] ?? _scope.scopeLabel).toString(),
           status: _statusOf((row['status'] ?? 'none').toString()),
           pairingId: row['device_pairing_id']?.toString(),
-          hasOpenSession: row['has_open_session'] == true,
+          hasOpenSession:
+              sessionMetadataKnown && row['has_open_session'] == true,
+          sessionExpiresAt: expiresAt,
+          lastSeenAt: _timestamp(row['last_seen_at']),
+          serverNow: serverNow,
+          codeExpiresAt: _timestamp(row['code_expires_at']),
+          snapshotClock: clock,
         ),
       );
     }
     return Success(devices);
   }
+
+  static DateTime? _timestamp(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toUtc() : null;
 
   @override
   Future<AdminResult<AdminDevice>> createDevice({
@@ -146,6 +168,15 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
         'p_device_id': deviceId,
       });
     } on SyncTransportException catch (e) {
+      // This RPC's known target-state refusal is not a retryable outage or an
+      // authentication verdict. Leave unrelated 42501 errors on the normal map.
+      if (e.code == '42501' &&
+          e.message?.contains(
+                'issue_device_enrollment_code: device not found, inactive, or its scope is soft-deleted',
+              ) ==
+              true) {
+        return const Failure(AdminConflict('device_changed'));
+      }
       return Failure(_mapTransport(e));
     } catch (_) {
       return const Failure(AdminTransient());

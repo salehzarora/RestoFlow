@@ -543,6 +543,12 @@ class RealPaymentRepository implements PaymentRepository, PaymentAttemptSender {
   ///   * everything else (timeout, socket, 5xx, 429, unknown) — the request
   ///     MAY have committed: UNCONFIRMED.
   static PaymentSendResult classifyTransportFailure(SyncTransportException e) {
+    // The local device guard refuses before invoking the wire. This attempt
+    // was not sent and may be retried once token verification succeeds.
+    if (e.kind == SyncTransportErrorKind.transient &&
+        e.code == 'device_session_unverified') {
+      return const PaymentSendNotApplied('device_session_unverified');
+    }
     if (e.kind == SyncTransportErrorKind.auth) {
       return const PaymentSendAuthRequired();
     }

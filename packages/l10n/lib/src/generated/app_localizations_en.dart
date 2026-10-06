@@ -2967,6 +2967,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSessionOpen => 'Session active';
 
   @override
+  String get adminSessionExpired => 'Session expired';
+
+  @override
+  String get adminNewCodeForDevice => 'New code for this device';
+
+  @override
+  String get adminNewCodeForDeviceConfirm =>
+      'Create a new code for this device? Pairing with the new code will end its previous sessions.';
+
+  @override
   String get adminDeviceCreated => 'Device added';
 
   @override

@@ -5470,6 +5470,24 @@ abstract class AppLocalizations {
   /// **'Session active'**
   String get adminSessionOpen;
 
+  /// No description provided for @adminSessionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Session expired'**
+  String get adminSessionExpired;
+
+  /// No description provided for @adminNewCodeForDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'New code for this device'**
+  String get adminNewCodeForDevice;
+
+  /// No description provided for @adminNewCodeForDeviceConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a new code for this device? Pairing with the new code will end its previous sessions.'**
+  String get adminNewCodeForDeviceConfirm;
+
   /// No description provided for @adminDeviceCreated.
   ///
   /// In en, this message translates to:

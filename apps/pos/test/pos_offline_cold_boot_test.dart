@@ -72,11 +72,17 @@ const _cachedContext = DeviceContext(
 /// Nothing may reach it while the boot is degraded (assert (d)).
 final class _ScriptedRealTransport implements SyncRpcTransport {
   final List<(String, Map<String, dynamic>)> calls = [];
+  bool unknownRestore = false;
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     calls.add((function, params));
-    if (function == 'restore_device_session') {
+    if (unknownRestore &&
+        (function == 'restore_device_session' ||
+            function == 'heartbeat_device_session'))
+      return {'ok': true};
+    if (function == 'restore_device_session' ||
+        function == 'heartbeat_device_session') {
       // The SAME pairing scope the cached context carries — the gate's
       // post-upgrade re-verify must keep the live tree untouched.
       return <String, dynamic>{
@@ -302,109 +308,112 @@ void main() {
     }
   }
 
-  testWidgets(
-    'cold boot with the network fully down reaches the cached menu behind the '
-    'restored offline session — then upgrades IN PLACE when the retry '
-    'succeeds (a/b/c/d/f)',
-    (tester) async {
-      sizeTablet(tester);
-      final now = DateTime.now().toUtc();
-      await seedDurableState(now);
-      final prefs = await SharedPreferences.getInstance();
-      final boot = buildCoordinator(prefs);
+  for (final unknown in [false, true]) {
+    testWidgets(
+      'cold boot with the network fully down reaches the cached menu behind the '
+      'restored offline session — then upgrades IN PLACE when the retry '
+      'succeeds (a/b/c/d/f); F1 unknown restore=$unknown',
+      (tester) async {
+        sizeTablet(tester);
+        final now = DateTime.now().toUtc();
+        await seedDurableState(now);
+        final prefs = await SharedPreferences.getInstance();
+        final boot = buildCoordinator(prefs);
 
-      await tester.pumpWidget(
-        root(
-          prefs,
-          boot.coordinator,
-          autoRetryInterval: const Duration(milliseconds: 400),
-        ),
-      );
-      await pumpThrough(tester);
+        await tester.pumpWidget(
+          root(
+            prefs,
+            boot.coordinator,
+            autoRetryInterval: const Duration(milliseconds: 400),
+          ),
+        );
+        await pumpThrough(tester);
 
-      // (a) The app tree mounts — never the blocking offline screen.
-      expect(find.byType(OfflineBootView), findsNothing);
-      expect(find.byType(PosMenuScreen), findsOneWidget);
-      expect(find.byType(PinLoginScreen), findsNothing);
+        // (a) The app tree mounts — never the blocking offline screen.
+        expect(find.byType(OfflineBootView), findsNothing);
+        expect(find.byType(PosMenuScreen), findsOneWidget);
+        expect(find.byType(PinLoginScreen), findsNothing);
 
-      // (b) The PIN gate's offline restore engaged: the restored session is
-      // live and the cached menu renders with the offline banner.
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(PosMenuScreen)),
-      );
-      final session = container.read(posSyncSessionProvider);
-      expect(session, isNotNull);
-      expect(session!.pinSessionId, 'pin-stored');
-      expect(session.deviceId, 'dev-1');
-      expect(find.text('Burger'), findsWidgets);
-      expect(find.byKey(const Key('pos-offline-banner')), findsOneWidget);
-
-      // (c) Kitchen readiness ended in a BOUNDED state: the offline-trusted
-      // resolved mode (the snapshot capture is inside its window) or the
-      // explicit retryable Unavailable — never a stuck Loading spinner.
-      final readiness = container.read(posKitchenModeReadinessProvider);
-      expect(
-        readiness is KitchenModeReadinessLoading,
-        isFalse,
-        reason: 'readiness must be actionable, got: $readiness',
-      );
-
-      // (d) ZERO network IO from the degraded tree: every repository call was
-      // refused synchronously by the hold transport; the real wire saw
-      // nothing. The ONLY network attempts are the boot gate's own retries.
-      final upgradable = boot.coordinator.upgradableTransport;
-      expect(upgradable, isNotNull);
-      expect(upgradable!.isUpgraded, isFalse);
-      expect(
-        upgradable.heldCallCount,
-        greaterThan(0),
-        reason: 'the degraded tree exercised the hold transport',
-      );
-      expect(boot.realTransport.calls, isEmpty);
-      expect(boot.signInAttempts(), greaterThanOrEqualTo(1));
-
-      // ---- (f) the network returns: upgrade IN PLACE, no remount ----------
-      final pinGateStateBefore = tester.state(find.byType(PosPinGate));
-      final menuElementBefore = tester.element(find.byType(PosMenuScreen));
-      boot.goOnline();
-      // Fire the pending auto-retry (backoff ≤ 400ms × 8 = 3.2s), then let
-      // the upgrade + the gate's silent server re-verification settle.
-      await tester.pump(const Duration(seconds: 4));
-      await pumpThrough(tester);
-
-      expect(upgradable.isUpgraded, isTrue);
-      expect(
-        boot.realTransport.calls.map((c) => c.$1),
-        contains('restore_device_session'),
-        reason: 'the pairing gate re-verified against the server on upgrade',
-      );
-      // The SAME tree is still mounted: state and element identity survived,
-      // the restored session is still live, and no boot/offline screen ever
-      // interposed.
-      expect(find.byType(PosMenuScreen), findsOneWidget);
-      expect(
-        identical(tester.state(find.byType(PosPinGate)), pinGateStateBefore),
-        isTrue,
-        reason: 'reconnection must not rebuild the subtree (cart safety)',
-      );
-      expect(
-        identical(
+        // (b) The PIN gate's offline restore engaged: the restored session is
+        // live and the cached menu renders with the offline banner.
+        final container = ProviderScope.containerOf(
           tester.element(find.byType(PosMenuScreen)),
-          menuElementBefore,
-        ),
-        isTrue,
-      );
-      expect(
-        container.read(posSyncSessionProvider)?.pinSessionId,
-        'pin-stored',
-      );
-      expect(find.byType(OfflineBootView), findsNothing);
+        );
+        final session = container.read(posSyncSessionProvider);
+        expect(session, isNotNull);
+        expect(session!.pinSessionId, 'pin-stored');
+        expect(session.deviceId, 'dev-1');
+        expect(find.text('Burger'), findsWidgets);
+        expect(find.byKey(const Key('pos-offline-banner')), findsOneWidget);
 
-      // Tear down explicitly so the gate/watchdog timers are disposed.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-    },
-  );
+        // (c) Kitchen readiness ended in a BOUNDED state: the offline-trusted
+        // resolved mode (the snapshot capture is inside its window) or the
+        // explicit retryable Unavailable — never a stuck Loading spinner.
+        final readiness = container.read(posKitchenModeReadinessProvider);
+        expect(
+          readiness is KitchenModeReadinessLoading,
+          isFalse,
+          reason: 'readiness must be actionable, got: $readiness',
+        );
+
+        // (d) ZERO network IO from the degraded tree: every repository call was
+        // refused synchronously by the hold transport; the real wire saw
+        // nothing. The ONLY network attempts are the boot gate's own retries.
+        final upgradable = boot.coordinator.upgradableTransport;
+        expect(upgradable, isNotNull);
+        expect(upgradable!.isUpgraded, isFalse);
+        expect(
+          upgradable.heldCallCount,
+          greaterThan(0),
+          reason: 'the degraded tree exercised the hold transport',
+        );
+        expect(boot.realTransport.calls, isEmpty);
+        expect(boot.signInAttempts(), greaterThanOrEqualTo(1));
+
+        // ---- (f) the network returns: upgrade IN PLACE, no remount ----------
+        final pinGateStateBefore = tester.state(find.byType(PosPinGate));
+        final menuElementBefore = tester.element(find.byType(PosMenuScreen));
+        boot.realTransport.unknownRestore = unknown;
+        boot.goOnline();
+        // Fire the pending auto-retry (backoff ≤ 400ms × 8 = 3.2s), then let
+        // the upgrade + the gate's silent server re-verification settle.
+        await tester.pump(const Duration(seconds: 4));
+        await pumpThrough(tester);
+
+        expect(upgradable.isUpgraded, isTrue);
+        expect(
+          boot.realTransport.calls.map((c) => c.$1),
+          contains('restore_device_session'),
+          reason: 'the pairing gate re-verified against the server on upgrade',
+        );
+        // The SAME tree is still mounted: state and element identity survived,
+        // the restored session is still live, and no boot/offline screen ever
+        // interposed.
+        expect(find.byType(PosMenuScreen), findsOneWidget);
+        expect(
+          identical(tester.state(find.byType(PosPinGate)), pinGateStateBefore),
+          isTrue,
+          reason: 'reconnection must not rebuild the subtree (cart safety)',
+        );
+        expect(
+          identical(
+            tester.element(find.byType(PosMenuScreen)),
+            menuElementBefore,
+          ),
+          isTrue,
+        );
+        expect(
+          container.read(posSyncSessionProvider)?.pinSessionId,
+          'pin-stored',
+        );
+        expect(find.byType(OfflineBootView), findsNothing);
+
+        // Tear down explicitly so the gate/watchdog timers are disposed.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      },
+    );
+  }
 
   testWidgets(
     '(e) with NO cached pairing scope the blocked OfflineBootView still shows '

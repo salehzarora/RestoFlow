@@ -21,6 +21,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
     show SyncSession, SyncTransportErrorKind, SyncTransportException;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
@@ -318,6 +319,31 @@ PaymentAttempt _attemptFixture({
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'F1 guarded payment is not sent and same attempt succeeds after verification',
+    () async {
+      final server = _server();
+      final guard = DeviceSessionGuardedTransport(server)..block();
+      final repo = RealPaymentRepository(
+        guard,
+        const SyncSession(pinSessionId: 'pin-A', deviceId: 'device-A'),
+        _CountingIds('unused'),
+      );
+      final attempt = _attemptFixture();
+      expect(
+        await repo.sendAttempt(attempt),
+        isA<PaymentSendNotApplied>().having(
+          (r) => r.code,
+          'code',
+          'device_session_unverified',
+        ),
+      );
+      expect(server.pushes, isEmpty);
+      guard.allow();
+      expect(await repo.sendAttempt(attempt), isA<PaymentSendAccepted>());
+      expect(server.pushes, hasLength(1));
+    },
+  );
 
   // S1-R3 / F001: the physical-key trust boundary is deliberately isolate-wide
   // and impossible to clear at runtime, so each test starts from a clean one.

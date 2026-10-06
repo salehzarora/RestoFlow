@@ -71,6 +71,9 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
 
   DeviceContext? _device;
   bool _restoring = false;
+  bool _unavailable = false;
+  bool _offline = false;
+  int _restoreGeneration = 0;
 
   @override
   void initState() {
@@ -112,13 +115,17 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
   /// settings sprint) so the ⋮ settings sheet can read it. Deferred a frame:
   /// provider writes are illegal while the tree is building.
   void _publish(DeviceContext? device) {
+    final generation = _restoreGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || generation != _restoreGeneration) return;
       ref.read(posDeviceContextProvider.notifier).set(device);
     });
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
+    final generation = ++_restoreGeneration;
+    var unavailable = false;
+    var offline = false;
     DeviceContext? restored;
     if (manager is DeviceSessionOutcomeManager) {
       // [POS-OFFLINE-OPERATIONS-002] Pass A: the TYPED restore keeps a server
@@ -126,22 +133,32 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
       // cached scope for the stored secret (transient evidence only, device
       // id + surface type already verified by the repository) the gate enters
       // the offline surface on that DURABLE server-verified pairing; the
-      // build-time type guard below still re-checks it. A null cache — and
-      // every rejected verdict — fails closed to the pairing screen as today.
-      restored = switch (await manager.restoreOutcome(
+      // build-time type guard below still re-checks it. Without cached scope,
+      // show retryable offline; only an explicit rejection needs activation.
+      final outcome = await manager.restoreOutcome(
         expectedDeviceType: _expectedDeviceType,
-      )) {
+      );
+      if (outcome is DeviceSessionRestoreSuperseded) return;
+      unavailable = outcome is DeviceSessionRestoreUnavailable;
+      offline =
+          outcome is DeviceSessionRestoreOffline &&
+          outcome.cachedContext == null;
+      restored = switch (outcome) {
         DeviceSessionRestored(:final context) => context,
         DeviceSessionRestoreOffline(:final cachedContext) => cachedContext,
         DeviceSessionRestoreRejected() => null,
+        DeviceSessionRestoreSuperseded() => null,
+        DeviceSessionRestoreUnavailable(:final cachedContext) => cachedContext,
       };
     } else {
       restored = await manager.restore(expectedDeviceType: _expectedDeviceType);
     }
-    if (!mounted) return;
+    if (!mounted || generation != _restoreGeneration) return;
     setState(() {
       _device = restored;
       _restoring = false;
+      _unavailable = unavailable;
+      _offline = offline;
     });
     _publish(restored);
   }
@@ -170,21 +187,33 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
   Future<void> _reverifyAfterUpgrade(
     DeviceSessionOutcomeManager manager,
   ) async {
+    final generation = ++_restoreGeneration;
     final outcome = await manager.restoreOutcome(
       expectedDeviceType: _expectedDeviceType,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _restoreGeneration) return;
     switch (outcome) {
       case DeviceSessionRestored(:final context):
         final current = _device;
+        setState(() {
+          _unavailable = false;
+          _offline = false;
+          _device = context;
+        });
         if (current != null && _sameScope(current, context)) return;
-        setState(() => _device = context);
         _publish(context);
       case DeviceSessionRestoreRejected():
-        setState(() => _device = null);
+        setState(() {
+          _unavailable = false;
+          _offline = false;
+          _device = null;
+        });
         _publish(null);
       case DeviceSessionRestoreOffline():
+      case DeviceSessionRestoreSuperseded():
         break;
+      case DeviceSessionRestoreUnavailable():
+        setState(() => _unavailable = true);
     }
   }
 
@@ -206,12 +235,48 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
     // screen. Guarded on `_device != null` so the gate's own publishes (which
     // never null once paired) can't loop.
     ref.listen<DeviceContext?>(posDeviceContextProvider, (previous, next) {
+      if (next != null && (_unavailable || _offline)) {
+        setState(() {
+          _device = next;
+          _unavailable = false;
+          _offline = false;
+        });
+      }
       if (next == null && _device != null) {
-        setState(() => _device = null);
+        _restoreGeneration++;
+        setState(() {
+          _device = null;
+          _unavailable = false;
+          _offline = false;
+        });
       }
     });
     if (_restoring) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_unavailable && _device == null) {
+      return DeviceSessionUnavailableView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+        repairManager: widget.repository is DeviceSessionLocalRepairManager
+            ? widget.repository as DeviceSessionLocalRepairManager
+            : null,
+        onRepaired: () {
+          if (!mounted) return;
+          _restoreGeneration++;
+          setState(() {
+            _offline = false;
+            _restoring = false;
+            _unavailable = false;
+            _device = null;
+          });
+          _publish(null);
+        },
+      );
+    }
+    if (_offline) {
+      return OfflineBootView(
+        onRetry: () => _restore(widget.repository as DeviceSessionManager),
+      );
     }
     // Enter ONLY for a paired device of THIS surface's type; the repo enforces
     // this on restore too, but the gate re-checks so an injected/restored
@@ -227,6 +292,7 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
       repository: widget.repository,
       deviceType: _expectedDeviceType,
       onPaired: (context) {
+        _restoreGeneration++;
         setState(() => _device = context);
         _publish(context);
       },

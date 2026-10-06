@@ -89,9 +89,11 @@ _realDeviceAuth(SharedPreferences prefs) async {
     return (seams: null, problem: RealDeviceAuthProblem.unconfigured);
   }
   try {
-    final transport = await SupabaseAuthBootstrap(
-      config: config,
-    ).createAnonymousDeviceTransport();
+    final transport = DeviceSessionGuardedTransport(
+      await SupabaseAuthBootstrap(
+        config: config,
+      ).createAnonymousDeviceTransport(),
+    );
     // LIVE-DEVICE-001: on WEB persist the paired-device credential via
     // shared_preferences so a KDS tablet stays paired across F5 / browser
     // restart (flutter_secure_storage's web backing is not reliably durable in
@@ -392,23 +394,41 @@ class _KdsMaterialApp extends ConsumerWidget {
           }
         : gate;
 
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context).kdsAppTitle,
-      localizationsDelegates: restoflowLocalizationsDelegates,
-      supportedLocales: kSupportedLocales,
-      locale: ref.watch(localeControllerProvider),
-      localeResolutionCallback: restoflowResolveLocale,
-      debugShowCheckedModeBanner: false,
-      // Design-polish sprint: the kitchen display runs the DARK high-contrast
-      // variant of the shared theme (glare-free at a distance). Semantic
-      // status colours come from RestoflowSemanticColors.dark via the tones.
-      theme: restoflowKdsDarkBrandTheme(),
-      // RF-118: the staff PIN-session expiry observer wraps the WHOLE home so it
-      // survives the live/non-live swap (the gate — and any observer inside it —
-      // is unmounted when the live board mounts). It ends a stale session on
-      // resume and surfaces the "enter PIN again" notice via kdsExpiredNoticeProvider.
-      home: KdsSessionLifecycleObserver(
-        child: live ? const KdsSyncedHome() : nonLiveHome,
+    final locale = ref.watch(localeControllerProvider);
+    return DeviceSessionAppHost(
+      manager: !demo && pairingRepo is DeviceSessionHeartbeatManager
+          ? pairingRepo as DeviceSessionHeartbeatManager
+          : null,
+      onInvalidSession: () {
+        ref.read(kdsSessionControllerProvider.notifier).endSession();
+        ref.read(kdsDeviceContextProvider.notifier).set(null);
+      },
+      onLocalUnpair: () {
+        ref.read(kdsSessionControllerProvider.notifier).endSession();
+        ref.read(kdsDeviceContextProvider.notifier).set(null);
+      },
+      onRestored: (context) =>
+          ref.read(kdsDeviceContextProvider.notifier).set(context),
+      buildApp: (navigatorKey, sessionBuilder) => MaterialApp(
+        onGenerateTitle: (context) => AppLocalizations.of(context).kdsAppTitle,
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        locale: locale,
+        localeResolutionCallback: restoflowResolveLocale,
+        debugShowCheckedModeBanner: false,
+        // Design-polish sprint: the kitchen display runs the DARK high-contrast
+        // variant of the shared theme (glare-free at a distance). Semantic
+        // status colours come from RestoflowSemanticColors.dark via the tones.
+        theme: restoflowKdsDarkBrandTheme(),
+        // RF-118: the staff PIN-session expiry observer wraps the WHOLE home so it
+        // survives the live/non-live swap (the gate — and any observer inside it —
+        // is unmounted when the live board mounts). It ends a stale session on
+        // resume and surfaces the "enter PIN again" notice via kdsExpiredNoticeProvider.
+        home: KdsSessionLifecycleObserver(
+          child: live ? const KdsSyncedHome() : nonLiveHome,
+        ),
+        navigatorKey: navigatorKey,
+        builder: sessionBuilder,
       ),
     );
   }
