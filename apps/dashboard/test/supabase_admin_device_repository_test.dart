@@ -337,6 +337,40 @@ void main() {
   });
 
   group('issueEnrollmentCode', () {
+    test(
+      'H6 missing inactive device 42501 maps to device_changed conflict',
+      () async {
+        final t = _FakeTransport(
+          (_, _) => throw const SyncTransportException(
+            SyncTransportErrorKind.server,
+            code: '42501',
+            message:
+                'issue_device_enrollment_code: device not found, inactive, or its scope is soft-deleted',
+          ),
+        );
+        final result = await _repo(t).issueEnrollmentCode('d1');
+        result.fold((_) => fail('expected conflict'), (failure) {
+          expect(failure, isA<AdminConflict>());
+          expect((failure as AdminConflict).message, 'device_changed');
+        });
+      },
+    );
+
+    test('H6 unrelated auth 42501 remains permission denied', () async {
+      final t = _FakeTransport(
+        (_, _) => throw const SyncTransportException(
+          SyncTransportErrorKind.auth,
+          code: '42501',
+          message: 'permission denied',
+        ),
+      );
+      final result = await _repo(t).issueEnrollmentCode('d1');
+      result.fold(
+        (_) => fail('expected permission denial'),
+        (failure) => expect(failure, isA<AdminPermissionDenied>()),
+      );
+    });
+
     test('returns the one-time code on the first response', () async {
       final t = _FakeTransport(
         (fn, p) => {

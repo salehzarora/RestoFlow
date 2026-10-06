@@ -23,12 +23,17 @@ class _Transport implements SyncRpcTransport {
   final revokedFor = <String>[];
   DateTime? codeExpiresAt;
   bool hideDevice = false;
+  bool codeExpiryMetadata = true;
+  Object? loadError;
+  SyncTransportException? issueError;
+  Completer<void>? actionGate;
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     if (function == 'list_devices') {
       loads++;
       await loadingGate?.future;
+      if (loadError case final error?) throw error;
       return {
         'ok': true,
         if (metadata) 'server_now': now.toIso8601String(),
@@ -41,7 +46,8 @@ class _Transport implements SyncRpcTransport {
               'branch_label': 'Main',
               'status': status,
               'device_pairing_id': status == 'none' ? null : 'pairing',
-              'code_expires_at': codeExpiresAt?.toIso8601String(),
+              if (codeExpiryMetadata)
+                'code_expires_at': codeExpiresAt?.toIso8601String(),
               'has_open_session':
                   !expired && status != 'revoked' && status != 'none',
               if (metadata)
@@ -58,6 +64,8 @@ class _Transport implements SyncRpcTransport {
     }
     if (function == 'issue_device_enrollment_code') {
       issuedFor.add(params['p_device_id'] as String);
+      await actionGate?.future;
+      if (issueError case final error?) throw error;
       status = 'code_issued';
       codeExpiresAt = now.add(const Duration(minutes: 5));
       return {
@@ -69,6 +77,7 @@ class _Transport implements SyncRpcTransport {
     }
     if (function == 'revoke_device_management') {
       revokedFor.add(params['p_device_id'] as String);
+      await actionGate?.future;
       status = 'revoked';
       return {'ok': true};
     }
@@ -86,6 +95,7 @@ Future<void> _pump(
   PairingPanelPresenter? pairingPanel,
   ProviderContainer? cachedContainer,
   bool settle = true,
+  ValueNotifier<bool>? screenVisible,
 }) async {
   tester.view.physicalSize = Size(width, 2200);
   tester.view.devicePixelRatio = 1;
@@ -102,7 +112,16 @@ Future<void> _pump(
       maxScaleFactor: scale,
       child: child!,
     ),
-    home: const Scaffold(body: AdminDevicesScreen()),
+    home: Scaffold(
+      body: screenVisible == null
+          ? const AdminDevicesScreen()
+          : ValueListenableBuilder<bool>(
+              valueListenable: screenVisible,
+              builder: (_, visible, _) => visible
+                  ? const AdminDevicesScreen()
+                  : const SizedBox.shrink(),
+            ),
+    ),
   );
   await tester.pumpWidget(
     cachedContainer != null
@@ -128,6 +147,244 @@ Future<void> _pump(
 }
 
 void main() {
+  ProviderContainer containerFor(_Transport transport) => ProviderContainer(
+    overrides: adminFeatureOverrides(
+      scope: AdminScope.demo,
+      repository: SupabaseAdminDeviceRepository(
+        transport: transport,
+        scope: AdminScope.demo,
+        currentUserId: () => 'manager',
+      ),
+    ),
+  );
+
+  test('H6 action locks are per device and release after failure', () async {
+    final transport = _Transport();
+    final container = containerFor(transport);
+    addTearDown(container.dispose);
+    final controller = container.read(adminControllerProvider);
+    final gate = Completer<void>();
+    transport.actionGate = gate;
+    transport.issueError = const SyncTransportException(
+      SyncTransportErrorKind.server,
+      code: '500',
+    );
+    final failedIssue = controller.issueEnrollmentCode('existing-device');
+    final otherDevice = controller.revokeDevice('other-device');
+    final blockedRevoke = await controller.revokeDevice('existing-device');
+    expect(blockedRevoke.isSuccess, isFalse);
+    expect(transport.issuedFor, ['existing-device']);
+    expect(transport.revokedFor, ['other-device']);
+    gate.complete();
+    expect((await failedIssue).isSuccess, isFalse);
+    expect((await otherDevice).isSuccess, isTrue);
+    transport.issueError = null;
+    expect(
+      (await controller.issueEnrollmentCode('existing-device')).isSuccess,
+      isTrue,
+    );
+    expect(transport.issuedFor, ['existing-device', 'existing-device']);
+    expect(container.read(adminDeviceActionsInFlightProvider), isEmpty);
+  });
+
+  for (final expired in [false, true]) {
+    testWidgets(
+      'H6 failed refresh retains ${expired ? 'expired' : 'active'} tile and retries',
+      (tester) async {
+        final transport = _Transport(expired: expired);
+        await _pump(tester, transport);
+        final tile = tester.element(
+          find.byKey(const ValueKey('existing-device')),
+        );
+        transport.loadError = StateError('offline');
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Counter POS'), findsOneWidget);
+        expect(
+          tester.element(find.byKey(const ValueKey('existing-device'))),
+          same(tile),
+        );
+        expect(find.text('Session active'), findsNothing);
+        expect(find.text('Session expired'), findsNothing);
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        expect(find.text(l10n.adminStateErrorBody), findsOneWidget);
+        transport.loadError = null;
+        await tester.tap(find.text(l10n.adminRetry));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(expired ? 'Session expired' : 'Session active'),
+          findsOneWidget,
+        );
+        expect(transport.loads, 3);
+      },
+    );
+  }
+
+  for (final action in ['Revoke', 'New code for this device']) {
+    testWidgets('H6 $action stays disabled after tile recreation during RPC', (
+      tester,
+    ) async {
+      final transport = _Transport();
+      final container = containerFor(transport);
+      final visible = ValueNotifier(true);
+      final gate = Completer<void>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+        container.dispose();
+        visible.dispose();
+      });
+      await _pump(
+        tester,
+        transport,
+        cachedContainer: container,
+        screenVisible: visible,
+      );
+      transport.actionGate = gate;
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(
+          FilledButton,
+          action == 'Revoke' ? 'Revoke' : 'Issue code',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      visible.value = false;
+      await tester.pump();
+      visible.value = true;
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      final button = tester.widget<ButtonStyleButton>(
+        find.widgetWithText(
+          action == 'Revoke' ? TextButton : FilledButton,
+          action,
+        ),
+      );
+      expect(button.onPressed, isNull);
+      final controller = container.read(adminControllerProvider);
+      final duplicate = action == 'Revoke'
+          ? controller.revokeDevice('existing-device')
+          : controller.issueEnrollmentCode('existing-device');
+      await tester.pump();
+      expect(action == 'Revoke' ? transport.revokedFor : transport.issuedFor, [
+        'existing-device',
+      ]);
+      expect((await duplicate).isSuccess, isFalse);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final duringRpc in [false, true]) {
+      testWidgets(
+        'H6 $action handles container disposal ${duringRpc ? 'during RPC' : 'before confirmation'}',
+        (tester) async {
+          final transport = _Transport();
+          final container = containerFor(transport);
+          final visible = ValueNotifier(true);
+          addTearDown(visible.dispose);
+          final gate = Completer<void>();
+          await _pump(
+            tester,
+            transport,
+            cachedContainer: container,
+            screenVisible: visible,
+          );
+          await tester.tap(find.text(action));
+          await tester.pumpAndSettle();
+          if (duringRpc) {
+            transport.actionGate = gate;
+            await tester.tap(
+              find.widgetWithText(
+                FilledButton,
+                action == 'Revoke' ? 'Revoke' : 'Issue code',
+              ),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 300));
+          }
+          visible.value = false;
+          await tester.pump();
+          container.dispose();
+          if (duringRpc) {
+            gate.complete();
+          } else {
+            await tester.tap(
+              find.widgetWithText(
+                FilledButton,
+                action == 'Revoke' ? 'Revoke' : 'Issue code',
+              ),
+            );
+          }
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          if (!duringRpc) {
+            expect(transport.issuedFor, isEmpty);
+            expect(transport.revokedFor, isEmpty);
+            final l10n = await AppLocalizations.delegate.load(
+              const Locale('en'),
+            );
+            expect(find.text(l10n.adminActionProblem), findsOneWidget);
+          }
+        },
+      );
+    }
+  }
+
+  testWidgets('H6 confirming code for a removed device shows device removed', (
+    tester,
+  ) async {
+    final transport = _Transport();
+    await _pump(tester, transport);
+    await tester.tap(find.text('New code for this device'));
+    await tester.pumpAndSettle();
+    transport.issueError = const SyncTransportException(
+      SyncTransportErrorKind.server,
+      code: '42501',
+      message:
+          'issue_device_enrollment_code: device not found, inactive, or its scope is soft-deleted',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Issue code'));
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.activityLogTitleDeviceRevoked), findsOneWidget);
+    expect(find.text(l10n.adminActionProblem), findsNothing);
+  });
+
+  for (final status in ['code_issued', 'code_expired']) {
+    testWidgets('H6 $status with expired code hides pairing hint', (
+      tester,
+    ) async {
+      final transport = _Transport(status: status);
+      transport.codeExpiresAt = transport.now;
+      await _pump(tester, transport);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.adminDevStatusCodeExpired), findsOneWidget);
+      expect(find.text(l10n.adminPairOnDevice), findsNothing);
+    });
+  }
+
+  testWidgets(
+    'H6 legacy codeIssued without expiry still offers confirmed new code',
+    (tester) async {
+      final transport = _Transport(status: 'code_issued')
+        ..metadata = false
+        ..codeExpiryMetadata = false;
+      await _pump(tester, transport, pairingPanel: (_, _) async {});
+      expect(find.text('New code for this device'), findsOneWidget);
+      await tester.tap(find.text('New code for this device'));
+      await tester.pumpAndSettle();
+      expect(transport.issuedFor, isEmpty);
+      await tester.tap(find.widgetWithText(FilledButton, 'Issue code'));
+      await tester.pumpAndSettle();
+      expect(transport.issuedFor, ['existing-device']);
+    },
+  );
+
   for (final elapsedOffscreen in [4, 8]) {
     testWidgets(
       'recreated tile retains fetch deadline after $elapsedOffscreen seconds offscreen',

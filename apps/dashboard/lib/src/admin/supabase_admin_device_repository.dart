@@ -168,6 +168,15 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
         'p_device_id': deviceId,
       });
     } on SyncTransportException catch (e) {
+      // This RPC's known target-state refusal is not a retryable outage or an
+      // authentication verdict. Leave unrelated 42501 errors on the normal map.
+      if (e.code == '42501' &&
+          e.message?.contains(
+                'issue_device_enrollment_code: device not found, inactive, or its scope is soft-deleted',
+              ) ==
+              true) {
+        return const Failure(AdminConflict('device_changed'));
+      }
       return Failure(_mapTransport(e));
     } catch (_) {
       return const Failure(AdminTransient());

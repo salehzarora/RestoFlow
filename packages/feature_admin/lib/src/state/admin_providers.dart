@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 
 import '../data/admin_repository.dart';
 import '../models/admin_failure.dart';
@@ -57,11 +58,20 @@ class _AdminLoadError implements Exception {
 AdminFailure adminFailureOf(Object error) =>
     error is _AdminLoadError ? error.failure : const AdminTransient();
 
+/// Scope-owned action locks survive device tile/screen recreation.
+final adminDeviceActionsInFlightProvider = StateProvider<Set<String>>(
+  (ref) => <String>{},
+  dependencies: [adminRepositoryProvider],
+);
+
 /// Runs admin write actions, invalidating the relevant loader on success (the UI
 /// shows the [AdminFailure] on failure). Writes are non-optimistic.
 class AdminController {
-  AdminController(this._ref);
+  AdminController(this._ref) {
+    _ref.onDispose(() => _disposed = true);
+  }
   final Ref _ref;
+  bool _disposed = false;
 
   AdminRepository get _repo => _ref.read(adminRepositoryProvider);
 
@@ -72,6 +82,29 @@ class AdminController {
     final outcome = await op();
     if (outcome.isSuccess) _ref.invalidate(toInvalidate);
     return outcome;
+  }
+
+  Future<AdminResult<T>> _runDeviceAction<T>(
+    String deviceId,
+    Future<AdminResult<T>> Function() op,
+  ) async {
+    if (_disposed) throw StateError('Admin controller disposed');
+    final actions = _ref.read(adminDeviceActionsInFlightProvider.notifier);
+    if (actions.state.contains(deviceId)) {
+      return Failure(const AdminConflict('action_in_progress'));
+    }
+    actions.state = {...actions.state, deviceId};
+    try {
+      final outcome = await op();
+      if (!_disposed && outcome.isSuccess) {
+        _ref.invalidate(adminDevicesProvider);
+      }
+      return outcome;
+    } finally {
+      if (!_disposed) {
+        actions.state = {...actions.state}..remove(deviceId);
+      }
+    }
   }
 
   // settings
@@ -159,7 +192,7 @@ class AdminController {
 
   Future<AdminResult<EnrollmentCodeIssued>> issueEnrollmentCode(
     String deviceId,
-  ) => _run(() => _repo.issueEnrollmentCode(deviceId), adminDevicesProvider);
+  ) => _runDeviceAction(deviceId, () => _repo.issueEnrollmentCode(deviceId));
 
   Future<AdminResult<AdminDevice>> redeemEnrollmentCode(String deviceId) =>
       _run(() => _repo.redeemEnrollmentCode(deviceId), adminDevicesProvider);
@@ -174,7 +207,7 @@ class AdminController {
       _run(() => _repo.startDeviceSession(deviceId), adminDevicesProvider);
 
   Future<AdminResult<AdminDevice>> revokeDevice(String deviceId) =>
-      _run(() => _repo.revokeDevice(deviceId), adminDevicesProvider);
+      _runDeviceAction(deviceId, () => _repo.revokeDevice(deviceId));
 
   /// See [AdminRepository.supportsManualLifecycle].
   bool get supportsManualLifecycle => _repo.supportsManualLifecycle;
@@ -188,6 +221,7 @@ final adminControllerProvider = Provider<AdminController>(
     adminSettingsProvider,
     adminUsersProvider,
     adminDevicesProvider,
+    adminDeviceActionsInFlightProvider,
   ],
 );
 

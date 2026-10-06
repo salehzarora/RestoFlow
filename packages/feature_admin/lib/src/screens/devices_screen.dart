@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -89,8 +90,28 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
               ? const LinearProgressIndicator()
               : null,
         ),
+        if (snapshot.hasError && snapshot.hasValue)
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
+              RestoflowSpacing.lg,
+              RestoflowSpacing.sm,
+            ),
+            child: RestoflowNoticeBanner(
+              tone: RestoflowTone.warning,
+              body: l10n.adminStateErrorBody,
+              action: TextButton.icon(
+                onPressed: () => ref.invalidate(adminDevicesProvider),
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.adminRetry),
+              ),
+            ),
+          ),
         Expanded(
+          key: const ValueKey('devices-list'),
           child: snapshot.when(
+            skipError: snapshot.hasValue,
             loading: AdminStateView.loading,
             error: (e, _) => AdminStateView.fromFailure(
               context,
@@ -141,7 +162,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
                         key: ValueKey(d.id),
                         device: d,
                         canManage: manage,
-                        sessionMetadataFresh: !refreshing,
+                        sessionMetadataFresh: !refreshing && !snapshot.hasError,
                       ),
                     ),
                   if (revoked.isNotEmpty) ...[
@@ -365,6 +386,18 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   void _snack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
+  Future<AdminResult<T>> _confirmedAction<T>(
+    Future<AdminResult<T>> Function() action,
+  ) async {
+    try {
+      return await action();
+    } on StateError {
+      // A confirmed dialog can outlive its provider scope/container. Report a
+      // safe failure through the captured root messenger rather than throwing.
+      return Failure(const AdminTransient());
+    }
+  }
+
   Future<void> _replaceCode() => _issueCode(confirmReplacement: true);
 
   Future<void> _issueCode({bool confirmReplacement = false}) async {
@@ -400,7 +433,9 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     // Confirmation belongs to the selected device, even if a refresh removes
     // its tile. Authorization remains server-side; feedback belongs to the root.
     if (mounted) setState(() => _busy = true);
-    final r = await controller.issueEnrollmentCode(device.id);
+    final r = await _confirmedAction(
+      () => controller.issueEnrollmentCode(device.id),
+    );
     if (mounted) setState(() => _busy = false);
     final issued = r.fold<EnrollmentCodeIssued?>((v) => v, (f) {
       if (messenger.mounted) {
@@ -489,7 +524,9 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     if (mounted) setState(() => _confirmingCode = false);
     if (confirmed != true) return;
     if (mounted) setState(() => _busy = true);
-    final result = await controller.revokeDevice(deviceId);
+    final result = await _confirmedAction(
+      () => controller.revokeDevice(deviceId),
+    );
     if (mounted) setState(() => _busy = false);
     if (!messenger.mounted) return;
     messenger.showSnackBar(
@@ -520,7 +557,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
   /// device pairs ITSELF by redeeming the code on its own pairing screen
   /// (RF-161), so the manual redeem/approve/activate/start-session simulation is
   /// hidden — only issue-code (and revoke, rendered separately) remain.
-  Widget? _action() {
+  Widget? _action({bool actionInFlight = false}) {
     final l10n = AppLocalizations.of(context);
     if (!widget.canManage) return null;
     final manual = _ctrl.supportsManualLifecycle;
@@ -574,7 +611,7 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
         };
     if (spec == null) return null;
     return FilledButton.tonalIcon(
-      onPressed: _busy || _confirmingCode ? null : spec.run,
+      onPressed: _busy || _confirmingCode || actionInFlight ? null : spec.run,
       icon: _busy
           ? const RestoflowInlineSpinner(size: 16)
           : Icon(spec.icon, size: RestoflowIconSizes.sm),
@@ -587,6 +624,11 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final actionInFlight = ref.watch(
+      adminDeviceActionsInFlightProvider.select(
+        (ids) => ids.contains(widget.device.id),
+      ),
+    );
     final semantic =
         theme.extension<RestoflowSemanticColors>() ??
         RestoflowSemanticColors.of(theme.brightness);
@@ -761,7 +803,9 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
             // Real backend: the device redeems its code itself (RF-161) — say so
             // instead of showing a manual redeem button.
             if (!_ctrl.supportsManualLifecycle &&
-                widget.device.status == DeviceLifecycleStatus.codeIssued) ...[
+                widget.device.status == DeviceLifecycleStatus.codeIssued &&
+                !widget.device.isCodeExpired &&
+                !_codeExpiryReached) ...[
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
@@ -812,14 +856,18 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                   if (_revocable)
                     TextButton.icon(
                       style: RestoflowButtonStyles.dangerGhost(context),
-                      onPressed: _busy || _confirmingCode ? null : _revoke,
+                      onPressed: _busy || _confirmingCode || actionInFlight
+                          ? null
+                          : _revoke,
                       icon: const Icon(
                         Icons.block,
                         size: RestoflowIconSizes.sm,
                       ),
                       label: Text(l10n.adminRevoke),
                     ),
-                  if (_action() case final action?) action,
+                  if (_action(actionInFlight: actionInFlight)
+                      case final action?)
+                    action,
                 ],
               ),
             ],
