@@ -984,11 +984,8 @@ begin
     join public.devices d on d.id = ds.device_id
     join public.branches b on b.organization_id = ds.organization_id
       and b.restaurant_id = ds.restaurant_id and b.id = ds.branch_id and b.deleted_at is null
-      and b.status = 'active'
     join public.restaurants r on r.organization_id = ds.organization_id
-      and r.id = ds.restaurant_id and r.deleted_at is null and r.status = 'active'
-    join public.organizations org on org.id = ds.organization_id
-      and org.deleted_at is null and org.status = 'active'
+      and r.id = ds.restaurant_id and r.deleted_at is null
     where ds.device_id = p_device_id
       and ds.session_token_ref = v_hash
       and ds.is_active and ds.revoked_at is null
@@ -996,8 +993,9 @@ begin
       and dp.status = 'active' and dp.revoked_at is null and dp.deleted_at is null
       and d.is_active and d.deleted_at is null
       and d.device_type = 'kiosk';                          -- kiosk-only capability gate
-  -- BIZBOT-DEVICE-SESSION-FIX-001: operational active-scope gates run
-  -- BEFORE renewal. Restore/heartbeat keep a suspended scope paired.
+  -- BIZBOT-DEVICE-SESSION-FIX-001: preserve main's kiosk predicate above.
+  -- Reversible scope suspension permits kiosk activity; the renewal helper
+  -- retains token, identity, tombstone and session-liveness validation.
   -- Context consumers are VOLATILE below.
   if o_session is not null
      and not (app.renew_device_session(p_device_id, p_session_token) ->> 'ok')::boolean then

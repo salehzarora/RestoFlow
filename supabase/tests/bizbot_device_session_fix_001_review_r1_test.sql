@@ -102,7 +102,13 @@ begin
     when 'ack' then return public.acknowledge_kitchen_print_dispatch(d,t,'be510002-0000-0000-0000-00000000ffff','transport_accepted',null);
     when 'kiosk_menu' then return public.kiosk_menu(d,t);
     when 'kiosk_tables' then return public.kiosk_tables(d,t);
-    when 'kiosk_submit' then return public.kiosk_submit_order(d,t,gen_random_uuid(),'r1-synthetic-op','takeaway',null,'USD',null,null,'invalid-phone','[]'::jsonb,0,0,0,0);
+    when 'kiosk_submit' then return public.kiosk_submit_order(
+      d,t,gen_random_uuid(),'r2-synthetic-'||gen_random_uuid()::text,
+      'takeaway',null,'USD',null,null,null,
+      jsonb_build_array(jsonb_build_object(
+        'menu_item_id','be510002-0000-0000-0000-000000007002',
+        'menu_item_name_snapshot','BIZBOT test drink','quantity',1,
+        'unit_price_minor_snapshot',100)),100,0,0,100);
     when 'kiosk_context' then return (select jsonb_build_object('ok',o_session is not null,'error',case when o_session is null then 'invalid_session' end) from app.kiosk_session_context(d,t));
     else raise exception 'unknown test path %',p_path;
   end case;
@@ -110,6 +116,16 @@ end
 $$;
 create temp table _r1_paths(path text primary key);
 insert into _r1_paths values ('readiness12'),('readiness11'),('status7'),('status6'),('pull'),('ack'),('kiosk_menu'),('kiosk_tables'),('kiosk_submit'),('kiosk_context');
+
+-- G1: exercise a real accepted kiosk submit, not merely a payload refusal
+-- after token proof. These synthetic orders and their audit writes roll back.
+insert into menu_categories(id,organization_id,restaurant_id,name,is_active) values
+  ('be510002-0000-0000-0000-000000007001','be510002-0000-0000-0000-00000000a000',
+   'be510002-0000-0000-0000-00000000a100','BIZBOT test category',true);
+insert into menu_items(id,organization_id,restaurant_id,menu_category_id,name,base_price_minor,currency_code,is_active) values
+  ('be510002-0000-0000-0000-000000007002','be510002-0000-0000-0000-00000000a000',
+   'be510002-0000-0000-0000-00000000a100','be510002-0000-0000-0000-000000007001',
+   'BIZBOT test drink',100,'USD',true);
 
 create function pg_temp.suspension(p_table text,p_id uuid) returns setof text language plpgsql as $$
 declare p record; kind text; before_expiry timestamptz; result jsonb;
@@ -127,9 +143,22 @@ begin
     update device_sessions set expires_at=now()+interval '7 days' where id in (select session_id from _bizbot_devices);
     update devices set last_seen_at=null where id in (select device_id from _bizbot_devices);
     result := pg_temp.activity(p.path);
-    return next is(result->>'ok','false','F2 '||p_table||' '||p.path||': operational scope gate refuses');
-    return next is(pg_temp.deadline(kind),now()+interval '7 days','F2 '||p_table||' '||p.path||': gate precedes renewal');
-    return next is(pg_temp.seen(kind),null::timestamptz,'F2 '||p_table||' '||p.path||': denied work records no activity');
+    if kind='kiosk' then
+      return next is(result->>'ok','true','G1 '||p_table||' '||p.path||': suspended scope preserves main kiosk behavior');
+      return next is(pg_temp.deadline(kind),now()+interval '30 days','G1 '||p_table||' '||p.path||': suspended kiosk activity renews');
+      return next is(pg_temp.seen(kind),now(),'G1 '||p_table||' '||p.path||': suspended kiosk activity is recorded');
+      if p.path='kiosk_submit' then
+        return next ok(exists(select 1 from orders
+          where id=(result->>'order_id')::uuid and status='submitted'
+            and device_id='be510002-0000-0000-0000-00000000d003'
+            and grand_total_minor=100),
+          'G1 '||p_table||': suspended kiosk submit persists the real order');
+      end if;
+    else
+      return next is(result->>'ok','false','G1 '||p_table||' '||p.path||': kitchen scope gate refuses');
+      return next is(pg_temp.deadline(kind),now()+interval '7 days','G1 '||p_table||' '||p.path||': kitchen gate precedes renewal');
+      return next is(pg_temp.seen(kind),null::timestamptz,'G1 '||p_table||' '||p.path||': denied kitchen work records no activity');
+    end if;
   end loop;
   execute format('update public.%I set status=''active'' where id=$1',p_table) using p_id;
   return next is(pg_temp.restore()->>'ok','true','F2 '||p_table||': same token works after reactivation');
