@@ -337,6 +337,22 @@ void main() {
   });
 
   group('issueEnrollmentCode', () {
+    test('K4 server membership refusal remains transient', () async {
+      final t = _FakeTransport(
+        (_, _) => throw const SyncTransportException(
+          SyncTransportErrorKind.server,
+          code: '42501',
+          message:
+              'issue_device_enrollment_code: caller has no active membership covering the device scope',
+        ),
+      );
+      final result = await _repo(t).issueEnrollmentCode('d1');
+      result.fold(
+        (_) => fail('expected transient failure'),
+        (failure) => expect(failure, isA<AdminTransient>()),
+      );
+    });
+
     test(
       'H6 missing inactive device 42501 maps to device_changed conflict',
       () async {

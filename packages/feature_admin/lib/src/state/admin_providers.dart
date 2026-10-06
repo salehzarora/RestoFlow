@@ -96,7 +96,12 @@ class AdminController {
     actions.state = {...actions.state, deviceId};
     try {
       final outcome = await op();
-      if (!_disposed && outcome.isSuccess) {
+      final refresh = outcome.fold(
+        (_) => true,
+        (failure) =>
+            failure is AdminConflict && failure.message == 'device_changed',
+      );
+      if (!_disposed && refresh) {
         _ref.invalidate(adminDevicesProvider);
       }
       return outcome;

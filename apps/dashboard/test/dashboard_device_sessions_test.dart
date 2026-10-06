@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_dashboard/src/admin/supabase_admin_device_repository.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
@@ -85,6 +86,23 @@ class _Transport implements SyncRpcTransport {
   }
 }
 
+class _LoadFailureRepository extends SupabaseAdminDeviceRepository {
+  _LoadFailureRepository(_Transport transport)
+    : super(
+        transport: transport,
+        scope: AdminScope.demo,
+        currentUserId: () => 'manager',
+      );
+
+  AdminFailure? loadFailure;
+
+  @override
+  Future<AdminResult<List<AdminDevice>>> loadDevices() async {
+    final failure = loadFailure;
+    return failure == null ? super.loadDevices() : Failure(failure);
+  }
+}
+
 Future<void> _pump(
   WidgetTester tester,
   _Transport transport, {
@@ -157,6 +175,74 @@ void main() {
       ),
     ),
   );
+
+  for (final (label, failure) in [
+    ('permission denied', const AdminPermissionDenied()),
+    ('validation', const AdminValidation('scope')),
+    ('conflict', const AdminConflict('scope_changed')),
+    ('not found', const AdminNotFound()),
+    ('transient', const AdminTransient()),
+  ]) {
+    testWidgets('K4 refresh $label uses the correct retained-list policy', (
+      tester,
+    ) async {
+      final transport = _Transport();
+      final repository = _LoadFailureRepository(transport);
+      final container = ProviderContainer(
+        overrides: adminFeatureOverrides(
+          scope: AdminScope.demo,
+          repository: repository,
+        ),
+      );
+      addTearDown(container.dispose);
+      await _pump(tester, transport, cachedContainer: container);
+      expect(find.text('Counter POS'), findsOneWidget);
+      repository.loadFailure = failure;
+      container.invalidate(adminDevicesProvider);
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text('Session active'), findsNothing);
+      if (failure is AdminTransient) {
+        expect(find.text('Counter POS'), findsOneWidget);
+        expect(find.text(l10n.adminStateErrorBody), findsOneWidget);
+      } else {
+        expect(find.text('Counter POS'), findsNothing);
+        expect(find.text('New code for this device'), findsNothing);
+        expect(
+          find.text(
+            failure is AdminPermissionDenied
+                ? l10n.adminPermissionDeniedTitle
+                : l10n.adminStateErrorTitle,
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('K4 device_changed refresh removes the stale device tile', (
+    tester,
+  ) async {
+    final transport = _Transport();
+    await _pump(tester, transport);
+    await tester.tap(find.text('New code for this device'));
+    await tester.pumpAndSettle();
+    transport.hideDevice = true;
+    transport.issueError = const SyncTransportException(
+      SyncTransportErrorKind.server,
+      code: '42501',
+      message:
+          'issue_device_enrollment_code: device not found, inactive, or its scope is soft-deleted',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Issue code'));
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(transport.loads, 2);
+    expect(find.text('Counter POS'), findsNothing);
+    expect(find.text(l10n.adminDevicesEmptyTitle), findsOneWidget);
+    expect(find.text(l10n.activityLogTitleDeviceRevoked), findsOneWidget);
+  });
 
   test('H6 action locks are per device and release after failure', () async {
     final transport = _Transport();

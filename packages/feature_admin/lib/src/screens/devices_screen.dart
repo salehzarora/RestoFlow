@@ -64,6 +64,10 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
     final l10n = AppLocalizations.of(context);
     final snapshot = ref.watch(adminDevicesProvider);
     final refreshing = _refreshOnMount || snapshot.isLoading;
+    final retainOnError =
+        snapshot.hasValue &&
+        snapshot.hasError &&
+        adminFailureOf(snapshot.error!) is AdminTransient;
     final scope = ref.watch(adminScopeProvider);
     final manage = canManage(scope.actingRole);
 
@@ -90,7 +94,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
               ? const LinearProgressIndicator()
               : null,
         ),
-        if (snapshot.hasError && snapshot.hasValue)
+        if (retainOnError)
           Padding(
             padding: const EdgeInsetsDirectional.fromSTEB(
               RestoflowSpacing.lg,
@@ -111,7 +115,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen>
         Expanded(
           key: const ValueKey('devices-list'),
           child: snapshot.when(
-            skipError: snapshot.hasValue,
+            skipError: retainOnError,
             loading: AdminStateView.loading,
             error: (e, _) => AdminStateView.fromFailure(
               context,
