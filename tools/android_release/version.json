@@ -99,6 +99,41 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.55",
+      "versionCode": 55,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / owner trial in progress since 2026-10-06 / never uploaded",
+      "applicationSourceSha": "40aeb184261ec46e500d46d6325c114467cb7374",
+      "sourceSha": "40aeb184261ec46e500d46d6325c114467cb7374",
+      "buildDate": "2026-10-06",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v55-40aeb18.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "25615be50505c8b75e980003c3d5a50a1dc23611542901d9cecadc5d5267cb0c"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v55-40aeb18.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "59834a2f6dd43967ca92a899892d57f12e1d0090993d78d4c00a8a6fcb9ac03f"
+        }
+      },
+      "intendedSource": "40aeb184261ec46e500d46d6325c114467cb7374 (main = the PR #296 prep merge, carrying the BIZBOT device-session heartbeat from PR #295)",
+      "notes": [
+        "Built 2026-10-06 by tools/android_release/build_official_pair.ps1 from main at",
+        "40aeb184261ec46e500d46d6325c114467cb7374 (the PR #296 prep merge).",
+        "POS and KDS both 0.0.55 / 55; verify_official_apk.ps1 PASS for both against the",
+        "production certificate pin (not debuggable, hosted reference, demo mode off).",
+        "Output folder: dist/official-v55, with Kiosk 0.2.24 / 26 from the same source.",
+        "The owner began a trial of v55 on 2026-10-06; no install date or acceptance",
+        "matrix is recorded here. Never uploaded. Build facts are recorded from the",
+        "Phase B release evidence. Superseded as the next candidate by v56; code 55",
+        "stays consumed."
+      ]
+    },
+    {
       "versionName": "0.0.54",
       "versionCode": 54,
       "signing": "restoflow-production",
@@ -451,22 +486,23 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.55",
-    "versionCode": 55,
+    "versionName": "0.0.56",
+    "versionCode": 56,
     "signing": "restoflow-production",
     "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main after the merge of this prep PR (carries PR #295, 4cedca2f); the exact SHA is recorded at build time",
+    "intendedSource": "main after the merge of this prep PR (carries PR #297, 2ee47f54); the exact SHA is recorded at build time",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V55 (2026-10-06): BIZBOT device-session heartbeat",
-      "(PR #295, merged at 4cedca2f) requires a new official POS/KDS pair.",
-      "versionSymmetry holds: POS and KDS both 0.0.55 / 55 from one main SHA;",
-      "55 > 54 keeps both lineages strictly monotonic. Package ids, signing",
-      "identity, RESTOFLOW_* names, storage keys and channels are unchanged:",
-      "v55 updates IN PLACE over 0.0.54.",
+      "BIZBOT-ANDROID-RELEASE-V56 (2026-10-06): the POS manual cash-drawer button",
+      "(POS-CASH-DRAWER-MANUAL-OPEN-001, PR #297, merged at 2ee47f54) requires a new",
+      "official POS/KDS pair. versionSymmetry holds: POS and KDS both 0.0.56 / 56",
+      "from one main SHA; 56 > 55 keeps both lineages strictly monotonic. Package ids,",
+      "signing identity, RESTOFLOW_* names, storage keys and channels are unchanged:",
+      "v56 updates IN PLACE over 0.0.55.",
+      "The button relies on hosted migration 20261006140000, applied separately by the owner.",
       "Build with tools/android_release/build_official_pair.ps1 from main at the",
       "intended source only after this prep PR merges and the owner authorizes BUILD.",
       "The runner never installs, uploads or publishes; rollout is a separate owner step.",
-      "Kiosk 0.2.24 / 26 is planned from the same source for its Android tablet.",
+      "Kiosk is not part of v56 (no kiosk change since 0.2.24 / 26).",
       "Dashboard keeps its existing independent lineage."
     ]
   },
@@ -498,6 +534,29 @@
     "rule": "POS and KDS must report the same versionName and versionCode, from the same source SHA, in every official release."
   },
   "kioskReleases": [
+    {
+      "versionName": "0.2.24",
+      "versionCode": 26,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / never uploaded",
+      "sourceSha": "40aeb184261ec46e500d46d6325c114467cb7374",
+      "buildDate": "2026-10-06",
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifact": {
+        "filename": "RestoFlow-Kiosk-official-v26-40aeb18.apk",
+        "packageId": "com.restoflow.kiosk",
+        "sha256": "b3b9dd934cfa7d6a6e39015adb72dde2eafb46bc77b7abb031b2dd03f71d6970"
+      },
+      "intendedSource": "40aeb184261ec46e500d46d6325c114467cb7374 (the same main SHA as the v55 pair)",
+      "notes": [
+        "Built 2026-10-06 from the same main SHA as the v55 pair with the pair runner's",
+        "flags (build-name 0.2.24, build-number 26, RESTOFLOW_DEMO_MODE=false, hosted",
+        "project URL + public anon key), production signing; verify_official_apk.ps1 PASS",
+        "(com.restoflow.kiosk, 0.2.24 / 26, production certificate, compiled portrait",
+        "setting). Carries the BIZBOT device-session heartbeat (PR #295). Output folder:",
+        "dist/official-v55. No install facts are recorded here; never uploaded."
+      ]
+    },
     {
       "versionName": "0.2.23",
       "versionCode": 25,
@@ -603,25 +662,16 @@
     }
   ],
   "kioskNextRelease": {
-    "versionName": "0.2.24",
-    "versionCode": 26,
+    "versionName": "0.2.25",
+    "versionCode": 27,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main after the merge of this prep PR (carries PR #295, 4cedca2f); the exact SHA is recorded at build time",
+    "status": "planned - NOT required yet / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "to be decided when a kiosk change needs a new build",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V55 (2026-10-06): BIZBOT device-session heartbeat",
-      "(PR #295, merged at 4cedca2f) also requires a new production Kiosk build",
-      "for the Android tablet. The portrait kiosk UI is unchanged.",
-      "Independent lineage outside the POS/KDS pair contract: 0.2.23 / 25 is",
-      "already built and recorded in kioskReleases with its original status.",
-      "0.2.24 / 26 follows the established 0.2.<code-2> progression; 26 > 25.",
-      "Build from the same main SHA as the v55 pair with the pair runner's flags",
-      "(flutter build apk --release, build-name 0.2.24, build-number 26,",
-      "RESTOFLOW_DEMO_MODE=false, hosted project URL + public anon key),",
-      "production signing via RESTOFLOW_ANDROID_SIGNING_PROPERTIES; verify with",
-      "verify_official_apk.ps1 (com.restoflow.kiosk, production certificate).",
-      "Build only after the prep PR merges and the owner authorizes BUILD;",
-      "installation and rollout remain separate owner steps."
+      "Independent lineage outside the POS/KDS pair contract: 0.2.24 / 26 is built and",
+      "recorded in kioskReleases. The v56 pair changes no kiosk code, so no kiosk build",
+      "is planned with it. 0.2.25 / 27 follows the 0.2.<code-2> progression and is",
+      "reserved for the next kiosk change; build only when the owner authorizes it."
     ]
   },
   "dashboardReleases": [
