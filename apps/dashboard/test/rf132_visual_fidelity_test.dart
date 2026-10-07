@@ -234,13 +234,15 @@ void main() {
     // Primary KPIs sit above the dominant analytics row.
     expect(topOf('kpi-gross-sales'), lessThan(topOf('sales-by-hour-card')));
     // The analytics row sits above the secondary operational cards.
-    expect(topOf('sales-by-hour-card'), lessThan(topOf('kpi-cash-sales')));
-    expect(topOf('payment-mix-card'), lessThan(topOf('kpi-cash-sales')));
+    expect(topOf('sales-by-hour-card'), lessThan(topOf('kpi-unpaid')));
+    expect(topOf('payment-mix-card'), lessThan(topOf('kpi-unpaid')));
     // The secondary cards sit above the lower detail sections.
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('top-items-card')));
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('recent-orders-card')));
-    expect(topOf('kpi-cash-sales'), lessThan(topOf('payment-summary-card')));
-    // Secondary values/captions preserved through the move.
+    expect(topOf('kpi-unpaid'), lessThan(topOf('top-items-card')));
+    expect(topOf('kpi-unpaid'), lessThan(topOf('recent-orders-card')));
+    expect(topOf('kpi-unpaid'), lessThan(topOf('payment-summary-card')));
+    expect(topOf('kpi-cash-sales'), lessThan(topOf('sales-by-hour-card')));
+    expect(topOf('kpi-completed'), lessThan(topOf('sales-by-hour-card')));
+    // Values/captions preserved through the move.
     expect(
       tester
           .widget<RestoflowMetricCard>(find.byKey(const Key('kpi-cash-sales')))
@@ -281,7 +283,10 @@ void main() {
     // its own non-fabricating states, never a ranked list.
     expect(find.byKey(const Key('top-items-card')), findsOneWidget);
     expect(find.byKey(const Key('top-items-list')), findsNothing);
-    expect(find.byType(RestoflowRankRow), findsNothing);
+    expect(
+      find.byWidgetPredicate((widget) => widget is RestoflowRankRow),
+      findsNothing,
+    );
 
     // The limited panel sits in the analytics position: below the primary
     // KPIs, above the secondary operational cards, and above the legacy
@@ -293,7 +298,7 @@ void main() {
         .getTopLeft(find.byKey(const Key('kpi-gross-sales')))
         .dy;
     final secondaryY = tester
-        .getTopLeft(find.byKey(const Key('kpi-cash-sales')))
+        .getTopLeft(find.byKey(const Key('kpi-unpaid')))
         .dy;
     final paymentY = tester
         .getTopLeft(find.byKey(const Key('payment-summary-card')))
@@ -386,7 +391,7 @@ void main() {
         expect(find.byKey(const Key('dashboard-side-rail')), findsNothing);
 
         // Icon-only is INTENTIONAL: no label may render (and therefore none
-        // can clip) — ten destinations at 390px cannot show readable text.
+        // can clip) — nine destinations at 390px cannot show readable text.
         expect(
           tester.widget<NavigationBar>(nav).labelBehavior,
           NavigationDestinationLabelBehavior.alwaysHide,
@@ -405,7 +410,12 @@ void main() {
           l10n.dashboardNavActivity,
           l10n.dashboardNavSettings,
         ];
+        final indices = [0, 1, 2, 4, 5, 6, 7, 8, 9];
         for (final label in labels) {
+          await tester.ensureVisible(
+            find.byKey(Key('dashboard-nav-${indices[labels.indexOf(label)]}')),
+          );
+          await tester.pumpAndSettle();
           // No VISIBLE label text inside the bar: NavigationBar keeps the
           // hidden label in the tree (laid out past the bar's bottom edge)
           // and hides it through a FadeTransition — the opacity must be
@@ -444,7 +454,9 @@ void main() {
             reason: 'semantic label present for "$label"',
           );
         }
-        // The bar fits the surface exactly — nothing renders past the bottom.
+        await tester.ensureVisible(find.byKey(const Key('dashboard-nav-0')));
+        await tester.pumpAndSettle();
+        // Horizontal scrolling stays inside the phone; nothing crosses its bottom.
         expect(tester.getBottomLeft(nav).dy, lessThanOrEqualTo(844.0));
 
         // Selection is announced (Overview is selected at boot; Menu is not).
@@ -498,6 +510,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(MenuManagementScreen), findsOneWidget);
 
+        await tester.ensureVisible(find.byKey(const Key('dashboard-nav-9')));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.descendant(of: nav, matching: find.byIcon(Icons.tune_outlined)),
         );

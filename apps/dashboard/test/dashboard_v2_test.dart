@@ -116,9 +116,7 @@ void main() {
   });
 
   testWidgets('the device readiness slot joins the operational row below the '
-      'analytics; without it the row keeps its three report cards', (
-    tester,
-  ) async {
+      'analytics alongside the unpaid report card', (tester) async {
     _size(tester, const Size(1320, 3200));
     // Without the slot (demo default): no device card.
     await tester.pumpWidget(_wrap());
@@ -127,7 +125,7 @@ void main() {
     expect(find.byKey(const Key('kpi-cash-sales')), findsOneWidget);
 
     // With the slot: the card renders inside the operational row (below the
-    // analytics, above the detail sections), alongside the three report cards.
+    // analytics, above the detail sections), alongside the unpaid report card.
     await tester.pumpWidget(
       _wrap(
         deviceSummary: const RestoflowMetricCard(
@@ -146,12 +144,12 @@ void main() {
     final chartY = tester
         .getTopLeft(find.byKey(const Key('sales-by-hour-card')))
         .dy;
-    final cashY = tester.getTopLeft(find.byKey(const Key('kpi-cash-sales'))).dy;
+    final unpaidY = tester.getTopLeft(find.byKey(const Key('kpi-unpaid'))).dy;
     final topItemsY = tester
         .getTopLeft(find.byKey(const Key('top-items-card')))
         .dy;
     expect(chartY, lessThan(deviceY));
-    expect(deviceY, cashY, reason: 'device card shares the operational row');
+    expect(deviceY, unpaidY, reason: 'device card shares the operational row');
     expect(deviceY, lessThan(topItemsY));
   });
 
@@ -377,7 +375,7 @@ void main() {
     expect(toneOf(), RestoflowTone.neutral);
   });
 
-  testWidgets('wide layout: a FAILED device load leaves no ghost fourth grid '
+  testWidgets('wide layout: a FAILED device load leaves no ghost grid '
       'slot — the unavailable card fills the operational row', (tester) async {
     _size(tester, const Size(1320, 3200));
     await tester.pumpWidget(
@@ -389,18 +387,14 @@ void main() {
     expect(unavailable, findsOneWidget);
     expect(find.text('0/0'), findsNothing);
 
-    // The operational row is a full four-card row: the unavailable card sits
+    // The operational row is a full two-card row: the unavailable card sits
     // ON the row (same top) with the SAME width as the report cards — no
     // blank allocated slot.
     Rect rectOf(String key) => tester.getRect(find.byKey(Key(key)));
-    final cash = rectOf('kpi-cash-sales');
-    final completed = rectOf('kpi-completed');
     final unpaid = rectOf('kpi-unpaid');
     final device = tester.getRect(unavailable);
-    expect(device.top, cash.top);
-    expect(device.top, completed.top);
     expect(device.top, unpaid.top);
-    expect(device.width, moreOrLessEquals(cash.width, epsilon: 0.5));
+    expect(device.width, moreOrLessEquals(unpaid.width, epsilon: 0.5));
   });
 
   for (final locale in const [Locale('ar'), Locale('he'), Locale('en')]) {

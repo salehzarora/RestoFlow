@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:restoflow_design_system/restoflow_design_system.dart';
+
+import '../overview/overview_visuals.dart';
 
 /// One label/value row in the daily summary. Provide either a [value] string
 /// (e.g. formatted money) or a [trailing] widget (e.g. a status pill).
@@ -21,9 +22,10 @@ class DailySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // RF-141C: built on the shared section card for consistent chrome.
-    return RestoflowSectionCard(
+    // Overview-local chrome; shared section consumers keep their existing theme.
+    return OverviewSectionCard(
       title: title,
+      surface: OverviewSurface.sage,
       children: [for (final row in rows) _SummaryRowTile(row: row)],
     );
   }
@@ -38,43 +40,23 @@ class _SummaryRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
-      child: Row(
-        children: [
-          // RF-127: the label flexes (and wraps) so a long label + value never
-          // overflows horizontally at narrow widths; the value stays at natural
-          // size at the reading-end.
-          Expanded(
-            child: Text(
-              row.label,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: OverviewValueRow(
+        label: Text(
+          row.label,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        value:
+            row.trailing ??
+            Text(
+              row.value ?? '',
+              textAlign: TextAlign.end,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(width: RestoflowSpacing.md),
-          // CLIENT-D: the value is FLEXIBLE, not natural-size. Loose fit means
-          // it still takes its natural width whenever there is room — so every
-          // layout that works today is pixel-unchanged — but a four-figure
-          // amount at a 2x text scale on a phone now ellipsizes instead of
-          // overflowing the card. A real day's takings reach four figures.
-          Flexible(
-            child:
-                row.trailing ??
-                Text(
-                  row.value ?? '',
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-          ),
-        ],
       ),
     );
   }

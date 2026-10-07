@@ -6,6 +6,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/setup_device_providers.dart';
+import '../overview/overview_readiness_card.dart';
 
 /// A guided "is this branch ready for service?" checklist at the top of the
 /// real-mode Overview: live menu / device / printer / staff-PIN counts
@@ -160,7 +161,7 @@ class DashboardSetupCenter extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            RestoflowReadinessStrip(
+            OverviewReadinessCard(
               ready: allReady,
               readyLabel: l10n.setupReadyHeadline,
               // Pending headline keeps the "Setup" wording (the section title).

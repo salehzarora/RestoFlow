@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_report.dart';
 import '../orders/order_history_screen.dart' show statusLabel, statusTone;
 import '../format/money_format.dart';
+import '../overview/overview_visuals.dart';
 
 /// One recent-orders row: the order number + net total on the first line, then a
 /// muted meta line (time · type · table) with a status pill and a paid/unpaid
@@ -29,32 +30,50 @@ class RecentOrderTile extends StatelessWidget {
         : '';
     final meta = '${row.timeLabel} · $type$table';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: OverviewVisuals.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  row.orderNumber,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final identifier = Text(
+                row.orderNumber,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-              ),
-              const SizedBox(width: RestoflowSpacing.md),
-              Text(
+              );
+              final amount = Text(
                 MoneyFormatter.formatMinor(row.totalMinor, row.currencyCode),
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.primary,
+                  color: OverviewVisuals.deep,
                 ),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 240 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 20) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [identifier, const SizedBox(height: 4), amount],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: identifier),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: amount,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: RestoflowSpacing.xs),
           Wrap(

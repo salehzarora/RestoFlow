@@ -6,6 +6,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/setup_device_providers.dart';
+import '../overview/overview_metric_card.dart';
 
 /// Dashboard V2 — the honest device readiness card for the Overview's lower
 /// operational row: `active/configured` counts read from the SAME real devices
@@ -68,7 +69,7 @@ class DashboardDeviceSummaryCard extends ConsumerWidget {
         if (devices == null) {
           // Load failed: an honest "status unavailable" card — never a fake
           // zero count, and never an empty ghost slot in the operational grid.
-          return RestoflowMetricCard(
+          return OverviewMetricCard(
             key: const Key('kpi-devices-unavailable'),
             style: RestoflowMetricCardStyle.kpi,
             tone: RestoflowTone.warning,
@@ -95,7 +96,7 @@ class DashboardDeviceSummaryCard extends ConsumerWidget {
         final tone = total == 0
             ? RestoflowTone.neutral
             : (active == total ? RestoflowTone.success : RestoflowTone.warning);
-        return RestoflowMetricCard(
+        return OverviewMetricCard(
           key: const Key('kpi-devices-summary'),
           style: RestoflowMetricCardStyle.kpi,
           tone: tone,

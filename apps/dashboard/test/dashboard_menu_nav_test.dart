@@ -21,7 +21,7 @@ void main() {
     // Starts on the overview; the menu surface is not built yet.
     expect(find.byType(MenuManagementScreen), findsNothing);
 
-    await tester.tap(find.text(l10n.dashboardNavMenu));
+    await tester.tap(find.byKey(const Key('dashboard-nav-1')));
     await tester.pumpAndSettle();
 
     expect(find.byType(MenuManagementScreen), findsOneWidget);

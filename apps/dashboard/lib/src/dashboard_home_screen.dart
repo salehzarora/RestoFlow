@@ -37,11 +37,13 @@ import 'orders/order_history_screen.dart' show orderTypeLabel;
 import 'widgets/daily_summary_card.dart';
 import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
+import 'overview/overview_metric_card.dart';
+import 'overview/overview_visuals.dart';
 
 /// The RF-104/RF-119 owner/manager reports dashboard, redesigned under RF-127
 /// into a calm, data-forward Overview: calm page chrome (title + period + range
 /// + refresh) over the RF-125 shell, the real readiness/setup content high up
-/// (via the [setupPanel] slot), four prioritized primary KPIs, a compact
+/// (via the [setupPanel] slot), six prioritized primary KPIs, a compact
 /// secondary operational summary, a dominant sales-by-hour area chart beside the
 /// payment-mix donut, then top sellers / recent orders and the remaining
 /// summaries in a clear responsive hierarchy.
@@ -121,57 +123,67 @@ class DashboardHomeScreen extends ConsumerWidget {
 
     final panel = setupPanel;
     final nav = onNavigate;
-    return Scaffold(
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _OverviewChrome(onRefresh: refresh),
-          if (panel != null)
-            Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(
-                RestoflowSpacing.lg,
-                RestoflowSpacing.md,
-                RestoflowSpacing.lg,
-                0,
-              ),
-              child: panel,
-            ),
-          Expanded(
-            child: reportAsync.when(
-              data: (report) => _ReportContent(
-                report: report,
-                // OPS-043 Phase 2B: the currency gate, resolved once per
-                // window. `unknown` while it is still loading, so money can
-                // never flash on screen before it is known to be addable.
-                currencyGuard: guard,
-                currencyGuardPending: guardPending,
-                window: window,
-                isDemo: isDemo,
-                deviceSummary: deviceSummary,
-                salesByDay: seriesKey == null
-                    ? null
-                    : _SalesByDayCard(
-                        queryKey: seriesKey,
-                        currencyCode:
-                            guard.displayCurrency ?? report.currencyCode,
+    return OverviewVisualScope(
+      child: Builder(
+        builder: (context) => Scaffold(
+          body: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1600),
+              // One scroll owner keeps every control reachable when readiness and
+              // translated range chips grow at phone widths / 2x text scale.
+              child: ListView(
+                key: const Key('overview-scroll'),
+                children: [
+                  _OverviewChrome(onRefresh: refresh),
+                  if (panel != null)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        RestoflowSpacing.lg,
+                        RestoflowSpacing.md,
+                        RestoflowSpacing.lg,
+                        0,
                       ),
-                salesSeriesKey: seriesKey,
-                // F0.4: bound HERE, where a WidgetRef exists. The child
-                // stays a plain StatelessWidget and never learns about
-                // Riverpod or the shell's tab indices.
-                onDrillDown: nav == null
-                    ? null
-                    : (drillDown) => runDashboardDrillDown(
-                        ref: ref,
-                        drillDown: drillDown,
-                        navigate: nav,
-                      ),
+                      child: panel,
+                    ),
+                  reportAsync.when(
+                    data: (report) => _ReportContent(
+                      report: report,
+                      // OPS-043 Phase 2B: the currency gate, resolved once per
+                      // window. `unknown` while it is still loading, so money can
+                      // never flash on screen before it is known to be addable.
+                      currencyGuard: guard,
+                      currencyGuardPending: guardPending,
+                      window: window,
+                      isDemo: isDemo,
+                      deviceSummary: deviceSummary,
+                      salesByDay: seriesKey == null
+                          ? null
+                          : _SalesByDayCard(
+                              queryKey: seriesKey,
+                              currencyCode:
+                                  guard.displayCurrency ?? report.currencyCode,
+                            ),
+                      salesSeriesKey: seriesKey,
+                      // F0.4: bound HERE, where a WidgetRef exists. The child
+                      // stays a plain StatelessWidget and never learns about
+                      // Riverpod or the shell's tab indices.
+                      onDrillDown: nav == null
+                          ? null
+                          : (drillDown) => runDashboardDrillDown(
+                              ref: ref,
+                              drillDown: drillDown,
+                              navigate: nav,
+                            ),
+                    ),
+                    loading: () => const _LoadingState(),
+                    error: (_, _) => _ErrorState(onRetry: refresh),
+                  ),
+                ],
               ),
-              loading: () => const _LoadingState(),
-              error: (_, _) => _ErrorState(onRetry: refresh),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -649,8 +661,9 @@ class _TopItemsCard extends ConsumerWidget {
     final async = ref.watch(
       ownerTopItemsForKeyProvider(ref.watch(currentOwnerTopItemsKeyProvider)),
     );
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('top-items-card'),
+      icon: Icons.leaderboard_outlined,
       title: l10n.dashboardTopItems,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
@@ -711,7 +724,7 @@ class _TopItemsCard extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < items.items.length; i++)
-          RestoflowRankRow(
+          _OverviewRankRow(
             rank: i + 1,
             name: items.items[i].name,
             meta:
@@ -722,6 +735,90 @@ class _TopItemsCard extends ConsumerWidget {
             fraction: top == 0 ? 0 : items.items[i].lineRevenueMinor / top,
           ),
       ],
+    );
+  }
+}
+
+/// Overview presentation of the server-ranked item, without thumbnails.
+class _OverviewRankRow extends RestoflowRankRow {
+  const _OverviewRankRow({
+    required super.rank,
+    required super.name,
+    required super.meta,
+    required super.fraction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            padding: const EdgeInsets.all(4),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: rank == 1
+                  ? OverviewVisuals.deep
+                  : OverviewVisuals.softMint,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$rank',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: rank == 1 ? Colors.white : OverviewVisuals.deep,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final scale =
+                        MediaQuery.textScalerOf(context).scale(14) / 14;
+                    final label = Text(name, style: theme.textTheme.titleSmall);
+                    final details = Text(
+                      meta,
+                      style: theme.textTheme.bodySmall,
+                    );
+                    if (constraints.maxWidth < 420 * scale) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [label, const SizedBox(height: 2), details],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: label),
+                        const SizedBox(width: 12),
+                        Flexible(child: details),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: fraction.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    color: OverviewVisuals.primary,
+                    backgroundColor: OverviewVisuals.softMint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -749,8 +846,9 @@ class _RecentOrdersCard extends ConsumerWidget {
       ),
     );
     final viewAll = onViewAll;
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('recent-orders-card'),
+      icon: Icons.receipt_long_outlined,
       title: l10n.dashboardRecentOrders,
       // The card shows the newest eight; this is where the other ones are.
       // It travels through the SAME typed drill-down the KPI cards use, whose
@@ -1002,7 +1100,7 @@ class _ReportContent extends StatelessWidget {
     // RF-REPORT-004: the selected range could not be served — honest note (never
     // today's data mislabelled). Chrome (title + range chips) stays above.
     if (!report.rangeSupported) {
-      return ListView(
+      return _OverviewSections(
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
         children: [
           banner,
@@ -1019,7 +1117,7 @@ class _ReportContent extends StatelessWidget {
     // unknown path: a screen that quietly adds ILS to USD is worse than a
     // screen that admits it does not know.
     if (!currencyGuard.canRenderMergedMoney) {
-      return ListView(
+      return _OverviewSections(
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
         children: [
           banner,
@@ -1033,7 +1131,7 @@ class _ReportContent extends StatelessWidget {
     }
 
     if (report.isEmpty) {
-      return ListView(
+      return _OverviewSections(
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
         children: [
           banner,
@@ -1047,7 +1145,7 @@ class _ReportContent extends StatelessWidget {
     // RF-132): the four headline figures as white KPI tiles with tinted icon
     // tiles, prominent dark values, and one consistent card height. ---
     final primaryKpis = <Widget>[
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-gross-sales'),
         style: RestoflowMetricCardStyle.kpi,
         label: l10n.dashboardGrossSales,
@@ -1055,7 +1153,7 @@ class _ReportContent extends StatelessWidget {
         icon: Icons.point_of_sale_outlined,
         delta: deltaOf(report.grossSalesMinor, comparison?.grossSalesMinor),
       ),
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-net-sales'),
         style: RestoflowMetricCardStyle.kpi,
         tone: RestoflowTone.success,
@@ -1068,7 +1166,7 @@ class _ReportContent extends StatelessWidget {
         icon: Icons.payments_outlined,
         delta: deltaOf(report.netSalesMinor, comparison?.netSalesMinor),
       ),
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-orders'),
         style: RestoflowMetricCardStyle.kpi,
         tone: RestoflowTone.info,
@@ -1077,7 +1175,7 @@ class _ReportContent extends StatelessWidget {
         icon: Icons.receipt_long_outlined,
         delta: deltaOf(report.orderCount, comparison?.orderCount),
       ),
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-avg-ticket'),
         style: RestoflowMetricCardStyle.kpi,
         tone: RestoflowTone.success,
@@ -1097,7 +1195,7 @@ class _ReportContent extends StatelessWidget {
     // cards. Every previously-shown figure is preserved (none removed). ---
     final openCaption = '${l10n.dashboardOpenOrders}: ${report.openOrderCount}';
     final secondaryKpis = <Widget>[
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-cash-sales'),
         style: RestoflowMetricCardStyle.kpi,
         label: l10n.dashboardCashSales,
@@ -1112,7 +1210,7 @@ class _ReportContent extends StatelessWidget {
         icon: Icons.account_balance_wallet_outlined,
         delta: deltaOf(report.cashSalesMinor, comparison?.cashSalesMinor),
       ),
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-completed'),
         style: RestoflowMetricCardStyle.kpi,
         tone: RestoflowTone.success,
@@ -1121,7 +1219,7 @@ class _ReportContent extends StatelessWidget {
         caption: openCaption,
         icon: Icons.task_alt,
       ),
-      RestoflowMetricCard(
+      OverviewMetricCard(
         key: const Key('kpi-unpaid'),
         style: RestoflowMetricCardStyle.kpi,
         tone: RestoflowTone.warning,
@@ -1236,7 +1334,7 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    final branches = RestoflowSectionCard(
+    final branches = OverviewSectionCard(
       key: const Key('sales-by-branch-card'),
       title: l10n.dashboardSalesByBranch,
       children: [
@@ -1284,13 +1382,17 @@ class _ReportContent extends StatelessWidget {
         if (h.netSalesMinor > peakEntry.netSalesMinor) peakEntry = h;
       }
       final peakLabel = money(peakEntry.netSalesMinor);
-      salesByHour = RestoflowSectionCard(
+      salesByHour = OverviewSectionCard(
         key: const Key('sales-by-hour-card'),
+        icon: Icons.bar_chart_rounded,
+        surface: OverviewSurface.analytics,
         title: l10n.dashboardSalesByHour,
         children: [
           const SizedBox(height: RestoflowSpacing.sm),
           RestoflowAreaChart(
             key: const Key('sales-by-hour-chart'),
+            lineColor: OverviewVisuals.primary,
+            maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20 ? 3 : 5,
             height: 260,
             points: [
               for (final h in hourly)
@@ -1375,7 +1477,7 @@ class _ReportContent extends StatelessWidget {
     final showLimitedNote =
         !isDemo && report.hourlyNetSales.isEmpty && report.branches.isEmpty;
     final theme = Theme.of(context);
-    final limitedNote = RestoflowSectionCard(
+    final limitedNote = OverviewSectionCard(
       key: const Key('reports-limited-analytics'),
       children: [
         Padding(
@@ -1452,7 +1554,6 @@ class _ReportContent extends StatelessWidget {
       payment,
       if (report.branches.isNotEmpty) branches,
       if (orderTypeCard != null) orderTypeCard,
-      if (shiftCashCard != null) shiftCashCard,
     ];
 
     // CLIENT-B: the period-comparison strip. It carries ONLY the metrics whose
@@ -1526,22 +1627,38 @@ class _ReportContent extends StatelessWidget {
       // ZONE 1 — what this page is describing.
       [banner],
       // ZONE 2 — the headline figures.
-      [_KpiGrid(cards: primaryKpis)],
+      [
+        _KpiGrid(
+          cards: [...primaryKpis, ...secondaryKpis.take(2)],
+          wideColumns: 6,
+        ),
+      ],
       // ZONE 3 — the trend, then the comparison that reads it.
       [
-        if (analyticsStart != null || paymentMix != null)
-          _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
+        if (analyticsStart != null ||
+            paymentMix != null ||
+            shiftCashCard != null)
+          _AnalyticsRow(
+            hourly: analyticsStart,
+            mix: paymentMix,
+            cash: shiftCashCard,
+          ),
         if (comparisonStrip != null) comparisonStrip,
       ],
       // ZONE 4 — live operational state.
-      [_KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length)],
+      [
+        _KpiGrid(
+          cards: secondaryKpis.skip(2).toList(),
+          wideColumns: secondaryKpis.length - 2,
+        ),
+      ],
       // ZONE 5 — what sold, and what just happened.
       [if (strongPair.isNotEmpty) _PairRow(sections: strongPair)],
       // ZONE 6 — the supporting detail an owner goes looking for.
       [if (remaining.isNotEmpty) _TwoColumn(sections: remaining)],
     ];
 
-    return ListView(
+    return _OverviewSections(
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
       children: _zoned(zones),
     );
@@ -1569,6 +1686,27 @@ class _ReportContent extends StatelessWidget {
         .reduce((a, b) => a.totalMinor >= b.totalMinor ? a : b)
         .method;
   }
+}
+
+/// Sections share the page scroll view with its header and readiness panel.
+class _OverviewSections extends StatelessWidget {
+  const _OverviewSections({
+    required this.children,
+    required this.padding,
+    super.key,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    ),
+  );
 }
 
 /// One row of the CLIENT-B comparison strip: a label, a comparison, and the
@@ -1618,7 +1756,7 @@ class _ComparisonStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) return const SizedBox.shrink();
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('period-comparison-card'),
       title: title,
       children: [for (final row in rows) _ComparisonRow(data: row)],
@@ -1651,50 +1789,29 @@ class _ComparisonRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
-      child: Row(
-        children: [
-          // Both sides flex, and both can ellipsize: at a 2x text scale on a
-          // phone a fixed trailing group would push the row past the card.
-          Expanded(
-            flex: 3,
-            child: Text(
-              data.label,
-              style: theme.textTheme.titleSmall,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: RestoflowIconSizes.xs, color: muted),
-                  const SizedBox(width: RestoflowSpacing.xs),
-                ],
-                Flexible(
-                  child: Text(
-                    key: Key('${data.key}-delta'),
-                    text,
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      // Neutral on purpose — see the class doc. No
-                      // success/danger tone.
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
+      child: OverviewValueRow(
+        label: Text(data.label, style: theme.textTheme.titleSmall),
+        value: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: RestoflowIconSizes.xs, color: muted),
+              const SizedBox(width: RestoflowSpacing.xs),
+            ],
+            Flexible(
+              child: Text(
+                key: Key('${data.key}-delta'),
+                text,
+                textAlign: TextAlign.end,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1754,8 +1871,10 @@ class _SalesByDayCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(ownerSalesSeriesForKeyProvider(queryKey));
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('sales-by-day-card'),
+      icon: Icons.bar_chart_rounded,
+      surface: OverviewSurface.analytics,
       title: l10n.dashboardSalesByDay,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
@@ -1818,6 +1937,8 @@ class _SalesByDayCard extends ConsumerWidget {
     final peakLabel = money(peak.netMinor);
 
     return RestoflowAreaChart(
+      lineColor: OverviewVisuals.primary,
+      maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20 ? 3 : 5,
       key: const Key('sales-by-day-chart'),
       height: 260,
       points: points,
@@ -1846,29 +1967,32 @@ class _SalesByDayCard extends ConsumerWidget {
 /// the payment-mix donut at wide widths (the chart gets the larger share), or
 /// stacked (chart first) on narrow widths. Renders whichever pieces exist.
 class _AnalyticsRow extends StatelessWidget {
-  const _AnalyticsRow({this.hourly, this.mix});
+  const _AnalyticsRow({this.hourly, this.mix, this.cash});
 
   final Widget? hourly;
   final Widget? mix;
+  final Widget? cash;
 
   @override
   Widget build(BuildContext context) {
     final h = hourly;
     final m = mix;
-    if (h == null && m == null) return const SizedBox.shrink();
-    if (h == null) return m!;
-    if (m == null) return h;
+    final c = cash;
+    final secondary = [if (m != null) m, if (c != null) c];
+    if (h == null) return _PairRow(sections: secondary);
+    if (secondary.isEmpty) return h;
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= RestoflowBreakpoints.wide) {
-          // RF-132: the reference gives the hourly chart roughly 7:3 of the
-          // row (clearly dominant) rather than the previous 3:2.
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        if (constraints.maxWidth >= 1120 * scale) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 7, child: h),
-              const SizedBox(width: RestoflowSpacing.lg),
-              Expanded(flex: 3, child: m),
+              Expanded(flex: 6, child: h),
+              for (final card in secondary) ...[
+                const SizedBox(width: RestoflowSpacing.lg),
+                Expanded(flex: 3, child: card),
+              ],
             ],
           );
         }
@@ -1877,7 +2001,7 @@ class _AnalyticsRow extends StatelessWidget {
           children: [
             h,
             const SizedBox(height: RestoflowSpacing.lg),
-            m,
+            _PairRow(sections: secondary),
           ],
         );
       },
@@ -1895,10 +2019,12 @@ class _PairRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (sections.isEmpty) return const SizedBox.shrink();
     if (sections.length == 1) return sections.first;
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= RestoflowBreakpoints.wide) {
+        if (constraints.maxWidth >=
+            720 * (MediaQuery.textScalerOf(context).scale(14) / 14)) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1930,7 +2056,8 @@ class _TwoColumn extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumn =
-            constraints.maxWidth >= RestoflowBreakpoints.wide &&
+            constraints.maxWidth >=
+                720 * (MediaQuery.textScalerOf(context).scale(14) / 14) &&
             sections.length > 1;
         if (!twoColumn) {
           return Column(
@@ -2072,8 +2199,10 @@ class _ShiftCashCard extends StatelessWidget {
         ? l10n.dashboardShiftClosedToday(shiftCash.closedShiftCount)
         : l10n.dashboardShiftClosedInRange(shiftCash.closedShiftCount);
 
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('shift-cash-card'),
+      icon: Icons.account_balance_wallet_outlined,
+      surface: OverviewSurface.sage,
       title: l10n.dashboardShiftCashTitle,
       children: [
         const SizedBox(height: RestoflowSpacing.sm),
@@ -2108,10 +2237,12 @@ class _ShiftCashCard extends StatelessWidget {
         ] else ...[
           SectionRow(
             label: l10n.dashboardShiftExpectedCash,
+            icon: Icons.payments_outlined,
             trailingValue: money(shiftCash.expectedCashMinor),
           ),
           SectionRow(
             label: l10n.dashboardCountedCash,
+            icon: Icons.account_balance_wallet_outlined,
             trailingValue: money(shiftCash.countedCashMinor),
           ),
           _VarianceRow(
@@ -2154,20 +2285,19 @@ class _VarianceRow extends StatelessWidget {
         : (varianceMinor > 0 ? RestoflowTone.success : RestoflowTone.warning);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-          Text(
-            MoneyFormatter.formatMinor(varianceMinor, currencyCode),
-            key: const Key('shift-cash-variance'),
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: varianceMinor == 0
-                  ? theme.colorScheme.onSurface
-                  : tone.styleOf(theme).accent,
-              fontWeight: FontWeight.w600,
-            ),
+      child: OverviewValueRow(
+        label: Text(label, style: theme.textTheme.bodyMedium),
+        value: Text(
+          MoneyFormatter.formatMinor(varianceMinor, currencyCode),
+          key: const Key('shift-cash-variance'),
+          textAlign: TextAlign.end,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: varianceMinor == 0
+                ? theme.colorScheme.onSurface
+                : tone.styleOf(theme).accent,
+            fontWeight: FontWeight.w600,
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2403,7 +2533,7 @@ class _CurrencyCheckPending extends StatelessWidget {
         const SizedBox(height: RestoflowSpacing.md),
         const RestoflowSkeleton(height: 96),
         const SizedBox(height: RestoflowSpacing.lg),
-        RestoflowMetricCard(
+        OverviewMetricCard(
           key: const Key('currency-pending-order-count'),
           style: RestoflowMetricCardStyle.kpi,
           tone: RestoflowTone.info,
@@ -2450,7 +2580,7 @@ class _CurrencySafetySection extends StatelessWidget {
             tone: RestoflowTone.warning,
           ),
           const SizedBox(height: RestoflowSpacing.lg),
-          RestoflowMetricCard(
+          OverviewMetricCard(
             key: const Key('currency-safety-order-count'),
             style: RestoflowMetricCardStyle.kpi,
             tone: RestoflowTone.info,
@@ -2476,7 +2606,7 @@ class _CurrencySafetySection extends StatelessWidget {
         for (final total in guard.totals)
           Padding(
             padding: const EdgeInsets.only(bottom: RestoflowSpacing.md),
-            child: RestoflowSectionCard(
+            child: OverviewSectionCard(
               key: Key('currency-split-${total.currencyCode}'),
               title: currencySelectorLabel(total.currencyCode),
               children: [
@@ -2505,7 +2635,7 @@ class _CurrencySafetySection extends StatelessWidget {
           ),
         // Non-money counts stay: an order count is a valid integer however many
         // currencies the orders were taken in.
-        RestoflowMetricCard(
+        OverviewMetricCard(
           key: const Key('currency-safety-order-count'),
           style: RestoflowMetricCardStyle.kpi,
           tone: RestoflowTone.info,
@@ -2637,8 +2767,8 @@ class _PaymentMixCard extends StatelessWidget {
     final topBps = top.shareBps;
 
     final donut = RestoflowDonutChart(
-      size: 120,
-      ringWidth: 15,
+      size: 136,
+      ringWidth: 16,
       segments: [
         for (final m in analytics)
           RestoflowDonutSegment(
@@ -2671,8 +2801,8 @@ class _PaymentMixCard extends StatelessWidget {
                   : null,
               child: Container(
                 padding: const EdgeInsetsDirectional.symmetric(
-                  horizontal: RestoflowSpacing.md,
-                  vertical: RestoflowSpacing.sm,
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   border: Border.all(color: kRestoflowHairline),
@@ -2697,25 +2827,18 @@ class _PaymentMixCard extends StatelessWidget {
                           child: Text(
                             label(m.method),
                             style: theme.textTheme.bodyMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: RestoflowSpacing.sm),
-                        Flexible(
-                          child: Text(
-                            key: Key('payment-amount-${m.method}'),
-                            money(m.amountMinor),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.end,
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      key: Key('payment-amount-${m.method}'),
+                      money(m.amountMinor),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.end,
                     ),
                     const SizedBox(height: RestoflowSpacing.xs),
                     // Count, share and average. Each is OMITTED rather than
@@ -2734,8 +2857,6 @@ class _PaymentMixCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -2746,16 +2867,18 @@ class _PaymentMixCard extends StatelessWidget {
     );
 
     final t = trend;
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('payment-mix-card'),
+      icon: Icons.donut_small_rounded,
       title: l10n.dashboardPaymentMix,
       children: [
-        const SizedBox(height: RestoflowSpacing.md),
+        const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
             // Donut beside the legend when the card is wide enough (the
             // reference's side-by-side card); stacked and centred when narrow.
-            if (constraints.maxWidth >= 300) {
+            if (constraints.maxWidth >=
+                380 * (MediaQuery.textScalerOf(context).scale(14) / 14)) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -2769,13 +2892,13 @@ class _PaymentMixCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(child: donut),
-                const SizedBox(height: RestoflowSpacing.md),
+                const SizedBox(height: 10),
                 legend,
               ],
             );
           },
         ),
-        if (t != null) ...[const SizedBox(height: RestoflowSpacing.md), t],
+        if (t != null) ...[const SizedBox(height: 10), t],
         const SizedBox(height: RestoflowSpacing.xs),
         Text(
           key: const Key('payment-recorded-tenders-note'),
@@ -2847,7 +2970,7 @@ class _OrderTypeCard extends ConsumerWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, currencyCode);
 
-    return RestoflowSectionCard(
+    return OverviewSectionCard(
       key: const Key('order-type-card'),
       title: l10n.dashboardSalesByOrderType,
       children: [
@@ -2980,8 +3103,8 @@ class _MethodTrendStrip extends ConsumerWidget {
 }
 
 /// Lays the KPI metric cards out in a responsive grid. [wideColumns] columns at
-/// the wide breakpoint (4 for the primary row, 3 for the compact secondary
-/// summary), 2 on mid widths, 1 when compact.
+/// the wide breakpoint (six headline metrics), three on landscape tablets,
+/// two on portrait tablets, and one or two on phones when values fit.
 class _KpiGrid extends StatelessWidget {
   const _KpiGrid({required this.cards, this.wideColumns = 4});
 
@@ -2992,18 +3115,60 @@ class _KpiGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= RestoflowBreakpoints.wide
-            ? wideColumns
-            : (constraints.maxWidth >= RestoflowBreakpoints.compact ? 2 : 1);
-        // RF-132: the reference breathes a little more between KPI tiles.
-        const gap = RestoflowSpacing.lg;
-        final gutters = gap * (columns - 1);
-        final cardWidth = (constraints.maxWidth - gutters) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final width = constraints.maxWidth;
+        final available = width >= 1120 * scale
+            ? 6
+            : width >= 900 * scale
+            ? 3
+            : width >= 340 * scale
+            ? 2
+            : 1;
+        var columns = available.clamp(1, wideColumns);
+        // Two compact cards are useful only when their actual values fit.
+        // Measure the same text style used by OverviewMetricCard; never shrink
+        // or ellipsize a financial value to force a column count.
+        for (final card in cards.whereType<OverviewMetricCard>()) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: card.value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout();
+          final minimumWidth =
+              painter.width + 2 * OverviewVisuals.metricPadding;
+          painter.dispose();
+          while (columns > 1 &&
+              (width - (columns - 1) * 12) / columns < minimumWidth) {
+            columns = columns > 3 ? 3 : columns - 1;
+          }
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final card in cards) SizedBox(width: cardWidth, child: card),
+            for (var start = 0; start < cards.length; start += columns) ...[
+              if (start > 0) const SizedBox(height: 12),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var col = 0; col < columns; col++) ...[
+                      if (col > 0) const SizedBox(width: 12),
+                      Expanded(
+                        child: start + col < cards.length
+                            ? cards[start + col]
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
         );
       },
@@ -3022,7 +3187,7 @@ class _LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return ListView(
+    return _OverviewSections(
       key: const Key('reports-loading'),
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
       children: [
