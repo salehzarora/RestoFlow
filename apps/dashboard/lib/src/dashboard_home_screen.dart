@@ -61,6 +61,7 @@ class DashboardHomeScreen extends ConsumerWidget {
     this.setupPanel,
     this.deviceSummary,
     this.onNavigate,
+    this.scopeInHeader = false,
     super.key,
   });
 
@@ -82,6 +83,10 @@ class DashboardHomeScreen extends ConsumerWidget {
   /// that mount this screen directly) leaves every KPI display-only, exactly
   /// as before — a drill-down is offered only when there is somewhere to go.
   final void Function(DashboardDestination destination)? onNavigate;
+
+  /// The full shell hosts the same authorized filter in its persistent header.
+  /// Standalone Overview consumers retain the original in-page placement.
+  final bool scopeInHeader;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -128,60 +133,76 @@ class DashboardHomeScreen extends ConsumerWidget {
     return OverviewVisualScope(
       child: Builder(
         builder: (context) => Scaffold(
-          body: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1600),
-              // One scroll owner keeps every control reachable when readiness and
-              // translated range chips grow at phone widths / 2x text scale.
-              child: ListView(
-                key: const Key('overview-scroll'),
-                children: [
-                  _OverviewChrome(onRefresh: refresh),
-                  if (panel != null)
-                    Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                        RestoflowSpacing.lg,
-                        RestoflowSpacing.md,
-                        RestoflowSpacing.lg,
-                        0,
+          body: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                stops: [0, 0.35, 0.8],
+                colors: [Color(0xFFE4F5EC), Color(0xFFF4FAF7), Colors.white],
+              ),
+            ),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1600),
+                // One scroll owner keeps every control reachable when readiness and
+                // translated range chips grow at phone widths / 2x text scale.
+                child: ListView(
+                  key: const Key('overview-scroll'),
+                  children: [
+                    _OverviewChrome(
+                      onRefresh: refresh,
+                      scopeInHeader: scopeInHeader,
+                    ),
+                    if (panel != null)
+                      Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(
+                          RestoflowSpacing.lg,
+                          OverviewVisuals.isPhone(context)
+                              ? 8
+                              : RestoflowSpacing.md,
+                          RestoflowSpacing.lg,
+                          0,
+                        ),
+                        child: panel,
                       ),
-                      child: panel,
+                    reportAsync.when(
+                      data: (report) => _ReportContent(
+                        report: report,
+                        // OPS-043 Phase 2B: the currency gate, resolved once per
+                        // window. `unknown` while it is still loading, so money can
+                        // never flash on screen before it is known to be addable.
+                        currencyGuard: guard,
+                        currencyGuardPending: guardPending,
+                        window: window,
+                        isDemo: isDemo,
+                        deviceSummary: deviceSummary,
+                        salesByDay: seriesKey == null
+                            ? null
+                            : _SalesByDayCard(
+                                queryKey: seriesKey,
+                                currencyCode:
+                                    guard.displayCurrency ??
+                                    report.currencyCode,
+                              ),
+                        salesSeriesKey: seriesKey,
+                        // F0.4: bound HERE, where a WidgetRef exists. The child
+                        // stays a plain StatelessWidget and never learns about
+                        // Riverpod or the shell's tab indices.
+                        onDrillDown: nav == null
+                            ? null
+                            : (drillDown) => runDashboardDrillDown(
+                                ref: ref,
+                                drillDown: drillDown,
+                                navigate: nav,
+                              ),
+                      ),
+                      loading: () => const _LoadingState(),
+                      error: (_, _) => _ErrorState(onRetry: refresh),
                     ),
-                  reportAsync.when(
-                    data: (report) => _ReportContent(
-                      report: report,
-                      // OPS-043 Phase 2B: the currency gate, resolved once per
-                      // window. `unknown` while it is still loading, so money can
-                      // never flash on screen before it is known to be addable.
-                      currencyGuard: guard,
-                      currencyGuardPending: guardPending,
-                      window: window,
-                      isDemo: isDemo,
-                      deviceSummary: deviceSummary,
-                      salesByDay: seriesKey == null
-                          ? null
-                          : _SalesByDayCard(
-                              queryKey: seriesKey,
-                              currencyCode:
-                                  guard.displayCurrency ?? report.currencyCode,
-                            ),
-                      salesSeriesKey: seriesKey,
-                      // F0.4: bound HERE, where a WidgetRef exists. The child
-                      // stays a plain StatelessWidget and never learns about
-                      // Riverpod or the shell's tab indices.
-                      onDrillDown: nav == null
-                          ? null
-                          : (drillDown) => runDashboardDrillDown(
-                              ref: ref,
-                              drillDown: drillDown,
-                              navigate: nav,
-                            ),
-                    ),
-                    loading: () => const _LoadingState(),
-                    error: (_, _) => _ErrorState(onRetry: refresh),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -199,17 +220,20 @@ class DashboardHomeScreen extends ConsumerWidget {
 /// The demo/live data source stays honest via the shell's mode pill + the
 /// report banner, so no duplicate mode pill is shown here.
 class _OverviewChrome extends ConsumerWidget {
-  const _OverviewChrome({required this.onRefresh});
+  const _OverviewChrome({required this.onRefresh, required this.scopeInHeader});
 
   final VoidCallback onRefresh;
+  final bool scopeInHeader;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final range = ref.watch(reportRangeProvider);
     final report = ref.watch(dashboardReportProvider).valueOrNull;
-    final hasScope = ref.watch(dashboardCoveredScopeProvider) != null;
+    final hasScope =
+        !scopeInHeader && ref.watch(dashboardCoveredScopeProvider) != null;
     final theme = Theme.of(context);
+    final phone = OverviewVisuals.isPhone(context);
     final heading = Row(
       key: const Key('reports-heading'),
       children: [
@@ -223,6 +247,8 @@ class _OverviewChrome extends ConsumerWidget {
                 child: Text(
                   l10n.dashboardNavOverview,
                   style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 25,
+                    letterSpacing: -0.5,
                     fontWeight: FontWeight.w800,
                     color: OverviewVisuals.ink,
                   ),
@@ -244,9 +270,41 @@ class _OverviewChrome extends ConsumerWidget {
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh),
           tooltip: l10n.dashboardRefresh,
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.85),
+            foregroundColor: OverviewVisuals.deep,
+            side: const BorderSide(color: OverviewVisuals.border),
+          ),
         ),
       ],
     );
+    if (scopeInHeader) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, phone ? 6 : 16, 16, 0),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            if (constraints.maxWidth >= 1080 * scale) {
+              return Row(
+                children: [
+                  SizedBox(width: 300, child: heading),
+                  const SizedBox(width: 16),
+                  const Expanded(child: _RangeFilterBar(embedded: true)),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                heading,
+                SizedBox(height: phone ? 4 : 10),
+                const _RangeFilterBar(embedded: true),
+              ],
+            );
+          },
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -262,7 +320,7 @@ class _OverviewChrome extends ConsumerWidget {
                     const SizedBox(width: 16),
                     const SizedBox(
                       width: 300,
-                      child: _ScopeSelector(embedded: true),
+                      child: DashboardOverviewScopeSelector(embedded: true),
                     ),
                   ],
                 );
@@ -273,7 +331,7 @@ class _OverviewChrome extends ConsumerWidget {
                   heading,
                   if (hasScope) ...[
                     const SizedBox(height: 8),
-                    const _ScopeSelector(embedded: true),
+                    const DashboardOverviewScopeSelector(embedded: true),
                   ],
                 ],
               );
@@ -312,8 +370,8 @@ class _OverviewChrome extends ConsumerWidget {
 ///
 /// A failed option load leaves the broad default in place and simply offers no
 /// individual branches. It never falls back to a branch, and never widens.
-class _ScopeSelector extends ConsumerWidget {
-  const _ScopeSelector({this.embedded = false});
+class DashboardOverviewScopeSelector extends ConsumerWidget {
+  const DashboardOverviewScopeSelector({this.embedded = false, super.key});
   final bool embedded;
 
   @override
@@ -323,6 +381,7 @@ class _ScopeSelector extends ConsumerWidget {
 
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final phone = OverviewVisuals.isPhone(context);
     final padding = embedded
         ? EdgeInsets.zero
         : const EdgeInsetsDirectional.fromSTEB(
@@ -400,7 +459,9 @@ class _ScopeSelector extends ConsumerWidget {
       child: Align(
         alignment: AlignmentDirectional.centerStart,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
+          constraints: BoxConstraints(
+            maxWidth: embedded ? double.infinity : 320,
+          ),
           child: DropdownButtonFormField<String?>(
             key: const Key('overview-scope-selector'),
             initialValue: selectedId,
@@ -408,7 +469,35 @@ class _ScopeSelector extends ConsumerWidget {
             decoration: InputDecoration(
               labelText: l10n.activityLogFilterBranch,
               isDense: true,
-              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+              constraints: phone ? const BoxConstraints(minHeight: 48) : null,
+              prefixIconConstraints: phone
+                  ? const BoxConstraints(minWidth: 40, minHeight: 48)
+                  : null,
+              prefixIcon: const Icon(
+                Icons.storefront_outlined,
+                size: 20,
+                color: OverviewVisuals.deep,
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: phone ? 6 : 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: OverviewVisuals.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: OverviewVisuals.deep,
+                  width: 2,
+                ),
+              ),
             ),
             items: [
               DropdownMenuItem<String?>(
@@ -448,7 +537,8 @@ class _ScopeSelector extends ConsumerWidget {
 /// On narrow widths the segments flex to the full width; on wide layouts the
 /// control sits at the reading end (reference composition).
 class _RangeFilterBar extends ConsumerWidget {
-  const _RangeFilterBar();
+  const _RangeFilterBar({this.embedded = false});
+  final bool embedded;
 
   /// Wide groups align to the reading end; all seven choices still wrap.
   static const double _wideBreakpoint = 900;
@@ -457,6 +547,7 @@ class _RangeFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final window = ref.watch(analyticsWindowProvider);
+    final phone = OverviewVisuals.isPhone(context);
     final selected = switch (window) {
       PresetAnalyticsWindow(:final range) => OverviewRangeChoice.preset(
         range.asReportRange,
@@ -465,15 +556,17 @@ class _RangeFilterBar extends ConsumerWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        RestoflowSpacing.lg,
-        8,
-        RestoflowSpacing.lg,
-        0,
-      ),
+      padding: embedded
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(
+              RestoflowSpacing.lg,
+              8,
+              RestoflowSpacing.lg,
+              0,
+            ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= _wideBreakpoint;
+          final wide = embedded || constraints.maxWidth >= _wideBreakpoint;
           final chips = [
             for (final choice in kOverviewRangeChoices)
               _RangeChip(
@@ -503,8 +596,8 @@ class _RangeFilterBar extends ConsumerWidget {
           // have this quarter.
           final row = Wrap(
             key: const Key('reports-range-filter'),
-            spacing: RestoflowSpacing.sm,
-            runSpacing: RestoflowSpacing.sm,
+            spacing: phone ? 4 : RestoflowSpacing.sm,
+            runSpacing: phone ? 4 : RestoflowSpacing.sm,
             alignment: wide ? WrapAlignment.end : WrapAlignment.start,
             children: chips,
           );
@@ -565,6 +658,7 @@ class _RangeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final phone = OverviewVisuals.isPhone(context);
     final fg = selected ? scheme.onPrimary : kRestoflowInk2;
     // MergeSemantics, not a wrapping Semantics node: the InkWell already
     // contributes the tap/focus actions and the Text contributes the label, so
@@ -577,20 +671,34 @@ class _RangeChip extends StatelessWidget {
         selected: selected,
         child: Material(
           color: selected ? scheme.primary : kRestoflowSurface,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(12),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
               // 44px minimum height keeps the touch target at the platform
               // standard even though the label is small.
               constraints: const BoxConstraints(minHeight: 44),
-              padding: const EdgeInsets.symmetric(
-                horizontal: RestoflowSpacing.lg,
+              padding: EdgeInsets.symmetric(
+                horizontal: phone ? 10 : RestoflowSpacing.lg,
                 vertical: RestoflowSpacing.sm,
               ),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(12),
+                gradient: selected
+                    ? const LinearGradient(
+                        colors: [OverviewVisuals.primary, OverviewVisuals.deep],
+                      )
+                    : null,
+                boxShadow: selected
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x20047857),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ]
+                    : null,
                 border: Border.all(
                   color: selected ? scheme.primary : kRestoflowHairline,
                 ),
@@ -1441,33 +1549,44 @@ class _ReportContent extends StatelessWidget {
         icon: Icons.bar_chart_rounded,
         surface: OverviewSurface.analytics,
         title: l10n.dashboardSalesByHour,
+        action: _ChartPeakValue(
+          value: peakLabel,
+          semanticsLabel: l10n.dashboardSalesByHourSemantics(
+            peakEntry.hourLabel,
+            peakLabel,
+          ),
+        ),
         children: [
           const SizedBox(height: RestoflowSpacing.sm),
-          RestoflowAreaChart(
-            key: const Key('sales-by-hour-chart'),
-            lineColor: OverviewVisuals.primary,
-            maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20 ? 3 : 5,
-            height: 260,
-            points: [
-              for (final h in hourly)
-                RestoflowAreaDatum(
-                  label: h.hourLabel.split(':').first,
-                  value: h.netSalesMinor,
-                ),
-            ],
-            peakValueLabel: peakLabel,
-            yAxisTicks: _axisTicksFor(peakEntry.netSalesMinor),
-            yAxisLabelBuilder: money,
-            // Dashboard V2: monotone smoothing (never overshoots the real
-            // points) + point selection with a tooltip built from the REAL
-            // datum — hour label + the MoneyFormatter-formatted value.
-            smooth: true,
-            tooltipBuilder: (d) => '${d.label}:00\n${money(d.value)}',
-            // A meaningful, localized screen-reader summary naming the peak hour
-            // and its formatted value (not conveyed by colour/shape alone).
-            semanticsLabel: l10n.dashboardSalesByHourSemantics(
-              peakEntry.hourLabel,
-              peakLabel,
+          _OverviewChartSurface(
+            child: RestoflowAreaChart(
+              key: const Key('sales-by-hour-chart'),
+              lineColor: const Color(0xFF008F6A),
+              maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20
+                  ? 3
+                  : 5,
+              height: 260,
+              points: [
+                for (final h in hourly)
+                  RestoflowAreaDatum(
+                    label: h.hourLabel.split(':').first,
+                    value: h.netSalesMinor,
+                  ),
+              ],
+              peakValueLabel: peakLabel,
+              yAxisTicks: _axisTicksFor(peakEntry.netSalesMinor),
+              yAxisLabelBuilder: money,
+              // Dashboard V2: monotone smoothing (never overshoots the real
+              // points) + point selection with a tooltip built from the REAL
+              // datum — hour label + the MoneyFormatter-formatted value.
+              smooth: true,
+              tooltipBuilder: (d) => '${d.label}:00\n${money(d.value)}',
+              // A meaningful, localized screen-reader summary naming the peak hour
+              // and its formatted value (not conveyed by colour/shape alone).
+              semanticsLabel: l10n.dashboardSalesByHourSemantics(
+                peakEntry.hourLabel,
+                peakLabel,
+              ),
             ),
           ),
         ],
@@ -1713,8 +1832,13 @@ class _ReportContent extends StatelessWidget {
     ];
 
     return _OverviewSections(
-      padding: const EdgeInsets.all(RestoflowSpacing.lg),
-      children: _zoned(zones),
+      padding: OverviewVisuals.isPhone(context)
+          ? const EdgeInsets.fromLTRB(12, 8, 12, 12)
+          : const EdgeInsets.all(RestoflowSpacing.lg),
+      children: _zoned(
+        zones,
+        zoneGap: OverviewVisuals.isPhone(context) ? 8 : 20,
+      ),
     );
   }
 
@@ -1990,31 +2114,106 @@ class _SalesByDayCard extends ConsumerWidget {
     }
     final peakLabel = money(peak.netMinor);
 
-    return RestoflowAreaChart(
-      lineColor: OverviewVisuals.primary,
-      maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20 ? 3 : 5,
-      key: const Key('sales-by-day-chart'),
-      height: 260,
-      points: points,
-      peakValueLabel: peakLabel,
-      yAxisTicks: _axisTicksFor(peak.netMinor),
-      yAxisLabelBuilder: money,
-      smooth: true,
-      // The full branch-local date, the day's net, and its order count — the
-      // three things an owner asks of a bar. The date is the server's exact
-      // calendar label, never a device-timezone re-render.
-      tooltipBuilder: (datum) {
-        final bucket = byDatum[datum];
-        if (bucket == null) return money(datum.value);
-        return '${bucket.day.label}\n${money(bucket.netMinor)}\n'
-            '${bucket.orderCount} · ${l10n.dashboardOrders}';
-      },
-      semanticsLabel: l10n.dashboardSalesByDaySemantics(
-        peak.day.label,
-        peakLabel,
+    return _OverviewChartSurface(
+      child: RestoflowAreaChart(
+        lineColor: const Color(0xFF008F6A),
+        maxLabels: MediaQuery.textScalerOf(context).scale(14) > 20 ? 3 : 5,
+        key: const Key('sales-by-day-chart'),
+        height: 260,
+        points: points,
+        peakValueLabel: peakLabel,
+        yAxisTicks: _axisTicksFor(peak.netMinor),
+        yAxisLabelBuilder: money,
+        smooth: true,
+        // The full branch-local date, the day's net, and its order count — the
+        // three things an owner asks of a bar. The date is the server's exact
+        // calendar label, never a device-timezone re-render.
+        tooltipBuilder: (datum) {
+          final bucket = byDatum[datum];
+          if (bucket == null) return money(datum.value);
+          return '${bucket.day.label}\n${money(bucket.netMinor)}\n'
+              '${bucket.orderCount} · ${l10n.dashboardOrders}';
+        },
+        semanticsLabel: l10n.dashboardSalesByDaySemantics(
+          peak.day.label,
+          peakLabel,
+        ),
       ),
     );
   }
+}
+
+/// Chart chrome uses the existing painter, raw points, ticks and interactions.
+/// Its typography/grid overrides never reach other dashboard widgets.
+class _OverviewChartSurface extends StatelessWidget {
+  const _OverviewChartSurface({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = RestoflowBrandPalette.from(context);
+    return Theme(
+      data: theme.copyWith(
+        colorScheme: theme.colorScheme.copyWith(
+          onSurfaceVariant: const Color(0xFF69847A),
+          onSurface: OverviewVisuals.deep,
+        ),
+        textTheme: theme.textTheme.copyWith(
+          bodySmall: theme.textTheme.bodySmall?.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+          labelSmall: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        extensions: [
+          for (final extension in theme.extensions.values)
+            if (extension is! RestoflowBrandPalette) extension,
+          palette.copyWith(chartGridLight: const Color(0xFFDDEDE5)),
+        ],
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x00D0F0DF), Color(0x80E4F5EC)],
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _ChartPeakValue extends StatelessWidget {
+  const _ChartPeakValue({required this.value, required this.semanticsLabel});
+  final String value;
+  final String semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: semanticsLabel,
+    excludeSemantics: true,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        value,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: OverviewVisuals.deep,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+  );
 }
 
 /// RF-127 — the primary analytics row: the dominant sales-by-hour chart beside
@@ -2308,12 +2507,12 @@ List<Widget> _verticallySpaced(List<Widget> items) => [
 /// comparison, or a real-mode report with no per-branch rows, must not leave a
 /// double gap where a group would have been (the same LIVE-UX-001 rule
 /// [_verticallySpaced] follows, one level up).
-List<Widget> _zoned(List<List<Widget>> zones) {
+List<Widget> _zoned(List<List<Widget>> zones, {double zoneGap = 20}) {
   final out = <Widget>[];
   for (final zone in zones) {
     if (zone.isEmpty) continue;
     if (out.isNotEmpty) {
-      out.add(const SizedBox(height: 20));
+      out.add(SizedBox(height: zoneGap));
     }
     out.addAll(_verticallySpaced(zone));
   }
@@ -2442,8 +2641,13 @@ class _VarianceRow extends StatelessWidget {
     final tone = varianceMinor == 0
         ? RestoflowTone.neutral
         : (varianceMinor > 0 ? RestoflowTone.success : RestoflowTone.warning);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: tone.styleOf(theme).container.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: OverviewValueRow(
         label: Text(label, style: theme.textTheme.bodyMedium),
         value: Text(
@@ -2482,45 +2686,53 @@ class _LastClosedShift extends StatelessWidget {
       if (shift.branchName.isNotEmpty) shift.branchName,
       if (shift.closedAtLabel.isNotEmpty) shift.closedAtLabel,
     ].join(' · ');
-    return Column(
+    return Container(
       key: const Key('shift-cash-last'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.dashboardShiftLastClosed,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        if (subtitle.isNotEmpty) ...[
-          const SizedBox(height: RestoflowSpacing.xxs),
-          Text(subtitle, style: theme.textTheme.bodyMedium),
-        ],
-        if (shift.openedByName != null && shift.openedByName!.isNotEmpty)
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: OverviewVisuals.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            l10n.dashboardShiftOpenedBy(shift.openedByName!),
-            style: theme.textTheme.bodySmall?.copyWith(
+            l10n.dashboardShiftLastClosed,
+            style: theme.textTheme.labelMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
           ),
-        if (shift.closedByName.isNotEmpty)
-          Text(
-            l10n.dashboardShiftClosedBy(shift.closedByName),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+          if (subtitle.isNotEmpty) ...[
+            const SizedBox(height: RestoflowSpacing.xxs),
+            Text(subtitle, style: theme.textTheme.bodyMedium),
+          ],
+          if (shift.openedByName != null && shift.openedByName!.isNotEmpty)
+            Text(
+              l10n.dashboardShiftOpenedBy(shift.openedByName!),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
-          ),
-        if (shift.hasDetail) ...[
+          if (shift.closedByName.isNotEmpty)
+            Text(
+              l10n.dashboardShiftClosedBy(shift.closedByName),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          if (shift.hasDetail) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            _ShiftDetailChips(shift: shift, currencyCode: currencyCode),
+          ],
           const SizedBox(height: RestoflowSpacing.xs),
-          _ShiftDetailChips(shift: shift, currencyCode: currencyCode),
+          _VarianceRow(
+            label: l10n.dashboardCashVariance,
+            varianceMinor: shift.varianceMinor,
+            currencyCode: currencyCode,
+          ),
         ],
-        const SizedBox(height: RestoflowSpacing.xs),
-        _VarianceRow(
-          label: l10n.dashboardCashVariance,
-          varianceMinor: shift.varianceMinor,
-          currencyCode: currencyCode,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -2964,9 +3176,8 @@ class _PaymentMixCard extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: OverviewVisuals.border),
-                  ),
+                  color: Colors.white.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2986,7 +3197,10 @@ class _PaymentMixCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             label(m.method),
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: OverviewVisuals.ink,
+                            ),
                           ),
                         ),
                       ],
@@ -2996,7 +3210,8 @@ class _PaymentMixCard extends StatelessWidget {
                       key: Key('payment-amount-${m.method}'),
                       money(m.amountMinor),
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
                       ),
                       textAlign: TextAlign.end,
                     ),
@@ -3030,6 +3245,7 @@ class _PaymentMixCard extends StatelessWidget {
     return OverviewSectionCard(
       key: const Key('payment-mix-card'),
       icon: Icons.donut_small_rounded,
+      surface: OverviewSurface.payments,
       title: l10n.dashboardPaymentMix,
       children: [
         const SizedBox(height: 10),
@@ -3042,7 +3258,16 @@ class _PaymentMixCard extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  donut,
+                  DecoratedBox(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFE5F3EE),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: donut,
+                    ),
+                  ),
                   const SizedBox(width: RestoflowSpacing.lg),
                   Expanded(child: legend),
                 ],
@@ -3051,7 +3276,18 @@ class _PaymentMixCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(child: donut),
+                Center(
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFE5F3EE),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: donut,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 10),
                 legend,
               ],
@@ -3060,11 +3296,18 @@ class _PaymentMixCard extends StatelessWidget {
         ),
         if (t != null) ...[const SizedBox(height: 10), t],
         const SizedBox(height: RestoflowSpacing.xs),
-        Text(
-          key: const Key('payment-recorded-tenders-note'),
-          l10n.dashboardRecordedTendersNote,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE6F3ED),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            key: const Key('payment-recorded-tenders-note'),
+            l10n.dashboardRecordedTendersNote,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ),
       ],
@@ -3277,6 +3520,7 @@ class _KpiGrid extends StatelessWidget {
       builder: (context, constraints) {
         final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
         final width = constraints.maxWidth;
+        final gap = OverviewVisuals.isPhone(context) ? 8.0 : 12.0;
         final available = width >= 1120 * scale
             ? 6
             : width >= 800 * scale
@@ -3293,7 +3537,7 @@ class _KpiGrid extends StatelessWidget {
             text: TextSpan(
               text: card.value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -3301,10 +3545,10 @@ class _KpiGrid extends StatelessWidget {
             textScaler: MediaQuery.textScalerOf(context),
           )..layout();
           final minimumWidth =
-              painter.width + 2 * OverviewVisuals.metricPadding;
+              painter.width + 2 * OverviewVisuals.metricContentPadding(context);
           painter.dispose();
           while (columns > 1 &&
-              (width - (columns - 1) * 12) / columns < minimumWidth) {
+              (width - (columns - 1) * gap) / columns < minimumWidth) {
             columns = columns > 3 ? 3 : columns - 1;
           }
         }
@@ -3312,13 +3556,13 @@ class _KpiGrid extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var start = 0; start < cards.length; start += columns) ...[
-              if (start > 0) const SizedBox(height: 12),
+              if (start > 0) SizedBox(height: gap),
               IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (var col = 0; col < columns; col++) ...[
-                      if (col > 0) const SizedBox(width: 12),
+                      if (col > 0) SizedBox(width: gap),
                       Expanded(
                         child: start + col < cards.length
                             ? cards[start + col]

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
+import 'overview_visuals.dart';
+
 /// Dashboard-only notice chrome. Conditions, text and actions belong to callers.
 /// This component owns no setup state or disclosure behavior.
 class OverviewAlertStrip extends RestoflowNoticeBanner {
@@ -17,6 +19,7 @@ class OverviewAlertStrip extends RestoflowNoticeBanner {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantic = tone.styleOf(theme);
+    final phone = OverviewVisuals.isPhone(context);
     final text = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,14 +44,18 @@ class OverviewAlertStrip extends RestoflowNoticeBanner {
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: phone ? const BoxConstraints(minHeight: 48) : null,
+      padding: EdgeInsets.symmetric(
+        horizontal: phone ? 10 : 12,
+        vertical: phone ? 4 : 8,
+      ),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          semantic.container.withValues(alpha: 0.5),
+          semantic.container.withValues(alpha: 0.16),
           Colors.white,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: semantic.accent.withValues(alpha: 0.2)),
+        border: Border.all(color: semantic.accent.withValues(alpha: 0.12)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {

@@ -591,11 +591,12 @@ class _DashboardShellState extends State<DashboardShell> {
 
     // Dashboard V2: the persistent header bar lives INSIDE the content column
     // so the side rail runs the full viewport height (reference composition).
-    // Everything on the bar (context, mode pill, language, sign-out) is
-    // unchanged and stays visible on every tab at every width.
+    // Context, mode, language and sign-out stay visible on every destination.
+    // Overview alone embeds its existing report-scope selector in this bar.
     final header = _ShellHeaderBar(
       membership: widget.membership,
       onSignOut: widget.onSignOut,
+      showOverviewScope: _index == 0,
     );
 
     return Scaffold(
@@ -739,6 +740,7 @@ class _DashboardShellState extends State<DashboardShell> {
     return DashboardHomeScreen(
       setupPanel: setupPanel,
       deviceSummary: deviceSummary,
+      scopeInHeader: true,
       // F0.4: the shell owns tab state, so it supplies the NAMED navigation
       // seam. The Overview binds it to a WidgetRef and executes typed
       // drill-downs; the shell learns nothing about filters, and no magic
@@ -1091,85 +1093,136 @@ const _shellEmerald = Color(0xFF005541);
 const _shellDeep = Color(0xFF00382D);
 const _shellActive = Color(0xFF008562);
 const _shellMint = Color(0xFFA7F3D0);
-const _shellCanvas = Color(0xFFF2F8F5);
 
 /// Existing context, source, language and sign-out controls, visible on every
-/// destination. Context is descriptive; the real analytics selector remains
-/// in Overview and retains its authorization and report-key behavior.
+/// destination. The Overview embeds its existing analytics selector here;
+/// workspace identity remains descriptive and never changes authentication.
 class _ShellHeaderBar extends StatelessWidget {
-  const _ShellHeaderBar({required this.membership, required this.onSignOut});
+  const _ShellHeaderBar({
+    required this.membership,
+    required this.onSignOut,
+    required this.showOverviewScope,
+  });
 
   final MembershipContext? membership;
   final Future<void> Function()? onSignOut;
+  final bool showOverviewScope;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final m = membership;
+    final phone = MediaQuery.sizeOf(context).width < 560;
+    final compactPhone =
+        phone && MediaQuery.textScalerOf(context).scale(14) / 14 <= 1.1;
     final isReal = m != null;
     final contextLabel = m == null
         ? l10n.dashboardAppTitle
         : '${m.organizationName} · ${m.branchName ?? m.restaurantName ?? m.organizationName}';
-    final contextCard = Tooltip(
-      message: contextLabel,
-      child: Container(
-        key: const Key('dashboard-header-context'),
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFE0EBE5)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD1FAE5),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(
-                Icons.storefront_outlined,
-                size: 20,
-                color: _shellEmerald,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                contextLabel,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: _shellDeep,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    final hasScope = isReal && showOverviewScope;
     final source = RestoflowStatusPill(
       label: isReal ? l10n.dashboardModeLiveData : l10n.dashboardModeDemoData,
       tone: isReal ? RestoflowTone.success : RestoflowTone.info,
       icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
     );
+    Widget identity({required bool stacked}) => Tooltip(
+      message: contextLabel,
+      child: Container(
+        key: const Key('dashboard-header-context'),
+        constraints: BoxConstraints(minHeight: phone ? 48 : 56),
+        padding: EdgeInsets.symmetric(
+          horizontal: stacked ? 10 : 14,
+          vertical: phone ? 4 : 10,
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
+            colors: [Colors.white, Color(0xFFF0FBF5)],
+          ),
+          border: Border.all(color: const Color(0xFFD0E9DD)),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: _shellDeep.withValues(alpha: 0.035),
+              offset: const Offset(0, 3),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            if (!stacked) ...[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFE2FFF0), Color(0xFFBDF0D8)],
+                  ),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.storefront_outlined,
+                  size: 21,
+                  color: _shellEmerald,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contextLabel,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: _shellDeep,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  if (stacked && !compactPhone) ...[
+                    SizedBox(height: phone ? 3 : 5),
+                    source,
+                  ],
+                ],
+              ),
+            ),
+            if (stacked && compactPhone) ...[const SizedBox(width: 6), source],
+            if (!stacked) ...[
+              const SizedBox(width: 12),
+              Container(width: 1, height: 24, color: const Color(0xFFD0E9DD)),
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 200 * MediaQuery.textScalerOf(context).scale(1),
+                ),
+                child: source,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
     final controls = Material(
-      color: Colors.white,
+      color: const Color(0xFFF9FFFC),
       shape: RoundedRectangleBorder(
-        side: const BorderSide(color: Color(0xFFE0EBE5)),
-        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFCEE5DA)),
+        borderRadius: BorderRadius.circular(16),
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const LanguageSelector(),
-          if (onSignOut != null)
+          if (onSignOut != null) ...[
+            Container(width: 1, height: 22, color: const Color(0xFFD9E9E1)),
             IconButton(
               tooltip: l10n.authSignOut,
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -1179,6 +1232,7 @@ class _ShellHeaderBar extends StatelessWidget {
                 child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -1187,48 +1241,58 @@ class _ShellHeaderBar extends StatelessWidget {
       child: Container(
         key: const Key('dashboard-persistent-header'),
         width: double.infinity,
-        color: _shellCanvas,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: AlignmentDirectional.centerStart,
+            end: AlignmentDirectional.centerEnd,
+            colors: [Color(0xFFE7F6ED), Color(0xFFF7FCF9), Color(0xFFEDF8F2)],
+          ),
+          border: const Border(bottom: BorderSide(color: Color(0xFFD1E6DA))),
+          boxShadow: [
+            BoxShadow(
+              color: _shellDeep.withValues(alpha: 0.045),
+              blurRadius: 16,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: phone ? 12 : 16,
+          vertical: phone ? 6 : 12,
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final stacked =
                 constraints.maxWidth <
-                620 * MediaQuery.textScalerOf(context).scale(1);
+                820 * MediaQuery.textScalerOf(context).scale(1);
             if (stacked) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      Expanded(child: contextCard),
-                      const SizedBox(width: 8),
+                      Expanded(child: identity(stacked: true)),
+                      SizedBox(width: phone ? 8 : 10),
                       controls,
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: source,
-                  ),
+                  if (hasScope) ...[
+                    SizedBox(height: phone ? 4 : 10),
+                    const DashboardOverviewScopeSelector(embedded: true),
+                  ],
                 ],
               );
             }
             return Row(
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child: contextCard,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Flexible(child: source),
-                    ],
+                Expanded(flex: 5, child: identity(stacked: false)),
+                if (hasScope) ...[
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    flex: 4,
+                    child: DashboardOverviewScopeSelector(embedded: true),
                   ),
-                ),
+                ],
                 const SizedBox(width: 12),
                 controls,
               ],
@@ -1377,7 +1441,7 @@ class _SideNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final member = membership;
-    final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.lg;
+    final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.md;
     // Keep the workspace navigation in a compact, full-height brand panel.
     return Container(
       key: const Key('dashboard-side-rail'),
@@ -1393,74 +1457,145 @@ class _SideNav extends StatelessWidget {
         gradient: const LinearGradient(
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
-          colors: [_shellEmerald, Color(0xFF004636), _shellDeep],
-          stops: [0, 0.55, 1],
+          colors: [Color(0xFF00614A), Color(0xFF004536), Color(0xFF002B25)],
+          stops: [0, 0.45, 1],
         ),
-        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-        border: Border.all(color: _shellEmerald),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFF126C54)),
         boxShadow: [
           BoxShadow(
-            color: _shellDeep.withValues(alpha: 0.16),
-            offset: const Offset(0, 6),
-            blurRadius: 18,
+            color: _shellDeep.withValues(alpha: 0.22),
+            offset: const Offset(0, 10),
+            blurRadius: 26,
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          // The official Latin artwork remains consistent in every locale;
-          // only the tagline is localized text.
-          Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(
-              side,
-              RestoflowSpacing.lg,
-              side,
-              RestoflowSpacing.lg,
-            ),
-            child: compact
-                ? const Center(
-                    child: RestoflowBrandMark(size: 46, reverse: true),
-                  )
-                : Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: Theme.of(
-                        context,
-                      ).colorScheme.copyWith(onSurfaceVariant: _shellMint),
-                    ),
-                    child: RestoflowBrandMark(
-                      size: 48,
-                      reverse: true,
-                      wordmark: BizbotWordmark.latin,
-                      tagline: l10n.dashboardBrandTagline,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Stack(
+                children: [
+                  PositionedDirectional(
+                    top: -70,
+                    start: -100,
+                    child: Container(
+                      width: 300,
+                      height: 300,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _shellMint.withValues(alpha: 0.08),
+                          width: 38,
+                        ),
+                      ),
                     ),
                   ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                RestoflowSpacing.sm,
-                0,
-                RestoflowSpacing.sm,
-                RestoflowSpacing.lg,
-              ),
-              children: [
-                // 037: hidden destinations are skipped, but the loop still
-                // walks the CANONICAL index space, so selection and taps need
-                // no translation here.
-                for (var i = 0; i < destinations.length; i++)
-                  if (!_DashboardShellState._navHidden(i, supportMode))
-                    _SideNavTile(
-                      key: Key('dashboard-nav-$i'),
-                      item: destinations[i],
-                      selected: i == selectedIndex,
-                      compact: compact,
-                      onTap: () => onSelected(i),
+                  PositionedDirectional(
+                    bottom: 170,
+                    end: -195,
+                    child: Transform.rotate(
+                      angle: 0.6,
+                      child: Container(
+                        width: 330,
+                        height: 330,
+                        decoration: BoxDecoration(
+                          color: _shellMint.withValues(alpha: 0.045),
+                          borderRadius: BorderRadius.circular(72),
+                          border: Border.all(
+                            color: _shellMint.withValues(alpha: 0.06),
+                          ),
+                        ),
+                      ),
                     ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
-          if (member != null) _RailFooter(membership: member, compact: compact),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The official Latin artwork remains consistent in every locale;
+              // only the tagline is localized text.
+              Container(
+                margin: EdgeInsetsDirectional.fromSTEB(
+                  side,
+                  14,
+                  side,
+                  RestoflowSpacing.lg,
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 0 : 10,
+                  vertical: compact ? 6 : 14,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: AlignmentDirectional.topStart,
+                    end: AlignmentDirectional.bottomEnd,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.09),
+                      Colors.white.withValues(alpha: 0.015),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: compact
+                    ? const Center(
+                        child: RestoflowBrandMark(size: 46, reverse: true),
+                      )
+                    : Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: Theme.of(
+                            context,
+                          ).colorScheme.copyWith(onSurfaceVariant: _shellMint),
+                        ),
+                        child: RestoflowBrandMark(
+                          size: 48,
+                          reverse: true,
+                          wordmark: BizbotWordmark.latin,
+                          tagline: l10n.dashboardBrandTagline,
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(side, 0, side, 12),
+                child: Container(
+                  height: 1,
+                  color: _shellMint.withValues(alpha: 0.16),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    RestoflowSpacing.sm,
+                    0,
+                    RestoflowSpacing.sm,
+                    RestoflowSpacing.lg,
+                  ),
+                  children: [
+                    // 037: hidden destinations are skipped, but the loop still
+                    // walks the CANONICAL index space, so selection and taps need
+                    // no translation here.
+                    for (var i = 0; i < destinations.length; i++)
+                      if (!_DashboardShellState._navHidden(i, supportMode))
+                        _SideNavTile(
+                          key: Key('dashboard-nav-$i'),
+                          item: destinations[i],
+                          selected: i == selectedIndex,
+                          compact: compact,
+                          onTap: () => onSelected(i),
+                        ),
+                  ],
+                ),
+              ),
+              if (member != null)
+                _RailFooter(membership: member, compact: compact),
+            ],
+          ),
         ],
       ),
     );
@@ -1496,12 +1631,12 @@ class _SideNavTileState extends State<_SideNavTile> {
     final theme = Theme.of(context);
     final selected = widget.selected;
     final compact = widget.compact;
-    final radius = BorderRadius.circular(RestoflowRadii.md);
+    final radius = BorderRadius.circular(16);
     final iconColor = selected ? Colors.white : const Color(0xFFD2EBDF);
     final labelColor = selected ? Colors.white : const Color(0xFFECF8F1);
 
     // Light ink and an inset ring remain visible on both emerald surfaces.
-    final hoverColor = Colors.white.withValues(alpha: selected ? 0.16 : 0.10);
+    final hoverColor = _shellMint.withValues(alpha: selected ? 0.22 : 0.13);
     final focusWash = Colors.white.withValues(alpha: 0.20);
     final focusRing = selected ? Colors.white : _shellMint;
 
@@ -1510,13 +1645,23 @@ class _SideNavTileState extends State<_SideNavTile> {
           ? MainAxisAlignment.center
           : MainAxisAlignment.start,
       children: [
-        Icon(
-          selected ? widget.item.selectedIcon : widget.item.icon,
-          size: RestoflowIconSizes.md,
-          color: iconColor,
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(
+            selected ? widget.item.selectedIcon : widget.item.icon,
+            size: 21,
+            color: iconColor,
+          ),
         ),
         if (!compact) ...[
-          const SizedBox(width: RestoflowSpacing.md),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               widget.item.label,
@@ -1533,7 +1678,7 @@ class _SideNavTileState extends State<_SideNavTile> {
     );
 
     final body = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
+      constraints: const BoxConstraints(minHeight: 48),
       child: Padding(
         padding: EdgeInsetsDirectional.symmetric(
           horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
@@ -1549,18 +1694,33 @@ class _SideNavTileState extends State<_SideNavTile> {
       color: selected ? _shellActive : Colors.transparent,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: widget.onTap,
-        onFocusChange: (value) {
-          if (value != _focused) setState(() => _focused = value);
-        },
-        borderRadius: radius,
-        hoverColor: hoverColor,
-        focusColor: focusWash,
-        child: ExcludeSemantics(
-          child: compact
-              ? Tooltip(message: widget.item.label, child: body)
-              : body,
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: selected
+              ? const LinearGradient(
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                  colors: [Color(0xFF00A67A), _shellActive, Color(0xFF007C5E)],
+                )
+              : null,
+          border: selected
+              ? Border.all(color: _shellMint.withValues(alpha: 0.22))
+              : null,
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          onFocusChange: (value) {
+            if (value != _focused) setState(() => _focused = value);
+          },
+          borderRadius: radius,
+          hoverColor: hoverColor,
+          focusColor: focusWash,
+          child: ExcludeSemantics(
+            child: compact
+                ? Tooltip(message: widget.item.label, child: body)
+                : body,
+          ),
         ),
       ),
     );
@@ -1569,17 +1729,13 @@ class _SideNavTileState extends State<_SideNavTile> {
       duration: RestoflowDurations.fast,
       decoration: BoxDecoration(
         borderRadius: radius,
-        // RF-132: the active pill's soft shadow is BRAND tinted (the reference's
-        // restrained glow) rather than the neutral card shadow.
-        //
-        // V1: derived from the painted brand colour instead of a hardcoded
-        // green alpha, so the glow follows the identity instead of outliving it.
+        // A deeper emerald shadow lifts the selected item off the rail.
         boxShadow: selected
             ? [
                 BoxShadow(
-                  color: _shellActive.withValues(alpha: 0.24),
-                  offset: const Offset(0, 3),
-                  blurRadius: 10,
+                  color: _shellDeep.withValues(alpha: 0.34),
+                  offset: const Offset(0, 5),
+                  blurRadius: 12,
                 ),
               ]
             : null,
@@ -1656,23 +1812,27 @@ class _RailFooter extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final org = membership.organizationName;
+    final branch = membership.branchName ?? membership.restaurantName;
     final initial = org.isNotEmpty ? org.substring(0, 1).toUpperCase() : '?';
     final avatar = Container(
-      width: 38,
-      height: 38,
+      width: 40,
+      height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
-          colors: const [_shellActive, _shellEmerald],
+          colors: const [Color(0xFFD6FFE8), _shellMint],
         ),
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
         border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Text(
         initial,
-        style: theme.textTheme.titleSmall?.copyWith(color: Colors.white),
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: _shellDeep,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
     final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.md;
@@ -1683,44 +1843,101 @@ class _RailFooter extends StatelessWidget {
         side,
         RestoflowSpacing.md,
       ),
-      padding: EdgeInsets.all(compact ? RestoflowSpacing.xs : 10),
+      padding: EdgeInsets.all(compact ? RestoflowSpacing.xs : 12),
       // Keep real workspace identity readable on the emerald surface.
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        gradient: const LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [Color(0xFF17644E), Color(0xFF0B493A)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _shellMint.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            offset: const Offset(0, 4),
+            blurRadius: 12,
+          ),
+        ],
       ),
       child: compact
           ? Center(child: avatar)
-          : Row(
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                avatar,
-                const SizedBox(width: RestoflowSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        org,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    avatar,
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            org,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _shellMint.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _roleLabel(l10n, membership.role),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: _shellMint,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _roleLabel(l10n, membership.role),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: _shellMint,
+                    ),
+                  ],
+                ),
+                if (branch != null && branch.isNotEmpty && branch != org) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 1,
+                    color: _shellMint.withValues(alpha: 0.18),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        color: _shellMint,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          branch,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFFE0F7EB),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                ),
+                ],
               ],
             ),
     );

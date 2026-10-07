@@ -33,6 +33,13 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 const _screenshots = bool.fromEnvironment('SHELL_SCREENSHOTS');
 // Only the isolated baseline replay opts out of the NEW visual budgets.
 const _baselineCapture = bool.fromEnvironment('FIDELITY_BASELINE');
+// Owner's revision gate exports only one top frame per selected test.
+// Normal regression and the full evidence harness remain available later.
+const _ownerReviewTopOnly = bool.fromEnvironment('OWNER_REVIEW_TOP_ONLY');
+const _mobileDensityReview = bool.fromEnvironment('MOBILE_DENSITY_REVIEW');
+// Supplemental evidence keeps both ends of a tall enlarged-text KPI grid
+// readable, without changing the ordinary regression or core capture path.
+const _kpiEvidenceOnly = bool.fromEnvironment('SHELL_KPI_EVIDENCE_ONLY');
 const _evidenceDir = String.fromEnvironment(
   'SHELL_EVIDENCE_DIR',
   defaultValue: '../build/dashboard-phase5-shell-evidence',
@@ -246,6 +253,28 @@ Future<void> _shot(WidgetTester tester, String name) async {
         'headerBounds': tester
             .getRect(find.byKey(const Key('dashboard-persistent-header')))
             .toString(),
+        'layoutBounds': {
+          for (final key in [
+            'dashboard-persistent-header',
+            'reports-heading',
+            'reports-range-filter',
+            'overview-readiness-card',
+            'kpi-gross-sales',
+            'kpi-net-sales',
+            'kpi-orders',
+            'kpi-avg-ticket',
+            'kpi-cash-sales',
+            'kpi-completed',
+            'sales-by-hour-card',
+            'dashboard-bottom-nav',
+          ])
+            if (find.byKey(Key(key)).evaluate().isNotEmpty)
+              key: {
+                'top': tester.getRect(find.byKey(Key(key))).top,
+                'bottom': tester.getRect(find.byKey(Key(key))).bottom,
+                'height': tester.getRect(find.byKey(Key(key))).height,
+              },
+        },
       }),
     );
   }
@@ -298,6 +327,33 @@ Future<void> _matrix(
     }
     final name =
         '${warningHeavy ? 'warnings' : 'healthy'}-${width.toInt()}-$locale-${scale.toInt()}x';
+    if (_kpiEvidenceOnly) {
+      for (final entry in {
+        'kpis': 'kpi-gross-sales',
+        'kpis-end': 'kpi-completed',
+      }.entries) {
+        await tester.scrollUntilVisible(
+          find.byKey(Key(entry.value)),
+          350,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const Key('overview-scroll')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+        await Scrollable.ensureVisible(
+          tester.element(find.byKey(Key(entry.value))),
+          alignment: entry.key == 'kpis-end' ? 1 : 0,
+        );
+        await tester.pumpAndSettle();
+        await _shot(tester, '$name-${entry.key}');
+      }
+      expect(errors, isEmpty, reason: name);
+      expect(tester.takeException(), isNull, reason: name);
+      return;
+    }
     expect(
       find.byKey(const Key('dashboard-persistent-header')),
       findsOneWidget,
@@ -316,7 +372,48 @@ Future<void> _matrix(
     expect(header.left, greaterThanOrEqualTo(0));
     expect(header.right, lessThanOrEqualTo(width));
     if (!_baselineCapture && scale == 1 && width >= 1440) {
-      expect(header.height, inInclusiveRange(56, 64));
+      expect(header.height, inInclusiveRange(64, 100));
+    }
+    if (!_baselineCapture) {
+      final selector = find.byKey(const Key('overview-scope-selector'));
+      expect(selector, findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('dashboard-persistent-header')),
+          matching: selector,
+        ),
+        findsOneWidget,
+      );
+    }
+    if (_ownerReviewTopOnly) {
+      if (_mobileDensityReview && scale == 1 && width < 560) {
+        final navigation = tester.getRect(
+          find.byKey(const Key('dashboard-bottom-nav')),
+        );
+        expect(header.height, lessThanOrEqualTo(116));
+        for (final key in [
+          'kpi-gross-sales',
+          'kpi-net-sales',
+          'kpi-orders',
+          'kpi-avg-ticket',
+          'kpi-cash-sales',
+          'kpi-completed',
+        ]) {
+          expect(
+            tester.getRect(find.byKey(Key(key))).bottom,
+            lessThanOrEqualTo(navigation.top + 8),
+            reason: '$key is visible in the first fold',
+          );
+        }
+        expect(
+          tester.getRect(find.byKey(const Key('sales-by-hour-card'))).top,
+          lessThanOrEqualTo(navigation.top + 24),
+          reason: 'sales chart starts at the first-fold boundary',
+        );
+      }
+      expect(errors, isEmpty, reason: name);
+      expect(tester.takeException(), isNull, reason: name);
+      return;
     }
     await tester.scrollUntilVisible(
       find.byKey(const Key('overview-readiness-card')),
@@ -470,6 +567,55 @@ Future<void> _loadFonts() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   if (_screenshots) setUpAll(_loadFonts);
+  testWidgets(
+    'V002 header branch filter preserves selection across resize and tabs',
+    (tester) async {
+      _size(tester, 1440);
+      await tester.pumpWidget(_app('en', 1));
+      await tester.pumpAndSettle();
+      final selector = find.byKey(const Key('overview-scope-selector'));
+      final header = find.byKey(const Key('dashboard-persistent-header'));
+      expect(selector, findsOneWidget);
+      expect(find.descendant(of: header, matching: selector), findsOneWidget);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الناصرة').last);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(tester.element(selector));
+      expect(
+        container.read(selectedAnalyticsBranchProvider)?.branchId,
+        'fixture-branch-2',
+      );
+      tester.view.physicalSize = const Size(390, 900);
+      await tester.pumpAndSettle();
+      expect(
+        ProviderScope.containerOf(tester.element(selector)),
+        same(container),
+      );
+      expect(find.descendant(of: header, matching: selector), findsOneWidget);
+      expect(
+        container.read(selectedAnalyticsBranchProvider)?.branchId,
+        'fixture-branch-2',
+      );
+      for (final index in [2, 0]) {
+        final nav = find.byKey(Key('dashboard-nav-$index'));
+        await tester.ensureVisible(nav);
+        await tester.pumpAndSettle();
+        await tester.tap(nav);
+        await tester.pumpAndSettle();
+        expect(
+          container.read(selectedAnalyticsBranchProvider)?.branchId,
+          'fixture-branch-2',
+        );
+        expect(selector, index == 0 ? findsOneWidget : findsNothing);
+      }
+      expect(
+        ProviderScope.containerOf(tester.element(selector)),
+        same(container),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final locale in ['ar', 'he', 'en']) {
     for (final width in [390.0, 430.0, 768.0, 1024.0, 1440.0, 1920.0]) {
       for (final scale in [1.0, 2.0]) {

@@ -334,7 +334,9 @@ Future<void> _verify(
       expect(metrics.first.height, inInclusiveRange(108, 124));
       expect(
         tester.getSize(find.byKey(const Key('overview-readiness-card'))).height,
-        lessThanOrEqualTo(110),
+        // The owner's revision explicitly replaces the compact strip with a
+        // stronger operational hero. Its height still has a bounded budget.
+        inInclusiveRange(128, 160),
       );
     }
     await _walk(tester);

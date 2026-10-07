@@ -183,7 +183,15 @@ void main() {
     tester,
   ) async {
     await _pumpToMenu(tester, _RecordingReadSource());
-    expect(find.textContaining('Main hall'), findsOneWidget);
+    // The workspace footer also describes the genuine resolved branch. This
+    // contract is specifically about the persistent header's context label.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('dashboard-header-context')),
+        matching: find.textContaining('Main hall'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Add category through the REAL shell wiring saves with the '
