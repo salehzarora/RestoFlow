@@ -606,6 +606,28 @@ void main() {
       expect(find.byKey(const Key('recent-orders-card')), findsOneWidget);
       expect(find.byKey(const Key('recent-orders-list')), findsOneWidget);
       expect(find.byType(RecentOrderTile), findsWidgets);
+      final cardBounds = tester.getRect(
+        find.byKey(const Key('top-items-card')),
+      );
+      for (final row
+          in find
+              .byWidgetPredicate((widget) => widget is RestoflowRankRow)
+              .evaluate()) {
+        final bounds = tester.getRect(find.byWidget(row.widget));
+        expect(bounds.left, greaterThanOrEqualTo(cardBounds.left));
+        expect(bounds.right, lessThanOrEqualTo(cardBounds.right));
+        expect(
+          bounds.height,
+          lessThanOrEqualTo(44),
+          reason: 'ordinary ranked rows remain compact',
+        );
+      }
+      final orders = find.byType(RecentOrderTile).evaluate().toList();
+      for (var i = 1; i < orders.length; i++) {
+        final previous = tester.getRect(find.byWidget(orders[i - 1].widget));
+        final current = tester.getRect(find.byWidget(orders[i].widget));
+        expect(previous.bottom, lessThanOrEqualTo(current.top));
+      }
     });
 
     testWidgets('an UNDEPLOYED RPC reads as unavailable, never as empty', (

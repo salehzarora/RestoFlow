@@ -417,9 +417,19 @@ void main() {
       // Zone 2 -> Zone 3 is a boundary; the KPI grid to the chart therefore
       // gets the wide gap. Measured as a RELATIVE claim: the exact constant is
       // a design decision, the hierarchy is the contract.
-      final kpiBottom = tester
-          .getBottomLeft(find.byKey(const Key('kpi-gross-sales')))
-          .dy;
+      // The complete headline grid may reflow when its real monetary values
+      // need more width. Measure its last row, rather than the gross-sales card.
+      final kpiBottom =
+          [
+                'kpi-gross-sales',
+                'kpi-net-sales',
+                'kpi-orders',
+                'kpi-avg-ticket',
+                'kpi-cash-sales',
+                'kpi-completed',
+              ]
+              .map((key) => tester.getBottomLeft(find.byKey(Key(key))).dy)
+              .reduce((a, b) => a > b ? a : b);
       final chartTop = topOf(tester, 'sales-by-hour-card');
       final chartBottom = tester
           .getBottomLeft(find.byKey(const Key('sales-by-hour-card')))
@@ -432,6 +442,11 @@ void main() {
         betweenZones,
         greaterThan(withinZone),
         reason: 'a zone boundary must be visibly wider than an internal gap',
+      );
+      expect(
+        betweenZones,
+        inInclusiveRange(16, 20),
+        reason: 'V002 keeps grouping while tightening the empty zone gaps',
       );
     });
 

@@ -31,7 +31,7 @@ class RecentOrderTile extends StatelessWidget {
     final meta = '${row.timeLabel} · $type$table';
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: OverviewVisuals.border)),
       ),
@@ -75,7 +75,7 @@ class RecentOrderTile extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: RestoflowSpacing.xs),
+          const SizedBox(height: 2),
           Wrap(
             spacing: RestoflowSpacing.sm,
             runSpacing: RestoflowSpacing.xs,

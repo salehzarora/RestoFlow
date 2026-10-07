@@ -18,10 +18,13 @@ import 'package:restoflow_dashboard/src/state/setup_device_providers.dart';
 class _DevicesStub extends DemoAdminStore {
   _DevicesStub(this._devices) : super(scope: AdminScope.demo);
   final List<AdminDevice> _devices;
+  int reads = 0;
 
   @override
-  Future<AdminResult<List<AdminDevice>>> loadDevices() async =>
-      Success(_devices);
+  Future<AdminResult<List<AdminDevice>>> loadDevices() async {
+    reads++;
+    return Success(_devices);
+  }
 }
 
 class _EmptyPrinters implements PrintersRepository {
@@ -136,6 +139,7 @@ Future<void> _pump(
   void Function(String)? onOpen,
   Locale? locale,
   KitchenWorkflowMode? kitchenWorkflowMode,
+  _DevicesStub? deviceRepo,
 }) async {
   tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
@@ -151,7 +155,7 @@ Future<void> _pump(
           child: ProviderScope(
             overrides: [
               setupDevicesRepositoryProvider.overrideWithValue(
-                _DevicesStub(devices),
+                deviceRepo ?? _DevicesStub(devices),
               ),
               setupPrintersRepositoryProvider.overrideWithValue(
                 printers == null ? _EmptyPrinters() : _PrintersStub(printers),
@@ -224,6 +228,43 @@ const _onePrinter = PrintersSnapshot(
 );
 
 void main() {
+  testWidgets(
+    'V002 disclosure survives responsive reflow and collapses without refetch',
+    (tester) async {
+      final repo = _DevicesStub(const []);
+      await _pump(
+        tester,
+        devices: const [],
+        staff: const [],
+        menuItems: const [],
+        locale: const Locale('en'),
+        deviceRepo: repo,
+      );
+      final disclosure = find.byKey(const Key('setup-more-steps'));
+      expect(find.textContaining('No POS device yet'), findsNothing);
+      final reads = repo.reads;
+      await tester.tap(disclosure);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No POS device yet'), findsOneWidget);
+      tester.view.physicalSize = const Size(390, 900);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No POS device yet'), findsOneWidget);
+      final toggle = find
+          .descendant(of: disclosure, matching: find.byType(ListTile))
+          .first;
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(toggle).height, greaterThanOrEqualTo(44));
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No POS device yet'), findsNothing);
+      expect(find.textContaining('No menu items yet'), findsOneWidget);
+      expect(repo.reads, reads);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('empty workspace: a guided checklist with a fixing action per '
       'step (menu, POS, KDS)', (tester) async {
     await _pump(

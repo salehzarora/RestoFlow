@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/main.dart';
 import 'package:restoflow_dashboard/src/data/currency_breakdown_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_dashboard/src/overview/overview_metric_card.dart';
+import 'package:restoflow_dashboard/src/overview/overview_visuals.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
@@ -107,6 +109,43 @@ Widget _wrapLimited() => ProviderScope(
 );
 
 void main() {
+  testWidgets(
+    'V002 ordinary metric geometry meets its desktop density budget',
+    (tester) async {
+      _size(tester, const Size(1440, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: restoflowLightBrandTheme(),
+          home: OverviewVisualScope(
+            child: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 190,
+                  child: OverviewMetricCard(
+                    key: const Key('density-metric'),
+                    label: 'Sales',
+                    value: '626',
+                    icon: Icons.bar_chart,
+                    delta: const RestoflowMetricDelta(
+                      label: '+9%',
+                      positive: true,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byKey(const Key('density-metric'))).height,
+        inInclusiveRange(108, 124),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('the range filter is ONE cohesive segmented control with the '
       'stable range-chip keys and working range behavior', (tester) async {
     _size(tester, const Size(1320, 2600));

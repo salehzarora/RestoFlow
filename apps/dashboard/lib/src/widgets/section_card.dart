@@ -47,24 +47,32 @@ class SectionRow extends StatelessWidget {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: icon == null
-          ? content
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: OverviewVisuals.softMint,
-                    borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: OverviewVisuals.border),
+        ),
+        child: icon == null
+            ? content
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: OverviewVisuals.softMint,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, size: 18, color: OverviewVisuals.deep),
                   ),
-                  child: Icon(icon, size: 18, color: OverviewVisuals.deep),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: content),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Expanded(child: content),
+                ],
+              ),
+      ),
     );
   }
 }
