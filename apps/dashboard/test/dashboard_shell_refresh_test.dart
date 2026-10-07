@@ -3,6 +3,7 @@
 // contacted; financial values come from the existing computed demo dataset.
 import 'dart:io';
 import 'dart:convert';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -565,6 +566,67 @@ Future<void> _loadFonts() async {
 }
 
 void main() {
+  testWidgets('POLISH-003 chart interaction isolates sibling painting', (
+    tester,
+  ) async {
+    _size(tester, 1440);
+    await tester.pumpWidget(_app('ar', 1));
+    await tester.pumpAndSettle();
+    final chart = find.byKey(const Key('sales-by-hour-chart'));
+    final chartPaint = tester.renderObject<RenderCustomPaint>(
+      find.descendant(
+        of: chart,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is CustomPaint &&
+              widget.painter.runtimeType.toString() == '_AreaChartPainter',
+        ),
+      ),
+    );
+    final metricPaint = tester.renderObject<RenderParagraph>(
+      find
+          .descendant(
+            of: find.byKey(const Key('kpi-gross-sales')),
+            matching: find.byType(RichText),
+          )
+          .first,
+    );
+    var chartPaints = 0;
+    var metricPaints = 0;
+    final previous = debugOnProfilePaint;
+    debugOnProfilePaint = (object) {
+      previous?.call(object);
+      if (identical(object, chartPaint)) chartPaints++;
+      if (identical(object, metricPaint)) metricPaints++;
+    };
+    addTearDown(() => debugOnProfilePaint = previous);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    addTearDown(mouse.removePointer);
+    final rect = tester.getRect(chart);
+    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
+      await mouse.moveTo(
+        Offset(rect.left + rect.width * fraction, rect.top + 90),
+      );
+      await tester.pump();
+    }
+    debugOnProfilePaint = previous;
+    // The probe counts actual painter visits, not RepaintBoundary widgets.
+    // A baseline replay records the oversized repaint before the optimization.
+    // ignore: avoid_print
+    print(
+      'POLISH_PAINT ${jsonEncode({'chart': chartPaints, 'kpi': metricPaints})}',
+    );
+    expect(chartPaints, greaterThan(0));
+    if (!const bool.fromEnvironment('POLISH_BASELINE')) {
+      expect(
+        metricPaints,
+        0,
+        reason: 'chart selection must not repaint KPI text',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   if (_screenshots) setUpAll(_loadFonts);
   testWidgets(

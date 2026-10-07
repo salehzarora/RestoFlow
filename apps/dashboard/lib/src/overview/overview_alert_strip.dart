@@ -20,38 +20,32 @@ class OverviewAlertStrip extends RestoflowNoticeBanner {
     final theme = Theme.of(context);
     final semantic = tone.styleOf(theme);
     final phone = OverviewVisuals.isPhone(context);
-    final text = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null)
-          Text(
+    final heading = title == null
+        ? null
+        : Text(
             title!,
             style: theme.textTheme.bodySmall?.copyWith(
               color: semantic.onContainer,
               fontWeight: FontWeight.w700,
               height: 1.3,
             ),
-          ),
-        Text(
-          body,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: semantic.onContainer,
-            height: 1.35,
-          ),
-        ),
-      ],
+          );
+    final message = Text(
+      body,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: semantic.onContainer,
+        height: 1.3,
+      ),
     );
     return Container(
       width: double.infinity,
-      constraints: phone ? const BoxConstraints(minHeight: 48) : null,
       padding: EdgeInsets.symmetric(
         horizontal: phone ? 10 : 12,
-        vertical: phone ? 4 : 8,
+        vertical: phone ? 2 : 4,
       ),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          semantic.container.withValues(alpha: 0.16),
+          semantic.container.withValues(alpha: 0.06),
           Colors.white,
         ),
         borderRadius: BorderRadius.circular(12),
@@ -60,16 +54,47 @@ class OverviewAlertStrip extends RestoflowNoticeBanner {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-          final inline = constraints.maxWidth >= 560 * scale;
+          final inline =
+              constraints.maxWidth >= 560 * scale ||
+              (phone && scale <= 1.1 && constraints.maxWidth >= 320);
+          final text = LayoutBuilder(
+            builder: (context, messageConstraints) {
+              if (heading == null) return message;
+              if (messageConstraints.maxWidth >= 800 * scale) {
+                return Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: messageConstraints.maxWidth * 0.4,
+                      ),
+                      child: heading,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: message),
+                  ],
+                );
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [heading, message],
+              );
+            },
+          );
           final content = Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon ?? semantic.icon, size: 18, color: semantic.accent),
-              const SizedBox(width: 8),
+              Icon(icon ?? semantic.icon, size: 16, color: semantic.accent),
+              const SizedBox(width: 6),
               Expanded(child: text),
               if (action != null && inline) ...[
-                const SizedBox(width: 12),
-                action!,
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * (phone ? 0.46 : 0.35),
+                  ),
+                  child: action!,
+                ),
               ],
             ],
           );

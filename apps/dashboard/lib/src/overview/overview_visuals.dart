@@ -9,7 +9,7 @@ abstract final class OverviewVisuals {
   static const mint = Color(0xFFA7F3D0);
   static const softMint = Color(0xFFD1FAE5);
   static const ink = Color(0xFF142D29);
-  static const canvas = Color(0xFFF4FAF7);
+  static const canvas = Colors.white;
   static const border = Color(0xFFE4EEE9);
   static const radius = BorderRadius.all(Radius.circular(16));
   static const metricPadding = 12.0;
