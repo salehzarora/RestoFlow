@@ -6,7 +6,7 @@ import 'package:restoflow_dashboard/src/state/locale_controller.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// RF-125 — the dashboard shell chrome: responsive rail modes at the existing
-/// breakpoints (560 / 720 / 1100), reading-start rail placement in LTR/RTL,
+/// breakpoints (560 / 1100), reading-start rail placement in LTR/RTL,
 /// preserved navigation order, and accessible (semantic + labelled) rail tiles.
 /// Presentation-only: it drives the SAME demo shell the nav tests use.
 
@@ -51,7 +51,7 @@ void main() {
     expect(_railLabel(l10n.dashboardNavSettings), findsOneWidget);
   });
 
-  testWidgets('tablet width (940) shows the labelled side rail', (
+  testWidgets('tablet width (940) preserves content with a compact rail', (
     tester,
   ) async {
     final l10n = await _l10n(const Locale('en'));
@@ -59,7 +59,25 @@ void main() {
 
     expect(find.byKey(_railKey), findsOneWidget);
     expect(find.byKey(_bottomNavKey), findsNothing);
-    expect(_railLabel(l10n.dashboardNavOverview), findsOneWidget);
+    expect(_railLabel(l10n.dashboardNavOverview), findsNothing);
+    expect(find.byTooltip(l10n.dashboardNavOverview), findsOneWidget);
+  });
+
+  for (final width in [560.0, 768.0, 1024.0, 1099.0, 1100.0]) {
+    testWidgets('rail breakpoint $width', (tester) async {
+      final l10n = await _l10n(const Locale('en'));
+      await _pump(tester, size: Size(width, 1200));
+      expect(find.byKey(_railKey), findsOneWidget);
+      expect(
+        _railLabel(l10n.dashboardNavOverview),
+        width < 1100 ? findsNothing : findsOneWidget,
+      );
+    });
+  }
+  testWidgets('559 stays on phone navigation', (tester) async {
+    await _pump(tester, size: const Size(559, 1200));
+    expect(find.byKey(_bottomNavKey), findsOneWidget);
+    expect(find.byKey(_railKey), findsNothing);
   });
 
   testWidgets('compact-tablet width (700) shows the icon-only rail', (

@@ -152,7 +152,7 @@ void main() {
       // Overview is the landing destination.
       expect(
         tileMaterial(tester, l10n.dashboardNavOverview).color,
-        kRestoflowSeedColor,
+        const Color(0xFF008562),
         reason:
             'the selected bed must be the Material surface, not a child '
             'decoration painted over the ink',
@@ -185,23 +185,20 @@ void main() {
       final selectedHover = inkOf(l10n.dashboardNavOverview).hoverColor!;
       final unselectedHover = inkOf(l10n.dashboardNavDevices).hoverColor!;
 
-      // On navy, only a light film reads; on white, only a tint does. The two
-      // beds therefore CANNOT share one hover colour — which is what the
-      // previous single `kRestoflowCanvas` hover tried to do.
+      // Both tiles sit on emerald. Compare the resulting painted overlay,
+      // not the RGB of a translucent color detached from its background.
       expect(selectedHover, isNot(unselectedHover));
-      expect(
-        selectedHover.a,
-        greaterThan(0.0),
-        reason: 'the selected tile must have a real hover overlay',
-      );
-      // The unselected hover must be a genuine step away from the white rail,
-      // not the ~3% canvas wash it used to be.
-      double lum(Color c) => c.computeLuminance();
-      expect(
-        lum(Colors.white) - lum(unselectedHover),
-        greaterThan(lum(Colors.white) - lum(kRestoflowCanvas)),
-        reason: 'the hover step must be stronger than the old canvas wash',
-      );
+      for (final pair in [
+        (selectedHover, const Color(0xFF008562)),
+        (unselectedHover, const Color(0xFF005541)),
+      ]) {
+        final painted = Color.alphaBlend(pair.$1, pair.$2);
+        expect(
+          painted.computeLuminance() - pair.$2.computeLuminance(),
+          greaterThan(0.025),
+          reason: 'hover must visibly lighten its actual bed',
+        );
+      }
     });
 
     testWidgets('keyboard focus draws a RING on the selected tile — the state '

@@ -205,10 +205,9 @@ class DashboardShell extends StatefulWidget {
   /// Dashboard "1c" responsive breakpoints (§9). Below [_railBreakpoint] the
   /// shell shows a phone bottom nav; from there the side rail stays on the
   /// reading-start side, icon-only in [_railBreakpoint.._fullRailBreakpoint) and
-  /// full-labelled above, widening at [_desktopBreakpoint].
+  /// full-labelled above.
   static const double _railBreakpoint = 560;
-  static const double _fullRailBreakpoint = 720;
-  static const double _desktopBreakpoint = 1100;
+  static const double _fullRailBreakpoint = 1100;
 
   @override
   State<DashboardShell> createState() => _DashboardShellState();
@@ -608,9 +607,7 @@ class _DashboardShellState extends State<DashboardShell> {
           final width = constraints.maxWidth;
           if (width >= DashboardShell._railBreakpoint) {
             final compact = width < DashboardShell._fullRailBreakpoint;
-            final railWidth = width >= DashboardShell._desktopBreakpoint
-                ? 232.0
-                : (compact ? 72.0 : 212.0);
+            final railWidth = compact ? 80.0 : 232.0;
             return Row(
               children: [
                 _SideNav(
@@ -639,44 +636,52 @@ class _DashboardShellState extends State<DashboardShell> {
               header,
               const Divider(height: 1),
               Expanded(child: content),
-              NavigationBar(
-                key: const Key('dashboard-bottom-nav'),
-                // 037: NavigationBar has no notion of a hidden destination, so
-                // its index space is the COMPACTED one. Translate both ways;
-                // a canonical tab with no visible tile (Printing, reached
-                // internally) falls back to 0 rather than asserting.
+              _PhoneNavigation(
                 selectedIndex: _visibleIndexOf(
                   _index,
                   l10n,
                   supportMode: supportMode,
                 ),
-                onDestinationSelected: (value) => _select(
-                  _visibleDestinations(
+                child: NavigationBar(
+                  key: const Key('dashboard-bottom-nav'),
+                  // 037: NavigationBar has no notion of a hidden destination, so
+                  // its index space is the COMPACTED one. Translate both ways;
+                  // a canonical tab with no visible tile (Printing, reached
+                  // internally) falls back to 0 rather than asserting.
+                  selectedIndex: _visibleIndexOf(
+                    _index,
                     l10n,
                     supportMode: supportMode,
-                  )[value].$1,
-                  ref,
+                  ),
+                  onDestinationSelected: (value) => _select(
+                    _visibleDestinations(
+                      l10n,
+                      supportMode: supportMode,
+                    )[value].$1,
+                    ref,
+                  ),
+                  // RF-132 (Codex review): ten destinations at phone width
+                  // leave no room to render any label unclipped, so the bar
+                  // is deliberately ICON-ONLY. NavigationBar keeps each
+                  // destination's label + selected state in its semantics
+                  // ("<label>, Tab N of 10") even with the label hidden,
+                  // and the tooltip covers hover/long-press; selection
+                  // stays visible via the filled icon + indicator pill.
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                  destinations: [
+                    for (final entry in _visibleDestinations(
+                      l10n,
+                      supportMode: supportMode,
+                    ))
+                      NavigationDestination(
+                        key: Key('dashboard-nav-${entry.$1}'),
+                        icon: Icon(entry.$2.icon),
+                        selectedIcon: Icon(entry.$2.selectedIcon),
+                        label: entry.$2.label,
+                        tooltip: entry.$2.label,
+                      ),
+                  ],
                 ),
-                // RF-132 (Codex review): ten destinations at phone width
-                // leave no room to render any label unclipped, so the bar
-                // is deliberately ICON-ONLY. NavigationBar keeps each
-                // destination's label + selected state in its semantics
-                // ("<label>, Tab N of 10") even with the label hidden,
-                // and the tooltip covers hover/long-press; selection
-                // stays visible via the filled icon + indicator pill.
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-                destinations: [
-                  for (final entry in _visibleDestinations(
-                    l10n,
-                    supportMode: supportMode,
-                  ))
-                    NavigationDestination(
-                      icon: Icon(entry.$2.icon),
-                      selectedIcon: Icon(entry.$2.selectedIcon),
-                      label: entry.$2.label,
-                      tooltip: entry.$2.label,
-                    ),
-                ],
               ),
             ],
           );
@@ -1080,8 +1085,17 @@ class _NavItem {
   final String label;
 }
 
-/// The persistent shell header: the active scope (organization · branch), an
-/// honest Demo/Real mode pill, and sign-out (real mode).
+// BIZBOT-DASHBOARD-REFRESH-001: shell-only presentation tokens. The shared
+// theme and the independently approved Overview palette remain untouched.
+const _shellEmerald = Color(0xFF005541);
+const _shellDeep = Color(0xFF00382D);
+const _shellActive = Color(0xFF008562);
+const _shellMint = Color(0xFFA7F3D0);
+const _shellCanvas = Color(0xFFF2F8F5);
+
+/// Existing context, source, language and sign-out controls, visible on every
+/// destination. Context is descriptive; the real analytics selector remains
+/// in Overview and retains its authorization and report-key behavior.
 class _ShellHeaderBar extends StatelessWidget {
   const _ShellHeaderBar({required this.membership, required this.onSignOut});
 
@@ -1097,36 +1111,34 @@ class _ShellHeaderBar extends StatelessWidget {
     final contextLabel = m == null
         ? l10n.dashboardAppTitle
         : '${m.organizationName} · ${m.branchName ?? m.restaurantName ?? m.organizationName}';
-    final scheme = theme.colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsetsDirectional.symmetric(
-        horizontal: RestoflowSpacing.lg,
-        vertical: RestoflowSpacing.sm,
-      ),
-      // Dashboard "1c": a clean white top bar over the warm canvas.
-      color: scheme.surface,
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+    final contextCard = Tooltip(
+      message: contextLabel,
+      child: Container(
+        key: const Key('dashboard-header-context'),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE0EBE5)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.storefront_outlined,
+                size: 20,
+                color: _shellEmerald,
+              ),
             ),
-            child: Icon(
-              Icons.storefront_outlined,
-              size: RestoflowIconSizes.sm,
-              color: scheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            // Long organization / branch names truncate safely to one line; the
-            // tooltip reveals the full active-context label (no new string).
-            child: Tooltip(
-              message: contextLabel,
+            const SizedBox(width: 10),
+            Expanded(
               child: Text(
                 contextLabel,
                 style: theme.textTheme.titleSmall,
@@ -1134,45 +1146,165 @@ class _ShellHeaderBar extends StatelessWidget {
                 maxLines: 1,
               ),
             ),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          // Flexible, because this Row is the one place a hardened pill still
-          // cannot save itself. A non-flex child of a horizontal RenderFlex is
-          // laid out with an UNBOUNDED width, so the pill keeps its full
-          // intrinsic size, starves the Expanded context label beside it, and
-          // the HEADER overflows rather than the pill. Arabic and Hebrew reach
-          // that point at 390px / 2x where English does not. Giving the pill a
-          // finite share is the call-site half of the fix; the component owns
-          // the other half.
-          Flexible(
-            child: RestoflowStatusPill(
-              // DESIGN-002: user-facing data-source wording (was the developer
-              // "Demo" / "Real" jargon).
-              label: isReal
-                  ? l10n.dashboardModeLiveData
-                  : l10n.dashboardModeDemoData,
-              tone: isReal ? RestoflowTone.success : RestoflowTone.info,
-              icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
-            ),
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          // Sprint (I): the language switcher lives on the persistent header,
-          // so it is visible on EVERY dashboard page.
-          const LanguageSelector(),
-          if (onSignOut != null) ...[
-            const SizedBox(width: RestoflowSpacing.xs),
-            IconButton(
-              tooltip: l10n.authSignOut,
-              onPressed: () => onSignOut!(),
-              // Icons.logout is NOT auto-mirrored by Flutter; flip it under
-              // RTL so the exit arrow points out of the app chrome.
-              icon: Transform.flip(
-                flipX: Directionality.of(context) == TextDirection.rtl,
-                child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
-              ),
-            ),
           ],
-        ],
+        ),
+      ),
+    );
+    final source = RestoflowStatusPill(
+      label: isReal ? l10n.dashboardModeLiveData : l10n.dashboardModeDemoData,
+      tone: isReal ? RestoflowTone.success : RestoflowTone.info,
+      icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
+    );
+    final controls = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const LanguageSelector(),
+        if (onSignOut != null)
+          IconButton(
+            tooltip: l10n.authSignOut,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            onPressed: () => onSignOut!(),
+            icon: Transform.flip(
+              flipX: Directionality.of(context) == TextDirection.rtl,
+              child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
+            ),
+          ),
+      ],
+    );
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        key: const Key('dashboard-persistent-header'),
+        width: double.infinity,
+        color: _shellCanvas,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked =
+                constraints.maxWidth <
+                620 * MediaQuery.textScalerOf(context).scale(1);
+            if (stacked) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  contextCard,
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(child: source),
+                      controls,
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: contextCard),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: source,
+                  ),
+                ),
+                controls,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Preserve the existing bottom NavigationBar and its canonical-index mapping.
+/// Nine genuine destinations need more width than a phone can offer at a 44px
+/// minimum target. An internal horizontal scroll gives each 64px; selected
+/// destinations are revealed after taps, drill-downs and viewport changes.
+class _PhoneNavigation extends StatefulWidget {
+  const _PhoneNavigation({required this.child, required this.selectedIndex});
+
+  final NavigationBar child;
+  final int selectedIndex;
+
+  @override
+  State<_PhoneNavigation> createState() => _PhoneNavigationState();
+}
+
+class _PhoneNavigationState extends State<_PhoneNavigation> {
+  final _scroll = ScrollController();
+  double? _lastWidth;
+  int? _lastSelection;
+  int? _lastCount;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE0EBE5))),
+        boxShadow: [BoxShadow(color: Color(0x0D005541), blurRadius: 16)],
+      ),
+      child: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final count = widget.child.destinations.length;
+            final width = constraints.maxWidth;
+            final contentWidth = width > count * 64.0 ? width : count * 64.0;
+            if (_lastWidth != width ||
+                _lastSelection != widget.selectedIndex ||
+                _lastCount != count) {
+              _lastWidth = width;
+              _lastSelection = widget.selectedIndex;
+              _lastCount = count;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || !_scroll.hasClients) return;
+                final offset =
+                    (widget.selectedIndex * (contentWidth / count) -
+                            (width - contentWidth / count) / 2)
+                        .clamp(0.0, _scroll.position.maxScrollExtent);
+                _scroll.animateTo(
+                  offset,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                );
+              });
+            }
+            return SingleChildScrollView(
+              key: const Key('dashboard-phone-navigation-scroll'),
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: contentWidth,
+                child: NavigationBarTheme(
+                  data: NavigationBarThemeData(
+                    height: 64,
+                    elevation: 0,
+                    backgroundColor: Colors.white,
+                    indicatorColor: _shellActive,
+                    iconTheme: WidgetStateProperty.resolveWith(
+                      (states) => IconThemeData(
+                        size: 24,
+                        color: states.contains(WidgetState.selected)
+                            ? Colors.white
+                            : const Color(0xFF52645D),
+                      ),
+                    ),
+                  ),
+                  child: widget.child,
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1194,12 +1326,9 @@ class _MenuUnavailable extends StatelessWidget {
   }
 }
 
-/// The Dashboard "1c" LIGHT side rail: a white panel with an end hairline, a
-/// gradient brand lockup on top, one tappable destination per row (active =
-/// brand-green fill + white foreground + soft shadow; inactive = muted ink with
-/// a warm hover), and a footer workspace card. Collapses to icon-only ([compact])
-/// on small tablets. RTL-safe (Rows + directional padding/borders); it stays on
-/// the reading-start side, so it sits on the right under Arabic/Hebrew.
+/// Emerald rail on the reading-start edge. Tablets use named icon tooltips;
+/// desktop keeps visible labels. Canonical destinations and permissions are
+/// identical in both forms.
 class _SideNav extends StatelessWidget {
   const _SideNav({
     required this.destinations,
@@ -1240,9 +1369,13 @@ class _SideNav extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [_shellEmerald, _shellDeep],
+        ),
         borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-        border: Border.all(color: kRestoflowHairline),
+        border: Border.all(color: _shellEmerald),
         boxShadow: RestoflowShadows.xs,
       ),
       child: Column(
@@ -1262,11 +1395,21 @@ class _SideNav extends StatelessWidget {
               RestoflowSpacing.xl,
             ),
             child: compact
-                ? const Center(child: RestoflowBrandMark(size: 40))
-                : RestoflowBrandMark(
-                    size: 42,
-                    wordmark: BizbotWordmark.latin,
-                    tagline: l10n.dashboardBrandTagline,
+                ? const Center(
+                    child: RestoflowBrandMark(size: 40, reverse: true),
+                  )
+                : Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: Theme.of(
+                        context,
+                      ).colorScheme.copyWith(onSurfaceVariant: _shellMint),
+                    ),
+                    child: RestoflowBrandMark(
+                      size: 42,
+                      reverse: true,
+                      wordmark: BizbotWordmark.latin,
+                      tagline: l10n.dashboardBrandTagline,
+                    ),
                   ),
           ),
           Expanded(
@@ -1284,6 +1427,7 @@ class _SideNav extends StatelessWidget {
                 for (var i = 0; i < destinations.length; i++)
                   if (!_DashboardShellState._navHidden(i, supportMode))
                     _SideNavTile(
+                      key: Key('dashboard-nav-$i'),
                       item: destinations[i],
                       selected: i == selectedIndex,
                       compact: compact,
@@ -1299,35 +1443,12 @@ class _SideNav extends StatelessWidget {
   }
 }
 
-/// One rail destination: a navy fill + white foreground when selected, muted ink
-/// otherwise, with a cool brand hover on every row. Icon-only when [compact]
-/// (label moves to a tooltip). The Row fills the rail width so the active fill
-/// spans it and the icon centres in compact mode.
-///
-/// Accessibility (RF-125): each tile is one merged semantic node — a selectable
-/// button carrying the destination [item.label] even when the visual is
-/// icon-only ([compact]) — so selection is announced (not conveyed by colour
-/// alone; the icon also switches to its filled variant) and screen readers read
-/// a label for every destination.
-///
-/// V2.2 — WHY THE FILL MOVED, AND WHY FOCUS IS A RING.
-///
-/// The selected fill used to be painted by an [AnimatedContainer] that was the
-/// InkWell's CHILD. Material draws ink — hover, focus and splash overlays —
-/// between its own surface and that child, so on a selected tile every one of
-/// those overlays was painted UNDERNEATH an opaque navy rectangle. The result
-/// was a destination that gave no hover feedback and, worse, showed no keyboard
-/// focus at all: a keyboard user tabbing along the rail could not see where they
-/// were. The fill is now the [Material]'s own colour, which puts the ink layer
-/// back on top of it where the whole feedback system expects to be.
-///
-/// Focus is a RING rather than a wash, and that is deliberate: a wash is a
-/// colour-only signal, and on the navy bed there is no wash light enough to read
-/// reliably at a glance. The ring is drawn as a non-participating overlay, so
-/// gaining focus changes nothing about the tile's size or position — a focus
-/// indicator that nudges the layout is its own bug.
+/// One named, selectable rail button. Paint the selected fill on Material so
+/// hover ink stays visible above it. The inset focus ring does not affect
+/// geometry and gives keyboard users a non-color-only position indicator.
 class _SideNavTile extends StatefulWidget {
   const _SideNavTile({
+    super.key,
     required this.item,
     required this.selected,
     required this.compact,
@@ -1352,20 +1473,13 @@ class _SideNavTileState extends State<_SideNavTile> {
     final selected = widget.selected;
     final compact = widget.compact;
     final radius = BorderRadius.circular(RestoflowRadii.md);
-    final iconColor = selected ? Colors.white : kRestoflowInk3;
-    final labelColor = selected ? Colors.white : kRestoflowInk2;
+    final iconColor = selected ? Colors.white : const Color(0xFFD2EBDF);
+    final labelColor = selected ? Colors.white : const Color(0xFFECF8F1);
 
-    // Hover/focus overlays, each read against the bed they actually land on.
-    // On the navy pill only a light film is legible; on the white rail the quiet
-    // brand tint is a real step (the previous hover was the page canvas, barely
-    // 3% off white, which is why the rail felt inert under the mouse).
-    final hoverColor = selected
-        ? Colors.white.withValues(alpha: 0.14)
-        : kRestoflowNavyContainer;
-    final focusWash = selected
-        ? Colors.white.withValues(alpha: 0.20)
-        : kRestoflowNavyContainer;
-    final focusRing = selected ? Colors.white : kRestoflowSeedColor;
+    // Light ink and an inset ring remain visible on both emerald surfaces.
+    final hoverColor = Colors.white.withValues(alpha: selected ? 0.16 : 0.10);
+    final focusWash = Colors.white.withValues(alpha: 0.20);
+    final focusRing = selected ? Colors.white : _shellMint;
 
     final row = Row(
       mainAxisAlignment: compact
@@ -1402,7 +1516,7 @@ class _SideNavTileState extends State<_SideNavTile> {
     final interactive = Material(
       // THE FILL. Being the Material's colour rather than a child decoration is
       // the whole fix — the ink layer now sits above it.
-      color: selected ? kRestoflowSeedColor : Colors.transparent,
+      color: selected ? _shellActive : Colors.transparent,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1433,7 +1547,7 @@ class _SideNavTileState extends State<_SideNavTile> {
         boxShadow: selected
             ? [
                 BoxShadow(
-                  color: kRestoflowSeedColor.withValues(alpha: 0.32),
+                  color: _shellActive.withValues(alpha: 0.32),
                   offset: const Offset(0, 4),
                   blurRadius: 12,
                 ),
@@ -1443,18 +1557,7 @@ class _SideNavTileState extends State<_SideNavTile> {
       child: Stack(
         children: [
           interactive,
-          // UI-ORANGE-BALANCE-POLISH-001: a narrow orange marker on the
-          // selected tile's leading edge.
-          //
-          // The rail stays navy — that is the structure — but navy-on-navy made
-          // "which page am I on" a brightness comparison. The marker adds a
-          // second, non-colour signal (an edge that is either there or not), so
-          // selection no longer depends on telling two navies apart. Directional
-          // start, so it mirrors to the right edge under RTL.
-          //
-          // It rides INSIDE the tile bounds like the focus ring, taking part in
-          // neither layout nor hit testing, so nothing shifts when selection
-          // moves.
+          // A directional mint edge supplements the filled selected icon.
           if (widget.selected)
             PositionedDirectional(
               start: 0,
@@ -1465,9 +1568,7 @@ class _SideNavTileState extends State<_SideNavTile> {
                   key: const Key('rail-active-marker'),
                   width: 3,
                   decoration: BoxDecoration(
-                    color: RestoflowBrandPalette.of(
-                      Brightness.light,
-                    ).accentOrange,
+                    color: _shellMint,
                     borderRadius: BorderRadius.circular(RestoflowRadii.pill),
                   ),
                 ),
@@ -1524,9 +1625,6 @@ class _RailFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
     final org = membership.organizationName;
     final initial = org.isNotEmpty ? org.substring(0, 1).toUpperCase() : '?';
     final avatar = Container(
@@ -1537,7 +1635,7 @@ class _RailFooter extends StatelessWidget {
         gradient: LinearGradient(
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
-          colors: [theme.colorScheme.primary, semantic.accent],
+          colors: const [_shellActive, _shellEmerald],
         ),
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
       ),
@@ -1557,12 +1655,11 @@ class _RailFooter extends StatelessWidget {
       padding: EdgeInsets.all(
         compact ? RestoflowSpacing.xs : RestoflowSpacing.md,
       ),
-      // RF-132: the reference's account card — the warm surface gains a
-      // hairline outline so it reads as a deliberate card, not a tint.
+      // Keep real workspace identity readable on the emerald surface.
       decoration: BoxDecoration(
-        color: kRestoflowCanvas,
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: Border.all(color: kRestoflowHairline),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: compact
           ? Center(child: avatar)
@@ -1577,14 +1674,16 @@ class _RailFooter extends StatelessWidget {
                     children: [
                       Text(
                         org,
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         _roleLabel(l10n, membership.role),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: kRestoflowInk3,
+                          color: _shellMint,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

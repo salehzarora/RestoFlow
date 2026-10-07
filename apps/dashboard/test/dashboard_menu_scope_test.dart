@@ -98,7 +98,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text(l10n.dashboardNavMenu));
+        await tester.tap(find.byKey(const Key('dashboard-nav-1')));
         await tester.pumpAndSettle();
 
         expect(find.byType(MenuManagementScreen), findsOneWidget);
@@ -123,7 +123,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.dashboardNavMenu));
+      await tester.tap(find.byKey(const Key('dashboard-nav-1')));
       await tester.pumpAndSettle();
 
       expect(find.text(l10n.menuScopeUnavailableTitle), findsOneWidget);
