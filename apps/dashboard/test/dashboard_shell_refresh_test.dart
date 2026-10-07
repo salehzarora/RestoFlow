@@ -2,7 +2,9 @@
 // Exported images use synthetic fixtures in live-mode chrome. No backend is
 // contacted; financial values come from the existing computed demo dataset.
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +20,7 @@ import 'package:restoflow_dashboard/src/data/owner_top_items_repository.dart';
 import 'package:restoflow_dashboard/src/data/order_history_repository.dart';
 import 'package:restoflow_dashboard/src/printers/printers_repository.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
+import 'package:restoflow_dashboard/src/staff/staff_models.dart';
 import 'package:restoflow_dashboard/src/state/audit_log_providers.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_dashboard/src/state/order_history_providers.dart';
@@ -28,6 +31,8 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 const _screenshots = bool.fromEnvironment('SHELL_SCREENSHOTS');
+// Only the isolated baseline replay opts out of the NEW visual budgets.
+const _baselineCapture = bool.fromEnvironment('FIDELITY_BASELINE');
 const _evidenceDir = String.fromEnvironment(
   'SHELL_EVIDENCE_DIR',
   defaultValue: '../build/dashboard-phase5-shell-evidence',
@@ -46,12 +51,24 @@ const _member = MembershipContext(
 );
 
 class _Devices extends DemoAdminStore {
-  _Devices()
+  _Devices({this.warningHeavy = false})
     : super(scope: dashboardAdminScopeFor(_member, currencyCode: 'ILS'));
+  final bool warningHeavy;
   int reads = 0;
   @override
   Future<AdminResult<List<AdminDevice>>> loadDevices() async {
     reads++;
+    if (warningHeavy) {
+      return const Success([
+        AdminDevice(
+          id: 'unpaired-kiosk',
+          label: 'Fixture kiosk',
+          deviceType: 'kiosk',
+          branchLabel: 'Main',
+          status: DeviceLifecycleStatus.codeIssued,
+        ),
+      ]);
+    }
     return const Success([
       AdminDevice(
         id: 'pos',
@@ -69,6 +86,11 @@ class _Devices extends DemoAdminStore {
       ),
     ]);
   }
+}
+
+class _EmptyStaff extends InMemoryStaffStore {
+  @override
+  Future<AdminResult<List<StaffMember>>> load() async => const Success([]);
 }
 
 class _Options implements AuditFilterOptionsRepository {
@@ -100,6 +122,7 @@ Widget _app(
   VoidCallback? onSignOut,
   bool unavailable = false,
   bool longNames = false,
+  bool warningHeavy = false,
 }) {
   final member = longNames
       ? MembershipContext(
@@ -115,10 +138,10 @@ Widget _app(
           status: _member.status,
         )
       : _member;
-  final menu = buildDemoMenuStore(
-    scope: dashboardMenuScopeFor(member, currencyCode: 'ILS')!,
-    readOnly: true,
-  );
+  final scope = dashboardMenuScopeFor(member, currencyCode: 'ILS')!;
+  final menu = warningHeavy
+      ? InMemoryMenuStore(readOnly: true)
+      : buildDemoMenuStore(scope: scope, readOnly: true);
   return RepaintBoundary(
     key: _capture,
     child: ProviderScope(
@@ -166,7 +189,11 @@ Widget _app(
           menuReadSource: demo ? null : menu,
           menuWriter: demo ? null : menu,
           printersRepository: demo ? null : InMemoryPrintersStore(),
-          staffRepository: demo ? null : InMemoryStaffStore(),
+          staffRepository: demo
+              ? null
+              : warningHeavy
+              ? _EmptyStaff()
+              : InMemoryStaffStore(),
           onSignOut: demo ? null : () async => onSignOut?.call(),
         ),
       ),
@@ -189,19 +216,48 @@ void _size(WidgetTester tester, double width) {
 }
 
 Future<void> _shot(WidgetTester tester, String name) async {
-  if (_screenshots)
+  if (_screenshots) {
+    tester
+        .renderObject<RenderRepaintBoundary>(find.byKey(_capture))
+        .markNeedsPaint();
+    await tester.pump();
     await expectLater(
       find.byKey(_capture),
       matchesGoldenFile('$_evidenceDir/$name.png'),
     );
+    final scrollables = find.descendant(
+      of: find.byKey(const Key('overview-scroll')),
+      matching: find.byType(Scrollable),
+    );
+    final position = scrollables.evaluate().isEmpty
+        ? null
+        : tester.state<ScrollableState>(scrollables.first).position;
+    final file = File('test/$_evidenceDir/$name.json');
+    file.parent.createSync(recursive: true);
+    file.writeAsStringSync(
+      jsonEncode({
+        'name': name,
+        'viewport': {
+          'width': tester.view.physicalSize.width,
+          'height': tester.view.physicalSize.height,
+        },
+        'scrollOffset': position?.pixels,
+        'maxScrollExtent': position?.maxScrollExtent,
+        'headerBounds': tester
+            .getRect(find.byKey(const Key('dashboard-persistent-header')))
+            .toString(),
+      }),
+    );
+  }
 }
 
 Future<void> _matrix(
   WidgetTester tester,
   double width,
   String locale,
-  double scale,
-) async {
+  double scale, {
+  bool warningHeavy = false,
+}) async {
   _size(tester, width);
   final errors = <String>[];
   final previous = FlutterError.onError;
@@ -213,7 +269,14 @@ Future<void> _matrix(
     }
   };
   try {
-    await tester.pumpWidget(_app(locale, scale, devices: _Devices()));
+    await tester.pumpWidget(
+      _app(
+        locale,
+        scale,
+        devices: _Devices(warningHeavy: warningHeavy),
+        warningHeavy: warningHeavy,
+      ),
+    );
     await tester.pumpAndSettle();
     if (_screenshots) {
       // Decoding bundled artwork is asynchronous outside the fake test clock.
@@ -233,7 +296,8 @@ Future<void> _matrix(
       );
       await tester.pumpAndSettle();
     }
-    final name = 'fixture-${width.toInt()}-$locale-${scale.toInt()}x';
+    final name =
+        '${warningHeavy ? 'warnings' : 'healthy'}-${width.toInt()}-$locale-${scale.toInt()}x';
     expect(
       find.byKey(const Key('dashboard-persistent-header')),
       findsOneWidget,
@@ -245,6 +309,15 @@ Future<void> _matrix(
       findsOneWidget,
     );
     await _shot(tester, '$name-top');
+    final header = tester.getRect(
+      find.byKey(const Key('dashboard-persistent-header')),
+    );
+    expect(header.top, 0);
+    expect(header.left, greaterThanOrEqualTo(0));
+    expect(header.right, lessThanOrEqualTo(width));
+    if (!_baselineCapture && scale == 1 && width >= 1440) {
+      expect(header.height, inInclusiveRange(56, 64));
+    }
     await tester.scrollUntilVisible(
       find.byKey(const Key('overview-readiness-card')),
       350,
@@ -256,6 +329,11 @@ Future<void> _matrix(
           .first,
     );
     await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('overview-readiness-card'))),
+      alignment: 0,
+    );
+    await tester.pumpAndSettle();
     await _shot(tester, '$name-readiness');
     final scroll = tester.state<ScrollableState>(
       find
@@ -265,6 +343,19 @@ Future<void> _matrix(
           )
           .first,
     );
+    // Literal matched offsets complement the semantic-anchor captures below.
+    // They allow before/after comparison at exactly the same scroll position.
+    for (final entry in {
+      'readiness': 120.0,
+      'analytics': 600.0,
+      'orders': 1000.0,
+    }.entries) {
+      scroll.position.jumpTo(
+        entry.value.clamp(0, scroll.position.maxScrollExtent),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-offset-${entry.key}');
+    }
     for (
       var offset = 0.0;
       offset < scroll.position.maxScrollExtent;
@@ -275,11 +366,35 @@ Future<void> _matrix(
     }
     for (final entry in {
       'analytics': 'sales-by-hour-card',
+      'top-items': 'top-items-card',
       'orders': 'recent-orders-card',
     }.entries) {
-      await tester.ensureVisible(find.byKey(Key(entry.value)));
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(Key(entry.value))),
+        alignment: 0,
+      );
       await tester.pumpAndSettle();
       await _shot(tester, '$name-${entry.key}');
+      if (!_baselineCapture &&
+          entry.key == 'analytics' &&
+          scale == 1 &&
+          width >= 1440) {
+        final sales = tester.getRect(
+          find.byKey(const Key('sales-by-hour-card')),
+        );
+        final payments = tester.getRect(
+          find.byKey(const Key('payment-mix-card')),
+        );
+        final cash = tester.getRect(find.byKey(const Key('shift-cash-card')));
+        expect(payments.right, lessThan(sales.left));
+        expect(sales.right, lessThan(cash.left));
+        expect(sales.width, closeTo(payments.width * 2, 1));
+        expect(cash.width, closeTo(payments.width, 1));
+        expect(payments.top, closeTo(sales.top, 1));
+        expect(cash.top, closeTo(sales.top, 1));
+        expect(payments.bottom, closeTo(sales.bottom, 1));
+        expect(cash.bottom, closeTo(sales.bottom, 1));
+      }
     }
     // Scroll all the genuine phone destinations into view without leaving
     // Overview, so the final image also records the trailing navigation items.
@@ -287,6 +402,31 @@ Future<void> _matrix(
       await tester.ensureVisible(find.byKey(const Key('dashboard-nav-9')));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-navigation-end');
+    }
+    if (warningHeavy) {
+      // Existing visibility semantics: only the first setup warning is open.
+      scroll.position.jumpTo(0);
+      await tester.pumpAndSettle();
+      final disclosure = find.byKey(const Key('setup-more-steps'));
+      await tester.scrollUntilVisible(
+        disclosure,
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const Key('overview-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(disclosure, findsOneWidget);
+      final tile = tester.widget<ExpansionTile>(disclosure);
+      expect(tile.initiallyExpanded, isFalse);
+      await Scrollable.ensureVisible(tester.element(disclosure), alignment: 0);
+      await tester.pumpAndSettle();
+      await tester.tap(disclosure);
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-warnings-expanded');
     }
     expect(errors, isEmpty, reason: name);
     expect(tester.takeException(), isNull, reason: name);
@@ -336,6 +476,10 @@ void main() {
         testWidgets(
           'full shell ${width.toInt()} $locale ${scale}x',
           (tester) => _matrix(tester, width, locale, scale),
+        );
+        testWidgets(
+          'full shell warnings ${width.toInt()} $locale ${scale}x',
+          (tester) => _matrix(tester, width, locale, scale, warningHeavy: true),
         );
       }
     }

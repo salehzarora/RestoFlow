@@ -7,6 +7,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/setup_device_providers.dart';
 import '../overview/overview_readiness_card.dart';
+import '../overview/overview_alert_strip.dart';
 
 /// A guided "is this branch ready for service?" checklist at the top of the
 /// real-mode Overview: live menu / device / printer / staff-PIN counts
@@ -261,7 +262,7 @@ class DashboardSetupCenter extends ConsumerWidget {
     if (steps.isEmpty) return const [];
     final rest = steps.sublist(1);
     return [
-      const SizedBox(height: RestoflowSpacing.md),
+      const SizedBox(height: 8),
       _SetupWarningRow(step: steps.first),
       if (rest.isNotEmpty) ...[
         const SizedBox(height: RestoflowSpacing.sm),
@@ -304,7 +305,7 @@ class _SetupWarningRow extends StatelessWidget {
     final label = step.actionLabel;
     final onTap = step.onAction;
     final desc = step.description;
-    return RestoflowNoticeBanner(
+    return OverviewAlertStrip(
       tone: RestoflowTone.warning,
       // With a description the message becomes the bold lead line and the
       // description the body; a description-less step is a single body line.
@@ -317,6 +318,8 @@ class _SetupWarningRow extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: warning.onContainer,
                 side: BorderSide(color: warning.accent),
+                minimumSize: const Size(44, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
               child: Text(label),
             ),
@@ -363,15 +366,11 @@ class _MoreStepsDisclosure extends StatelessWidget {
             l10n.setupMoreSteps(steps.length),
             style: theme.textTheme.titleSmall,
           ),
-          tilePadding: const EdgeInsetsDirectional.symmetric(
-            horizontal: RestoflowSpacing.md,
-          ),
-          childrenPadding: const EdgeInsetsDirectional.fromSTEB(
-            RestoflowSpacing.md,
-            0,
-            RestoflowSpacing.md,
-            RestoflowSpacing.md,
-          ),
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          minTileHeight: 44,
+          tilePadding: const EdgeInsetsDirectional.symmetric(horizontal: 10),
+          childrenPadding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 8),
           children: [
             for (var i = 0; i < steps.length; i++) ...[
               if (i > 0) const SizedBox(height: RestoflowSpacing.sm),

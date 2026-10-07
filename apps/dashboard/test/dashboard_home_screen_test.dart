@@ -6,6 +6,7 @@ import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/data/currency_breakdown_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_dashboard/src/overview/overview_alert_strip.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
@@ -281,9 +282,90 @@ String _kpi(WidgetTester tester, String key) =>
     tester.widget<RestoflowMetricCard>(find.byKey(Key(key))).value;
 
 void main() {
+  testWidgets(
+    'V002 analytics remeasure after asynchronous range content changes',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      final scroll = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const Key('overview-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      for (final range in ['last7', 'last30', 'today']) {
+        scroll.position.jumpTo(0);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(Key('range-chip-$range')));
+        await tester.pumpAndSettle();
+        final sales = find.byKey(
+          Key(range == 'today' ? 'sales-by-hour-card' : 'sales-by-day-card'),
+        );
+        await tester.ensureVisible(sales);
+        await tester.pumpAndSettle();
+        final salesBounds = tester.getRect(sales);
+        for (final key in ['payment-mix-card', 'shift-cash-card']) {
+          final bounds = tester.getRect(find.byKey(Key(key)));
+          expect(bounds.top, closeTo(salesBounds.top, 1));
+          expect(bounds.bottom, closeTo(salesBounds.bottom, 1));
+        }
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+  testWidgets('V002 alerts keep complete messages and actions when enlarged', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var actions = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: restoflowLightBrandTheme(),
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: OverviewAlertStrip(
+              title: 'Setup warning',
+              body:
+                  'The original message and pairing explanation remain complete.',
+              tone: RestoflowTone.warning,
+              action: OutlinedButton(
+                onPressed: () => actions++,
+                child: const Text('Open devices'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final body = tester.widget<Text>(
+      find.text(
+        'The original message and pairing explanation remain complete.',
+      ),
+    );
+    expect(body.maxLines, isNull);
+    expect(body.overflow, isNot(TextOverflow.ellipsis));
+    final button = find.byType(OutlinedButton);
+    expect(tester.getSize(button).height, greaterThanOrEqualTo(44));
+    expect(tester.getRect(button).right, lessThanOrEqualTo(390));
+    await tester.tap(button);
+    expect(actions, 1);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('renders the reports area: banner, day context, refresh', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     _useWideSurface(tester);
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
@@ -299,10 +381,15 @@ void main() {
     );
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('Overview')).flagsCollection.isHeader,
+      isTrue,
+    );
     expect(find.text('Report day: 2026-06-28'), findsOneWidget);
     // RF-127: the duplicate header mode pill was removed; the demo/live data
     // source stays honest via the report banner + the shell's persistent pill.
     expect(find.byKey(const Key('reports-refresh-button')), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('real mode shows the live·limited notice, not the demo banner', (

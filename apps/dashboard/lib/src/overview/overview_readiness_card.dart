@@ -32,15 +32,19 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
                 children: [
                   DecoratedBox(
                     decoration: const BoxDecoration(
-                      color: OverviewVisuals.deep,
+                      gradient: LinearGradient(
+                        begin: AlignmentDirectional.topStart,
+                        end: AlignmentDirectional.bottomEnd,
+                        colors: [OverviewVisuals.primary, OverviewVisuals.deep],
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(9),
                       child: Icon(
                         ready ? Icons.check_rounded : Icons.tune_rounded,
                         color: Colors.white,
-                        size: 24,
+                        size: 26,
                       ),
                     ),
                   ),
@@ -54,6 +58,8 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
                         Text(
                           '${percent.clamp(0, 100)}%',
                           style: theme.textTheme.headlineMedium?.copyWith(
+                            fontSize: 32,
+                            height: 1.1,
                             color: OverviewVisuals.deep,
                             fontWeight: FontWeight.w800,
                           ),
@@ -61,7 +67,8 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
                         Text(
                           heading,
                           style: theme.textTheme.titleMedium?.copyWith(
-                            fontSize: 18,
+                            fontSize: 16,
+                            height: 1.2,
                             color: OverviewVisuals.ink,
                             fontWeight: FontWeight.w700,
                           ),
@@ -73,18 +80,21 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
               ),
             ),
             if (trailing != null)
-              IconButtonTheme(
-                data: IconButtonThemeData(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    foregroundColor: OverviewVisuals.deep,
+              SizedBox.square(
+                dimension: 48,
+                child: IconButtonTheme(
+                  data: IconButtonThemeData(
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      foregroundColor: OverviewVisuals.deep,
+                    ),
                   ),
+                  child: trailing!,
                 ),
-                child: trailing!,
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: LinearProgressIndicator(
@@ -100,44 +110,40 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
     );
     return Container(
       key: const Key('overview-readiness-card'),
-      padding: const EdgeInsets.all(14),
+      constraints: const BoxConstraints(minHeight: 96),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
-          colors: [OverviewVisuals.softMint, Color(0xFFF1FCF6)],
+          colors: [Color(0xFFDCF8E8), Color(0xFFEEFBF2), Color(0xFFF6FCF5)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: OverviewVisuals.radius,
         border: Border.all(color: OverviewVisuals.mint),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08047857),
+            blurRadius: 12,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
           final wide = constraints.maxWidth >= 800 * scale;
-          final statColumns = constraints.maxWidth >= 276 * scale + 24 ? 3 : 1;
-          final tiles = Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final stat in stats)
-                SizedBox(
-                  width: wide
-                      ? (constraints.maxWidth * 0.58 - 24) / 3
-                      : (constraints.maxWidth - (statColumns - 1) * 12) /
-                            statColumns,
-                  child: _ReadinessStat(stat: stat),
-                ),
-            ],
-          );
           if (wide) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(flex: 4, child: completion),
                 if (stats.isNotEmpty) ...[
-                  const SizedBox(width: 24),
-                  Expanded(flex: 6, child: tiles),
+                  Expanded(
+                    flex: 5,
+                    child: _ReadinessStats(stats: stats, wide: true),
+                  ),
+                  const SizedBox(width: 16),
                 ],
+                Expanded(flex: 6, child: completion),
               ],
             );
           }
@@ -145,7 +151,10 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               completion,
-              if (stats.isNotEmpty) ...[const SizedBox(height: 12), tiles],
+              if (stats.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _ReadinessStats(stats: stats, wide: false),
+              ],
             ],
           );
         },
@@ -154,73 +163,93 @@ class OverviewReadinessCard extends RestoflowReadinessStrip {
   }
 }
 
+/// Tile widths come from their own available column, including the wide layout.
+/// Enlarged text uses full-width rows instead of squeezing three labels.
+class _ReadinessStats extends StatelessWidget {
+  const _ReadinessStats({required this.stats, required this.wide});
+  final List<RestoflowReadinessStat> stats;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final columns = wide || constraints.maxWidth >= 300 * scale
+          ? stats.length.clamp(1, 3)
+          : 1;
+      final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final stat in stats)
+            SizedBox(
+              width: width,
+              child: _ReadinessStat(stat: stat, inline: columns == 1),
+            ),
+        ],
+      );
+    },
+  );
+}
+
 class _ReadinessStat extends StatelessWidget {
-  const _ReadinessStat({required this.stat});
+  const _ReadinessStat({required this.stat, required this.inline});
   final RestoflowReadinessStat stat;
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tone = stat.complete ? RestoflowTone.success : RestoflowTone.warning;
-    final content = LayoutBuilder(
-      builder: (context, constraints) {
-        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-        final compact = constraints.maxWidth < 150 * scale;
-        final icon = Icon(
-          stat.icon,
-          color: tone.styleOf(theme).accent,
-          size: 22,
-        );
-        final count = Text(
-          '${stat.done}/${stat.total}',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: OverviewVisuals.ink,
-            fontWeight: FontWeight.w800,
-          ),
-        );
-        final text = Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: compact
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.start,
-          children: [
-            Text(
-              stat.label,
-              style: theme.textTheme.labelLarge,
-              textAlign: compact ? TextAlign.center : TextAlign.start,
-            ),
-            const SizedBox(height: 2),
-            count,
-          ],
-        );
-        return Padding(
-          padding: const EdgeInsets.all(10),
-          child: compact
-              ? Column(
-                  children: [
-                    Text(
-                      stat.label,
-                      style: theme.textTheme.labelLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 4,
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [icon, count],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    icon,
-                    const SizedBox(width: 12),
-                    Expanded(child: text),
-                  ],
-                ),
-        );
-      },
+    final icon = Icon(stat.icon, color: tone.styleOf(theme).accent, size: 20);
+    final count = Text(
+      '${stat.done}/${stat.total}',
+      style: theme.textTheme.titleLarge?.copyWith(
+        fontSize: 20,
+        height: 1.15,
+        color: OverviewVisuals.ink,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+    final label = Text(
+      stat.label,
+      style: theme.textTheme.labelLarge?.copyWith(
+        fontSize: 13,
+        height: 1.2,
+        fontWeight: FontWeight.w600,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      textAlign: inline ? TextAlign.start : TextAlign.center,
+    );
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: inline
+            ? Row(
+                children: [
+                  icon,
+                  const SizedBox(width: 8),
+                  Expanded(child: label),
+                  const SizedBox(width: 8),
+                  Flexible(child: count),
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  label,
+                  const SizedBox(height: 2),
+                  Wrap(
+                    spacing: 6,
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [icon, count],
+                  ),
+                ],
+              ),
+      ),
     );
     return Material(
       color: Colors.white,

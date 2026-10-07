@@ -331,12 +331,37 @@ Future<void> _verify(
       expect(metrics.map((rect) => rect.top).toSet(), hasLength(1));
       expect(metrics.map((rect) => rect.height).toSet(), hasLength(1));
       expect(metrics.first.height, lessThanOrEqualTo(132));
+      expect(metrics.first.height, inInclusiveRange(108, 124));
       expect(
         tester.getSize(find.byKey(const Key('overview-readiness-card'))).height,
         lessThanOrEqualTo(110),
       );
     }
     await _walk(tester);
+    // Bounds and complete monetary text are ordinary CI assertions as well as
+    // screenshot checks; enlarged text may increase height or reduce columns.
+    for (final key in [
+      'gross-sales',
+      'net-sales',
+      'avg-ticket',
+      'cash-sales',
+    ]) {
+      final finder = find.byKey(Key('kpi-$key'));
+      if (finder.evaluate().isEmpty) continue;
+      final metric = tester.widget<RestoflowMetricCard>(finder);
+      final value = find.descendant(
+        of: finder,
+        matching: find.text(metric.value),
+      );
+      final text = tester.widget<Text>(value);
+      expect(text.maxLines, isNull);
+      expect(text.overflow, isNot(TextOverflow.ellipsis));
+      final cardBounds = tester.getRect(finder);
+      final valueBounds = tester.getRect(value);
+      expect(valueBounds.left, greaterThanOrEqualTo(cardBounds.left));
+      expect(valueBounds.right, lessThanOrEqualTo(cardBounds.right));
+      expect(valueBounds.bottom, lessThanOrEqualTo(cardBounds.bottom));
+    }
     if (scenario == _Scenario.large) {
       final metric = tester.widget<RestoflowMetricCard>(
         find.byKey(const Key('kpi-gross-sales')),

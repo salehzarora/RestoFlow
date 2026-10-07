@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_currency/restoflow_currency.dart'
     show currencySelectorLabel;
@@ -39,6 +40,7 @@ import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
 import 'overview/overview_metric_card.dart';
 import 'overview/overview_visuals.dart';
+import 'overview/overview_alert_strip.dart';
 
 /// The RF-104/RF-119 owner/manager reports dashboard, redesigned under RF-127
 /// into a calm, data-forward Overview: calm page chrome (title + period + range
@@ -206,29 +208,78 @@ class _OverviewChrome extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final range = ref.watch(reportRangeProvider);
     final report = ref.watch(dashboardReportProvider).valueOrNull;
+    final hasScope = ref.watch(dashboardCoveredScopeProvider) != null;
+    final theme = Theme.of(context);
+    final heading = Row(
+      key: const Key('reports-heading'),
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.dashboardNavOverview,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: OverviewVisuals.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _subtitleFor(l10n, range, report),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          key: const Key('reports-refresh-button'),
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh),
+          tooltip: l10n.dashboardRefresh,
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        RestoflowPageHeader(
-          key: const Key('reports-heading'),
-          title: l10n.dashboardNavOverview,
-          subtitle: _subtitleFor(l10n, range, report),
-          padding: const EdgeInsetsDirectional.fromSTEB(
-            RestoflowSpacing.lg,
-            RestoflowSpacing.md,
-            RestoflowSpacing.lg,
-            0,
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 0),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              if (hasScope && constraints.maxWidth >= 760 * scale) {
+                return Row(
+                  children: [
+                    Expanded(child: heading),
+                    const SizedBox(width: 16),
+                    const SizedBox(
+                      width: 300,
+                      child: _ScopeSelector(embedded: true),
+                    ),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  heading,
+                  if (hasScope) ...[
+                    const SizedBox(height: 8),
+                    const _ScopeSelector(embedded: true),
+                  ],
+                ],
+              );
+            },
           ),
-          actions: [
-            IconButton(
-              key: const Key('reports-refresh-button'),
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh),
-              tooltip: l10n.dashboardRefresh,
-            ),
-          ],
         ),
-        const _ScopeSelector(),
         const _RangeFilterBar(),
       ],
     );
@@ -262,7 +313,8 @@ class _OverviewChrome extends ConsumerWidget {
 /// A failed option load leaves the broad default in place and simply offers no
 /// individual branches. It never falls back to a branch, and never widens.
 class _ScopeSelector extends ConsumerWidget {
-  const _ScopeSelector();
+  const _ScopeSelector({this.embedded = false});
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -271,12 +323,14 @@ class _ScopeSelector extends ConsumerWidget {
 
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final padding = const EdgeInsetsDirectional.fromSTEB(
-      RestoflowSpacing.lg,
-      RestoflowSpacing.md,
-      RestoflowSpacing.lg,
-      0,
-    );
+    final padding = embedded
+        ? EdgeInsets.zero
+        : const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.md,
+            RestoflowSpacing.lg,
+            0,
+          );
 
     // A membership that covers ONE branch has nothing to choose. Show what is
     // being reported on and stop there.
@@ -396,7 +450,7 @@ class _ScopeSelector extends ConsumerWidget {
 class _RangeFilterBar extends ConsumerWidget {
   const _RangeFilterBar();
 
-  /// Below this the selector scrolls horizontally instead of wrapping.
+  /// Wide groups align to the reading end; all seven choices still wrap.
   static const double _wideBreakpoint = 900;
 
   @override
@@ -413,7 +467,7 @@ class _RangeFilterBar extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         RestoflowSpacing.lg,
-        RestoflowSpacing.md,
+        8,
         RestoflowSpacing.lg,
         0,
       ),
@@ -752,12 +806,12 @@ class _OverviewRankRow extends RestoflowRankRow {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             padding: const EdgeInsets.all(4),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -788,7 +842,7 @@ class _OverviewRankRow extends RestoflowRankRow {
                       meta,
                       style: theme.textTheme.bodySmall,
                     );
-                    if (constraints.maxWidth < 420 * scale) {
+                    if (constraints.maxWidth < 300 * scale) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [label, const SizedBox(height: 2), details],
@@ -809,7 +863,7 @@ class _OverviewRankRow extends RestoflowRankRow {
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
                     value: fraction.clamp(0.0, 1.0),
-                    minHeight: 5,
+                    minHeight: 4,
                     color: OverviewVisuals.primary,
                     backgroundColor: OverviewVisuals.softMint,
                   ),
@@ -1085,11 +1139,11 @@ class _ReportContent extends StatelessWidget {
     // "live · limited" caution notice — never a demo/deferred banner over real
     // data.
     final banner = isDemo
-        ? RestoflowNoticeBanner(
+        ? OverviewAlertStrip(
             key: const Key('reports-demo-banner'),
             body: l10n.dashboardDemoReportsNotice,
           )
-        : RestoflowNoticeBanner(
+        : OverviewAlertStrip(
             key: const Key('reports-realmode-banner'),
             title: l10n.dashboardLiveReportsTitle,
             body: l10n.dashboardRealModeNotice,
@@ -1985,14 +2039,18 @@ class _AnalyticsRow extends StatelessWidget {
       builder: (context, constraints) {
         final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
         if (constraints.maxWidth >= 1120 * scale) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          final rtl = Directionality.of(context) == TextDirection.rtl;
+          return _AnalyticsColumns(
+            direction: Directionality.of(context),
+            flexes: [
+              if ((rtl ? c : m) != null) 1,
+              2,
+              if ((rtl ? m : c) != null) 1,
+            ],
             children: [
-              Expanded(flex: 6, child: h),
-              for (final card in secondary) ...[
-                const SizedBox(width: RestoflowSpacing.lg),
-                Expanded(flex: 3, child: card),
-              ],
+              if ((rtl ? c : m) case final first?) first,
+              h,
+              if ((rtl ? m : c) case final last?) last,
             ],
           );
         }
@@ -2009,9 +2067,110 @@ class _AnalyticsRow extends StatelessWidget {
   }
 }
 
-/// RF-127 — a two-up row for the strong secondary pair (top sellers + recent
-/// orders): side by side at wide widths, stacked on narrow. With a single
-/// section it renders that section full width.
+/// Measures real card content before equalizing the desktop row. Unlike a fixed
+/// height or IntrinsicHeight, this supports chart/heading LayoutBuilders and
+/// lets translated text, tender metadata and shift history increase the row.
+class _AnalyticsColumns extends MultiChildRenderObjectWidget {
+  const _AnalyticsColumns({
+    required this.flexes,
+    required this.direction,
+    required super.children,
+  });
+  final List<int> flexes;
+  final TextDirection direction;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderAnalyticsColumns(flexes, direction);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderAnalyticsColumns renderObject,
+  ) {
+    renderObject.configure(flexes, direction);
+  }
+}
+
+class _AnalyticsParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderAnalyticsColumns extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _AnalyticsParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _AnalyticsParentData> {
+  _RenderAnalyticsColumns(this._flexes, this._direction);
+  List<int> _flexes;
+  TextDirection _direction;
+
+  void configure(List<int> flexes, TextDirection direction) {
+    _flexes = flexes;
+    _direction = direction;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _AnalyticsParentData) {
+      child.parentData = _AnalyticsParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    const gap = 16.0;
+    final width = constraints.maxWidth;
+    final total = _flexes.fold(0, (sum, flex) => sum + flex);
+    final unit = (width - gap * (childCount - 1)) / total;
+    var height = 0.0;
+    var child = firstChild;
+    var index = 0;
+    while (child != null) {
+      child.layout(
+        BoxConstraints.tightFor(width: unit * _flexes[index]),
+        parentUsesSize: true,
+      );
+      if (child.size.height > height) height = child.size.height;
+      child = (child.parentData! as _AnalyticsParentData).nextSibling;
+      index++;
+    }
+    size = constraints.constrain(Size(width, height));
+    var cursor = 0.0;
+    child = firstChild;
+    index = 0;
+    while (child != null) {
+      final cardWidth = unit * _flexes[index];
+      child.layout(
+        // A minimum aligns the surfaces without creating a tight-height
+        // relayout boundary. Asynchronous tender/history content must be able
+        // to grow and invalidate this row's natural-height measurement.
+        BoxConstraints(
+          minWidth: cardWidth,
+          maxWidth: cardWidth,
+          minHeight: height,
+        ),
+        parentUsesSize: true,
+      );
+      final data = child.parentData! as _AnalyticsParentData;
+      data.offset = Offset(
+        _direction == TextDirection.rtl ? width - cursor - cardWidth : cursor,
+        0,
+      );
+      cursor += cardWidth + gap;
+      child = data.nextSibling;
+      index++;
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
+}
+
+/// Secondary cards pair only when their actual available width permits it.
 class _PairRow extends StatelessWidget {
   const _PairRow({required this.sections});
 
@@ -2154,7 +2313,7 @@ List<Widget> _zoned(List<List<Widget>> zones) {
   for (final zone in zones) {
     if (zone.isEmpty) continue;
     if (out.isNotEmpty) {
-      out.add(const SizedBox(height: RestoflowSpacing.xxl));
+      out.add(const SizedBox(height: 20));
     }
     out.addAll(_verticallySpaced(zone));
   }
@@ -2284,7 +2443,7 @@ class _VarianceRow extends StatelessWidget {
         ? RestoflowTone.neutral
         : (varianceMinor > 0 ? RestoflowTone.success : RestoflowTone.warning);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: OverviewValueRow(
         label: Text(label, style: theme.textTheme.bodyMedium),
         value: Text(
@@ -2767,8 +2926,8 @@ class _PaymentMixCard extends StatelessWidget {
     final topBps = top.shareBps;
 
     final donut = RestoflowDonutChart(
-      size: 136,
-      ringWidth: 16,
+      size: 120,
+      ringWidth: 14,
       segments: [
         for (final m in analytics)
           RestoflowDonutSegment(
@@ -2801,12 +2960,13 @@ class _PaymentMixCard extends StatelessWidget {
                   : null,
               child: Container(
                 padding: const EdgeInsetsDirectional.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 4,
+                  vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: kRestoflowHairline),
-                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                  border: Border(
+                    bottom: BorderSide(color: OverviewVisuals.border),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2840,7 +3000,7 @@ class _PaymentMixCard extends StatelessWidget {
                       ),
                       textAlign: TextAlign.end,
                     ),
-                    const SizedBox(height: RestoflowSpacing.xs),
+                    const SizedBox(height: 2),
                     // Count, share and average. Each is OMITTED rather than
                     // faked when its basis is missing: a window that collected
                     // nothing has no share to take, and a method with no
@@ -2878,7 +3038,7 @@ class _PaymentMixCard extends StatelessWidget {
             // Donut beside the legend when the card is wide enough (the
             // reference's side-by-side card); stacked and centred when narrow.
             if (constraints.maxWidth >=
-                380 * (MediaQuery.textScalerOf(context).scale(14) / 14)) {
+                250 * (MediaQuery.textScalerOf(context).scale(14) / 14)) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -3119,7 +3279,7 @@ class _KpiGrid extends StatelessWidget {
         final width = constraints.maxWidth;
         final available = width >= 1120 * scale
             ? 6
-            : width >= 900 * scale
+            : width >= 800 * scale
             ? 3
             : width >= 340 * scale
             ? 2
@@ -3133,7 +3293,7 @@ class _KpiGrid extends StatelessWidget {
             text: TextSpan(
               text: card.value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
               ),
             ),

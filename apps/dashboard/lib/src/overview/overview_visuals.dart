@@ -9,10 +9,10 @@ abstract final class OverviewVisuals {
   static const mint = Color(0xFFA7F3D0);
   static const softMint = Color(0xFFD1FAE5);
   static const ink = Color(0xFF1F2937);
-  static const canvas = Color(0xFFF2F8F5);
-  static const border = Color(0xFFE0EBE5);
-  static const radius = BorderRadius.all(Radius.circular(20));
-  static const metricPadding = 14.0;
+  static const canvas = Color(0xFFF6FAF8);
+  static const border = Color(0xFFE4EEE9);
+  static const radius = BorderRadius.all(Radius.circular(16));
+  static const metricPadding = 12.0;
   static const sage = Color(0xFFF5F9F3);
   static const paleMint = Color(0xFFF3FCF7);
 
@@ -31,8 +31,8 @@ abstract final class OverviewVisuals {
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
       margin: EdgeInsets.zero,
-      elevation: 1,
-      shadowColor: Color(0x18047857),
+      elevation: 0.5,
+      shadowColor: Color(0x10047857),
       shape: RoundedRectangleBorder(
         borderRadius: radius,
         side: BorderSide(color: border),
@@ -82,7 +82,7 @@ class OverviewSectionCard extends RestoflowSectionCard {
           color: surface == OverviewSurface.sage ? OverviewVisuals.sage : null,
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -113,7 +113,7 @@ class OverviewSectionCard extends RestoflowSectionCard {
                               Text(
                                 title!,
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  fontSize: 18,
+                                  fontSize: 17,
                                   fontWeight: FontWeight.w700,
                                   color: OverviewVisuals.ink,
                                 ),
@@ -185,7 +185,7 @@ class OverviewValueRow extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-      if (constraints.maxWidth < 260 * scale) {
+      if (constraints.maxWidth < 190 * scale) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [label, const SizedBox(height: 4), value],
@@ -195,7 +195,7 @@ class OverviewValueRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(child: label),
-          const SizedBox(width: 16),
+          const SizedBox(width: 10),
           Expanded(
             child: Align(
               alignment: AlignmentDirectional.centerEnd,

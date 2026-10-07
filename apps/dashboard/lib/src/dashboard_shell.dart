@@ -1085,7 +1085,7 @@ class _NavItem {
   final String label;
 }
 
-// BIZBOT-DASHBOARD-REFRESH-001: shell-only presentation tokens. The shared
+// BIZBOT-DASHBOARD-VISUAL-FIDELITY-002: shell-only presentation tokens. The shared
 // theme and the independently approved Overview palette remain untouched.
 const _shellEmerald = Color(0xFF005541);
 const _shellDeep = Color(0xFF00382D);
@@ -1116,11 +1116,11 @@ class _ShellHeaderBar extends StatelessWidget {
       child: Container(
         key: const Key('dashboard-header-context'),
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(color: const Color(0xFFE0EBE5)),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
@@ -1141,7 +1141,10 @@ class _ShellHeaderBar extends StatelessWidget {
             Expanded(
               child: Text(
                 contextLabel,
-                style: theme.textTheme.titleSmall,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: _shellDeep,
+                  fontWeight: FontWeight.w600,
+                ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
@@ -1155,21 +1158,29 @@ class _ShellHeaderBar extends StatelessWidget {
       tone: isReal ? RestoflowTone.success : RestoflowTone.info,
       icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
     );
-    final controls = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const LanguageSelector(),
-        if (onSignOut != null)
-          IconButton(
-            tooltip: l10n.authSignOut,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            onPressed: () => onSignOut!(),
-            icon: Transform.flip(
-              flipX: Directionality.of(context) == TextDirection.rtl,
-              child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
+    final controls = Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFFE0EBE5)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const LanguageSelector(),
+          if (onSignOut != null)
+            IconButton(
+              tooltip: l10n.authSignOut,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              onPressed: () => onSignOut!(),
+              icon: Transform.flip(
+                flipX: Directionality.of(context) == TextDirection.rtl,
+                child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
     return SafeArea(
       bottom: false,
@@ -1177,7 +1188,7 @@ class _ShellHeaderBar extends StatelessWidget {
         key: const Key('dashboard-persistent-header'),
         width: double.infinity,
         color: _shellCanvas,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final stacked =
@@ -1187,27 +1198,38 @@ class _ShellHeaderBar extends StatelessWidget {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  contextCard,
-                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      Expanded(child: source),
+                      Expanded(child: contextCard),
+                      const SizedBox(width: 8),
                       controls,
                     ],
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: source,
                   ),
                 ],
               );
             }
             return Row(
               children: [
-                Expanded(child: contextCard),
-                const SizedBox(width: 16),
-                Flexible(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: source,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: contextCard,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(child: source),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 controls,
               ],
             );
@@ -1356,8 +1378,7 @@ class _SideNav extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final member = membership;
     final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.lg;
-    // Dashboard V2: the rail is a full-height floating panel (rounded, hairline
-    // outline, soft shadow) on the warm canvas rather than a flush column.
+    // Keep the workspace navigation in a compact, full-height brand panel.
     return Container(
       key: const Key('dashboard-side-rail'),
       width: width,
@@ -1372,31 +1393,34 @@ class _SideNav extends StatelessWidget {
         gradient: const LinearGradient(
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
-          colors: [_shellEmerald, _shellDeep],
+          colors: [_shellEmerald, Color(0xFF004636), _shellDeep],
+          stops: [0, 0.55, 1],
         ),
         borderRadius: BorderRadius.circular(RestoflowRadii.lg),
         border: Border.all(color: _shellEmerald),
-        boxShadow: RestoflowShadows.xs,
+        boxShadow: [
+          BoxShadow(
+            color: _shellDeep.withValues(alpha: 0.16),
+            offset: const Offset(0, 6),
+            blurRadius: 18,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // RF-132: a stronger, never-truncated brand area — the short product
-          // wordmark with the surface tagline beneath it (the previous long
-          // app title ellipsized inside the rail), and a touch more air above
-          // the navigation. BIZBOT official identity: the wordmark is the
-          // official Latin artwork (the brand token is Latin in every locale);
+          // The official Latin artwork remains consistent in every locale;
           // only the tagline is localized text.
           Padding(
             padding: EdgeInsetsDirectional.fromSTEB(
               side,
-              RestoflowSpacing.xl,
+              RestoflowSpacing.lg,
               side,
-              RestoflowSpacing.xl,
+              RestoflowSpacing.lg,
             ),
             child: compact
                 ? const Center(
-                    child: RestoflowBrandMark(size: 40, reverse: true),
+                    child: RestoflowBrandMark(size: 46, reverse: true),
                   )
                 : Theme(
                     data: Theme.of(context).copyWith(
@@ -1405,7 +1429,7 @@ class _SideNav extends StatelessWidget {
                       ).colorScheme.copyWith(onSurfaceVariant: _shellMint),
                     ),
                     child: RestoflowBrandMark(
-                      size: 42,
+                      size: 48,
                       reverse: true,
                       wordmark: BizbotWordmark.latin,
                       tagline: l10n.dashboardBrandTagline,
@@ -1496,7 +1520,10 @@ class _SideNavTileState extends State<_SideNavTile> {
           Expanded(
             child: Text(
               widget.item.label,
-              style: theme.textTheme.labelLarge?.copyWith(color: labelColor),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: labelColor,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1505,12 +1532,15 @@ class _SideNavTileState extends State<_SideNavTile> {
       ],
     );
 
-    final body = Padding(
-      padding: EdgeInsetsDirectional.symmetric(
-        horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
-        vertical: RestoflowSpacing.md,
+    final body = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: Padding(
+        padding: EdgeInsetsDirectional.symmetric(
+          horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
+          vertical: 10,
+        ),
+        child: row,
       ),
-      child: row,
     );
 
     final interactive = Material(
@@ -1547,9 +1577,9 @@ class _SideNavTileState extends State<_SideNavTile> {
         boxShadow: selected
             ? [
                 BoxShadow(
-                  color: _shellActive.withValues(alpha: 0.32),
-                  offset: const Offset(0, 4),
-                  blurRadius: 12,
+                  color: _shellActive.withValues(alpha: 0.24),
+                  offset: const Offset(0, 3),
+                  blurRadius: 10,
                 ),
               ]
             : null,
@@ -1638,6 +1668,7 @@ class _RailFooter extends StatelessWidget {
           colors: const [_shellActive, _shellEmerald],
         ),
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Text(
         initial,
@@ -1652,12 +1683,10 @@ class _RailFooter extends StatelessWidget {
         side,
         RestoflowSpacing.md,
       ),
-      padding: EdgeInsets.all(
-        compact ? RestoflowSpacing.xs : RestoflowSpacing.md,
-      ),
+      padding: EdgeInsets.all(compact ? RestoflowSpacing.xs : 10),
       // Keep real workspace identity readable on the emerald surface.
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: Colors.white.withValues(alpha: 0.09),
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
@@ -1680,6 +1709,7 @@ class _RailFooter extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         _roleLabel(l10n, membership.role),
                         style: theme.textTheme.bodySmall?.copyWith(

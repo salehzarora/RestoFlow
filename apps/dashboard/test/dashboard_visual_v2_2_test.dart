@@ -433,6 +433,11 @@ void main() {
         greaterThan(withinZone),
         reason: 'a zone boundary must be visibly wider than an internal gap',
       );
+      expect(
+        betweenZones,
+        inInclusiveRange(16, 20),
+        reason: 'V002 keeps grouping while tightening the empty zone gaps',
+      );
     });
 
     testWidgets('no feature was removed from the Overview', (tester) async {
