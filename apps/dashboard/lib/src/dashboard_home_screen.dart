@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -133,15 +134,8 @@ class DashboardHomeScreen extends ConsumerWidget {
     return OverviewVisualScope(
       child: Builder(
         builder: (context) => Scaffold(
-          body: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-                stops: [0, 0.35, 0.8],
-                colors: [Color(0xFFE4F5EC), Color(0xFFF4FAF7), Colors.white],
-              ),
-            ),
+          body: ColoredBox(
+            color: OverviewVisuals.canvas,
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -1882,7 +1876,12 @@ class _OverviewSections extends StatelessWidget {
     padding: padding,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
+      // The report occupies one ListView paint layer. Cache its sections so
+      // chart tooltip layout cannot repaint unrelated KPI/table surfaces.
+      children: [
+        for (final child in children)
+          if (child is SizedBox) child else RepaintBoundary(child: child),
+      ],
     ),
   );
 }
@@ -2302,6 +2301,7 @@ class _RenderAnalyticsColumns extends RenderBox
   TextDirection _direction;
 
   void configure(List<int> flexes, TextDirection direction) {
+    if (listEquals(_flexes, flexes) && _direction == direction) return;
     _flexes = flexes;
     _direction = direction;
     markNeedsLayout();
@@ -3533,6 +3533,7 @@ class _KpiGrid extends StatelessWidget {
         // Measure the same text style used by OverviewMetricCard; never shrink
         // or ellipsize a financial value to force a column count.
         for (final card in cards.whereType<OverviewMetricCard>()) {
+          if (columns == 1) break;
           final painter = TextPainter(
             text: TextSpan(
               text: card.value,
@@ -3557,21 +3558,24 @@ class _KpiGrid extends StatelessWidget {
           children: [
             for (var start = 0; start < cards.length; start += columns) ...[
               if (start > 0) SizedBox(height: gap),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var col = 0; col < columns; col++) ...[
-                      if (col > 0) SizedBox(width: gap),
-                      Expanded(
-                        child: start + col < cards.length
-                            ? cards[start + col]
-                            : const SizedBox.shrink(),
-                      ),
+              if (columns == 1)
+                cards[start]
+              else
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var col = 0; col < columns; col++) ...[
+                        if (col > 0) SizedBox(width: gap),
+                        Expanded(
+                          child: start + col < cards.length
+                              ? cards[start + col]
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
             ],
           ],
         );
