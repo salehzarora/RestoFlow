@@ -390,6 +390,25 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# STOREFRONT-PUBLISH-001: the storefront media publisher. It runs every upstream
+# call AS THE CALLER (their JWT + the public anon key); it needs no secret. JWT
+# verification stays ON. The five pinned codec .wasm files (recipe
+# storefront-media-c4, read by index.ts) and the third-party notices ship as
+# static files, so the licence notices travel inside every deploy bundle (deploy
+# with CLI / Docker bundling). Not deployed by the ticket that adds it; see
+# docs/DEPLOYMENT.md.
+[functions.storefront-media-publish]
+enabled = true
+verify_jwt = true
+static_files = [
+  "./functions/storefront-media-publish/vendor/jsquash/png/squoosh_png_bg.wasm",
+  "./functions/storefront-media-publish/vendor/jsquash/resize/squoosh_resize_bg.wasm",
+  "./functions/storefront-media-publish/vendor/jsquash/jpeg-dec/mozjpeg_dec.wasm",
+  "./functions/storefront-media-publish/vendor/jsquash/webp-enc/webp_enc.wasm",
+  "./functions/storefront-media-publish/vendor/jsquash/webp-dec/webp_dec.wasm",
+  "./functions/storefront-media-publish/vendor/THIRD_PARTY_NOTICES.txt",
+]
+
 [analytics]
 enabled = true
 port = 54327
