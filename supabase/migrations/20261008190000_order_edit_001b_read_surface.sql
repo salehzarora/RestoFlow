@@ -565,8 +565,8 @@ begin
            -- ORDER-EDIT-001B (D-043): additive, money-free. has_active_round =
            -- any live service round of the order in submitted..ready (the
            -- app.void_order live-round predicate; an edit-emptied round is
-           -- 'voided'). On a printer_only branch rounds stay 'submitted' until
-           -- completion, so a status label must gate on kitchen_channel.
+           -- 'voided'). On a printer_only branch nothing advances a round, so
+           -- it stays 'submitted' (and this flag TRUE) until completion.
            'dispatch_mode',        o.dispatch_mode,
            'edit_count',           o.edit_count,
            'has_active_round',     exists (
