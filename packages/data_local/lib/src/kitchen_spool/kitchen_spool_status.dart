@@ -81,7 +81,13 @@ enum KitchenSpoolJobStatus {
 enum KitchenSpoolDispatchType {
   initialOrder('initial_order'),
   serviceRound('service_round'),
-  voidNotice('void');
+  voidNotice('void'),
+
+  /// ORDER-EDIT-001C (D-044; API_CONTRACT §4.45.9): the paper-channel change
+  /// slip of one sent-order edit. Printed ONLY through the dedicated change-slip
+  /// route; the legacy and canonical ticket paths refuse it (fail closed), so it
+  /// can never print as an item-less "new order" ticket.
+  orderEdit('order_edit');
 
   const KitchenSpoolDispatchType(this.wireName);
 

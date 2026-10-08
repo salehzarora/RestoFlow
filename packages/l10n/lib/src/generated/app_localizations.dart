@@ -586,6 +586,768 @@ abstract class AppLocalizations {
   /// **'Takeaway orders can\'t take additions'**
   String get posAddItemsIneligibleTakeaway;
 
+  /// ORDER-EDIT-001C POS: Edit order is blocked while the order's submit is not yet acknowledged by the server (design §7.1 step 1); also shown for the server's anti-oracle 'order not found'.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the order to reach the server'**
+  String get posOrderEditBlockedUnacknowledged;
+
+  /// ORDER-EDIT-001C POS: Edit order is blocked while offline (order.edit is an online-only op).
+  ///
+  /// In en, this message translates to:
+  /// **'Editing needs a connection so the kitchen is told'**
+  String get posOrderEditNeedsConnection;
+
+  /// ORDER-EDIT-001C POS: body of the start-of-edit prompt when the cart is not empty (title reuses posParkedActiveCartTitle; actions posOrderEditParkCurrentCart / posClearCart).
+  ///
+  /// In en, this message translates to:
+  /// **'Park or clear the current cart before editing this order.'**
+  String get posOrderEditCartNotEmptyBody;
+
+  /// ORDER-EDIT-001C POS: action that parks the non-empty cart so the edit can start.
+  ///
+  /// In en, this message translates to:
+  /// **'Park current cart'**
+  String get posOrderEditParkCurrentCart;
+
+  /// ORDER-EDIT-001C POS: amber edit-mode banner; {orderCode} is the #XXXXXX code.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing {orderCode}'**
+  String posOrderEditBanner(String orderCode);
+
+  /// ORDER-EDIT-001C POS: amber edit-mode banner for a dine-in order on a table; {orderCode} is the #XXXXXX code, {table} the table label.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing {orderCode} · Table {table}'**
+  String posOrderEditBannerWithTable(String orderCode, String table);
+
+  /// ORDER-EDIT-001C POS: banner action that leaves edit mode without sending anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get posOrderEditDiscard;
+
+  /// ORDER-EDIT-001C POS: confirmation title before discarding unsent edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard your changes?'**
+  String get posOrderEditDiscardConfirmTitle;
+
+  /// ORDER-EDIT-001C POS: confirmation body before discarding unsent edits (nothing reaches the server).
+  ///
+  /// In en, this message translates to:
+  /// **'The order stays exactly as it was sent.'**
+  String get posOrderEditDiscardConfirmBody;
+
+  /// ORDER-EDIT-001C POS: per-line kitchen stage in edit mode: the line's work unit is submitted and not yet acknowledged by the kitchen.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get posOrderEditStageWaiting;
+
+  /// ORDER-EDIT-001C POS: per-line kitchen stage in edit mode: the work unit is accepted or preparing (never claims a dish is being cooked).
+  ///
+  /// In en, this message translates to:
+  /// **'In kitchen'**
+  String get posOrderEditStageInKitchen;
+
+  /// ORDER-EDIT-001C POS: per-line kitchen stage in edit mode: the work unit is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get posOrderEditStageReady;
+
+  /// ORDER-EDIT-001C POS: per-line kitchen stage in edit mode: the work unit is served.
+  ///
+  /// In en, this message translates to:
+  /// **'Served'**
+  String get posOrderEditStageServed;
+
+  /// ORDER-EDIT-001C POS: per-line kitchen stage on a printer-only (paper) order: every sent line shows this.
+  ///
+  /// In en, this message translates to:
+  /// **'Printed'**
+  String get posOrderEditStagePrinted;
+
+  /// ORDER-EDIT-001C POS: modifier sheet in edit mode, label of the split choice when quantity > 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply to'**
+  String get posOrderEditApplyToLabel;
+
+  /// ORDER-EDIT-001C POS: split choice: apply the modifier change to all {count} units of the line ({count} >= 2).
+  ///
+  /// In en, this message translates to:
+  /// **'All {count}'**
+  String posOrderEditApplyToAll(int count);
+
+  /// ORDER-EDIT-001C POS: split choice: apply the modifier change to one unit only.
+  ///
+  /// In en, this message translates to:
+  /// **'Just 1'**
+  String get posOrderEditApplyToOne;
+
+  /// ORDER-EDIT-001C POS: badge on a line added during the edit.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get posOrderEditNewBadge;
+
+  /// ORDER-EDIT-001C POS: action on a struck-through (to-be-removed) line that restores it.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get posOrderEditUndoRemove;
+
+  /// ORDER-EDIT-001C POS: a line whose item or option left the menu.
+  ///
+  /// In en, this message translates to:
+  /// **'No longer on the menu: keep or remove only'**
+  String get posOrderEditKeepOrRemoveOnly;
+
+  /// ORDER-EDIT-001C POS: a line with an item discount can only be removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Discounted item: remove only'**
+  String get posOrderEditRemoveOnlyDiscount;
+
+  /// ORDER-EDIT-001C POS: a legacy-priced line (server flag 'legacy') can only be removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Older item: remove only'**
+  String get posOrderEditRemoveOnlyLegacy;
+
+  /// ORDER-EDIT-001C POS: explanation when the cashier's void_order capability is denied: remove/reduce/modify are disabled, adds and +1 stay possible.
+  ///
+  /// In en, this message translates to:
+  /// **'You can add items. Removing, reducing or changing sent items needs a manager.'**
+  String get posOrderEditRemovalNotAllowedHint;
+
+  /// ORDER-EDIT-001C POS: Ready/Served line on a KDS branch while 'Only managers may remove food that is Ready or Served' is ON (cashier view).
+  ///
+  /// In en, this message translates to:
+  /// **'Manager needed'**
+  String get posOrderEditManagerNeeded;
+
+  /// ORDER-EDIT-001C POS: edit footer; all three are pre-formatted money strings from integer minor units, {delta} already signed. ar/he use '←' where en uses '→'.
+  ///
+  /// In en, this message translates to:
+  /// **'Was {before} → Now {after} ({delta})'**
+  String posOrderEditTotalsChange(String before, String after, String delta);
+
+  /// ORDER-EDIT-001C POS: edit footer; the order discount keeps its stored amount; {amount} is a pre-formatted money string.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount {amount} kept'**
+  String posOrderEditDiscountKept(String amount);
+
+  /// ORDER-EDIT-001C POS: primary action that sends the edit (order.edit).
+  ///
+  /// In en, this message translates to:
+  /// **'Send changes'**
+  String get posOrderEditSendChanges;
+
+  /// ORDER-EDIT-001C POS: why Send changes is disabled: nothing changed.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes yet'**
+  String get posOrderEditNoChanges;
+
+  /// ORDER-EDIT-001C POS: Send changes disabled because every line is removed, and the message for the server's edit_would_empty_order; the POS opens the Cancel order flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Every item would be removed. Cancel the order instead.'**
+  String get posOrderEditAllRemovedUseCancel;
+
+  /// ORDER-EDIT-001C POS: action offered when the kept discount would exceed the new subtotal (never clamped silently).
+  ///
+  /// In en, this message translates to:
+  /// **'Lower discount'**
+  String get posOrderEditLowerDiscount;
+
+  /// ORDER-EDIT-001C POS: why Send changes is disabled before sending (the server refusal invalid_discount/discount_exceeds_order_total reuses posDiscountExceedsOrderTotal).
+  ///
+  /// In en, this message translates to:
+  /// **'The discount is more than the new subtotal.'**
+  String get posOrderEditDiscountExceedsNewSubtotal;
+
+  /// ORDER-EDIT-001C POS: heading of the reason chips (shown only when something is removed, reduced or modified; chip labels use orderEditReason*).
+  ///
+  /// In en, this message translates to:
+  /// **'Reason for the change'**
+  String get posOrderEditReasonTitle;
+
+  /// ORDER-EDIT-001C POS: hint of the free-text field shown with the Other reason chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the reason (up to 200 characters)'**
+  String get posOrderEditReasonOtherHint;
+
+  /// ORDER-EDIT-001C POS: validation and the server refusal reason_required.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a reason for the change'**
+  String get posOrderEditReasonRequired;
+
+  /// ORDER-EDIT-001C POS: validation when Other is chosen without text.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the reason'**
+  String get posOrderEditReasonOtherRequired;
+
+  /// ORDER-EDIT-001C POS: title of the confirm sheet listing Ready/Served lines a change removes, reduces or remakes.
+  ///
+  /// In en, this message translates to:
+  /// **'Already cooked'**
+  String get posOrderEditAlreadyCookedTitle;
+
+  /// ORDER-EDIT-001C POS: body of the finished-food confirm sheet (the old → new total uses posOrderEditTotalsChange).
+  ///
+  /// In en, this message translates to:
+  /// **'These items are recorded as removed after the kitchen made them.'**
+  String get posOrderEditAlreadyCookedBody;
+
+  /// ORDER-EDIT-001C POS: pending state while the journaled order.edit is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending changes…'**
+  String get posOrderEditSending;
+
+  /// ORDER-EDIT-001C POS: why Pay, Discount, Cancel, Add items, Move and Edit are withdrawn while an edit's outcome is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes to this order are still being sent'**
+  String get posOrderEditPendingBlocked;
+
+  /// ORDER-EDIT-001C POS: transport failure; the retry reuses the SAME operation identity.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes not sent — tap to retry'**
+  String get posOrderEditRetry;
+
+  /// ORDER-EDIT-001C POS: result toast when kitchen_ack_required is true; {number} is the edit number.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {number} sent: kitchen must confirm'**
+  String posOrderEditResultKitchenMustConfirm(int number);
+
+  /// ORDER-EDIT-001C POS: result toast when the change landed only in a new ticket on a KDS branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {number} sent: new ticket for the kitchen'**
+  String posOrderEditResultNewTicket(int number);
+
+  /// ORDER-EDIT-001C POS: result toast on the paper channel after the change slip printed.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {number} printed for the kitchen'**
+  String posOrderEditResultPrinted(int number);
+
+  /// ORDER-EDIT-001C POS: result toast when no kitchen confirmation and no new ticket were needed (e.g. only served food was touched).
+  ///
+  /// In en, this message translates to:
+  /// **'Change {number} saved'**
+  String posOrderEditResultSaved(int number);
+
+  /// ORDER-EDIT-001C POS: appended to the result toast when a change remakes finished food (remake = true); {count} >= 1 is the number of remade dishes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Already cooked: 1 dish will be remade} other{Already cooked: {count} dishes will be remade}}'**
+  String posOrderEditResultRemake(int count);
+
+  /// ORDER-EDIT-001C POS: chip on an order card whose edit_count > 0.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited'**
+  String get posOrderEditedChip;
+
+  /// ORDER-EDIT-001C POS: chip while kitchen_edit_ack_pending is true.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen to confirm'**
+  String get posOrderEditKitchenPendingChip;
+
+  /// ORDER-EDIT-001C POS: chip once the kitchen confirmed every required change.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen confirmed'**
+  String get posOrderEditKitchenConfirmedChip;
+
+  /// ORDER-EDIT-001C POS: a pre-bill printed before the edit is outdated (action reuses posPrintBillAction).
+  ///
+  /// In en, this message translates to:
+  /// **'Bill changed: print new bill?'**
+  String get posOrderEditBillChanged;
+
+  /// ORDER-EDIT-001C POS: automatic rebase after line_changed or totals_mismatch (nothing was written; resent with a NEW operation id).
+  ///
+  /// In en, this message translates to:
+  /// **'This order changed on another till. Your changes were applied again — check them and send.'**
+  String get posOrderEditRebased;
+
+  /// ORDER-EDIT-001C POS: after a rebase, the cashier's intents that no longer apply; {items} is the joined item names.
+  ///
+  /// In en, this message translates to:
+  /// **'No longer possible, left out: {items}'**
+  String posOrderEditRebaseDropped(String items);
+
+  /// ORDER-EDIT-001C POS: refusal of the step-1 device-type and role checks (as app.add_order_items), or permission_denied with no detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders can\'t be edited from this device or role.'**
+  String get posOrderEditErrorNotAllowed;
+
+  /// ORDER-EDIT-001C POS: refusals invalid_payload, no_changes, duplicate_line_reference, expected_totals_required and invalid_item_payload.
+  ///
+  /// In en, this message translates to:
+  /// **'The change couldn\'t be sent. Review it and try again.'**
+  String get posOrderEditErrorInvalid;
+
+  /// ORDER-EDIT-001C POS: refusal too_many_changes (more than 100 changes).
+  ///
+  /// In en, this message translates to:
+  /// **'Too many changes at once. Send them as smaller edits.'**
+  String get posOrderEditErrorTooManyChanges;
+
+  /// ORDER-EDIT-001C POS: refusal feature_disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing sent orders is turned off for this branch.'**
+  String get posOrderEditErrorFeatureDisabled;
+
+  /// ORDER-EDIT-001C POS: refusal order_not_editable.
+  ///
+  /// In en, this message translates to:
+  /// **'This order can no longer be edited.'**
+  String get posOrderEditErrorNotEditable;
+
+  /// ORDER-EDIT-001C POS: refusal order_already_settled.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is already paid, so it can\'t be edited.'**
+  String get posOrderEditErrorAlreadyPaid;
+
+  /// ORDER-EDIT-001C POS: refusal kitchen_mode_changed.
+  ///
+  /// In en, this message translates to:
+  /// **'The branch\'s kitchen setup changed after this order was sent, so it can\'t be edited.'**
+  String get posOrderEditErrorKitchenModeChanged;
+
+  /// ORDER-EDIT-001C POS: refusal line_has_discount.
+  ///
+  /// In en, this message translates to:
+  /// **'A discounted item can only be removed.'**
+  String get posOrderEditErrorLineHasDiscount;
+
+  /// ORDER-EDIT-001C POS: refusal legacy_line_not_editable.
+  ///
+  /// In en, this message translates to:
+  /// **'This older item can only be removed.'**
+  String get posOrderEditErrorLegacyLine;
+
+  /// ORDER-EDIT-001C POS: refusal permission_denied / removal_not_permitted.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t remove, reduce or change sent items — ask a manager.'**
+  String get posOrderEditErrorRemovalNotPermitted;
+
+  /// ORDER-EDIT-001C POS: refusal permission_denied / finished_food_needs_manager.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a manager can change food that is Ready or Served.'**
+  String get posOrderEditErrorFinishedFoodNeedsManager;
+
+  /// ORDER-EDIT-001C POS: refusal item_unavailable; {items} is the joined item names.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available right now: {items}. Remove them and send again.'**
+  String posOrderEditErrorItemUnavailable(String items);
+
+  /// ORDER-EDIT-001C POS: refusal modifier_option_not_in_scope (modifier_prep_snapshot_stale reuses posPrepSnapshotStale).
+  ///
+  /// In en, this message translates to:
+  /// **'An option no longer belongs to this item. Refresh the menu and choose the options again.'**
+  String get posOrderEditErrorOptionNotInScope;
+
+  /// ORDER-EDIT-001C POS: refusal tax_mode_unsupported (Q-043).
+  ///
+  /// In en, this message translates to:
+  /// **'Orders can\'t be edited while prices include tax.'**
+  String get posOrderEditErrorTaxModeUnsupported;
+
+  /// ORDER-EDIT-001C POS: the documented paper-channel residual RAISE 23514 (slip over the 32 KB cap); nothing was written.
+  ///
+  /// In en, this message translates to:
+  /// **'This change is too large for one kitchen slip. Split it into smaller edits.'**
+  String get posOrderEditErrorSlipTooLarge;
+
+  /// ORDER-EDIT-001C POS: persistent banner when the awaited change-slip print did not report sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen change slip not printed'**
+  String get posOrderEditSlipNotPrinted;
+
+  /// ORDER-EDIT-001C POS: banner action that reprints the same change slip under the same guard key.
+  ///
+  /// In en, this message translates to:
+  /// **'Print again'**
+  String get posOrderEditPrintAgain;
+
+  /// ORDER-EDIT-001C POS: before Print again, edit_count shows a newer edit (possibly from another till).
+  ///
+  /// In en, this message translates to:
+  /// **'This order has a newer change. Print the latest change slip instead?'**
+  String get posOrderEditNewerSlipOffer;
+
+  /// ORDER-EDIT-001C POS: prints the latest edit's change slip.
+  ///
+  /// In en, this message translates to:
+  /// **'Print latest'**
+  String get posOrderEditPrintLatest;
+
+  /// ORDER-EDIT-001C POS: order status label while a service round of the order is active (has_active_round) and the round is not ready; never Picked up/Served then.
+  ///
+  /// In en, this message translates to:
+  /// **'In kitchen'**
+  String get posOrdersStatusInKitchen;
+
+  /// ORDER-EDIT-001C KDS: amber card header word and the badge on a changed line.
+  ///
+  /// In en, this message translates to:
+  /// **'CHANGED'**
+  String get kdsEditChangedLabel;
+
+  /// ORDER-EDIT-001C KDS: badge on a line the edit added to this ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'NEW'**
+  String get kdsEditNewBadge;
+
+  /// ORDER-EDIT-001C KDS: the old line text under a changed line; {item} is e.g. '2× Burger +Tomato'.
+  ///
+  /// In en, this message translates to:
+  /// **'was: {item}'**
+  String kdsEditWas(String item);
+
+  /// ORDER-EDIT-001C KDS: badge on a line whose quantity the edit increased; {count} is the increase.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count}'**
+  String kdsEditQuantityIncrease(int count);
+
+  /// ORDER-EDIT-001C KDS: badge on a replacement of finished food landed in the edit's round.
+  ///
+  /// In en, this message translates to:
+  /// **'REMAKE'**
+  String get kdsEditRemake;
+
+  /// ORDER-EDIT-001C KDS: under a REMAKE line; {item} is the replaced line text.
+  ///
+  /// In en, this message translates to:
+  /// **'instead of: {item}'**
+  String kdsEditInsteadOf(String item);
+
+  /// ORDER-EDIT-001C KDS: standalone amber card for a work unit the edit emptied.
+  ///
+  /// In en, this message translates to:
+  /// **'All items of this ticket removed'**
+  String get kdsEditAllItemsRemovedTitle;
+
+  /// ORDER-EDIT-001C KDS: body of the emptied-ticket card (mirrors kdsCancelledCardBody).
+  ///
+  /// In en, this message translates to:
+  /// **'The cashier removed everything on this ticket — stop preparing it.'**
+  String get kdsEditAllItemsRemovedBody;
+
+  /// ORDER-EDIT-001C KDS: replaces the advance/Acknowledge button while the unit has a pending change; sends order.edit_ack (pending/failed states reuse kdsAckPending / kdsAckFailed).
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get kdsEditGotIt;
+
+  /// ORDER-EDIT-001C KDS: caption under Got it when the tap also confirms pending edits of the same order that are not on this card; {numbers} is the pre-joined list of edit numbers (e.g. '1, 2').
+  ///
+  /// In en, this message translates to:
+  /// **'Also confirms change {numbers}'**
+  String kdsEditAlsoConfirms(String numbers);
+
+  /// ORDER-EDIT-001C KDS: on a REMOVED line whose dish is remade in a later round ticket; {round} is that round's number (2+).
+  ///
+  /// In en, this message translates to:
+  /// **'Remade in Round {round}'**
+  String kdsEditRemadeInRound(int round);
+
+  /// ORDER-EDIT-001C Kitchen chrome: KDS card header, edit-round marker (with kdsRoundLabel), change slip header and Dashboard timeline; {number} is the edit number. An order edit, NOT money change (never posReceiptChange / ordersChangeLabel).
+  ///
+  /// In en, this message translates to:
+  /// **'Change {number}'**
+  String kitchenEditChangeNumber(int number);
+
+  /// ORDER-EDIT-001C Kitchen chrome: KDS struck-through removed line and the change slip's REMOVED section header (thermal printers cannot strike through).
+  ///
+  /// In en, this message translates to:
+  /// **'REMOVED'**
+  String get kitchenEditRemovedLabel;
+
+  /// ORDER-EDIT-001C Change slip: header word; the builder composes '*** <title> · <kitchenEditChangeNumber> ***'.
+  ///
+  /// In en, this message translates to:
+  /// **'ORDER CHANGED'**
+  String get kitchenChangeSlipTitle;
+
+  /// ORDER-EDIT-001C Change slip: section header for modified lines (Was:/Now: lines) and quantity reductions. An order edit, NOT money change.
+  ///
+  /// In en, this message translates to:
+  /// **'CHANGE'**
+  String get kitchenChangeSlipChangeLabel;
+
+  /// ORDER-EDIT-001C Change slip: section header for new lines and +N quantity increases landed in the edit's round (paper never prints REMAKE).
+  ///
+  /// In en, this message translates to:
+  /// **'ADD'**
+  String get kitchenChangeSlipAddLabel;
+
+  /// ORDER-EDIT-001C Change slip: prefixes the old line (edit_lines[].was) of a CHANGE entry (modify or set_quantity).
+  ///
+  /// In en, this message translates to:
+  /// **'Was'**
+  String get kitchenChangeSlipWasLabel;
+
+  /// ORDER-EDIT-001C Change slip: prefixes each new line (edit_lines[].now[] or the was line at now_qty) of a CHANGE entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get kitchenChangeSlipNowLabel;
+
+  /// ORDER-EDIT-001C Change slip: section header listing every live line of the order (authoritative).
+  ///
+  /// In en, this message translates to:
+  /// **'ORDER NOW'**
+  String get kitchenChangeSlipOrderNow;
+
+  /// ORDER-EDIT-001C Change slip: footer; {orderCode} is the #XXXXXX code (it already carries the '#').
+  ///
+  /// In en, this message translates to:
+  /// **'Replaces earlier tickets for {orderCode}'**
+  String kitchenChangeSlipFooter(String orderCode);
+
+  /// ORDER-EDIT-001C Change slip: prefixes the staff first name of the edit ('<label>: <name>').
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get kitchenChangeSlipStaffLabel;
+
+  /// ORDER-EDIT-001C Change slip: prefixes the edit reason ('<label>: <reason>').
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get kitchenChangeSlipReasonLabel;
+
+  /// ORDER-EDIT-001C Reason: reason_code=customer_changed_mind on POS chips, KDS header, change slip and Dashboard (NOT the Activity log, which keeps activityLogEditReason*).
+  ///
+  /// In en, this message translates to:
+  /// **'Customer changed mind'**
+  String get orderEditReasonCustomerChangedMind;
+
+  /// ORDER-EDIT-001C Reason: reason_code=entry_mistake (non-audit surfaces).
+  ///
+  /// In en, this message translates to:
+  /// **'Order entry mistake'**
+  String get orderEditReasonEntryMistake;
+
+  /// ORDER-EDIT-001C Reason: reason_code=item_unavailable (non-audit surfaces).
+  ///
+  /// In en, this message translates to:
+  /// **'Item unavailable'**
+  String get orderEditReasonItemUnavailable;
+
+  /// ORDER-EDIT-001C Reason: reason_code=kitchen_issue (non-audit surfaces).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen issue'**
+  String get orderEditReasonKitchenIssue;
+
+  /// ORDER-EDIT-001C Reason: reason_code=other (non-audit surfaces); the free text is shown with it.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get orderEditReasonOther;
+
+  /// ORDER-EDIT-001C Dashboard: order status label while a service round is active (has_active_round) and not ready; never Picked up/Served then.
+  ///
+  /// In en, this message translates to:
+  /// **'In kitchen'**
+  String get ordersStatusInKitchen;
+
+  /// ORDER-EDIT-001C Dashboard: badge on an edited order; {count} is edit_count.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited ×{count}'**
+  String ordersEditedBadge(int count);
+
+  /// ORDER-EDIT-001C Dashboard: heading of the order's edit timeline (entries use kitchenEditChangeNumber + time + orderEditReason*). Order edits, NOT money change.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes'**
+  String get ordersEditTimelineTitle;
+
+  /// ORDER-EDIT-001C Dashboard: timeline entry detail; {time} is a pre-formatted local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen confirmed at {time}'**
+  String ordersEditKitchenConfirmedAt(String time);
+
+  /// ORDER-EDIT-001C Dashboard: timeline entry detail while kitchen_ack_pending is true.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the kitchen to confirm'**
+  String get ordersEditKitchenPending;
+
+  /// ORDER-EDIT-001C Dashboard: timeline entry detail on the paper channel (no confirmation step).
+  ///
+  /// In en, this message translates to:
+  /// **'Printed for the kitchen'**
+  String get ordersEditKitchenPrinted;
+
+  /// ORDER-EDIT-001C Dashboard: report block title (owner_order_edits, API §4.47; MONEY M13).
+  ///
+  /// In en, this message translates to:
+  /// **'Order edits'**
+  String get dashboardOrderEditsTitle;
+
+  /// ORDER-EDIT-001C Dashboard: the Order edits bucket is separate from Voids (MONEY M13).
+  ///
+  /// In en, this message translates to:
+  /// **'Changes to sent orders. Not counted in Voids.'**
+  String get dashboardOrderEditsSubtitle;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for edit_count.
+  ///
+  /// In en, this message translates to:
+  /// **'Edits'**
+  String get dashboardOrderEditsEditCount;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for edited_order_count.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited orders'**
+  String get dashboardOrderEditsEditedOrders;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for removed_minor (retired lines with no replacement).
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get dashboardOrderEditsRemoved;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for replaced_out_minor.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaced (before)'**
+  String get dashboardOrderEditsReplacedOut;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for replaced_in_minor.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaced (after)'**
+  String get dashboardOrderEditsReplacedIn;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for added_minor.
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get dashboardOrderEditsAdded;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for net_change_minor (derived; never replaces the gross figure). An order edit, NOT money change.
+  ///
+  /// In en, this message translates to:
+  /// **'Net change'**
+  String get dashboardOrderEditsNetChange;
+
+  /// ORDER-EDIT-001C Dashboard: figure label for removed_minor + replaced_out_minor (always shown, MONEY §12.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Gross removed value'**
+  String get dashboardOrderEditsGrossRemoved;
+
+  /// ORDER-EDIT-001C Dashboard: breakdown heading (values use orderEditReason*).
+  ///
+  /// In en, this message translates to:
+  /// **'By reason'**
+  String get dashboardOrderEditsByReason;
+
+  /// ORDER-EDIT-001C Dashboard: breakdown heading.
+  ///
+  /// In en, this message translates to:
+  /// **'By staff member'**
+  String get dashboardOrderEditsByStaff;
+
+  /// ORDER-EDIT-001C Dashboard: empty state of the Order edits block.
+  ///
+  /// In en, this message translates to:
+  /// **'No order edits in this period'**
+  String get dashboardOrderEditsEmpty;
+
+  /// ORDER-EDIT-001C Dashboard: settings card title for the two branch switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing sent orders'**
+  String get dashboardOrderEditSectionTitle;
+
+  /// ORDER-EDIT-001C Dashboard: toggle for branches.order_edit_enabled (default off).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow editing sent orders'**
+  String get dashboardOrderEditEnabledLabel;
+
+  /// ORDER-EDIT-001C Dashboard: help under the main toggle (rollout rule, design §11).
+  ///
+  /// In en, this message translates to:
+  /// **'Cashiers can change an open, unpaid order after it was sent to the kitchen. Update every kitchen screen, then every POS, before turning this on.'**
+  String get dashboardOrderEditEnabledHelp;
+
+  /// ORDER-EDIT-001C Dashboard: toggle for branches.order_edit_finished_food_manager_only (default off).
+  ///
+  /// In en, this message translates to:
+  /// **'Only managers may remove food that is Ready or Served'**
+  String get dashboardOrderEditFinishedFoodLabel;
+
+  /// ORDER-EDIT-001C Dashboard: help under the finished-food toggle (owner decision 2).
+  ///
+  /// In en, this message translates to:
+  /// **'When off, any cashier allowed to cancel orders may do it, with a reason.'**
+  String get dashboardOrderEditFinishedFoodHelp;
+
+  /// ORDER-EDIT-001C Dashboard: note on the finished-food toggle when kitchen_workflow_mode = printer_only (the value is kept, Q-046); exact design text (ORDER_EDIT_DESIGN §10).
+  ///
+  /// In en, this message translates to:
+  /// **'No effect without a kitchen screen: the system cannot tell when food is ready'**
+  String get dashboardOrderEditFinishedFoodPrinterOnlyNote;
+
+  /// ORDER-EDIT-001C Dashboard: snackbar after a successful save.
+  ///
+  /// In en, this message translates to:
+  /// **'Order editing settings saved.'**
+  String get dashboardOrderEditSaved;
+
+  /// ORDER-EDIT-001C Dashboard: snackbar when the save fails transiently (owner-only/denied/not-found/unavailable reuse the generic dashboardKitchenWorkflow* messages).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the order editing settings. Please try again.'**
+  String get dashboardOrderEditSaveFailed;
+
+  /// ORDER-EDIT-001C Dashboard: staff capability switch label for void_order once order editing exists (design §9.2; replaces staffCapVoidOrder in ORDER-EDIT-001G, which stays unchanged while the feature is dark).
+  ///
+  /// In en, this message translates to:
+  /// **'Can cancel unpaid orders and remove sent items'**
+  String get staffCapVoidOrderAndEdits;
+
+  /// ORDER-EDIT-001C Dashboard: hint under the void_order switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Also covers removing, reducing or changing items already sent to the kitchen when editing an order.'**
+  String get staffCapVoidOrderAndEditsHint;
+
   /// No description provided for @activityLogTitleDiscountApplied.
   ///
   /// In en, this message translates to:

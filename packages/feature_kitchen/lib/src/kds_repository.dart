@@ -63,6 +63,9 @@ class KdsRepository {
         modifiers: s.rowsFor('order_item_modifiers'),
         tables: s.rowsFor('tables'),
         serviceRounds: s.rowsFor('order_service_rounds'),
+        // ORDER-EDIT-001C: the applied sent-order edits (money-free) — the
+        // mapper overlays the unconfirmed ones onto the cards they touched.
+        orderEdits: s.rowsFor('order_edits'),
       ),
     );
   }

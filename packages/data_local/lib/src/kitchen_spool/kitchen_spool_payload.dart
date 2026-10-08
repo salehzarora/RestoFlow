@@ -133,7 +133,14 @@ final class KitchenSpoolLocalPayload {
 }
 
 /// The typed, money-free server dispatch document (closed mirror of the
-/// server payload builders' output — initial order / round delta / void).
+/// server payload builders' output — initial order / round delta / void /
+/// order edit).
+///
+/// ORDER-EDIT-001C: an `order_edit` document (API_CONTRACT §4.45.9) carries the
+/// common header plus [editNumber], [reasonCode], [reason], [staffName],
+/// [editLines] and [orderNow], and never the item/round/void fields; the three
+/// older kinds never carry the edit fields. Decoding is gated BOTH ways by the
+/// kind, so a key that belongs to the other family is an unknown key.
 final class KitchenDispatchDocument {
   KitchenDispatchDocument({
     required this.serverPayloadVersion,
@@ -152,6 +159,11 @@ final class KitchenDispatchDocument {
     this.voidMarker = false,
     this.voidedAt,
     this.affectedItemCount,
+    this.editNumber,
+    this.reasonCode,
+    this.staffName,
+    this.editLines = const [],
+    this.orderNow = const [],
   });
 
   final int serverPayloadVersion;
@@ -169,14 +181,45 @@ final class KitchenDispatchDocument {
   /// simply decode this as null. Money-free display text.
   final String? customerPhone;
   final String? orderNote;
+
+  /// ISO-8601 server instant: the order's creation for an initial/round
+  /// dispatch, the EDIT's creation for an `order_edit` (§4.45.9).
   final String? createdAt;
   final List<KitchenDispatchItem> items;
   final String? roundId;
   final int? roundNumber;
+
+  /// The void reason, or (ORDER-EDIT-001C) the edit's free-text reason — the
+  /// server uses the same `reason` key for both.
   final String? reason;
   final bool voidMarker;
   final String? voidedAt;
   final int? affectedItemCount;
+
+  /// ORDER-EDIT-001C: the per-order edit number (1, 2, …) — required and
+  /// positive on an `order_edit`, null on every other kind. Together with the
+  /// order id it identifies the edit (the pull row carries no edit id).
+  final int? editNumber;
+
+  /// ORDER-EDIT-001C: the edit's reason code as the server sent it. Deliberately
+  /// NOT allowlisted here: a code this build does not know costs only its label
+  /// (the slip falls back to the free text), never the whole slip.
+  final String? reasonCode;
+
+  /// ORDER-EDIT-001C: the acting employee's FIRST name (the server truncates
+  /// it); display text only, never an identifier.
+  final String? staffName;
+
+  /// ORDER-EDIT-001C: one entry per requested change, in request order;
+  /// non-empty on an `order_edit`.
+  final List<KitchenDispatchEditLine> editLines;
+
+  /// ORDER-EDIT-001C: EVERY live line of the order after the edit, in the
+  /// server's canonical menu order (the list that replaces every earlier
+  /// ticket); non-empty on an `order_edit`.
+  final List<KitchenDispatchItem> orderNow;
+
+  bool get _isOrderEdit => kind == KitchenSpoolDispatchType.orderEdit;
 
   Map<String, Object?> toJson() => {
     'v': serverPayloadVersion,
@@ -203,33 +246,224 @@ final class KitchenDispatchDocument {
     if (voidMarker) 'void': true,
     if (voidedAt != null) 'voided_at': voidedAt,
     if (affectedItemCount != null) 'affected_item_count': affectedItemCount,
+    // ORDER-EDIT-001C: the edit keys exist on an `order_edit` ONLY, so the
+    // three older kinds serialize byte-identically to before. Every key avoids
+    // the hostile vocabulary (no `change` / `total` / … token).
+    if (_isOrderEdit) ...{
+      if (editNumber != null) 'edit_number': editNumber,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (staffName != null) 'staff_name': staffName,
+      'edit_lines': [for (final line in editLines) line.toJson()],
+      'order_now': [for (final item in orderNow) item.toJson()],
+    },
   };
 
   static KitchenDispatchDocument fromJson(Map<String, Object?> raw) {
     final r = _StrictReader(raw, 'dispatch');
-    final doc = KitchenDispatchDocument(
-      serverPayloadVersion: r.requirePositiveInt('v'),
-      kind: _dispatchKind(r.requireString('kind')),
-      orderCode: r.requireString('order_code'),
-      orderType: r.requireString('order_type'),
-      tableLabel: r.optionalString('table_label'),
-      customerDisplayName: r.optionalString('customer_display_name'),
-      orderNote: r.optionalString('order_note'),
-      createdAt: r.optionalString('created_at'),
-      items: [
-        for (final item in r.optionalList('items'))
-          KitchenDispatchItem.fromJson(_requireObject(item, 'dispatch.items')),
-      ],
-      roundId: r.optionalString('round_id'),
-      roundNumber: r.optionalInt('round_number'),
-      reason: r.optionalString('reason'),
-      voidMarker: r.optionalBool('void') ?? false,
-      voidedAt: r.optionalString('voided_at'),
-      affectedItemCount: r.optionalInt('affected_item_count'),
-    );
+    final serverPayloadVersion = r.requirePositiveInt('v');
+    final kind = _dispatchKind(r.requireString('kind'));
+    final orderCode = r.requireString('order_code');
+    final orderType = r.requireString('order_type');
+    final tableLabel = r.optionalString('table_label');
+    final customerDisplayName = r.optionalString('customer_display_name');
+    final orderNote = r.optionalString('order_note');
+    final createdAt = r.optionalString('created_at');
+    // ORDER-EDIT-001C: the kind decides WHICH keys are consumed; finish()
+    // then rejects every key of the other family as unknown.
+    final KitchenDispatchDocument doc;
+    switch (kind) {
+      case KitchenSpoolDispatchType.orderEdit:
+        doc = KitchenDispatchDocument(
+          serverPayloadVersion: serverPayloadVersion,
+          kind: kind,
+          orderCode: orderCode,
+          orderType: orderType,
+          tableLabel: tableLabel,
+          customerDisplayName: customerDisplayName,
+          orderNote: orderNote,
+          createdAt: createdAt,
+          editNumber: r.requirePositiveInt('edit_number'),
+          reasonCode: r.optionalString('reason_code'),
+          reason: r.optionalString('reason'),
+          staffName: r.optionalString('staff_name'),
+          // The server refuses an empty edit and an edit that would empty the
+          // order, so both lists are non-empty on every real slip.
+          editLines: [
+            for (final line in r.requireNonEmptyList('edit_lines'))
+              KitchenDispatchEditLine.fromJson(
+                _requireObject(line, 'dispatch.edit_lines'),
+              ),
+          ],
+          orderNow: [
+            for (final item in r.requireNonEmptyList('order_now'))
+              KitchenDispatchItem.fromJson(
+                _requireObject(item, 'dispatch.order_now'),
+              ),
+          ],
+        );
+      case KitchenSpoolDispatchType.initialOrder:
+      case KitchenSpoolDispatchType.serviceRound:
+      case KitchenSpoolDispatchType.voidNotice:
+        // Exactly the keys consumed before ORDER-EDIT-001C, in the same order.
+        doc = KitchenDispatchDocument(
+          serverPayloadVersion: serverPayloadVersion,
+          kind: kind,
+          orderCode: orderCode,
+          orderType: orderType,
+          tableLabel: tableLabel,
+          customerDisplayName: customerDisplayName,
+          orderNote: orderNote,
+          createdAt: createdAt,
+          items: [
+            for (final item in r.optionalList('items'))
+              KitchenDispatchItem.fromJson(
+                _requireObject(item, 'dispatch.items'),
+              ),
+          ],
+          roundId: r.optionalString('round_id'),
+          roundNumber: r.optionalInt('round_number'),
+          reason: r.optionalString('reason'),
+          voidMarker: r.optionalBool('void') ?? false,
+          voidedAt: r.optionalString('voided_at'),
+          affectedItemCount: r.optionalInt('affected_item_count'),
+        );
+    }
     r.finish();
     return doc;
   }
+}
+
+/// ORDER-EDIT-001C — one line of an `order_edit` dispatch's `edit_lines`
+/// (API_CONTRACT §4.45.9), one per requested change, in request order. Every
+/// item is the [KitchenDispatchItem] shape (money-free, closed). CLOSED per
+/// op: each op consumes exactly its own keys, so a stray `now` on a remove or
+/// a `was` on an add is rejected, and an unknown op is the typed payload
+/// exception without echoing the value.
+sealed class KitchenDispatchEditLine {
+  const KitchenDispatchEditLine();
+
+  /// The wire `op` value.
+  String get op;
+
+  Map<String, Object?> toJson();
+
+  static KitchenDispatchEditLine fromJson(Map<String, Object?> raw) {
+    final r = _StrictReader(raw, 'edit_line');
+    final KitchenDispatchEditLine line;
+    switch (r.requireString('op')) {
+      case KitchenDispatchEditRemove.wireOp:
+        line = KitchenDispatchEditRemove(was: _editItem(r.requireMap('was')));
+      case KitchenDispatchEditSetQuantity.wireOp:
+        line = KitchenDispatchEditSetQuantity(
+          was: _editItem(r.requireMap('was')),
+          // The server bounds it to 1..999; no client upper cap.
+          nowQty: r.requirePositiveInt('now_qty'),
+        );
+      case KitchenDispatchEditModify.wireOp:
+        line = KitchenDispatchEditModify(
+          was: _editItem(r.requireMap('was')),
+          now: _editItems(r.requireNonEmptyList('now')),
+        );
+      case KitchenDispatchEditAdd.wireOp:
+        line = KitchenDispatchEditAdd(
+          now: _editItems(r.requireNonEmptyList('now')),
+        );
+      default:
+        throw const KitchenSpoolPayloadFormatException(
+          'edit_line.op is not a supported edit operation',
+        );
+    }
+    r.finish();
+    return line;
+  }
+
+  static KitchenDispatchItem _editItem(Map<String, Object?> raw) =>
+      KitchenDispatchItem.fromJson(raw);
+
+  static List<KitchenDispatchItem> _editItems(List<Object?> raw) => [
+    for (final item in raw)
+      KitchenDispatchItem.fromJson(_requireObject(item, 'edit_line.now')),
+  ];
+}
+
+/// `{op:'remove', was}` — the line [was] left the order.
+final class KitchenDispatchEditRemove extends KitchenDispatchEditLine {
+  KitchenDispatchEditRemove({required this.was});
+
+  static const String wireOp = 'remove';
+
+  final KitchenDispatchItem was;
+
+  @override
+  String get op => wireOp;
+
+  @override
+  Map<String, Object?> toJson() => {'op': wireOp, 'was': was.toJson()};
+}
+
+/// `{op:'set_quantity', was, now_qty}` — the line [was] now has [nowQty]
+/// units. A positive [delta] prints under ADD, otherwise under CHANGE.
+final class KitchenDispatchEditSetQuantity extends KitchenDispatchEditLine {
+  KitchenDispatchEditSetQuantity({required this.was, required this.nowQty});
+
+  static const String wireOp = 'set_quantity';
+
+  final KitchenDispatchItem was;
+  final int nowQty;
+
+  /// The signed quantity difference (`nowQty - was.qty`); integer units only.
+  int get delta => nowQty - was.qty;
+
+  bool get isIncrease => delta > 0;
+
+  @override
+  String get op => wireOp;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': wireOp,
+    'was': was.toJson(),
+    'now_qty': nowQty,
+  };
+}
+
+/// `{op:'modify', was, now[]}` — the line [was] was replaced by the
+/// non-empty [now] lines (a continuation and/or replacements).
+final class KitchenDispatchEditModify extends KitchenDispatchEditLine {
+  KitchenDispatchEditModify({required this.was, required this.now});
+
+  static const String wireOp = 'modify';
+
+  final KitchenDispatchItem was;
+  final List<KitchenDispatchItem> now;
+
+  @override
+  String get op => wireOp;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': wireOp,
+    'was': was.toJson(),
+    'now': [for (final item in now) item.toJson()],
+  };
+}
+
+/// `{op:'add', now[]}` — the non-empty [now] lines joined the order.
+final class KitchenDispatchEditAdd extends KitchenDispatchEditLine {
+  KitchenDispatchEditAdd({required this.now});
+
+  static const String wireOp = 'add';
+
+  final List<KitchenDispatchItem> now;
+
+  @override
+  String get op => wireOp;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': wireOp,
+    'now': [for (final item in now) item.toJson()],
+  };
 }
 
 /// CLEANUP 3: every malformed/unknown dispatch kind is the module's TYPED
@@ -795,6 +1029,16 @@ final class _StrictReader {
     if (v is List) return v;
     throw KitchenSpoolPayloadFormatException(
       '$_context.$key must be an array when present',
+    );
+  }
+
+  /// ORDER-EDIT-001C: a REQUIRED, non-empty array (the edit's `edit_lines` /
+  /// `order_now`, a modify's or add's `now`).
+  List<Object?> requireNonEmptyList(String key) {
+    final v = _take(key);
+    if (v is List && v.isNotEmpty) return v;
+    throw KitchenSpoolPayloadFormatException(
+      '$_context.$key must be a non-empty array',
     );
   }
 

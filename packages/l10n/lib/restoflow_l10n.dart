@@ -10,6 +10,9 @@ library;
 
 export 'src/generated/app_localizations.dart';
 export 'src/localization_wiring.dart';
+// ORDER-EDIT-001C: the closed order-edit reason codes and their shared,
+// non-audit labels (POS chips, KDS header, change slip, Dashboard).
+export 'src/order_edit_reason_labels.dart';
 // PRINT-BRANDING-LOGO-001: the Flutter/dart:ui logo decoder (compressed image
 // bytes -> straight-alpha RGBA DecodedLogoImage) that feeds the pure printing
 // LogoRasterizer; enforces the shared image limits + a typed decode exception.

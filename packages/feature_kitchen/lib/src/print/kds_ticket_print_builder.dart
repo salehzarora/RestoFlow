@@ -5,6 +5,7 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import '../kds_ticket_mapper.dart' show KdsTicketMapper;
 import '../kds_ticket_view.dart';
 import 'kitchen_print_document.dart';
+import 'order_change_slip_view.dart';
 
 /// KITCHEN-PRINT-DUAL-001B — the ONE kitchen-ticket layout, shared by the KDS
 /// live board and the POS direct kitchen print.
@@ -31,7 +32,14 @@ enum KitchenTicketDocumentKind {
   initialOrder,
 
   /// A later service round: items ADDED to an order that already exists.
-  orderAddition;
+  orderAddition,
+
+  /// ORDER-EDIT-001C (D-044): the printer-only CHANGE SLIP of a sent-order
+  /// edit — the changes plus the full ORDER NOW list. It is never derived from
+  /// a [KdsTicketView] ([forTicket] cannot return it) and prints ONLY through
+  /// [buildOrderChangeSlipPrintDocument]: rendering a change as a full ticket
+  /// would make the kitchen cook the whole order again.
+  orderChange;
 
   /// The kind [ticket] is, derived from the ONE authoritative signal — the
   /// server-assigned service-round number, which is null on work unit 1 and
@@ -61,6 +69,7 @@ class KitchenTicketPrintLabels {
     this.restaurantNameFallback,
     this.prepWithOption = _defaultPrepWithOption,
     this.prepWithoutOption = _defaultPrepWithoutOption,
+    this.changeNumberLabel,
   });
 
   /// Header fallback prefix when the ticket has no order number (`kdsTicketLabel`).
@@ -119,6 +128,14 @@ class KitchenTicketPrintLabels {
   /// (`printRestaurantNameFallback`). Null on a label built without it — the
   /// brand line is then simply omitted (never a hardcoded placeholder).
   final String? restaurantNameFallback;
+
+  /// ORDER-EDIT-001C (O-6): `kitchenEditChangeNumber(number)` — "Change N".
+  /// When set, a round OPENED by a sent-order edit
+  /// ([KdsTicketView.openedByEditNumber]) prints "Change N · Round M" instead
+  /// of "Addition · Round M", the same words the KDS card shows. Null (the
+  /// default, and every label built before this field existed) keeps the
+  /// addition marker, so no existing construction site changes its output.
+  final String Function(int number)? changeNumberLabel;
 }
 
 /// Builds the render-neutral, money-free kitchen-ticket [PrintDocument] for
@@ -148,6 +165,12 @@ class KitchenTicketPrintLabels {
 ///
 /// MONEY-FREE by construction (SECURITY T-003): a [KdsTicketView] carries no
 /// money field and nothing here (item right column stays empty) invents one.
+///
+/// ORDER-EDIT-001C: [KitchenTicketDocumentKind.orderChange] is REFUSED with an
+/// [ArgumentError] — a change slip prints only through
+/// [buildOrderChangeSlipPrintDocument]. With [KitchenTicketPrintLabels
+/// .changeNumberLabel] set, a round opened by an edit prints "Change N · Round
+/// M" (O-6); every other ticket prints exactly as before.
 PrintDocument buildKdsTicketPrintDocument({
   required KdsTicketView ticket,
   required KitchenTicketPrintLabels labels,
@@ -161,12 +184,29 @@ PrintDocument buildKdsTicketPrintDocument({
   // number, the honest bare marker prints rather than a fabricated "Round".
   final round = ticket.roundNumber;
   final String? additionMarker;
-  if (documentKind != KitchenTicketDocumentKind.orderAddition) {
-    additionMarker = null;
-  } else if (round != null) {
-    additionMarker = '${labels.additionLabel} · ${labels.roundLabel(round)}';
-  } else {
-    additionMarker = labels.additionLabel;
+  switch (documentKind) {
+    case KitchenTicketDocumentKind.initialOrder:
+      additionMarker = null;
+    case KitchenTicketDocumentKind.orderAddition:
+      final openedBy = ticket.openedByEditNumber;
+      final changeNumber = labels.changeNumberLabel;
+      if (round == null) {
+        additionMarker = labels.additionLabel;
+      } else if (openedBy != null && changeNumber != null) {
+        // ORDER-EDIT-001C (O-6): a round OPENED by a sent-order edit names the
+        // edit instead of "Addition" — the KDS card's "Change N · Round M".
+        additionMarker =
+            '${changeNumber(openedBy)} · ${labels.roundLabel(round)}';
+      } else {
+        additionMarker =
+            '${labels.additionLabel} · ${labels.roundLabel(round)}';
+      }
+    case KitchenTicketDocumentKind.orderChange:
+      throw ArgumentError.value(
+        documentKind,
+        'kind',
+        'prints through buildOrderChangeSlipPrintDocument',
+      );
   }
   final header =
       ticket.orderNumber ?? '${labels.ticketLabel} ${ticket.kitchenTicketId}';
@@ -175,13 +215,7 @@ PrintDocument buildKdsTicketPrintDocument({
   final showStation =
       ticket.stationId != KdsTicketMapper.unassignedStation &&
       ticket.stationId.isNotEmpty;
-  // The brand line: the real restaurant name when the print path supplies one,
-  // else the localized generic fallback from [labels]; omitted only when neither
-  // exists (never a hardcoded placeholder).
-  final rawBrand = restaurantName?.trim();
-  final brand = (rawBrand != null && rawBrand.isNotEmpty)
-      ? rawBrand
-      : labels.restaurantNameFallback?.trim();
+  final brand = _brandLine(restaurantName, labels);
   final items = ticket.items;
   final docTitle = '${labels.previewTitle} $header';
   return PrintDocument(
@@ -247,14 +281,7 @@ PrintDocument buildKdsTicketPrintDocument({
       ],
       for (var i = 0; i < items.length; i++) ...[
         if (i > 0) PrintLine.spacer(),
-        PrintLine.item(
-          '${items[i].quantity} × ${items[i].name}',
-          '',
-          emphasised: true,
-        ),
-        for (final modifier in items[i].modifiers) PrintLine.sub('+ $modifier'),
-        if (items[i].note case final note?)
-          PrintLine.note('» ${labels.noteLabel}: $note'),
+        ..._kitchenItemLines(items[i], labels),
       ],
       if (ticket.notes case final orderNote?) ...[
         PrintLine.rule(),
@@ -265,6 +292,224 @@ PrintDocument buildKdsTicketPrintDocument({
       if (dineIn) PrintLine.banner(),
     ],
   );
+}
+
+/// The brand line: the real restaurant name when the print path supplies one,
+/// else the localized generic fallback from [labels]; null only when neither
+/// exists (never a hardcoded placeholder). Shared by the ticket and the change
+/// slip so both print the same brand.
+String? _brandLine(String? restaurantName, KitchenTicketPrintLabels labels) {
+  final rawBrand = restaurantName?.trim();
+  return (rawBrand != null && rawBrand.isNotEmpty)
+      ? rawBrand
+      : labels.restaurantNameFallback?.trim();
+}
+
+/// The ONE kitchen item block (PRINT-LAYOUT-001B): the quantity-leading item
+/// line (large + bold), each modifier indented under it, then the per-item
+/// note in the distinct note style. [heading] replaces the default
+/// "qty × name" text — the change slip's "Now: 2 × Cola" and "+2 × Cola"
+/// lines; the ticket always uses the default. Money-free: the right column
+/// stays empty.
+List<PrintLine> _kitchenItemLines(
+  KdsItemView item,
+  KitchenTicketPrintLabels labels, {
+  String? heading,
+}) => [
+  PrintLine.item(
+    heading ?? '${item.quantity} × ${item.name}',
+    '',
+    emphasised: true,
+  ),
+  for (final modifier in item.modifiers) PrintLine.sub('+ $modifier'),
+  if (item.note case final note?)
+    PrintLine.note('» ${labels.noteLabel}: $note'),
+];
+
+/// ORDER-EDIT-001C (D-044, design §7.3, O-5) — the money-free CHANGE SLIP of a
+/// sent-order edit ([KitchenTicketDocumentKind.orderChange]) on the SAME line
+/// model, converter and raster path as the kitchen ticket.
+///
+/// Layout, top to bottom (each optional line omitted when its data is absent):
+///  1. the dine-in star band (TABLE-FLOOR-LAYOUT-021);
+///  2. the brand line (same fallback as the ticket);
+///  3. `*** ORDER CHANGED · Change N ***` and 4. the ORIGINAL order code, both
+///     in the large heading style, then 5. the service-mode badge;
+///  6. a rule, then 7. the centered meta block: order type, table, customer,
+///     the EDIT's time (never the order's, never the print time) and the
+///     staff first name — never a phone;
+///  8. the reason note (see [KitchenChangeSlipLabels.reasonCodeLabel]);
+///  9. the sections REMOVED, CHANGE and ADD, each a rule + a large heading
+///     and printed only when it has entries, entries in request order:
+///     REMOVED prints the removed line's full item block; CHANGE prints the
+///     old line as "Was: q × name" (+ its modifiers and note) in the lighter
+///     modifier style and each new line as "Now: q × name" in the bold item
+///     style — raster ignores emphasis, so the two differ by STYLE, and no
+///     '→' is printed (one bidi direction per raster document, Q-015); a
+///     quantity reduction is a CHANGE ("Was: 3 × Cola" / "Now: 1 × Cola");
+///     ADD prints added lines as item blocks and a quantity increase as
+///     "+N × name" with the line's modifiers and note;
+///  10. ORDER NOW — every live line, in the given (server canonical) order,
+///     never re-sorted, then the order note; 11. the footer "Replaces earlier
+///     tickets for #code" (the code already carries its '#');
+///  12. the closing dine-in band.
+///
+/// When [OrderChangeSlipView.orderNow] is empty, ORDER NOW and the footer are
+/// omitted (a change chit that replaces nothing). The paper NEVER prints
+/// REMAKE (design §7.3): the view has no remake field at all. MONEY-FREE by
+/// construction (SECURITY T-003): every line is item/name/modifier/note text
+/// and the right column stays empty; there is no kitchen-count block (O-5).
+PrintDocument buildOrderChangeSlipPrintDocument({
+  required OrderChangeSlipView slip,
+  required KitchenTicketPrintLabels labels,
+  required KitchenChangeSlipLabels changeLabels,
+  String? restaurantName,
+}) {
+  final dineIn = slip.orderType == 'dine_in';
+  final takeaway = slip.orderType == 'takeaway';
+  final brand = _brandLine(restaurantName, labels);
+  final staff = _nonBlank(slip.staffFirstName);
+  final reason = _slipReason(slip, changeLabels);
+
+  // The sections, each a list of entry blocks in request order.
+  final removed = <List<PrintLine>>[];
+  final changed = <List<PrintLine>>[];
+  final added = <List<PrintLine>>[];
+  for (final entry in slip.changes) {
+    switch (entry) {
+      case OrderChangeRemoved(:final was):
+        removed.add(_kitchenItemLines(was, labels));
+      case OrderChangeModified(:final was, :final now):
+        changed.add([
+          ..._wasLines(was, labels, changeLabels),
+          for (final line in now)
+            ..._kitchenItemLines(
+              line,
+              labels,
+              heading:
+                  '${changeLabels.nowLabel}: ${line.quantity} × ${line.name}',
+            ),
+        ]);
+      case final OrderChangeQuantity quantity when quantity.isIncrease:
+        // An increase keeps the old line and lands as "+N" in the edit's
+        // round: the kitchen cooks the delta only.
+        added.add(
+          _kitchenItemLines(
+            quantity.was,
+            labels,
+            heading: '+${quantity.delta} × ${quantity.was.name}',
+          ),
+        );
+      case OrderChangeQuantity(:final was, :final nowQuantity):
+        // A reduction (and, defensively, an unchanged quantity — never
+        // dropped) is a CHANGE of the same line.
+        changed.add([
+          ..._wasLines(was, labels, changeLabels),
+          ..._kitchenItemLines(
+            was,
+            labels,
+            heading: '${changeLabels.nowLabel}: $nowQuantity × ${was.name}',
+          ),
+        ]);
+      case OrderChangeAdded(:final now):
+        for (final line in now) {
+          added.add(_kitchenItemLines(line, labels));
+        }
+    }
+  }
+
+  List<PrintLine> section(String heading, List<List<PrintLine>> blocks) => [
+    if (blocks.isNotEmpty) ...[
+      PrintLine.rule(),
+      PrintLine.title(heading),
+      for (var i = 0; i < blocks.length; i++) ...[
+        if (i > 0) PrintLine.spacer(),
+        ...blocks[i],
+      ],
+    ],
+  ];
+
+  final orderNow = slip.orderNow;
+  return PrintDocument(
+    title: '${changeLabels.orderChanged} ${slip.orderCode}',
+    lines: <PrintLine>[
+      if (dineIn) PrintLine.banner(),
+      if (brand != null && brand.isNotEmpty) PrintLine.subtitle(brand),
+      PrintLine.title(
+        '*** ${changeLabels.orderChanged} · '
+        '${changeLabels.changeNumber(slip.editNumber)} ***',
+      ),
+      PrintLine.title(slip.orderCode),
+      if (kitchenServiceModeBadge(labels, slip.orderType) case final badge?)
+        PrintLine.title(badge),
+      PrintLine.rule(),
+      if (dineIn || takeaway)
+        PrintLine.center(dineIn ? labels.dineIn : labels.takeaway),
+      if (slip.tableLabel case final table?)
+        PrintLine.center('${labels.tableLabel} $table'),
+      if (slip.customerName case final customer?)
+        PrintLine.center('${labels.customerLabel}: $customer'),
+      if (slip.editedAt case final editedAt?)
+        PrintLine.center(formatKitchenTicketTimestamp(editedAt)),
+      if (staff != null) PrintLine.center('${changeLabels.staffLabel}: $staff'),
+      if (reason != null)
+        PrintLine.note('» ${changeLabels.reasonLabel}: $reason'),
+      ...section(changeLabels.removedSection, removed),
+      ...section(changeLabels.changeSection, changed),
+      ...section(changeLabels.addSection, added),
+      if (orderNow.isNotEmpty) ...[
+        PrintLine.rule(),
+        PrintLine.title(changeLabels.orderNowSection),
+        for (var i = 0; i < orderNow.length; i++) ...[
+          if (i > 0) PrintLine.spacer(),
+          ..._kitchenItemLines(orderNow[i], labels),
+        ],
+      ],
+      if (slip.orderNote case final orderNote?) ...[
+        PrintLine.rule(),
+        PrintLine.note('» ${labels.noteLabel}: $orderNote'),
+      ],
+      if (orderNow.isNotEmpty) ...[
+        PrintLine.rule(),
+        PrintLine.center(changeLabels.replacesFooter(slip.orderCode)),
+      ],
+      if (dineIn) PrintLine.banner(),
+    ],
+  );
+}
+
+/// The "was" side of a CHANGE entry: "Was: q × name", then the old line's
+/// modifiers and note, all in the lighter indented modifier style so the old
+/// line never reads like a dish to cook.
+List<PrintLine> _wasLines(
+  KdsItemView was,
+  KitchenTicketPrintLabels labels,
+  KitchenChangeSlipLabels changeLabels,
+) => [
+  PrintLine.sub('${changeLabels.wasLabel}: ${was.quantity} × ${was.name}'),
+  for (final modifier in was.modifiers) PrintLine.sub('+ $modifier'),
+  if (was.note case final note?) PrintLine.sub('» ${labels.noteLabel}: $note'),
+];
+
+/// The slip's reason text, or null when there is nothing to print:
+///  * a known code → its label, plus " · text" when a reason text exists;
+///  * `other` with a text, or an UNKNOWN code → the text alone (an unknown
+///    wire value is never printed);
+///  * `other` without a text (the server refuses it) → its label.
+String? _slipReason(
+  OrderChangeSlipView slip,
+  KitchenChangeSlipLabels changeLabels,
+) {
+  final text = _nonBlank(slip.reasonText);
+  final codeLabel = changeLabels.reasonCodeLabel(slip.reasonCode);
+  if (slip.reasonCode == 'other') return text ?? codeLabel;
+  if (codeLabel != null && text != null) return '$codeLabel · $text';
+  return codeLabel ?? text;
+}
+
+String? _nonBlank(String? raw) {
+  final trimmed = raw?.trim();
+  return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
 }
 
 /// KIOSK-PRINT-114B.6: the LARGE service-mode badge text for [orderType]

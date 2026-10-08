@@ -276,6 +276,472 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا يمكن الإضافة إلى طلبات السفري';
 
   @override
+  String get posOrderEditBlockedUnacknowledged =>
+      'بانتظار وصول الطلب إلى الخادم';
+
+  @override
+  String get posOrderEditNeedsConnection =>
+      'يحتاج التعديل إلى اتصال بالإنترنت ليصل إلى المطبخ';
+
+  @override
+  String get posOrderEditCartNotEmptyBody =>
+      'علّق السلة الحالية أو امسحها قبل تعديل هذا الطلب.';
+
+  @override
+  String get posOrderEditParkCurrentCart => 'تعليق السلة الحالية';
+
+  @override
+  String posOrderEditBanner(String orderCode) {
+    return 'جارٍ تعديل $orderCode';
+  }
+
+  @override
+  String posOrderEditBannerWithTable(String orderCode, String table) {
+    return 'جارٍ تعديل $orderCode · طاولة $table';
+  }
+
+  @override
+  String get posOrderEditDiscard => 'تجاهل التغييرات';
+
+  @override
+  String get posOrderEditDiscardConfirmTitle => 'هل تريد تجاهل تغييراتك؟';
+
+  @override
+  String get posOrderEditDiscardConfirmBody => 'سيبقى الطلب تمامًا كما أُرسل.';
+
+  @override
+  String get posOrderEditStageWaiting => 'قيد الانتظار';
+
+  @override
+  String get posOrderEditStageInKitchen => 'في المطبخ';
+
+  @override
+  String get posOrderEditStageReady => 'جاهز';
+
+  @override
+  String get posOrderEditStageServed => 'قُدِّم';
+
+  @override
+  String get posOrderEditStagePrinted => 'طُبع';
+
+  @override
+  String get posOrderEditApplyToLabel => 'تطبيق على';
+
+  @override
+  String posOrderEditApplyToAll(int count) {
+    return 'الكل ($count)';
+  }
+
+  @override
+  String get posOrderEditApplyToOne => 'واحد فقط';
+
+  @override
+  String get posOrderEditNewBadge => 'جديد';
+
+  @override
+  String get posOrderEditUndoRemove => 'تراجع';
+
+  @override
+  String get posOrderEditKeepOrRemoveOnly =>
+      'لم يعد في القائمة: يمكن إبقاؤه أو حذفه فقط';
+
+  @override
+  String get posOrderEditRemoveOnlyDiscount => 'صنف عليه خصم: يمكن حذفه فقط';
+
+  @override
+  String get posOrderEditRemoveOnlyLegacy => 'صنف قديم: يمكن حذفه فقط';
+
+  @override
+  String get posOrderEditRemovalNotAllowedHint =>
+      'يمكنك إضافة أصناف. حذف الأصناف المُرسلة أو إنقاصها أو تغييرها يحتاج إلى مدير.';
+
+  @override
+  String get posOrderEditManagerNeeded => 'يحتاج إلى مدير';
+
+  @override
+  String posOrderEditTotalsChange(String before, String after, String delta) {
+    return 'كان $before ← الآن $after ($delta)';
+  }
+
+  @override
+  String posOrderEditDiscountKept(String amount) {
+    return 'الخصم $amount لا يزال مطبّقًا';
+  }
+
+  @override
+  String get posOrderEditSendChanges => 'إرسال التغييرات';
+
+  @override
+  String get posOrderEditNoChanges => 'لا توجد تغييرات بعد';
+
+  @override
+  String get posOrderEditAllRemovedUseCancel =>
+      'ستُحذف كل الأصناف. ألغِ الطلب بدلًا من ذلك.';
+
+  @override
+  String get posOrderEditLowerDiscount => 'تخفيض الخصم';
+
+  @override
+  String get posOrderEditDiscountExceedsNewSubtotal =>
+      'الخصم أكبر من المجموع الفرعي الجديد.';
+
+  @override
+  String get posOrderEditReasonTitle => 'سبب التغيير';
+
+  @override
+  String get posOrderEditReasonOtherHint => 'اكتب السبب (حتى 200 حرف)';
+
+  @override
+  String get posOrderEditReasonRequired => 'اختر سببًا للتغيير';
+
+  @override
+  String get posOrderEditReasonOtherRequired => 'اكتب السبب';
+
+  @override
+  String get posOrderEditAlreadyCookedTitle => 'تم تحضيره مسبقًا';
+
+  @override
+  String get posOrderEditAlreadyCookedBody =>
+      'ستُسجَّل هذه الأصناف كمحذوفة بعد أن حضّرها المطبخ.';
+
+  @override
+  String get posOrderEditSending => 'جارٍ إرسال التغييرات…';
+
+  @override
+  String get posOrderEditPendingBlocked =>
+      'لا تزال تغييرات هذا الطلب قيد الإرسال';
+
+  @override
+  String get posOrderEditRetry => 'لم تُرسل التغييرات — اضغط لإعادة المحاولة';
+
+  @override
+  String posOrderEditResultKitchenMustConfirm(int number) {
+    return 'أُرسل التغيير $number: يجب أن يؤكّده المطبخ';
+  }
+
+  @override
+  String posOrderEditResultNewTicket(int number) {
+    return 'أُرسل التغيير $number: تذكرة جديدة للمطبخ';
+  }
+
+  @override
+  String posOrderEditResultPrinted(int number) {
+    return 'طُبع التغيير $number للمطبخ';
+  }
+
+  @override
+  String posOrderEditResultSaved(int number) {
+    return 'حُفظ التغيير $number';
+  }
+
+  @override
+  String posOrderEditResultRemake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تم تحضيره مسبقًا: سيُعاد تحضير $count طبق',
+      many: 'تم تحضيره مسبقًا: سيُعاد تحضير $count طبقًا',
+      few: 'تم تحضيره مسبقًا: سيُعاد تحضير $count أطباق',
+      two: 'تم تحضيره مسبقًا: سيُعاد تحضير طبقين',
+      one: 'تم تحضيره مسبقًا: سيُعاد تحضير طبق واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posOrderEditedChip => 'مُعدَّل';
+
+  @override
+  String get posOrderEditKitchenPendingChip => 'بانتظار تأكيد المطبخ';
+
+  @override
+  String get posOrderEditKitchenConfirmedChip => 'أكّد المطبخ';
+
+  @override
+  String get posOrderEditBillChanged =>
+      'تغيّر الحساب: هل تريد طباعة حساب جديد؟';
+
+  @override
+  String get posOrderEditRebased =>
+      'تغيّر هذا الطلب على صندوق آخر. أُعيد تطبيق تغييراتك — راجعها ثم أرسلها.';
+
+  @override
+  String posOrderEditRebaseDropped(String items) {
+    return 'استُبعد لأنه لم يعد ممكنًا: $items';
+  }
+
+  @override
+  String get posOrderEditErrorNotAllowed =>
+      'لا يمكن تعديل الطلبات من هذا الجهاز أو بهذا الدور.';
+
+  @override
+  String get posOrderEditErrorInvalid =>
+      'تعذّر إرسال التغيير. راجعه وحاول مرة أخرى.';
+
+  @override
+  String get posOrderEditErrorTooManyChanges =>
+      'تغييرات كثيرة دفعة واحدة. أرسلها على شكل تعديلات أصغر.';
+
+  @override
+  String get posOrderEditErrorFeatureDisabled =>
+      'تعديل الطلبات المُرسلة مُعطَّل في هذا الفرع.';
+
+  @override
+  String get posOrderEditErrorNotEditable => 'لم يعد بالإمكان تعديل هذا الطلب.';
+
+  @override
+  String get posOrderEditErrorAlreadyPaid =>
+      'هذا الطلب مدفوع بالفعل، لذا لا يمكن تعديله.';
+
+  @override
+  String get posOrderEditErrorKitchenModeChanged =>
+      'تغيّر إعداد المطبخ في الفرع بعد إرسال هذا الطلب، لذا لا يمكن تعديله.';
+
+  @override
+  String get posOrderEditErrorLineHasDiscount =>
+      'الصنف الذي عليه خصم يمكن حذفه فقط.';
+
+  @override
+  String get posOrderEditErrorLegacyLine => 'هذا الصنف القديم يمكن حذفه فقط.';
+
+  @override
+  String get posOrderEditErrorRemovalNotPermitted =>
+      'لا يمكنك حذف الأصناف المُرسلة أو إنقاصها أو تغييرها — اطلب ذلك من المدير.';
+
+  @override
+  String get posOrderEditErrorFinishedFoodNeedsManager =>
+      'لا يمكن تغيير الطعام الجاهز أو المُقدَّم إلا بواسطة مدير.';
+
+  @override
+  String posOrderEditErrorItemUnavailable(String items) {
+    return 'غير متوفر الآن: $items. احذفها وأرسل مجددًا.';
+  }
+
+  @override
+  String get posOrderEditErrorOptionNotInScope =>
+      'أحد الخيارات لم يعد ضمن هذا الصنف. حدّث القائمة واختر الخيارات من جديد.';
+
+  @override
+  String get posOrderEditErrorTaxModeUnsupported =>
+      'لا يمكن تعديل الطلبات عندما تكون الأسعار شاملة الضريبة.';
+
+  @override
+  String get posOrderEditErrorSlipTooLarge =>
+      'هذا التغيير أكبر من أن يُطبع على قسيمة مطبخ واحدة. قسّمه إلى تعديلات أصغر.';
+
+  @override
+  String get posOrderEditSlipNotPrinted => 'لم تُطبع قسيمة التغيير للمطبخ';
+
+  @override
+  String get posOrderEditPrintAgain => 'إعادة الطباعة';
+
+  @override
+  String get posOrderEditNewerSlipOffer =>
+      'لهذا الطلب تغيير أحدث. هل تريد طباعة قسيمة آخر تغيير بدلًا من ذلك؟';
+
+  @override
+  String get posOrderEditPrintLatest => 'طباعة الأحدث';
+
+  @override
+  String get posOrdersStatusInKitchen => 'في المطبخ';
+
+  @override
+  String get kdsEditChangedLabel => 'مُعدَّل';
+
+  @override
+  String get kdsEditNewBadge => 'جديد';
+
+  @override
+  String kdsEditWas(String item) {
+    return 'كان: $item';
+  }
+
+  @override
+  String kdsEditQuantityIncrease(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get kdsEditRemake => 'إعادة تحضير';
+
+  @override
+  String kdsEditInsteadOf(String item) {
+    return 'بدلًا من: $item';
+  }
+
+  @override
+  String get kdsEditAllItemsRemovedTitle => 'حُذفت كل أصناف هذه التذكرة';
+
+  @override
+  String get kdsEditAllItemsRemovedBody =>
+      'حذف الكاشير كل ما في هذه التذكرة — توقّفوا عن تحضيرها.';
+
+  @override
+  String get kdsEditGotIt => 'تمّ الاطّلاع';
+
+  @override
+  String kdsEditAlsoConfirms(String numbers) {
+    return 'يؤكّد أيضًا التغيير $numbers';
+  }
+
+  @override
+  String kdsEditRemadeInRound(int round) {
+    return 'يُعاد تحضيره في الجولة $round';
+  }
+
+  @override
+  String kitchenEditChangeNumber(int number) {
+    return 'تغيير $number';
+  }
+
+  @override
+  String get kitchenEditRemovedLabel => 'محذوف';
+
+  @override
+  String get kitchenChangeSlipTitle => 'تم تعديل الطلب';
+
+  @override
+  String get kitchenChangeSlipChangeLabel => 'تعديل';
+
+  @override
+  String get kitchenChangeSlipAddLabel => 'إضافة';
+
+  @override
+  String get kitchenChangeSlipWasLabel => 'كان';
+
+  @override
+  String get kitchenChangeSlipNowLabel => 'الآن';
+
+  @override
+  String get kitchenChangeSlipOrderNow => 'الطلب الحالي';
+
+  @override
+  String kitchenChangeSlipFooter(String orderCode) {
+    return 'يحلّ محلّ التذاكر السابقة للطلب $orderCode';
+  }
+
+  @override
+  String get kitchenChangeSlipStaffLabel => 'الموظف';
+
+  @override
+  String get kitchenChangeSlipReasonLabel => 'السبب';
+
+  @override
+  String get orderEditReasonCustomerChangedMind => 'غيّر الزبون رأيه';
+
+  @override
+  String get orderEditReasonEntryMistake => 'خطأ في إدخال الطلب';
+
+  @override
+  String get orderEditReasonItemUnavailable => 'الصنف غير متوفر';
+
+  @override
+  String get orderEditReasonKitchenIssue => 'مشكلة في المطبخ';
+
+  @override
+  String get orderEditReasonOther => 'سبب آخر';
+
+  @override
+  String get ordersStatusInKitchen => 'في المطبخ';
+
+  @override
+  String ordersEditedBadge(int count) {
+    return 'مُعدَّل ×$count';
+  }
+
+  @override
+  String get ordersEditTimelineTitle => 'التغييرات';
+
+  @override
+  String ordersEditKitchenConfirmedAt(String time) {
+    return 'أكّد المطبخ في $time';
+  }
+
+  @override
+  String get ordersEditKitchenPending => 'بانتظار تأكيد المطبخ';
+
+  @override
+  String get ordersEditKitchenPrinted => 'طُبع للمطبخ';
+
+  @override
+  String get dashboardOrderEditsTitle => 'تعديلات الطلبات';
+
+  @override
+  String get dashboardOrderEditsSubtitle =>
+      'تغييرات على طلبات مُرسلة. لا تُحتسب ضمن الإلغاءات.';
+
+  @override
+  String get dashboardOrderEditsEditCount => 'التعديلات';
+
+  @override
+  String get dashboardOrderEditsEditedOrders => 'الطلبات المُعدَّلة';
+
+  @override
+  String get dashboardOrderEditsRemoved => 'أصناف محذوفة';
+
+  @override
+  String get dashboardOrderEditsReplacedOut => 'أصناف مُستبدَلة (قبل)';
+
+  @override
+  String get dashboardOrderEditsReplacedIn => 'أصناف بديلة (بعد)';
+
+  @override
+  String get dashboardOrderEditsAdded => 'أصناف مُضافة';
+
+  @override
+  String get dashboardOrderEditsNetChange => 'صافي التغيير';
+
+  @override
+  String get dashboardOrderEditsGrossRemoved => 'إجمالي القيمة المحذوفة';
+
+  @override
+  String get dashboardOrderEditsByReason => 'حسب السبب';
+
+  @override
+  String get dashboardOrderEditsByStaff => 'حسب الموظف';
+
+  @override
+  String get dashboardOrderEditsEmpty =>
+      'لا توجد تعديلات على الطلبات في هذه الفترة';
+
+  @override
+  String get dashboardOrderEditSectionTitle => 'تعديل الطلبات المُرسلة';
+
+  @override
+  String get dashboardOrderEditEnabledLabel => 'السماح بتعديل الطلبات المُرسلة';
+
+  @override
+  String get dashboardOrderEditEnabledHelp =>
+      'يستطيع الكاشير تغيير طلب مفتوح وغير مدفوع بعد إرساله إلى المطبخ. حدّث كل شاشات المطبخ ثم كل أجهزة نقاط البيع قبل تفعيل هذا الخيار.';
+
+  @override
+  String get dashboardOrderEditFinishedFoodLabel =>
+      'حذف الطعام الجاهز أو المُقدَّم مسموح للمديرين فقط';
+
+  @override
+  String get dashboardOrderEditFinishedFoodHelp =>
+      'عند إيقافه، يستطيع أي كاشير مسموح له بإلغاء الطلبات فعل ذلك مع ذكر السبب.';
+
+  @override
+  String get dashboardOrderEditFinishedFoodPrinterOnlyNote =>
+      'لا أثر له بدون شاشة مطبخ: لا يستطيع النظام معرفة متى يصبح الطعام جاهزًا';
+
+  @override
+  String get dashboardOrderEditSaved => 'حُفظت إعدادات تعديل الطلبات.';
+
+  @override
+  String get dashboardOrderEditSaveFailed =>
+      'تعذّر حفظ إعدادات تعديل الطلبات. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get staffCapVoidOrderAndEdits =>
+      'يمكنه إلغاء الطلبات غير المدفوعة وحذف الأصناف المُرسلة';
+
+  @override
+  String get staffCapVoidOrderAndEditsHint =>
+      'يشمل أيضًا حذف الأصناف المُرسلة إلى المطبخ أو إنقاصها أو تغييرها عند تعديل طلب.';
+
+  @override
   String get activityLogTitleDiscountApplied => 'تم تطبيق خصم';
 
   @override

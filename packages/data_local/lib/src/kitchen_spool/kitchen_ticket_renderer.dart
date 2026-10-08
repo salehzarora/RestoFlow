@@ -141,7 +141,8 @@ final class KitchenTicketLabels {
 /// `KdsTicketView` → `buildKdsTicketPrintDocument`, so every kitchen paper is
 /// the same ticket with the whole-order counts on top). This legacy renderer
 /// implements the same seam and stays for the dispatch kinds the canonical
-/// builder cannot represent (VOID notices).
+/// builder cannot represent (VOID notices). It refuses an ORDER-EDIT-001C
+/// `order_edit` dispatch (see [KitchenTicketRenderer.buildDocument]).
 abstract interface class KitchenDispatchBytesRenderer {
   /// Renders one money-free dispatch to printer bytes. [customerPhoneOverride]
   /// is the OPTIONAL phone from the encrypted local payload (crash-recovery
@@ -182,6 +183,17 @@ final class KitchenTicketRenderer implements KitchenDispatchBytesRenderer {
     // (always-null, never-serialized) transient field. Null => nothing printed.
     String? customerPhoneOverride,
   }) {
+    // ORDER-EDIT-001C: FAIL CLOSED on an order-edit change slip. This frame
+    // knows item tickets and void notices only; an edit carries no `items`, so
+    // it would print an item-less "new order" ticket. The change slip prints
+    // only through its dedicated route (feature_kitchen); a render error here
+    // becomes a visible, non-printing failure in the worker.
+    if (dispatch.kind == KitchenSpoolDispatchType.orderEdit) {
+      throw UnsupportedError(
+        'KitchenTicketRenderer cannot render an order_edit dispatch; '
+        'it prints through the change-slip route',
+      );
+    }
     final isVoid = dispatch.kind == KitchenSpoolDispatchType.voidNotice;
     final customerPhone = customerPhoneOverride ?? dispatch.customerPhone;
     // TABLE-FLOOR-LAYOUT-021 (owner decision 4): a DINE-IN ticket opens and

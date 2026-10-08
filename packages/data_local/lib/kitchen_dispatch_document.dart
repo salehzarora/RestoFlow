@@ -1,8 +1,9 @@
 /// KIOSK-PRINT-114B.5A — the WEB-SAFE kitchen dispatch document library.
 ///
 /// Exposes ONLY the money-free dispatch payload model
-/// ([KitchenDispatchDocument] + its items/prep/modifier types and the
-/// hostile-key validator), the dispatch kind enum, and the dispatch bytes
+/// ([KitchenDispatchDocument] + its items/prep/modifier types, the
+/// ORDER-EDIT-001C edit-line types and the hostile-key validator), the
+/// dispatch kind enum, and the dispatch bytes
 /// renderer seam ([KitchenDispatchBytesRenderer] + the legacy
 /// [KitchenTicketRenderer]) — as a DEDICATED library, deliberately separate
 /// from the package barrel.

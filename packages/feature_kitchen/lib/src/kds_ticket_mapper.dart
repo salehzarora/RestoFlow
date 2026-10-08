@@ -1,5 +1,7 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 
+import 'kds_order_edit_overlay.dart';
+import 'kds_row_views.dart';
 import 'kds_ticket_view.dart';
 
 /// Maps raw `app.sync_pull` rows (orders / order_items / order_item_modifiers)
@@ -32,14 +34,19 @@ class KdsTicketMapper {
   };
 
   /// Station bucket for an item with no `station_id` (routing not yet assigned).
-  static const String unassignedStation = 'unassigned';
+  static const String unassignedStation = kKdsUnassignedStation;
 
+  /// ORDER-EDIT-001C: [orderEdits] are the pulled `order_edits` rows. Empty
+  /// (the default) returns exactly the pre-edit board; otherwise the
+  /// sent-order edit overlay (change headers, line marks, removed lines and
+  /// standalone change cards) is applied before the FIFO sort.
   static List<KdsTicketView> map({
     required List<Map<String, dynamic>> orders,
     required List<Map<String, dynamic>> orderItems,
     required List<Map<String, dynamic>> modifiers,
     List<Map<String, dynamic>> tables = const [],
     List<Map<String, dynamic>> serviceRounds = const [],
+    List<Map<String, dynamic>> orderEdits = const [],
   }) {
     // Dining-table labels (tables entity, money-free): id -> label.
     final tableLabels = <String, String>{};
@@ -73,7 +80,7 @@ class KdsTicketMapper {
         orderId: roundOrderId,
         status: roundStatus,
         roundNumber: numRaw is int ? numRaw : int.tryParse('$numRaw'),
-        submittedAt: _parseTimestamp(r['created_at'], r['client_created_at']),
+        submittedAt: parseKdsTimestamp(r['created_at'], r['client_created_at']),
       );
       ordersWithActiveRounds.add(roundOrderId);
     }
@@ -89,7 +96,7 @@ class KdsTicketMapper {
     // yet). An acknowledged void, a served-source void (no acknowledgement
     // required) and every historical/ordinary voided or cancelled order remain
     // EXCLUDED exactly as before.
-    final orderInfo = <String, _OrderInfo>{};
+    final orderInfo = <String, KdsOrderHeader>{};
     final pendingAckOrders = <String>{};
     for (final o in orders) {
       if (o['deleted_at'] != null) continue;
@@ -121,113 +128,23 @@ class KdsTicketMapper {
         continue;
       }
       if (isPendingAckVoid) pendingAckOrders.add(id);
-      final tableId = o['table_id'];
-      final orderType = o['order_type'];
-      final notes = o['notes'];
-      // ORDER-CUSTOMER-001: the OPTIONAL customer display name (money-free pluck,
-      // trimmed + empty->null). Present on the kitchen wire row because
-      // app.redact_money only strips *_minor/receipt keys, not this display text.
-      final customerName = o['customer_name'];
-      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone (money-free scalar
-      // pluck, trimmed + empty->null). Present on the kitchen wire row because
-      // app.redact_money only strips *_minor/receipt keys, not this display text.
-      final customerPhone = o['customer_phone'];
-      // PSC-001D: the cancellation card's honest void time + source state —
-      // money-free scalar plucks, present only on a pending-ack void.
-      final voidedAtRaw = o['voided_at'];
-      final voidedFromRaw = o['voided_from_status'];
-      orderInfo[id] = _OrderInfo(
+      // ORDER-EDIT-001C: the explicit money-free header pluck (table, type,
+      // notes, customer, submit time, PSC-001D void provenance) is shared with
+      // the edit overlay — kds_row_views.dart.
+      orderInfo[id] = KdsOrderHeader.pluck(
+        o,
         status: status,
-        orderType: orderType is String ? orderType : null,
-        tableLabel: tableId is String ? tableLabels[tableId] : null,
-        notes: notes is String && notes.isNotEmpty ? notes : null,
-        customerName: customerName is String && customerName.trim().isNotEmpty
-            ? customerName.trim()
-            : null,
-        customerPhone:
-            customerPhone is String && customerPhone.trim().isNotEmpty
-            ? customerPhone.trim()
-            : null,
-        // DESIGN-001 display-only pluck: when the order was submitted, for the
-        // elapsed/urgency pill. `created_at` is the stable server insert time
-        // (`updated_at` bumps on every status push and would under-report
-        // age); `client_created_at` is the offline-client fallback. Still a
-        // money-free pluck — timestamps only.
-        submittedAt: _parseTimestamp(o['created_at'], o['client_created_at']),
-        voidedAt: isPendingAckVoid && voidedAtRaw is String
-            ? DateTime.tryParse(voidedAtRaw)
-            : null,
-        voidedFromStatus: isPendingAckVoid && voidedFromRaw is String
-            ? voidedFromRaw
-            : null,
+        tableLabels: tableLabels,
+        isPendingAckVoid: isPendingAckVoid,
         roundContextOnly: isRoundContextOnly,
       );
     }
 
-    // Modifier option names per order_item_id (skip tombstoned modifiers).
-    // A modifier row carries an integer `quantity` (>=1, default 1); when it is
-    // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
-    // same convention as the KDS item line). Never money.
-    // MENU-ORDER-001: collect each item's modifier lines WITH their menu-
-    // configured print-order keys, snapshotted at submit (modifier GROUP display
-    // order + OPTION display order) + the line_position tie-breaker, so the KDS
-    // prints them in the SAME order as the cashier receipt. The wire delivers
-    // modifiers `ORDER BY (updated_at, id)` — random within an item for a fresh
-    // order — so the snapshot keys (not wire order) drive the sequence.
-    final modLinesByItem = <String, List<_ModLine>>{};
-    // KITCHEN-MEAT-001: each order item's meat contributions from its selected
-    // options, PRE-MULTIPLIED by the modifier units (× the item quantity is
-    // applied per item below). Money-free; only options carrying meat_snapshot
-    // contribute (nothing is inferred from a name/price).
-    final meatByItem = <String, List<KitchenMeat>>{};
-    for (final m in modifiers) {
-      if (m['deleted_at'] != null) continue;
-      final itemId = m['order_item_id'];
-      final option = m['option_name_snapshot'];
-      if (itemId is! String || option is! String) continue;
-      final qtyRaw = m['quantity'];
-      final qty = qtyRaw is int ? qtyRaw : int.tryParse('$qtyRaw') ?? 1;
-      // Tolerant int-or-0 plucks — an order/server predating the columns yields
-      // 0 (legacy sentinel), so those modifiers keep their wire (input) order.
-      (modLinesByItem[itemId] ??= <_ModLine>[]).add(
-        _ModLine(
-          groupDisplayOrder: menuPrintOrderInt(
-            m['modifier_group_display_order_snapshot'],
-          ),
-          optionDisplayOrder: menuPrintOrderInt(
-            m['modifier_option_display_order_snapshot'],
-          ),
-          linePosition: menuPrintOrderInt(m['line_position']),
-          text: qty > 1 ? '$option ×$qty' : option,
-        ),
-      );
-      final meat = KitchenMeat.tryFromJson(m['meat_snapshot']);
-      if (meat != null && qty > 0) {
-        // 020 (Codex HIGH #2): scale through the domain API so the WHOLE
-        // decoded contribution survives. Rebuilding it as
-        // `KitchenMeat(quantity: …, unit: …)` silently dropped
-        // classifierOptionId / classifierOptionName / classifierSelected, so a
-        // classified size option arrived at the KDS as an unsplit total even
-        // though the wire carried the answer.
-        //
-        // `scaledBy` multiplies the QUANTITY only, by the modifier's own units;
-        // the order-item quantity is applied exactly once downstream by
-        // [aggregateOrderKitchenCounts]. Nothing is multiplied twice.
-        (meatByItem[itemId] ??= <KitchenMeat>[]).add(meat.scaledBy(qty));
-      }
-    }
-    // MENU-ORDER-001: order each item's modifiers by the shared canonical key
-    // (group -> option -> line_position -> input index), so the KDS prints them
-    // in the SAME Dashboard order as the cashier receipt. Legacy 0 keys fall back
-    // to input (wire) order — a partially-migrated order never scrambles.
-    final modsByItem = <String, List<String>>{};
-    for (final entry in modLinesByItem.entries) {
-      final lines = sortByMenuPrintOrder(
-        entry.value,
-        (l) => [l.groupDisplayOrder, l.optionDisplayOrder, l.linePosition],
-      );
-      modsByItem[entry.key] = [for (final l in lines) l.text];
-    }
+    // Modifier option names (+ meat contributions) per order_item_id, in menu
+    // print order — ORDER-EDIT-001C: built by the shared kds_row_views.dart so
+    // the edit overlay renders retired "was" lines with the same text.
+    final itemModifiers = KdsItemModifiers.fromRows(modifiers);
+    final meatByItem = itemModifiers.meatByItem;
 
     // Group active items into (order, station) tickets.
     final grouped = <String, _TicketBuilder>{};
@@ -253,6 +170,11 @@ class KdsTicketMapper {
       // the exclusion, so ordinary voided/cancelled/served items never leak
       // back onto working cards.
       final pendingAck = pendingAckOrders.contains(orderId);
+      // ORDER-EDIT-001C (§4.46 voided-order rule): the red card shows what the
+      // order HAD when it was voided — a line an edit already retired was
+      // never part of it, so it stays off the card. Round items and live
+      // edit-written lines are kept.
+      if (pendingAck && it['removed_by_edit_id'] != null) continue;
       // PSC-001C: round membership routes the item to its OWN ticket. On a
       // pending-ack cancellation the round items stay on the ORDER-level red
       // card (the kitchen sees everything that was canceled). On a live order
@@ -273,32 +195,17 @@ class KdsTicketMapper {
           _excludedItemStatuses.contains(itemStatus)) {
         continue;
       }
-      final stationRaw = it['station_id'];
-      final station = stationRaw is String && stationRaw.isNotEmpty
-          ? stationRaw
-          : unassignedStation;
-      final nameRaw = it['menu_item_name_snapshot'];
-      final name = nameRaw is String ? nameRaw : '';
-      final qty = it['quantity'];
-      final quantity = qty is int ? qty : int.tryParse('$qty') ?? 0;
-      final noteRaw = it['notes'];
-      final note = noteRaw is String && noteRaw.isNotEmpty ? noteRaw : null;
-      // KITCHEN-PREP-001: the item's PER-UNIT prep components (money-free
-      // {name,quantity,unit}) plucked from the order_items snapshot. Tolerant
-      // parse — a missing/bad value yields an empty list (no prep row).
-      final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
-      // MENU-ORDER-001: the item's menu-configured print-order keys — the
-      // category rank + within-category rank snapshotted at submit (order_items
-      // .category_display_order_snapshot / .item_display_order_snapshot) + the
-      // 001D line_position tie-breaker. Tolerant int-or-0 plucks (an order/server
-      // predating the columns yields 0 -> keep wire order). Non-money.
-      final categoryDisplayOrder = menuPrintOrderInt(
-        it['category_display_order_snapshot'],
+      final station = kdsStationOf(it);
+      // ORDER-EDIT-001C: the money-free item view (name, quantity, modifiers,
+      // note, prep, MENU-ORDER-001 print keys) — shared with the edit overlay
+      // so a retired "was" line renders exactly like this live line.
+      final view = kdsItemViewFromRow(
+        it,
+        itemId: itemId,
+        modifiers: itemModifiers,
       );
-      final itemDisplayOrder = menuPrintOrderInt(
-        it['item_display_order_snapshot'],
-      );
-      final linePosition = menuPrintOrderInt(it['line_position']);
+      final quantity = view.quantity;
+      final prepComponents = view.prepComponents;
 
       // PSC-001C: a round item builds a SEPARATE per-round ticket keyed by
       // (order, station, round); the round's OWN status drives the column.
@@ -316,25 +223,13 @@ class KdsTicketMapper {
           // PSC-001C round tickets project from the ROUND row instead.
           status: pendingAck
               ? KitchenTicketStatus.cancelled
-              : _ticketStatusFor(round?.status ?? info.status),
+              : kdsTicketStatusFor(round?.status ?? info.status),
           info: info,
           roundId: roundId,
           round: round,
         ),
       );
-      builder.items.add(
-        KdsItemView(
-          name: name,
-          quantity: quantity,
-          // Structured modifier lines (was: flattened into the name).
-          modifiers: modsByItem[itemId] ?? const <String>[],
-          note: note,
-          prepComponents: prepComponents,
-          categoryDisplayOrder: categoryDisplayOrder,
-          itemDisplayOrder: itemDisplayOrder,
-          linePosition: linePosition,
-        ),
-      );
+      builder.items.add(view);
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
       // contribution for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
       // order + round, so a round ticket never inherits the original order's
@@ -358,9 +253,9 @@ class KdsTicketMapper {
                 // order_items in (updated_at, id) order — arbitrary within one
                 // order — so without these the KDS could aggregate the same
                 // totals in a different ROW order than the POS/spool.
-                categoryDisplayOrder: categoryDisplayOrder,
-                itemDisplayOrder: itemDisplayOrder,
-                linePosition: linePosition,
+                categoryDisplayOrder: view.categoryDisplayOrder,
+                itemDisplayOrder: view.itemDisplayOrder,
+                linePosition: view.linePosition,
               ),
             );
       }
@@ -389,70 +284,61 @@ class KdsTicketMapper {
       );
     }
 
-    final tickets =
-        grouped.values
-            .map(
-              (b) => KdsTicketView(
-                kitchenTicketId: b.kitchenTicketId,
-                stationId: b.stationId,
-                items: b.items,
-                status: b.status,
-                orderId: b.orderId,
-                // The SAME display code the POS shows (shared derivation).
-                orderNumber: displayOrderCode(b.orderId),
-                orderType: b.info.orderType,
-                tableLabel: b.info.tableLabel,
-                customerName: b.info.customerName,
-                customerPhone: b.info.customerPhone,
-                notes: b.info.notes,
-                // PSC-001C: a round ticket's honest FIFO/elapsed anchor is the
-                // ROUND's own submission time, not the parent order's.
-                submittedAt: b.round?.submittedAt ?? b.info.submittedAt,
-                // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the
-                // unified count totals of THIS ticket's own work unit
-                // (patties + buns + …) shown at the top. Money-free.
-                kitchenCounts:
-                    kitchenCountsByWorkUnit['${b.orderId}|${b.roundId ?? ''}'] ??
-                    const <KitchenCount>[],
-                // PSC-001D: cancellation provenance for the red card (null on
-                // every normal ticket).
-                voidedAt: b.info.voidedAt,
-                voidedFromStatus: b.info.voidedFromStatus,
-                // PSC-001C: round identity for "Addition · Round N" + the
-                // order.round_status action target. Null on original tickets.
-                roundId: b.roundId,
-                roundNumber: b.round?.roundNumber,
-              ),
-            )
-            .toList()
-          // KDS-FIFO-001: oldest submitted order first (stable id tie-break) so
-          // the kitchen can trust the top of each column is the next to make.
-          ..sort(KdsTicketView.compareByOldestFirst);
-    return tickets;
-  }
-
-  /// Parses the submit timestamp from the wire row: `created_at` first (the
-  /// stable server anchor), then `client_created_at`. Non-string / unparseable
-  /// values yield null — the card then shows no elapsed pill rather than a
-  /// fabricated age (DESIGN-001).
-  static DateTime? _parseTimestamp(Object? createdAt, Object? clientCreatedAt) {
-    if (createdAt is String) {
-      final parsed = DateTime.tryParse(createdAt);
-      if (parsed != null) return parsed;
-    }
-    if (clientCreatedAt is String) return DateTime.tryParse(clientCreatedAt);
-    return null;
-  }
-
-  /// Minimal order-status -> kitchen-ticket-status projection.
-  static KitchenTicketStatus _ticketStatusFor(String orderStatus) {
-    return switch (orderStatus) {
-      'submitted' => KitchenTicketStatus.newTicket,
-      'accepted' => KitchenTicketStatus.acknowledged,
-      'preparing' => KitchenTicketStatus.inPreparation,
-      'ready' => KitchenTicketStatus.ready,
-      _ => KitchenTicketStatus.newTicket,
-    };
+    final tickets = grouped.values
+        .map(
+          (b) => KdsTicketView(
+            kitchenTicketId: b.kitchenTicketId,
+            stationId: b.stationId,
+            items: b.items,
+            status: b.status,
+            orderId: b.orderId,
+            // The SAME display code the POS shows (shared derivation).
+            orderNumber: displayOrderCode(b.orderId),
+            orderType: b.info.orderType,
+            tableLabel: b.info.tableLabel,
+            customerName: b.info.customerName,
+            customerPhone: b.info.customerPhone,
+            notes: b.info.notes,
+            // PSC-001C: a round ticket's honest FIFO/elapsed anchor is the
+            // ROUND's own submission time, not the parent order's.
+            submittedAt: b.round?.submittedAt ?? b.info.submittedAt,
+            // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the
+            // unified count totals of THIS ticket's own work unit
+            // (patties + buns + …) shown at the top. Money-free.
+            kitchenCounts:
+                kitchenCountsByWorkUnit['${b.orderId}|${b.roundId ?? ''}'] ??
+                const <KitchenCount>[],
+            // PSC-001D: cancellation provenance for the red card (null on
+            // every normal ticket).
+            voidedAt: b.info.voidedAt,
+            voidedFromStatus: b.info.voidedFromStatus,
+            // PSC-001C: round identity for "Addition · Round N" + the
+            // order.round_status action target. Null on original tickets.
+            roundId: b.roundId,
+            roundNumber: b.round?.roundNumber,
+          ),
+        )
+        .toList();
+    // ORDER-EDIT-001C (D-044): the sent-order edit overlay — a SEPARATE pure
+    // post-pass (kds_order_edit_overlay.dart). With no edit rows the base
+    // board is returned untouched; otherwise affected cards get their change
+    // header / line marks / removed lines, and standalone change cards are
+    // appended. Grouping, counts and the one-card-per-work-unit rule are
+    // unchanged; the FIFO sort below runs over the union.
+    final board = orderEdits.isEmpty
+        ? tickets
+        : applyKdsOrderEditOverlay(
+            base: tickets,
+            orders: orders,
+            orderItems: orderItems,
+            serviceRounds: serviceRounds,
+            orderEdits: orderEdits,
+            modifiers: itemModifiers,
+            tableLabels: tableLabels,
+          );
+    // KDS-FIFO-001: oldest submitted order first (stable id tie-break) so
+    // the kitchen can trust the top of each column is the next to make.
+    return board..sort(KdsTicketView.compareByOldestFirst);
   }
 }
 
@@ -471,7 +357,7 @@ class _TicketBuilder {
   final String stationId;
   final String orderId;
   final KitchenTicketStatus status;
-  final _OrderInfo info;
+  final KdsOrderHeader info;
 
   /// PSC-001C: set when this ticket is an additional service round.
   final String? roundId;
@@ -493,54 +379,4 @@ class _RoundInfo {
   final String status;
   final int? roundNumber;
   final DateTime? submittedAt;
-}
-
-/// The explicit money-free pluck of one active order's display fields.
-class _OrderInfo {
-  const _OrderInfo({
-    required this.status,
-    required this.orderType,
-    required this.tableLabel,
-    required this.notes,
-    required this.customerName,
-    required this.customerPhone,
-    required this.submittedAt,
-    this.voidedAt,
-    this.voidedFromStatus,
-    this.roundContextOnly = false,
-  });
-
-  final String status;
-  final String? orderType;
-  final String? tableLabel;
-  final String? notes;
-  final String? customerName;
-  final String? customerPhone;
-  final DateTime? submittedAt;
-
-  /// PSC-001D: set ONLY for a pending-acknowledgement void (the red card).
-  final DateTime? voidedAt;
-  final String? voidedFromStatus;
-
-  /// PSC-001C: TRUE for a SERVED parent admitted only so its still-active
-  /// rounds can render — its original (already bumped) items never re-appear.
-  final bool roundContextOnly;
-}
-
-/// MENU-ORDER-001: one modifier line with its menu-configured print-order keys
-/// (group display order, option display order) + the line_position tie-breaker,
-/// used to sort an item's modifiers into cashier-receipt (Dashboard) order
-/// before they are flattened to display strings. Money-free.
-class _ModLine {
-  _ModLine({
-    required this.groupDisplayOrder,
-    required this.optionDisplayOrder,
-    required this.linePosition,
-    required this.text,
-  });
-
-  final int groupDisplayOrder;
-  final int optionDisplayOrder;
-  final int linePosition;
-  final String text;
 }

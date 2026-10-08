@@ -1,5 +1,7 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 
+import 'kds_order_edit.dart';
+
 /// A KDS-local view model for one item line on a ticket.
 ///
 /// Moved into `feature_kitchen` under RF-063 (was an app-local model under
@@ -16,6 +18,10 @@ class KdsItemView {
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
     this.linePosition = 0,
+    this.orderItemId,
+    this.editMark,
+    this.editWas,
+    this.editNumber,
   });
 
   /// Display name snapshot (data — rendered as-is, not a localized string).
@@ -56,6 +62,47 @@ class KdsItemView {
   /// (category -> item -> line_position -> input index), so the KDS ticket +
   /// reprint print in the same Dashboard-configured order as the cashier receipt.
   final int linePosition;
+
+  /// ORDER-EDIT-001C: the source `order_items.id` when the line was built from
+  /// a real `sync_pull` row (null for POS/kiosk dispatch views and demo
+  /// fixtures). A NON-MONEY identifier (SECURITY T-003) the edit overlay uses
+  /// to attach its marks; never rendered.
+  final String? orderItemId;
+
+  /// ORDER-EDIT-001C: how a sent-order edit touched this live line, or null
+  /// for an untouched line. `added` / `increased` / `changed` are shown only
+  /// while the edit awaits the kitchen's "Got it"; `remake` is permanent.
+  final KdsEditLineMark? editMark;
+
+  /// ORDER-EDIT-001C: the line this one replaced — the "was" text of a
+  /// `changed` line, or the "instead of" text of a `remake` line. Null
+  /// otherwise. Built exactly like a live line (same name, modifiers, note).
+  final KdsItemView? editWas;
+
+  /// ORDER-EDIT-001C: the number of the edit that wrote this line when
+  /// [editMark] is set ("Change N"); null otherwise.
+  final int? editNumber;
+
+  /// ORDER-EDIT-001C: a copy of this line carrying an edit mark. Every other
+  /// field (including [orderItemId]) is kept.
+  KdsItemView withEdit({
+    required KdsEditLineMark mark,
+    KdsItemView? was,
+    int? editNumber,
+  }) => KdsItemView(
+    name: name,
+    quantity: quantity,
+    modifiers: modifiers,
+    note: note,
+    prepComponents: prepComponents,
+    categoryDisplayOrder: categoryDisplayOrder,
+    itemDisplayOrder: itemDisplayOrder,
+    linePosition: linePosition,
+    orderItemId: orderItemId,
+    editMark: mark,
+    editWas: was,
+    editNumber: editNumber,
+  );
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.
@@ -84,6 +131,8 @@ class KdsTicketView {
     this.voidedFromStatus,
     this.roundId,
     this.roundNumber,
+    this.change,
+    this.openedByEditNumber,
   });
 
   final String kitchenTicketId;
@@ -161,6 +210,57 @@ class KdsTicketView {
   /// PSC-001C: the round's human number (2+; the original order is work unit
   /// 1 and carries null). Drives the localized "Addition · Round N" label.
   final int? roundNumber;
+
+  /// ORDER-EDIT-001C (D-044): the sent-order edits this card still has to
+  /// confirm with "Got it" — header data, removed lines and, for a card with
+  /// no live base ticket, the standalone/emptied facts. Null when nothing on
+  /// this card awaits the kitchen's acknowledgement (and always null on a
+  /// voided order, whose red card supersedes every pending edit, §4.46).
+  final KdsTicketChange? change;
+
+  /// ORDER-EDIT-001C: the number of the KDS-channel edit that OPENED this
+  /// round ("Change N · Round M"). Permanent provenance — it stays after the
+  /// edit is acknowledged. Null on the original ticket and on add-items rounds.
+  final int? openedByEditNumber;
+
+  /// ORDER-EDIT-001C: true while this card shows a change the kitchen must
+  /// confirm with "Got it" (`order.edit_ack`, §4.46).
+  bool get requiresChangeAck => change != null;
+
+  /// ORDER-EDIT-001C: the re-alert key — (work unit, newest pending edit on
+  /// it). A second edit of the same card yields a new key, so the visual pulse
+  /// fires again; null while nothing is pending.
+  String? get changeAlertKey =>
+      change == null ? null : '$kitchenTicketId|e${change!.upToEditNumber}';
+
+  /// ORDER-EDIT-001C: a copy of this ticket with the edit overlay applied.
+  /// A null argument keeps the current value; the status, counts and every
+  /// other field are copied unchanged.
+  KdsTicketView withEditOverlay({
+    KdsTicketChange? change,
+    int? openedByEditNumber,
+    List<KdsItemView>? items,
+  }) => KdsTicketView(
+    kitchenTicketId: kitchenTicketId,
+    stationId: stationId,
+    items: items ?? this.items,
+    status: status,
+    orderId: orderId,
+    orderNumber: orderNumber,
+    orderType: orderType,
+    tableLabel: tableLabel,
+    customerName: customerName,
+    customerPhone: customerPhone,
+    notes: notes,
+    submittedAt: submittedAt,
+    kitchenCounts: kitchenCounts,
+    voidedAt: voidedAt,
+    voidedFromStatus: voidedFromStatus,
+    roundId: roundId,
+    roundNumber: roundNumber,
+    change: change ?? this.change,
+    openedByEditNumber: openedByEditNumber ?? this.openedByEditNumber,
+  );
 
   /// PSC-001D: true for a cancellation card the kitchen must still acknowledge.
   /// The mapper ONLY ever emits cancelled tickets for pending acknowledgements,

@@ -97,6 +97,10 @@ void main() {
         // PSC-001C: additional service rounds — money-free by schema; each
         // active round renders as its own "Addition / Round N" ticket.
         'order_service_rounds',
+        // ORDER-EDIT-001C: the money-free applied edits — strictly AFTER the
+        // items, modifiers and rounds that reference them (sync_pull reads in
+        // request order, one snapshot per entity).
+        'order_edits',
         // Money-free dining-table directory (demo-readiness sprint) — the KDS
         // resolves orders.table_id to a human label; still no financial entity.
         'tables',
@@ -414,5 +418,102 @@ void main() {
     ticks.add(null);
     await _settleUntil(() => transport.calls >= 3);
     expect(transport.calls, 3);
+  });
+
+  group('ORDER-EDIT-001C: the order_edits entity', () {
+    // Server-shaped (public.order_edits) money-free rows. The acknowledgement
+    // writes the one-time triple and bumps updated_at, so the SAME id is
+    // re-delivered on the next pull (append-only, never tombstoned).
+    Map<String, dynamic> edit(
+      String id, {
+      required int number,
+      String? ackAt,
+      String updatedAt = '2026-10-08T10:00:00+00:00',
+    }) => {
+      'id': id,
+      'order_id': 'o1',
+      'edit_number': number,
+      'kitchen_channel': 'kds',
+      'kitchen_ack_required': true,
+      'kitchen_ack_at': ackAt,
+      'reason_code': 'customer_changed_mind',
+      'reason_text': null,
+      'created_at': '2026-10-08T10:00:00+00:00',
+      'updated_at': updatedAt,
+      'deleted_at': null,
+    };
+
+    Map<String, dynamic> editsPage(
+      List<Map<String, dynamic>> rows, {
+      required Map<String, dynamic> nextCursor,
+    }) => {
+      'order_edits': {
+        'rows': rows,
+        'next_cursor': nextCursor,
+        'has_more': false,
+      },
+    };
+
+    test('order_edits rows accumulate by id, and an acknowledged '
+        're-delivery REPLACES the stored row (no duplicate)', () async {
+      final transport = _ScriptedTransport([
+        () => _env(
+          editsPage(
+            [edit('e1', number: 1), edit('e2', number: 2)],
+            nextCursor: {'updated_at': 't1', 'id': 'e2'},
+          ),
+        ),
+        // The kitchen's "Got it" stamped e1: the same id comes back with
+        // kitchen_ack_at set and a newer updated_at.
+        () => _env(
+          editsPage(
+            [
+              edit(
+                'e1',
+                number: 1,
+                ackAt: '2026-10-08T10:05:00+00:00',
+                updatedAt: '2026-10-08T10:05:00+00:00',
+              ),
+            ],
+            nextCursor: {'updated_at': 't2', 'id': 'e1'},
+          ),
+        ),
+      ]);
+      final c = build(transport);
+      addTearDown(c.dispose);
+
+      await c.start();
+      expect(c.state.rowsFor('order_edits').map((r) => r['id']).toSet(), {
+        'e1',
+        'e2',
+      });
+
+      await c.refresh();
+      final rows = c.state.rowsFor('order_edits');
+      expect(rows, hasLength(2), reason: 'the re-delivery never duplicates');
+      final e1 = rows.singleWhere((r) => r['id'] == 'e1');
+      expect(e1['kitchen_ack_at'], '2026-10-08T10:05:00+00:00');
+      final e2 = rows.singleWhere((r) => r['id'] == 'e2');
+      expect(e2['kitchen_ack_at'], isNull, reason: 'untouched rows are kept');
+      // The second request carried the order_edits cursor of the first page.
+      expect(transport.paramsLog[1]['p_cursors'], {
+        'order_edits': {'updated_at': 't1', 'id': 'e2'},
+      });
+    });
+
+    test('order_edits is requested after every entity that references an '
+        'edit id', () async {
+      final transport = _ScriptedTransport([() => _env(_ordersPage(const []))]);
+      final c = build(transport);
+      addTearDown(c.dispose);
+
+      await c.start();
+      final entities = (transport.paramsLog.first['p_entities'] as List)
+          .cast<String>();
+      final at = entities.indexOf('order_edits');
+      expect(at, greaterThan(entities.indexOf('order_items')));
+      expect(at, greaterThan(entities.indexOf('order_item_modifiers')));
+      expect(at, greaterThan(entities.indexOf('order_service_rounds')));
+    });
   });
 }

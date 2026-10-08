@@ -3,6 +3,7 @@ import 'dart:ui' show Locale;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_ticket_print_builder.dart' show KitchenTicketPrintLabels;
+import 'order_change_slip_view.dart' show KitchenChangeSlipLabels;
 
 /// KIOSK-PRINT-114B.5A: MOVED VERBATIM from `apps/pos/lib/src/print/` (the POS
 /// keeps a re-export shim at the old path) so the kiosk claimed print and the
@@ -39,6 +40,10 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   additionLabel: l10n.kdsAdditionLabel,
   roundLabel: l10n.kdsRoundLabel,
   restaurantNameFallback: l10n.printRestaurantNameFallback,
+  // ORDER-EDIT-001C (O-6): "Change N" for a round OPENED by a sent-order edit
+  // ("Change N · Round M"). POS and kiosk tickets never carry an edit-opened
+  // round, so their paper is unchanged.
+  changeNumberLabel: l10n.kitchenEditChangeNumber,
 );
 
 /// KIOSK-PRINT-114B.5A: context-free labels for a BCP-47 language code — the
@@ -55,4 +60,45 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsForLanguageCode(String code) {
     l10n = lookupAppLocalizations(const Locale('en'));
   }
   return kitchenTicketPrintLabelsFromL10n(l10n);
+}
+
+/// ORDER-EDIT-001C (D-044) — the change-slip CHROME labels from the ONE shared
+/// `AppLocalizations`. "CHANGE" is the order-change key
+/// (`kitchenChangeSlipChangeLabel`), never the money-change word
+/// (`posReceiptChange`, الباقي / עודף). The reason labels are the shared,
+/// NON-audit `orderEditReason*` keys (the same mapping as
+/// `orderEditReasonLabel`).
+KitchenChangeSlipLabels kitchenChangeSlipLabelsFromL10n(
+  AppLocalizations l10n,
+) => KitchenChangeSlipLabels(
+  orderChanged: l10n.kitchenChangeSlipTitle,
+  changeNumber: l10n.kitchenEditChangeNumber,
+  removedSection: l10n.kitchenEditRemovedLabel,
+  changeSection: l10n.kitchenChangeSlipChangeLabel,
+  addSection: l10n.kitchenChangeSlipAddLabel,
+  orderNowSection: l10n.kitchenChangeSlipOrderNow,
+  wasLabel: l10n.kitchenChangeSlipWasLabel,
+  nowLabel: l10n.kitchenChangeSlipNowLabel,
+  staffLabel: l10n.kitchenChangeSlipStaffLabel,
+  reasonLabel: l10n.kitchenChangeSlipReasonLabel,
+  replacesFooter: l10n.kitchenChangeSlipFooter,
+  reasonCustomerChangedMind: l10n.orderEditReasonCustomerChangedMind,
+  reasonEntryMistake: l10n.orderEditReasonEntryMistake,
+  reasonItemUnavailable: l10n.orderEditReasonItemUnavailable,
+  reasonKitchenIssue: l10n.orderEditReasonKitchenIssue,
+  reasonOther: l10n.orderEditReasonOther,
+);
+
+/// ORDER-EDIT-001C: context-free change-slip labels for a BCP-47 language
+/// code (the POS drain worker and the kiosk lane run outside any widget
+/// tree). Fail-safe exactly like [kitchenTicketPrintLabelsForLanguageCode]:
+/// an unsupported code resolves to English, never a throw on the print path.
+KitchenChangeSlipLabels kitchenChangeSlipLabelsForLanguageCode(String code) {
+  AppLocalizations l10n;
+  try {
+    l10n = lookupAppLocalizations(Locale(code));
+  } catch (_) {
+    l10n = lookupAppLocalizations(const Locale('en'));
+  }
+  return kitchenChangeSlipLabelsFromL10n(l10n);
 }

@@ -27,7 +27,10 @@ final class PulledKitchenDispatch {
 
   final String dispatchId;
 
-  /// `initial_order` / `service_round` / `void` — closed on parse.
+  /// `initial_order` / `service_round` / `void` / `order_edit` (ORDER-EDIT-001C;
+  /// the server ledger's CHECK) — closed on parse. An `order_edit` row has no
+  /// [serviceRoundId] and the server sends no edit id: the edit is identified by
+  /// [dispatchId], or by [orderId] plus the payload's `edit_number`.
   final String dispatchType;
   final String orderId;
   final String? serviceRoundId;
@@ -95,6 +98,10 @@ const Set<String> _closedDispatchTypes = {
   'initial_order',
   'service_round',
   'void',
+  // ORDER-EDIT-001C (D-044; API_CONTRACT §4.45.9): the paper-channel change
+  // slip. The server ranks it with the round deltas (`type_rank` 2), so the
+  // keyset cursor is unchanged.
+  'order_edit',
 };
 
 /// Device-token repository (house pattern; token read per request).

@@ -20,6 +20,14 @@ const List<String> kKdsPullEntities = [
   // schema; the KDS renders each active round as its own ticket with the
   // round's OWN status.
   'order_service_rounds',
+  // ORDER-EDIT-001C: the money-free applied sent-order edits (D-044) — the KDS
+  // derives its change cards and "Got it" state from them. It MUST follow
+  // order_items, order_item_modifiers and order_service_rounds: sync_pull reads
+  // the entities in request order, one statement (and snapshot) each, so an
+  // item or round that references an edit already has its edit row in the same
+  // response. Rows are append-only and never tombstoned; an acknowledgement
+  // re-delivers the same id, which replaces the stored row.
+  'order_edits',
   'tables',
 ];
 

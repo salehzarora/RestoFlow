@@ -1,4 +1,4 @@
-import 'dart:convert' show utf8;
+import 'dart:convert' show json, utf8;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_local/kitchen_dispatch_document.dart';
@@ -69,6 +69,48 @@ KitchenCount? _count(KdsTicketView t, String label) =>
 
 List<String> _texts(PrintDocument doc) => [
   for (final line in doc.lines) line.left ?? line.right ?? '',
+];
+
+/// ORDER-EDIT-001C — REAL server output of `app.kitchen_dispatch_payload_order_edit`
+/// (copied verbatim from packages/data_local/test/kitchen_spool_order_edit_payload_test.dart,
+/// captured through `public.sync_push` `order.edit` in a rolled-back
+/// transaction; only `created_at` is pinned). Six edit lines [modify, remove,
+/// set_quantity 3→1, set_quantity 1→3, modify 2→1+1, add] and the eight
+/// ORDER NOW lines, split lines as the server emits them.
+const String _serverOrderEdit = r'''
+{"v": 1, "kind": "order_edit", "order_now": [{"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}, {"qty": 1, "name": "cheese"}]}, {"qty": 1, "name": "Cola", "modifiers": []}, {"qty": 1, "name": "Cola", "modifiers": []}, {"qty": 1, "name": "Lemonade", "modifiers": []}, {"qty": 2, "name": "Lemonade", "modifiers": []}, {"qty": 1, "name": "Water", "modifiers": []}], "created_at": "2026-10-08T22:33:30.46448+00:00", "edit_lines": [{"op": "modify", "now": [{"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}], "was": {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "tomato"}, {"qty": 1, "name": "cucumber"}]}}, {"op": "remove", "was": {"qty": 1, "name": "Fries", "modifiers": []}}, {"op": "set_quantity", "was": {"qty": 3, "name": "Cola", "modifiers": []}, "now_qty": 1}, {"op": "set_quantity", "was": {"qty": 1, "name": "Lemonade", "modifiers": []}, "now_qty": 3}, {"op": "modify", "now": [{"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}, {"qty": 1, "name": "cheese"}]}], "was": {"qty": 2, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}}, {"op": "add", "now": [{"qty": 1, "name": "Water", "modifiers": []}]}], "order_code": "#00A001", "order_type": "dine_in", "staff_name": "Dana", "edit_number": 1, "reason_code": "entry_mistake"}
+''';
+
+/// The same edit with a table, a customer, an order note, a reason text, an
+/// item note and an item prep component (every optional key).
+const String _serverOrderEditRich = r'''
+{"v": 1, "kind": "order_edit", "reason": "Guest asked twice", "order_now": [{"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "prep": [{"name": "Patty", "unit": "pc", "quantity": 1}], "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}, {"qty": 1, "name": "cheese"}]}, {"qty": 1, "name": "Cola", "modifiers": []}, {"qty": 1, "name": "Cola", "modifiers": []}, {"qty": 1, "name": "Lemonade", "modifiers": []}, {"qty": 2, "name": "Lemonade", "modifiers": []}, {"qty": 1, "name": "Water", "modifiers": []}], "created_at": "2026-10-08T22:33:30.46448+00:00", "edit_lines": [{"op": "modify", "now": [{"qty": 1, "name": "Burger", "prep": [{"name": "Patty", "unit": "pc", "quantity": 1}], "modifiers": [{"qty": 1, "name": "cucumber"}]}], "was": {"qty": 1, "name": "Burger", "prep": [{"name": "Patty", "unit": "pc", "quantity": 1}], "modifiers": [{"qty": 1, "name": "tomato"}, {"qty": 1, "name": "cucumber"}]}}, {"op": "remove", "was": {"qty": 1, "name": "Fries", "note": "no salt", "modifiers": []}}, {"op": "set_quantity", "was": {"qty": 3, "name": "Cola", "modifiers": []}, "now_qty": 1}, {"op": "set_quantity", "was": {"qty": 1, "name": "Lemonade", "modifiers": []}, "now_qty": 3}, {"op": "modify", "now": [{"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}, {"qty": 1, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}, {"qty": 1, "name": "cheese"}]}], "was": {"qty": 2, "name": "Burger", "modifiers": [{"qty": 1, "name": "cucumber"}]}}, {"op": "add", "now": [{"qty": 1, "name": "Water", "modifiers": []}]}], "order_code": "#00A001", "order_note": "Allergy: nuts", "order_type": "dine_in", "staff_name": "Dana", "edit_number": 1, "reason_code": "entry_mistake", "table_label": "12", "customer_display_name": "Noa"}
+''';
+
+KitchenDispatchDocument _orderEdit([String raw = _serverOrderEdit]) =>
+    KitchenDispatchDocument.fromJson(json.decode(raw) as Map<String, Object?>);
+
+KitchenChangeSlipLabels _changeLabels() => KitchenChangeSlipLabels(
+  orderChanged: 'ORDER CHANGED',
+  changeNumber: (n) => 'Change $n',
+  removedSection: 'REMOVED',
+  changeSection: 'CHANGE',
+  addSection: 'ADD',
+  orderNowSection: 'ORDER NOW',
+  wasLabel: 'Was',
+  nowLabel: 'Now',
+  staffLabel: 'Staff',
+  reasonLabel: 'Reason',
+  replacesFooter: (code) => 'Replaces earlier tickets for $code',
+  reasonCustomerChangedMind: 'Customer changed mind',
+  reasonEntryMistake: 'Order entry mistake',
+  reasonItemUnavailable: 'Item unavailable',
+  reasonKitchenIssue: 'Kitchen issue',
+  reasonOther: 'Other',
+);
+
+List<(PrintLineKind, String)> _shape(Iterable<PrintLine> lines) => [
+  for (final l in lines) (l.kind, l.left ?? ''),
 ];
 
 void main() {
@@ -474,5 +516,360 @@ void main() {
 
   test('pp import is only for the render-neutral document type', () {
     expect(pp.PrinterProfile.escPos80mm, isNotNull);
+  });
+
+  test('ORDER-EDIT-001C: an order_edit dispatch is never adapted into a '
+      'kitchen ticket (fail closed, no item-less "new order" paper)', () {
+    final edit = KitchenDispatchDocument(
+      serverPayloadVersion: 1,
+      kind: KitchenSpoolDispatchType.orderEdit,
+      orderCode: '#00A001',
+      orderType: 'dine_in',
+      createdAt: '2026-10-08T22:33:30.46448+00:00',
+      editNumber: 1,
+      editLines: [
+        KitchenDispatchEditRemove(
+          was: KitchenDispatchItem(qty: 1, name: 'Fries'),
+        ),
+      ],
+      orderNow: [KitchenDispatchItem(qty: 1, name: 'Burger')],
+    );
+    expect(
+      () => kdsTicketViewFromKitchenDispatch(edit),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.toString(),
+          'message',
+          isNot(contains('Fries')),
+        ),
+      ),
+    );
+  });
+
+  group('ORDER-EDIT-001C — the order_edit change-slip route', () {
+    test('the REAL server payload adapts into the slip view: ops in request '
+        'order, deltas, ORDER NOW as sent, the EDIT time', () {
+      final view = orderChangeSlipViewFromKitchenDispatch(_orderEdit());
+      expect(view.orderCode, '#00A001');
+      expect(view.editNumber, 1);
+      expect(view.orderType, 'dine_in');
+      expect(view.tableLabel, isNull);
+      expect(view.customerName, isNull);
+      expect(view.orderNote, isNull);
+      expect(view.reasonCode, 'entry_mistake');
+      expect(view.reasonText, isNull);
+      expect(view.staffFirstName, 'Dana');
+      expect(
+        view.editedAt,
+        DateTime.parse('2026-10-08T22:33:30.46448+00:00').toLocal(),
+      );
+      expect(view.changes.map((c) => c.runtimeType), [
+        OrderChangeModified,
+        OrderChangeRemoved,
+        OrderChangeQuantity,
+        OrderChangeQuantity,
+        OrderChangeModified,
+        OrderChangeAdded,
+      ]);
+      final cola = view.changes[2] as OrderChangeQuantity;
+      final lemonade = view.changes[3] as OrderChangeQuantity;
+      expect((cola.was.name, cola.delta, cola.isIncrease), ('Cola', -2, false));
+      expect(
+        (lemonade.was.name, lemonade.delta, lemonade.isIncrease),
+        ('Lemonade', 2, true),
+      );
+      final split = view.changes[4] as OrderChangeModified;
+      expect(split.was.quantity, 2);
+      expect(split.now.map((i) => i.modifiers), [
+        ['cucumber'],
+        ['cucumber', 'cheese'],
+      ]);
+      expect(view.orderNow.map((i) => '${i.quantity} × ${i.name}'), [
+        '1 × Burger',
+        '1 × Burger',
+        '1 × Burger',
+        '1 × Cola',
+        '1 × Cola',
+        '1 × Lemonade',
+        '2 × Lemonade',
+        '1 × Water',
+      ]);
+    });
+
+    test('the REAL payload prints the expected slip sections', () {
+      final doc = buildOrderChangeSlipPrintDocument(
+        slip: orderChangeSlipViewFromKitchenDispatch(_orderEdit()),
+        labels: _labels(),
+        changeLabels: _changeLabels(),
+      );
+      final texts = _texts(doc);
+      expect(texts, contains('*** ORDER CHANGED · Change 1 ***'));
+      expect(texts, contains('Staff: Dana'));
+      expect(texts, contains('» Reason: Order entry mistake'));
+      List<(PrintLineKind, String)> section(String heading) {
+        final start = texts.indexOf(heading);
+        final out = <PrintLine>[];
+        for (var i = start + 1; i < doc.lines.length; i++) {
+          if (doc.lines[i].kind == PrintLineKind.rule) break;
+          out.add(doc.lines[i]);
+        }
+        return _shape(out);
+      }
+
+      expect(section('REMOVED'), [(PrintLineKind.item, '1 × Fries')]);
+      expect(section('CHANGE'), [
+        (PrintLineKind.sub, 'Was: 1 × Burger'),
+        (PrintLineKind.sub, '+ tomato'),
+        (PrintLineKind.sub, '+ cucumber'),
+        (PrintLineKind.item, 'Now: 1 × Burger'),
+        (PrintLineKind.sub, '+ cucumber'),
+        (PrintLineKind.spacer, ''),
+        (PrintLineKind.sub, 'Was: 3 × Cola'),
+        (PrintLineKind.item, 'Now: 1 × Cola'),
+        (PrintLineKind.spacer, ''),
+        (PrintLineKind.sub, 'Was: 2 × Burger'),
+        (PrintLineKind.sub, '+ cucumber'),
+        (PrintLineKind.item, 'Now: 1 × Burger'),
+        (PrintLineKind.sub, '+ cucumber'),
+        (PrintLineKind.item, 'Now: 1 × Burger'),
+        (PrintLineKind.sub, '+ cucumber'),
+        (PrintLineKind.sub, '+ cheese'),
+      ]);
+      expect(section('ADD'), [
+        (PrintLineKind.item, '+2 × Lemonade'),
+        (PrintLineKind.spacer, ''),
+        (PrintLineKind.item, '1 × Water'),
+      ]);
+      expect(
+        [
+          for (final l in section('ORDER NOW'))
+            if (l.$1 == PrintLineKind.item) l.$2,
+        ],
+        [
+          '1 × Burger',
+          '1 × Burger',
+          '1 × Burger',
+          '1 × Cola',
+          '1 × Cola',
+          '1 × Lemonade',
+          '2 × Lemonade',
+          '1 × Water',
+        ],
+      );
+      expect(texts, contains('Replaces earlier tickets for #00A001'));
+    });
+
+    test('the RICH payload carries table, customer, note and reason text; '
+        'item prep is never printed as a count block', () {
+      final view = orderChangeSlipViewFromKitchenDispatch(
+        _orderEdit(_serverOrderEditRich),
+      );
+      expect(view.tableLabel, '12');
+      expect(view.customerName, 'Noa');
+      expect(view.orderNote, 'Allergy: nuts');
+      expect(view.reasonText, 'Guest asked twice');
+      expect((view.changes[1] as OrderChangeRemoved).was.note, 'no salt');
+      expect(view.orderNow[1].prepComponents, isNotEmpty);
+      final texts = _texts(
+        buildOrderChangeSlipPrintDocument(
+          slip: view,
+          labels: _labels(),
+          changeLabels: _changeLabels(),
+        ),
+      );
+      expect(texts, contains('Table 12'));
+      expect(texts, contains('Customer: Noa'));
+      expect(texts, contains('» Note: Allergy: nuts'));
+      expect(texts, contains('» Note: no salt'));
+      expect(
+        texts,
+        contains('» Reason: Order entry mistake · Guest asked twice'),
+      );
+      expect(texts.where((t) => t.contains('Patty')), isEmpty);
+      expect(texts.where((t) => t.startsWith('Kitchen total')), isEmpty);
+    });
+
+    test('parity: a HAND-built view prints the same document as the '
+        'dispatch-built one', () {
+      const burger = KdsItemView(
+        name: 'Burger',
+        quantity: 1,
+        modifiers: ['cucumber'],
+      );
+      const cola = KdsItemView(name: 'Cola', quantity: 1);
+      final hand = OrderChangeSlipView(
+        orderCode: '#00A001',
+        editNumber: 1,
+        orderType: 'dine_in',
+        editedAt: DateTime.parse('2026-10-08T22:33:30.46448+00:00').toLocal(),
+        reasonCode: 'entry_mistake',
+        staffFirstName: 'Dana',
+        changes: const [
+          OrderChangeModified(
+            was: KdsItemView(
+              name: 'Burger',
+              quantity: 1,
+              modifiers: ['tomato', 'cucumber'],
+            ),
+            now: [burger],
+          ),
+          OrderChangeRemoved(KdsItemView(name: 'Fries', quantity: 1)),
+          OrderChangeQuantity(
+            was: KdsItemView(name: 'Cola', quantity: 3),
+            nowQuantity: 1,
+          ),
+          OrderChangeQuantity(
+            was: KdsItemView(name: 'Lemonade', quantity: 1),
+            nowQuantity: 3,
+          ),
+          OrderChangeModified(
+            was: KdsItemView(
+              name: 'Burger',
+              quantity: 2,
+              modifiers: ['cucumber'],
+            ),
+            now: [
+              burger,
+              KdsItemView(
+                name: 'Burger',
+                quantity: 1,
+                modifiers: ['cucumber', 'cheese'],
+              ),
+            ],
+          ),
+          OrderChangeAdded([KdsItemView(name: 'Water', quantity: 1)]),
+        ],
+        orderNow: const [
+          burger,
+          burger,
+          KdsItemView(
+            name: 'Burger',
+            quantity: 1,
+            modifiers: ['cucumber', 'cheese'],
+          ),
+          cola,
+          cola,
+          KdsItemView(name: 'Lemonade', quantity: 1),
+          KdsItemView(name: 'Lemonade', quantity: 2),
+          KdsItemView(name: 'Water', quantity: 1),
+        ],
+      );
+      PrintDocument build(OrderChangeSlipView slip) =>
+          buildOrderChangeSlipPrintDocument(
+            slip: slip,
+            labels: _labels(),
+            changeLabels: _changeLabels(),
+            restaurantName: 'Burger Maps',
+          );
+      final fromHand = build(hand);
+      final fromDispatch = build(
+        orderChangeSlipViewFromKitchenDispatch(_orderEdit()),
+      );
+      expect(fromDispatch.title, fromHand.title);
+      expect(fromDispatch.lines.length, fromHand.lines.length);
+      for (var i = 0; i < fromHand.lines.length; i++) {
+        final a = fromDispatch.lines[i];
+        final b = fromHand.lines[i];
+        expect(
+          (a.kind, a.left, a.right, a.emphasised),
+          (b.kind, b.left, b.right, b.emphasised),
+          reason: 'line $i',
+        );
+      }
+    });
+
+    test('the renderer routes an order_edit to the change-slip bytes '
+        '(never the empty canonical ticket); the phone never prints', () async {
+      final renderer = CanonicalKitchenDispatchRenderer(
+        labels: _labels(),
+        changeLabels: _changeLabels(),
+        restaurantName: 'Burger Maps',
+      );
+      final bytes = await renderer.renderToBytes(
+        _orderEdit(),
+        customerPhoneOverride: '+972500000000',
+      );
+      final expected = await renderOrderChangeSlipBytes(
+        slip: orderChangeSlipViewFromKitchenDispatch(_orderEdit()),
+        labels: _labels(),
+        changeLabels: _changeLabels(),
+        restaurantName: 'Burger Maps',
+      );
+      expect(bytes, expected);
+      final text = utf8.decode(bytes, allowMalformed: true);
+      expect(text, contains('ORDER CHANGED'));
+      expect(text, contains('Replaces earlier tickets for #00A001'));
+      expect(text, isNot(contains('972500000000')));
+    });
+
+    test(
+      'the renderer passes its rasterizer and media profile to the slip',
+      () async {
+        final rendererFake = pp.FakeReceiptRasterizer();
+        final bytes = await CanonicalKitchenDispatchRenderer(
+          labels: _labels(),
+          changeLabels: _changeLabels(),
+          rasterizer: rendererFake,
+          mediaProfile: pp.MediaProfile.label80x80,
+        ).renderToBytes(_orderEdit());
+        final expected = await renderOrderChangeSlipBytes(
+          slip: orderChangeSlipViewFromKitchenDispatch(_orderEdit()),
+          labels: _labels(),
+          changeLabels: _changeLabels(),
+          rasterizer: pp.FakeReceiptRasterizer(),
+          mediaProfile: pp.MediaProfile.label80x80,
+        );
+        expect(bytes, expected);
+        expect(rendererFake.requests, isNotEmpty);
+      },
+    );
+
+    test('WITHOUT change-slip labels an order_edit FAILS CLOSED (StateError, '
+        'no item names echoed) while other kinds still print', () async {
+      final renderer = CanonicalKitchenDispatchRenderer(labels: _labels());
+      expect(
+        () async => renderer.renderToBytes(_orderEdit()),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            allOf(isNot(contains('Fries')), isNot(contains('Burger'))),
+          ),
+        ),
+      );
+      expect(await renderer.renderToBytes(_classic(qty: 2)), isNotEmpty);
+    });
+
+    test('only an order_edit with its number adapts into a slip', () {
+      expect(
+        () => orderChangeSlipViewFromKitchenDispatch(_classic()),
+        throwsArgumentError,
+      );
+      final numberless = KitchenDispatchDocument(
+        serverPayloadVersion: 1,
+        kind: KitchenSpoolDispatchType.orderEdit,
+        orderCode: '#00A001',
+        orderType: 'dine_in',
+        editLines: [
+          KitchenDispatchEditRemove(
+            was: KitchenDispatchItem(qty: 1, name: 'Fries'),
+          ),
+        ],
+        orderNow: [KitchenDispatchItem(qty: 1, name: 'Burger')],
+      );
+      expect(
+        () => orderChangeSlipViewFromKitchenDispatch(numberless),
+        throwsArgumentError,
+      );
+    });
+
+    test('an unparseable created_at prints no time line', () {
+      final raw = json.decode(_serverOrderEdit) as Map<String, Object?>;
+      raw['created_at'] = 'not-a-time';
+      final view = orderChangeSlipViewFromKitchenDispatch(
+        KitchenDispatchDocument.fromJson(raw),
+      );
+      expect(view.editedAt, isNull);
+    });
   });
 }
