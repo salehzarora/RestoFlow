@@ -224,8 +224,10 @@ update kitchen_print_dispatches set superseded_by_dispatch_id = '9f000000-0000-0
 update kitchen_print_dispatches set completed_at = now(), last_client_status = 'transport_accepted' where id = '9f000000-0000-0000-0000-0000000dd002';
 select is((pg_temp.tbl('T6') -> 'active_orders' -> 0 ->> 'kitchen_work_open')::boolean, false,
   'C15g. a dispatch SUPERSEDED by a completed VOID dispatch does not count (superseded filter)');
-update kitchen_print_dispatches set superseded_by_dispatch_id = null where id = '9f000000-0000-0000-0000-0000000dd001';
-delete from kitchen_print_dispatches where id in ('9f000000-0000-0000-0000-0000000dd001', '9f000000-0000-0000-0000-0000000dd002');
+-- ORDER-EDIT-001A: the supersession pointer is write-once, so the fixture is
+-- torn down referencing row first instead of clearing the pointer.
+delete from kitchen_print_dispatches where id = '9f000000-0000-0000-0000-0000000dd001';
+delete from kitchen_print_dispatches where id = '9f000000-0000-0000-0000-0000000dd002';
 -- the SERVICE-ROUND disjunct on the served printer-only order O6 (T5)
 insert into order_service_rounds (id, organization_id, restaurant_id, branch_id, order_id, round_number, status, device_id, opened_by_employee_profile_id, local_operation_id, revision) values
   ('9f000000-0000-0000-0000-0000000ee001', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000a006', 2, 'submitted', '9f000000-0000-0000-0000-00000000da11', '9f000000-0000-0000-0000-0000000ef001', 'stale-round-1', 1);

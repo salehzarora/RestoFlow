@@ -70,6 +70,17 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
     category: 'orders',
     hasTitle: true,
   ),
+  // ORDER-EDIT-001A: editing a sent order and the kitchen's acknowledgement of
+  // the change. All four classify under 'orders' (the server's `order.%` rule;
+  // none starts with order.void / order.discount) and all carry specific titles
+  // — a refused edit or acknowledgement is exactly the row an owner must notice.
+  'order.edited': AuditActionSpec(category: 'orders', hasTitle: true),
+  'order.edit_denied': AuditActionSpec(category: 'orders', hasTitle: true),
+  'order.edit_acknowledged': AuditActionSpec(
+    category: 'orders',
+    hasTitle: true,
+  ),
+  'order.edit_ack_denied': AuditActionSpec(category: 'orders', hasTitle: true),
   'order.discount_applied': AuditActionSpec(
     category: 'discounts',
     hasTitle: true,
@@ -146,6 +157,12 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
     hasTitle: true,
   ),
   'settings.branch.update_denied': AuditActionSpec(category: 'settings'),
+  // ORDER-EDIT-001A: the branch order-editing settings (allow editing sent
+  // orders / manager-only removal of finished food) — the `settings.%` rule.
+  'settings.branch.order_edit_updated': AuditActionSpec(
+    category: 'settings',
+    hasTitle: true,
+  ),
   'settings.restaurant.updated': AuditActionSpec(
     category: 'settings',
     hasTitle: true,

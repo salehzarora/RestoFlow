@@ -88,6 +88,8 @@ enum _Kind {
   chargeState,
   availability,
   availabilityReason,
+  kitchenChannel,
+  reasonCode,
 }
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
@@ -139,8 +141,8 @@ const Map<String, _Kind> _displayableKeys = {
   // plain-text keys above, their VALUES are a closed enum, so both the label and
   // the value are localized (ar/he/en) rather than shown as a raw server token.
   'completion_mode': _Kind.completionMode, //     automatic | manual
-  'completion_trigger':
-      _Kind.completionTrigger, // order_served | payment_recorded
+  // order_served | payment_recorded | order_edited (ORDER-EDIT-001A)
+  'completion_trigger': _Kind.completionTrigger,
   // WHY a mutation was denied (MONEY-SETTLEMENT-CONSISTENCY-001). The denial actions have
   // always carried this, but it was never allowlisted — so the Activity Log said THAT a
   // discount was refused and never WHY. A closed enum of safe STATE tokens; never money,
@@ -180,6 +182,20 @@ const Map<String, _Kind> _displayableKeys = {
   // Never money, never identifiers (T-003 holds).
   'round_number': _Kind.count,
   'added_item_count': _Kind.count,
+  // ORDER-EDIT-001A: editing a sent order + the kitchen acknowledgement + the
+  // branch order-edit settings. Positions/line counts, two closed enums (both
+  // label AND value localized) and two setting booleans — never identifiers
+  // (T-003 holds). The edit's money (subtotal / discount / grand total
+  // before→after) reuses the existing *_minor keys above.
+  'edit_number': _Kind.count,
+  'kitchen_channel': _Kind.kitchenChannel, // kds | paper
+  'reason_code': _Kind.reasonCode,
+  'removed_item_count': _Kind.count,
+  'modified_item_count': _Kind.count,
+  'up_to_edit_number': _Kind.count,
+  'acknowledged_count': _Kind.count,
+  'order_edit_enabled': _Kind.boolean,
+  'order_edit_finished_food_manager_only': _Kind.boolean,
   // KITCHEN-MODE-001B: printer configuration safe scalars. display_name is
   // tenant display text (the item_name/table_label class); the rest are closed
   // enums/booleans. connection_config (host/port/addresses) is NOT listed and
@@ -248,6 +264,17 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   // PSC-001C: service-round safe scalars.
   'round_number' => l10n.activityLogFieldRoundNumber,
   'added_item_count' => l10n.activityLogFieldAddedItemCount,
+  // ORDER-EDIT-001A: order-edit / acknowledgement / settings safe scalars.
+  'edit_number' => l10n.activityLogFieldEditNumber,
+  'kitchen_channel' => l10n.activityLogFieldKitchenChannel,
+  'reason_code' => l10n.activityLogFieldReasonCode,
+  'removed_item_count' => l10n.activityLogFieldRemovedItemCount,
+  'modified_item_count' => l10n.activityLogFieldModifiedItemCount,
+  'up_to_edit_number' => l10n.activityLogFieldUpToEditNumber,
+  'acknowledged_count' => l10n.activityLogFieldAcknowledgedCount,
+  'order_edit_enabled' => l10n.activityLogFieldOrderEditEnabled,
+  'order_edit_finished_food_manager_only' =>
+    l10n.activityLogFieldOrderEditFinishedFoodManagerOnly,
   // KITCHEN-MODE-001B: printer configuration safe scalars.
   'display_name' => l10n.activityLogFieldName,
   'paper_width' => l10n.activityLogFieldPaperWidth,
@@ -394,6 +421,12 @@ class AuditEventPresenter {
     'order.items_add_denied' => l10n.activityLogTitleItemsAddDenied,
     'order.round_status_updated' => l10n.activityLogTitleRoundStatusUpdated,
     'order.round_status_denied' => l10n.activityLogTitleRoundStatusDenied,
+    // ORDER-EDIT-001A: editing a sent order + the kitchen acknowledgement —
+    // success AND denial get specific titles (never a bare category fallback).
+    'order.edited' => l10n.activityLogTitleOrderEdited,
+    'order.edit_denied' => l10n.activityLogTitleOrderEditDenied,
+    'order.edit_acknowledged' => l10n.activityLogTitleOrderEditAcknowledged,
+    'order.edit_ack_denied' => l10n.activityLogTitleOrderEditAckDenied,
     'order.discount_applied' => l10n.activityLogTitleDiscountApplied,
     // FULL-COMP-PERMISSION-001: a REFUSED discount had no title of its own, so it
     // fell back to the bare category label — the operator saw "Discounts" and had
@@ -419,6 +452,9 @@ class AuditEventPresenter {
     'payment.recorded' => l10n.activityLogTitlePaymentRecorded,
     'organization.created' => l10n.activityLogTitleOrganizationCreated,
     'settings.branch.updated' => l10n.activityLogTitleBranchSettings,
+    // ORDER-EDIT-001A: the branch order-editing settings.
+    'settings.branch.order_edit_updated' =>
+      l10n.activityLogTitleOrderEditSettingsUpdated,
     'settings.restaurant.updated' => l10n.activityLogTitleRestaurantSettings,
     'settings.organization.updated' =>
       l10n.activityLogTitleOrganizationSettings,
@@ -551,9 +587,31 @@ class AuditEventPresenter {
       _Kind.chargeState => _chargeStateLabel(value.toString()),
       _Kind.availability => _availabilityLabel(value.toString()),
       _Kind.availabilityReason => _availabilityReasonLabel(value.toString()),
+      _Kind.kitchenChannel => _kitchenChannelLabel(value.toString()),
+      _Kind.reasonCode => _reasonCodeLabel(value.toString()),
       _Kind.text => value.toString(),
     };
   }
+
+  /// ORDER-EDIT-001A: HOW the kitchen learned of an order edit — a closed
+  /// enum; an unknown token shows raw rather than guessed.
+  String _kitchenChannelLabel(String channel) => switch (channel) {
+    'kds' => l10n.activityLogKitchenChannelKds,
+    'paper' => l10n.activityLogKitchenChannelPaper,
+    _ => channel,
+  };
+
+  /// ORDER-EDIT-001A: the structured reason picked for an order edit (closed
+  /// enum). An unknown token falls back to the raw token — an honest unknown
+  /// beats a confident mislabel.
+  String _reasonCodeLabel(String code) => switch (code) {
+    'customer_changed_mind' => l10n.activityLogEditReasonCustomerChangedMind,
+    'entry_mistake' => l10n.activityLogEditReasonEntryMistake,
+    'item_unavailable' => l10n.activityLogEditReasonItemUnavailable,
+    'kitchen_issue' => l10n.activityLogEditReasonKitchenIssue,
+    'other' => l10n.activityLogEditReasonOther,
+    _ => code,
+  };
 
   /// Branch menu availability — a closed enum; an unknown token shows raw.
   String _availabilityLabel(String value) => switch (value) {
@@ -593,6 +651,33 @@ class AuditEventPresenter {
     'takeaway_order' => l10n.activityLogDeniedTakeawayOrder,
     'order_not_movable' => l10n.activityLogDeniedOrderNotMovable,
     'table_not_available' => l10n.activityLogDeniedTableNotAvailable,
+    // ORDER-EDIT-001A: editing a sent order / acknowledging the change.
+    // permission_denied, full_comp_permission_required and
+    // discount_exceeds_order_total reuse the labels above.
+    'removal_not_permitted' => l10n.activityLogDeniedRemovalNotPermitted,
+    'finished_food_needs_manager' =>
+      l10n.activityLogDeniedFinishedFoodNeedsManager,
+    'reason_required' => l10n.activityLogDeniedReasonRequired,
+    'feature_disabled' => l10n.activityLogDeniedFeatureDisabled,
+    'order_not_editable' => l10n.activityLogDeniedOrderNotEditable,
+    'order_already_settled' => l10n.activityLogDeniedOrderAlreadySettled,
+    'kitchen_mode_changed' => l10n.activityLogDeniedKitchenModeChanged,
+    'line_changed' => l10n.activityLogDeniedLineChanged,
+    'line_has_discount' => l10n.activityLogDeniedLineHasDiscount,
+    'legacy_line_not_editable' => l10n.activityLogDeniedLegacyLineNotEditable,
+    'edit_would_empty_order' => l10n.activityLogDeniedEditWouldEmptyOrder,
+    'tax_mode_unsupported' => l10n.activityLogDeniedTaxModeUnsupported,
+    'totals_mismatch' => l10n.activityLogDeniedTotalsMismatch,
+    'invalid_edit_number' => l10n.activityLogDeniedInvalidEditNumber,
+    'order_voided' => l10n.activityLogDeniedOrderVoided,
+    'item_unavailable' => l10n.activityLogDeniedItemUnavailable,
+    'modifier_option_not_in_scope' =>
+      l10n.activityLogDeniedModifierOptionNotInScope,
+    'modifier_prep_snapshot_stale' =>
+      l10n.activityLogDeniedModifierPrepSnapshotStale,
+    // Also emitted by the PSC-001D void-acknowledgement refusal (the action
+    // came from a device type that may not perform it); it rendered raw.
+    'invalid_device_type' => l10n.activityLogDeniedInvalidDeviceType,
     _ => reason,
   };
 
@@ -625,6 +710,8 @@ class AuditEventPresenter {
   String _completionTriggerLabel(String trigger) => switch (trigger) {
     'order_served' => l10n.activityLogCompletionTriggerOrderServed,
     'payment_recorded' => l10n.activityLogCompletionTriggerPaymentRecorded,
+    // ORDER-EDIT-001A: the edit left the order served + paid, so it closed.
+    'order_edited' => l10n.activityLogCompletionTriggerOrderEdited,
     _ => trigger,
   };
 
