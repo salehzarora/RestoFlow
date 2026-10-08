@@ -218,6 +218,8 @@ Printing MUST work with no internet connection (**DECISION D-010**).
 2. **Print Adapter (port/interface):** consumes a `PrintDocument` + a target `PrinterProfile` (width 58/80mm, native-vs-raster capability, transport) and produces device-ready bytes. The adapter owns Arabic/Hebrew rasterization decisions (Section 5), code-page selection, paper-width column mapping (Section 4), and the cut/kick commands.
 3. **Transport (port):** sends bytes over network / USB / Bluetooth (Section 3) and reports best-effort success/failure to the spool.
 
+*(ORDER-EDIT-001, **DECISION D-044**: the shared kitchen ticket builder gains a third, money-free kitchen document kind, `orderChange` — the printer-only **change slip** for a sent-order edit: the changes (REMOVED, CHANGE "was → now", ADD) plus the full **ORDER NOW** list of the order's live lines and the footer "Replaces earlier tickets for #code", in ar/he/en with the **OPEN QUESTION Q-015** raster fallback (Section 5). The slip's dispatch, print-once and "Print again" rules are owned by [API_CONTRACT.md](API_CONTRACT.md) §4.45.9.)*
+
 ### 13.2 Adapter responsibilities (interface contract, prose)
 
 A conforming adapter MUST:
@@ -239,7 +241,7 @@ A conforming adapter MUST:
 
 ## 14. Markers summary (traceability)
 
-- **DECISIONS cited:** D-001, D-002, D-003, D-005, D-006, D-007, D-008, D-009, D-010, D-011, D-012, D-013, D-014, D-017, D-018, D-021, D-022.
+- **DECISIONS cited:** D-001, D-002, D-003, D-005, D-006, D-007, D-008, D-009, D-010, D-011, D-012, D-013, D-014, D-017, D-018, D-021, D-022. *(ORDER-EDIT-001: also D-044, §13.1.)*
 - **OPEN QUESTIONS cited:** Q-003, Q-004, Q-006, Q-009, Q-015 (owned by [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)).
 - **RISKS cited:** R-001, R-006, R-007 (owned by [DECISIONS.md](DECISIONS.md)/risk register).
 - **SECURITY REQUIREMENTs:** LAN isolation of printers (§3), permission+audit on receipt reprint (§8.4), no printing/kick by revoked devices incl. offline (§10/§11/§12), no auth relaxation offline (§12).

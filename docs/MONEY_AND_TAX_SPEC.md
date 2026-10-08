@@ -85,13 +85,14 @@ Discounts exist at two levels and in two forms. Both levels operate on integer m
 This ordering is deterministic so the server and every offline client compute identical results.
 
 ### 4.4 Clamping and negatives
-- A discount may reduce a target to exactly zero but never below zero. After applying a discount, if the computed result is negative it is clamped to `0`.
+- A discount may reduce a target to exactly zero but never below zero. After applying a discount, if the computed result is negative it is clamped to `0`. *(Amended — ORDER-EDIT-001, **DECISION D-043**: this clamp caps a discount's own amount at its target when the discount is applied; it never re-clamps an order discount already stored as an absolute amount when a later change shrinks the subtotal. A sent-order edit keeps the stored `discount_total_minor` and, if it would exceed the new subtotal, is **refused** with `invalid_discount` / `discount_exceeds_order_total` — never clamped; the POS offers "Lower discount" (§9.2 M6). That is the error / detail pair `app.apply_discount` already returns, instead of flooring, when a discount would push the order's prospective `grand_total_minor` below zero ([API_CONTRACT.md](API_CONTRACT.md) §4.5). An edit does not re-apply an order-level percentage to the new subtotal either; persisting a percentage's basis is **OPEN QUESTION Q-042**.)*
 - "Comp" / 100% discount is representable as a percentage discount of 10000 basis points but **requires authorization** (§4.5).
 
 ### 4.5 Authorization
 - **SECURITY REQUIREMENT** — Applying a discount above a configurable per-role threshold, and any 100% comp, is a sensitive mutation performed via PostgreSQL RPC (DECISION D-011) that authorizes by membership role and records an audit event (DECISION D-013).
 - Role keys permitted to authorize discounts (subject to thresholds): `manager`, `restaurant_owner`, `org_owner`. A `cashier` may apply discounts only up to a configured limit; above it requires manager authorization. Exact thresholds are configuration, owned operationally by the org; the authorization gate itself is mandatory.
 - **OPEN QUESTION Q-017** — whether the `accountant` (read-only) role exists in MVP affects who can *view* discount reporting; it never grants discount authorization.
+- **Sent-order edits (ORDER-EDIT-001, DECISION D-043).** The comp gate also covers an edit: an edit that takes `grand_total_minor` from > 0 to 0 — with or without a discount, for example by leaving only a zero-priced line — needs `manager` / `restaurant_owner` / `org_owner` or a `cashier` holding the default-OFF `apply_full_comp` grant, and is otherwise refused with `permission_denied` / `full_comp_permission_required`, the pair `app.apply_discount` returns for a full comp the actor may not grant (§9.2 M8). An edit never applies a new discount: added and replacement rows carry item discount `0` (§9.2 M3, M4) and the stored order discount is kept (§4.4, §9.2 M6); discounts stay with `app.apply_discount`.
 
 ---
 
@@ -130,6 +131,10 @@ Related blocking open questions (raise, do not answer here):
 
 > Tax-inclusive extraction formula (for when Q-002 resolves to inclusive), expressed in integers:
 > `tax_amount_minor = round( gross_minor * rate_bp / (10000 + rate_bp) )`, and `net_minor = gross_minor - tax_amount_minor`. Rounding per §5. This is documented as the intended algorithm, not an active rate.
+
+> **Sent-order edits (ORDER-EDIT-001, DECISION D-043; §9.2 M7).** An edit recomputes the tax of the **whole** order, not only of the changed lines: `tax_total_minor` is recomputed by the new `app.edit_tax_minor` from the branch's **current** tax settings on base = subtotal − order discount. Tax disabled or a 0 bp rate → `0`; `exclusive` → round half away from zero (§5) of base × rate_bp / 10000, byte-matching the POS rule (`apps/pos/lib/src/format/tax_math.dart`); `inclusive` → the edit is refused with `tax_mode_unsupported` (fail closed). No effect while tax is OFF (the branch default). No tax rate is snapshotted on the order, so a rate changed between submit and edit re-taxes the whole order at the new rate. The rate snapshot and inclusive-mode edits are **OPEN QUESTION Q-043**; the Q-002 mode choice above stays unresolved and nothing is assumed about it.
+>
+> **RISK R-008** — `app.add_order_items` raises the subtotal by the added lines and keeps the order's stored tax, so lines added after submit on a tax-enabled branch carry no tax. An edit's whole-order recompute corrects this on the edited order only; the general fix is MONEY-ADD-ITEMS-TAX-001, gated by Q-043.
 
 ---
 
@@ -196,6 +201,46 @@ Step 7 — order total = 10060 + 1710 = **`11770`** minor units.
 
 Stored amounts: subtotal `10560`, total_discount `1540` (1040 item + 500 order), tax `1710`, service_charge `0`, grand_total `11770`. All integers; no floating point used at any step.
 
+### 9.2 Sent-order edits (ORDER-EDIT-001)
+
+**DECISION D-043** — A sent, open, unpaid order is edited **in place**: the same `orders` row keeps its id, display code, table, shift and report bucket. Each edit is one append-only, money-free `order_edits` record numbered per order (`orders.edit_count`). Retired lines become `cancelled` or `voided` and carry the provenance columns `removed_by_edit_id` / `removed_kitchen_stage`; rows written by the edit carry `edit_id`, and a row that replaces a retired line also carries `replaces_order_item_id`. No state is added (D-018). An edit is online only, through `order.edit` → `app.edit_order` ([API_CONTRACT.md](API_CONTRACT.md) §4.45), on `dine_in` / `takeaway` orders, behind the per-branch switch `order_edit_enabled` (default OFF). The change kinds are `remove`, `set_quantity`, `modify` (modifiers and note only; the line keeps its size and variant) and `add`. Columns are owned by [DOMAIN_MODEL.md](DOMAIN_MODEL.md) §2.3, §6.1, §6.2 and §6.4, line transitions by [STATE_MACHINES.md](STATE_MACHINES.md) §2.1–§2.2; the design record is [ORDER_EDIT_DESIGN.md](ORDER_EDIT_DESIGN.md) §6–§9.
+
+An edit does not re-run the §9 sequence from scratch; it recomposes the order's stored totals over its live lines: kept lines keep their stored step 1–2 amounts (M1), rows the edit writes are priced by step 1 with item discount `0` (M3, M4), step 3 is re-rolled (M5), step 4 is **not** re-run — the stored order discount is kept as an absolute amount and never clamped (M6) — and step 6 is re-run for the **whole** order from the branch's current tax settings (M7). Money rules (integer minor units throughout, D-007):
+
+- **M1** Kept lines are untouched: their rows, modifiers, snapshots, item discount and legacy pricing epoch (D-008).
+- **M1a** **Legacy-price predicate.** MONEY-PRICING-FORMULA-002A moved line totals to the §9 step 1 per-unit formula without adding a pricing-epoch column, so rows stored before it may carry the older amount (option surcharges counted once per line instead of once per unit). "Legacy" is therefore derived from the stored row only, never from a timestamp or a new column: a line L is **legacy-priced** iff `L.line_total_minor + L.line_discount_minor <> L.quantity × (L.unit_price_minor_snapshot + COALESCE(Σ m.price_minor_snapshot × m.quantity over L's order_item_modifiers, 0))`. A row on which the two epoch formulas agree (quantity 1, or no priced modifiers) is not legacy and is editable, because the M3 recomputation reproduces its stored amount exactly. The predicate is computed **server-side only**: `app.edit_order` (refusal `legacy_line_not_editable`) and `app.pos_order_detail` (the per-item `legacy` boolean) evaluate the same SQL expression through one internal helper; the POS never recomputes it and only reads the flag.
+- **M2** Retired lines keep their row and amounts for history; their status (`cancelled` / `voided`) excludes them from every sum.
+- **M3** Continuation, replacement and delta rows copy **server-side** from the old row the base price, the size / variant and name snapshots, the display-order snapshots and every kept option's price and name snapshots. The display-order snapshots are restored by an UPDATE after the insert, because the MENU-ORDER-001 BEFORE INSERT triggers always re-derive them from the live menu; the triggers are not changed. The item `prep_snapshot` and each kept option's `meat_snapshot` are copied frozen, except that each `classifier_selected` is re-answered by the presence of its `classifier_option_id` in the replacement's full option set (the `app.trusted_modifier_prep_snapshot` / `app.trusted_item_prep_snapshot` presence rule, applied to the frozen link and never to the live menu). Only newly chosen options carry a client snapshot; it passes the option ownership check and the prep-staleness check, the latter against the replacement's full modifier array. Every new row is priced `line_total_minor = quantity × (unit_price_minor_snapshot + Σ option price_minor_snapshot × option quantity)` — the §9 step 1 per-unit formula — with item discount `0`. Lines with an item discount (`line_has_discount`) or a legacy price (M1a, `legacy_line_not_editable`) can only be removed.
+- **M4** Added lines follow `app.add_order_items` exactly: the current menu price, snapshotted when the line is added (§3, D-008), and its checks; an `add` carries `line_discount_minor` `0`. Sellable / available is checked under the lock for adds, quantity increases and a modify that raises the total quantity. A size or variant change is a `remove` plus an `add`, priced at the current menu price.
+- **M5** `subtotal_minor` is **re-rolled** as the sum of live line totals, never adjusted by a delta, so gross − item discount − order discount = net in reports (§13).
+- **M6** `discount_total_minor` keeps its stored absolute amount; it is never clamped (§4.4) and never re-derived from a percentage (**OPEN QUESTION Q-042**). If it would exceed the new subtotal the edit is refused with `invalid_discount` / `discount_exceeds_order_total` and the POS offers "Lower discount". The audit records the effective discount ratio before and after.
+- **M7** `tax_total_minor` is recomputed by the new `app.edit_tax_minor` from the branch's **current** tax settings on base = subtotal − discount: tax disabled or a 0 bp rate → `0`; `exclusive` → round half away from zero (§5) of base × rate_bp / 10000, byte-matching `apps/pos/lib/src/format/tax_math.dart`; `inclusive` → `tax_mode_unsupported` (fail closed). No effect while tax is OFF (the branch default). The recompute also corrects earlier untaxed add-items lines on that order (§6, **RISK R-008**). Tax-rate snapshot and inclusive tax: **OPEN QUESTION Q-043**.
+- **M8** `grand_total_minor` = subtotal − discount + tax ≥ 0. **Zero-out guard:** if the total goes from > 0 to 0, the caller needs `manager` / `restaurant_owner` / `org_owner` or the `apply_full_comp` capability, with or without a discount (refusal `permission_denied` / `full_comp_permission_required`, the pair `app.apply_discount` already emits, §4.5); otherwise a cashier could leave a zero-priced line and let the order auto-complete unpaid. An edit that would leave no live line is refused (`edit_would_empty_order`); cancelling the order stays `app.void_order`.
+- **M9** The `expected` totals (`subtotal_minor`, `tax_total_minor`, `grand_total_minor`) are mandatory (`expected_totals_required`); any mismatch → `totals_mismatch` with the server's figures, nothing written (§1 rule 3).
+- **M10** A live completed payment → `order_already_settled`. Paid orders need the deferred refund flow (D-023, D-024, §12.3).
+- **M11** Every edit bumps `orders.revision`, so a payment prepared against the old total (payments send `expected_revision`) gets `40001` and re-reads the new total. The kitchen acknowledgement (`app.kitchen_ack_order_edit`, D-044) never bumps revision.
+- **M12** `receipt_number` (D-021, §15), shift expected cash (§14) and the order's report bucket (`created_at`) are unaffected. `order_edits`, service rounds and kitchen payloads carry no money (T-003).
+- **M13** Reporting (amends §12.2 "Money effect" and §13 for edit-retired lines only). Lines retired by an edit (`removed_by_edit_id` set, status `voided` or `cancelled`) are excluded from Gross sales, Discounts and Net sales, and from the **Voids** bucket, which covers voided orders — orders with status `voided` (`void_count`, `void_total_minor`); an order voided whole after an edit still reports its full grand total there — and item voids not made by an edit (today the only such item voids are the cascade of a whole-order void, so the bucket stays order-level, as D-043 point 10 states). They are never silently dropped: they are reported in a separate **Order edits** bucket for each tenant scope and business day, on the order's `created_at` bucket (M12), whose figures are defined in §13 (`edit_count`, `edited_order_count`, `removed_minor`, `replaced_out_minor`, `replaced_in_minor`, `added_minor`, `net_change_minor`), each also broken down by `reason_code` and by employee. The gross retired value (`removed_minor` + `replaced_out_minor`) is always shown, so the gross amounts stay visible as §12.2 requires; net of replacements is a derived column and never replaces the gross figure.
+
+Every refusal above is RETURNed (error / detail), audited as `order.edit_denied` and decided before the first write, so a refused edit changes no money. Every applied edit writes one append-only `order.edited` audit event (§17, D-013) carrying the old and new totals, the effective discount ratio before and after, the reason and the per-line before / after quantities and totals; a `remove`, a `modify` or a quantity reduction requires a reason (`reason_required`; `other` needs text).
+
+**Worked example (integer minor units; tax off, no discount).**
+
+Order before the edit:
+- Line A: Burger, `unit_price_minor = 4000`, options Tomato and Cucumber (both `+0`), quantity 1 → `4000`.
+- Line B: Fries, `1500`, quantity 1.
+- Line C: Cola, `800`, quantity 1.
+- Subtotal `6300`; grand total `6300`.
+
+Edit (one `order.edit`; a reason is required because a line is removed and one is modified):
+- `modify` Line A, burger without tomato: Line A is retired and a replacement row with Cucumber only (`replaces_order_item_id` = Line A) is priced from Line A's copied snapshots (M3) → `4000`.
+- `remove` Line B: retired.
+- `add` Lemonade at the current menu price, `900` (M4).
+
+After the edit: subtotal re-rolled = 4000 + 800 + 900 = `5700` (M5); discount `0`; tax `0` (tax OFF, M7); grand total `5700`. The `expected` totals sent are subtotal `5700`, tax `0`, grand total `5700` (M9), and `orders.revision` is bumped (M11).
+
+Reports: this order's Gross and Net count only its live lines (`5700`). Order edits bucket: `removed_minor` `1500` (fries), `replaced_out_minor` `4000` / `replaced_in_minor` `4000` (burger changed), `added_minor` `900` (lemonade), `net_change_minor` = 4000 + 900 − 1500 − 4000 = `−600` = 5700 − 6300, matching the `order.edited` audit 6300 → 5700. The Voids bucket is unchanged.
+
 ---
 
 ## 10. Cash received & change due
@@ -239,9 +284,9 @@ These three are **distinct** and must never be conflated. They map to the PROPOS
 - **Order:** `voided` is a **post-submission, terminal** state requiring authorization + reason (D-018).
 - **Order item:** `voided` terminal.
 - **Payment:** `voided` is terminal and is a **pre-completion** void only — **DECISION D-023** permits `pending -> voided` and `tendered -> voided`, but **`completed -> voided` is FORBIDDEN**. There is **no** post-completion void/reversal in MVP. A `tendered -> voided` void must **account for any cash physically received before finalization** (the cash received is reconciled/returned operationally and recorded in the audit event; it is not silently dropped).
-- **Authorization & audit:** **SECURITY REQUIREMENT** — A void (especially voiding an *unpaid but submitted* order, or a pre-completion payment) is a sensitive mutation via RPC (D-011); the actor must hold an authorizing role (e.g. `manager`+) and supply a reason; an append-only audit event is written (D-013). The canonical isolation/permission test "a cashier cannot void a paid order without permission" (SECURITY_AND_THREAT_MODEL.md) governs enforcement.
+- **Authorization & audit:** **SECURITY REQUIREMENT** — A void (especially voiding an *unpaid but submitted* order, or a pre-completion payment) is a sensitive mutation via RPC (D-011); the actor must hold an authorizing role (e.g. `manager`+) and supply a reason; an append-only audit event is written (D-013). The canonical isolation/permission test "a cashier cannot void a paid order without permission" (SECURITY_AND_THREAT_MODEL.md) governs enforcement. *(Amended — ORDER-EDIT-001, **DECISION D-043**: a line `cancelled` / `voided` by a sent-order edit on an **unpaid** order is authorized for a `cashier` by the existing default-ON, deny-only `void_order` capability rather than a `manager`+ role; the edit always carries a reason (`reason_required`) and is audited `order.edited` (§9.2). On KDS branches the per-branch `order_edit_finished_food_manager_only` switch (default OFF) restricts Ready / Served lines to `manager`+; a standalone item void stays `manager`+. The capability is owned by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md) §5.)*
 - **Offline posture:** voids are **online-only by default** (per the STATE_MACHINES Shift/Order ASSUMPTION). Offline-provisional voids are a deferred/open consideration, not the default behaviour.
-- **Money effect:** Removes the voided (pre-completion) amounts from net sales; the gross/void amounts remain visible for audit and reporting (§13). Money on a `completed` payment cannot be reversed by a void — see §12.3.
+- **Money effect:** Removes the voided (pre-completion) amounts from net sales; the gross/void amounts remain visible for audit and reporting (§13). Money on a `completed` payment cannot be reversed by a void — see §12.3. *(Amended — ORDER-EDIT-001, **DECISION D-043**: a line retired by a sent-order edit — `removed_by_edit_id` set, status `voided`, or `cancelled` (§12.1) when its work unit was still `submitted` on the KDS channel — is likewise removed from net sales, but its gross amount stays visible in the **Order edits** bucket (§13) rather than in Voids (§9.2 M13). Edits apply to unpaid orders only (`order_already_settled`, §9.2 M10).)*
 
 ### 12.3 Refund
 - **Definition:** Returning money to a customer for a **completed** payment.
@@ -261,10 +306,19 @@ Reports compose from persisted, snapshot-based amounts (D-008), in integer minor
 - **Net sales** = gross sales − discounts (excludes tax and service charge), excluding **cancelled** orders entirely and **excluding voided** amounts.
 - **Service charge total** = sum of `service_charge_amount_minor` (Q-012 gated).
 - **Tax total** = sum of `tax_amount_minor` (mode/rate per Q-002); for tax-inclusive mode this is the extracted tax.
-- **Voids** = sum of voided amounts, reported separately (not part of net sales) for audit/loss-prevention.
+- **Voids** = sum of voided amounts, reported separately (not part of net sales) for audit/loss-prevention. *(Amended — ORDER-EDIT-001, **DECISION D-043**: Voids covers voided orders — orders with status `voided` (`void_count`, `void_total_minor`); an order voided whole after an edit still reports its full grand total here — and item voids not made by an edit (today only the cascade of a whole-order void, so the bucket stays order-level). Lines with `removed_by_edit_id` are reported only in **Order edits** below, never here.)*
+- **Order edits** *(ORDER-EDIT-001, **DECISION D-043**; §9.2 M13)* = the lines retired by sent-order edits (`removed_by_edit_id` set, status `voided` or `cancelled`) and the rows those edits wrote, reported for each tenant scope and business day on the order's `created_at` bucket (§9.2 M12). Retired lines are excluded from Gross sales, Discounts, Net sales and Voids. Figures, all integer minor units except the counts:
+  - `edit_count` and `edited_order_count`;
+  - `removed_minor` = Σ `line_total_minor` of retired lines with no replacement row;
+  - `replaced_out_minor` = Σ `line_total_minor` of retired lines that a row with `replaces_order_item_id` replaces;
+  - `replaced_in_minor` = Σ `line_total_minor` of those live replacement or continuation rows (every continuation — a reduction's remainder or an unchanged modify replacement — and every modify replacement carries `replaces_order_item_id`; increase deltas and added lines carry none);
+  - `added_minor` = Σ `line_total_minor` of live rows with `edit_id` set and no `replaces_order_item_id` (added lines and +N delta rows);
+  - `net_change_minor` = `replaced_in_minor` + `added_minor` − `removed_minor` − `replaced_out_minor`.
+
+  Each figure is also broken down by `reason_code` and by employee. The gross retired value (`removed_minor` + `replaced_out_minor`) is always shown, so the gross amounts stay visible (§12.2); net of replacements is a derived column and never replaces the gross figure. The reader is `owner_order_edits` ([API_CONTRACT.md](API_CONTRACT.md) §4.47, ORDER-EDIT-001G).
 - **Collected (tendered) total** = sum of `amount_minor` on `completed` payments.
 
-Rule: voided and cancelled transactions are **never** silently dropped — they are reported in their own buckets so totals reconcile and shrinkage is visible. All buckets are integer minor units in the order/report currency (single currency per order, §2).
+Rule: voided and cancelled transactions are **never** silently dropped — they are reported in their own buckets so totals reconcile and shrinkage is visible. All buckets are integer minor units in the order/report currency (single currency per order, §2). *(Amended — ORDER-EDIT-001, **DECISION D-043**: lines retired by a sent-order edit are likewise never silently dropped; their own bucket is **Order edits**, not Voids.)*
 
 ---
 
@@ -350,6 +404,8 @@ Each audit event records at minimum (per D-013): actor (user identity + membersh
 - **OPEN QUESTION Q-010** — Per-entity conflict-resolution policy (affects stale-price/discount conflicts).
 - **OPEN QUESTION Q-012** — Service-charge rules & taxability.
 - **OPEN QUESTION Q-017** — Whether `accountant` (read-only) ships in MVP (affects money-report visibility, never authorization).
+- **OPEN QUESTION Q-042** — Persisted percentage-discount basis, so a sent-order edit can re-apply a percentage (v1 keeps the stored absolute amount; §4.4, §9.2 M6).
+- **OPEN QUESTION Q-043** — Tax-rate snapshot on orders, and `inclusive` tax for sent-order edits (v1 refuses with `tax_mode_unsupported`; §6, §9.2 M7).
 - **DEFERRED** — Tips (Q-011), Refunds (payment `refunded`), multi-currency orders, cash rounding (until jurisdiction frozen), partial/split tender beyond single-tender + change.
 
 ## 20. PROPOSED DECISION candidates raised here (for ratification in DECISIONS.md)
