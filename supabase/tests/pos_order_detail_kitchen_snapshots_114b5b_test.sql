@@ -142,8 +142,12 @@ select is(
   '13 E. items[] carries exactly the shipped keys + prep_snapshot');
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res #> '{items,0,modifiers,0}') k),
-  array['meat_snapshot','modifier_name_snapshot','option_name_snapshot','price_minor_snapshot','quantity'],
-  '14 E. modifiers[] carries exactly the shipped keys + meat_snapshot');
+  -- POS-ORDER-DETAIL-IDS-001 later added modifier_option_id and the two
+  -- display-order snapshots (pos_order_detail_ids_001_test pins them).
+  array['meat_snapshot','modifier_group_display_order_snapshot','modifier_name_snapshot',
+        'modifier_option_display_order_snapshot','modifier_option_id','option_name_snapshot',
+        'price_minor_snapshot','quantity'],
+  '14 E. modifiers[] carries exactly the shipped keys + meat_snapshot (+ the POS-ORDER-DETAIL-IDS-001 keys)');
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res -> 'order') k),
   array['created_at','currency_code','customer_name','customer_phone','discount_total_minor',
