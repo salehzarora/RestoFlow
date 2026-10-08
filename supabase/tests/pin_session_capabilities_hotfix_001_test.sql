@@ -202,13 +202,15 @@ select is(
   app.pin_session_capabilities('00000000-0000-0000-0000-0000000000ff','c1a00000-0000-0000-0000-0000000d0a01')::text,
   'E1 a CROSS-TENANT session and a NON-EXISTENT one return the byte-identical envelope (no existence/scope oracle)'
 );
--- A success payload must carry the role and two booleans — and nothing else. No
+-- A success payload must carry the role, the capability booleans and (since
+-- ORDER-EDIT-001B) the branch's two edit switches — and nothing else. No
 -- membership/employee/session/device UUID, no permissions JSON, no PIN material.
+-- (order_edit_001b_capabilities_test pins void_order and branch_features.)
 select is(
   (select array_agg(k order by k)
      from jsonb_object_keys(app.pin_session_capabilities('c1a00000-0000-0000-0000-00000000c502','c1a00000-0000-0000-0000-0000000d0a01')) k),
-  array['capabilities','entity','ok','role'],
-  'E2 a success payload exposes ONLY ok/entity/role/capabilities — no identifier, no permissions JSON'
+  array['branch_features','capabilities','entity','ok','role'],
+  'E2 a success payload exposes ONLY ok/entity/role/capabilities/branch_features — no identifier, no permissions JSON'
 );
 select ok(
   app.pin_session_capabilities('c1a00000-0000-0000-0000-00000000c502','c1a00000-0000-0000-0000-0000000d0a01')::text

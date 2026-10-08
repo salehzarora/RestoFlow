@@ -168,11 +168,13 @@ select is(
 -- ===== B. everything else is unchanged =====================================
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res #> '{items,0}') k),
-  array['category_display_order_snapshot','item_display_order_snapshot','item_size_snapshot',
-        'item_variant_snapshot','line_discount_minor','line_position','line_total_minor',
+  -- ORDER-EDIT-001B later added unit_status, legacy and edit_id
+  -- (order_edit_001b_pos_order_detail_test pins them).
+  array['category_display_order_snapshot','edit_id','item_display_order_snapshot','item_size_snapshot',
+        'item_variant_snapshot','legacy','line_discount_minor','line_position','line_total_minor',
         'menu_item_id','menu_item_name_snapshot','modifiers','notes','order_item_id',
         'prep_snapshot','quantity','round_number','service_round_id','status',
-        'unit_price_minor_snapshot'],
+        'unit_price_minor_snapshot','unit_status'],
   '09 items[] keys are byte-unchanged (order_item_id, menu_item_id and status already present)');
 
 select is(
@@ -187,14 +189,19 @@ select is(
 
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res -> 'order') k),
+  -- ORDER-EDIT-001B later added dispatch_mode, edit_count, has_active_round
+  -- and kitchen_channel (order_edit_001b_pos_order_detail_test pins them).
   array['created_at','currency_code','customer_name','customer_phone','discount_total_minor',
-        'grand_total_minor','order_code','order_id','order_type','receipt_number','revision',
+        'dispatch_mode','edit_count','grand_total_minor','has_active_round','kitchen_channel',
+        'order_code','order_id','order_type','receipt_number','revision',
         'status','subtotal_minor','table_label','tax_total_minor','updated_at'],
   '12 the order header keys are byte-unchanged');
 
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res) k),
-  array['entity','items','ok','order','payment','rounds','server_ts'],
+  -- ORDER-EDIT-001B later added edits and branch_features
+  -- (order_edit_001b_pos_order_detail_test pins them).
+  array['branch_features','edits','entity','items','ok','order','payment','rounds','server_ts'],
   '13 the envelope keys are byte-unchanged');
 
 select is(

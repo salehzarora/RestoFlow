@@ -134,11 +134,13 @@ select is((select res #>> '{items,1,menu_item_name_snapshot}' from _d), 'Legacy 
 -- ===== E. every existing key is unchanged; the new keys are ADDITIVE ======
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res #> '{items,0}') k),
-  array['category_display_order_snapshot','item_display_order_snapshot','item_size_snapshot',
-        'item_variant_snapshot','line_discount_minor','line_position','line_total_minor',
+  -- ORDER-EDIT-001B later added unit_status, legacy and edit_id
+  -- (order_edit_001b_pos_order_detail_test pins them).
+  array['category_display_order_snapshot','edit_id','item_display_order_snapshot','item_size_snapshot',
+        'item_variant_snapshot','legacy','line_discount_minor','line_position','line_total_minor',
         'menu_item_id','menu_item_name_snapshot','modifiers','notes','order_item_id',
         'prep_snapshot','quantity','round_number','service_round_id','status',
-        'unit_price_minor_snapshot'],
+        'unit_price_minor_snapshot','unit_status'],
   '13 E. items[] carries exactly the shipped keys + prep_snapshot');
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res #> '{items,0,modifiers,0}') k),
@@ -150,13 +152,18 @@ select is(
   '14 E. modifiers[] carries exactly the shipped keys + meat_snapshot (+ the POS-ORDER-DETAIL-IDS-001 keys)');
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res -> 'order') k),
+  -- ORDER-EDIT-001B later added dispatch_mode, edit_count, has_active_round
+  -- and kitchen_channel (order_edit_001b_pos_order_detail_test pins them).
   array['created_at','currency_code','customer_name','customer_phone','discount_total_minor',
-        'grand_total_minor','order_code','order_id','order_type','receipt_number','revision',
+        'dispatch_mode','edit_count','grand_total_minor','has_active_round','kitchen_channel',
+        'order_code','order_id','order_type','receipt_number','revision',
         'status','subtotal_minor','table_label','tax_total_minor','updated_at'],
   '15 E. the order header keys are byte-unchanged');
 select is(
   (select array_agg(k order by k) from _d, jsonb_object_keys(res) k),
-  array['entity','items','ok','order','payment','rounds','server_ts'],
+  -- ORDER-EDIT-001B later added edits and branch_features
+  -- (order_edit_001b_pos_order_detail_test pins them).
+  array['branch_features','edits','entity','items','ok','order','payment','rounds','server_ts'],
   '16 E. the envelope keys are unchanged');
 select is((select res #>> '{items,0,notes}' from _d), 'well done', '17 E. notes still carried');
 select is((select res #>> '{items,0,modifiers,0,option_name_snapshot}' from _d), '240g',
