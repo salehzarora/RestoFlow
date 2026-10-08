@@ -9220,6 +9220,12 @@ abstract class AppLocalizations {
   /// **'The payment being recorded'**
   String get activityLogCompletionTriggerPaymentRecorded;
 
+  /// ORDER-EDIT-001A Activity-log VALUE for completion_trigger=order_edited: the edit left the order fully served and fully paid, so it completed automatically.
+  ///
+  /// In en, this message translates to:
+  /// **'The order being edited'**
+  String get activityLogCompletionTriggerOrderEdited;
+
   /// ACTIVE-ORDERS-002 Active-orders subtitle: explains that this surface holds open operational orders and that finished ones go to History.
   ///
   /// In en, this message translates to:
@@ -9892,6 +9898,36 @@ abstract class AppLocalizations {
   /// **'Wrong PIN to unlock the cash drawer'**
   String get activityLogTitleDrawerUnlockFailed;
 
+  /// ORDER-EDIT-001A Activity-log title for order.edited: an order already sent to the kitchen was edited (items removed, changed or added; totals before→after shown by the row).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent order edited'**
+  String get activityLogTitleOrderEdited;
+
+  /// ORDER-EDIT-001A Activity-log title for order.edit_denied: the server refused an edit of a sent order (the WHY is the localized denied_reason row).
+  ///
+  /// In en, this message translates to:
+  /// **'Order edit denied'**
+  String get activityLogTitleOrderEditDenied;
+
+  /// ORDER-EDIT-001A Activity-log title for order.edit_acknowledged: the kitchen explicitly acknowledged one or more edits of a sent order (up to an edit number).
+  ///
+  /// In en, this message translates to:
+  /// **'Order change acknowledged by kitchen'**
+  String get activityLogTitleOrderEditAcknowledged;
+
+  /// ORDER-EDIT-001A Activity-log title for order.edit_ack_denied: the server refused a kitchen acknowledgement of an order edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Order change acknowledgement denied'**
+  String get activityLogTitleOrderEditAckDenied;
+
+  /// ORDER-EDIT-001A Activity-log title for settings.branch.order_edit_updated: a branch's order-editing settings (allow editing sent orders / manager-only removal of finished food) were changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Order editing settings changed'**
+  String get activityLogTitleOrderEditSettingsUpdated;
+
   /// Activity Log field label for the table manual status before a change.
   ///
   /// In en, this message translates to:
@@ -9933,6 +9969,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recorded offline'**
   String get activityLogFieldRecordedOffline;
+
+  /// ORDER-EDIT-001A Activity-log field label for edit_number: the position of this edit among the order's edits (1 = first edit).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit number'**
+  String get activityLogFieldEditNumber;
+
+  /// ORDER-EDIT-001A Activity-log field label for kitchen_channel: how the kitchen learned of the edit (the kitchen screen or a printed kitchen ticket).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen notified via'**
+  String get activityLogFieldKitchenChannel;
+
+  /// ORDER-EDIT-001A Activity-log field label for reason_code: the structured reason picked for an order edit (closed list; the value is localized).
+  ///
+  /// In en, this message translates to:
+  /// **'Reason for the change'**
+  String get activityLogFieldReasonCode;
+
+  /// ORDER-EDIT-001A Activity-log field label for removed_item_count: how many order lines the edit removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Items removed'**
+  String get activityLogFieldRemovedItemCount;
+
+  /// ORDER-EDIT-001A Activity-log field label for modified_item_count: how many order lines the edit changed (e.g. quantity).
+  ///
+  /// In en, this message translates to:
+  /// **'Items changed'**
+  String get activityLogFieldModifiedItemCount;
+
+  /// ORDER-EDIT-001A Activity-log field label for up_to_edit_number: the kitchen acknowledged every edit up to and including this edit number.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to edit number'**
+  String get activityLogFieldUpToEditNumber;
+
+  /// ORDER-EDIT-001A Activity-log field label for acknowledged_count: how many order edits this kitchen acknowledgement covered.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes acknowledged'**
+  String get activityLogFieldAcknowledgedCount;
+
+  /// ORDER-EDIT-001A Activity-log field label for the branch setting order_edit_enabled (boolean, before→after).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow editing sent orders'**
+  String get activityLogFieldOrderEditEnabled;
+
+  /// ORDER-EDIT-001A Activity-log field label for the branch setting order_edit_finished_food_manager_only (boolean, before→after): removing or reducing an item the kitchen already marked Ready or Served needs a manager.
+  ///
+  /// In en, this message translates to:
+  /// **'Only managers may remove food that is Ready or Served'**
+  String get activityLogFieldOrderEditFinishedFoodManagerOnly;
 
   /// Activity Log field label for the availability before/after value.
   ///
@@ -9987,6 +10077,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The table isn’t available'**
   String get activityLogDeniedTableNotAvailable;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=removal_not_permitted: the actor may not remove or reduce items already sent to the kitchen.
+  ///
+  /// In en, this message translates to:
+  /// **'Not allowed to remove sent items'**
+  String get activityLogDeniedRemovalNotPermitted;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=finished_food_needs_manager: the edit touched an item already Ready or Served and the branch requires a manager for that.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a manager can change finished food'**
+  String get activityLogDeniedFinishedFoodNeedsManager;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=reason_required: removing or reducing a sent item needs a reason and none was given.
+  ///
+  /// In en, this message translates to:
+  /// **'A reason is required'**
+  String get activityLogDeniedReasonRequired;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=feature_disabled: the branch has editing of sent orders switched off.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing sent orders is turned off'**
+  String get activityLogDeniedFeatureDisabled;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=order_not_editable: the order is in a state that no longer accepts edits (e.g. completed or cancelled).
+  ///
+  /// In en, this message translates to:
+  /// **'The order can no longer be edited'**
+  String get activityLogDeniedOrderNotEditable;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=order_already_settled: the order already has a completed payment, so it cannot be edited.
+  ///
+  /// In en, this message translates to:
+  /// **'The order is already paid'**
+  String get activityLogDeniedOrderAlreadySettled;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=kitchen_mode_changed: the branch kitchen mode (kitchen screen / printer) changed since the edit was prepared.
+  ///
+  /// In en, this message translates to:
+  /// **'The kitchen mode changed'**
+  String get activityLogDeniedKitchenModeChanged;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=line_changed: an order line changed after the edit was prepared (stale edit refused, never merged).
+  ///
+  /// In en, this message translates to:
+  /// **'The order changed on another device'**
+  String get activityLogDeniedLineChanged;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=line_has_discount: a line carrying a line discount can be removed whole but not changed.
+  ///
+  /// In en, this message translates to:
+  /// **'A discounted line can only be removed'**
+  String get activityLogDeniedLineHasDiscount;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=legacy_line_not_editable: a line created before order editing existed can be removed whole but not changed.
+  ///
+  /// In en, this message translates to:
+  /// **'An older line can only be removed'**
+  String get activityLogDeniedLegacyLineNotEditable;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=edit_would_empty_order: the edit would leave the order with no items (voiding is the separate path).
+  ///
+  /// In en, this message translates to:
+  /// **'The edit would empty the order'**
+  String get activityLogDeniedEditWouldEmptyOrder;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=tax_mode_unsupported: the order uses tax-inclusive pricing, which order edits do not support yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Tax-inclusive pricing is not supported for edits'**
+  String get activityLogDeniedTaxModeUnsupported;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=totals_mismatch: the totals the device showed no longer matched the server's totals for the edit.
+  ///
+  /// In en, this message translates to:
+  /// **'The totals changed — review and try again'**
+  String get activityLogDeniedTotalsMismatch;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=invalid_edit_number: a kitchen acknowledgement named an edit number the order does not have.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown change number'**
+  String get activityLogDeniedInvalidEditNumber;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=order_voided: the order was voided, so its edit can no longer be acknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'The order was voided'**
+  String get activityLogDeniedOrderVoided;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=item_unavailable: an item the edit adds or keeps is not available in this branch right now.
+  ///
+  /// In en, this message translates to:
+  /// **'An item is unavailable'**
+  String get activityLogDeniedItemUnavailable;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=modifier_option_not_in_scope: a chosen modifier option is not one of this menu item's options.
+  ///
+  /// In en, this message translates to:
+  /// **'An option does not belong to this item'**
+  String get activityLogDeniedModifierOptionNotInScope;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=modifier_prep_snapshot_stale: a modifier's kitchen-preparation snapshot no longer matches the menu, so the device must refresh the menu.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu changed — refresh and try again'**
+  String get activityLogDeniedModifierPrepSnapshotStale;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for denied_reason=invalid_device_type: the action was attempted from a device type that may not perform it (e.g. a kitchen acknowledgement from a POS till).
+  ///
+  /// In en, this message translates to:
+  /// **'Not allowed from this device'**
+  String get activityLogDeniedInvalidDeviceType;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for kitchen_channel=kds: the kitchen sees the edit on its kitchen display screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen screen'**
+  String get activityLogKitchenChannelKds;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for kitchen_channel=paper: the kitchen receives the edit as a printed kitchen ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen printer'**
+  String get activityLogKitchenChannelPaper;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for reason_code=customer_changed_mind.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer changed their mind'**
+  String get activityLogEditReasonCustomerChangedMind;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for reason_code=entry_mistake.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry mistake'**
+  String get activityLogEditReasonEntryMistake;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for reason_code=item_unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Item unavailable'**
+  String get activityLogEditReasonItemUnavailable;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for reason_code=kitchen_issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen issue'**
+  String get activityLogEditReasonKitchenIssue;
+
+  /// ORDER-EDIT-001A Activity-log VALUE for reason_code=other.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get activityLogEditReasonOther;
 
   /// Localized denied_reason value: the actor role was not permitted to perform the mutation (availability change / table move).
   ///

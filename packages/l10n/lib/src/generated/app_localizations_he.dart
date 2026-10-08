@@ -4978,6 +4978,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogCompletionTriggerPaymentRecorded => 'רישום התשלום';
 
   @override
+  String get activityLogCompletionTriggerOrderEdited => 'עריכת ההזמנה';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'הזמנות פתוחות כעת בתפעול. הזמנות שהסתיימו עוברות להיסטוריה.';
 
@@ -5366,6 +5369,23 @@ class AppLocalizationsHe extends AppLocalizations {
       'קוד PIN שגוי לשחרור מגירת המזומנים';
 
   @override
+  String get activityLogTitleOrderEdited => 'הזמנה שנשלחה נערכה';
+
+  @override
+  String get activityLogTitleOrderEditDenied => 'עריכת ההזמנה נדחתה';
+
+  @override
+  String get activityLogTitleOrderEditAcknowledged =>
+      'המטבח אישר את השינוי בהזמנה';
+
+  @override
+  String get activityLogTitleOrderEditAckDenied => 'אישור השינוי בהזמנה נדחה';
+
+  @override
+  String get activityLogTitleOrderEditSettingsUpdated =>
+      'הגדרות עריכת ההזמנות שונו';
+
+  @override
   String get activityLogFieldFromStatus => 'מסטטוס';
 
   @override
@@ -5385,6 +5405,34 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogFieldRecordedOffline => 'נרשם ללא חיבור';
+
+  @override
+  String get activityLogFieldEditNumber => 'מספר עריכה';
+
+  @override
+  String get activityLogFieldKitchenChannel => 'עדכון המטבח דרך';
+
+  @override
+  String get activityLogFieldReasonCode => 'סיבת השינוי';
+
+  @override
+  String get activityLogFieldRemovedItemCount => 'פריטים שהוסרו';
+
+  @override
+  String get activityLogFieldModifiedItemCount => 'פריטים ששונו';
+
+  @override
+  String get activityLogFieldUpToEditNumber => 'עד עריכה מספר';
+
+  @override
+  String get activityLogFieldAcknowledgedCount => 'שינויים שאושרו';
+
+  @override
+  String get activityLogFieldOrderEditEnabled => 'לאפשר עריכת הזמנות שנשלחו';
+
+  @override
+  String get activityLogFieldOrderEditFinishedFoodManagerOnly =>
+      'רק מנהלים רשאים להסיר מנות מוכנות או שהוגשו';
 
   @override
   String get activityLogFieldAvailability => 'זמינות';
@@ -5413,6 +5461,92 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'השולחן אינו זמין';
+
+  @override
+  String get activityLogDeniedRemovalNotPermitted =>
+      'אין הרשאה להסיר פריטים שנשלחו';
+
+  @override
+  String get activityLogDeniedFinishedFoodNeedsManager =>
+      'רק מנהל רשאי לשנות מנות מוכנות';
+
+  @override
+  String get activityLogDeniedReasonRequired => 'נדרשת סיבה';
+
+  @override
+  String get activityLogDeniedFeatureDisabled => 'עריכת הזמנות שנשלחו כבויה';
+
+  @override
+  String get activityLogDeniedOrderNotEditable => 'לא ניתן עוד לערוך את ההזמנה';
+
+  @override
+  String get activityLogDeniedOrderAlreadySettled => 'ההזמנה כבר שולמה';
+
+  @override
+  String get activityLogDeniedKitchenModeChanged => 'מצב המטבח השתנה';
+
+  @override
+  String get activityLogDeniedLineChanged => 'ההזמנה שונתה במכשיר אחר';
+
+  @override
+  String get activityLogDeniedLineHasDiscount =>
+      'שורה עם הנחה ניתנת להסרה בלבד';
+
+  @override
+  String get activityLogDeniedLegacyLineNotEditable =>
+      'שורה ישנה ניתנת להסרה בלבד';
+
+  @override
+  String get activityLogDeniedEditWouldEmptyOrder => 'העריכה תרוקן את ההזמנה';
+
+  @override
+  String get activityLogDeniedTaxModeUnsupported =>
+      'תמחור כולל מס אינו נתמך בעריכה';
+
+  @override
+  String get activityLogDeniedTotalsMismatch =>
+      'הסכומים השתנו — יש לבדוק ולנסות שוב';
+
+  @override
+  String get activityLogDeniedInvalidEditNumber => 'מספר שינוי לא ידוע';
+
+  @override
+  String get activityLogDeniedOrderVoided => 'ההזמנה בוטלה';
+
+  @override
+  String get activityLogDeniedItemUnavailable => 'אחד הפריטים אינו זמין';
+
+  @override
+  String get activityLogDeniedModifierOptionNotInScope =>
+      'אחת האפשרויות אינה שייכת לפריט זה';
+
+  @override
+  String get activityLogDeniedModifierPrepSnapshotStale =>
+      'התפריט השתנה — יש לרענן ולנסות שוב';
+
+  @override
+  String get activityLogDeniedInvalidDeviceType => 'לא מותר ממכשיר זה';
+
+  @override
+  String get activityLogKitchenChannelKds => 'מסך המטבח';
+
+  @override
+  String get activityLogKitchenChannelPaper => 'מדפסת המטבח';
+
+  @override
+  String get activityLogEditReasonCustomerChangedMind => 'הלקוח שינה את דעתו';
+
+  @override
+  String get activityLogEditReasonEntryMistake => 'טעות בהזנה';
+
+  @override
+  String get activityLogEditReasonItemUnavailable => 'הפריט אינו זמין';
+
+  @override
+  String get activityLogEditReasonKitchenIssue => 'בעיה במטבח';
+
+  @override
+  String get activityLogEditReasonOther => 'סיבה אחרת';
 
   @override
   String get activityLogDeniedPermission => 'אין הרשאה לתפקיד זה';

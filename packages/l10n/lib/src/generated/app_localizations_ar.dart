@@ -5015,6 +5015,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogCompletionTriggerPaymentRecorded => 'تسجيل الدفعة';
 
   @override
+  String get activityLogCompletionTriggerOrderEdited => 'تعديل الطلب';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'الطلبات المفتوحة حاليًا، وتنتقل إلى السجل بعد إتمامها أو إنهائها.';
 
@@ -5407,6 +5410,24 @@ class AppLocalizationsAr extends AppLocalizations {
       'رمز خاطئ لفتح قفل درج النقود';
 
   @override
+  String get activityLogTitleOrderEdited => 'تم تعديل طلب بعد إرساله';
+
+  @override
+  String get activityLogTitleOrderEditDenied => 'رُفض تعديل الطلب';
+
+  @override
+  String get activityLogTitleOrderEditAcknowledged =>
+      'أكّد المطبخ الاطّلاع على تعديل الطلب';
+
+  @override
+  String get activityLogTitleOrderEditAckDenied =>
+      'تم رفض تأكيد الاطّلاع على تعديل الطلب';
+
+  @override
+  String get activityLogTitleOrderEditSettingsUpdated =>
+      'تم تغيير إعدادات تعديل الطلبات';
+
+  @override
   String get activityLogFieldFromStatus => 'من الحالة';
 
   @override
@@ -5426,6 +5447,35 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogFieldRecordedOffline => 'سُجّل دون اتصال';
+
+  @override
+  String get activityLogFieldEditNumber => 'رقم التعديل';
+
+  @override
+  String get activityLogFieldKitchenChannel => 'إبلاغ المطبخ عبر';
+
+  @override
+  String get activityLogFieldReasonCode => 'سبب التغيير';
+
+  @override
+  String get activityLogFieldRemovedItemCount => 'الأصناف المحذوفة';
+
+  @override
+  String get activityLogFieldModifiedItemCount => 'الأصناف المعدّلة';
+
+  @override
+  String get activityLogFieldUpToEditNumber => 'حتى التعديل رقم';
+
+  @override
+  String get activityLogFieldAcknowledgedCount => 'التعديلات المؤكَّدة';
+
+  @override
+  String get activityLogFieldOrderEditEnabled =>
+      'السماح بتعديل الطلبات المُرسلة';
+
+  @override
+  String get activityLogFieldOrderEditFinishedFoodManagerOnly =>
+      'حذف الطعام الجاهز أو المُقدَّم مسموح للمديرين فقط';
 
   @override
   String get activityLogFieldAvailability => 'التوفر';
@@ -5454,6 +5504,94 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'الطاولة غير متاحة';
+
+  @override
+  String get activityLogDeniedRemovalNotPermitted =>
+      'غير مسموح بحذف أصناف مُرسلة';
+
+  @override
+  String get activityLogDeniedFinishedFoodNeedsManager =>
+      'تغيير الطعام الجاهز مسموح للمدير فقط';
+
+  @override
+  String get activityLogDeniedReasonRequired => 'يجب ذكر سبب';
+
+  @override
+  String get activityLogDeniedFeatureDisabled =>
+      'تعديل الطلبات المُرسلة مُعطَّل';
+
+  @override
+  String get activityLogDeniedOrderNotEditable => 'لم يعد بالإمكان تعديل الطلب';
+
+  @override
+  String get activityLogDeniedOrderAlreadySettled => 'الطلب مدفوع بالفعل';
+
+  @override
+  String get activityLogDeniedKitchenModeChanged => 'تغيّر وضع المطبخ';
+
+  @override
+  String get activityLogDeniedLineChanged => 'تغيّر الطلب على جهاز آخر';
+
+  @override
+  String get activityLogDeniedLineHasDiscount =>
+      'البند المخصوم يُحذف فقط ولا يُعدَّل';
+
+  @override
+  String get activityLogDeniedLegacyLineNotEditable =>
+      'البند القديم يُحذف فقط ولا يُعدَّل';
+
+  @override
+  String get activityLogDeniedEditWouldEmptyOrder =>
+      'التعديل سيُفرغ الطلب من الأصناف';
+
+  @override
+  String get activityLogDeniedTaxModeUnsupported =>
+      'التسعير شامل الضريبة غير مدعوم في التعديل';
+
+  @override
+  String get activityLogDeniedTotalsMismatch =>
+      'تغيّرت المجاميع — راجِع وحاوِل مرة أخرى';
+
+  @override
+  String get activityLogDeniedInvalidEditNumber => 'رقم تعديل غير معروف';
+
+  @override
+  String get activityLogDeniedOrderVoided => 'تم إلغاء الطلب';
+
+  @override
+  String get activityLogDeniedItemUnavailable => 'أحد الأصناف غير متوفر';
+
+  @override
+  String get activityLogDeniedModifierOptionNotInScope =>
+      'أحد الخيارات لا يخص هذا الصنف';
+
+  @override
+  String get activityLogDeniedModifierPrepSnapshotStale =>
+      'تغيّرت القائمة — حدِّثها وحاوِل مرة أخرى';
+
+  @override
+  String get activityLogDeniedInvalidDeviceType => 'غير مسموح من هذا الجهاز';
+
+  @override
+  String get activityLogKitchenChannelKds => 'شاشة المطبخ';
+
+  @override
+  String get activityLogKitchenChannelPaper => 'طابعة المطبخ';
+
+  @override
+  String get activityLogEditReasonCustomerChangedMind => 'غيّر الزبون رأيه';
+
+  @override
+  String get activityLogEditReasonEntryMistake => 'خطأ في الإدخال';
+
+  @override
+  String get activityLogEditReasonItemUnavailable => 'الصنف غير متوفر';
+
+  @override
+  String get activityLogEditReasonKitchenIssue => 'مشكلة في المطبخ';
+
+  @override
+  String get activityLogEditReasonOther => 'سبب آخر';
 
   @override
   String get activityLogDeniedPermission => 'غير مسموح لهذا الدور';

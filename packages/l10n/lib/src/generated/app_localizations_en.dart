@@ -5048,6 +5048,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The payment being recorded';
 
   @override
+  String get activityLogCompletionTriggerOrderEdited =>
+      'The order being edited';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'Orders currently open in operations. Finished orders move to History.';
 
@@ -5441,6 +5445,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Wrong PIN to unlock the cash drawer';
 
   @override
+  String get activityLogTitleOrderEdited => 'Sent order edited';
+
+  @override
+  String get activityLogTitleOrderEditDenied => 'Order edit denied';
+
+  @override
+  String get activityLogTitleOrderEditAcknowledged =>
+      'Order change acknowledged by kitchen';
+
+  @override
+  String get activityLogTitleOrderEditAckDenied =>
+      'Order change acknowledgement denied';
+
+  @override
+  String get activityLogTitleOrderEditSettingsUpdated =>
+      'Order editing settings changed';
+
+  @override
   String get activityLogFieldFromStatus => 'From status';
 
   @override
@@ -5461,6 +5483,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogFieldRecordedOffline => 'Recorded offline';
+
+  @override
+  String get activityLogFieldEditNumber => 'Edit number';
+
+  @override
+  String get activityLogFieldKitchenChannel => 'Kitchen notified via';
+
+  @override
+  String get activityLogFieldReasonCode => 'Reason for the change';
+
+  @override
+  String get activityLogFieldRemovedItemCount => 'Items removed';
+
+  @override
+  String get activityLogFieldModifiedItemCount => 'Items changed';
+
+  @override
+  String get activityLogFieldUpToEditNumber => 'Up to edit number';
+
+  @override
+  String get activityLogFieldAcknowledgedCount => 'Changes acknowledged';
+
+  @override
+  String get activityLogFieldOrderEditEnabled => 'Allow editing sent orders';
+
+  @override
+  String get activityLogFieldOrderEditFinishedFoodManagerOnly =>
+      'Only managers may remove food that is Ready or Served';
 
   @override
   String get activityLogFieldAvailability => 'Availability';
@@ -5490,6 +5540,99 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'The table isn’t available';
+
+  @override
+  String get activityLogDeniedRemovalNotPermitted =>
+      'Not allowed to remove sent items';
+
+  @override
+  String get activityLogDeniedFinishedFoodNeedsManager =>
+      'Only a manager can change finished food';
+
+  @override
+  String get activityLogDeniedReasonRequired => 'A reason is required';
+
+  @override
+  String get activityLogDeniedFeatureDisabled =>
+      'Editing sent orders is turned off';
+
+  @override
+  String get activityLogDeniedOrderNotEditable =>
+      'The order can no longer be edited';
+
+  @override
+  String get activityLogDeniedOrderAlreadySettled =>
+      'The order is already paid';
+
+  @override
+  String get activityLogDeniedKitchenModeChanged => 'The kitchen mode changed';
+
+  @override
+  String get activityLogDeniedLineChanged =>
+      'The order changed on another device';
+
+  @override
+  String get activityLogDeniedLineHasDiscount =>
+      'A discounted line can only be removed';
+
+  @override
+  String get activityLogDeniedLegacyLineNotEditable =>
+      'An older line can only be removed';
+
+  @override
+  String get activityLogDeniedEditWouldEmptyOrder =>
+      'The edit would empty the order';
+
+  @override
+  String get activityLogDeniedTaxModeUnsupported =>
+      'Tax-inclusive pricing is not supported for edits';
+
+  @override
+  String get activityLogDeniedTotalsMismatch =>
+      'The totals changed — review and try again';
+
+  @override
+  String get activityLogDeniedInvalidEditNumber => 'Unknown change number';
+
+  @override
+  String get activityLogDeniedOrderVoided => 'The order was voided';
+
+  @override
+  String get activityLogDeniedItemUnavailable => 'An item is unavailable';
+
+  @override
+  String get activityLogDeniedModifierOptionNotInScope =>
+      'An option does not belong to this item';
+
+  @override
+  String get activityLogDeniedModifierPrepSnapshotStale =>
+      'The menu changed — refresh and try again';
+
+  @override
+  String get activityLogDeniedInvalidDeviceType =>
+      'Not allowed from this device';
+
+  @override
+  String get activityLogKitchenChannelKds => 'Kitchen screen';
+
+  @override
+  String get activityLogKitchenChannelPaper => 'Kitchen printer';
+
+  @override
+  String get activityLogEditReasonCustomerChangedMind =>
+      'Customer changed their mind';
+
+  @override
+  String get activityLogEditReasonEntryMistake => 'Entry mistake';
+
+  @override
+  String get activityLogEditReasonItemUnavailable => 'Item unavailable';
+
+  @override
+  String get activityLogEditReasonKitchenIssue => 'Kitchen issue';
+
+  @override
+  String get activityLogEditReasonOther => 'Other';
 
   @override
   String get activityLogDeniedPermission => 'Not permitted for this role';

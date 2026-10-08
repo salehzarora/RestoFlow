@@ -1434,21 +1434,21 @@ select throws_ok(
              '00000000-0000-0000-0000-0001c1000d0a', 'initial_order', '{"v":1}'::jsonb, 'x:s7',
              (select id from kitchen_print_dispatches
                where order_id = '00000000-0000-0000-0000-0001c1000d0a' and dispatch_type = 'initial_order')) $$,
-  '23514', NULL, 'S7: supersession must target a VOID dispatch — an initial can never supersede');               -- 136
+  '23514', NULL, 'S7: supersession must target a VOID or ORDER_EDIT dispatch — an initial can never supersede'); -- 136
 insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision) values
   ('00000000-0000-0000-0000-0001c1000d26', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d001', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'takeaway', 'submitted', 'ILS', 100, 0, 0, 100, 'c1-d26', 1);
 insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key) values
   ('00000000-0000-0000-0000-0001c1a11d01', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000d26', 'void', '{"v":1,"kind":"void"}'::jsonb, 'x:v1-od26'),
   ('00000000-0000-0000-0000-0001c1a11d02', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000d26', 'void', '{"v":1,"kind":"void"}'::jsonb, 'x:v2-od26');
-update kitchen_print_dispatches
-  set superseded_by_dispatch_id = '00000000-0000-0000-0000-0001c1a11d02'
-  where id = '00000000-0000-0000-0000-0001c1a11d01';
+-- ORDER-EDIT-001A amended the supersession shape (API_CONTRACT §4.45.9): a VOID
+-- row can never be superseded, so a void -> void chain cannot even be built.
+-- The "target is itself superseded" rule is exercised through an order_edit
+-- target in order_edit_001a_dispatch_test.
 select throws_ok(
-  $$ insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key, superseded_by_dispatch_id)
-     values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
-             '00000000-0000-0000-0000-0001c1000d26', 'initial_order', '{"v":1}'::jsonb, 'x:s8',
-             '00000000-0000-0000-0000-0001c1a11d01') $$,
-  '23514', NULL, 'S8: a supersession CHAIN (target itself superseded) is rejected — cycles are impossible');     -- 137
+  $$ update kitchen_print_dispatches
+       set superseded_by_dispatch_id = '00000000-0000-0000-0000-0001c1a11d02'
+       where id = '00000000-0000-0000-0000-0001c1a11d01' $$,
+  '23514', NULL, 'S8: a VOID dispatch is never superseded (no void -> void chain) — cycles are impossible');      -- 137
 
 -- ===== T. guard canaries + prep allowlist ===================================
 create function pg_temp.guard_rejects(p_payload jsonb) returns boolean
