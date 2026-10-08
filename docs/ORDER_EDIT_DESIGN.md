@@ -12,6 +12,19 @@
 > in §12, which take effect only when transcribed under the architecture-change
 > procedure.
 >
+> **Update 2026-10-08 — rule (c) invoked.** The owner instructed ORDER-EDIT-001 not to
+> wait for #288. The labels were re-verified under rule (b): all are still free on main
+> and on #288 head `9d817a34`. They were then written directly on main by the
+> ORDER-EDIT-001 register-transcription PR: D-043, D-044, Q-042..Q-046, TH-7, T-019 and
+> API_CONTRACT §4.45–§4.47. The D-040..D-042 / Q-031..Q-041 / T-018 / §4.43–§4.44 gaps
+> are recorded there as held by open PR #288. Once the transcription PR merges, the
+> owning documents carry the decision record, and the §10 slices may move to Ready in
+> dependency order. #288's branch is never touched by ORDER-EDIT work. Where the
+> register tails meet, #288 brings main into its branch (merge or rebase, its own
+> choice, as rule c anticipates). It keeps both sides, putting its own entries first
+> and dropping the "held by #288" notes. The paragraphs below are the
+> pre-transcription record and are kept unchanged.
+>
 > **Register entries are proposed, not yet written; their IDs are provisional.** Open
 > PR #288 (STOREFRONT-PUBLISH-001, head `9d817a34`, last updated 2026-09-27) holds
 > D-040..D-042, Q-031..Q-041, T-018 and API_CONTRACT §4.43–§4.44. It is an
@@ -586,7 +599,10 @@ Writes, in one transaction:
 14. UPDATE retired items: status, `void_reason = 'order_edit:<reason>'`,
     `removed_by_edit_id`, `removed_kitchen_stage`.
 15. INSERT new items and modifiers (`edit_id`, `replaces_order_item_id`,
-    `service_round_id`). In-place rows keep the old `line_position`; a legacy old row
+    `service_round_id`). Every continuation row (a reduction's remainder, an unchanged
+    modify replacement) and every modify replacement carries `replaces_order_item_id`
+    = the retired line; increase deltas and added lines carry none (M13 classifies on
+    this). In-place rows keep the old `line_position`; a legacy old row
     with `line_position` 0 lands at max+1 through the PRINT-LAYOUT-001D trigger, which
     is accepted. In the same step, an UPDATE copies the old row's item and category
     display-order snapshots onto the new items and, matching by
