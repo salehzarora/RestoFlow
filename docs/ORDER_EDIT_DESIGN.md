@@ -22,16 +22,17 @@
 > claimed by this change. Only the owning registers allocate IDs (AGENT_WORKFLOW §9
 > step 3), so these labels are claims, not reservations. Rules:
 >
-> - **(a)** When this note's PR opens, a comment on PR #288 names these labels as
->   claimed by ORDER-EDIT-001 and asks that any further #288 sub-PR either skip them
->   or record the claim in #288's DECISIONS changelog (posted only with the owner's
->   approval).
+> - **(a)** When this note's PR (#302) opens, an information-only comment on PR #288
+>   names these labels as claimed by ORDER-EDIT-001 (owner-approved 2026-10-08). It
+>   requests no change to #288; a collision is resolved on the ORDER-EDIT side by
+>   rule (b), so #288's work is not affected.
 > - **(b)** At transcription, the registers are re-read on main and on every open PR.
 >   If any label is already taken, ORDER-EDIT-001 takes the next free IDs instead and,
 >   in the same docs commit, renumbers every citation in this note and on any
 >   ORDER-EDIT branch.
-> - **(c)** If #288 has not merged by the fallback date the owner sets when approving
->   this note, ORDER-EDIT-001 writes its entries directly on main. The
+> - **(c)** The owner set no fixed fallback date (2026-10-08): ORDER-EDIT-001 waits for
+>   #288. If the owner later instructs it explicitly, ORDER-EDIT-001 writes its
+>   entries directly on main without waiting for #288. The
 >   D-040..D-042 / Q-031..Q-041 / T-018 / §4.43–§4.44 gap is recorded as held by #288,
 >   the way D-030 is recorded as reserved, and #288 rebases onto it.
 >
@@ -124,7 +125,7 @@ plus the complete current order.
 | 3 | Must the kitchen confirm every change on the KDS? | **Yes, every change to a ticket on screen** — including a ticket not yet acknowledged, because cooks often start before tapping Acknowledge. The owner stressed that **some restaurants run without a kitchen screen**: that is the existing branch setting `kitchen_workflow_mode = 'printer_only'`, where there is no confirmation step and the change slip prints at once (§7). |
 | 4 | What does the printer-only change slip contain? | **The changes plus the full "ORDER NOW" list** on one slip, footer "Replaces earlier tickets for #code". |
 
-Defaults adopted without a separate owner answer (recommended, reversible later):
+Defaults confirmed by the owner on 2026-10-08 ("go with the defaults"; reversible later):
 
 - **Tax:** an edit recomputes the whole order's tax at the branch's current rate. No
   effect while tax is OFF (the branch default). An `inclusive` tax mode is refused
@@ -137,9 +138,14 @@ Defaults adopted without a separate owner answer (recommended, reversible later)
   at submit (`20260729090000_kitchen_print_dual_001c_direct_print_dispatch.sql:106-118`),
   but every paper line counts as stage "printed". So the "Only managers may remove
   food that is Ready or Served" switch has no effect there, and any cashier with
-  `void_order` may remove, reduce or change sent food. The alternative, for the owner
-  to choose before 001A: when the switch is ON on a paper-channel order, treat every
-  sent line as finished food, so a cashier gets `finished_food_needs_manager`.
+  `void_order` may remove, reduce or change sent food. The rejected alternative was:
+  when the switch is ON on a paper-channel order, treat every sent line as finished
+  food, so a cashier gets `finished_food_needs_manager`.
+- **Audit coverage in 001A:** slice 001A ships the complete API §4.33 coverage of its
+  audit writers, including the l10n titles and Dashboard registry entries, as an
+  approved exception to the shared-package split (§9.2).
+- **#288 coordination:** no fixed fallback date, and an information-only claim
+  comment on #288 (header note rules a and c).
 
 ## 5. Current system facts the design relies on
 
@@ -805,7 +811,7 @@ unchanged.
 - **Finished food:** with the branch switch ON, only manager+ may remove, reduce or
   remake Ready/Served lines (default OFF, owner decision 2). On the paper channel
   every line is stage "printed", not Ready/Served, so the switch does not apply and
-  the cashier is allowed (a §4 default, pending the owner's confirmation). The
+  the cashier is allowed (a §4 default, owner-confirmed 2026-10-08). The
   Dashboard says so (001G).
 - **Reason** required for any remove, reduce or modify; "other" requires text.
 - **Online only:** the PIN session and membership are re-validated at apply time
@@ -838,8 +844,8 @@ in 001A: `audit_safe_detail` / `audit_action_has_detail`, pgTAP writer and
 titles, the `_displayableKeys` labels and a green `auditRegistryViolations` guard.
 001A therefore also touches `packages/l10n` (keys mid-file) and `apps/dashboard`, as
 an approved exception to the shared-package split, following the PSC-001D and
-POS-CASH-DRAWER-MANUAL-OPEN-001 precedent. Owner approval of this plan records that
-exception; 001C carries no audit strings.
+POS-CASH-DRAWER-MANUAL-OPEN-001 precedent. The owner approved that exception on
+2026-10-08; 001C carries no audit strings.
 
 ## 10. Implementation plan
 
@@ -849,7 +855,7 @@ Work IDs are proposals pending owner approval.
 
 | # | Work ID | Scope | Depends on |
 |---|---|---|---|
-| 0 | **ORDER-EDIT-001** | This design note (no code) plus the §12 register transcription, merged to main after #288 merges, or by the fallback date in the header note (rule c), with IDs re-verified (rule b). Slice 0 is Done only when both are merged | — |
+| 0 | **ORDER-EDIT-001** | This design note (no code) plus the §12 register transcription, merged to main after #288 merges, or earlier on the owner's explicit fallback instruction (header note, rule c), with IDs re-verified (rule b). Slice 0 is Done only when both are merged | — |
 | 1 | **KITCHEN-DISPATCH-HARDEN-001** | Fail-closed `create_kitchen_dispatch`; payload builders exclude voided/cancelled lines (no behaviour change today) | 0 |
 | 2 | **POS-ORDER-DETAIL-IDS-001** | `pos_order_detail` per-modifier `modifier_option_id` + display-order snapshots (re-emit from the live `20260826090000` body); POS parser keeps `order_item_id`, `menu_item_id`, item `status` and modifier ids | 0 |
 | 3 | **ORDER-EDIT-001A** | DB core: schema (incl. the two `branches` columns and `app.set_branch_order_edit_settings` + its INVOKER public wrapper), `edit_order`, `kitchen_ack_order_edit`, `sync_push` re-emit, `void_order` ack-required re-emit, `order_edit` dispatch and supersession guard, `order_rounds_all_served`, item-count readers, and the audit writers **with their complete API §4.33 coverage in this same PR** (`audit_safe_detail`/`audit_action_has_detail`, pgTAP writer + `audit_category` tests, Dashboard `kAuditActionRegistry` entries with ar/he/en titles, `_displayableKeys` labels, `auditRegistryViolations` guard green) for `order.edited`, `order.edit_denied`, `order.edit_acknowledged`, `order.edit_ack_denied`, `settings.branch.order_edit_updated`; also touches `packages/l10n` and `apps/dashboard` as the approved §9.2 exception. Ships dark (switch OFF) | 1 |
@@ -1210,4 +1216,4 @@ Each row has Status **Accepted Open (D-027)**, and none blocks ORDER-EDIT-001A..
 - **Delivery load** — about eleven PRs across the DB, sync, three packages, two apps
   and the dashboard, with register and l10n merge friction against #288. Mitigation:
   the claim comment on #288, re-verification and renumbering at transcription, and
-  the owner-dated fallback to write the registers on main (header note).
+  the owner-triggered fallback to write the registers on main (header note).
