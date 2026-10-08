@@ -176,6 +176,9 @@ class PosOrderDetailItem {
     this.itemDisplayOrder = 0,
     this.linePosition = 0,
     this.prepComponents = const <KitchenPrepComponent>[],
+    this.orderItemId,
+    this.menuItemId,
+    this.status,
   });
 
   final String name;
@@ -206,6 +209,15 @@ class PosOrderDetailItem {
   /// nothing is ever re-derived from the live menu (D-008). Never multiplied
   /// here: the canonical aggregator applies the line quantity exactly once.
   final List<KitchenPrepComponent> prepComponents;
+
+  /// POS-ORDER-DETAIL-IDS-001 (ORDER-EDIT slice 2): the line's server identity
+  /// (`order_items.id`), its non-FK menu reference and its stored item status,
+  /// exactly as pos_order_detail emits them. Kept so a sent line can later be
+  /// edited against the right row. Tolerant: absent / non-string => null, and a
+  /// null never fails the (money-strict) detail. Non-money.
+  final String? orderItemId;
+  final String? menuItemId;
+  final String? status;
 
   static PosOrderDetailItem? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -257,6 +269,10 @@ class PosOrderDetailItem {
       linePosition: menuPrintOrderInt(raw['line_position']),
       // 114B.5B: tolerant, per unit, never fails the (money-strict) detail.
       prepComponents: parseKitchenPrepComponents(raw['prep_snapshot']),
+      // POS-ORDER-DETAIL-IDS-001: tolerant identity plucks.
+      orderItemId: _nonEmptyString(raw['order_item_id']),
+      menuItemId: _nonEmptyString(raw['menu_item_id']),
+      status: _nonEmptyString(raw['status']),
     );
   }
 }
@@ -268,6 +284,9 @@ class PosOrderDetailModifier {
     required this.quantity,
     this.modifierName,
     this.meat,
+    this.modifierOptionId,
+    this.groupDisplayOrder = 0,
+    this.optionDisplayOrder = 0,
   });
 
   final String optionName;
@@ -282,6 +301,20 @@ class PosOrderDetailModifier {
   /// KDS mapper uses; JSON null / absent / malformed => null. Not multiplied
   /// here — see [submittedOrderViewFromDetail].
   final KitchenMeat? meat;
+
+  /// POS-ORDER-DETAIL-IDS-001 (ORDER-EDIT slice 2): the option's non-FK
+  /// reference id (`order_item_modifiers.modifier_option_id`) and its
+  /// order-time MENU-ORDER-001 ranks (group, then option), exactly as
+  /// pos_order_detail emits them — the detail already sorts by these ranks.
+  /// Tolerant: an absent id is null; an absent / malformed rank is 0 (a server
+  /// predating the keys). A STORED rank of 0 means no rank was captured: the
+  /// option / group was missing at submit, the row predates MENU-ORDER-001, or
+  /// it was never reordered (default display_order 0). The ranks are a sort key
+  /// only, never a liveness signal — use [modifierOptionId] against the menu
+  /// for that. Non-money; never fails the detail.
+  final String? modifierOptionId;
+  final int groupDisplayOrder;
+  final int optionDisplayOrder;
 
   static PosOrderDetailModifier? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -308,6 +341,14 @@ class PosOrderDetailModifier {
           : null,
       // 114B.5B: tolerant, per modifier unit, never fails the detail.
       meat: KitchenMeat.tryFromJson(raw['meat_snapshot']),
+      // POS-ORDER-DETAIL-IDS-001: tolerant id + rank plucks.
+      modifierOptionId: _nonEmptyString(raw['modifier_option_id']),
+      groupDisplayOrder: menuPrintOrderInt(
+        raw['modifier_group_display_order_snapshot'],
+      ),
+      optionDisplayOrder: menuPrintOrderInt(
+        raw['modifier_option_display_order_snapshot'],
+      ),
     );
   }
 }
@@ -423,6 +464,10 @@ class PosOrderDetailPayment {
 
 /// STRICT integer parse (D-007): ints only — a double or string is refused.
 int? _int(Object? v) => v is int ? v : null;
+
+/// Tolerant identity pluck (POS-ORDER-DETAIL-IDS-001): a non-empty string, or
+/// null for anything else. Never fails the detail.
+String? _nonEmptyString(Object? v) => v is String && v.isNotEmpty ? v : null;
 
 /// Why a detail read failed — mirrors the snapshot repository's taxonomy.
 enum PosOrderDetailFailure { session, transport, notFound, malformed }
