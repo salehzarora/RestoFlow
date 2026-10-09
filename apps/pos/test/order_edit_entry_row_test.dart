@@ -23,6 +23,7 @@ import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
+import 'package:restoflow_pos/src/state/order_edit_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_offline_state.dart';
@@ -447,6 +448,12 @@ void main() {
     await tester.pump();
     expect(find.text(l10n.posOrderEditNeedsConnection), findsOneWidget);
     expect(find.text(l10n.posOfflineActionUnavailable), findsNothing);
+    // The controller is never called: nothing was reserved or loaded.
+    final edit = ProviderScope.containerOf(
+      tester.element(find.byType(OrderActionRow)),
+    ).read(orderEditControllerProvider);
+    expect(edit.phase, OrderEditPhase.idle);
+    expect(edit.generation, 0);
   });
 
   testWidgets('a pending edit reads "Sending changes…"', (tester) async {

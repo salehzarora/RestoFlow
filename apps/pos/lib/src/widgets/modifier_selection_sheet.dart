@@ -63,6 +63,10 @@ class ModifierSelectionSheet extends StatefulWidget {
     this.initialQuantity = 1,
     this.displayBasePriceMinor,
     this.quickNotes = const <PosQuickNotePreset>[],
+    this.editMode = false,
+    this.applyToCount = 1,
+    this.onConfirmEdit,
+    this.normalizeSelections,
     super.key,
   });
 
@@ -150,6 +154,35 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// the real catalogue, and only the BASE is historical.
   final int? displayBasePriceMinor;
 
+  /// ORDER-EDIT-001E — the sheet edits a line of a SENT order (design §6,
+  /// §7.1 point 3): modifiers and note only. The quantity stepper is hidden —
+  /// a sent line's quantity moves only through its own cart stepper.
+  final bool editMode;
+
+  /// ORDER-EDIT-001E — how many units of the sent line the change can apply
+  /// to. At 2 or more (and only in [editMode]) the sheet offers "Apply to: All
+  /// N / Just 1" ("one of the three burgers without tomato").
+  final int applyToCount;
+
+  /// ORDER-EDIT-001E — the edit-mode confirm: the selections, the note and
+  /// whether the cashier chose "Just 1". When set (with [editMode]) it is
+  /// called INSTEAD of [onConfirm], whose type is unchanged.
+  final void Function(
+    List<SelectedModifier> selections,
+    String? note,
+    bool applyToOne,
+  )?
+  onConfirmEdit;
+
+  /// ORDER-EDIT-001E — re-prices the selections the way the line will be
+  /// charged: an option the sent line already had keeps its STORED price
+  /// (`app.edit_order` charges kept options their old price), whatever the
+  /// live menu says. The running total and the edit-mode confirm both use
+  /// it, so the sheet never shows a figure the cart will not. Null: the
+  /// selections as the sheet priced them.
+  final List<SelectedModifier> Function(List<SelectedModifier> selections)?
+  normalizeSelections;
+
   /// Presents the picker as a MODAL BOTTOM SHEET at EVERY width — the cashier
   /// workflow the POS is built around: it slides up from the bottom edge over
   /// the dimmed POS, with rounded top corners and a Material drag handle, and
@@ -184,6 +217,16 @@ class ModifierSelectionSheet extends StatefulWidget {
     int initialQuantity = 1,
     int? displayBasePriceMinor,
     List<PosQuickNotePreset> quickNotes = const <PosQuickNotePreset>[],
+    bool editMode = false,
+    int applyToCount = 1,
+    void Function(
+      List<SelectedModifier> selections,
+      String? note,
+      bool applyToOne,
+    )?
+    onConfirmEdit,
+    List<SelectedModifier> Function(List<SelectedModifier> selections)?
+    normalizeSelections,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -218,6 +261,10 @@ class ModifierSelectionSheet extends StatefulWidget {
         initialQuantity: initialQuantity,
         displayBasePriceMinor: displayBasePriceMinor,
         quickNotes: quickNotes,
+        editMode: editMode,
+        applyToCount: applyToCount,
+        onConfirmEdit: onConfirmEdit,
+        normalizeSelections: normalizeSelections,
       ),
     );
   }
@@ -299,6 +346,10 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// selections and the note, so a reused widget position can never inherit
   /// another line's in-progress quantity.
   int _quantity = 1;
+
+  /// ORDER-EDIT-001E — "Apply to: Just 1" was chosen ([ModifierSelectionSheet.
+  /// applyToCount] >= 2 in edit mode). Reset with the rest of the state.
+  bool _applyToOne = false;
 
   @override
   void initState() {
@@ -505,6 +556,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       ..addAll([for (final i in split.labelIndexes) presets[i]]);
     _noteController.text = split.freeText;
     _quantity = widget.initialQuantity < 1 ? 1 : widget.initialQuantity;
+    _applyToOne = false;
     _quickNotesExpanded = false;
     _quickNoteRefused = false;
   }
@@ -647,11 +699,23 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// SAME snapshots by construction, so the two cannot drift apart again.
   int get _deltaTotal {
     var total = 0;
-    for (final selection in _selections()) {
+    for (final selection in _pricedSelections()) {
       total += selection.totalDeltaMinor;
     }
     return total;
   }
+
+  /// ORDER-EDIT-001E — [_selections] priced the way the edited line will be
+  /// charged ([ModifierSelectionSheet.normalizeSelections]); identical to
+  /// [_selections] everywhere else.
+  List<SelectedModifier> _pricedSelections() {
+    final normalize = widget.normalizeSelections;
+    return normalize == null ? _selections() : normalize(_selections());
+  }
+
+  /// ORDER-EDIT-001E — the sheet edits a sent line ([ModifierSelectionSheet.
+  /// editMode]) and may offer "Apply to".
+  bool get _offersApplyTo => widget.editMode && widget.applyToCount >= 2;
 
   /// Whether an option in [group] can be activated right now. A selected
   /// option always can (deselecting is never blocked); a single-select choice
@@ -855,7 +919,9 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     // quantity, so multiplying here cannot double-count it. Integer minor units
     // throughout (D-007).
     final unitTotalMinor = baseMinor + _deltaTotal;
-    final totalMinor = unitTotalMinor * _quantity;
+    // ORDER-EDIT-001E: "Just 1" changes ONE unit, so the total is that unit's.
+    final totalMinor =
+        unitTotalMinor * (_offersApplyTo && _applyToOne ? 1 : _quantity);
     final totalText = MoneyFormatter.formatMinor(
       totalMinor,
       widget.currencyCode,
@@ -934,7 +1000,62 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       // decided. Hidden in the note-only degraded edit, where the sheet is
       // deliberately not entitled to re-price the line; the cart-line stepper
       // still changes that line's quantity.
-      if (!_noteOnlyEdit)
+      // ORDER-EDIT-001E: a SENT line's sheet edits modifiers and note only
+      // (design §6) — no stepper; when the line has several units it asks
+      // which of them the change applies to instead.
+      if (_offersApplyTo)
+        Padding(
+          padding: const EdgeInsets.only(top: RestoflowSpacing.md),
+          child: Container(
+            key: const Key('modifier-apply-to-row'),
+            padding: const EdgeInsets.symmetric(
+              horizontal: RestoflowSpacing.md,
+              vertical: RestoflowSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: kPosInnerSurface,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(color: kRestoflowHairline),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: RestoflowSpacing.md,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                Text(
+                  l10n.posOrderEditApplyToLabel,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text(
+                        l10n.posOrderEditApplyToAll(widget.applyToCount),
+                        key: const Key('modifier-apply-to-all'),
+                      ),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text(
+                        l10n.posOrderEditApplyToOne,
+                        key: const Key('modifier-apply-to-one'),
+                      ),
+                    ),
+                  ],
+                  selected: {_applyToOne},
+                  onSelectionChanged: (choice) =>
+                      setState(() => _applyToOne = choice.first),
+                ),
+              ],
+            ),
+          ),
+        ),
+      if (!_noteOnlyEdit && !widget.editMode)
         Padding(
           padding: const EdgeInsets.only(top: RestoflowSpacing.md),
           child: Container(
@@ -1208,7 +1329,18 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 // while any stored selection cannot be represented.
                 onPressed: _satisfied
                     ? () {
-                        widget.onConfirm(_selections(), _note, _quantity);
+                        final confirmEdit = widget.onConfirmEdit;
+                        if (widget.editMode && confirmEdit != null) {
+                          // ORDER-EDIT-001E: modifiers, note and the
+                          // Apply-to choice — never a quantity.
+                          confirmEdit(
+                            _pricedSelections(),
+                            _note,
+                            _offersApplyTo && _applyToOne,
+                          );
+                        } else {
+                          widget.onConfirm(_selections(), _note, _quantity);
+                        }
                         Navigator.of(context).pop();
                       }
                     : null,

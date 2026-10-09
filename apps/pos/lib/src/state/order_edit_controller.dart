@@ -1547,13 +1547,41 @@ class OrderEditController extends Notifier<OrderEditState> {
     }
   }
 
+  /// Decision D10 — re-baselines the OPEN, UNSENT edit in place after a
+  /// separate committed change to the same order made from inside the edit
+  /// ("Lower discount", or the "Cancel order" link when every line would be
+  /// removed): the detail is re-fetched and the cashier's intents are
+  /// re-applied to it, exactly like a rebase. The line ids do not change, so
+  /// every intent is kept; a cancelled order is no longer editable and the
+  /// edit ends ([OrderEditRefusalEffect.exit]).
+  ///
+  /// Never sends anything. Refused (`notSent`, nothing changes) unless an
+  /// edit is open and unsent.
+  Future<OrderEditResult> refreshBaseline() async {
+    final s = state;
+    if (s.startupBlocked ||
+        s.phase != OrderEditPhase.active ||
+        s.baseline == null ||
+        s.entryOrderId == null) {
+      return const OrderEditResult(
+        status: OrderEditSubmitStatus.notSent,
+        error: 'nothing_to_refresh',
+      );
+    }
+    return _rebase(s.generation, null, null);
+  }
+
   /// THE REBASE (design §7.1 point 9, decision D9): re-fetch the detail,
   /// rebuild the baseline, re-apply the cashier's intents to the fresh lines
   /// and reload the edit cart. The resend is MANUAL, under a new identity.
+  ///
+  /// [outcome] / [policy] are the refusal that asked for it; both are null for
+  /// a [refreshBaseline], whose result is `notSent` and says something only
+  /// when an intent had to be left out.
   Future<OrderEditResult> _rebase(
     int gen,
-    OrderEditOutcome outcome,
-    OrderEditRefusalPolicy policy,
+    OrderEditOutcome? outcome,
+    OrderEditRefusalPolicy? policy,
   ) async {
     final s = state;
     final orderId = s.entryOrderId!;
@@ -1561,19 +1589,21 @@ class OrderEditController extends Notifier<OrderEditState> {
     final previousLines = ref.read(cartControllerProvider).editLines;
     _publish(s.copyWith(phase: OrderEditPhase.rebasing));
     OrderEditResult result(
-      OrderEditNotice notice,
-      OrderEditRefusalEffect effect, {
+      OrderEditNotice? notice,
+      OrderEditRefusalEffect? effect, {
       List<String> dropped = const <String>[],
     }) => OrderEditResult(
-      status: OrderEditSubmitStatus.refused,
+      status: outcome == null
+          ? OrderEditSubmitStatus.notSent
+          : OrderEditSubmitStatus.refused,
       notice: notice,
       effect: effect,
       outcome: outcome,
       droppedItems: dropped,
-      error: outcome.reason,
+      error: outcome?.reason,
     );
 
-    if (outcome.refusal?.code == 'totals_mismatch') await _freshTax();
+    if (outcome?.refusal?.code == 'totals_mismatch') await _freshTax();
     PosOrderDetail? fresh;
     try {
       fresh = await ref.read(orderDetailRepositoryProvider).fetch(orderId);
@@ -1589,7 +1619,7 @@ class OrderEditController extends Notifier<OrderEditState> {
     if (_disposed ||
         state.generation != gen ||
         state.phase != OrderEditPhase.rebasing) {
-      return result(policy.notice, policy.effect);
+      return result(policy?.notice, policy?.effect);
     }
     void back() => _publish(
       state.copyWith(phase: OrderEditPhase.active, lastError: 'rebase_failed'),
@@ -1638,9 +1668,17 @@ class OrderEditController extends Notifier<OrderEditState> {
       state.copyWith(
         phase: OrderEditPhase.active,
         baseline: baseline,
-        lastError: outcome.reason,
+        lastError: outcome?.reason,
       ),
     );
+    if (policy == null) {
+      // A re-baseline: silent unless an intent no longer applies.
+      return result(
+        replay.droppedItems.isEmpty ? null : OrderEditNotice.rebased,
+        OrderEditRefusalEffect.rebaseline,
+        dropped: replay.droppedItems,
+      );
+    }
     return result(policy.notice, policy.effect, dropped: replay.droppedItems);
   }
 

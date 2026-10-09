@@ -1515,4 +1515,77 @@ void main() {
       expect(h.c.read(orderEditPlanProvider), isNull);
     });
   });
+
+  group('re-baseline in place (decision D10)', () {
+    test(
+      'refused, and nothing fetched, unless an edit is open and unsent',
+      () async {
+        final h = _H();
+        await h.boot();
+        final r = await h.edit.refreshBaseline();
+        expect(r.status, OrderEditSubmitStatus.notSent);
+        expect(r.error, 'nothing_to_refresh');
+        expect(h.details.fetches, 0);
+      },
+    );
+
+    test('after "Lower discount": the fresh discount is adopted and every '
+        'intent is kept; nothing is sent', () async {
+      final h = _H();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.cart.addItem(_lemonade);
+      // The discount was lowered to 500 as its own committed change.
+      h.details.byId['order-1'] = detail(
+        items: [_burger(), _fries()],
+        discount: 500,
+      );
+
+      final r = await h.edit.refreshBaseline();
+      expect(r.status, OrderEditSubmitStatus.notSent);
+      expect(r.notice, isNull);
+      expect(r.droppedItems, isEmpty);
+      expect(h.state.phase, OrderEditPhase.active);
+      expect(h.state.baseline!.discountMinor, 500);
+      expect(h.cartState.editContext!.baseline.discountMinor, 500);
+      final lines = h.cartState.lines;
+      expect(
+        lines.singleWhere((l) => l.lineId == 'sent-oi-fries').editRemoved,
+        isTrue,
+      );
+      expect(lines.where((l) => l.editAdded).single.menuItemId, 'mi-lemonade');
+      // 8000 + 900 − 500: the plan reads the fresh discount.
+      final plan = h.c.read(orderEditPlanProvider)!;
+      expect(plan.subtotalMinor, 8900);
+      expect(plan.grandMinor, 8400);
+      expect(h.transport.ops, isEmpty);
+    });
+
+    test('a line another till retired is left out and named', () async {
+      final h = _H();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.details.byId['order-1'] = detail(items: [_burger()]);
+      final r = await h.edit.refreshBaseline();
+      expect(r.notice, OrderEditNotice.rebased);
+      expect(r.droppedItems, ['Fries']);
+      expect(h.state.phase, OrderEditPhase.active);
+    });
+
+    test('an order cancelled meanwhile ends the edit', () async {
+      final h = _H();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.details.byId['order-1'] = detail(
+        items: [_burger(), _fries()],
+        status: 'voided',
+      );
+      final r = await h.edit.refreshBaseline();
+      expect(r.effect, OrderEditRefusalEffect.exit);
+      expect(r.notice, OrderEditNotice.notEditable);
+      expect(h.state.phase, OrderEditPhase.idle);
+      expect(h.cartState.isEditing, isFalse);
+      expect(h.transport.ops, isEmpty);
+    });
+  });
 }
