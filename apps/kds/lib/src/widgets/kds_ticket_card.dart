@@ -65,6 +65,10 @@ class KdsTicketCard extends StatelessWidget {
     this.ackPending = false,
     this.ackFailed = false,
     this.highlightCancelled = false,
+    this.onAcknowledgeChange,
+    this.changeAckPending = false,
+    this.changeAckFailed = false,
+    this.highlightChange = false,
     super.key,
   });
 
@@ -127,6 +131,26 @@ class KdsTicketCard extends StatelessWidget {
   /// cancellation card first appears (locked decision).
   final bool highlightCancelled;
 
+  /// ORDER-EDIT-001D: "Got it" for this card's unconfirmed sent-order edit
+  /// (`order.edit_ack` on the LIVE board). While the card shows a change it
+  /// REPLACES the advance / Acknowledge action (design §7.2). Null (demo /
+  /// bare tests) renders neither — never a dead button.
+  final VoidCallback? onAcknowledgeChange;
+
+  /// ORDER-EDIT-001D: a "Got it" covering this change is in flight (or
+  /// applied, awaiting the authoritative pull) — honest pending state, no
+  /// duplicate taps. The card is never hidden locally.
+  final bool changeAckPending;
+
+  /// ORDER-EDIT-001D: the last "Got it" failed — the card keeps the change,
+  /// shows a localized failure line, and stays retryable.
+  final bool changeAckFailed;
+
+  /// ORDER-EDIT-001D: one finite, reduce-motion-aware AMBER pulse when this
+  /// card's change first appears — keyed by (work unit, edit number), so a
+  /// second edit pulses again.
+  final bool highlightChange;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -176,16 +200,42 @@ class KdsTicketCard extends StatelessWidget {
     final pendingAckCancellation = ticket.requiresAck;
     final dangerStyle = RestoflowTone.danger.styleOf(theme);
 
+    // ORDER-EDIT-001D: the unconfirmed sent-order change on this card. A red
+    // cancellation card NEVER shows change UI — a void supersedes every
+    // pending edit (API_CONTRACT §4.46; the mapper already drops it).
+    final change = pendingAckCancellation ? null : ticket.change;
+    // A STANDALONE change card exists only because of the change (an emptied
+    // unit, or an order that left the board): the FULL-CARD amber treatment
+    // mirrors the PSC-001D red card. It keeps the unit's print key, so it
+    // shows no status chip, print status or Reprint (they would describe the
+    // old ticket and reprint an empty one).
+    final standalone = change?.standalone == true;
+    final warningStyle = RestoflowTone.warning.styleOf(theme);
+    // "was" renders once per changed group: a modify of "just 1 of 3" marks
+    // the continuation AND the replacement with the same old line.
+    final wasShownFor = <String>{};
+    final showWas = [
+      for (final item in ticket.items)
+        item.editMark != KdsEditLineMark.changed ||
+            item.editWas?.orderItemId == null ||
+            wasShownFor.add(item.editWas!.orderItemId!),
+    ];
+
     final card = Card(
       margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.md),
       color: pendingAckCancellation
           ? dangerStyle.container
+          : standalone
+          ? warningStyle.container
           : theme.colorScheme.surfaceContainerLow,
       child: Container(
         decoration: BoxDecoration(
           border: pendingAckCancellation
               // Full danger ring for the cancellation card…
               ? Border.all(color: dangerStyle.accent, width: 2)
+              // …a full amber ring for a standalone change card…
+              : standalone
+              ? Border.all(color: warningStyle.accent, width: 2)
               // …else the existing status-accent start edge, unchanged.
               : BorderDirectional(
                   start: BorderSide(color: statusAccent, width: 4),
@@ -204,6 +254,19 @@ class KdsTicketCard extends StatelessWidget {
                   key: Key('kds-cancelled-banner-${ticket.kitchenTicketId}'),
                   l10n: l10n,
                   voidedAt: ticket.voidedAt,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+              ],
+              // ORDER-EDIT-001D: the amber change header LEADS a changed card
+              // — "CHANGED" (or the emptied-ticket title + stop instruction),
+              // then one row per unconfirmed edit: Change N · time · reason.
+              // Words, not colour alone. Money-free; never a staff name.
+              if (change != null) ...[
+                _ChangeHeader(
+                  key: Key('kds-change-header-${ticket.kitchenTicketId}'),
+                  ticketId: ticket.kitchenTicketId,
+                  l10n: l10n,
+                  change: change,
                 ),
                 const SizedBox(height: RestoflowSpacing.sm),
               ],
@@ -259,11 +322,15 @@ class KdsTicketCard extends StatelessWidget {
                       runSpacing: RestoflowSpacing.xs,
                       children: [
                         if (elapsedPill != null) elapsedPill,
-                        KdsStatusChip(status: ticket.status),
+                        // ORDER-EDIT-001D: a standalone change card has no
+                        // live unit, so no unit status to show.
+                        if (!standalone) KdsStatusChip(status: ticket.status),
                         // A1: the always-visible per-card Reprint control (LIVE
                         // board). Money-free; re-runs the existing kitchen
-                        // print, never an order/status change.
-                        if (onReprint != null)
+                        // print, never an order/status change. Never on a
+                        // standalone change card (it would print the old,
+                        // emptied unit).
+                        if (onReprint != null && !standalone)
                           IconButton(
                             key: Key('kds-reprint-${ticket.kitchenTicketId}'),
                             tooltip: l10n.printReprintAction,
@@ -290,12 +357,16 @@ class KdsTicketCard extends StatelessWidget {
                     // PSC-001C: an ADDITION ticket announces itself — the
                     // kitchen must see this is NEW work on an existing order,
                     // not a re-send of the original items. Money-free.
+                    // ORDER-EDIT-001D: a round OPENED by a sent-order edit
+                    // reads "Change N · Round M" instead (permanent
+                    // provenance, the same marker its paper prints).
                     if (ticket.roundNumber != null)
                       RestoflowStatusPill(
                         key: Key('kds-round-${ticket.kitchenTicketId}'),
                         icon: Icons.playlist_add,
-                        label:
-                            '${l10n.kdsAdditionLabel} · ${l10n.kdsRoundLabel(ticket.roundNumber!)}',
+                        label: ticket.openedByEditNumber == null
+                            ? '${l10n.kdsAdditionLabel} · ${l10n.kdsRoundLabel(ticket.roundNumber!)}'
+                            : '${l10n.kitchenEditChangeNumber(ticket.openedByEditNumber!)} · ${l10n.kdsRoundLabel(ticket.roundNumber!)}',
                       ),
                     if (dineIn)
                       RestoflowStatusPill(
@@ -336,13 +407,25 @@ class KdsTicketCard extends StatelessWidget {
               // count summary — one prominent line PER RESOURCE (patties, buns,
               // …), combining the modifier-option and item-base counts. Shown
               // above the item details; hidden when the order carries no
-              // configured count. Money-free.
-              if (ticket.kitchenCounts.isNotEmpty) ...[
+              // configured count. Money-free. ORDER-EDIT-001D: never on a
+              // standalone change card — it has no live work to count.
+              if (ticket.kitchenCounts.isNotEmpty && !standalone) ...[
                 _KitchenCountsSection(counts: ticket.kitchenCounts, l10n: l10n),
                 const SizedBox(height: RestoflowSpacing.sm),
               ],
-              for (final item in ticket.items)
-                _ItemLine(item: item, l10n: l10n, noteColor: noteColor),
+              for (final (index, item) in ticket.items.indexed)
+                _ItemLine(
+                  item: item,
+                  l10n: l10n,
+                  noteColor: noteColor,
+                  showMark: !pendingAckCancellation,
+                  showWas: showWas[index],
+                ),
+              // ORDER-EDIT-001D: the lines an unconfirmed edit took off this
+              // card, struck through under a REMOVED word.
+              if (change != null)
+                for (final removed in change.removed)
+                  _RemovedLine(removed: removed, l10n: l10n),
               if (ticket.notes case final note?) ...[
                 const SizedBox(height: RestoflowSpacing.xs),
                 Text(
@@ -354,7 +437,9 @@ class KdsTicketCard extends StatelessWidget {
                   ),
                 ),
               ],
-              if (printStatus case final status?) ...[
+              // ORDER-EDIT-001D: never on a standalone change card — its key
+              // is the old unit's, so the status would describe that ticket.
+              if (printStatus case final status? when !standalone) ...[
                 const SizedBox(height: RestoflowSpacing.xs),
                 Row(
                   key: const Key('ticket-print-status'),
@@ -400,13 +485,28 @@ class KdsTicketCard extends StatelessWidget {
                   ],
                 ),
               ],
-              _TicketAction(
-                status: ticket.status,
-                l10n: l10n,
-                takeaway: ticket.orderType == 'takeaway',
-                onAdvance: onAdvance,
-                onRecall: onRecall,
-              ),
+              // ORDER-EDIT-001D (design §7.2): while the card shows an
+              // unconfirmed change, "Got it" REPLACES the advance action —
+              // Acknowledge on a new ticket included — for every status. A
+              // null callback (demo / bare tests) renders neither: never a
+              // dead button, and never an advance the server would refuse.
+              if (change == null)
+                _TicketAction(
+                  status: ticket.status,
+                  l10n: l10n,
+                  takeaway: ticket.orderType == 'takeaway',
+                  onAdvance: onAdvance,
+                  onRecall: onRecall,
+                )
+              else if (onAcknowledgeChange case final onGotIt?)
+                _ChangeAckAction(
+                  ticketId: ticket.kitchenTicketId,
+                  l10n: l10n,
+                  alsoAcknowledges: change.alsoAcknowledges,
+                  pending: changeAckPending,
+                  failed: changeAckFailed,
+                  onPressed: onGotIt,
+                ),
               // PSC-001D: the ONE acknowledgement action for a pending
               // cancellation (the cancelled status renders no normal
               // progression action above). LIVE board only — a null callback
@@ -473,6 +573,18 @@ class KdsTicketCard extends StatelessWidget {
         key: Key('kds-cancel-arrival-${ticket.kitchenTicketId}'),
         window: newArrivalWindow,
         color: theme.colorScheme.error,
+        child: result,
+      );
+    }
+    // ORDER-EDIT-001D: one finite, reduce-motion-aware AMBER pulse when this
+    // card's change first appears. Keyed by the change alert key (unit + newest
+    // edit), so a second edit remounts it and the finite animation restarts.
+    // No audio in v1 (design §7.2). The new-order glow wins when both apply.
+    if (highlightChange && !highlightNew && change != null) {
+      result = _NewArrivalHighlight(
+        key: Key('kds-change-arrival-${ticket.changeAlertKey}'),
+        window: newArrivalWindow,
+        color: RestoflowSemanticColors.of(theme.brightness).warning,
         child: result,
       );
     }
@@ -749,6 +861,275 @@ class _CancelledBanner extends StatelessWidget {
   }
 }
 
+/// ORDER-EDIT-001D (design §7.2): the leading AMBER header of a card with an
+/// unconfirmed sent-order change. It says IN WORDS what happened — "CHANGED",
+/// or, for a unit the edit emptied, the all-items-removed title and the
+/// stop-preparing instruction — then one row per pending edit on the card,
+/// oldest first: "Change N · 12:41 · reason". The time is the honest edit time
+/// (omitted when the wire carried none — never fabricated); the reason is a
+/// localized label (an unknown code is never shown raw). Money-free and
+/// identity-free: the KDS never plucks a staff name (SECURITY T-003).
+class _ChangeHeader extends StatelessWidget {
+  const _ChangeHeader({
+    required this.ticketId,
+    required this.l10n,
+    required this.change,
+    super.key,
+  });
+
+  final String ticketId;
+  final AppLocalizations l10n;
+  final KdsTicketChange change;
+
+  /// The edit's reason by the SAME rule as the change slip: `other` shows its
+  /// free text (or the label when there is none); a known code with text
+  /// shows "label · text"; otherwise the label or the text alone.
+  String? _reason(KdsOrderEdit edit) {
+    final text = edit.reasonText?.trim();
+    final nonBlank = text == null || text.isEmpty ? null : text;
+    final label = orderEditReasonLabel(l10n, edit.reasonCode);
+    if (edit.reasonCode == 'other') return nonBlank ?? label;
+    if (label != null && nonBlank != null) return '$label · $nonBlank';
+    return label ?? nonBlank;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = RestoflowSemanticColors.of(theme.brightness);
+    final foreground = semantic.onWarning;
+    final localizations = MaterialLocalizations.of(context);
+    String summary(KdsOrderEdit edit) {
+      final createdAt = edit.createdAt;
+      final reason = _reason(edit);
+      return [
+        l10n.kitchenEditChangeNumber(edit.editNumber),
+        if (createdAt != null)
+          localizations.formatTimeOfDay(
+            TimeOfDay.fromDateTime(createdAt.toLocal()),
+          ),
+        if (reason != null) reason,
+      ].join(' · ');
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: semantic.warning,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                change.emptied
+                    ? Icons.remove_circle_outline
+                    : Icons.edit_note_outlined,
+                size: RestoflowIconSizes.md,
+                color: foreground,
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Expanded(
+                child: Text(
+                  change.emptied
+                      ? l10n.kdsEditAllItemsRemovedTitle
+                      : l10n.kdsEditChangedLabel,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (change.emptied) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              l10n.kdsEditAllItemsRemovedBody,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
+            ),
+          ],
+          for (final edit in change.pendingEdits) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              summary(edit),
+              key: Key('kds-change-edit-$ticketId|e${edit.editNumber}'),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: foreground,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// ORDER-EDIT-001D: one line an unconfirmed edit REMOVED from this card — a
+/// danger REMOVED word, then the old line (and its modifiers) struck through in
+/// the danger accent: words plus the strike, never colour alone. When the dish
+/// was re-made in another round, "Remade in Round M" tells the cook where it
+/// went. Money-free (the line is the card's own money-free view).
+class _RemovedLine extends StatelessWidget {
+  const _RemovedLine({required this.removed, required this.l10n});
+
+  final KdsRemovedLine removed;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final danger = RestoflowTone.danger.styleOf(theme).accent;
+    final line = removed.line;
+    // Data text in the live line's exact '{name} ×{quantity}' form.
+    final text = '${line.name} ×${line.quantity}';
+    final remadeIn = removed.remadeInRoundNumber;
+    TextStyle? struck(TextStyle? base) => base?.copyWith(
+      color: danger,
+      decoration: TextDecoration.lineThrough,
+      decorationColor: danger,
+      decorationThickness: 2,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              RestoflowStatusPill(
+                icon: Icons.remove_circle_outline,
+                label: l10n.kitchenEditRemovedLabel,
+                tone: RestoflowTone.danger,
+                dense: false,
+              ),
+              Text(
+                text,
+                style: struck(
+                  theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          for (final modifier in line.modifiers.map((m) => '+ $m'))
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(modifier, style: struck(theme.textTheme.bodyLarge)),
+            ),
+          if (remadeIn != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                l10n.kdsEditRemadeInRound(remadeIn),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ORDER-EDIT-001D: the "Got it" action that REPLACES the advance action while
+/// the card shows an unconfirmed change (design §7.2). One full-width ≥48dp
+/// amber button sending `order.edit_ack`; an honest STATIC pending state (no
+/// spinner — the board's animations are finite-only) that blocks duplicate
+/// taps; a localized failure line above it that keeps it retryable; and, when
+/// the tap also confirms older pending edits of the order that are not on this
+/// card, an "Also confirms change …" caption so the cook is never surprised.
+class _ChangeAckAction extends StatelessWidget {
+  const _ChangeAckAction({
+    required this.ticketId,
+    required this.l10n,
+    required this.alsoAcknowledges,
+    required this.pending,
+    required this.failed,
+    required this.onPressed,
+  });
+
+  final String ticketId;
+  final AppLocalizations l10n;
+  final List<int> alsoAcknowledges;
+  final bool pending;
+  final bool failed;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = RestoflowSemanticColors.of(theme.brightness);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (failed && !pending) ...[
+          const SizedBox(height: RestoflowSpacing.xs),
+          Text(
+            l10n.kdsAckFailed,
+            key: Key('kds-edit-ack-failed-$ticketId'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: RestoflowTone.danger.styleOf(theme).accent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        Padding(
+          padding: const EdgeInsetsDirectional.only(top: RestoflowSpacing.sm),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: Key('kds-edit-ack-$ticketId'),
+              onPressed: pending ? null : onPressed,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: semantic.warning,
+                foregroundColor: semantic.onWarning,
+              ),
+              // STATIC pending glyph (no spinner): the disabled state + the
+              // localized pending label carry the signal.
+              icon: Icon(pending ? Icons.hourglass_top : Icons.done_all),
+              label: Text(pending ? l10n.kdsAckPending : l10n.kdsEditGotIt),
+            ),
+          ),
+        ),
+        if (alsoAcknowledges.isNotEmpty)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(top: RestoflowSpacing.xs),
+            child: Text(
+              l10n.kdsEditAlsoConfirms(alsoAcknowledges.join(', ')),
+              key: Key('kds-edit-also-$ticketId'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified WHOLE-ORDER kitchen count
 /// summary — the prominent top chef note. One clean, bold line PER RESOURCE,
 /// using the generic "Kitchen total: {count} {label}" copy (l10n
@@ -817,36 +1198,105 @@ class _KitchenCountsSection extends StatelessWidget {
   }
 }
 
+/// ORDER-EDIT-001D: an edit's old line as one data string — "2× Burger
+/// +Tomato" (the `kdsEditWas` / `kdsEditInsteadOf` {item} format).
+String _editLineText(KdsItemView line) =>
+    '${line.quantity}× ${line.name}'
+    '${line.modifiers.map((m) => ' +$m').join()}';
+
 class _ItemLine extends StatelessWidget {
   const _ItemLine({
     required this.item,
     required this.l10n,
     required this.noteColor,
+    this.showMark = true,
+    this.showWas = true,
   });
 
   final KdsItemView item;
   final AppLocalizations l10n;
   final Color noteColor;
 
+  /// ORDER-EDIT-001D: false on a red cancellation card, which never shows
+  /// change UI (the mapper gives it no marks either).
+  final bool showMark;
+
+  /// ORDER-EDIT-001D: whether a CHANGED line shows its "was" text — only the
+  /// first line of a group sharing one old line does.
+  final bool showWas;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mark = showMark ? item.editMark : null;
+    final was = item.editWas;
     // Data text (item name + quantity), rendered as a single Text. Kept in the
     // exact '{name} ×{quantity}' form (U+00D7) — readable, money-free.
-    final line = '${item.name} ×${item.quantity}';
+    // ORDER-EDIT-001D: a "+N" row's quantity IS the increase (its pill says
+    // "+N"), so the row names the dish only.
+    final line = mark == KdsEditLineMark.increased
+        ? item.name
+        : '${item.name} ×${item.quantity}';
+    final lineText = Text(
+      line,
+      style: theme.textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+      ),
+    );
+    // ORDER-EDIT-001D: the edit badge LEADS a touched line (words, not colour
+    // alone). NEW / +N / CHANGED show only while the edit awaits "Got it";
+    // REMAKE is permanent provenance, so it reads in the quieter info tone.
+    final badge = switch (mark) {
+      null => null,
+      KdsEditLineMark.added => RestoflowStatusPill(
+        icon: Icons.add_circle_outline,
+        label: l10n.kdsEditNewBadge,
+        tone: RestoflowTone.warning,
+        dense: false,
+      ),
+      KdsEditLineMark.increased => RestoflowStatusPill(
+        label: l10n.kdsEditQuantityIncrease(item.quantity),
+        tone: RestoflowTone.warning,
+        dense: false,
+      ),
+      KdsEditLineMark.changed => RestoflowStatusPill(
+        icon: Icons.edit_outlined,
+        label: l10n.kdsEditChangedLabel,
+        tone: RestoflowTone.warning,
+        dense: false,
+      ),
+      KdsEditLineMark.remake => RestoflowStatusPill(
+        icon: Icons.replay,
+        label: l10n.kdsEditRemake,
+        tone: RestoflowTone.info,
+        dense: false,
+      ),
+    };
+    final previous = switch (mark) {
+      KdsEditLineMark.changed when was != null && showWas => l10n.kdsEditWas(
+        _editLineText(was),
+      ),
+      KdsEditLineMark.remake when was != null => l10n.kdsEditInsteadOf(
+        _editLineText(was),
+      ),
+      _ => null,
+    };
     return Padding(
       // PRINT-LAYOUT-001: more breathing room between items so the pass scans.
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            line,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              height: 1.2,
+          if (badge == null)
+            lineText
+          else
+            Wrap(
+              spacing: RestoflowSpacing.sm,
+              runSpacing: RestoflowSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [badge, lineText],
             ),
-          ),
           // Modifier options as their own readable sub-lines (never money).
           for (final modifier in item.modifiers)
             Padding(
@@ -873,6 +1323,22 @@ class _ItemLine extends StatelessWidget {
                   fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w600,
                   color: noteColor,
+                ),
+              ),
+            ),
+          // ORDER-EDIT-001D: what the line replaced — "was: …" under a
+          // CHANGED line, "instead of: …" under a REMAKE — after the new
+          // line's own modifiers and note, so the new dish reads as one block.
+          if (previous != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                previous,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),

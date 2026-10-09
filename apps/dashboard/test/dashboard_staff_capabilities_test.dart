@@ -504,4 +504,56 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // ORDER-EDIT-001G (ORDER_EDIT_DESIGN §9.2): the SAME void_order capability
+  // also gates removing, reducing or changing sent items in an order edit, so
+  // the switch says so. Key and payload are unchanged.
+  group('ORDER-EDIT-001G — the void_order switch names sent-item edits', () {
+    for (final code in ['en', 'ar', 'he']) {
+      testWidgets('title and hint in $code', (tester) async {
+        final l10n = await AppLocalizations.delegate.load(Locale(code));
+        final repo = _RecordingRepo([_cashier()]);
+        await _pump(tester, repo, locale: Locale(code));
+        await tester.tap(find.byKey(const Key('staff-capabilities-emp-c')));
+        await tester.pumpAndSettle();
+        final tile = find.byKey(const Key('cap-void-order'));
+        expect(
+          find.descendant(
+            of: tile,
+            matching: find.text(l10n.staffCapVoidOrderAndEdits),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: tile,
+            matching: find.text(l10n.staffCapVoidOrderAndEditsHint),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text(l10n.staffCapVoidOrder), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('turning it off still saves voidOrder = false', (tester) async {
+      final repo = _RecordingRepo([_cashier()]);
+      await _pump(tester, repo);
+      await tester.tap(find.byKey(const Key('staff-capabilities-emp-c')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('cap-void-order')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('capabilities-save-button')));
+      await tester.pumpAndSettle();
+      expect(repo.capabilityCalls.single.$2.voidOrder, isFalse);
+
+      final t = _FakeTransport((fn, p) => {'ok': true});
+      await _repo(t).setCapabilities(
+        employeeProfileId: 'emp-c',
+        capabilities: repo.capabilityCalls.single.$2,
+      );
+      expect(t.calls.single.$1, 'set_staff_capabilities');
+      expect(t.calls.single.$2['p_void_order'], false);
+    });
+  });
 }

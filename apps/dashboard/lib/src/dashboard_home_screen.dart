@@ -42,6 +42,8 @@ import 'widgets/section_card.dart';
 import 'overview/overview_metric_card.dart';
 import 'overview/overview_visuals.dart';
 import 'overview/overview_alert_strip.dart';
+import 'overview/order_edits_card.dart';
+import 'support/support_mode_scope.dart';
 
 /// The RF-104/RF-119 owner/manager reports dashboard, redesigned under RF-127
 /// into a calm, data-forward Overview: calm page chrome (title + period + range
@@ -129,6 +131,25 @@ class DashboardHomeScreen extends ConsumerWidget {
     final guard = guardAsync.valueOrNull ?? const ReportCurrencyGuard.unknown();
     final guardPending = guardAsync.isLoading && !guardAsync.hasValue;
 
+    // ORDER-EDIT-001G — the "Order edits" block. Never requested in platform
+    // support mode: the reader names staff, so the server refuses a support
+    // session (42501), and asking anyway would only paint an error card. The
+    // block appears once its first answer says there is something to show
+    // (editing turned on in this scope, or edits in this window) or when the
+    // request failed; while it first loads, and for a scope that never turned
+    // editing on, it takes no space at all.
+    final supportMode = SupportModeScope.of(context);
+    final orderEditsKey = supportMode
+        ? null
+        : ref.watch(currentOwnerOrderEditsKeyProvider);
+    final orderEditsAsync = orderEditsKey == null
+        ? null
+        : ref.watch(ownerOrderEditsForKeyProvider(orderEditsKey));
+    final showOrderEdits =
+        orderEditsAsync != null &&
+        (orderEditsAsync.hasError ||
+            (orderEditsAsync.valueOrNull?.visibleOnOverview ?? false));
+
     final panel = setupPanel;
     final nav = onNavigate;
     return OverviewVisualScope(
@@ -181,6 +202,14 @@ class DashboardHomeScreen extends ConsumerWidget {
                                     report.currencyCode,
                               ),
                         salesSeriesKey: seriesKey,
+                        orderEdits: showOrderEdits
+                            ? OrderEditsCard(
+                                queryKey: orderEditsKey!,
+                                currencyCode:
+                                    guard.displayCurrency ??
+                                    report.currencyCode,
+                              )
+                            : null,
                         // F0.4: bound HERE, where a WidgetRef exists. The child
                         // stays a plain StatelessWidget and never learns about
                         // Riverpod or the shell's tab indices.
@@ -1123,6 +1152,7 @@ class _ReportContent extends StatelessWidget {
     this.deviceSummary,
     this.salesByDay,
     this.salesSeriesKey,
+    this.orderEdits,
     this.onDrillDown,
   });
 
@@ -1168,6 +1198,13 @@ class _ReportContent extends StatelessWidget {
   /// is handed to the per-method trend strip, which watches the SAME family
   /// entry, so the payment trend costs no additional request.
   final OwnerSalesSeriesQueryKey? salesSeriesKey;
+
+  /// ORDER-EDIT-001G — the "Order edits" card, built by the parent where a
+  /// WidgetRef exists (the [salesByDay] pattern). Null hides it: support mode,
+  /// a scope that never enabled editing and has no edits, or the first load.
+  /// It joins the supporting grid right after the payment summary, so it only
+  /// ever renders on the single-currency path below the currency guard.
+  final Widget? orderEdits;
 
   /// F0.4: executes a typed drill-down (filters first, then navigate).
   /// Null keeps every KPI display-only, exactly as before.
@@ -1719,6 +1756,7 @@ class _ReportContent extends StatelessWidget {
     final remaining = <Widget>[
       summary,
       payment,
+      if (orderEdits != null) orderEdits!,
       if (report.branches.isNotEmpty) branches,
       if (orderTypeCard != null) orderTypeCard,
     ];

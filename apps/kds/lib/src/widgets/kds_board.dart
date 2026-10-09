@@ -32,6 +32,10 @@ class KdsBoard extends StatelessWidget {
     this.ackPendingOrderIds = const <String>{},
     this.ackFailedOrderIds = const <String>{},
     this.cancelledArrivalIds = const <String>{},
+    this.onAcknowledgeChange,
+    this.changeAckPendingKeys = const <String>{},
+    this.changeAckFailedKeys = const <String>{},
+    this.changeArrivalKeys = const <String>{},
     super.key,
   });
 
@@ -73,6 +77,21 @@ class KdsBoard extends StatelessWidget {
   /// reduce-motion-aware danger pulse (locked decision).
   final Set<String> cancelledArrivalIds;
 
+  /// ORDER-EDIT-001D: "Got it" for a card's unconfirmed sent-order change
+  /// (LIVE board); null (demo / bare tests) renders no "Got it".
+  final void Function(KdsTicketView ticket)? onAcknowledgeChange;
+
+  /// ORDER-EDIT-001D: CHANGE ALERT keys (`KdsTicketView.changeAlertKey`)
+  /// whose "Got it" is in flight or applied, awaiting the pull.
+  final Set<String> changeAckPendingKeys;
+
+  /// ORDER-EDIT-001D: change alert keys whose last "Got it" failed.
+  final Set<String> changeAckFailedKeys;
+
+  /// ORDER-EDIT-001D: change alert keys that just APPEARED — one finite,
+  /// reduce-motion-aware amber pulse (a second edit is a new key).
+  final Set<String> changeArrivalKeys;
+
   /// Buckets a ticket into its workflow column key.
   ///
   /// PSC-001D: a PENDING-ACKNOWLEDGEMENT cancellation stays in the WORKING
@@ -80,6 +99,10 @@ class KdsBoard extends StatelessWidget {
   /// submitted -> New, accepted/preparing -> Preparing, ready -> Ready; an
   /// unknown source fails safe to New — up front, never hidden). Every other
   /// cancelled ticket (demo/local) keeps today's Cleared bucket.
+  ///
+  /// ORDER-EDIT-001D: a STANDALONE change card needs no rule here — the shared
+  /// overlay already gives it the status of the unit's former stage (unknown
+  /// fails safe to New), so it lands in the column the kitchen last saw.
   static String _bucket(KdsTicketView ticket) => switch (ticket.status) {
     KitchenTicketStatus.newTicket => 'new',
     KitchenTicketStatus.acknowledged ||
@@ -165,6 +188,10 @@ class KdsBoard extends StatelessWidget {
                         ackPendingOrderIds: ackPendingOrderIds,
                         ackFailedOrderIds: ackFailedOrderIds,
                         cancelledArrivalIds: cancelledArrivalIds,
+                        onAcknowledgeChange: onAcknowledgeChange,
+                        changeAckPendingKeys: changeAckPendingKeys,
+                        changeAckFailedKeys: changeAckFailedKeys,
+                        changeArrivalKeys: changeArrivalKeys,
                       ),
                     ),
                   ],
@@ -199,6 +226,10 @@ class KdsBoard extends StatelessWidget {
                         ackPendingOrderIds: ackPendingOrderIds,
                         ackFailedOrderIds: ackFailedOrderIds,
                         cancelledArrivalIds: cancelledArrivalIds,
+                        onAcknowledgeChange: onAcknowledgeChange,
+                        changeAckPendingKeys: changeAckPendingKeys,
+                        changeAckFailedKeys: changeAckFailedKeys,
+                        changeArrivalKeys: changeArrivalKeys,
                       ),
                     ),
                   ),
@@ -257,6 +288,18 @@ class KdsBoard extends StatelessWidget {
                         highlightCancelled: cancelledArrivalIds.contains(
                           ticket.kitchenTicketId,
                         ),
+                        onAcknowledgeChange: onAcknowledgeChange == null
+                            ? null
+                            : () => onAcknowledgeChange!(ticket),
+                        changeAckPending: changeAckPendingKeys.contains(
+                          ticket.changeAlertKey,
+                        ),
+                        changeAckFailed: changeAckFailedKeys.contains(
+                          ticket.changeAlertKey,
+                        ),
+                        highlightChange: changeArrivalKeys.contains(
+                          ticket.changeAlertKey,
+                        ),
                       ),
                   const SizedBox(height: RestoflowSpacing.md),
                 ],
@@ -283,6 +326,10 @@ class _StatusColumn extends StatelessWidget {
     this.ackPendingOrderIds = const <String>{},
     this.ackFailedOrderIds = const <String>{},
     this.cancelledArrivalIds = const <String>{},
+    this.onAcknowledgeChange,
+    this.changeAckPendingKeys = const <String>{},
+    this.changeAckFailedKeys = const <String>{},
+    this.changeArrivalKeys = const <String>{},
   });
 
   final _BoardColumn column;
@@ -301,6 +348,10 @@ class _StatusColumn extends StatelessWidget {
   final Set<String> ackPendingOrderIds;
   final Set<String> ackFailedOrderIds;
   final Set<String> cancelledArrivalIds;
+  final void Function(KdsTicketView ticket)? onAcknowledgeChange;
+  final Set<String> changeAckPendingKeys;
+  final Set<String> changeAckFailedKeys;
+  final Set<String> changeArrivalKeys;
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +403,18 @@ class _StatusColumn extends StatelessWidget {
                             ackFailedOrderIds.contains(ticket.orderId),
                         highlightCancelled: cancelledArrivalIds.contains(
                           ticket.kitchenTicketId,
+                        ),
+                        onAcknowledgeChange: onAcknowledgeChange == null
+                            ? null
+                            : () => onAcknowledgeChange!(ticket),
+                        changeAckPending: changeAckPendingKeys.contains(
+                          ticket.changeAlertKey,
+                        ),
+                        changeAckFailed: changeAckFailedKeys.contains(
+                          ticket.changeAlertKey,
+                        ),
+                        highlightChange: changeArrivalKeys.contains(
+                          ticket.changeAlertKey,
                         ),
                       ),
                   ],

@@ -25,7 +25,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(88);
+select plan(90);
 
 -- ===== fixture: one real tenant, fully furnished ============================
 insert into organizations (id, name, slug, default_currency, status) values
@@ -199,6 +199,12 @@ select throws_ok(
 select throws_ok(
   $$ select public.owner_audit_events('c4000000-0000-0000-0000-0000000000a0','c4000000-0000-0000-0000-0000000000a1',null) $$,
   '42501', NULL, 'D5. owner_audit_events is DENIED — it names staff actors');
+select throws_ok(
+  $$ select public.owner_order_edits('c4000000-0000-0000-0000-0000000000a0','c4000000-0000-0000-0000-0000000000a1',null) $$,
+  '42501', NULL, 'D6. owner_order_edits is DENIED — it names the staff who edited orders (ORDER-EDIT-001G)');
+select is(public.get_branch_order_edit_settings('c4000000-0000-0000-0000-0000000000a0','c4000000-0000-0000-0000-0000000000a1','c4000000-0000-0000-0000-0000000000c1'),
+  '{"ok": false, "error": "not_found", "entity": "branch"}'::jsonb,
+  'D7. get_branch_order_edit_settings is not a support read — the member rank only (ORDER-EDIT-001G)');
 
 -- ===========================================================================
 -- W. THE WRITE DENIAL MATRIX

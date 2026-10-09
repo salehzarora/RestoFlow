@@ -52,4 +52,8 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   additionLabel: l10n.kdsAdditionLabel,
   roundLabel: l10n.kdsRoundLabel,
   restaurantNameFallback: l10n.printRestaurantNameFallback,
+  // ORDER-EDIT-001D (O-6): "Change N" for a round OPENED by a sent-order edit,
+  // so the paper reads "Change N · Round M" like the card — the SAME key the
+  // shared adapter sets. Every other ticket prints byte-identically.
+  changeNumberLabel: l10n.kitchenEditChangeNumber,
 );

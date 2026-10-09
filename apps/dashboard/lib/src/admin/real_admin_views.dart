@@ -13,9 +13,11 @@ import '../branding/restaurant_logo_storage.dart';
 import '../quick_notes/quick_notes_repository.dart';
 import '../quick_notes/quick_notes_section.dart';
 import 'branch_kitchen_workflow_repository.dart';
+import 'branch_order_edit_settings_repository.dart';
 import 'branch_shift_close_policy_repository.dart';
 import 'currency_change_guard.dart';
 import 'currency_picker.dart';
+import 'order_edit_settings_section.dart';
 import 'supabase_settings_repository.dart';
 import 'timezone_catalog.dart';
 import 'timezone_picker.dart';
@@ -63,6 +65,7 @@ class RealSettingsView extends StatefulWidget {
     required this.membership,
     this.currencyCode,
     this.policyRepository,
+    this.orderEditSettingsRepository,
     this.settingsRepository,
     this.currencyChangeGuard,
     this.brandingRepository,
@@ -91,6 +94,11 @@ class RealSettingsView extends StatefulWidget {
   /// concrete branch in scope — the section is then omitted entirely rather than
   /// rendered as a control that cannot work.
   final BranchKitchenWorkflowRepository? kitchenWorkflowRepository;
+
+  /// ORDER-EDIT-001G: the per-branch order-editing switches seam. Null when
+  /// there is no authenticated transport or no concrete branch in scope — the
+  /// section is then omitted entirely.
+  final BranchOrderEditSettingsRepository? orderEditSettingsRepository;
 
   /// RF-116: the settings read/write seam for the owner-only editable branch/
   /// restaurant fields. Null when there is no authenticated transport or no
@@ -699,6 +707,16 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             title: l10n.dashboardKitchenWorkflowSectionTitle,
             icon: Icons.soup_kitchen_outlined,
             child: _kitchenWorkflow(context, l10n),
+          ),
+        ],
+        // ORDER-EDIT-001G: directly under the kitchen workflow, whose mode
+        // decides whether the finished-food switch can take effect.
+        if (widget.orderEditSettingsRepository != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          OrderEditSettingsSection(
+            repository: widget.orderEditSettingsRepository!,
+            kitchenMode: _workflowMode,
+            canEdit: _canEdit,
           ),
         ],
         if (widget.policyRepository != null) ...[
