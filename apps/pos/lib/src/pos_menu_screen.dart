@@ -845,6 +845,11 @@ class _MenuGrid extends ConsumerWidget {
   /// the compact flag once from the viewport, same as before.
   final bool stripCompact;
 
+  /// ORDER-EDIT-001F: the most of the pane's height the unsent-slip banners
+  /// may take; past it they scroll (one banner and part of the next on a
+  /// 1024x600 till).
+  static const double _slipBannerShare = 0.4;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -1035,19 +1040,26 @@ class _MenuGrid extends ConsumerWidget {
     // ORDER-EDIT-001F: an unsent paper change slip keeps its "not printed"
     // banner (with Print again) above the merchandise until it is on paper.
     // The grid selects only whether there is one; the banner owns the rest.
+    // However many are unsent, their area is bounded to a share of the pane
+    // and scrolls, so the grid always keeps usable height.
     final slipsUnsent = ref.watch(
       orderEditPendingSlipsProvider.select((pending) => pending.isNotEmpty),
     );
     if (!offlineCached && !slipsUnsent) {
       return grid;
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (offlineCached) const _OfflineCachedBanner(),
-        if (slipsUnsent) const OrderEditSlipBanner(),
-        Expanded(child: grid),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (offlineCached) const _OfflineCachedBanner(),
+          if (slipsUnsent)
+            OrderEditSlipBanner(
+              maxHeight: constraints.maxHeight * _slipBannerShare,
+            ),
+          Expanded(child: grid),
+        ],
+      ),
     );
   }
 

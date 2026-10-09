@@ -47,7 +47,8 @@ import 'order_edit_cart_widgets.dart'
         showOrderEditResult;
 import 'order_edit_messages.dart'
     show orderEditEntryMessage, orderEditRetryLabel;
-import 'order_edit_slip_widgets.dart' show printOrderEditSlipAgain;
+import 'order_edit_slip_widgets.dart'
+    show OrderEditSlipPrintAgain, printOrderEditSlipAgain;
 import 'receipt_print_preview.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the SHARED order action row.
@@ -563,6 +564,9 @@ class OrderActionRow extends ConsumerWidget {
   Future<void> _retryEdit(BuildContext context, String orderId) async {
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
+    // ORDER-EDIT-001F: captured with the rest — the toast's Print again
+    // outlives this row (the Orders sheet or preview may be closed by then).
+    final printSlipAgain = OrderEditSlipPrintAgain.of(context);
     final edit = container.read(orderEditControllerProvider.notifier);
     final result = await edit.retryOrder(orderId);
     final slipEditId = result.applied?.orderEditId;
@@ -574,11 +578,7 @@ class OrderActionRow extends ConsumerWidget {
       // ORDER-EDIT-001F: the paper slip did not print — Print again.
       onPrintSlipAgain: slipEditId == null
           ? null
-          : () {
-              if (context.mounted) {
-                printOrderEditSlipAgain(context, orderEditId: slipEditId);
-              }
-            },
+          : () => printSlipAgain(slipEditId),
       onPrintBill: () => printOrderBill(
         container: container,
         messenger: messenger,

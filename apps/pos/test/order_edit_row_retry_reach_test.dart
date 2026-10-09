@@ -8,6 +8,8 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show KitchenChangeSlipLabels, KitchenTicketPrintLabels, OrderChangeSlipView;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart'
@@ -20,13 +22,20 @@ import 'package:restoflow_pos/src/data/order_edit_diff.dart'
 import 'package:restoflow_pos/src/data/order_edit_journal_store.dart';
 import 'package:restoflow_pos/src/data/order_edit_read_model.dart';
 import 'package:restoflow_pos/src/data/order_edit_response.dart'
-    show OrderEditApplied;
+    show OrderEditApplied, OrderEditAppliedChange, OrderEditKitchenDispatch;
+import 'package:restoflow_pos/src/data/order_edit_slip_store.dart'
+    show InMemoryOrderEditSlipStore, orderEditSlipStoreProvider;
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
+import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        PosProviderReader,
+        posOrderEditSlipPrintProvider;
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
@@ -66,7 +75,9 @@ import 'support/order_edit_fixtures.dart';
 ///  * this session's applied-but-unproven edit reads the same;
 ///  * a conflict reads the conflict wording, not "Sending changes…";
 ///  * the journal's start-up blanket reads the neutral "Checking for
-///    unfinished changes", not "Sending changes…".
+///    unfinished changes", not "Sending changes…";
+///  * ORDER-EDIT-001F: the result toast's "Print again" for a paper change
+///    slip that did not print still prints it once the sheet is closed.
 
 const _session = SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1');
 const _code = '#A1B2C3';
@@ -95,7 +106,11 @@ PosOrderSnapshot _snap() => PosOrderSnapshot(
   currencyCode: 'ILS',
 );
 
-PosOrderDetail _order({int editCount = 0, List<PosOrderDetailEdit>? edits}) {
+PosOrderDetail _order({
+  int editCount = 0,
+  List<PosOrderDetailEdit>? edits,
+  PosKitchenChannel channel = PosKitchenChannel.kds,
+}) {
   final d = detail(
     items: [
       detailItem(
@@ -109,6 +124,7 @@ PosOrderDetail _order({int editCount = 0, List<PosOrderDetailEdit>? edits}) {
     ],
     orderType: 'takeaway',
     tableLabel: null,
+    channel: channel,
   );
   return PosOrderDetail(
     orderId: d.orderId,
@@ -132,10 +148,12 @@ PosOrderDetail _order({int editCount = 0, List<PosOrderDetailEdit>? edits}) {
 }
 
 /// The order after the server applied `edit-1` — what proves it.
-PosOrderDetail _proven() => _order(
-  editCount: 1,
-  edits: const [PosOrderDetailEdit(orderEditId: 'edit-1', editNumber: 1)],
-);
+PosOrderDetail _proven({PosKitchenChannel channel = PosKitchenChannel.kds}) =>
+    _order(
+      editCount: 1,
+      edits: const [PosOrderDetailEdit(orderEditId: 'edit-1', editNumber: 1)],
+      channel: channel,
+    );
 
 const _applied = OrderEditApplied(
   orderEditId: 'edit-1',
@@ -143,6 +161,18 @@ const _applied = OrderEditApplied(
   revision: 4,
   kitchenChannel: PosKitchenChannel.kds,
   kitchenAckRequired: true,
+);
+
+/// ORDER-EDIT-001F: the same edit on a PAPER kitchen — its change slip
+/// rides the born-claimed `order_edit` dispatch.
+const _paperApplied = OrderEditApplied(
+  orderEditId: 'edit-1',
+  editNumber: 1,
+  revision: 4,
+  kitchenChannel: PosKitchenChannel.paper,
+  kitchenAckRequired: false,
+  kitchenDispatch: OrderEditKitchenDispatch(id: 'dispatch-1'),
+  changes: [OrderEditAppliedChange(kind: 'remove', orderItemId: 'oi-fries')],
 );
 
 OrderEditJournalRecord _record(
@@ -245,6 +275,22 @@ class _Snapshots implements OrderSnapshotRepository {
       );
 }
 
+/// ORDER-EDIT-001F: the change-slip print seam (no socket).
+class _SlipPrinter {
+  final List<OrderChangeSlipView> slips = [];
+  PosKitchenPrintOutcome outcome = PosKitchenPrintOutcome.printed;
+
+  Future<PosKitchenPrintOutcome> call({
+    required PosProviderReader read,
+    required OrderChangeSlipView slip,
+    required KitchenTicketPrintLabels labels,
+    required KitchenChangeSlipLabels changeLabels,
+  }) async {
+    slips.add(slip);
+    return outcome;
+  }
+}
+
 class _Tax implements DeviceBranchTaxReader {
   @override
   Future<BranchTax?> load() async => BranchTax.disabled;
@@ -277,7 +323,11 @@ class _UnreadableJournal implements OrderEditJournalStore {
 }
 
 class _H {
-  _H({required this.journal, bool proveOnApply = true}) {
+  _H({
+    required this.journal,
+    bool proveOnApply = true,
+    List<Override> extra = const [],
+  }) {
     details.current = _order();
     transport = _Transport(() {
       if (proveOnApply) details.current = _proven();
@@ -318,6 +368,7 @@ class _H {
           FixedClientIdGenerator(const ['op-1', 'op-2']),
         ),
         orderEditJournalStoreProvider.overrideWithValue(journal),
+        ...extra,
       ],
     );
     addTearDown(c.dispose);
@@ -381,6 +432,28 @@ Future<void> _pumpSheet(WidgetTester tester, _H h) async {
     PosRecentOrder.discovered(_snap()),
   ]);
   await _pumpHost(tester, h, const RecentOrdersSheet());
+  expect(find.byKey(const Key('recent-order-$_code')), findsOneWidget);
+}
+
+/// The real Orders sheet opened as the till opens it: a modal sheet over the
+/// page whose Scaffold shows the result toasts.
+Future<void> _openSheet(WidgetTester tester, _H h) async {
+  await h.store.persist(kDemoSyncScope.key, [
+    PosRecentOrder.discovered(_snap()),
+  ]);
+  await _pumpHost(
+    tester,
+    h,
+    Builder(
+      builder: (context) => TextButton(
+        key: const Key('open-orders'),
+        onPressed: () => RecentOrdersSheet.show(context),
+        child: const Text('Orders'),
+      ),
+    ),
+  );
+  await tester.tap(find.byKey(const Key('open-orders')));
+  await tester.pumpAndSettle();
   expect(find.byKey(const Key('recent-order-$_code')), findsOneWidget);
 }
 
@@ -583,6 +656,64 @@ void main() {
       expect(h.c.read(orderEditControllerProvider).hydrationFailed, isTrue);
       expect(_pillText(l10n.posAdditionLoadingPending), findsOneWidget);
       expect(find.text(l10n.posOrderEditSending), findsNothing);
+    });
+  });
+  group('ORDER-EDIT-001F: the toast outlives the sheet', () {
+    testWidgets('a paper edit retried from the Orders sheet whose change slip '
+        'did not print: once the sheet is closed, the toast\'s Print again '
+        'still prints it and says so', (tester) async {
+      final l10n = await _en();
+      final journal = InMemoryOrderEditJournalStore();
+      await journal.persist('dev-1', {
+        'op-old': _record(
+          OrderEditJournalPhase.awaitingAuthoritativeRefresh,
+          applied: _paperApplied,
+        ),
+      });
+      final printer = _SlipPrinter()..outcome = PosKitchenPrintOutcome.failed;
+      final h = _H(
+        journal: journal,
+        extra: [
+          orderEditSlipStoreProvider.overrideWithValue(
+            InMemoryOrderEditSlipStore(),
+          ),
+          posOrderEditSlipPrintProvider.overrideWithValue(printer.call),
+        ],
+      );
+      // Offline at boot: the automatic reconcile cannot read the detail.
+      h.details.error = const PosOrderDetailException(
+        PosOrderDetailFailure.transport,
+      );
+      await _openSheet(tester, h);
+
+      // Back online: the row's refresh proves the edit; its slip does not
+      // reach the printer, and the toast offers Print again.
+      h.details
+        ..error = null
+        ..current = _proven(channel: PosKitchenChannel.paper);
+      final retry = _retry();
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      expect(await journal.load('dev-1'), isEmpty);
+      final toastAction = find.byKey(
+        const Key('order-edit-slip-not-printed-print-again'),
+      );
+      expect(toastAction, findsOneWidget);
+      final sent = printer.slips.length;
+
+      // The cashier closes the sheet to keep selling; the toast stays.
+      Navigator.of(tester.element(find.byType(RecentOrdersSheet))).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(RecentOrdersSheet), findsNothing);
+      expect(toastAction, findsOneWidget);
+
+      printer.outcome = PosKitchenPrintOutcome.printed;
+      await tester.tap(toastAction);
+      await tester.pumpAndSettle();
+      expect(printer.slips, hasLength(sent + 1));
+      expect(printer.slips.last.editNumber, 1);
+      expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
     });
   });
 }

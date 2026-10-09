@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,7 +30,10 @@ import 'support/order_edit_fixtures.dart';
 ///    (RTL for ar / he), and none when every slip is on paper;
 ///  * Print again maps its outcome onto the existing kitchen-print snacks,
 ///    "still being sent" and the fetch failure;
-///  * a NEWER edit from another till offers "Print latest" / "Cancel";
+///  * a NEWER edit from another till offers "Print latest" / "Cancel" — also
+///    when the banner that was tapped is gone by the time the order is read;
+///  * however many slips are unsent, the banner area stays bounded and the
+///    menu grid keeps its height;
 ///  * the order's own row carries Print again for its newest unsent slip.
 
 const _session = SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1');
@@ -37,8 +42,12 @@ class _Details implements OrderDetailRepository {
   PosOrderDetail? current;
   Object? error;
 
+  /// When set, every read waits for it (a slow network).
+  Completer<void>? gate;
+
   @override
   Future<PosOrderDetail> fetch(String orderId) async {
+    if (gate case final g?) await g.future;
     if (error case final e?) throw e;
     final d = current;
     if (d == null) {
@@ -175,6 +184,37 @@ Future<void> _pumpBanner(
   await tester.pumpAndSettle();
 }
 
+/// The real menu screen over [h], at [size].
+Future<void> _pumpMenu(
+  WidgetTester tester,
+  _H h, {
+  Size size = const Size(1280, 800),
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: h.c,
+      child: MaterialApp(
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        home: const PosMenuScreen(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// An unsent slip of order [n] ("#B0000n · Change 1").
+OrderEditSlipRecord _other(int n) => OrderEditSlipRecord(
+  orderEditId: 'edit-x$n',
+  orderId: 'order-x$n',
+  orderCode: '#B0000$n',
+  editNumber: 1,
+  updatedAt: DateTime.utc(2026, 10, 9, 11, 10 + n),
+);
+
 Future<AppLocalizations> _l10n([String code = 'en']) =>
     AppLocalizations.delegate.load(Locale(code));
 
@@ -265,6 +305,30 @@ void main() {
         find.text('#B00009 · ${l10n.kitchenEditChangeNumber(3)}'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('six unsent slips on a 1024x600 till: the banners scroll in '
+        'a bounded area and the menu grid keeps its height', (tester) async {
+      final h = _H(records: [for (var n = 1; n <= 6; n++) _other(n)]);
+      await _pumpMenu(tester, h, size: const Size(1024, 600));
+      expect(tester.takeException(), isNull);
+      final area = tester.getSize(_key('order-edit-slip-banner-area')).height;
+      final grid = tester.getSize(_key('pos-menu-scroll')).height;
+      // The grid keeps most of the menu pane: never squeezed out.
+      expect(grid, greaterThan(area));
+      // Every slip is still reachable: the area scrolls to the last one.
+      final last = _key('order-edit-slip-print-again-edit-x6');
+      await tester.scrollUntilVisible(
+        last,
+        100,
+        scrollable: find.descendant(
+          of: _key('order-edit-slip-banner-area'),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.tap(last);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
   });
 
@@ -359,6 +423,28 @@ void main() {
       expect(slip.editNumber, 2);
       expect(slip.changes, isEmpty);
       expect(slip.orderNow.single.name, 'Burger');
+      expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
+    });
+
+    testWidgets('on the menu screen, the ONLY unsent slip and a NEWER edit '
+        'from another till: its banner leaves while the order is re-read, '
+        'and the "Print latest" offer still comes', (tester) async {
+      final l10n = await _l10n();
+      final h = _H();
+      h.details.current = _paper(editNumber: 2);
+      final read = h.details.gate = Completer<void>();
+      await _pumpMenu(tester, h);
+      await tester.tap(_key('order-edit-slip-print-again-edit-1'));
+      await tester.pump();
+      // Printing: the slip is no longer unsent, so its banner is gone.
+      expect(_key('order-edit-slip-banners'), findsNothing);
+      read.complete();
+      await tester.pumpAndSettle();
+      expect(_key('order-edit-newer-slip-offer'), findsOneWidget);
+
+      await tester.tap(_key('order-edit-newer-slip-print-latest'));
+      await tester.pumpAndSettle();
+      expect(h.printer.slips.single.editNumber, 2);
       expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
     });
 
