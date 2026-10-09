@@ -22,6 +22,7 @@ import 'src/state/addition_controller.dart' show additionJournalStoreProvider;
 import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
 import 'src/data/addition_journal_store.dart';
+import 'src/data/order_edit_journal_store.dart';
 import 'src/data/recent_orders_store.dart';
 import 'src/data/round_print_claim_store.dart';
 import 'src/print/pos_kitchen_ticket_printer.dart'
@@ -196,6 +197,14 @@ List<Override> _posOverrides(
   // round) instead of being re-keyed as a second round.
   additionJournalStoreProvider.overrideWithValue(
     SharedPrefsAdditionJournalStore(prefs),
+  ),
+  // ORDER-EDIT-001E: the durable sent-order-edit journal — the same rule for
+  // `order.edit`. The frozen edit is journalled BEFORE it is dispatched, so an
+  // uncertain edit is replayed under its own local_operation_id (which
+  // app.edit_order answers with the same stored edit) instead of being
+  // re-keyed as a second edit.
+  orderEditJournalStoreProvider.overrideWithValue(
+    SharedPrefsOrderEditJournalStore(prefs),
   ),
   // The DURABLE automatic-kitchen-print claim, scoped to this device's
   // session. Without it the exactly-once guard is session-only, so a process
