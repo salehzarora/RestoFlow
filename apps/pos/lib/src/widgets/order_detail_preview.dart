@@ -73,7 +73,12 @@ class OrderDetailPreview extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Header(l10n: l10n, order: order, actions: actions),
+          _Header(
+            l10n: l10n,
+            order: order,
+            actions: actions,
+            model: state.model,
+          ),
           const Divider(height: 1),
           Flexible(
             child: switch (state.phase) {
@@ -137,11 +142,18 @@ class _Header extends StatelessWidget {
     required this.l10n,
     required this.order,
     required this.actions,
+    required this.model,
   });
 
   final AppLocalizations l10n;
   final PosRecentOrder order;
   final PosOrderActions actions;
+
+  /// ORDER-EDIT-001E: the loaded model, when there is one. Its authoritative
+  /// edit surface (fresher than this device's snapshot, and the only source
+  /// of the active rounds' STAGE and of the edit history) wins; a local copy
+  /// carries none of it, so the snapshot speaks.
+  final OrderDetailPreviewModel? model;
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +224,21 @@ class _Header extends StatelessWidget {
                 settlement: order.settlement,
                 keySuffix: 'preview-${order.orderNumber}',
                 orderType: order.orderType,
+                // ORDER-EDIT-001E (STATE_MACHINES §1): a served order with a
+                // live round reads its stage — refined to "Ready" here, the
+                // one surface that has the rounds.
+                hasActiveRound: model?.hasActiveRound ?? order.hasActiveRound,
+                roundStage: model?.activeRoundStage,
+              ),
+              // ORDER-EDIT-001E: Edited / Kitchen to confirm / Kitchen
+              // confirmed — the last only here, from the edit history (D13).
+              ...orderEditChips(
+                l10n,
+                keySuffix: 'preview-${order.orderNumber}',
+                editCount: model?.editCount ?? order.editCount,
+                kitchenAckPending:
+                    model?.kitchenEditAckPending ?? order.kitchenEditAckPending,
+                kitchenConfirmed: model?.kitchenEditsConfirmed ?? false,
               ),
               // THIS device's queued work, reported separately from the order's
               // own lifecycle.

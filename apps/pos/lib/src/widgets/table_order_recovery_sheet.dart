@@ -212,6 +212,13 @@ class _TableOrderRecoverySheetState
                 entry,
                 now,
                 tableLabel: widget.table.label,
+                // ORDER-EDIT-001E: the EXACT by-id flag once the snapshot is
+                // loaded and carries the edit surface; until then (or from a
+                // server predating it) the floor's kitchen_work_open stands in.
+                hasActiveRound: switch (order?.snapshot) {
+                  final s? when s.editSurfaceKnown => s.hasActiveRound,
+                  _ => null,
+                },
               ),
               key: const Key('table-recovery-summary'),
               style: theme.textTheme.bodySmall?.copyWith(
@@ -302,18 +309,30 @@ String tableOrderAgeLabel(AppLocalizations l10n, Duration age) {
 
 /// The localized status of an occupying order (the shared order-status keys;
 /// a takeaway served row reads "picked up", as everywhere else).
-String tableOrderStatusLabel(AppLocalizations l10n, PosTableActiveOrder e) =>
-    switch (e.status) {
-      'submitted' => l10n.ordersStatusSubmitted,
-      'accepted' => l10n.ordersStatusAccepted,
-      'preparing' => l10n.ordersStatusPreparing,
-      'ready' => l10n.ordersStatusReady,
-      'served' =>
-        e.orderType == 'takeaway'
-            ? l10n.ordersStatusPickedUp
-            : l10n.ordersStatusServed,
-      _ => e.status,
-    };
+///
+/// ORDER-EDIT-001E (STATE_MACHINES §1): a `served` order whose kitchen work is
+/// still live reads "In kitchen", never "Served" / "Picked up". [hasActiveRound]
+/// is the exact flag when the caller has the by-id snapshot; without it the
+/// floor's `kitchen_work_open` stands in (`pos_tables` carries no
+/// `has_active_round`). The stand-in can over-report — an unresolved print
+/// dispatch also holds it — but it never shows "Served" while a round is live.
+String tableOrderStatusLabel(
+  AppLocalizations l10n,
+  PosTableActiveOrder e, {
+  bool? hasActiveRound,
+}) => switch (e.status) {
+  'submitted' => l10n.ordersStatusSubmitted,
+  'accepted' => l10n.ordersStatusAccepted,
+  'preparing' => l10n.ordersStatusPreparing,
+  'ready' => l10n.ordersStatusReady,
+  'served' when hasActiveRound ?? e.kitchenWorkOpen ?? false =>
+    l10n.ordersStatusInKitchen,
+  'served' =>
+    e.orderType == 'takeaway'
+        ? l10n.ordersStatusPickedUp
+        : l10n.ordersStatusServed,
+  _ => e.status,
+};
 
 /// The settlement word for an occupying order — the server's three honest
 /// states, never a client guess.
@@ -329,11 +348,12 @@ String tableActiveOrderSummary(
   PosTableActiveOrder e,
   DateTime now, {
   String? tableLabel,
+  bool? hasActiveRound,
 }) {
   final parts = <String>[
     if (tableLabel != null && tableLabel.isNotEmpty)
       '${l10n.posTableLabel} $tableLabel',
-    tableOrderStatusLabel(l10n, e),
+    tableOrderStatusLabel(l10n, e, hasActiveRound: hasActiveRound),
     tableOrderAgeLabel(l10n, now.toUtc().difference(e.createdAt)),
     tableOrderPaymentLabel(l10n, e),
     if (e.originatingShiftClosed) l10n.posTableOrderShiftClosed,

@@ -1097,6 +1097,18 @@ class _OrderCard extends ConsumerWidget {
                           // A takeaway's `served` reads "Picked up" - same state machine,
                           // honest operational words (RESTAURANT-OPERATIONS-V1-001).
                           orderType: order.orderType,
+                          // ORDER-EDIT-001E: ...unless a round is still active, when
+                          // it reads "In kitchen" (STATE_MACHINES §1).
+                          hasActiveRound: order.hasActiveRound,
+                        ),
+                      // ORDER-EDIT-001E: "Edited" / "Kitchen to confirm" from the
+                      // snapshot's two server facts (never for a not-created shell).
+                      if (!order.isNeverCreated)
+                        ...orderEditChips(
+                          l10n,
+                          keySuffix: order.orderNumber,
+                          editCount: order.editCount,
+                          kitchenAckPending: order.kitchenEditAckPending,
                         ),
                       // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
                       // "My payment is syncing" is a fact about this till, not the order.

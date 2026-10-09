@@ -17,6 +17,7 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 
 import 'order_actions.dart' show PosPendingKind;
 import 'order_detail_repository.dart';
+import 'order_edit_read_model.dart';
 import 'order_snapshot.dart' show PosSettlement;
 import 'payment.dart';
 import 'recent_order.dart';
@@ -137,6 +138,10 @@ class OrderDetailPreviewModel {
     this.grandTotalMinor,
     this.amountDueMinor,
     this.payment,
+    this.hasActiveRound,
+    this.activeRoundStage,
+    this.editCount,
+    this.edits,
   });
 
   final OrderPreviewSource source;
@@ -182,6 +187,39 @@ class OrderDetailPreviewModel {
 
   /// Present only when a real completed payment exists.
   final OrderPreviewPayment? payment;
+
+  /// ORDER-EDIT-001E — the detail's sent-order-edit surface, set ONLY by the
+  /// authoritative mapper (null on a local copy, so the header falls back to
+  /// this device's snapshot rather than to a default dressed up as fact).
+  ///
+  /// Whether a service round is still active (`has_active_round`).
+  final bool? hasActiveRound;
+
+  /// The active rounds' stage, refined from the detail's rounds — the one
+  /// surface that can say "Ready" rather than "In kitchen".
+  final PosRoundStage? activeRoundStage;
+
+  /// `edit_count`.
+  final int? editCount;
+
+  /// The applied edits, oldest first; null when unknown.
+  final List<PosOrderDetailEdit>? edits;
+
+  /// Whether an edit still awaits the kitchen's confirmation (the server's
+  /// per-edit verdict), or null when the history is unknown.
+  bool? get kitchenEditAckPending => edits?.any((e) => e.kitchenAckPending);
+
+  /// "Kitchen confirmed": at least one edit needed the kitchen's confirmation
+  /// and EVERY such edit has it. Read from the confirmation instants, never
+  /// from the absence of a pending flag (a voided order clears that flag
+  /// without anyone confirming anything).
+  bool get kitchenEditsConfirmed {
+    final required = [
+      for (final e in edits ?? const <PosOrderDetailEdit>[])
+        if (e.kitchenAckRequired) e,
+    ];
+    return required.isNotEmpty && required.every((e) => e.kitchenAckAt != null);
+  }
 
   bool get isAuthoritative => source == OrderPreviewSource.authoritative;
   bool get isPaid => payment != null;
@@ -256,6 +294,11 @@ class OrderDetailPreviewModel {
           ? detail.grandTotalMinor
           : null,
       payment: payment,
+      // ORDER-EDIT-001E: money-free, verbatim from the detail.
+      hasActiveRound: detail.hasActiveRound,
+      activeRoundStage: detail.activeRoundStage,
+      editCount: detail.editCount,
+      edits: detail.edits,
     );
   }
 
