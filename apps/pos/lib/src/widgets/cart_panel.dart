@@ -58,6 +58,7 @@ import 'order_action_row.dart' show printOrderBill;
 import 'order_confirmation.dart';
 import 'order_edit_cart_widgets.dart';
 import 'order_edit_messages.dart' show orderEditResultMessage;
+import 'order_edit_slip_widgets.dart' show printOrderEditSlipAgain;
 import 'quantity_stepper.dart';
 import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
@@ -953,11 +954,23 @@ Future<void> submitOrderEditFromCart({
     billPresentedAt: billPresentedAt,
   );
   if (!messenger.mounted) return;
+  final slipEditId = result.applied?.orderEditId;
   showOrderEditResult(
     messenger,
     l10n,
     result,
     onRefresh: () => unawaited(controller.retryRefresh()),
+    // ORDER-EDIT-001F: the paper slip did not print — Print again (the
+    // menu screen's banner keeps it too, should this panel be gone).
+    onPrintSlipAgain: slipEditId == null
+        ? null
+        : () {
+            if (context.mounted) {
+              unawaited(
+                printOrderEditSlipAgain(context, orderEditId: slipEditId),
+              );
+            }
+          },
     onPrintBill: orderId == null
         ? null
         : () => unawaited(

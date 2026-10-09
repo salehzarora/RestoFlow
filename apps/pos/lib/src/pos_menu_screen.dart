@@ -10,6 +10,8 @@ import 'pos_palette.dart';
 import 'state/cart_controller.dart';
 import 'state/discount_controller.dart' show staffCapabilitiesProvider;
 import 'state/menu_filter.dart';
+import 'state/order_edit_slip_controller.dart'
+    show orderEditPendingSlipsProvider;
 import 'state/pos_device_accent.dart';
 import 'state/pos_menu_provider.dart';
 import 'state/pos_offline_state.dart';
@@ -24,6 +26,7 @@ import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/open_orders_strip.dart';
+import 'widgets/order_edit_slip_widgets.dart' show OrderEditSlipBanner;
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_identity_title.dart';
 import 'widgets/pos_bottom_bar.dart';
@@ -1029,13 +1032,20 @@ class _MenuGrid extends ConsumerWidget {
         (o) => o.phase == PosOfflinePhase.offlineCached,
       ),
     );
-    if (!offlineCached) {
+    // ORDER-EDIT-001F: an unsent paper change slip keeps its "not printed"
+    // banner (with Print again) above the merchandise until it is on paper.
+    // The grid selects only whether there is one; the banner owns the rest.
+    final slipsUnsent = ref.watch(
+      orderEditPendingSlipsProvider.select((pending) => pending.isNotEmpty),
+    );
+    if (!offlineCached && !slipsUnsent) {
       return grid;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _OfflineCachedBanner(),
+        if (offlineCached) const _OfflineCachedBanner(),
+        if (slipsUnsent) const OrderEditSlipBanner(),
         Expanded(child: grid),
       ],
     );

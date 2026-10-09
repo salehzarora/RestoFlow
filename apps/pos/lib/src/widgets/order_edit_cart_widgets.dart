@@ -1028,23 +1028,35 @@ Future<OrderEditCartChoice?> showOrderEditCartNotEmptyPrompt(
 
 /// Shows what a send, retry or refresh came to: the result toast (with
 /// "Refresh orders" when the applied edit still needs its authoritative
-/// refresh — [onRefresh]), then, when the payload told the server a pre-bill
-/// had been presented (D7), "Bill changed: print new bill?" with [onPrintBill].
+/// refresh — [onRefresh]; ORDER-EDIT-001F: with "Print again" when a paper
+/// change slip did not reach the printer — [onPrintSlipAgain]), then, when
+/// the payload told the server a pre-bill had been presented (D7), "Bill
+/// changed: print new bill?" with [onPrintBill].
 void showOrderEditResult(
   ScaffoldMessengerState messenger,
   AppLocalizations l10n,
   OrderEditResult result, {
   VoidCallback? onRefresh,
   VoidCallback? onPrintBill,
+  VoidCallback? onPrintSlipAgain,
 }) {
   final message = orderEditResultMessage(l10n, result);
   final applied = result.status == OrderEditSubmitStatus.applied;
   if (message != null) {
     messenger.showSnackBar(
       SnackBar(
+        key: orderEditSlipNotPrinted(result)
+            ? const Key('order-edit-slip-not-printed-toast')
+            : null,
         content: Text(message),
         action: applied && result.refreshRequired && onRefresh != null
             ? SnackBarAction(label: l10n.posOrdersRefresh, onPressed: onRefresh)
+            : orderEditSlipNotPrinted(result) && onPrintSlipAgain != null
+            ? SnackBarAction(
+                key: const Key('order-edit-slip-not-printed-print-again'),
+                label: l10n.posOrderEditPrintAgain,
+                onPressed: onPrintSlipAgain,
+              )
             : null,
       ),
     );

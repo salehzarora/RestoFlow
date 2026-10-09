@@ -6,6 +6,7 @@ import '../data/order_edit_journal_store.dart' show OrderEditJournalRecord;
 import '../data/order_edit_read_model.dart' show PosKitchenChannel;
 import '../data/order_edit_response.dart' show OrderEditApplied;
 import '../state/order_edit_controller.dart';
+import '../state/order_edit_slip_controller.dart' show OrderEditSlipOutcome;
 
 /// ORDER-EDIT-001E — THE cashier-facing wording of the edit flow (plan §8b).
 ///
@@ -66,8 +67,10 @@ String orderEditNoticeMessage(
 ///    kitchen must confirm";
 ///  * otherwise, on a KDS branch, a change that landed only in a NEW round —
 ///    "Change N sent: new ticket for the kitchen";
-///  * otherwise — paper included — "Change N saved". The paper change slip is
-///    ORDER-EDIT-001F: until it prints, this till never claims "printed";
+///  * on paper, "Change N printed for the kitchen" ONLY when [slipPrinted]:
+///    the awaited change slip reached the kitchen printer (ORDER-EDIT-001F);
+///  * otherwise — paper whose slip did not print included — "Change N
+///    saved";
 ///  * [refreshRequired] (applied, not yet proven by the authoritative detail)
 ///    is always the honest "Change N saved";
 ///  * [remakeCount] > 0 adds "Already cooked: N dishes will be remade" (the
@@ -77,6 +80,7 @@ String orderEditAppliedMessage(
   OrderEditApplied applied, {
   int remakeCount = 0,
   bool refreshRequired = false,
+  bool slipPrinted = false,
 }) {
   final n = applied.editNumber;
   final head = refreshRequired
@@ -86,6 +90,8 @@ String orderEditAppliedMessage(
       : (applied.kitchenChannel == PosKitchenChannel.kds &&
             applied.newRoundId != null)
       ? l10n.posOrderEditResultNewTicket(n)
+      : (applied.kitchenChannel == PosKitchenChannel.paper && slipPrinted)
+      ? l10n.posOrderEditResultPrinted(n)
       : l10n.posOrderEditResultSaved(n);
   if (remakeCount <= 0) return head;
   return '$head\n${l10n.posOrderEditResultRemake(remakeCount)}';
@@ -94,16 +100,23 @@ String orderEditAppliedMessage(
 /// The message of any [OrderEditResult], or null when there is nothing to say
 /// (a send the footer already explains, or a superseded continuation).
 ///
-/// A rebase names what no longer applies on its own line.
+/// A rebase names what no longer applies on its own line. ORDER-EDIT-001F: a
+/// paper change slip that did not reach the printer says so on its own line
+/// ([orderEditSlipNotPrinted]) — never while the refresh is still owed, when
+/// the slip waits for the proof (its banner says it either way).
 String? orderEditResultMessage(AppLocalizations l10n, OrderEditResult result) {
   final applied = result.applied;
   if (result.status == OrderEditSubmitStatus.applied && applied != null) {
-    return orderEditAppliedMessage(
+    final message = orderEditAppliedMessage(
       l10n,
       applied,
       remakeCount: result.remakeCount,
       refreshRequired: result.refreshRequired,
+      slipPrinted: result.slip == OrderEditSlipOutcome.printed,
     );
+    return orderEditSlipNotPrinted(result)
+        ? '$message\n${l10n.posOrderEditSlipNotPrinted}'
+        : message;
   }
   final notice = result.notice;
   if (notice == null) return null;
@@ -116,6 +129,13 @@ String? orderEditResultMessage(AppLocalizations l10n, OrderEditResult result) {
   return '$message\n'
       '${l10n.posOrderEditRebaseDropped(result.droppedItems.join(', '))}';
 }
+
+/// ORDER-EDIT-001F: whether [result] is an applied PAPER edit whose change slip
+/// did not reach the printer — the toast then says so and offers Print again.
+bool orderEditSlipNotPrinted(OrderEditResult result) =>
+    result.status == OrderEditSubmitStatus.applied &&
+    result.slip == OrderEditSlipOutcome.notPrinted &&
+    !result.refreshRequired;
 
 /// Why "Send changes" is disabled — the footer's one reason line, in the
 /// order [orderEditSendBlock] reports them (design §7.1 point 4).

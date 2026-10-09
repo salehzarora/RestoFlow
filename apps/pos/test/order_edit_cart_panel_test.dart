@@ -6,6 +6,12 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        KitchenChangeSlipLabels,
+        KitchenTicketPrintLabels,
+        OrderChangeQuantity,
+        OrderChangeSlipView;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
@@ -18,6 +24,11 @@ import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
+import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        PosProviderReader,
+        posOrderEditSlipPrintProvider;
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
@@ -54,7 +65,9 @@ import 'support/order_edit_fixtures.dart';
 ///  * the reason chips appear only for a removing change, with the
 ///    "Customer changed mind" preselect only for Waiting tickets;
 ///  * the finished-food confirm comes BEFORE anything is dispatched;
-///  * the result toast follows the server, and paper never says "printed";
+///  * the result toast follows the server; on paper it says "printed" only
+///    once the change slip reached the printer (ORDER-EDIT-001F), and a slip
+///    that did not print offers Print again;
 ///  * a pre-bill this session printed rides the payload (D7) and is offered
 ///    again after the edit;
 ///  * "Apply to: Just 1" splits one unit off.
@@ -318,8 +331,46 @@ Object? _applied(
   'kitchen_ack_required': ack,
   'new_round_id': 'round-2',
   'new_round_number': 2,
-  'changes': const <Object?>[],
+  // ORDER-EDIT-001F: on paper the server answers every requested change
+  // (in request order) and hands back its born-claimed `order_edit`
+  // dispatch.
+  'changes': channel == 'paper'
+      ? [
+          for (final c in ((op['payload'] as Map)['changes'] as List))
+            {
+              'kind': (c as Map)['op'],
+              'order_item_id': c['order_item_id'],
+              'new_order_item_ids': const <Object?>[],
+              'remake': false,
+            },
+        ]
+      : const <Object?>[],
+  if (channel == 'paper')
+    'kitchen_dispatch': const {
+      'id': 'dispatch-1',
+      'claim_expires_at': '2026-10-09T12:10:00Z',
+    },
 });
+
+/// ORDER-EDIT-001F: the change-slip print seam (no socket).
+class _SlipPrinter {
+  final List<OrderChangeSlipView> slips = [];
+  List<PosKitchenPrintOutcome> outcomes = const [
+    PosKitchenPrintOutcome.printed,
+  ];
+
+  Future<PosKitchenPrintOutcome> call({
+    required PosProviderReader read,
+    required OrderChangeSlipView slip,
+    required KitchenTicketPrintLabels labels,
+    required KitchenChangeSlipLabels changeLabels,
+  }) async {
+    slips.add(slip);
+    return outcomes.length >= slips.length
+        ? outcomes[slips.length - 1]
+        : outcomes.last;
+  }
+}
 
 _Handler _refused(String code) =>
     (op) => _envelope(op, {'status': 'rejected', 'error': code});
@@ -1031,19 +1082,62 @@ void main() {
       expect(h.edit.phase, OrderEditPhase.idle);
     });
 
-    testWidgets('paper: "Change 1 saved", never "printed"', (tester) async {
+    testWidgets('ORDER-EDIT-001F paper: the change slip reached the printer '
+        '— "Change 1 printed for the kitchen"', (tester) async {
       final l10n = await _l10n();
+      final printer = _SlipPrinter();
       final h = _H(
         order: detail(items: _items(), channel: PosKitchenChannel.paper),
         ack: false,
         channel: 'paper',
+        extra: [posOrderEditSlipPrintProvider.overrideWithValue(printer.call)],
       );
       await _open(tester, h);
       await _tap(tester, 'cart-increase-sent-oi-burger');
       await _tap(tester, 'order-edit-send');
-      expect(find.text('Change 1 saved'), findsOneWidget);
+      expect(find.text(l10n.posOrderEditResultPrinted(1)), findsOneWidget);
+      expect(find.text('Change 1 printed for the kitchen'), findsOneWidget);
+      expect(
+        find.textContaining(l10n.posOrderEditSlipNotPrinted),
+        findsNothing,
+      );
+      final change = printer.slips.single.changes.single as OrderChangeQuantity;
+      expect(change.was.name, 'Burger');
+      expect(change.was.quantity, 2);
+      expect(change.nowQuantity, 3);
+      expect(h.c.read(cartControllerProvider).isEditing, isFalse);
+    });
+
+    testWidgets('ORDER-EDIT-001F paper: a slip that did not print — "Change 1 '
+        'saved", "not printed" and Print again, which re-sends it', (
+      tester,
+    ) async {
+      final l10n = await _l10n();
+      final printer = _SlipPrinter()
+        ..outcomes = const [
+          PosKitchenPrintOutcome.failed,
+          PosKitchenPrintOutcome.printed,
+        ];
+      final h = _H(
+        order: detail(items: _items(), channel: PosKitchenChannel.paper),
+        ack: false,
+        channel: 'paper',
+        extra: [posOrderEditSlipPrintProvider.overrideWithValue(printer.call)],
+      );
+      await _open(tester, h);
+      await _tap(tester, 'cart-increase-sent-oi-burger');
+      await _tap(tester, 'order-edit-send');
+      expect(
+        find.text('Change 1 saved\n${l10n.posOrderEditSlipNotPrinted}'),
+        findsOneWidget,
+      );
       expect(find.text(l10n.posOrderEditResultPrinted(1)), findsNothing);
-      expect(find.textContaining('printed'), findsNothing);
+      expect(_key('order-edit-slip-not-printed-toast'), findsOneWidget);
+      await tester.tap(_key('order-edit-slip-not-printed-print-again'));
+      await tester.pumpAndSettle();
+      expect(printer.slips, hasLength(2));
+      expect(printer.slips[1].changes.single, isA<OrderChangeQuantity>());
+      expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
     });
 
     testWidgets('a refusal says why and keeps the edit open', (tester) async {

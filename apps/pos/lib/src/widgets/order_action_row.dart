@@ -9,6 +9,7 @@ import '../data/order_actions.dart';
 import '../data/order_identity.dart' show PosOrderIdentity;
 import '../data/payment.dart';
 import '../data/order_detail_repository.dart';
+import '../data/order_edit_slip_store.dart' show OrderEditSlipRecord;
 import '../data/recent_order.dart';
 import '../print/native_print_bridges.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
@@ -20,6 +21,8 @@ import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/order_edit_controller.dart';
+import '../state/order_edit_slip_controller.dart'
+    show orderEditPendingSlipsProvider, orderEditSlipSupersededBy;
 import '../state/parked_carts_controller.dart';
 import '../state/payment_controller.dart' show paymentControllerProvider;
 import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
@@ -39,6 +42,7 @@ import 'order_edit_cart_widgets.dart'
         showOrderEditResult;
 import 'order_edit_messages.dart'
     show orderEditEntryMessage, orderEditRetryLabel;
+import 'order_edit_slip_widgets.dart' show printOrderEditSlipAgain;
 import 'receipt_print_preview.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the SHARED order action row.
@@ -347,6 +351,39 @@ class OrderActionRow extends ConsumerWidget {
       );
     }
 
+    // ORDER-EDIT-001F: this order's paper change slip did not reach the
+    // kitchen printer — its Print again rides the row too (the twin of the
+    // menu screen's banner), for the newest unsent slip of the order.
+    final slipEditId = editOrderId == null || editOrderId.isEmpty
+        ? null
+        : ref.watch(
+            orderEditPendingSlipsProvider.select((pending) {
+              OrderEditSlipRecord? newest;
+              for (final r in pending) {
+                if (r.orderId == editOrderId &&
+                    (newest == null || r.editNumber > newest.editNumber)) {
+                  newest = r;
+                }
+              }
+              return newest == null || orderEditSlipSupersededBy(order, newest)
+                  ? null
+                  : newest.orderEditId;
+            }),
+          );
+    if (slipEditId != null) {
+      children.add(
+        OrderActionButton(
+          child: OutlinedButton.icon(
+            key: Key('$keyPrefix-edit-slip-print-again-${order.orderNumber}'),
+            onPressed: () =>
+                printOrderEditSlipAgain(context, orderEditId: slipEditId),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: Text(l10n.posOrderEditPrintAgain),
+          ),
+        ),
+      );
+    }
+
     if (actions.canOpenReceipt) {
       children.add(
         OrderActionButton(
@@ -523,11 +560,20 @@ class OrderActionRow extends ConsumerWidget {
     final container = ProviderScope.containerOf(context, listen: false);
     final edit = container.read(orderEditControllerProvider.notifier);
     final result = await edit.retryOrder(orderId);
+    final slipEditId = result.applied?.orderEditId;
     showOrderEditResult(
       messenger,
       l10n,
       result,
       onRefresh: () => edit.retryOrder(orderId),
+      // ORDER-EDIT-001F: the paper slip did not print — Print again.
+      onPrintSlipAgain: slipEditId == null
+          ? null
+          : () {
+              if (context.mounted) {
+                printOrderEditSlipAgain(context, orderEditId: slipEditId);
+              }
+            },
       onPrintBill: () => printOrderBill(
         container: container,
         messenger: messenger,

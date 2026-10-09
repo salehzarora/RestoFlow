@@ -935,7 +935,7 @@ final orderEditPendingSlipsProvider = Provider<List<OrderEditSlipRecord>>((
   final pending = <OrderEditSlipRecord>[
     for (final r in slips.records.values)
       if (!slips.inFlight.contains(r.orderEditId) &&
-          !_supersededBySnapshot(byOrder[r.orderId], r))
+          !orderEditSlipSupersededBy(byOrder[r.orderId], r))
         r,
   ];
   pending.sort((a, b) {
@@ -945,7 +945,9 @@ final orderEditPendingSlipsProvider = Provider<List<OrderEditSlipRecord>>((
   return List<OrderEditSlipRecord>.unmodifiable(pending);
 });
 
-bool _supersededBySnapshot(PosRecentOrder? order, OrderEditSlipRecord r) {
+/// Whether [order]'s server snapshot already shows [r] superseded: a newer
+/// edit (`edit_count` past its number), or a voided / cancelled order.
+bool orderEditSlipSupersededBy(PosRecentOrder? order, OrderEditSlipRecord r) {
   if (order == null) return false;
   return order.editCount > r.editNumber ||
       order.isVoided ||
