@@ -593,7 +593,9 @@ or contract change):*
   Otherwise it says "saved" and adds "Kitchen change slip not printed" with a
   "Print again" action on the toast itself, rather than a second snack, which would
   queue behind it. A banner per unsent slip sits above the menu grid, and the order
-  row has its own "Print again". "Print again" is refused while the slip is printing
+  row has its own "Print again". The banners share one scrolling area capped at 40%
+  of the menu pane, so the grid keeps its height however many slips are unsent.
+  "Print again" is refused while the slip is printing
   or the order has an unresolved edit. It keeps the record when the detail cannot
   be read and retires it silently when the order was voided (D9). When a newer edit
   exists it retires the record and offers "Print latest": a newer unsent slip of
