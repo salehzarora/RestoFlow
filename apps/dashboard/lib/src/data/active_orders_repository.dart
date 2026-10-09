@@ -236,6 +236,8 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
       staffName: d.staffName,
       paymentMethod: pay?.method,
       paidAmountMinor: pay?.amountMinor,
+      editCount: d.editCount,
+      hasActiveRound: d.hasActiveRound,
     );
   }
 }

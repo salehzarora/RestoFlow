@@ -231,6 +231,8 @@ class OrderHistoryRow {
     this.branchName,
     this.shiftStatus,
     this.kitchenWorkOpen,
+    this.editCount = 0,
+    this.hasActiveRound,
   });
 
   final String orderId;
@@ -277,6 +279,16 @@ class OrderHistoryRow {
   /// never mutates an order from them.
   final String? shiftStatus;
   final bool? kitchenWorkOpen;
+
+  /// ORDER-EDIT-001G (API_CONTRACT §4.47a): how many times the order was
+  /// changed after it was sent (`orders.edit_count`); 0 for an unedited order
+  /// and for a server that does not send the key yet.
+  final int editCount;
+
+  /// ORDER-EDIT-001G: a service round of the order is still in the kitchen
+  /// (`has_active_round`). Null when the server does not send it, which reads
+  /// exactly as before (the persisted status alone).
+  final bool? hasActiveRound;
 }
 
 /// One page of history rows + the keyset continuation.
@@ -401,6 +413,10 @@ class OrderDetail {
     this.notes,
     this.items = const [],
     this.payments = const [],
+    this.editCount = 0,
+    this.hasActiveRound,
+    this.activeRoundsReady,
+    this.edits,
   });
 
   final String orderId;
@@ -422,6 +438,22 @@ class OrderDetail {
   final String? notes;
   final List<OrderDetailItem> items;
   final List<OrderPayment> payments;
+
+  /// ORDER-EDIT-001G (API_CONTRACT §4.47a): `orders.edit_count`, 0 when unedited
+  /// or not sent.
+  final int editCount;
+
+  /// A service round of the order is still in the kitchen. Null = not sent.
+  final bool? hasActiveRound;
+
+  /// Every active round is `ready`, so the drawer can say "Ready" where the
+  /// lists say "In kitchen". Null = not sent.
+  final bool? activeRoundsReady;
+
+  /// The order's edits, oldest first. Null when unknown — an older server, or
+  /// a malformed list, which is never shown half-parsed — and the timeline is
+  /// then hidden; an empty list is a known "no edits".
+  final List<OrderEditTimelineEntry>? edits;
 
   /// The single completed payment, if any (at most one per order; D-024/D-025).
   OrderPayment? get completedPayment {
@@ -465,6 +497,45 @@ class OrderDetail {
     if (grandTotalMinor == 0) return SettlementState.notChargeable;
     return isFullySettled ? SettlementState.paid : SettlementState.unpaid;
   }
+}
+
+/// ORDER-EDIT-001G — one entry of the order drawer's "Changes" timeline
+/// (`owner_order_detail.order.edits[]`, API_CONTRACT §4.47a). Money-free, and
+/// carries no staff, device or session identifier.
+class OrderEditTimelineEntry {
+  const OrderEditTimelineEntry({
+    required this.editNumber,
+    required this.createdAtLabel,
+    required this.kitchenChannel,
+    required this.kitchenAckRequired,
+    required this.kitchenAckPending,
+    this.reasonCode,
+    this.reasonText,
+    this.kitchenAckAtLabel,
+  });
+
+  final int editNumber;
+
+  /// The edit's time, already formatted branch-local by the server.
+  final String createdAtLabel;
+
+  /// Null for an edit that only added items (no reason needed).
+  final String? reasonCode;
+
+  /// The free text of an `other` reason.
+  final String? reasonText;
+
+  /// `kds` or `paper`.
+  final String kitchenChannel;
+  final bool kitchenAckRequired;
+
+  /// When the kitchen confirmed the change, formatted branch-local.
+  final String? kitchenAckAtLabel;
+
+  /// Required, not yet given, and false on a voided order (ORDER-EDIT-001B).
+  final bool kitchenAckPending;
+
+  bool get printedForKitchen => kitchenChannel == 'paper';
 }
 
 /// One aggregated whole-order kitchen count line (e.g. "9 patties").

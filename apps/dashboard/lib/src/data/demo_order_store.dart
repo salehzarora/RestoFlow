@@ -213,5 +213,11 @@ class DemoOrderStore {
     notes: d.notes,
     items: d.items,
     payments: payments ?? d.payments,
+    // ORDER-EDIT-001G: the edit facts travel with the order, or a demo
+    // completion would silently drop its badge and timeline.
+    editCount: d.editCount,
+    hasActiveRound: d.hasActiveRound,
+    activeRoundsReady: d.activeRoundsReady,
+    edits: d.edits,
   );
 }

@@ -108,6 +108,7 @@ class RecentOrderRow {
     required this.totalMinor,
     required this.currencyCode,
     this.tableLabel,
+    this.hasActiveRound = false,
   });
 
   /// Display number (data, not localized chrome).
@@ -123,6 +124,10 @@ class RecentOrderRow {
   final bool isPaid;
   final int totalMinor;
   final String currencyCode;
+
+  /// ORDER-EDIT-001G: a service round is still in the kitchen, so a `served`
+  /// order reads "In kitchen" (STATE_MACHINES §1).
+  final bool hasActiveRound;
 
   /// F3 — the same row, built from a real order-history row.
   ///
@@ -141,6 +146,7 @@ class RecentOrderRow {
     isPaid: row.settlement.isSettled,
     totalMinor: row.grandTotalMinor,
     currencyCode: row.currencyCode,
+    hasActiveRound: row.hasActiveRound == true,
   );
 }
 

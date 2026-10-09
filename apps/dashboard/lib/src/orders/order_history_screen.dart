@@ -441,7 +441,11 @@ class OrderHistoryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final statusStyle = statusTone(row.status).styleOf(theme);
+    final hasActiveRound = row.hasActiveRound == true;
+    final statusStyle = statusTone(
+      row.status,
+      hasActiveRound: hasActiveRound,
+    ).styleOf(theme);
     final money = MoneyFormatter.formatMinor(
       row.grandTotalMinor,
       row.currencyCode,
@@ -506,10 +510,16 @@ class OrderHistoryCard extends ConsumerWidget {
                             l10n,
                             row.status,
                             row.orderType,
+                            hasActiveRound: hasActiveRound,
                           ),
-                          tone: statusTone(row.status),
+                          tone: statusTone(
+                            row.status,
+                            hasActiveRound: hasActiveRound,
+                          ),
                         ),
                         settlementPill(l10n, row.settlement),
+                        if (row.editCount > 0)
+                          orderEditedBadge(l10n, row.editCount),
                       ],
                     ),
                   ],
@@ -537,23 +547,92 @@ class OrderHistoryCard extends ConsumerWidget {
   }
 }
 
-/// The tone for an order status pill.
-RestoflowTone statusTone(String status) => switch (status) {
-  'completed' || 'served' => RestoflowTone.success,
-  'voided' || 'cancelled' => RestoflowTone.danger,
-  'ready' => RestoflowTone.info,
-  'preparing' || 'accepted' || 'submitted' => RestoflowTone.warning,
-  _ => RestoflowTone.neutral,
+/// ORDER-EDIT-001G (STATE_MACHINES §1, DECISION D-043) — the stage a `served`
+/// order shows while kitchen work of it is still live, or null when the
+/// persisted status speaks for itself.
+///
+/// An order rests at `served` while an Add-items round, or a sent-order edit's
+/// own round, is still in the kitchen (`has_active_round`). That `served` is
+/// not the pickup and not a table service, so the Dashboard says the round's
+/// stage instead: "Ready" when every active round is ready
+/// ([activeRoundsReady], known only in the order drawer), otherwise
+/// "In kitchen" — never a "Ready" nobody saw. Only `served` is overridden.
+enum ServedRoundStage { inKitchen, ready }
+
+ServedRoundStage? servedRoundStage(
+  String status, {
+  bool hasActiveRound = false,
+  bool activeRoundsReady = false,
+}) {
+  if (status != 'served' || !hasActiveRound) return null;
+  return activeRoundsReady
+      ? ServedRoundStage.ready
+      : ServedRoundStage.inKitchen;
+}
+
+/// The tone for an order status pill. ORDER-EDIT-001G: a `served` order with
+/// an active round takes the tone of the round's stage ([servedRoundStage]).
+RestoflowTone statusTone(
+  String status, {
+  bool hasActiveRound = false,
+  bool activeRoundsReady = false,
+}) => switch (servedRoundStage(
+  status,
+  hasActiveRound: hasActiveRound,
+  activeRoundsReady: activeRoundsReady,
+)) {
+  ServedRoundStage.ready => RestoflowTone.info,
+  ServedRoundStage.inKitchen => RestoflowTone.warning,
+  null => switch (status) {
+    'completed' || 'served' => RestoflowTone.success,
+    'voided' || 'cancelled' => RestoflowTone.danger,
+    'ready' => RestoflowTone.info,
+    'preparing' || 'accepted' || 'submitted' => RestoflowTone.warning,
+    _ => RestoflowTone.neutral,
+  },
 };
 
 /// The localized label for an order status value (display, all statuses).
-String statusLabel(AppLocalizations l10n, String status) =>
-    statusLabelFor(l10n, status, null);
+String statusLabel(
+  AppLocalizations l10n,
+  String status, {
+  bool hasActiveRound = false,
+  bool activeRoundsReady = false,
+}) => statusLabelFor(
+  l10n,
+  status,
+  null,
+  hasActiveRound: hasActiveRound,
+  activeRoundsReady: activeRoundsReady,
+);
 
 /// TYPE-AWARE status label (RESTAURANT-OPERATIONS-V1-001): a TAKEAWAY order's
 /// persisted `served` renders "Picked up" — the customer collected it. One
 /// state machine, two operational meanings; the wire value is unchanged.
-String statusLabelFor(AppLocalizations l10n, String status, String? orderType) {
+///
+/// ORDER-EDIT-001G: checked FIRST, a `served` order with an active round reads
+/// the round's stage instead ([servedRoundStage]) — for takeaway as much as
+/// dine-in: an edit-made `served` is not the customer pickup. "Picked up" and
+/// "Served" are shown only once no round is active.
+String statusLabelFor(
+  AppLocalizations l10n,
+  String status,
+  String? orderType, {
+  bool hasActiveRound = false,
+  bool activeRoundsReady = false,
+}) {
+  switch (servedRoundStage(
+    status,
+    hasActiveRound: hasActiveRound,
+    activeRoundsReady: activeRoundsReady,
+  )) {
+    case ServedRoundStage.ready:
+      return l10n.ordersStatusReady;
+    case ServedRoundStage.inKitchen:
+      return l10n.ordersStatusInKitchen;
+    case null:
+      break;
+  }
   if (status == 'served' && orderType == 'takeaway') {
     return l10n.ordersStatusPickedUp;
   }
@@ -589,3 +668,14 @@ String orderTypeLabel(AppLocalizations l10n, String type) => switch (type) {
   'takeaway' => l10n.posOrderTypeTakeaway,
   _ => type,
 };
+
+/// ORDER-EDIT-001G — the "Edited ×N" badge shown beside the status pill of an
+/// order changed after it was sent (`edit_count` > 0). One widget for the
+/// history list, the active board and the order drawer.
+Widget orderEditedBadge(AppLocalizations l10n, int editCount) =>
+    RestoflowStatusPill(
+      key: const Key('order-edited-badge'),
+      label: l10n.ordersEditedBadge(editCount),
+      tone: RestoflowTone.info,
+      icon: Icons.edit_note_outlined,
+    );
