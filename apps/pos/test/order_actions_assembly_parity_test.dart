@@ -148,6 +148,8 @@ void _expectFieldKeyParity(
     'recent-cancel-$code': actions.canVoid,
     'recent-move-table-$code': actions.canMoveTable,
     'recent-add-items-$code': actions.canAddItems,
+    // ORDER-EDIT-001E: the Edit entry renders exactly when the assembly says.
+    'recent-edit-order-$code': actions.canEditOrder,
     'recent-reprint-$code': actions.canOpenReceipt,
     'recent-view-$code': actions.canOpenReceipt,
     'recent-complete-$code': actions.canComplete,

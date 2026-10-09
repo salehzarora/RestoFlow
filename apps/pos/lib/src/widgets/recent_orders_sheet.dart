@@ -1440,6 +1440,8 @@ String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
   // PSC-001C: an addition in flight for this order from THIS device.
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
+  // ORDER-EDIT-001E: a sent-order edit in flight from THIS device.
+  PosPendingKind.orderEdit => l10n.posOrderEditSending,
 };
 
 /// POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: convert to LOCAL exactly once before

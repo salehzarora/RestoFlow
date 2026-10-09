@@ -144,24 +144,16 @@ class _TableOrderRecoverySheetState
   /// with order_has_completed_payment. A zero-total (not_chargeable) order
   /// has NO payment row, so the server accepts its void - the shared policy's
   /// verdict stands for it.
+  ///
+  /// ORDER-EDIT-001E: through [PosOrderActions.copyWith] — the hand-written
+  /// field-by-field copy this replaced would silently drop every new verdict
+  /// (Edit among them) to false.
   static PosOrderActions _withoutVoidWhenSettled(
     PosOrderActions a,
     PosRecentOrder order,
   ) {
     if (order.settlement != PosSettlement.paid || !a.canVoid) return a;
-    return PosOrderActions(
-      canPay: a.canPay,
-      canDiscount: a.canDiscount,
-      canFullComp: a.canFullComp,
-      canVoid: false,
-      canMoveTable: a.canMoveTable,
-      canOpenReceipt: a.canOpenReceipt,
-      pendingKind: a.pendingKind,
-      canAddItems: a.canAddItems,
-      canComplete: a.canComplete,
-      canPrintBill: a.canPrintBill,
-      submitUnacknowledged: a.submitUnacknowledged,
-    );
+    return a.copyWith(canVoid: false);
   }
 
   @override

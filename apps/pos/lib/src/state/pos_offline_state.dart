@@ -150,7 +150,11 @@ const Duration kPosOfflineReconnectProbeInterval = Duration(seconds: 25);
 /// ONLY at the UI entry — no payment/void/shift logic is touched — and demo
 /// mode never reaches it (the demo menu cannot fail, so the phase stays
 /// online).
-bool blockPosActionWhileOffline(BuildContext context) {
+///
+/// ORDER-EDIT-001E: [message] replaces the generic line for an entry that has a
+/// more precise reason to give (Edit order: "Editing needs a connection so the
+/// kitchen is told"). Omitted, the behaviour is unchanged.
+bool blockPosActionWhileOffline(BuildContext context, {String? message}) {
   final container = ProviderScope.containerOf(context, listen: false);
   if (container.read(posOfflineModeProvider).phase !=
       PosOfflinePhase.offlineCached) {
@@ -158,7 +162,9 @@ bool blockPosActionWhileOffline(BuildContext context) {
   }
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(AppLocalizations.of(context).posOfflineActionUnavailable),
+      content: Text(
+        message ?? AppLocalizations.of(context).posOfflineActionUnavailable,
+      ),
     ),
   );
   return true;

@@ -18,6 +18,7 @@ import '../print/pos_kitchen_ticket_printer.dart'
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/payment_controller.dart' show paymentControllerProvider;
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_order_complete_controller.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_receipt_logo.dart';
@@ -289,6 +290,25 @@ class OrderActionRow extends ConsumerWidget {
       );
     }
 
+    // ORDER-EDIT-001E: edit a SENT order in place (remove, change quantity,
+    // modify, add) — right after Add items (ORDER_EDIT_DESIGN §7.1 step 1).
+    // Drawn only when the central policy says so (`canEditOrder`: the
+    // add-items interlocks, an acknowledged submit, the branch switch ON and a
+    // role the server accepts); the label is the existing, translated
+    // "Edit order".
+    if (actions.canEditOrder) {
+      children.add(
+        OrderActionButton(
+          child: OutlinedButton.icon(
+            key: Key('$keyPrefix-edit-order-${order.orderNumber}'),
+            onPressed: () => _startEdit(context, ref),
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: Text(l10n.posRecoveryEditOrder),
+          ),
+        ),
+      );
+    }
+
     if (actions.canOpenReceipt) {
       children.add(
         OrderActionButton(
@@ -375,6 +395,23 @@ class OrderActionRow extends ConsumerWidget {
         messenger.showSnackBar(
           SnackBar(content: Text(l10n.posAdditionConflictBlocked)),
         );
+    }
+  }
+
+  /// ORDER-EDIT-001E: the "Edit order" entry.
+  ///
+  /// Editing is ONLINE-ONLY (API_CONTRACT §4.45.1): the kitchen has to be told,
+  /// so offline the tap is refused at this entry with the edit's own reason —
+  /// nothing is reserved, fetched or loaded. The entry transition itself (the
+  /// reservation, the authoritative load and the cart's edit mode) is owned by
+  /// the edit controller, which this slice's later step wires in here.
+  void _startEdit(BuildContext context, WidgetRef ref) {
+    if (order.orderId == null) return;
+    if (blockPosActionWhileOffline(
+      context,
+      message: l10n.posOrderEditNeedsConnection,
+    )) {
+      return;
     }
   }
 

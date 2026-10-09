@@ -263,6 +263,8 @@ String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
+  // ORDER-EDIT-001E: a sent-order edit in flight from THIS device.
+  PosPendingKind.orderEdit => l10n.posOrderEditSending,
 };
 
 /// A STATIC skeleton: an indeterminate spinner never settles, so a widget test

@@ -168,6 +168,9 @@ class PosOrderActionsAssembly {
       // Pass C: this row's `itemsAdd` stamp is the startup blanket, not a
       // known amendment — it relaxes the read-only pre-bill and nothing else.
       amendmentsHydrating: _hydrationBlanketOnly.contains(order.identity.key),
+      // ORDER-EDIT-001E: Edit needs a real backend; the policy fails closed
+      // without this, so only this shared assembly ever offers it.
+      isRealMode: !_isDemo,
       // Gap B: the central close-eligibility policy decides the printer-only
       // Complete safety net (server re-enforces).
       completeEligible:
