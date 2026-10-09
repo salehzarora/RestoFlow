@@ -13,10 +13,15 @@ import '../data/order_detail_repository.dart';
 import '../data/order_edit_baseline.dart';
 import '../data/order_edit_diff.dart';
 import '../data/order_edit_journal_store.dart';
+import '../data/order_edit_read_model.dart' show PosKitchenChannel;
 import '../data/order_edit_response.dart';
+import '../data/order_edit_slip.dart'
+    show OrderEditSlipItem, orderEditSlipWasLines;
 import 'addition_controller.dart';
 import 'cart_controller.dart';
 import 'discount_controller.dart' show staffCapabilitiesProvider;
+import 'order_edit_slip_controller.dart'
+    show OrderEditSlipOutcome, orderEditSlipControllerProvider;
 import 'order_sync_controller.dart';
 import 'pos_branch_tax.dart';
 import 'pos_menu_provider.dart';
@@ -52,8 +57,14 @@ import 'pos_session.dart';
 ///  * every asynchronous continuation is FENCED on the generation and the
 ///    attempt identity — a stale answer has no state side effect.
 ///
-/// No change slip is printed here: the paper `order_edit` dispatch the server
-/// returns is carried in the journal for ORDER-EDIT-001F, untouched.
+/// ORDER-EDIT-001F — THE PAPER CHANGE SLIP (design §7.3): on a printer-only
+/// branch the applied edit's slip is RECORDED
+/// ([OrderEditSlipController.recordApplied]) BEFORE the journal record
+/// closes — built from the detail that proved the edit, or left unbuilt for
+/// the spool when none did — and then PRINTED, awaited and exactly once
+/// ([OrderEditSlipController.printRecorded]), before the result is built. The
+/// toast says "printed" only when [OrderEditResult.slip] says so. A KDS edit
+/// never touches the slip.
 class OrderEditAttempt {
   const OrderEditAttempt({
     required this.localOperationId,
@@ -64,6 +75,7 @@ class OrderEditAttempt {
     required this.summary,
     required this.clientCreatedAt,
     this.employeeProfileId,
+    this.slipWas,
   });
 
   /// A restored journal record as an attempt (cart-free: no edit cart is ever
@@ -78,6 +90,7 @@ class OrderEditAttempt {
         summary: r.summary,
         clientCreatedAt: r.clientCreatedAt,
         employeeProfileId: r.employeeProfileId,
+        slipWas: r.slipWas,
       );
 
   /// The D-022 idempotency identity — one per attempt, reused by every retry.
@@ -103,6 +116,11 @@ class OrderEditAttempt {
   /// The worker who froze it — diagnostic only (decision D12).
   final String? employeeProfileId;
 
+  /// ORDER-EDIT-001F (D2): the money-free "was" projections of the lines the
+  /// payload names, frozen from the baseline on a PAPER edit (null on KDS), so
+  /// a cart-free replay can still hand-build the full change slip.
+  final Map<String, OrderEditSlipItem>? slipWas;
+
   /// Whether the payload told the server a pre-bill had been presented
   /// (decision D7) — the result then offers "Bill changed: print new bill?".
   bool get billPresented => payload.containsKey('bill_presented_at');
@@ -121,6 +139,7 @@ class OrderEditAttempt {
     phase: phase,
     attemptCount: attemptCount,
     employeeProfileId: employeeProfileId,
+    slipWas: slipWas,
   );
 }
 
@@ -630,6 +649,7 @@ class OrderEditResult {
     this.droppedItems = const <String>[],
     this.sendBlock,
     this.error,
+    this.slip,
   });
 
   final OrderEditSubmitStatus status;
@@ -666,6 +686,11 @@ class OrderEditResult {
 
   /// A SAFE diagnostic code — never raw backend text.
   final String? error;
+
+  /// ORDER-EDIT-001F: what the PAPER change slip of an applied edit came to
+  /// (null on KDS, and for anything not applied) — the toast says "printed"
+  /// only for [OrderEditSlipOutcome.printed].
+  final OrderEditSlipOutcome? slip;
 
   /// `item_unavailable`: the names the server refused.
   List<String> get unavailableItems => [
@@ -1071,13 +1096,14 @@ class OrderEditController extends Notifier<OrderEditState> {
     if (s0.phase == OrderEditPhase.appliedAwaitingRefresh) {
       final applied = s0.applied;
       final attempt = s0.attempt;
-      final ok = await retryRefresh();
+      final (ok, slip) = await _retryRefresh();
       return OrderEditResult(
         status: OrderEditSubmitStatus.applied,
         applied: applied,
         refreshRequired: !ok,
         remakeCount: attempt?.summary.remakeDishCount ?? 0,
         billPresented: attempt?.billPresented ?? false,
+        slip: slip,
       );
     }
     final frozen = s0.attempt;
@@ -1159,20 +1185,26 @@ class OrderEditController extends Notifier<OrderEditState> {
         error: 'blocked',
       );
     }
+    final payload = buildOrderEditPayload(
+      plan,
+      reasonCode: reasonCode,
+      reasonText: reasonText,
+      billPresentedAt: billPresentedAt,
+    );
     final attempt = OrderEditAttempt(
       localOperationId: ref.read(clientIdGeneratorProvider).newId(),
       orderId: context.orderId,
       orderCode: context.orderCode,
       generation: gen,
-      payload: buildOrderEditPayload(
-        plan,
-        reasonCode: reasonCode,
-        reasonText: reasonText,
-        billPresentedAt: billPresentedAt,
-      ),
+      payload: payload,
       summary: plan.summary,
       clientCreatedAt: DateTime.now().toUtc(),
       employeeProfileId: ref.read(posSignedInEmployeeProfileIdProvider),
+      // ORDER-EDIT-001F (D2): the paper slip's "was" lines, frozen with the
+      // payload from the same baseline.
+      slipWas: context.baseline.channel == PosKitchenChannel.paper
+          ? orderEditSlipWasLines(context.baseline, payload)
+          : null,
     );
     final cartController = ref.read(cartControllerProvider.notifier);
     final owner = _ownerOf(attempt);
@@ -1361,7 +1393,13 @@ class OrderEditController extends Notifier<OrderEditState> {
     );
     if (!cartBound) {
       final reconciled = await _reconcileRecord(attempt, applied);
-      return _appliedResult(attempt, applied, outcome, reconciled: reconciled);
+      return _appliedResult(
+        attempt,
+        applied,
+        outcome,
+        reconciled: reconciled,
+        slip: await _printSlip(applied),
+      );
     }
     if (!_disposed && _isCurrentAttempt(gen, attempt)) {
       _publish(
@@ -1375,7 +1413,16 @@ class OrderEditController extends Notifier<OrderEditState> {
       );
     }
     final reconciled = await _reconcileApplied(gen, attempt, applied);
-    return _appliedResult(attempt, applied, outcome, reconciled: reconciled);
+    // ORDER-EDIT-001F: the slip prints AFTER the reconcile released the cart
+    // and closed the journal — the till is never held by the printer; only
+    // the result (the toast) waits for it.
+    return _appliedResult(
+      attempt,
+      applied,
+      outcome,
+      reconciled: reconciled,
+      slip: await _printSlip(applied),
+    );
   }
 
   OrderEditResult _appliedResult(
@@ -1383,6 +1430,7 @@ class OrderEditController extends Notifier<OrderEditState> {
     OrderEditApplied applied,
     OrderEditOutcome outcome, {
     required bool reconciled,
+    OrderEditSlipOutcome? slip,
   }) => OrderEditResult(
     status: OrderEditSubmitStatus.applied,
     outcome: outcome,
@@ -1391,6 +1439,7 @@ class OrderEditController extends Notifier<OrderEditState> {
     remakeCount: attempt.summary.remakeDishCount,
     billPresented: attempt.billPresented,
     error: reconciled ? null : 'refresh_required',
+    slip: slip,
   );
 
   /// The outcome is unknown: the identity, the payload and (for this
@@ -1703,17 +1752,21 @@ class OrderEditController extends Notifier<OrderEditState> {
   }
 
   /// Retries ONLY the authoritative refresh of this session's applied edit.
-  /// Never dispatches `order.edit` again.
-  Future<bool> retryRefresh() async {
+  /// Never dispatches `order.edit` again. ORDER-EDIT-001F: a paper slip the
+  /// refresh records is printed (awaited) before this returns.
+  Future<bool> retryRefresh() async => (await _retryRefresh()).$1;
+
+  Future<(bool, OrderEditSlipOutcome?)> _retryRefresh() async {
     final s = state;
     final attempt = s.attempt;
     final applied = s.applied;
     if (s.phase != OrderEditPhase.appliedAwaitingRefresh ||
         attempt == null ||
         applied == null) {
-      return false;
+      return (false, null);
     }
-    return _reconcileApplied(s.generation, attempt, applied);
+    final ok = await _reconcileApplied(s.generation, attempt, applied);
+    return (ok, await _printSlip(applied));
   }
 
   /// The post-apply reconcile of this session's attempt: the targeted
@@ -1721,21 +1774,29 @@ class OrderEditController extends Notifier<OrderEditState> {
   /// edit (its `edit_count` reached `edit_number` and `edits[]` names the
   /// `order_edit_id`) before the cart is cleared — with the matching owner
   /// token — and the record closed, exactly once.
+  ///
+  /// ORDER-EDIT-001F: a paper edit's slip is recorded first — the order of
+  /// state is journal awaiting-refresh, slip record persisted, journal
+  /// closed — so no crash between them can lose the slip (and a crash before
+  /// it leaves this till's claimed dispatch for the spool to re-serve).
   Future<bool> _reconcileApplied(
     int gen,
     OrderEditAttempt attempt,
     OrderEditApplied applied,
   ) async {
     final fresh = await _authoritativeDetail(attempt.orderId);
-    if (_disposed ||
+    bool stale() =>
+        _disposed ||
         state.generation != gen ||
         state.phase != OrderEditPhase.appliedAwaitingRefresh ||
-        state.attempt?.localOperationId != attempt.localOperationId) {
-      return false; // stale — zero side effects
-    }
+        state.attempt?.localOperationId != attempt.localOperationId;
+    if (stale()) return false; // stale — zero side effects
+    final proven = _proves(fresh, attempt, applied);
+    await _recordSlip(attempt, applied, proven ? fresh : null);
+    if (stale()) return false;
     final cart = ref.read(cartControllerProvider.notifier);
     final owner = _ownerOf(attempt);
-    if (!_proves(fresh, attempt, applied) || !cart.ownsAdditionLock(owner)) {
+    if (!proven || !cart.ownsAdditionLock(owner)) {
       _publish(state.copyWith(lastError: 'refresh_required'));
       return false;
     }
@@ -1745,7 +1806,9 @@ class OrderEditController extends Notifier<OrderEditState> {
     return true;
   }
 
-  /// The reconcile of a restored applied record (no cart is involved).
+  /// The reconcile of a restored applied record (no cart is involved). A
+  /// paper edit's slip is recorded first — from the frozen "was" lines the
+  /// record carries (D2) — exactly like [_reconcileApplied].
   Future<bool> _reconcileRecord(
     OrderEditAttempt attempt,
     OrderEditApplied applied,
@@ -1753,9 +1816,44 @@ class OrderEditController extends Notifier<OrderEditState> {
     final fresh = await _authoritativeDetail(attempt.orderId);
     if (_disposed) return false;
     if (!_records.containsKey(attempt.localOperationId)) return true;
-    if (!_proves(fresh, attempt, applied)) return false;
+    final proven = _proves(fresh, attempt, applied);
+    await _recordSlip(attempt, applied, proven ? fresh : null);
+    if (_disposed || !proven) return false;
     await _journalClose(attempt.localOperationId);
     return true;
+  }
+
+  /// ORDER-EDIT-001F: records the PAPER change slip of [applied] ([fresh] is
+  /// the detail that proved it, or null). Never fails the reconcile: the slip
+  /// is the kitchen's paper, not the edit's truth, and the spool backs it up.
+  Future<void> _recordSlip(
+    OrderEditAttempt attempt,
+    OrderEditApplied applied,
+    PosOrderDetail? fresh,
+  ) async {
+    if (_disposed || applied.kitchenChannel != PosKitchenChannel.paper) return;
+    try {
+      await ref
+          .read(orderEditSlipControllerProvider.notifier)
+          .recordApplied(attempt: attempt, applied: applied, fresh: fresh);
+    } catch (_) {
+      // See above.
+    }
+  }
+
+  /// ORDER-EDIT-001F: prints the recorded PAPER change slip of [applied]
+  /// (awaited, exactly once) — null on KDS.
+  Future<OrderEditSlipOutcome?> _printSlip(OrderEditApplied applied) async {
+    if (_disposed || applied.kitchenChannel != PosKitchenChannel.paper) {
+      return null;
+    }
+    try {
+      return await ref
+          .read(orderEditSlipControllerProvider.notifier)
+          .printRecorded(applied.orderEditId);
+    } catch (_) {
+      return OrderEditSlipOutcome.notPrinted;
+    }
   }
 
   Future<PosOrderDetail?> _authoritativeDetail(String orderId) async {
@@ -1831,6 +1929,7 @@ class OrderEditController extends Notifier<OrderEditState> {
         remakeCount: attempt.summary.remakeDishCount,
         billPresented: attempt.billPresented,
         error: reconciled ? null : 'refresh_required',
+        slip: await _printSlip(applied),
       );
     }
     return _dispatch(attempt.generation, attempt, cartBound: false);

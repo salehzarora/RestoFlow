@@ -7,6 +7,11 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import 'kitchen_destination_resolver.dart';
+import 'kitchen_void_reconciliation.dart'
+    show
+        KitchenEditSupersessionEvidence,
+        kitchenJobPayloadCreatedAt,
+        reconcileOrderEditEvidence;
 
 /// KITCHEN-MODE-001C2B — the durable import transaction (steps 3–14 of the
 /// locked order; the runtime validates session/scope + trusted mode BEFORE
@@ -34,6 +39,15 @@ import 'kitchen_destination_resolver.dart';
 /// `sent`/`claimed` claim means this POS already printed that order's initial
 /// ticket locally at submit, so the dispatch is acknowledged and skipped
 /// without ever becoming a print job (see `_readInitialPrintClaim`).
+///
+/// ORDER-EDIT-001F: a NEW `order_edit` dispatch gets the same kind of consult,
+/// keyed by its DISPATCH id (a pulled row carries no edit id): the till that
+/// made the edit prints the change slip itself and mirrors that in
+/// `edit-dispatch:<dispatchId>`. In flight right now → skipped untouched;
+/// `sent` / `claimed` → acknowledged, never imported; `failed` / absent →
+/// imported, and the till hands the slip to the spool. An imported
+/// `order_edit` then supersedes this order's OLDER local jobs (the ordered
+/// sweep, `reconcileOrderEditEvidence`).
 final class KitchenImportScope {
   const KitchenImportScope({
     required this.organizationId,
@@ -61,6 +75,8 @@ final class KitchenImportSummary {
     required this.supersessionLinks,
     required this.localStateConflicts,
     required this.alreadyPrintedLocally,
+    this.deferredInFlight = 0,
+    this.orderEditsHandedOver = 0,
   });
 
   final int imported;
@@ -83,6 +99,19 @@ final class KitchenImportSummary {
   /// crash-window `claimed`). Safe scalar count only.
   final int alreadyPrintedLocally;
 
+  /// ORDER-EDIT-001F (decision D11): NEW `order_edit` dispatches SKIPPED
+  /// because this till's direct print of that very slip is in flight right
+  /// now (or the till refused the spool's reservation of it) — no local row,
+  /// no acknowledgement. The dispatch is this till's own claim, so the next
+  /// drain re-serves it and the consult runs again once the print has
+  /// settled. Safe scalar count only.
+  final int deferredInFlight;
+
+  /// ORDER-EDIT-001F (decision D3): `order_edit` rows this pass handed to the
+  /// spool (the till forgets its own slip record; re-drives included — the
+  /// hand-over is idempotent). Safe scalar count only.
+  final int orderEditsHandedOver;
+
   /// CORRECTION-001: re-driven dispatches whose durable row is OUTSIDE this
   /// coordinator's acknowledgement authority (later print states, or an
   /// already-terminal server verdict). No acknowledgement is invented; the
@@ -104,6 +133,12 @@ final class KitchenDispatchImportCoordinator {
     Future<String?> Function(OrderSubmitPhoneLookupKey key)?
     resolveCustomerPhone,
     PosRoundPrintClaimState? Function(String orderId)? readInitialPrintClaim,
+    PosRoundPrintClaimState? Function(String dispatchId)?
+    readOrderEditPrintClaim,
+    bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
+    Future<void> Function(String dispatchId)? onOrderEditImported,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -113,7 +148,12 @@ final class KitchenDispatchImportCoordinator {
        _newLocalJobId = localJobIdGenerator,
        _now = now ?? DateTime.now,
        _resolveCustomerPhone = resolveCustomerPhone,
-       _readInitialPrintClaim = readInitialPrintClaim;
+       _readInitialPrintClaim = readInitialPrintClaim,
+       _readOrderEditPrintClaim = readOrderEditPrintClaim,
+       _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
+       _reserveOrderEditSlip = reserveOrderEditSlip,
+       _releaseOrderEditSlip = releaseOrderEditSlip,
+       _onOrderEditImported = onOrderEditImported;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
   static const Duration _ackBackoffCap = Duration(minutes: 5);
@@ -150,6 +190,33 @@ final class KitchenDispatchImportCoordinator {
   /// Null (not wired: tests, web) keeps the pre-Pass-C behaviour.
   final PosRoundPrintClaimState? Function(String orderId)?
   _readInitialPrintClaim;
+
+  /// ORDER-EDIT-001F — the order-edit MIRROR claim reader: this device's
+  /// durable `edit-dispatch:<dispatchId>` record of its own direct print of
+  /// that change slip (`claimed` while pending or printing — or after a crash
+  /// mid-print — `sent` once the bytes were accepted, `failed` when the slip
+  /// could not be built or printed). Null (tests, web) skips the consult.
+  final PosRoundPrintClaimState? Function(String dispatchId)?
+  _readOrderEditPrintClaim;
+
+  /// ORDER-EDIT-001F (decision D11): whether this till's direct print of the
+  /// dispatch's slip is in flight RIGHT NOW. Consulted first; null = never.
+  final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
+
+  /// ORDER-EDIT-001F: the ownership decision for a dispatch the consult is
+  /// about to import, taken in the SAME synchronous section as the in-flight
+  /// check and the mirror read — the till then never prints it directly
+  /// (false: its print just started; the row is deferred like an in-flight
+  /// one). [_releaseOrderEditSlip] gives it back when this pass ends before
+  /// the row is durable. Null = no reservation (the pre-fix consult).
+  final bool Function(String dispatchId)? _reserveOrderEditSlip;
+  final void Function(String dispatchId)? _releaseOrderEditSlip;
+
+  /// ORDER-EDIT-001F (decision D3): called once an `order_edit` row is durable
+  /// in the spool — the till's mirror then reads `claimed` and its own slip
+  /// record (and banner) goes away, because the spool prints the server's
+  /// slip from now on. Idempotent; best-effort (a failure keeps the row).
+  final Future<void> Function(String dispatchId)? _onOrderEditImported;
 
   /// The fully-scoped durable-phone lookup identity for [dispatch] in THIS run's
   /// import scope (organization/restaurant/branch/device from [_scope]). The
@@ -225,10 +292,35 @@ final class KitchenDispatchImportCoordinator {
   Future<KitchenImportSummary> importDispatches(
     List<PulledKitchenDispatch> dispatches,
   ) async {
+    // ORDER-EDIT-001F: dispatches the order-edit consult reserved whose rows
+    // are not durable yet. Whatever ends this pass first — a rejected
+    // payload, a thrown cipher or store error — gives each one back to the
+    // till, so a slip is never left without an owner.
+    final reserved = <String>{};
+    try {
+      return await _importDispatches(dispatches, reserved);
+    } finally {
+      final release = _releaseOrderEditSlip;
+      if (release != null) {
+        for (final dispatchId in reserved) {
+          try {
+            release(dispatchId);
+          } on Object {
+            // A torn-down container has no slip to give back.
+          }
+        }
+      }
+    }
+  }
+
+  Future<KitchenImportSummary> _importDispatches(
+    List<PulledKitchenDispatch> dispatches,
+    Set<String> reserved,
+  ) async {
     var imported = 0, duplicates = 0, blocked = 0, rejected = 0;
     var acked = 0, retries = 0, terminal = 0;
     var superseded = 0, links = 0, conflicts = 0;
-    var alreadyPrinted = 0;
+    var alreadyPrinted = 0, deferredInFlight = 0, handedOver = 0;
     for (final dispatch in dispatches) {
       final now = _now();
 
@@ -264,28 +356,90 @@ final class KitchenDispatchImportCoordinator {
         if (claim == PosRoundPrintClaimState.sent ||
             claim == PosRoundPrintClaimState.claimed) {
           alreadyPrinted++;
-          final result = await _ackRepository.acknowledge(
-            dispatchId: dispatch.dispatchId,
-            // `sent` = the transport accepted the bytes at submit;
-            // `claimed` = a crash window where paper MAY exist — the
-            // server's own vocabulary for exactly those two facts.
-            status: claim == PosRoundPrintClaimState.sent
-                ? KitchenImportAckStatus.transportAccepted
-                : KitchenImportAckStatus.possiblyPrinted,
-          );
-          switch (result) {
-            case KitchenAckAccepted():
+          switch (await _acknowledgeLocalPrint(dispatch, claim!)) {
+            case KitchenAckFlushOutcome.acked:
               acked++;
-            case KitchenAckTerminal():
+            case KitchenAckFlushOutcome.terminal:
               terminal++;
-            case KitchenAckInvalidSession():
-            case KitchenAckInvalidRequest():
-            case KitchenAckTransientFailure():
-            case KitchenAckServerFailure():
-            case KitchenAckMalformedResponse():
+            case KitchenAckFlushOutcome.retryScheduled:
+            case KitchenAckFlushOutcome.skipped:
               break; // re-served later; never printed meanwhile.
           }
           continue;
+        }
+      }
+
+      // ORDER-EDIT-001F: the ORDER-EDIT consult, BEFORE any local job exists,
+      // keyed by the DISPATCH id (pulled rows carry no edit id). Only a NEW
+      // `order_edit` row is consulted; an existing row stays the authority.
+      //  * in flight (D11): this till is printing that very slip right now —
+      //    skip untouched (no row, no acknowledgement, no `possibly_printed`
+      //    hold); the dispatch is this till's claim, so it is re-served;
+      //  * mirror `sent`: the till printed it — `transport_accepted`;
+      //  * mirror `claimed` (pending, or a crash mid-print; also an unreadable
+      //    mirror): paper MAY exist — `possibly_printed`;
+      //  * mirror `failed` / absent: import it, so the drain prints the
+      //    server's own slip, and hand it over below (D3) — reserved for the
+      //    spool first, in this same synchronous section.
+      if (dispatch.dispatchType ==
+              KitchenSpoolDispatchType.orderEdit.wireName &&
+          (_isOrderEditSlipInFlight != null ||
+              _readOrderEditPrintClaim != null ||
+              _reserveOrderEditSlip != null) &&
+          await _store.findByDispatchId(dispatch.dispatchId) == null) {
+        bool inFlight;
+        try {
+          inFlight =
+              _isOrderEditSlipInFlight?.call(dispatch.dispatchId) ?? false;
+        } on Object {
+          // Unknown: leave it for the next drain rather than race a print.
+          inFlight = true;
+        }
+        if (inFlight) {
+          deferredInFlight++;
+          continue;
+        }
+        if (_readOrderEditPrintClaim != null) {
+          PosRoundPrintClaimState? claim;
+          try {
+            claim = _readOrderEditPrintClaim(dispatch.dispatchId);
+          } on Object {
+            claim = PosRoundPrintClaimState.claimed;
+          }
+          if (claim == PosRoundPrintClaimState.sent ||
+              claim == PosRoundPrintClaimState.claimed) {
+            alreadyPrinted++;
+            switch (await _acknowledgeLocalPrint(dispatch, claim!)) {
+              case KitchenAckFlushOutcome.acked:
+                acked++;
+              case KitchenAckFlushOutcome.terminal:
+                terminal++;
+              case KitchenAckFlushOutcome.retryScheduled:
+              case KitchenAckFlushOutcome.skipped:
+                break; // re-served later; never printed meanwhile.
+            }
+            continue;
+          }
+        }
+        // No await since the in-flight check: the till's direct print checks
+        // this reservation in the same synchronous section as its own
+        // in-flight mark, so neither starts once the other owns the slip (a
+        // hand-over a crash cut short after the durable insert is found by
+        // the till asking this spool's database). Refused = that print just
+        // started: deferred like an in-flight row.
+        final reserve = _reserveOrderEditSlip;
+        if (reserve != null) {
+          bool taken;
+          try {
+            taken = reserve(dispatch.dispatchId);
+          } on Object {
+            taken = false;
+          }
+          if (!taken) {
+            deferredInFlight++;
+            continue;
+          }
+          reserved.add(dispatch.dispatchId);
         }
       }
 
@@ -304,7 +458,10 @@ final class KitchenDispatchImportCoordinator {
         // the durable op and the recent-order registration). Enrich ONLY the
         // encrypted customerPhone — never a duplicate, a status/attempt/
         // destination change, or an overwrite of an existing non-null phone.
-        await _maybeEnrichPhone(existing, dispatch, now);
+        // ORDER-EDIT-001F: a change slip prints no phone, so none is resolved.
+        if (!_isOrderEdit(dispatch)) {
+          await _maybeEnrichPhone(existing, dispatch, now);
+        }
       } else {
         // 3–4: closed decode + defence in depth. A hostile/malformed payload
         // rejects THIS dispatch only (typed) — it is never persisted.
@@ -331,9 +488,10 @@ final class KitchenDispatchImportCoordinator {
         // from the LOCAL order (never the redacted server payload) so it is stored
         // in the encrypted local payload and printed on a crash-recovery replay.
         // Best-effort: any miss/failure keeps the phone null (name-only, unchanged).
+        // ORDER-EDIT-001F: a change slip prints no phone, so none is resolved.
         String? resolvedCustomerPhone;
         final resolver = _resolveCustomerPhone;
-        if (resolver != null) {
+        if (resolver != null && !_isOrderEdit(dispatch)) {
           try {
             resolvedCustomerPhone = await resolver(_phoneLookupKey(dispatch));
           } on Object {
@@ -431,6 +589,9 @@ final class KitchenDispatchImportCoordinator {
           imported++;
         }
       }
+      // The row is durable: the spool owns the slip from here (the hand-over
+      // below ends the reservation), so this pass never gives it back.
+      reserved.remove(dispatch.dispatchId);
 
       // Server-derived supersession reconciliation: a durably imported VOID
       // marks this order's unresolved prior local jobs (possiblyPrinted
@@ -460,6 +621,49 @@ final class KitchenDispatchImportCoordinator {
           )) {
             superseded++;
           }
+        }
+      }
+
+      // ORDER-EDIT-001F: an `order_edit` row is durable in the spool — first
+      // hand the slip over (the till's mirror reads `claimed`, its record and
+      // banner go away: the spool prints the server's slip from now on, D3),
+      // then let the edit supersede this order's OLDER unresolved jobs (the
+      // ORDERED sweep, D4: a round created after the edit is kept). Both are
+      // idempotent and deliberately re-run on re-drives, so a crash between
+      // the insert and either step recovers.
+      if (row.dispatchType == KitchenSpoolDispatchType.orderEdit) {
+        final onImported = _onOrderEditImported;
+        if (onImported != null) {
+          try {
+            await onImported(dispatch.dispatchId);
+            handedOver++;
+          } on Object {
+            // Best-effort: the spool holds the job either way.
+          }
+        }
+        final createdAt = await kitchenJobPayloadCreatedAt(
+          row,
+          cipher: _cipher,
+          key: _key,
+        );
+        if (createdAt != null) {
+          final swept = await reconcileOrderEditEvidence(
+            _store,
+            [
+              KitchenEditSupersessionEvidence(
+                orderId: row.orderId,
+                dispatchId: row.dispatchId,
+                createdAt: createdAt,
+              ),
+            ],
+            cipher: _cipher,
+            key: _key,
+            deviceId: _scope.deviceId,
+            branchId: _scope.branchId,
+            now: now,
+          );
+          superseded += swept.superseded;
+          links += swept.links;
         }
       }
 
@@ -518,7 +722,40 @@ final class KitchenDispatchImportCoordinator {
       supersessionLinks: links,
       localStateConflicts: conflicts,
       alreadyPrintedLocally: alreadyPrinted,
+      deferredInFlight: deferredInFlight,
+      orderEditsHandedOver: handedOver,
     );
+  }
+
+  static bool _isOrderEdit(PulledKitchenDispatch dispatch) =>
+      dispatch.dispatchType == KitchenSpoolDispatchType.orderEdit.wireName;
+
+  /// Tells the server the honest NON-PHYSICAL status of a dispatch this POS
+  /// already handled itself (the mirror-claim consults): `transport_accepted`
+  /// for a `sent` claim, `possibly_printed` for a `claimed` one. No local row
+  /// exists, so nothing is scheduled: a refused or failed acknowledgement is
+  /// simply re-served later and the consult converges.
+  Future<KitchenAckFlushOutcome> _acknowledgeLocalPrint(
+    PulledKitchenDispatch dispatch,
+    PosRoundPrintClaimState claim,
+  ) async {
+    final result = await _ackRepository.acknowledge(
+      dispatchId: dispatch.dispatchId,
+      // `sent` = the transport accepted the bytes; `claimed` = a crash window
+      // where paper MAY exist — the server's own vocabulary for those facts.
+      status: claim == PosRoundPrintClaimState.sent
+          ? KitchenImportAckStatus.transportAccepted
+          : KitchenImportAckStatus.possiblyPrinted,
+    );
+    return switch (result) {
+      KitchenAckAccepted() => KitchenAckFlushOutcome.acked,
+      KitchenAckTerminal() => KitchenAckFlushOutcome.terminal,
+      KitchenAckInvalidSession() ||
+      KitchenAckInvalidRequest() ||
+      KitchenAckTransientFailure() ||
+      KitchenAckServerFailure() ||
+      KitchenAckMalformedResponse() => KitchenAckFlushOutcome.skipped,
+    };
   }
 }
 

@@ -1,5 +1,6 @@
 import 'package:crypto/crypto.dart' show sha256;
 import 'dart:convert' show utf8;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart'
@@ -118,6 +119,8 @@ final class KitchenSpoolRunWorked extends PosKitchenSpoolRunReport {
     required this.acked,
     required this.retriesScheduled,
     required this.terminal,
+    this.editSuperseded = 0,
+    this.editLinks = 0,
   });
 
   final KitchenDispatchDrainReport drain;
@@ -127,6 +130,11 @@ final class KitchenSpoolRunWorked extends PosKitchenSpoolRunReport {
   final int recoveredStale;
   final int voidSuperseded;
   final int voidLinks;
+
+  /// ORDER-EDIT-001F: jobs the ORDERED order-edit sweeps (before and after
+  /// the drain) superseded, and possiblyPrinted jobs they only linked.
+  final int editSuperseded;
+  final int editLinks;
 
   /// Pending-ack coordinator flush totals across the run's flush points.
   final int acked;
@@ -165,6 +173,14 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     resolveCustomerPhone,
     PosRoundPrintClaimState? Function(String orderId)?
     readInitialKitchenPrintClaim,
+    PosRoundPrintClaimState? Function(String dispatchId)?
+    readOrderEditPrintClaim,
+    bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
+    Future<void> Function(String dispatchId)? onOrderEditImported,
+    Future<List<KitchenEditSupersessionEvidence>> Function()?
+    readLocalOrderEditEvidence,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -184,7 +200,13 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _keyStore = keyStore,
        _now = now ?? DateTime.now,
        _resolveCustomerPhone = resolveCustomerPhone,
-       _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim;
+       _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim,
+       _readOrderEditPrintClaim = readOrderEditPrintClaim,
+       _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
+       _reserveOrderEditSlip = reserveOrderEditSlip,
+       _releaseOrderEditSlip = releaseOrderEditSlip,
+       _onOrderEditImported = onOrderEditImported,
+       _readLocalOrderEditEvidence = readLocalOrderEditEvidence;
 
   final PosKitchenSpoolPlatform _platform;
   final DeviceContext? Function() _deviceContext;
@@ -227,7 +249,31 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final PosRoundPrintClaimState? Function(String orderId)?
   _readInitialKitchenPrintClaim;
 
+  /// ORDER-EDIT-001F: the order-edit consult's inputs, handed to the import
+  /// coordinator — the dispatch-keyed mirror claim of this till's own direct
+  /// slip print, whether that print is in flight right now (D11), the
+  /// synchronous reservation of a dispatch the spool imports (and its
+  /// release when the import fails), and the hand-over once the spool
+  /// imported the dispatch (D3). Null (tests / web) keeps the pre-001F
+  /// import.
+  final PosRoundPrintClaimState? Function(String dispatchId)?
+  _readOrderEditPrintClaim;
+  final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
+  final bool Function(String dispatchId)? _reserveOrderEditSlip;
+  final void Function(String dispatchId)? _releaseOrderEditSlip;
+  final Future<void> Function(String dispatchId)? _onOrderEditImported;
+
+  /// ORDER-EDIT-001F: this till's DIRECT slip prints — external evidence for
+  /// the ordered order-edit sweep (their dispatches complete on the server
+  /// and never reach this spool). Null or failing reads as none.
+  final Future<List<KitchenEditSupersessionEvidence>> Function()?
+  _readLocalOrderEditEvidence;
+
   KitchenSpoolDatabase? _db;
+
+  /// The open in progress, shared: a run and an order-edit lookup that race
+  /// get ONE handle, never two connections to the same file.
+  Future<KitchenSpoolDatabase>? _opening;
   bool _running = false;
   bool _disposed = false;
 
@@ -320,7 +366,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     }
     final KitchenSpoolDatabase db;
     try {
-      db = _db ??= await factory.open();
+      db = await _openDatabase(factory);
     } on KitchenSpoolDatabaseUnavailableException catch (e) {
       return KitchenSpoolRunBlocked(e.reason);
     }
@@ -360,10 +406,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   /// 2. inspect/provision the key ONLY under D3;
   /// 3. recover stale printing rows (→ possiblyPrinted + pending ack);
   /// 4. flush due pending acknowledgements from previous runs;
-  /// 5. reconcile local VOID evidence before any new claim;
+  /// 5. reconcile local VOID evidence before any new claim — and
+  ///    (ORDER-EDIT-001F) the ORDERED order-edit evidence after it;
   /// 6. drain/import new dispatches (the C2B coordinator);
   /// 7. (import acks flush inside the drain + coordinator);
-  /// 8. re-run VOID reconciliation after the drain;
+  /// 8. re-run both reconciliations after the drain;
   /// 9. run the bounded kitchen print worker;
   /// 10. flush worker-generated pending acknowledgements;
   /// 11. return the typed safe report. No timer; disposal-safe.
@@ -392,7 +439,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     final factory = _databaseFactoryBuilder();
     final KitchenSpoolDatabase db;
     try {
-      db = _db ??= await factory.open();
+      db = await _openDatabase(factory);
     } on KitchenSpoolDatabaseUnavailableException catch (e) {
       return KitchenSpoolRunBlocked(e.reason);
     }
@@ -445,12 +492,18 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       branchId: context.branchId,
     );
 
-    // 5: local VOID evidence applies BEFORE any new claim.
-    final voidsBefore = await reconcileLocalVoidEvidence(
+    // 5: local VOID evidence applies BEFORE any new claim, then
+    // (ORDER-EDIT-001F) the ORDERED order-edit evidence: imported edit rows
+    // plus this till's own direct slip prints.
+    final cipher = AesGcmKitchenSpoolCipher();
+    final sweepBefore = await reconcileLocalSupersessionEvidence(
       store,
+      cipher: cipher,
+      key: key,
       deviceId: deviceId,
       branchId: context.branchId,
       now: _now(),
+      externalEdits: await _localOrderEditEvidence(),
     );
 
     // The destination pins ONCE per run. A typed BLOCKED resolution is a
@@ -475,7 +528,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       pullRepository: pullRepository,
       importCoordinator: KitchenDispatchImportCoordinator(
         store: store,
-        cipher: AesGcmKitchenSpoolCipher(),
+        cipher: cipher,
         key: key,
         scope: scope,
         destination: destination,
@@ -487,23 +540,34 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         // order this POS already printed locally is acknowledged, not
         // re-printed.
         readInitialPrintClaim: _readInitialKitchenPrintClaim,
+        // ORDER-EDIT-001F: the same consult for an order-edit change slip
+        // this till printed (or is printing) itself, and the hand-over.
+        readOrderEditPrintClaim: _readOrderEditPrintClaim,
+        isOrderEditSlipInFlight: _isOrderEditSlipInFlight,
+        reserveOrderEditSlip: _reserveOrderEditSlip,
+        releaseOrderEditSlip: _releaseOrderEditSlip,
+        onOrderEditImported: _onOrderEditImported,
       ),
     ).drain();
 
-    // 8: VOID evidence again — a void imported by THIS drain must stop its
+    // 8: VOID + order-edit evidence again — a void or an edit imported by
+    // THIS drain (or a slip this till printed meanwhile) must stop its
     // order's earlier jobs before the worker can claim them.
-    final voidsAfter = await reconcileLocalVoidEvidence(
+    final sweepAfter = await reconcileLocalSupersessionEvidence(
       store,
+      cipher: cipher,
+      key: key,
       deviceId: deviceId,
       branchId: context.branchId,
       now: _now(),
+      externalEdits: await _localOrderEditEvidence(),
     );
 
     // 9: the bounded worker (claim → decrypt/render → gated single send →
     // atomic transition+ack). Disposal stops it before any further send.
     final workerReport = await KitchenPrintWorker(
       store: store,
-      cipher: AesGcmKitchenSpoolCipher(),
+      cipher: cipher,
       key: key,
       renderer: renderer,
       networkSend: networkSend,
@@ -527,12 +591,26 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       drain: drainReport,
       worker: workerReport,
       recoveredStale: recoveredStale,
-      voidSuperseded: voidsBefore.superseded + voidsAfter.superseded,
-      voidLinks: voidsBefore.links + voidsAfter.links,
+      voidSuperseded: sweepBefore.voidSuperseded + sweepAfter.voidSuperseded,
+      voidLinks: sweepBefore.voidLinks + sweepAfter.voidLinks,
+      editSuperseded: sweepBefore.editSuperseded + sweepAfter.editSuperseded,
+      editLinks: sweepBefore.editLinks + sweepAfter.editLinks,
       acked: preAcked + postAcked,
       retriesScheduled: preRetries + postRetries,
       terminal: preTerminal + postTerminal,
     );
+  }
+
+  /// This till's direct slip prints (ORDER-EDIT-001F); never throws.
+  Future<List<KitchenEditSupersessionEvidence>>
+  _localOrderEditEvidence() async {
+    final read = _readLocalOrderEditEvidence;
+    if (read == null) return const <KitchenEditSupersessionEvidence>[];
+    try {
+      return await read();
+    } on Object {
+      return const <KitchenEditSupersessionEvidence>[];
+    }
   }
 
   Future<void> _cacheMode(
@@ -584,6 +662,67 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     } on Exception {
       // Cache write failure is non-fatal; the cache stays UNKNOWN.
     }
+  }
+
+  /// Opens the dedicated database once and keeps it (closed by [dispose]).
+  Future<KitchenSpoolDatabase> _openDatabase(
+    KitchenSpoolDatabaseFactory factory,
+  ) {
+    final open = _db;
+    if (open != null) return Future<KitchenSpoolDatabase>.value(open);
+    return _opening ??= factory
+        .open()
+        .then((db) => _db = db)
+        .whenComplete(() => _opening = null);
+  }
+
+  /// Whether this runtime currently keeps a spool database handle.
+  @visibleForTesting
+  bool get holdsOpenDatabaseForTesting => _db != null;
+
+  /// ORDER-EDIT-001F — whether this device's spool database durably holds a
+  /// row for the `order_edit` dispatch [dispatchId], in ANY status: the
+  /// spool then owns that slip (it prints the server's slip, or already
+  /// printed, superseded or blocked it). The till's slip controller asks
+  /// this as the source of truth for a hand-over a crash left half done
+  /// (between the import's durable insert and the hand-over).
+  ///
+  /// READ-ONLY and zero-footprint: a confirmed ABSENT spool file answers
+  /// `false` without creating anything. It THROWS when it cannot tell — an
+  /// undeterminable file, a database that cannot open, a disposed runtime —
+  /// and the caller then neither prints the slip nor forgets it. No key is
+  /// read and nothing is decrypted (the dispatch id is row metadata).
+  Future<bool> holdsOrderEditDispatch(String dispatchId) async {
+    if (_disposed) {
+      throw const KitchenSpoolDatabaseUnavailableException('runtime_disposed');
+    }
+    var db = _db;
+    if (db == null) {
+      final factory = _databaseFactoryBuilder();
+      switch (await factory.inspectSpoolFilePresence()) {
+        case KitchenSpoolFilePresence.absent:
+          return false;
+        case KitchenSpoolFilePresence.unknown:
+          throw const KitchenSpoolDatabaseUnavailableException(
+            'spool_presence_unknown',
+          );
+        case KitchenSpoolFilePresence.present:
+          db = await _openDatabase(factory);
+      }
+    }
+    if (_disposed) {
+      // A dispose overtook this lookup's open: release the handle it left
+      // behind (a run still using it keeps it, as before), so a lookup never
+      // keeps a disposed runtime's connection to the spool file.
+      if (!_running) {
+        final leftover = _db;
+        _db = null;
+        await leftover?.close();
+      }
+      throw const KitchenSpoolDatabaseUnavailableException('runtime_disposed');
+    }
+    return await DriftKitchenSpoolStore(db).findByDispatchId(dispatchId) !=
+        null;
   }
 
   /// Disposes runtime handles on logout/unpair/scope change (rows and key

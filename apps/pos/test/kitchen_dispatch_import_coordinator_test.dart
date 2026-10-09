@@ -1,12 +1,14 @@
 @TestOn('vm')
 library;
 
-import 'dart:convert' show json, utf8;
+import 'dart:convert' show json, jsonDecode, utf8;
 import 'dart:io';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
@@ -19,12 +21,19 @@ import 'package:restoflow_pos/src/data/order_submission.dart'
     show OrderSummary, OutboxEntry, OutboxSyncState;
 import 'package:restoflow_pos/src/data/outbox_repository.dart'
     show OrderSubmitPhoneLookupKey, customerPhoneFromOrderSubmitEntries;
+import 'package:restoflow_pos/src/data/order_edit_slip_store.dart'
+    show OrderEditSlipEvidence;
 import 'package:restoflow_pos/src/data/round_print_claim_store.dart'
     show PosRoundPrintClaimState;
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
+import 'package:restoflow_pos/src/spool/kitchen_void_reconciliation.dart';
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition_native.dart'
+    show orderEditSupersessionEvidenceFrom;
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
+
+import 'support/pos_package_root.dart';
 
 /// KITCHEN-MODE-001C2B — the durable import transaction against a REAL
 /// dedicated spool database (temp file), the REAL AES-256-GCM cipher, and a
@@ -132,6 +141,54 @@ Map<String, Object?> _voidPayload({String orderCode = '#000042'}) => {
   'order_type': 'dine_in',
   'void': true,
   'reason': 'entry_error',
+};
+
+// ORDER-EDIT-001F: the STORED server payload of a real paper edit (captured
+// on local PostgreSQL by test/fixtures/order_edit_slip/capture_probe.sql),
+// with only `created_at` / `edit_number` overridden per test.
+const String _editCreatedAt = '2026-10-09T05:31:12.606845+00:00';
+const String _beforeEdit = '2026-10-09T05:20:00Z';
+const String _afterEdit = '2026-10-09T05:40:00Z';
+
+Map<String, Object?> _fixtureEditPayload() {
+  final file = File(
+    p.join(
+      locatePosPackageRoot().path,
+      'test',
+      'fixtures',
+      'order_edit_slip',
+      'a_every_op.json',
+    ),
+  );
+  final fixture = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+  return Map<String, Object?>.from(fixture['dispatch']! as Map);
+}
+
+Map<String, Object?> _editPayload({
+  String createdAt = _editCreatedAt,
+  int editNumber = 1,
+}) => {
+  ..._fixtureEditPayload(),
+  'created_at': createdAt,
+  'edit_number': editNumber,
+};
+
+Map<String, Object?> _initialPayloadAt(String createdAt) => {
+  ..._ticketPayload(),
+  'created_at': createdAt,
+};
+
+Map<String, Object?> _roundPayload(String createdAt, {int number = 2}) => {
+  'v': 1,
+  'kind': 'service_round',
+  'order_code': '#000042',
+  'order_type': 'dine_in',
+  'created_at': createdAt,
+  'round_id': 'round-$number',
+  'round_number': number,
+  'items': [
+    {'qty': 1, 'name': 'Fries', 'modifiers': <Object?>[]},
+  ],
 };
 
 PulledKitchenDispatch _dispatch({
@@ -891,4 +948,550 @@ void main() {
       expect(await store.findByDispatchId('d-void'), isNotNull);
     });
   });
+
+  // ORDER-EDIT-001F — the order-edit consult (keyed by the DISPATCH id: a
+  // pulled row carries no edit id), the hand-over to the spool (D3), the
+  // in-flight skip (D11) and the ORDERED supersession sweep (D4).
+  group(
+    'ORDER-EDIT-001F — order_edit consult, hand-over and ordered sweep',
+    () {
+      late List<String> mirrorReads;
+      late List<String> handedOver;
+      late int phoneResolves;
+
+      setUp(() {
+        mirrorReads = [];
+        handedOver = [];
+        phoneResolves = 0;
+      });
+
+      KitchenDispatchImportCoordinator editCoordinator({
+        PosRoundPrintClaimState? Function(String dispatchId)? mirror,
+        bool inFlight = false,
+        bool wireHandOver = true,
+        bool Function(String dispatchId)? reserve,
+        void Function(String dispatchId)? release,
+      }) => KitchenDispatchImportCoordinator(
+        store: store,
+        cipher: cipher,
+        key: key,
+        scope: _scope,
+        destination: _resolved,
+        ackRepository: ackRepo,
+        localJobIdGenerator: () => 'job-${++idCounter}',
+        now: () => now,
+        resolveCustomerPhone: (_) async {
+          phoneResolves++;
+          return '054-1234567';
+        },
+        readOrderEditPrintClaim: (dispatchId) {
+          mirrorReads.add(dispatchId);
+          return mirror?.call(dispatchId);
+        },
+        isOrderEditSlipInFlight: (_) => inFlight,
+        reserveOrderEditSlip: reserve,
+        releaseOrderEditSlip: release,
+        onOrderEditImported: wireHandOver
+            ? (dispatchId) async => handedOver.add(dispatchId)
+            : null,
+      );
+
+      PulledKitchenDispatch edit(
+        String id, {
+        String orderId = 'order-1',
+        String createdAt = _editCreatedAt,
+        int editNumber = 1,
+      }) => _dispatch(
+        dispatchId: id,
+        dispatchType: 'order_edit',
+        orderId: orderId,
+        payload: _editPayload(createdAt: createdAt, editNumber: editNumber),
+      );
+
+      // Seeds a durable, server-acknowledged job whose blob is the REAL
+      // encrypted local payload of [payload] (or [rawBlob], e.g. garbage).
+      Future<KitchenSpoolJobRow> seed(
+        String dispatchId, {
+        Map<String, Object?>? payload,
+        KitchenSpoolDispatchType? type,
+        String orderId = 'order-1',
+        Uint8List? rawBlob,
+        bool possiblyPrinted = false,
+      }) async {
+        final document = payload == null
+            ? null
+            : KitchenDispatchDocument.fromJson(payload);
+        final blob =
+            rawBlob ??
+            await cipher.encrypt(
+              plaintext: KitchenSpoolLocalPayload(
+                dispatch: document!,
+                destination: _resolved.destination,
+                paperWidth: '80mm',
+                documentVersion: 1,
+                rasterVersion: 1,
+              ).toBytes(),
+              aad: aad(dispatchId),
+              key: key,
+            );
+        final row = await store.insertImportedJob(
+          NewKitchenSpoolJob(
+            localJobId: 'seed-$dispatchId',
+            dispatchId: dispatchId,
+            organizationId: 'org-1',
+            restaurantId: 'rest-1',
+            branchId: 'branch-1',
+            deviceId: 'dev-1',
+            orderId: orderId,
+            serviceRoundId: null,
+            dispatchType: type ?? document!.kind,
+            initialStatus: KitchenSpoolJobStatus.imported,
+            encryptedPayloadBlob: blob,
+            encryptionVersion: cipher.encryptionVersion,
+            // possiblyPrinted needs its own destination to be claimable.
+            destinationFingerprint: possiblyPrinted ? 'fp-pp' : 'fp-net-1',
+            destinationDisplayLabel: 'Kitchen',
+            transportKind: 'network',
+            paperWidth: '80mm',
+            payloadVersion: 1,
+            documentVersion: 1,
+            rasterVersion: 1,
+            serverClaimExpiresAt: null,
+            createdAt: now,
+          ),
+        );
+        await store.setPendingServerAck(
+          row.localJobId,
+          KitchenServerAckStatus.imported,
+          now,
+        );
+        await store.markServerAcked(row.localJobId, now);
+        if (possiblyPrinted) {
+          expect(
+            await store.claimRunnableForQueued(
+              row.localJobId,
+              organizationId: 'org-1',
+              restaurantId: 'rest-1',
+              branchId: 'branch-1',
+              deviceId: 'dev-1',
+              now: now,
+            ),
+            isNotNull,
+          );
+          expect(await store.markPrinting(row.localJobId, now), isTrue);
+          expect(
+            await store.markPossiblyPrintedWithAck(row.localJobId, now),
+            isTrue,
+          );
+        }
+        return (await store.findByDispatchId(dispatchId))!;
+      }
+
+      Future<KitchenSpoolJobRow> rowOf(String dispatchId) async =>
+          (await store.findByDispatchId(dispatchId))!;
+
+      test('IN FLIGHT (D11): skipped untouched — no row, no acknowledgement, '
+          'the mirror never read, re-served later', () async {
+        final summary = await editCoordinator(
+          inFlight: true,
+          mirror: (_) => PosRoundPrintClaimState.claimed,
+        ).importDispatches([edit('d-edit')]);
+        expect(summary.deferredInFlight, 1);
+        expect(summary.imported, 0);
+        expect(summary.alreadyPrintedLocally, 0);
+        expect(await store.findByDispatchId('d-edit'), isNull);
+        expect(transport.calls, isEmpty, reason: 'no possibly_printed hold');
+        expect(mirrorReads, isEmpty);
+        expect(handedOver, isEmpty);
+      });
+
+      test('mirror `sent` => acknowledged transport_accepted, NO local row, '
+          'never handed over', () async {
+        transport.enqueue({'ok': true});
+        final summary = await editCoordinator(
+          mirror: (id) => id == 'd-edit' ? PosRoundPrintClaimState.sent : null,
+        ).importDispatches([edit('d-edit')]);
+        expect(summary.alreadyPrintedLocally, 1);
+        expect(summary.acked, 1);
+        expect(summary.imported, 0);
+        expect(await store.findByDispatchId('d-edit'), isNull);
+        expect(mirrorReads, ['d-edit'], reason: 'keyed by the DISPATCH id');
+        final (fn, params) = transport.calls.single;
+        expect(fn, 'acknowledge_kitchen_print_dispatch');
+        expect(params['p_dispatch_id'], 'd-edit');
+        expect(params['p_client_status'], 'transport_accepted');
+        expect(handedOver, isEmpty);
+      });
+
+      test('mirror `claimed` (pending / crash mid-print) and a THROWING '
+          'reader => possibly_printed, NO local row', () async {
+        for (final mirror in <PosRoundPrintClaimState? Function(String)>[
+          (_) => PosRoundPrintClaimState.claimed,
+          (_) => throw StateError('torn down'),
+        ]) {
+          transport.calls.clear();
+          transport.enqueue({'ok': true});
+          final summary = await editCoordinator(
+            mirror: mirror,
+          ).importDispatches([edit('d-edit')]);
+          expect(summary.alreadyPrintedLocally, 1);
+          expect(summary.imported, 0);
+          expect(await store.findByDispatchId('d-edit'), isNull);
+          expect(
+            transport.calls.single.$2['p_client_status'],
+            'possibly_printed',
+          );
+        }
+        expect(handedOver, isEmpty);
+      });
+
+      test('mirror `failed` or ABSENT => imported, acknowledged `imported`, '
+          'handed over once; the phone is never resolved', () async {
+        for (final (id, claim) in [
+          ('d-failed', PosRoundPrintClaimState.failed),
+          ('d-absent', null),
+        ]) {
+          transport.enqueue({'ok': true});
+          final summary = await editCoordinator(
+            mirror: (_) => claim,
+          ).importDispatches([edit(id)]);
+          expect(summary.imported, 1, reason: id);
+          expect(summary.acked, 1, reason: id);
+          expect(summary.alreadyPrintedLocally, 0, reason: id);
+          expect(summary.orderEditsHandedOver, 1, reason: id);
+          final row = await rowOf(id);
+          expect(row.dispatchType, KitchenSpoolDispatchType.orderEdit);
+          expect(row.status, KitchenSpoolJobStatus.imported);
+          expect(transport.calls.last.$2['p_client_status'], 'imported');
+        }
+        expect(handedOver, ['d-failed', 'd-absent']);
+        expect(phoneResolves, 0, reason: 'a change slip prints no phone');
+      });
+
+      test('the spool RESERVATION: taken in the consult only for a row it '
+          'imports and kept once that row is durable; refused -> deferred '
+          'untouched; given back when the import fails', () async {
+        final reservations = <String>[];
+        final releases = <String>[];
+        bool take(String id) {
+          reservations.add(id);
+          return true;
+        }
+
+        // Taken, then the row is durable: handed over, never given back.
+        transport.enqueue({'ok': true});
+        var summary = await editCoordinator(
+          reserve: take,
+          release: releases.add,
+        ).importDispatches([edit('d-taken')]);
+        expect(summary.imported, 1);
+        expect(reservations, ['d-taken']);
+        expect(releases, isEmpty);
+        expect(handedOver, ['d-taken']);
+
+        // Mirror `sent` / `claimed`: nothing is imported, nothing reserved.
+        for (final claim in [
+          PosRoundPrintClaimState.sent,
+          PosRoundPrintClaimState.claimed,
+        ]) {
+          transport.enqueue({'ok': true});
+          await editCoordinator(
+            mirror: (_) => claim,
+            reserve: take,
+            release: releases.add,
+          ).importDispatches([edit('d-${claim.name}')]);
+        }
+        expect(reservations, ['d-taken']);
+
+        // Refused (the till's print just started) or a throwing hook:
+        // deferred like an in-flight row — no row, no acknowledgement.
+        transport.calls.clear();
+        for (final refuse in <bool Function(String)>[
+          (_) => false,
+          (_) => throw StateError('torn down'),
+        ]) {
+          summary = await editCoordinator(
+            reserve: refuse,
+            release: releases.add,
+          ).importDispatches([edit('d-refused')]);
+          expect(summary.deferredInFlight, 1);
+          expect(summary.imported, 0);
+        }
+        expect(await store.findByDispatchId('d-refused'), isNull);
+        expect(transport.calls, isEmpty);
+        expect(releases, isEmpty);
+
+        // A rejected payload never becomes a row: the slip is given back.
+        summary = await editCoordinator(reserve: take, release: releases.add)
+            .importDispatches([
+              _dispatch(
+                dispatchId: 'd-bad',
+                dispatchType: 'order_edit',
+                payload: _roundPayload(_editCreatedAt),
+              ),
+            ]);
+        expect(summary.rejected, 1);
+        expect(releases, ['d-bad']);
+        expect(handedOver, ['d-taken']);
+      });
+
+      test(
+        'a RE-DRIVE is idempotent: the durable row is the authority (no '
+        'consult), the hand-over repeats harmlessly, no second row or ack',
+        () async {
+          transport.enqueue({'ok': true});
+          await editCoordinator().importDispatches([edit('d-edit')]);
+          final blob = (await rowOf('d-edit')).encryptedPayloadBlob;
+          mirrorReads.clear();
+
+          final again = await editCoordinator(
+            inFlight: true, // even "in flight" never touches an existing row
+            mirror: (_) => PosRoundPrintClaimState.sent,
+          ).importDispatches([edit('d-edit')]);
+          expect(again.duplicates, 1);
+          expect(again.deferredInFlight, 0);
+          expect(again.alreadyPrintedLocally, 0);
+          expect(again.orderEditsHandedOver, 1);
+          expect(mirrorReads, isEmpty);
+          expect(await store.countTotalRows(), 1);
+          expect((await rowOf('d-edit')).encryptedPayloadBlob, blob);
+          expect(transport.calls, hasLength(1), reason: 'no second ack');
+          expect(handedOver, ['d-edit', 'd-edit']);
+          expect(phoneResolves, 0);
+        },
+      );
+
+      test('the edit consult is order_edit-ONLY: an initial dispatch never '
+          'reads the edit mirror, and an edit with no 001F wiring imports as '
+          'before', () async {
+        transport.enqueue({'ok': true});
+        await editCoordinator(
+          mirror: (_) => PosRoundPrintClaimState.sent,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(mirrorReads, isEmpty);
+        expect((await rowOf('d-1')).status, KitchenSpoolJobStatus.imported);
+
+        transport.enqueue({'ok': true});
+        final summary = await coordinator().importDispatches([edit('d-edit')]);
+        expect(summary.imported, 1);
+        expect(summary.orderEditsHandedOver, 0);
+      });
+
+      test(
+        'ORDERED sweep at import (D4): the edit supersedes this order\'s '
+        'OLDER jobs only — a newer round, a tie, an unreadable payload, a '
+        'void and other orders are kept; possiblyPrinted is only linked',
+        () async {
+          await seed('d-initial', payload: _initialPayloadAt(_beforeEdit));
+          await seed('d-round-old', payload: _roundPayload(_beforeEdit));
+          // Imported BEFORE the edit (the acting till held the edit's claim),
+          // yet created AFTER it on the server: it must still print.
+          await seed(
+            'd-round-new',
+            payload: _roundPayload(_afterEdit, number: 3),
+          );
+          await seed('d-round-tie', payload: _roundPayload(_editCreatedAt));
+          await seed(
+            'd-round-garbage',
+            type: KitchenSpoolDispatchType.serviceRound,
+            rawBlob: Uint8List.fromList(List<int>.filled(64, 7)),
+          );
+          await seed(
+            'd-edit-1',
+            payload: _editPayload(createdAt: _beforeEdit, editNumber: 1),
+          );
+          await seed(
+            'd-round-pp',
+            payload: _roundPayload(_beforeEdit, number: 4),
+            possiblyPrinted: true,
+          );
+          await seed('d-void', payload: _voidPayload());
+          await seed(
+            'd-other',
+            payload: _initialPayloadAt(_beforeEdit),
+            orderId: 'order-2',
+          );
+
+          transport.enqueue({'ok': true});
+          final summary = await editCoordinator().importDispatches([
+            edit('d-edit-2', editNumber: 2),
+          ]);
+          expect(summary.imported, 1);
+          expect(summary.superseded, 3, reason: 'initial, old round, edit 1');
+          expect(
+            summary.supersessionLinks,
+            1,
+            reason: 'possiblyPrinted linked',
+          );
+
+          for (final id in ['d-initial', 'd-round-old', 'd-edit-1']) {
+            final row = await rowOf(id);
+            expect(row.status, KitchenSpoolJobStatus.superseded, reason: id);
+            expect(row.supersededByDispatchId, 'd-edit-2', reason: id);
+          }
+          final pp = await rowOf('d-round-pp');
+          expect(pp.status, KitchenSpoolJobStatus.possiblyPrinted);
+          expect(pp.supersededByDispatchId, 'd-edit-2');
+          for (final id in [
+            'd-round-new',
+            'd-round-tie',
+            'd-round-garbage',
+            'd-void',
+            'd-other',
+          ]) {
+            final row = await rowOf(id);
+            expect(row.status, KitchenSpoolJobStatus.imported, reason: id);
+            expect(row.supersededByDispatchId, isNull, reason: id);
+          }
+          expect(
+            (await rowOf('d-edit-2')).status,
+            KitchenSpoolJobStatus.imported,
+            reason: 'the evidence never supersedes itself',
+          );
+
+          // Idempotent on a re-drive.
+          final again = await editCoordinator().importDispatches([
+            edit('d-edit-2', editNumber: 2),
+          ]);
+          expect(again.duplicates, 1);
+          expect(again.superseded, 0);
+          expect(again.supersessionLinks, 0);
+        },
+      );
+
+      test('the RUN-LEVEL sweep: this till\'s DIRECT slip prints are evidence '
+          'with no imported edit row; imported edit rows are evidence too; '
+          'VOID numbers stay apart', () async {
+        await seed('d-initial', payload: _initialPayloadAt(_beforeEdit));
+        await seed('d-round-old', payload: _roundPayload(_beforeEdit));
+        await seed(
+          'd-round-new',
+          payload: _roundPayload(_afterEdit, number: 3),
+        );
+        // order-2: an imported (unresolved) edit row is the evidence.
+        await seed(
+          'd-o2-round',
+          payload: _roundPayload(_beforeEdit),
+          orderId: 'order-2',
+        );
+        await seed('d-o2-edit', payload: _editPayload(), orderId: 'order-2');
+        // order-3: a VOID supersedes everything, as before.
+        await seed(
+          'd-o3-initial',
+          payload: _initialPayloadAt(_afterEdit),
+          orderId: 'order-3',
+        );
+        await seed('d-o3-void', payload: _voidPayload(), orderId: 'order-3');
+
+        final result = await reconcileLocalSupersessionEvidence(
+          store,
+          cipher: cipher,
+          key: key,
+          deviceId: 'dev-1',
+          branchId: 'branch-1',
+          now: now,
+          externalEdits: [
+            KitchenEditSupersessionEvidence(
+              orderId: 'order-1',
+              dispatchId: 'd-direct',
+              createdAt: DateTime.parse(_editCreatedAt),
+            ),
+          ],
+        );
+        expect(result.voidSuperseded, 1);
+        expect(result.voidLinks, 0);
+        expect(result.editSuperseded, 3);
+        expect(result.editLinks, 0);
+
+        for (final (id, by) in [
+          ('d-initial', 'd-direct'),
+          ('d-round-old', 'd-direct'),
+          ('d-o2-round', 'd-o2-edit'),
+          ('d-o3-initial', 'd-o3-void'),
+        ]) {
+          final row = await rowOf(id);
+          expect(row.status, KitchenSpoolJobStatus.superseded, reason: id);
+          expect(row.supersededByDispatchId, by, reason: id);
+        }
+        for (final id in ['d-round-new', 'd-o2-edit', 'd-o3-void']) {
+          expect(
+            (await rowOf(id)).status,
+            KitchenSpoolJobStatus.imported,
+            reason: id,
+          );
+        }
+
+        // Idempotent.
+        final again = await reconcileLocalSupersessionEvidence(
+          store,
+          cipher: cipher,
+          key: key,
+          deviceId: 'dev-1',
+          branchId: 'branch-1',
+          now: now,
+          externalEdits: [
+            KitchenEditSupersessionEvidence(
+              orderId: 'order-1',
+              dispatchId: 'd-direct',
+              createdAt: DateTime.parse(_editCreatedAt),
+            ),
+          ],
+        );
+        expect(again.editSuperseded + again.voidSuperseded, 0);
+      });
+
+      test(
+        'an UNREADABLE imported edit row is no evidence (keeps every job)',
+        () async {
+          await seed('d-initial', payload: _initialPayloadAt(_beforeEdit));
+          await seed(
+            'd-edit-garbage',
+            type: KitchenSpoolDispatchType.orderEdit,
+            rawBlob: Uint8List.fromList(List<int>.filled(64, 9)),
+          );
+          final result = await reconcileLocalSupersessionEvidence(
+            store,
+            cipher: cipher,
+            key: key,
+            deviceId: 'dev-1',
+            branchId: 'branch-1',
+            now: now,
+          );
+          expect(result.editSuperseded, 0);
+          expect(
+            (await rowOf('d-initial')).status,
+            KitchenSpoolJobStatus.imported,
+          );
+        },
+      );
+
+      test('the composition maps the slip store evidence; an entry without a '
+          'dispatch id cannot be linked and is dropped', () {
+        final created = DateTime.parse(_editCreatedAt);
+        final mapped = orderEditSupersessionEvidenceFrom([
+          OrderEditSlipEvidence(
+            orderId: 'order-1',
+            dispatchId: 'd-1',
+            editCreatedAt: created,
+            recordedAt: now,
+          ),
+          OrderEditSlipEvidence(
+            orderId: 'order-2',
+            editCreatedAt: created,
+            recordedAt: now,
+          ),
+          OrderEditSlipEvidence(
+            orderId: 'order-3',
+            dispatchId: '',
+            editCreatedAt: created,
+            recordedAt: now,
+          ),
+        ]);
+        expect(mapped, hasLength(1));
+        expect(mapped.single.orderId, 'order-1');
+        expect(mapped.single.dispatchId, 'd-1');
+        expect(mapped.single.createdAt, created);
+      });
+    },
+  );
 }

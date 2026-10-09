@@ -8,6 +8,12 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        KitchenChangeSlipLabels,
+        KitchenTicketPrintLabels,
+        OrderChangeRemoved,
+        OrderChangeSlipView;
 import 'package:restoflow_pos/src/data/demo_menu.dart' show DemoMenuItem;
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
@@ -16,6 +22,8 @@ import 'package:restoflow_pos/src/data/order_edit_diff.dart';
 import 'package:restoflow_pos/src/data/order_edit_journal_store.dart';
 import 'package:restoflow_pos/src/data/order_edit_read_model.dart';
 import 'package:restoflow_pos/src/data/order_edit_response.dart';
+import 'package:restoflow_pos/src/data/order_edit_slip_store.dart';
+import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart'
     show PosPersistenceException;
@@ -23,7 +31,14 @@ import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
     show staffCapabilitiesProvider;
+import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        PosProviderReader,
+        posOrderEditSlipPrintProvider,
+        posRoundPrintClaimStoreProvider;
 import 'package:restoflow_pos/src/state/order_edit_controller.dart';
+import 'package:restoflow_pos/src/state/order_edit_slip_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/parked_carts_controller.dart';
 import 'package:restoflow_pos/src/state/pos_branch_tax.dart';
@@ -50,7 +65,11 @@ import 'support/order_edit_fixtures.dart';
 ///    drift gets ONE automatic rebase (decision D9);
 ///  * a restart blocks the order and replays the record verbatim;
 ///  * a worker change discards only an UNSENT edit (D12);
-///  * an edit and an addition never share the cart.
+///  * an edit and an addition never share the cart;
+///  * ORDER-EDIT-001F: a PAPER edit's change slip is recorded before the
+///    journal closes and printed (awaited, once) after the cart is released;
+///    a KDS edit never touches it; an unproven edit records it unbuilt; a
+///    replay builds it from the journaled "was" lines (D2).
 ///
 /// Every amount is an independent literal (D-007).
 
@@ -113,6 +132,60 @@ class _Tax implements DeviceBranchTaxReader {
     loads++;
     return tax;
   }
+}
+
+/// ORDER-EDIT-001F: the change-slip print seam, recording into the shared log.
+class _SlipPrinter {
+  _SlipPrinter(this.log);
+  final List<String> log;
+  final List<OrderChangeSlipView> slips = [];
+  PosKitchenPrintOutcome outcome = PosKitchenPrintOutcome.printed;
+  Completer<void>? gate;
+
+  Future<PosKitchenPrintOutcome> call({
+    required PosProviderReader read,
+    required OrderChangeSlipView slip,
+    required KitchenTicketPrintLabels labels,
+    required KitchenChangeSlipLabels changeLabels,
+  }) async {
+    slips.add(slip);
+    log.add('slip-print:${slip.orderCode}#${slip.editNumber}');
+    if (gate case final g?) await g.future;
+    return outcome;
+  }
+}
+
+/// ORDER-EDIT-001F: the durable slip store, recording into the shared log.
+class _SlipStore implements OrderEditSlipStore {
+  _SlipStore(this.log);
+  final List<String> log;
+  final InMemoryOrderEditSlipStore inner = InMemoryOrderEditSlipStore();
+
+  @override
+  Future<Map<String, OrderEditSlipRecord>> load(String scopeKey) =>
+      inner.load(scopeKey);
+
+  @override
+  Future<void> persist(
+    String scopeKey,
+    Map<String, OrderEditSlipRecord> records,
+  ) async {
+    log.add('slip-store:${(records.keys.toList()..sort()).join(',')}');
+    await inner.persist(scopeKey, records);
+  }
+
+  @override
+  Future<List<OrderEditSlipEvidence>> loadEvidence(
+    String scopeKey, {
+    required DateTime now,
+  }) => inner.loadEvidence(scopeKey, now: now);
+
+  @override
+  Future<void> appendEvidence(
+    String scopeKey,
+    OrderEditSlipEvidence entry, {
+    required DateTime now,
+  }) => inner.appendEvidence(scopeKey, entry, now: now);
 }
 
 class _Journal implements OrderEditJournalStore {
@@ -322,10 +395,13 @@ class _H {
     bool withJournal = true,
     PosStaffCapabilities? caps,
     List<String> ids = const ['op-1', 'op-2', 'op-3', 'op-4'],
+    bool withSlipStore = false,
   }) {
     transport = _Transport(log, script ?? [_applied()]);
     this.journal = journal ?? (withJournal ? _Journal() : null);
     this.journal?.log = log;
+    slipPrinter = _SlipPrinter(log);
+    slipStore = withSlipStore ? _SlipStore(log) : null;
     details.byId['order-1'] = _order();
     final capabilities = caps ?? _caps();
     c = ProviderContainer(
@@ -354,12 +430,22 @@ class _H {
         ),
         if (this.journal case final j?)
           orderEditJournalStoreProvider.overrideWithValue(j),
+        // ORDER-EDIT-001F: the slip's print seam and durable claims.
+        posOrderEditSlipPrintProvider.overrideWithValue(slipPrinter.call),
+        posRoundPrintClaimStoreProvider.overrideWithValue(claims),
+        if (slipStore case final s?)
+          orderEditSlipStoreProvider.overrideWithValue(s),
       ],
     );
     addTearDown(c.dispose);
   }
 
   final List<String> log = [];
+  late final _SlipPrinter slipPrinter;
+  late final _SlipStore? slipStore;
+  final InMemoryRoundPrintClaimStore claims = InMemoryRoundPrintClaimStore();
+
+  OrderEditSlipsState get slips => c.read(orderEditSlipControllerProvider);
   late final _Transport transport;
   late final _Journal? journal;
   final _Details details = _Details();
@@ -579,6 +665,50 @@ void main() {
       expect(result.status, OrderEditSubmitStatus.applied);
     });
 
+    test('ORDER-EDIT-001F (D2): a PAPER attempt journals the frozen "was" '
+        'projections of the lines it names, before the invoke', () async {
+      final h = _H(script: [_applied(channel: 'paper', ackRequired: false)]);
+      h.details.byId['order-1'] = _order(
+        channel: PosKitchenChannel.paper,
+        items: [
+          _burger(),
+          _fries(notes: '  extra salt '),
+        ],
+      );
+      await h.enter();
+      h.transport.gate = Completer<void>();
+      h.cart.removeLine('sent-oi-fries');
+      final pending = h.edit.submit(reasonCode: 'entry_mistake');
+      await _settle();
+
+      // Journaled and in flight: the record already carries the slip lines.
+      expect(h.log, ['persist:dispatching', 'invoke:op-1']);
+      final record = (await h.journal!.stored())['op-1']!;
+      expect(record.slipWas!.keys, ['oi-fries']);
+      final fries = record.slipWas!['oi-fries']!;
+      expect(fries.qty, 1);
+      expect(fries.name, 'Fries');
+      expect(fries.note, 'extra salt');
+      expect(h.state.attempt!.slipWas!.keys, ['oi-fries']);
+
+      h.transport.gate!.complete();
+      await pending;
+    });
+
+    test('ORDER-EDIT-001F: a KDS attempt freezes no slip lines', () async {
+      final h = _H(script: [_applied()]);
+      await h.enter();
+      h.transport.gate = Completer<void>();
+      h.cart.removeLine('sent-oi-fries');
+      final pending = h.edit.submit(reasonCode: 'entry_mistake');
+      await _settle();
+      final record = (await h.journal!.stored())['op-1']!;
+      expect(record.slipWas, isNull);
+      expect(record.toJson().containsKey('slip_was'), isFalse);
+      h.transport.gate!.complete();
+      await pending;
+    });
+
     test('a refused journal write sends NOTHING and keeps the edit', () async {
       final h = _H();
       await h.enter();
@@ -775,6 +905,197 @@ void main() {
         expect(h.state.phase, OrderEditPhase.idle);
       },
     );
+  });
+
+  group('ORDER-EDIT-001F: the paper change slip', () {
+    // The server applied "remove the fries" as edit-1 on a PAPER order, with
+    // its born-claimed `order_edit` dispatch.
+    _Handler paperApplied() =>
+        (op) => _envelope(op, {
+          'status': 'applied',
+          'ok': true,
+          'order_id': 'order-1',
+          'order_edit_id': 'edit-1',
+          'edit_number': 1,
+          'revision': 4,
+          'kitchen_channel': 'paper',
+          'kitchen_ack_required': false,
+          'changes': [
+            {
+              'kind': 'remove',
+              'order_item_id': 'oi-fries',
+              'new_order_item_ids': <Object?>[],
+              'remake': false,
+            },
+          ],
+          'kitchen_dispatch': {
+            'id': 'dispatch-1',
+            'claim_expires_at': '2026-10-09T12:10:00Z',
+          },
+        });
+    PosOrderDetail paperOrder() => _order(channel: PosKitchenChannel.paper);
+    PosOrderDetail paperEdited() => _order(
+      channel: PosKitchenChannel.paper,
+      items: [_burger()],
+      editCount: 1,
+      edits: [
+        PosOrderDetailEdit(
+          orderEditId: 'edit-1',
+          editNumber: 1,
+          createdAt: DateTime.utc(2026, 10, 9, 12),
+          reasonCode: 'entry_mistake',
+        ),
+      ],
+    );
+    String mirror() => posOrderEditDispatchClaimKey('dispatch-1');
+
+    test('applied on paper: the slip record is durable BEFORE the journal '
+        'closes; the cart is released, THEN the slip prints, once — '
+        '"printed"', () async {
+      final h = _H(script: [paperApplied()], withSlipStore: true);
+      h.details.byId['order-1'] = paperOrder();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.details.byId['order-1'] = paperEdited();
+      h.slipPrinter.gate = Completer<void>();
+      final pending = h.edit.submit(reasonCode: 'entry_mistake');
+      await _settle();
+      // The till is not held by the printer: the edit already ended.
+      expect(h.slipPrinter.slips, hasLength(1));
+      expect(h.state.phase, OrderEditPhase.idle);
+      expect(h.cartState.isEditing, isFalse);
+      expect(h.cartState.lockedByAddition, isFalse);
+      h.slipPrinter.gate!.complete();
+      final r = await pending;
+
+      expect(r.status, OrderEditSubmitStatus.applied);
+      expect(r.refreshRequired, isFalse);
+      expect(r.slip, OrderEditSlipOutcome.printed);
+      expect(h.log, [
+        'persist:dispatching',
+        'invoke:op-1',
+        'persist:awaitingAuthoritativeRefresh',
+        'slip-store:edit-1',
+        'persist:',
+        'slip-print:#A1B2C3#1',
+        'slip-store:',
+      ]);
+      final slip = h.slipPrinter.slips.single;
+      expect((slip.changes.single as OrderChangeRemoved).was.name, 'Fries');
+      expect(slip.orderNow.map((i) => '${i.quantity} ${i.name}'), ['2 Burger']);
+      expect(slip.reasonCode, 'entry_mistake');
+      expect(h.claims.claimOf(mirror()), PosRoundPrintClaimState.sent);
+      expect(h.slips.records, isEmpty);
+    });
+
+    test('a slip that did not print: the edit is still applied and ended; '
+        'the result says "not printed" and the slip waits for Print '
+        'again', () async {
+      final h = _H(script: [paperApplied()]);
+      h.slipPrinter.outcome = PosKitchenPrintOutcome.noPrinterConfigured;
+      h.details.byId['order-1'] = paperOrder();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.details.byId['order-1'] = paperEdited();
+      final r = await h.edit.submit(reasonCode: 'entry_mistake');
+      expect(r.status, OrderEditSubmitStatus.applied);
+      expect(r.refreshRequired, isFalse);
+      expect(r.slip, OrderEditSlipOutcome.notPrinted);
+      expect(h.state.phase, OrderEditPhase.idle);
+      expect(await h.journal!.stored(), isEmpty);
+      expect(h.slips.records.keys, ['edit-1']);
+      expect(h.claims.claimOf(mirror()), PosRoundPrintClaimState.failed);
+    });
+
+    test('a KDS edit never touches the slip', () async {
+      final h = _H(script: [_applied()], withSlipStore: true);
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      h.details.byId['order-1'] = _edited();
+      final r = await h.edit.submit(reasonCode: 'entry_mistake');
+      expect(r.status, OrderEditSubmitStatus.applied);
+      expect(r.slip, isNull);
+      expect(h.slipPrinter.slips, isEmpty);
+      expect(h.log.where((l) => l.startsWith('slip-')), isEmpty);
+      expect(h.slips.records, isEmpty);
+    });
+
+    test('applied but not proven: the slip is recorded UNBUILT (the spool '
+        'may print it) and the toast stays "saved"; the later proof prints '
+        'nothing by itself, and Print again builds it', () async {
+      final h = _H(script: [paperApplied()]);
+      h.details.byId['order-1'] = paperOrder();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      final r = await h.edit.submit(reasonCode: 'entry_mistake');
+      expect(r.refreshRequired, isTrue);
+      expect(r.slip, OrderEditSlipOutcome.notPrinted);
+      expect(h.slipPrinter.slips, isEmpty);
+      expect(h.slips.records['edit-1']!.isBuilt, isFalse);
+      expect(h.claims.claimOf(mirror()), PosRoundPrintClaimState.failed);
+
+      h.details.byId['order-1'] = paperEdited();
+      final again = await h.edit.submit();
+      expect(again.refreshRequired, isFalse);
+      expect(again.slip, OrderEditSlipOutcome.notPrinted);
+      expect(h.slipPrinter.slips, isEmpty);
+
+      final printed = await h.c
+          .read(orderEditSlipControllerProvider.notifier)
+          .printAgain('edit-1');
+      expect(printed.status, OrderEditPrintAgainStatus.printed);
+      final slip = h.slipPrinter.slips.single;
+      expect((slip.changes.single as OrderChangeRemoved).was.name, 'Fries');
+    });
+
+    test('a replay after a restart builds the FULL slip from the journaled '
+        '"was" lines (D2)', () async {
+      final journal = _Journal();
+      final before = _H(script: [paperApplied()], journal: journal);
+      before.details.byId['order-1'] = paperOrder();
+      await before.enter();
+      before.cart.removeLine('sent-oi-fries');
+      expect(
+        (await before.edit.submit(reasonCode: 'entry_mistake')).refreshRequired,
+        isTrue,
+      );
+      final stored = (await journal.stored())['op-1']!;
+      expect(stored.slipWas!.keys, ['oi-fries']);
+      expect(stored.applied!.changes.single.kind, 'remove');
+
+      // A restart: a fresh till, no cart, the record replayed on restore.
+      final after = _H(journal: journal);
+      after.details.byId['order-1'] = paperEdited();
+      await after.boot();
+      await _settle();
+      expect(await journal.stored(), isEmpty);
+      final slip = after.slipPrinter.slips.single;
+      expect((slip.changes.single as OrderChangeRemoved).was.name, 'Fries');
+      expect(after.slips.records, isEmpty);
+    });
+
+    test('a 001E-format record (no "was" lines) replays to an UNBUILT slip: '
+        'nothing printed automatically', () async {
+      final journal = _Journal();
+      final before = _H(script: [paperApplied()], journal: journal);
+      before.details.byId['order-1'] = paperOrder();
+      await before.enter();
+      before.cart.removeLine('sent-oi-fries');
+      await before.edit.submit(reasonCode: 'entry_mistake');
+      final json = (await journal.stored())['op-1']!.toJson()
+        ..remove('slip_was');
+      await journal.inner.persist('dev-1', {
+        'op-1': OrderEditJournalRecord.fromJson(json),
+      });
+
+      final after = _H(journal: journal);
+      after.details.byId['order-1'] = paperEdited();
+      await after.boot();
+      await _settle();
+      expect(await journal.stored(), isEmpty);
+      expect(after.slipPrinter.slips, isEmpty);
+      expect(after.slips.records['edit-1']!.isBuilt, isFalse);
+    });
   });
 
   group('refusal policy (API §4.45.6)', () {

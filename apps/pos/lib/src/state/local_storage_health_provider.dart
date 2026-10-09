@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/local_storage_health.dart';
 import '../data/order_edit_journal_store.dart'
     show orderEditJournalStoreProvider;
+import '../data/order_edit_slip_store.dart' show orderEditSlipStoreProvider;
 import '../data/payment_attempt_store.dart' show paymentAttemptStoreProvider;
 import 'draft_recovery_controller.dart' show posDraftRecoveryStoreProvider;
 import 'outbox_controller.dart' show durableOutboxStoreProvider;
@@ -61,12 +62,21 @@ final posLocalStorageHealthProvider = Provider<PosLocalStorageHealth>((ref) {
   // like the outbox. A refused journal write means an edit was NOT sent; an
   // unreadable record is an edit this till can no longer replay.
   final editJournal = ref.watch(orderEditJournalStoreProvider);
+  // ORDER-EDIT-001F: the durable unsent change slips, per device too. A
+  // refused slip write means a slip that is not on paper may be forgotten.
+  final slipStore = ref.watch(orderEditSlipStoreProvider);
   final scopeKey = ref.watch(posSyncSessionProvider)?.deviceId ?? '';
   final attemptScopeKey = ref.watch(posSyncScopeProvider)?.key ?? '';
 
   var refused = false;
   var unreadable = 0;
-  for (final store in <Object?>[outbox, recovery, attempts, editJournal]) {
+  for (final store in <Object?>[
+    outbox,
+    recovery,
+    attempts,
+    editJournal,
+    slipStore,
+  ]) {
     if (store is! PosDurableStoreHealth) continue;
     if (store.isDegraded) refused = true;
     // A store keyed per device cannot answer without a scope; with no session

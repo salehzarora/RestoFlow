@@ -268,7 +268,7 @@ change):*
   While it is unresolved the order's other actions are withdrawn, and the row
   carries a Retry that replays the same identity and payload.
 - **Results and refusals.** Toasts follow §7.1 point 8, except that a paper edit
-  reads "Change N saved" until ORDER-EDIT-001F prints the change slip; the
+  reads "Change N saved" (ORDER-EDIT-001F adds the printed slip, see §7.3); the
   `kitchen_dispatch` is kept in the journal for it (D1). The remake count is the
   frozen plan's allotment (D8). `bill_presented_at` is sent only when this session
   sent the order's bill to a printer, and the result then offers "Print bill"
@@ -554,6 +554,170 @@ change):*
   `apps/pos/lib/src/spool/pos_kitchen_spool_runtime.dart`); the awaited direct print
   plus "Print again" is the v1 safety net. A periodic drain is a separate follow-up
   (§13).
+
+*Implemented — ORDER-EDIT-001F (POS app plus one migration; no shared-package, l10n
+or contract change):*
+
+- **The slip is hand-built (D1).** `edit_order` returns only the dispatch id, so the
+  POS builds the `OrderChangeSlipView` itself
+  (`apps/pos/lib/src/data/order_edit_slip.dart`), mirroring
+  `app.kitchen_dispatch_payload_order_edit`. The "was" lines come from the entry
+  baseline, the now-quantities from the frozen request, the new lines and ORDER NOW
+  from the post-apply `pos_order_detail`, and the time and reason from
+  `detail.edits[]`. Tests render it byte-identical to the slip decoded from three
+  real stored server payloads, in en, ar and he (no order note, the editing worker
+  signed in, one label language). It is the same view as the server payload except
+  in four ways:
+  - **Order note (gap G1):** `pos_order_detail` has no order note, so the
+    hand-built slip prints none (pinned by a fixture); the server slip prints it.
+  - **ORDER NOW and the header:** ORDER NOW, the table label and the customer
+    name are read when the slip is built (the post-apply detail, a later replay,
+    or "Print again" of an unbuilt slip), so any add-items, table move or name
+    change since the edit shows; the server slip keeps them as at the edit.
+  - **Staff line:** the staff first name is printed only when the signed-in worker
+    made the edit. A replay under another worker, or with nobody signed in, omits
+    the line, while the server payload carries the editing worker's first name
+    (`staff_name`) whoever replays it.
+  - **Label language:** the direct slip prints its labels in the UI language, the
+    spool in the device language (as for tickets).
+
+  A replay after a restart builds the same slip from the money-free "was" lines
+  frozen in the journal record (`slip_was`, D2). A record from a 001E build has
+  none, so its "Print again" prints the ORDER-NOW slip of that edit, never a
+  partial change list.
+- **Exactly once, awaited.** The slip record is persisted before anything is sent,
+  then the spool mirror `edit-dispatch:<dispatchId>` is written `claimed`, then the
+  slip prints under the guard key `<orderId>|edit:<orderEditId>` (claim before
+  send). The record goes before the mirror, because "mirror claimed, no record" is
+  how a hand-over to the spool reads. A slip that cannot be proven yet (no fresh
+  detail) is recorded unbuilt with the mirror `failed`, and it is never printed
+  automatically: the spool prints the server's slip, or "Print again" builds it on
+  demand. A guard claim left `claimed` by a crash mid-print is never re-sent
+  automatically. A slip whose guard key already reads `sent` is never sent again:
+  a restart settles its leftover record as printed (no banner), "Print again"
+  settles instead of sending, and `sent` is never overwritten with `claimed`. A
+  replayed edit whose record already exists is still retired when the proving
+  detail shows a newer edit or a void. The direct print is acknowledged as
+  `transport_accepted`, or as `failed_retryable` with `pos_slip_no_printer`,
+  `pos_slip_unavailable` or `pos_slip_send_failed` (also with no printer or no
+  native printing, D10). Every answer is ignored: the dispatch is this till's
+  claim, so the next drain converges it. The device's kitchen auto-print toggle does
+  not apply to slips (D12), and a KDS edit never reaches this path.
+- **Surfaces.** The applied toast says "printed" only when the slip was sent.
+  Otherwise it says "saved" and adds "Kitchen change slip not printed" with a
+  "Print again" action on the toast itself, rather than a second snack, which would
+  queue behind it. A banner per unsent slip sits above the menu grid, and the order
+  row has its own "Print again". The banners share one scrolling area capped at 40%
+  of the menu pane, so the grid keeps its height however many slips are unsent.
+  "Print again" is refused while the slip is printing
+  or the order has an unresolved edit. It keeps the record when the detail cannot
+  be read and retires it silently when the order was voided (D9). When a newer edit
+  exists it retires the record and offers "Print latest": a newer unsent slip of
+  this till prints that slip, a newer slip this till already printed offers nothing,
+  and another till's edit prints the ORDER-NOW slip from the detail, unguarded and
+  unacknowledged (D5). A slip the recent-orders snapshot proves superseded (a newer
+  edit, a void or a cancel) is retired, not just hidden, and a slip whose order has
+  left that window and whose record is older than it (the start of yesterday) is
+  retired too, so no stale banner comes back.
+- **Spool** (inside `lib/src/spool` only). The drain renderer now has the slip
+  labels (device locale), so an `order_edit` job prints instead of blocking as
+  `kitchen_render_failed`. A NEW `order_edit` dispatch is consulted by its dispatch
+  id before import:
+  - this till is printing that slip right now → skipped, no acknowledgement (D11);
+  - mirror `sent` → `transport_accepted`;
+  - mirror `claimed`, or unreadable → `possibly_printed`;
+  - mirror `failed` or absent → reserved for the spool in the same synchronous step
+    as these checks, imported, and the till hands the slip over (mirror `claimed`,
+    record and banner removed, D3). The till's automatic print and "Print again"
+    check that reservation in the same synchronous step as their own in-flight
+    mark, so neither starts once the other owns the slip; an import that fails
+    gives the slip back. A slip prints no phone, so none is resolved.
+- **The spool database decides a hand-over.** A crash between the spool's durable
+  insert and the hand-over leaves the till's record, its banner and the old mirror
+  next to a spool row the worker prints, and the next session remembers no
+  reservation. So the till asks the spool database itself:
+  `PosKitchenSpoolRuntime.holdsOrderEditDispatch`, a read-only lookup by dispatch id
+  (any row status) that never creates a spool file and reads no key. The native
+  composition attaches it through `orderEditSpoolLookupProvider`, and it resolves
+  the current runtime at each call; with none attached (web, demo, no paired
+  transport) it reads "not held".
+  - The restore hands over every loaded slip whose dispatch the spool holds, so no
+    banner shows for it, and asks again when the lookup attaches.
+  - The automatic print and "Print again" ask after their in-flight mark (which
+    defers any new import) and before any claim or send, and hand a held dispatch
+    over instead of printing it.
+  - A spool that cannot tell (presence undeterminable, database not opening)
+    withholds the direct print and keeps the record and its banner.
+  - A replay that finds the mirror `claimed` over no guard claim reads it as a
+    hand-over, as before. Over a `failed` guard claim it needs the spool's positive
+    proof, because a failed print whose slip-store and mirror `failed` writes were
+    both refused leaves the same pair. Without the proof the slip is recorded and
+    printed again; when the spool cannot tell, it is recorded and offered by its
+    banner.
+  - Retention: the spool keeps every row. Nothing in production prunes it, and
+    `pruneTransportAcceptedOlderThan` (no caller) would remove only fully
+    acknowledged `transport_accepted` rows. A slip record is retired once the
+    recent-orders window (the start of yesterday) passes it, so the lookup outlives
+    every record that asks it; any future pruning must keep rows longer than that.
+- **Ordered supersession sweep (D4).** An imported `order_edit`, and this till's own
+  direct prints (bounded evidence: 72 hours, 200 entries; an entry without a
+  dispatch id cannot be linked and is dropped), supersede only OLDER unresolved
+  jobs of the same order, by the server `created_at` in each decrypted payload. An
+  initial ticket is always older. A round or an edit is older only when strictly
+  earlier, so a round added after the edit still prints, even if this till imported
+  it first. A tie or an unreadable payload keeps the job, a void is never
+  superseded, a `possibly_printed` job only gains the link, and a printing job is
+  left alone. The sweep runs at import (re-drives included) and before and after
+  every drain. The VOID sweep is unchanged.
+- **Reprint marker (D6, R2).** The manual kitchen reprint of an edited order
+  (`edit_count > 0`) prints the ORDER-NOW slip from the detail ("ORDER CHANGED ·
+  Change N", every live line, "Replaces earlier tickets"), never the order-time
+  snapshot. The owed initial-ticket recovery action is hidden for an edited order
+  (D8, read-only). An unedited order is unchanged.
+- **VOID slip count.** Migration `20261009140000_order_edit_001f_void_payload_count`
+  re-emits `app.kitchen_dispatch_payload_void` so `affected_item_count` skips
+  edit-retired lines (`removed_by_edit_id`); an unedited order's payload is
+  byte-identical (API_CONTRACT §4.45.10).
+- **Rollout.** Every POS of a printer-only branch must run 001F before the switch
+  is turned on: a 001E-only POS prints no slip, and an older spool blocks the
+  `order_edit` job.
+- **Residuals** (RISK R-002, R-007):
+  - After the lease lapses and another till prints the slip, "Print again" gets
+    `not_claim_owner` (ignored), so a duplicate slip is possible. The direct
+    transport reports only success or failure, so a deliberate "Print again" after
+    an ambiguous write may also duplicate.
+  - A crash mid-print leaves the mirror `claimed`, so the next drain parks the
+    dispatch as `possibly_printed`; the banner still offers "Print again". A slip
+    recorded while the spool's import of it was running, when that import then
+    fails, is not printed automatically; its banner offers "Print again". An
+    unreadable claim store, or a crash between the record and the mirror write,
+    withholds the automatic print (the banner still offers it). A spool-side
+    failure after a hand-over is not shown in the UI yet (the spool capability has
+    no screen).
+  - Another till's already-imported jobs are not swept: the edit's dispatch
+    completes on the acting till and never reaches them (a periodic drain or
+    supersession feed is a follow-up, §13). Two tills racing in the same instant
+    may order a round and an edit wrongly by `created_at`; the server's own
+    supersession stays authoritative.
+  - The till never prints a slip the spool database holds, but the lookup is
+    attached only when the spool runtime is first composed (the first frame of the
+    POS surface). A direct print before that could miss a held row; none runs that
+    early, and the restore asks again once it attaches. While the spool database
+    cannot be read (its presence undeterminable, or it does not open), the till
+    prints no change slip directly, automatically or by "Print again": each keeps
+    its banner until the spool can answer.
+  - A replay that finds the mirror `claimed` over no guard claim still reads it as
+    a hand-over without asking the spool. Besides a hand-over, that pair is left by
+    a retired slip (nothing to print) or by a refused slip-store write followed by
+    a crash before the print; the last leaves that slip unprinted and without a
+    banner (the spool acknowledges it `possibly_printed`).
+  - The hand-built slip differs from the server slip as listed above (order note,
+    concurrent ORDER NOW lines, staff line, label language). The claim store keeps
+    two keys per paper edit, with no pruning (the existing pattern).
+- The API_CONTRACT §4.45.5–§4.45.10 notes for this slice (23514 already mapped by
+  001E, the decoder line superseded by 001C, the POS paper rules, the void count)
+  and the IMPLEMENTATION_CHECKLIST marker are reconciled after #288 merges, because
+  those files are in #288's diff.
 
 ## 8. Server contract
 

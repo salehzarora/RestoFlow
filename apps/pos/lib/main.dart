@@ -23,6 +23,7 @@ import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
 import 'src/data/addition_journal_store.dart';
 import 'src/data/order_edit_journal_store.dart';
+import 'src/data/order_edit_slip_store.dart';
 import 'src/data/recent_orders_store.dart';
 import 'src/data/round_print_claim_store.dart';
 import 'src/print/pos_kitchen_ticket_printer.dart'
@@ -39,6 +40,8 @@ import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
 import 'src/state/pos_device_theme.dart' show posDeviceThemePairProvider;
+import 'src/state/pos_kitchen_dispatch_ack.dart'
+    show posKitchenDispatchAckProvider;
 import 'src/state/pos_offline_state.dart'
     show
         kPosOfflineReconnectProbeInterval,
@@ -206,6 +209,12 @@ List<Override> _posOverrides(
   orderEditJournalStoreProvider.overrideWithValue(
     SharedPrefsOrderEditJournalStore(prefs),
   ),
+  // ORDER-EDIT-001F: the durable UNSENT paper change slips (and this till's
+  // bounded direct-print evidence), per device like the journal. A slip that
+  // did not reach the printer survives a restart and keeps its Print again.
+  orderEditSlipStoreProvider.overrideWithValue(
+    SharedPrefsOrderEditSlipStore(prefs),
+  ),
   // The DURABLE automatic-kitchen-print claim, scoped to this device's
   // session. Without it the exactly-once guard is session-only, so a process
   // that dies after an amendment was applied comes back, replays the
@@ -304,6 +313,10 @@ List<Override> _posOverrides(
   // default-OFF if unread — never invents a tax the owner did not set).
   if (seams != null)
     posBranchTaxReaderProvider.overrideWithValue(seams.branchTax),
+  // ORDER-EDIT-001F: the typed device-token acknowledgement client the
+  // DIRECT change-slip print reports its order_edit dispatch through.
+  if (seams != null)
+    posKitchenDispatchAckProvider.overrideWithValue(seams.kitchenDispatchAck),
   // POS-OPEN-ORDERS-REALTIME-GATE-013: the branch-hint listener factory
   // over the SAME authenticated session (Disabled in degraded boots via the
   // seam itself; demo/tests never reach this override and keep the provider
@@ -388,6 +401,8 @@ typedef PosDeviceSeams = ({
   DeviceShiftClosePolicyReader shiftClosePolicy,
   DeviceBranchTaxReader branchTax,
   UpgradableSyncTransport? upgradable,
+  // ORDER-EDIT-001F: reports the direct change-slip print of a paper edit.
+  SupabaseKitchenDispatchAckRepository? kitchenDispatchAck,
   // POS-OPEN-ORDERS-REALTIME-GATE-013: builds the branch-hint listener over
   // the SAME authenticated client (Disabled in degraded/demo boots).
   InvalidationSource Function(RealtimeScope scope) invalidationSourceFactory,
@@ -587,6 +602,13 @@ class PosBootCoordinator {
         secretStore: store,
       ),
       upgradable: upgradable,
+      // The acknowledgement rides the hold-mode transport like every other
+      // device-token call; offline it fails transiently and the spool's own
+      // re-served claim converges it later.
+      kitchenDispatchAck: SupabaseKitchenDispatchAckRepository(
+        transport: transport,
+        secretStore: store,
+      ),
       // …and realtime is absent too (no authenticated client until the next
       // full boot) — polling remains the resilience floor (D-010).
       invalidationSourceFactory: (_) => const DisabledInvalidationSource(),
@@ -634,6 +656,12 @@ class PosBootCoordinator {
         secretStore: store,
       ),
       upgradable: null,
+      // ORDER-EDIT-001F: same token-proven session acknowledges the direct
+      // change-slip print of a paper edit.
+      kitchenDispatchAck: SupabaseKitchenDispatchAckRepository(
+        transport: transport,
+        secretStore: store,
+      ),
       // POS-OPEN-ORDERS-REALTIME-GATE-013: branch-hint listener over the same
       // anonymous session (server-gated by the device RECEIVE policy).
       invalidationSourceFactory: session.invalidationSourceFactory,

@@ -10,6 +10,7 @@ import 'package:restoflow_data_local/restoflow_data_local.dart'
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
     show
         CanonicalKitchenDispatchRenderer,
+        kitchenChangeSlipLabelsForLanguageCode,
         kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show
@@ -38,8 +39,12 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import '../data/customer_phone.dart' show normalizeCustomerPhone;
 import '../data/ids.dart' show clientIdGeneratorProvider;
+import '../data/order_edit_slip_store.dart' show OrderEditSlipEvidence;
 import '../data/round_print_claim_store.dart'
-    show PosRoundPrintClaimState, posInitialKitchenPrintClaimKey;
+    show
+        PosRoundPrintClaimState,
+        posInitialKitchenPrintClaimKey,
+        posOrderEditDispatchClaimKey;
 import '../print/pos_kitchen_ticket_printer.dart'
     show posRoundPrintClaimStoreProvider;
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
@@ -58,6 +63,8 @@ import '../print/native_print_bridges.dart'
 import '../state/pos_bluetooth_printer_config.dart'
     show posKitchenBluetoothPrinterConfigProvider;
 import '../state/pos_device_context.dart' show posDeviceContextProvider;
+import '../state/order_edit_slip_controller.dart'
+    show orderEditSlipControllerProvider, orderEditSpoolLookupProvider;
 import '../state/outbox_controller.dart' show outboxRepositoryProvider;
 import '../state/recent_orders_controller.dart'
     show posRecentOrdersControllerProvider;
@@ -72,9 +79,10 @@ import 'kitchen_readiness_coordinator.dart';
 import 'kitchen_readiness_evidence.dart';
 import 'kitchen_spool_readiness_probe.dart';
 import 'kitchen_ticket_renderer.dart';
+import 'kitchen_void_reconciliation.dart' show KitchenEditSupersessionEvidence;
 import 'pos_kitchen_spool_capability.dart';
 import 'pos_kitchen_spool_composition.dart'
-    show posKitchenSpoolCapabilityProvider;
+    show posKitchenSpoolCapabilityProvider, posKitchenSpoolRuntimeProvider;
 import 'pos_kitchen_spool_hooks.dart';
 import 'pos_kitchen_spool_platform.dart';
 import 'pos_kitchen_spool_runtime.dart';
@@ -185,8 +193,15 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     // (labels from the shared l10n mapper for the device locale; brand header
     // from the same restaurant-name provider the direct print reads). A VOID
     // dispatch keeps the legacy frame (device-locale bundle) byte-for-byte.
+    // ORDER-EDIT-001F: the change-slip labels (device locale, like the ticket
+    // frame) — without them the renderer refuses an `order_edit` dispatch as
+    // `kitchen_render_failed`; with them the drain prints the server's slip
+    // through the same shared bytes seam as the POS direct slip.
     renderer: CanonicalKitchenDispatchRenderer(
       labels: kitchenTicketPrintLabelsForLanguageCode(
+        ui.PlatformDispatcher.instance.locale.languageCode,
+      ),
+      changeLabels: kitchenChangeSlipLabelsForLanguageCode(
         ui.PlatformDispatcher.instance.locale.languageCode,
       ),
       rasterizer: ref.watch(nativePrintRasterizerProvider),
@@ -257,7 +272,86 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
         return PosRoundPrintClaimState.claimed;
       }
     },
+    // ORDER-EDIT-001F — the order-edit consult (decisions D3, D11). Store and
+    // controller reads through the sanctioned providers only (no storage
+    // API in the spool, no timer).
+    //  * the DISPATCH-keyed mirror of this till's own direct slip print (a
+    //    pulled row carries no edit id); unreadable reads as `claimed`;
+    readOrderEditPrintClaim: (dispatchId) {
+      try {
+        return ref
+            .read(posRoundPrintClaimStoreProvider)
+            ?.claimOf(posOrderEditDispatchClaimKey(dispatchId));
+      } catch (_) {
+        return PosRoundPrintClaimState.claimed;
+      }
+    },
+    //  * whether that print is in flight right now — skip, never race it;
+    isOrderEditSlipInFlight: (dispatchId) {
+      try {
+        return ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .isDispatchInFlight(dispatchId);
+      } catch (_) {
+        // A torn-down container: leave the row for the next drain.
+        return true;
+      }
+    },
+    //  * the spool's reservation of a dispatch it is about to import, in the
+    //    consult's own synchronous section (the till never prints it from
+    //    then on), and its release when that import fails;
+    reserveOrderEditSlip: (dispatchId) {
+      try {
+        return ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .reserveForSpool(dispatchId);
+      } catch (_) {
+        // A torn-down container: leave the row for the next drain.
+        return false;
+      }
+    },
+    releaseOrderEditSlip: (dispatchId) {
+      try {
+        ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .releaseSpoolReservation(dispatchId);
+      } catch (_) {
+        // A torn-down container has no slip to give back.
+      }
+    },
+    //  * the hand-over once the spool holds the dispatch (the till's record
+    //    and banner go away; the spool prints the server's slip);
+    onOrderEditImported: (dispatchId) async {
+      try {
+        await ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .handOverToSpool(dispatchId);
+      } catch (_) {
+        // Best-effort: the spool holds the job either way.
+      }
+    },
+    //  * this till's direct slip prints, for the ordered supersession sweep.
+    readLocalOrderEditEvidence: () async {
+      try {
+        return orderEditSupersessionEvidenceFrom(
+          await ref.read(orderEditSlipControllerProvider.notifier).evidence(),
+        );
+      } catch (_) {
+        return const <KitchenEditSupersessionEvidence>[];
+      }
+    },
   );
+  // ORDER-EDIT-001F: the spool database's own answer to "do you hold this
+  // order_edit dispatch?", attached for the till's slip controller, which
+  // asks it (the source of truth) before every direct slip print and at its
+  // restore, so a hand-over a crash left half done never prints a second
+  // slip. Read-only and zero-footprint. It resolves the CURRENT runtime at
+  // each call — this one is disposed as soon as any input above changes and
+  // rebuilt only on the next read — so it is never left detached.
+  final container = ref.container;
+  ref
+      .read(orderEditSpoolLookupProvider)
+      .attach((dispatchId) => holdsOrderEditDispatchNow(container, dispatchId));
   // REAL disposal: logout/unpair/scope change (the device-context watch) or
   // provider teardown closes the dedicated DB and stops an in-flight worker
   // before its next send. Rows and key are preserved.
@@ -270,6 +364,36 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     }
   });
 }
+
+/// ORDER-EDIT-001F — whether the CURRENT spool runtime of [container] holds a
+/// durable row for the `order_edit` dispatch [dispatchId]
+/// ([PosKitchenSpoolRuntime.holdsOrderEditDispatch]). No runtime (web, demo,
+/// no paired transport) holds nothing: `false`. A failure throws (unknown).
+Future<bool> holdsOrderEditDispatchNow(
+  ProviderContainer container,
+  String dispatchId,
+) async {
+  final hooks = container.read(posKitchenSpoolRuntimeProvider);
+  if (hooks is! _CapabilityReportingHooks) return false;
+  return hooks._runtime.holdsOrderEditDispatch(dispatchId);
+}
+
+/// ORDER-EDIT-001F — maps this till's DIRECT slip prints (the slip store's
+/// bounded evidence) to the spool sweep's external order-edit evidence. An
+/// entry without a dispatch id cannot be linked as server evidence, so it is
+/// dropped (the sweep then KEEPS jobs — never guesses toward dropping paper).
+List<KitchenEditSupersessionEvidence> orderEditSupersessionEvidenceFrom(
+  Iterable<OrderEditSlipEvidence> entries,
+) => <KitchenEditSupersessionEvidence>[
+  for (final e in entries)
+    if (e.dispatchId case final dispatchId?
+        when dispatchId.isNotEmpty && e.orderId.isNotEmpty)
+      KitchenEditSupersessionEvidence(
+        orderId: e.orderId,
+        dispatchId: dispatchId,
+        createdAt: e.editCreatedAt,
+      ),
+];
 
 /// KITCHEN-MODE-001C3A — the NATIVE readiness-heartbeat composition.
 ///

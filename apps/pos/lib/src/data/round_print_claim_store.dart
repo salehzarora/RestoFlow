@@ -74,6 +74,37 @@ String posLocalKitchenDispatchClaimKey({
 /// can never re-print a ticket this POS already printed at submit.
 String posInitialKitchenPrintClaimKey(String orderId) => '$orderId|initial';
 
+/// ORDER-EDIT-001F (design §7.3) — the claim of the PAPER CHANGE SLIP of ONE
+/// applied sent-order edit, the guard key of its exactly-once direct print.
+/// Mirrors the round key (`orderId|round:<roundId>`) and the server ledger's
+/// own `edit:<order_edit_id>` idempotency key: one slip per edit, never per
+/// attempt or per till session.
+///
+/// Collision-safe: the `|edit:` infix appears in no other key shape — an
+/// `orderId` guard key, `orderId|round:<roundId>`, `orderId|initial` and
+/// `local:v1:…` all differ — and neither an order id nor an edit id (both
+/// UUIDs) contains a `|` or a `:`.
+String posOrderEditKitchenPrintGuardKey({
+  required String orderId,
+  required String orderEditId,
+}) => '$orderId|edit:$orderEditId';
+
+/// ORDER-EDIT-001F — the SPOOL MIRROR of a change slip's claim, keyed by the
+/// server's `order_edit` DISPATCH id. A pulled dispatch row carries the
+/// dispatch id but no `order_edit_id`, so the spool's import consult can only
+/// find the direct print's claim through this key (written next to
+/// [posOrderEditKitchenPrintGuardKey] by the direct path).
+///
+/// Collision-safe: the `edit-dispatch:` prefix is neither a UUID (no UUID
+/// contains a `:`), nor `local:v1:`, and the key holds no `|`, so it can never
+/// equal any order-scoped key above.
+///
+/// Neither new shape can surface on an owed-print screen: this store exposes
+/// only [PosRoundPrintClaimStore.claimOf] / [PosRoundPrintClaimStore.record]
+/// and has no enumeration.
+String posOrderEditDispatchClaimKey(String dispatchId) =>
+    'edit-dispatch:$dispatchId';
+
 /// Durable per-round automatic-print claims.
 abstract class PosRoundPrintClaimStore {
   /// The claim for [key], or null when this round has never been claimed.

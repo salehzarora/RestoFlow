@@ -791,12 +791,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // enforced across order_sync/ready-notifications/demo snapshots). The real
     // app leaves posSyncClockProvider at its DateTime.now default, so production
     // windowing is unchanged.
-    final now = ref.read(posSyncClockProvider)();
-    final cutoff = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(const Duration(days: 1));
+    final cutoff = posRecentOrdersWindowStart(ref.read(posSyncClockProvider)());
     final windowed = <PosRecentOrder>[
       for (final o in list)
         if (!o.sortAt.isBefore(cutoff)) o,
@@ -806,6 +801,12 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
         : windowed;
   }
 }
+
+/// The start of the recent-orders window at [now]: the start of yesterday.
+/// Older orders are pruned (ORDER-EDIT-001F retires a stale change-slip
+/// record by the same rule).
+DateTime posRecentOrdersWindowStart(DateTime now) =>
+    DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
 
 /// The recent-orders persistence seam. Default: in-memory (demo mode / tests —
 /// session only). The real app overrides this in `main.dart` with a

@@ -2,32 +2,48 @@
 library;
 
 import 'dart:async' show Completer;
-import 'dart:convert' show utf8;
+import 'dart:convert' show jsonDecode, utf8;
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show sha256;
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show
+        CanonicalKitchenDispatchRenderer,
+        kitchenChangeSlipLabelsForLanguageCode,
+        kitchenTicketPrintLabelsForLanguageCode;
+import 'package:restoflow_pos/src/data/round_print_claim_store.dart'
+    show PosRoundPrintClaimState;
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_drain_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
+import 'package:restoflow_pos/src/spool/kitchen_void_reconciliation.dart'
+    show KitchenEditSupersessionEvidence;
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
     show
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         PrinterDestinationSendGate;
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition.dart'
+    show posKitchenSpoolRuntimeProvider;
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition_native.dart'
+    show holdsOrderEditDispatchNow;
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_runtime.dart';
 import 'package:restoflow_pos/src/spool/pos_secure_kitchen_mode_cache.dart';
+
+import 'support/pos_package_root.dart';
 
 /// KITCHEN-MODE-001C2B — runtime gating (D1/D3/D4) + pending-ack
 /// reconciliation against a REAL dedicated spool database and scripted
@@ -173,6 +189,15 @@ void main() {
     Future<KitchenModeResult> Function()? fetchMode,
     Future<KitchenDestinationResolution> Function()? destinationResolver,
     bool wireDrain = false,
+    KitchenDispatchBytesRenderer? renderer,
+    PosRoundPrintClaimState? Function(String dispatchId)?
+    readOrderEditPrintClaim,
+    bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
+    Future<void> Function(String dispatchId)? onOrderEditImported,
+    Future<List<KitchenEditSupersessionEvidence>> Function()?
+    readLocalOrderEditEvidence,
   }) => PosKitchenSpoolRuntime(
     platform: platform,
     deviceContext: deviceContext ?? () => _context,
@@ -196,7 +221,7 @@ void main() {
     fetchMode: fetchMode,
     destinationResolver: destinationResolver,
     localJobIdGenerator: wireDrain ? () => 'rt-${++localJobCounter}' : null,
-    renderer: wireDrain ? const KitchenTicketRenderer() : null,
+    renderer: wireDrain ? (renderer ?? const KitchenTicketRenderer()) : null,
     networkSend: wireDrain
         ? ({required host, required port, required bytes}) async {
             workerNetworkCalls.add((host, port));
@@ -222,6 +247,12 @@ void main() {
       platform: native,
     ),
     now: () => now,
+    readOrderEditPrintClaim: readOrderEditPrintClaim,
+    isOrderEditSlipInFlight: isOrderEditSlipInFlight,
+    reserveOrderEditSlip: reserveOrderEditSlip,
+    releaseOrderEditSlip: releaseOrderEditSlip,
+    onOrderEditImported: onOrderEditImported,
+    readLocalOrderEditEvidence: readLocalOrderEditEvidence,
   );
 
   Future<void> provisionKey() => KitchenSpoolKeyManager(
@@ -774,6 +805,456 @@ void main() {
       final report = await runtime(fetchMode: trustedMode).onStartup();
       expect(report.detail, 'real_backend_not_wired');
       expect(transport.calls, isEmpty);
+    });
+  });
+
+  // ORDER-EDIT-001F — the spool side of the paper change slip: with the
+  // change-slip labels an `order_edit` dispatch PRINTS (it was refused as
+  // `kitchen_render_failed` before), the order-edit consult and hand-over are
+  // wired through, and the ORDERED sweep runs on every trusted run.
+  group('ORDER-EDIT-001F: order_edit through the trusted run', () {
+    Future<KitchenModeResult> trustedMode() async =>
+        KitchenModePrinterOnlyWithRevision(revision: 3, verifiedAt: now);
+
+    final resolved = ResolvedKitchenDestination(
+      destination: const NetworkKitchenDestination(
+        host: '10.0.0.9',
+        port: 9100,
+      ),
+      fingerprint: sha256
+          .convert(utf8.encode('network|10.0.0.9|9100'))
+          .toString(),
+      displayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+    );
+
+    Map<String, Object?> pageOf(List<Map<String, Object?>> rows) => {
+      'ok': true,
+      'dispatches': rows,
+      'has_more': false,
+    };
+
+    // The STORED server payload of a real paper edit (fixture capture).
+    Map<String, Object?> editPayload() {
+      final file = File(
+        p.join(
+          locatePosPackageRoot().path,
+          'test',
+          'fixtures',
+          'order_edit_slip',
+          'a_every_op.json',
+        ),
+      );
+      final fixture =
+          jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+      return Map<String, Object?>.from(fixture['dispatch']! as Map);
+    }
+
+    Map<String, Object?> row(
+      String id, {
+      required String type,
+      required String orderId,
+      required Map<String, Object?> payload,
+    }) => {
+      'id': id,
+      'dispatch_type': type,
+      'order_id': orderId,
+      'payload_version': 1,
+      'payload': payload,
+      'created_at': '2026-10-09T05:00:00Z',
+    };
+
+    Map<String, Object?> editRow(String id) =>
+        row(id, type: 'order_edit', orderId: 'order-e', payload: editPayload());
+
+    CanonicalKitchenDispatchRenderer canonical({required bool slipLabels}) =>
+        CanonicalKitchenDispatchRenderer(
+          labels: kitchenTicketPrintLabelsForLanguageCode('en'),
+          changeLabels: slipLabels
+              ? kitchenChangeSlipLabelsForLanguageCode('en')
+              : null,
+        );
+
+    Future<KitchenSpoolJobRow?> storedRow(String dispatchId) async {
+      final db = await factory().open();
+      try {
+        return await DriftKitchenSpoolStore(db).findByDispatchId(dispatchId);
+      } finally {
+        await db.close();
+      }
+    }
+
+    test('WITH the change-slip labels an order_edit dispatch is imported, '
+        'handed over and PRINTED (transport accepted)', () async {
+      final handedOver = <String>[];
+      final reserved = <String>[];
+      final released = <String>[];
+      transport.enqueue(pageOf([editRow('d-edit')]));
+      transport.enqueue({'ok': true}); // import ack
+      transport.enqueue({'ok': true, 'completed': true}); // worker TA ack
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+        renderer: canonical(slipLabels: true),
+        readOrderEditPrintClaim: (_) => null,
+        isOrderEditSlipInFlight: (_) => false,
+        reserveOrderEditSlip: (id) {
+          reserved.add(id);
+          return true;
+        },
+        releaseOrderEditSlip: released.add,
+        onOrderEditImported: (id) async => handedOver.add(id),
+      );
+      final worked = await rt.onStartup() as KitchenSpoolRunWorked;
+      await rt.dispose();
+      expect(worked.drain.rowsImported, 1);
+      expect(worked.drain.rowsOrderEditHandedOver, 1);
+      expect(worked.drain.rowsDeferredInFlight, 0);
+      expect(reserved, ['d-edit'], reason: 'reserved before the import');
+      expect(released, isEmpty, reason: 'the row is durable: never given back');
+      expect(handedOver, ['d-edit']);
+      expect(worked.worker.claimed, 1);
+      expect(worked.worker.accepted, 1);
+      expect(worked.worker.blockedConfiguration, 0);
+      expect(workerNetworkCalls.single, ('10.0.0.9', 9100));
+      expect(
+        (await storedRow('d-edit'))!.status,
+        KitchenSpoolJobStatus.transportAccepted,
+      );
+    });
+
+    test('WITHOUT them (the pre-001F renderer) the same dispatch is refused '
+        'as kitchen_render_failed — never an item-less ticket', () async {
+      transport.enqueue(pageOf([editRow('d-edit')]));
+      transport.enqueue({'ok': true}); // import ack
+      transport.enqueue({'ok': true}); // blocked_configuration ack
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+        renderer: canonical(slipLabels: false),
+      );
+      final worked = await rt.onStartup() as KitchenSpoolRunWorked;
+      await rt.dispose();
+      expect(worked.worker.accepted, 0);
+      expect(worked.worker.blockedConfiguration, 1);
+      expect(workerNetworkCalls, isEmpty);
+      final stored = (await storedRow('d-edit'))!;
+      expect(stored.status, KitchenSpoolJobStatus.blockedConfiguration);
+      expect(stored.lastErrorCode, 'kitchen_render_failed');
+    });
+
+    test('a slip IN FLIGHT on this till is deferred: counted, no row, no '
+        'acknowledgement', () async {
+      transport.enqueue(pageOf([editRow('d-edit')]));
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+        renderer: canonical(slipLabels: true),
+        readOrderEditPrintClaim: (_) => PosRoundPrintClaimState.claimed,
+        isOrderEditSlipInFlight: (id) => id == 'd-edit',
+      );
+      final worked = await rt.onStartup() as KitchenSpoolRunWorked;
+      await rt.dispose();
+      expect(worked.drain.rowsDeferredInFlight, 1);
+      expect(worked.drain.rowsImported, 0);
+      expect(worked.drain.rowsAlreadyPrintedLocally, 0);
+      expect(worked.worker.claimed, 0);
+      expect(transport.calls, hasLength(1), reason: 'the pull only');
+      expect(await storedRow('d-edit'), isNull);
+    });
+
+    test(
+      'this till\'s DIRECT slip print supersedes an older local job of '
+      'the edited order BEFORE the worker runs; a newer round still prints',
+      () async {
+        // Run 1 imports an initial ticket and a round created AFTER the edit,
+        // then stops before the worker (disposed) — both wait locally.
+        transport.enqueue(
+          pageOf([
+            row(
+              'd-initial',
+              type: 'initial_order',
+              orderId: 'order-e',
+              payload: {
+                'v': 1,
+                'kind': 'initial_order',
+                'order_code': '#00A001',
+                'order_type': 'dine_in',
+                'items': [
+                  {'qty': 1, 'name': 'Burger', 'modifiers': <Object?>[]},
+                ],
+              },
+            ),
+            row(
+              'd-round-new',
+              type: 'service_round',
+              orderId: 'order-e',
+              payload: {
+                'v': 1,
+                'kind': 'service_round',
+                'order_code': '#00A001',
+                'order_type': 'dine_in',
+                'created_at': '2026-10-09T05:40:00Z',
+                'round_id': 'round-2',
+                'round_number': 2,
+                'items': [
+                  {'qty': 1, 'name': 'Fries', 'modifiers': <Object?>[]},
+                ],
+              },
+            ),
+          ]),
+        );
+        transport.enqueue({'ok': true}); // import ack d-initial
+        transport.enqueue({'ok': true}); // import ack d-round-new
+        final first = runtime(
+          fetchMode: trustedMode,
+          destinationResolver: () async => resolved,
+          wireDrain: true,
+          renderer: canonical(slipLabels: true),
+        );
+        await first.dispose();
+        await first.onStartup();
+        await first.dispose();
+
+        // Run 2: the till printed the edit's slip directly meanwhile.
+        transport.enqueue(pageOf(const [])); // nothing new to pull
+        transport.enqueue({'ok': true, 'completed': true}); // round TA ack
+        final second = runtime(
+          fetchMode: trustedMode,
+          destinationResolver: () async => resolved,
+          wireDrain: true,
+          renderer: canonical(slipLabels: true),
+          readLocalOrderEditEvidence: () async => [
+            KitchenEditSupersessionEvidence(
+              orderId: 'order-e',
+              dispatchId: 'd-direct',
+              createdAt: DateTime.parse('2026-10-09T05:31:12.606845+00:00'),
+            ),
+          ],
+        );
+        final worked = await second.onStartup() as KitchenSpoolRunWorked;
+        await second.dispose();
+        expect(worked.editSuperseded, 1);
+        expect(worked.editLinks, 0);
+        expect(worked.voidSuperseded, 0);
+        expect(worked.worker.claimed, 1, reason: 'the newer round only');
+        expect(worked.worker.accepted, 1);
+        final initial = (await storedRow('d-initial'))!;
+        expect(initial.status, KitchenSpoolJobStatus.superseded);
+        expect(initial.supersededByDispatchId, 'd-direct');
+        expect(
+          (await storedRow('d-round-new'))!.status,
+          KitchenSpoolJobStatus.transportAccepted,
+        );
+      },
+    );
+
+    test(
+      'a FAILING evidence reader is no evidence (the run still works)',
+      () async {
+        transport.enqueue(pageOf(const []));
+        final rt = runtime(
+          fetchMode: trustedMode,
+          destinationResolver: () async => resolved,
+          wireDrain: true,
+          readLocalOrderEditEvidence: () async => throw StateError('gone'),
+        );
+        final report = await rt.onStartup();
+        await rt.dispose();
+        expect(report, isA<KitchenSpoolRunWorked>());
+        expect((report as KitchenSpoolRunWorked).editSuperseded, 0);
+      },
+    );
+
+    test(
+      'the NATIVE composition wires the change-slip labels and all four '
+      'order-edit callbacks (source pin: the composition needs a device)',
+      () {
+        final source = File(
+          p.join(
+            locatePosPackageRoot().path,
+            'lib',
+            'src',
+            'spool',
+            'pos_kitchen_spool_composition_native.dart',
+          ),
+        ).readAsStringSync();
+        expect(
+          source,
+          contains(
+            'changeLabels: kitchenChangeSlipLabelsForLanguageCode(\n'
+            '        ui.PlatformDispatcher.instance.locale.languageCode,',
+          ),
+        );
+        for (final wiring in [
+          'readOrderEditPrintClaim: (dispatchId)',
+          'posOrderEditDispatchClaimKey(dispatchId)',
+          'isOrderEditSlipInFlight: (dispatchId)',
+          '.isDispatchInFlight(dispatchId)',
+          'reserveOrderEditSlip: (dispatchId)',
+          '.reserveForSpool(dispatchId)',
+          'releaseOrderEditSlip: (dispatchId)',
+          '.releaseSpoolReservation(dispatchId)',
+          'onOrderEditImported: (dispatchId) async',
+          '.handOverToSpool(dispatchId)',
+          'readLocalOrderEditEvidence: () async',
+          'orderEditSupersessionEvidenceFrom(',
+        ]) {
+          expect(source, contains(wiring), reason: wiring);
+        }
+      },
+    );
+  });
+
+  group('ORDER-EDIT-001F: the order-edit spool lookup', () {
+    test('NO spool file -> "not held", with ZERO footprint (no directory, no '
+        'database)', () async {
+      final rt = runtime();
+      expect(await rt.holdsOrderEditDispatch('d-edit'), isFalse);
+      expect(
+        Directory(p.join(tempDir.path, 'restoflow_kitchen_spool')).existsSync(),
+        isFalse,
+      );
+      await rt.dispose();
+    });
+
+    test('an existing spool answers from its durable rows (any status); a '
+        'disposed runtime cannot tell (throws)', () async {
+      final seed = await factory().open();
+      final store = DriftKitchenSpoolStore(seed);
+      await store.insertImportedJob(_job('edit'));
+      await store.insertImportedJob(_job('done'));
+      await store.markSupersededFromServerEvidence(
+        dispatchId: 'd-done',
+        supersededByDispatchId: 'd-void',
+        now: now,
+      );
+      await seed.close();
+
+      final rt = runtime();
+      expect(await rt.holdsOrderEditDispatch('d-edit'), isTrue);
+      expect(await rt.holdsOrderEditDispatch('d-done'), isTrue);
+      expect(await rt.holdsOrderEditDispatch('d-other'), isFalse);
+      // The lookup and a run share the ONE handle the lookup opened.
+      transport.enqueue({
+        'ok': true,
+        'entity': 'kitchen_workflow_mode',
+        'kitchen_workflow_mode': 'kds',
+        'server_ts': 'x',
+      });
+      await provisionKey();
+      final both = await Future.wait<Object?>([
+        rt.onStartup(),
+        rt.holdsOrderEditDispatch('d-edit'),
+      ]);
+      expect(both.last, isTrue);
+      await rt.dispose();
+      await expectLater(
+        rt.holdsOrderEditDispatch('d-edit'),
+        throwsA(isA<KitchenSpoolDatabaseUnavailableException>()),
+      );
+    });
+
+    test(
+      'a lookup whose open a DISPOSE overtakes closes that handle: a '
+      'disposed runtime never keeps a connection to the spool file',
+      () async {
+        final seed = await factory().open();
+        await seed.close();
+
+        var calls = 0;
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        final rt = PosKitchenSpoolRuntime(
+          platform: native,
+          deviceContext: () => _context,
+          secretStore: secretStore,
+          modeRepository: null,
+          ackRepository: null,
+          databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+            documentsDirectoryProvider: () async {
+              // 1st call: the presence check; 2nd: the open, held open here.
+              if (++calls == 2) {
+                entered.complete();
+                await release.future;
+              }
+              return tempDir;
+            },
+          ),
+        );
+        final lookup = rt.holdsOrderEditDispatch('d-edit');
+        await entered.future;
+        await rt.dispose();
+        release.complete();
+        await expectLater(
+          lookup,
+          throwsA(
+            isA<KitchenSpoolDatabaseUnavailableException>().having(
+              (e) => e.reason,
+              'reason',
+              'runtime_disposed',
+            ),
+          ),
+        );
+        expect(rt.holdsOpenDatabaseForTesting, isFalse);
+      },
+    );
+
+    test('a spool whose presence cannot be determined cannot tell (throws), '
+        'and nothing is created', () async {
+      final rt = PosKitchenSpoolRuntime(
+        platform: native,
+        deviceContext: () => _context,
+        secretStore: secretStore,
+        modeRepository: null,
+        ackRepository: null,
+        databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+          documentsDirectoryProvider: () async =>
+              throw const FileSystemException('no documents directory'),
+        ),
+      );
+      await expectLater(
+        rt.holdsOrderEditDispatch('d-edit'),
+        throwsA(isA<KitchenSpoolDatabaseUnavailableException>()),
+      );
+      expect(
+        Directory(p.join(tempDir.path, 'restoflow_kitchen_spool')).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('no composed runtime (web, demo, no paired transport) holds '
+        'nothing', () async {
+      final container = ProviderContainer(
+        overrides: [posKitchenSpoolRuntimeProvider.overrideWithValue(null)],
+      );
+      addTearDown(container.dispose);
+      expect(await holdsOrderEditDispatchNow(container, 'd-edit'), isFalse);
+    });
+
+    test('the NATIVE composition attaches the lookup for the slip controller, '
+        'resolving the CURRENT runtime at each call (source pin)', () {
+      final source = File(
+        p.join(
+          locatePosPackageRoot().path,
+          'lib',
+          'src',
+          'spool',
+          'pos_kitchen_spool_composition_native.dart',
+        ),
+      ).readAsStringSync();
+      for (final wiring in [
+        '.read(orderEditSpoolLookupProvider)',
+        '(dispatchId) => holdsOrderEditDispatchNow(container, dispatchId)',
+        'final hooks = container.read(posKitchenSpoolRuntimeProvider);',
+        'hooks._runtime.holdsOrderEditDispatch(dispatchId);',
+      ]) {
+        expect(source, contains(wiring), reason: wiring);
+      }
     });
   });
 

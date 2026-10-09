@@ -107,6 +107,73 @@ void main() {
       );
     });
 
+    test('ORDER-EDIT-001F: the changes are kept in request order for the '
+        'hand-built change slip', () {
+      final row = _appliedRow(channel: 'paper')
+        ..['changes'] = [
+          {
+            'kind': 'modify',
+            'order_item_id': 'oi-1',
+            'new_order_item_ids': ['n-1', 'n-2'],
+            'remake': false,
+          },
+          {
+            'kind': 'remove',
+            'order_item_id': 'oi-2',
+            'new_order_item_ids': <Object?>[],
+          },
+          {
+            'kind': 'set_quantity',
+            'order_item_id': 'oi-3',
+            'new_order_item_ids': ['n-3'],
+          },
+          {
+            'kind': 'add',
+            'order_item_id': null,
+            'new_order_item_ids': ['n-4'],
+          },
+        ];
+      final changes = _classify(_envelope(row)).applied!.changes;
+      expect(changes.map((c) => c.kind), [
+        'modify',
+        'remove',
+        'set_quantity',
+        'add',
+      ]);
+      expect(changes.map((c) => c.orderItemId), ['oi-1', 'oi-2', 'oi-3', null]);
+      expect(changes.first.newOrderItemIds, ['n-1', 'n-2']);
+      expect(changes.last.newOrderItemIds, ['n-4']);
+    });
+
+    test('ORDER-EDIT-001F: the changes are ALL OR NOTHING — one unreadable '
+        'entry empties the list but never doubts the edit', () {
+      Map<String, Object?> good() => {
+        'kind': 'remove',
+        'order_item_id': 'oi-2',
+        'new_order_item_ids': <Object?>[],
+      };
+      final bad = <Object?>[
+        'remove',
+        {...good(), 'kind': 'remake'},
+        {...good(), 'order_item_id': null},
+        {...good(), 'order_item_id': ''},
+        {...good(), 'kind': 'add', 'order_item_id': 'oi-2'},
+        {...good(), 'new_order_item_ids': 'n-1'},
+        {
+          ...good(),
+          'new_order_item_ids': ['n-1', ''],
+        },
+        {...good()}..remove('new_order_item_ids'),
+      ];
+      for (final entry in bad) {
+        final row = _appliedRow(channel: 'paper')
+          ..['changes'] = [good(), entry];
+        final o = _classify(_envelope(row));
+        expect(o.kind, OrderEditOutcomeKind.applied, reason: '$entry');
+        expect(o.applied!.changes, isEmpty, reason: '$entry');
+      }
+    });
+
     test('the optional facts are tolerant', () {
       final row = _appliedRow()
         ..['new_round_id'] = null

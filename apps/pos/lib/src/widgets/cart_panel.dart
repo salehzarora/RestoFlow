@@ -58,6 +58,7 @@ import 'order_action_row.dart' show printOrderBill;
 import 'order_confirmation.dart';
 import 'order_edit_cart_widgets.dart';
 import 'order_edit_messages.dart' show orderEditResultMessage;
+import 'order_edit_slip_widgets.dart' show OrderEditSlipPrintAgain;
 import 'quantity_stepper.dart';
 import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
@@ -919,8 +920,9 @@ Future<void> submitOrderEditFromCart({
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   // Captured BEFORE the first await: the container and the notifiers it owns
-  // outlive the widget.
+  // outlive the widget (so does ORDER-EDIT-001F's Print again).
   final container = ProviderScope.containerOf(context, listen: false);
+  final printSlipAgain = OrderEditSlipPrintAgain.of(context);
   final controller = container.read(orderEditControllerProvider.notifier);
   final edit = container.read(orderEditControllerProvider);
   final editContext = container.read(cartControllerProvider).editContext;
@@ -953,11 +955,17 @@ Future<void> submitOrderEditFromCart({
     billPresentedAt: billPresentedAt,
   );
   if (!messenger.mounted) return;
+  final slipEditId = result.applied?.orderEditId;
   showOrderEditResult(
     messenger,
     l10n,
     result,
     onRefresh: () => unawaited(controller.retryRefresh()),
+    // ORDER-EDIT-001F: the paper slip did not print — Print again (the
+    // menu screen's banner keeps it too).
+    onPrintSlipAgain: slipEditId == null
+        ? null
+        : () => unawaited(printSlipAgain(slipEditId)),
     onPrintBill: orderId == null
         ? null
         : () => unawaited(

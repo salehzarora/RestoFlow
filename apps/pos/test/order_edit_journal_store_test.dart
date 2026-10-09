@@ -75,6 +75,49 @@ const _applied = OrderEditApplied(
   orderStatus: 'served',
 );
 
+/// ORDER-EDIT-001F: a paper envelope's changes (modify + add).
+const _appliedWithChanges = OrderEditApplied(
+  orderEditId: 'edit-9',
+  editNumber: 2,
+  revision: 7,
+  kitchenChannel: PosKitchenChannel.paper,
+  kitchenAckRequired: false,
+  kitchenDispatch: OrderEditKitchenDispatch(id: 'dispatch-1'),
+  changes: [
+    OrderEditAppliedChange(
+      kind: 'modify',
+      orderItemId: 'oi-burger',
+      newOrderItemIds: ['n-1', 'n-2'],
+    ),
+    OrderEditAppliedChange(kind: 'add', newOrderItemIds: ['n-3']),
+  ],
+);
+
+/// ORDER-EDIT-001F (D2): the frozen "was" projections, as persisted.
+const _slipWasJson = [
+  {
+    'order_item_id': 'oi-burger',
+    'item': {
+      'qty': 2,
+      'name': 'Burger',
+      'note': 'no salt',
+      'prep': [
+        {'name': 'Bun', 'quantity': 1, 'unit': 'pc'},
+      ],
+      'modifiers': [
+        {'qty': 2, 'name': 'Tomato'},
+        {'qty': 1, 'name': 'Cheese'},
+      ],
+    },
+  },
+  {
+    'order_item_id': 'OI-FRIES',
+    'item': {'qty': 1, 'name': 'Fries', 'modifiers': <Object?>[]},
+  },
+];
+
+Map<String, Object?> _map(Object? raw) => (raw as Map).cast<String, Object?>();
+
 OrderEditJournalRecord _record({
   String localOperationId = 'op-1',
   OrderEditJournalPhase phase = OrderEditJournalPhase.dispatching,
@@ -224,6 +267,106 @@ void main() {
         ).load('dev-1'))['op-1']!.applied!.kitchenDispatch!.claimExpiresAt,
         DateTime.utc(2026, 10, 9, 11, 41),
       );
+    });
+
+    test('ORDER-EDIT-001F (D2): the frozen slip "was" lines and the applied '
+        'changes round-trip', () async {
+      final prefs = await _prefs();
+      final record = OrderEditJournalRecord.fromJson(
+        _map(
+          jsonDecode(
+            jsonEncode(
+              _record(
+                phase: OrderEditJournalPhase.awaitingAuthoritativeRefresh,
+                applied: _appliedWithChanges,
+              ).toJson(),
+            ),
+          ),
+        )..['slip_was'] = _slipWasJson,
+      );
+      await SharedPrefsOrderEditJournalStore(
+        prefs,
+      ).persist('dev-1', {'op-1': record});
+      final back = (await SharedPrefsOrderEditJournalStore(
+        prefs,
+      ).load('dev-1'))['op-1']!;
+      expect(back.slipWas!.keys, ['oi-burger', 'oi-fries']);
+      final burger = back.slipWas!['oi-burger']!;
+      expect(burger.qty, 2);
+      expect(burger.note, 'no salt');
+      expect(burger.prep.single.name, 'Bun');
+      expect(burger.modifiers.map((m) => '${m.qty} ${m.name}'), [
+        '2 Tomato',
+        '1 Cheese',
+      ]);
+      expect(back.applied!.changes.map((c) => c.kind), ['modify', 'add']);
+      expect(back.applied!.changes.first.newOrderItemIds, ['n-1', 'n-2']);
+      expect(back.applied!.changes.last.orderItemId, isNull);
+      // A phase transition keeps both.
+      final moved = back.copyWith(attemptCount: 5);
+      expect(moved.slipWas, same(back.slipWas));
+      expect(
+        jsonEncode(moved.toJson()['slip_was']),
+        jsonEncode(back.toJson()['slip_was']),
+      );
+    });
+
+    test('ORDER-EDIT-001F: a 001E-format record (no slip keys) still decodes, '
+        'and a KDS record writes none', () async {
+      final legacy = _record(
+        phase: OrderEditJournalPhase.awaitingAuthoritativeRefresh,
+        applied: _applied,
+      ).toJson();
+      expect(legacy.containsKey('slip_was'), isFalse);
+      expect((legacy['applied']! as Map).containsKey('changes'), isFalse);
+      final back = OrderEditJournalRecord.fromJson(legacy);
+      expect(back.slipWas, isNull);
+      expect(back.applied!.changes, isEmpty);
+    });
+
+    test('ORDER-EDIT-001F: unreadable slip evidence costs the SLIP, never the '
+        'record (its identity may be live on the server)', () {
+      final base = _record(
+        phase: OrderEditJournalPhase.awaitingAuthoritativeRefresh,
+        applied: _appliedWithChanges,
+      ).toJson();
+      for (final bad in <Object?>[
+        'garbled',
+        [
+          {'order_item_id': 'oi-1'},
+        ],
+        [
+          {
+            'order_item_id': '',
+            'item': {'qty': 1, 'name': 'Cola', 'modifiers': <Object?>[]},
+          },
+        ],
+        [
+          {
+            'order_item_id': 'oi-1',
+            'item': {
+              'qty': 1,
+              'name': 'Cola',
+              'modifiers': <Object?>[],
+              'price_minor': 800,
+            },
+          },
+        ],
+      ]) {
+        final back = OrderEditJournalRecord.fromJson({
+          ...base,
+          'slip_was': bad,
+        });
+        expect(back.slipWas, isNull, reason: '$bad');
+        expect(back.localOperationId, 'op-1');
+      }
+      final badChanges = _map(jsonDecode(jsonEncode(base)));
+      (badChanges['applied']! as Map)['changes'] = [
+        {'kind': 'remake', 'order_item_id': 'oi-1', 'new_order_item_ids': []},
+      ];
+      final back = OrderEditJournalRecord.fromJson(badChanges);
+      expect(back.applied!.changes, isEmpty);
+      expect(back.applied!.orderEditId, 'edit-9');
     });
 
     test('the frozen payload comes back byte-identical', () async {

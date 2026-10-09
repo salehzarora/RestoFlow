@@ -9,6 +9,8 @@ import 'package:restoflow_pos/src/data/order_edit_response.dart';
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/order_edit_controller.dart';
+import 'package:restoflow_pos/src/state/order_edit_slip_controller.dart'
+    show OrderEditSlipOutcome;
 import 'package:restoflow_pos/src/state/receipt_print_controller.dart';
 import 'package:restoflow_pos/src/widgets/order_edit_cart_widgets.dart';
 import 'package:restoflow_pos/src/widgets/order_edit_messages.dart';
@@ -159,14 +161,76 @@ void main() {
       expect(orderEditAppliedMessage(l10n, _applied()), 'Change 3 saved');
     });
 
-    test('paper is saved — never "printed" before ORDER-EDIT-001F', () {
-      final message = orderEditAppliedMessage(
-        l10n,
-        _applied(channel: PosKitchenChannel.paper, newRound: 'round-2'),
+    test('ORDER-EDIT-001F: paper says "printed" ONLY once the slip reached '
+        'the printer; otherwise "saved"', () {
+      final paper = _applied(
+        channel: PosKitchenChannel.paper,
+        newRound: 'round-2',
       );
-      expect(message, 'Change 3 saved');
-      expect(message, isNot(l10n.posOrderEditResultPrinted(3)));
-      expect(message.toLowerCase(), isNot(contains('print')));
+      expect(
+        orderEditAppliedMessage(l10n, paper, slipPrinted: true),
+        'Change 3 printed for the kitchen',
+      );
+      expect(
+        orderEditAppliedMessage(l10n, paper, slipPrinted: true),
+        l10n.posOrderEditResultPrinted(3),
+      );
+      final saved = orderEditAppliedMessage(l10n, paper);
+      expect(saved, 'Change 3 saved');
+      expect(saved.toLowerCase(), isNot(contains('print')));
+      // Never "printed" while the refresh is owed, nor on a KDS branch.
+      expect(
+        orderEditAppliedMessage(
+          l10n,
+          paper,
+          slipPrinted: true,
+          refreshRequired: true,
+        ),
+        'Change 3 saved',
+      );
+      expect(
+        orderEditAppliedMessage(l10n, _applied(), slipPrinted: true),
+        'Change 3 saved',
+      );
+    });
+
+    test('ORDER-EDIT-001F: the result toast follows the slip outcome', () {
+      final paper = _applied(channel: PosKitchenChannel.paper);
+      OrderEditResult result(
+        OrderEditSlipOutcome? slip, {
+        bool refreshRequired = false,
+      }) => OrderEditResult(
+        status: OrderEditSubmitStatus.applied,
+        applied: paper,
+        refreshRequired: refreshRequired,
+        slip: slip,
+      );
+      expect(
+        orderEditResultMessage(l10n, result(OrderEditSlipOutcome.printed)),
+        'Change 3 printed for the kitchen',
+      );
+      final notPrinted = result(OrderEditSlipOutcome.notPrinted);
+      expect(
+        orderEditResultMessage(l10n, notPrinted),
+        'Change 3 saved\n${l10n.posOrderEditSlipNotPrinted}',
+      );
+      expect(orderEditSlipNotPrinted(notPrinted), isTrue);
+      // While the refresh is owed the slip waits for the proof: "saved".
+      final owed = result(
+        OrderEditSlipOutcome.notPrinted,
+        refreshRequired: true,
+      );
+      expect(orderEditResultMessage(l10n, owed), 'Change 3 saved');
+      expect(orderEditSlipNotPrinted(owed), isFalse);
+      for (final other in [
+        null,
+        OrderEditSlipOutcome.handedOver,
+        OrderEditSlipOutcome.superseded,
+        OrderEditSlipOutcome.notApplicable,
+      ]) {
+        expect(orderEditResultMessage(l10n, result(other)), 'Change 3 saved');
+        expect(orderEditSlipNotPrinted(result(other)), isFalse);
+      }
     });
 
     test('applied but not yet proven: the honest "saved"', () {
