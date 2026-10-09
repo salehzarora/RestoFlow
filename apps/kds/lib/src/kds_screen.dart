@@ -31,6 +31,7 @@ class KdsScreen extends StatefulWidget {
     this.onAcknowledgeChange,
     this.changeAckPendingKeys = const <String>{},
     this.changeAckFailedKeys = const <String>{},
+    this.boardIsAuthoritative = true,
     super.key,
   });
 
@@ -103,6 +104,14 @@ class KdsScreen extends StatefulWidget {
 
   /// ORDER-EDIT-001D: change alert keys whose last "Got it" failed.
   final Set<String> changeAckFailedKeys;
+
+  /// ORDER-EDIT-001D: whether [tickets] is an AUTHORITATIVE board (the LIVE
+  /// board passes `status == KdsSyncStatus.data`). The change pulse seeds its
+  /// first-seen map only from such a board: the initial / loading emissions
+  /// of an app start or sign-in carry a temporary EMPTY list, and seeding
+  /// from it would make every change already pending pulse on the first
+  /// pull. True by default (demo / bare boards are what they show).
+  final bool boardIsAuthoritative;
 
   @override
   State<KdsScreen> createState() => _KdsScreenState();
@@ -195,7 +204,9 @@ class _KdsScreenState extends State<KdsScreen> {
   /// NEW key and pulses again. Keys present on the FIRST build are seeded in
   /// the past (no pulse on page load / restart — the amber header is the
   /// persistent signal); keys that disappear (acknowledged) are pruned. Same
-  /// enable flag + window as the new-arrival alert.
+  /// enable flag + window as the new-arrival alert. "First build" means the
+  /// first AUTHORITATIVE board ([KdsScreen.boardIsAuthoritative]), never the
+  /// empty initial / loading board before the first pull.
   final Map<String, DateTime> _firstSeenChange = <String, DateTime>{};
   bool _changeArrivalInitialized = false;
 
@@ -206,6 +217,18 @@ class _KdsScreenState extends State<KdsScreen> {
       for (final t in widget.tickets)
         if (t.change != null && !t.requiresAck) t.changeAlertKey!,
     };
+    if (!widget.boardIsAuthoritative) {
+      // Not a pulled board (initial / loading before the first pull, or a
+      // stale / error snapshot): it neither seeds nor prunes the map, so the
+      // first AUTHORITATIVE board is the one "at load" and a pulse already
+      // running keeps its window.
+      return <String>{
+        for (final entry in _firstSeenChange.entries)
+          if (currentKeys.contains(entry.key) &&
+              now.difference(entry.value) < widget.newArrivalWindow)
+            entry.key,
+      };
+    }
     if (!_changeArrivalInitialized) {
       for (final key in currentKeys) {
         _firstSeenChange[key] = _seenInThePast;

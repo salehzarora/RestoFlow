@@ -5,7 +5,11 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
-    show OrderChangeRemoved, OrderChangeSlipView;
+    show
+        OrderChangeAdded,
+        OrderChangeModified,
+        OrderChangeRemoved,
+        OrderChangeSlipView;
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_kds/src/print/kds_change_chit.dart';
 import 'package:restoflow_kds/src/print/kds_ticket_document.dart';
@@ -125,6 +129,72 @@ KdsTicketView _unit(
 List<String> _removedNames(OrderChangeSlipView view) => [
   for (final c in view.changes) (c as OrderChangeRemoved).was.name,
 ];
+
+/// Unit o1:grill as printed at Acknowledge BEFORE any edit (paper P1).
+KdsTicketView _beforeEdit() => KdsTicketView(
+  kitchenTicketId: 'o1:grill',
+  stationId: 'grill',
+  orderId: 'o1',
+  orderNumber: '#ABC123',
+  orderType: 'takeaway',
+  status: KitchenTicketStatus.acknowledged,
+  items: const [
+    KdsItemView(
+      name: 'Burger',
+      quantity: 1,
+      modifiers: ['Tomato'],
+      linePosition: 1,
+      orderItemId: 'i-burger',
+    ),
+    KdsItemView(name: 'Fries', quantity: 1, linePosition: 2),
+  ],
+);
+
+/// The same unit after edit 1: Fries REMOVED, the Burger CHANGED to no
+/// tomato (Was/Now) and a Salad ADDED.
+KdsTicketView _afterEdit1() => KdsTicketView(
+  kitchenTicketId: 'o1:grill',
+  stationId: 'grill',
+  orderId: 'o1',
+  orderNumber: '#ABC123',
+  orderType: 'takeaway',
+  status: KitchenTicketStatus.acknowledged,
+  items: const [
+    KdsItemView(
+      name: 'Burger',
+      quantity: 1,
+      linePosition: 1,
+      orderItemId: 'i-burger-now',
+      editMark: KdsEditLineMark.changed,
+      editWas: KdsItemView(
+        name: 'Burger',
+        quantity: 1,
+        modifiers: ['Tomato'],
+        linePosition: 1,
+        orderItemId: 'i-burger',
+      ),
+      editNumber: 1,
+    ),
+    KdsItemView(
+      name: 'Salad',
+      quantity: 1,
+      linePosition: 3,
+      editMark: KdsEditLineMark.added,
+      editNumber: 1,
+    ),
+  ],
+  change: KdsTicketChange(
+    pendingEdits: [_edit(1)],
+    removed: const [
+      KdsRemovedLine(
+        line: KdsItemView(name: 'Fries', quantity: 1),
+        editNumber: 1,
+        removedKitchenStage: 'accepted',
+      ),
+    ],
+    orderPendingEditNumbers: const [1],
+  ),
+);
 
 void main() {
   test('toggle OFF -> nothing is built, stored or sent', () async {
@@ -401,6 +471,7 @@ void main() {
       printed: true,
       fromLocalJob: true,
       through: 2,
+      removalThrough: 2,
     ));
 
     final plain = KdsTicketView(
@@ -418,6 +489,84 @@ void main() {
     expect(controller.jobFor(plain)!.printedThroughEdit, isNull);
   });
 
+  group('a Reprint keeps the EARLIER paper\'s removal watermark', () {
+    Future<List<OrderChangeSlipView>> reprintThenGotIt({
+      required BridgeSubmitResult reprintOutcome,
+    }) async {
+      final l10n = await _en();
+      final c = await _container();
+      final controller = c.read(kdsKitchenPrintControllerProvider.notifier);
+      // P1 went out at Acknowledge, before the edit.
+      final p1 = _beforeEdit();
+      controller.prepareForTicket(
+        p1,
+        hasEnabledPrinter: true,
+        buildDocument: () => buildKdsTicketDocument(l10n, p1),
+      );
+      controller.markSentToPrinter(KdsKitchenPrintController.keyFor(p1));
+      // Edit 1 lands; with the change on screen the cook taps Reprint (P2
+      // carries only the live lines: no Fries, no REMOVED, no Was).
+      final edited = _afterEdit1();
+      await controller.retry(
+        edited,
+        hasEnabledPrinter: true,
+        buildDocument: () => buildKdsTicketDocument(l10n, edited),
+        submitToBridge: (_) async => reprintOutcome,
+      );
+      // Then "Got it" up to 1.
+      final views = <OrderChangeSlipView>[];
+      await controller.printChangeChit(
+        orderId: 'o1',
+        upToEditNumber: 1,
+        board: [edited],
+        buildDocument: (v) {
+          views.add(v);
+          return buildKdsChangeChitDocument(l10n, v);
+        },
+      );
+      return views;
+    }
+
+    test('a SENT reprint: the chit still prints REMOVED Fries and the '
+        'Burger Was/Now (P1 still lists them) but never repeats the ADD '
+        'that P2 already shows', () async {
+      final views = await reprintThenGotIt(
+        reprintOutcome: const BridgeSubmitResult.sentToPrinter(),
+      );
+      expect(views, hasLength(1));
+      final changes = views.single.changes;
+      expect(
+        [for (final c in changes.whereType<OrderChangeRemoved>()) c.was.name],
+        ['Fries'],
+      );
+      final modified = changes.whereType<OrderChangeModified>().single;
+      expect(modified.was.modifiers, ['Tomato']);
+      expect(modified.now.single.modifiers, isEmpty);
+      expect(changes.whereType<OrderChangeAdded>(), isEmpty);
+      expect(changes, hasLength(2));
+    });
+
+    test('a FAILED reprint: P1 is still the paper on the rail, so the chit '
+        'carries every change — the ADD included', () async {
+      final views = await reprintThenGotIt(
+        reprintOutcome: const BridgeSubmitResult.failed(
+          PrinterErrorCategory.paperOut,
+        ),
+      );
+      expect(views, hasLength(1));
+      final changes = views.single.changes;
+      expect(changes.whereType<OrderChangeRemoved>(), hasLength(1));
+      expect(changes.whereType<OrderChangeModified>(), hasLength(1));
+      expect(
+        [
+          for (final c in changes.whereType<OrderChangeAdded>())
+            for (final l in c.now) l.name,
+        ],
+        ['Salad'],
+      );
+    });
+  });
+
   test('printFactsFor: a failed local job is not paper; without a job the '
       'stage decides', () {
     final c = ProviderContainer();
@@ -428,6 +577,7 @@ void main() {
       printed: true,
       fromLocalJob: false,
       through: 0,
+      removalThrough: 0,
     ));
     unit.status = KitchenTicketStatus.newTicket;
     expect(controller.printFactsFor(unit).printed, isFalse);
@@ -440,6 +590,7 @@ void main() {
       printed: false,
       fromLocalJob: true,
       through: 0,
+      removalThrough: 0,
     ));
   });
 }

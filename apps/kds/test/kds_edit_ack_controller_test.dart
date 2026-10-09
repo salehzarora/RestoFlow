@@ -470,6 +470,176 @@ void main() {
     });
   });
 
+  group('an UNKNOWN outcome owes its change chit, replayed with the SAME id '
+      'once an authoritative pull shows its edits confirmed', () {
+    test('owed only with a confirmed board; never replayed while an edit up '
+        'to N is still pending on the board; an applied count > 0 is '
+        'returned ONCE', () async {
+      var attempt = 0;
+      final (container, transport, _) = _harness((fn, p) {
+        attempt++;
+        if (attempt <= 2) throw StateError('reply lost');
+        return _applied2(fn, p);
+      });
+      final notifier = container.read(kdsEditAckControllerProvider.notifier);
+      final card = _card();
+
+      await notifier.acknowledge(card);
+      expect(notifier.owedChits, isEmpty, reason: 'no board, no chit');
+
+      final board = [card, _card(orderId: 'o2')];
+      await notifier.acknowledge(card, confirmedBoard: board);
+      final opId = _opId(transport.calls[1].$2);
+      final owed = notifier.owedChits.single;
+      expect(owed.localOperationId, opId);
+      expect(owed.orderId, 'o1');
+      expect(owed.upToEditNumber, 1);
+      expect(owed.board, board);
+
+      // The change still shows: nothing is sent.
+      expect(await notifier.replayOwedChits([card]), isEmpty);
+      // The card moved on to edit 2 while edit 1 is still pending (the key
+      // changed): the lost tap never applied, and a replay now would confirm
+      // a change still on the board — nothing is sent.
+      final movedOn = _card(edits: [2], orderPending: [1, 2]);
+      expect(movedOn.changeAlertKey, isNot(card.changeAlertKey));
+      expect(await notifier.replayOwedChits([movedOn]), isEmpty);
+      // Another card of the order still shows edit 1 pending.
+      final sibling = _card(unit: 'bar', edits: [1]);
+      expect(await notifier.replayOwedChits([sibling]), isEmpty);
+      expect(transport.calls, hasLength(2));
+      expect(notifier.owedChits, hasLength(1));
+
+      // Edits up to 1 confirmed (only a newer edit and another order are
+      // pending): the replay runs.
+      final due = await notifier.replayOwedChits([
+        _card(edits: [2], orderPending: [2]),
+        _card(orderId: 'o2'),
+      ]);
+      expect(due.single.localOperationId, opId);
+      expect(_opId(transport.calls[2].$2), opId);
+      expect(_op(transport.calls[2].$2)['payload'], {
+        'order_id': 'o1',
+        'up_to_edit_number': 1,
+      });
+      expect(notifier.owedChits, isEmpty);
+      expect(await notifier.replayOwedChits(const <KdsTicketView>[]), isEmpty);
+      expect(transport.calls, hasLength(3));
+    });
+
+    test('a replay still UNKNOWN is kept for the next pull, at most 3 '
+        'times', () async {
+      final (container, transport, _) = _harness(
+        (fn, p) => throw StateError('offline'),
+      );
+      final notifier = container.read(kdsEditAckControllerProvider.notifier);
+      final card = _card();
+      await notifier.acknowledge(card, confirmedBoard: [card]);
+      for (var i = 0; i < 3; i++) {
+        expect(notifier.owedChits, hasLength(1), reason: 'replay $i');
+        expect(
+          await notifier.replayOwedChits(const <KdsTicketView>[]),
+          isEmpty,
+        );
+      }
+      expect(notifier.owedChits, isEmpty);
+      expect(transport.calls, hasLength(4));
+      await notifier.replayOwedChits(const <KdsTicketView>[]);
+      expect(transport.calls, hasLength(4));
+    });
+
+    for (final (name, answer) in [
+      (
+        'order_voided',
+        {'status': 'rejected', 'ok': false, 'error': 'order_voided'},
+      ),
+      (
+        'a refusal',
+        {'status': 'rejected', 'ok': false, 'error': 'permission_denied'},
+      ),
+      ('count 0', {'status': 'applied', 'ok': true, 'acknowledged_count': 0}),
+    ]) {
+      test(
+        'a replay answered with $name is dropped and prints nothing',
+        () async {
+          var attempt = 0;
+          final (container, transport, _) = _harness((fn, p) {
+            attempt++;
+            if (attempt == 1) throw StateError('reply lost');
+            return _answer(answer)(fn, p);
+          });
+          final notifier = container.read(
+            kdsEditAckControllerProvider.notifier,
+          );
+          final card = _card();
+          await notifier.acknowledge(card, confirmedBoard: [card]);
+          expect(
+            await notifier.replayOwedChits(const <KdsTicketView>[]),
+            isEmpty,
+          );
+          expect(notifier.owedChits, isEmpty);
+          await notifier.replayOwedChits(const <KdsTicketView>[]);
+          expect(transport.calls, hasLength(2));
+        },
+      );
+    }
+
+    test('a definitive answer to a re-tap of the same operation settles the '
+        'owed chit (the tap prints through its own caller)', () async {
+      var attempt = 0;
+      final (container, transport, _) = _harness((fn, p) {
+        attempt++;
+        if (attempt == 1) throw StateError('reply lost');
+        return _applied2(fn, p);
+      });
+      final notifier = container.read(kdsEditAckControllerProvider.notifier);
+      final card = _card();
+      await notifier.acknowledge(card, confirmedBoard: [card]);
+      final retry = await notifier.acknowledge(card, confirmedBoard: [card]);
+      expect(retry.outcome, KdsEditAckOutcome.applied);
+      expect(notifier.owedChits, isEmpty);
+      expect(await notifier.replayOwedChits(const <KdsTicketView>[]), isEmpty);
+      expect(transport.calls, hasLength(2));
+    });
+
+    test('a chit owed by another PIN session is dropped unsent (never '
+        'attributed to the next person signed in)', () async {
+      final sessionHolder = StateProvider<SyncSession?>((ref) => _session);
+      var attempt = 0;
+      final transport = _FakeTransport((fn, p) {
+        attempt++;
+        if (attempt == 1) throw StateError('reply lost');
+        return _applied2(fn, p);
+      });
+      final container = ProviderContainer(
+        overrides: [
+          kdsAuthTransportProvider.overrideWithValue(transport),
+          kdsSyncSessionProvider.overrideWith(
+            (ref) => ref.watch(sessionHolder),
+          ),
+          kdsSyncSourceProvider.overrideWithValue(_FakeSource()),
+        ],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(kdsEditAckControllerProvider.notifier);
+      final card = _card();
+      await notifier.acknowledge(card, confirmedBoard: [card]);
+      expect(notifier.owedChits, hasLength(1));
+
+      container.read(sessionHolder.notifier).state = null;
+      expect(await notifier.replayOwedChits(const <KdsTicketView>[]), isEmpty);
+      expect(notifier.owedChits, hasLength(1), reason: 'signed out: kept');
+
+      container.read(sessionHolder.notifier).state = const SyncSession(
+        pinSessionId: 'pin-2',
+        deviceId: 'dev-1',
+      );
+      expect(await notifier.replayOwedChits(const <KdsTicketView>[]), isEmpty);
+      expect(notifier.owedChits, isEmpty);
+      expect(transport.calls, hasLength(1));
+    });
+  });
+
   group('authoritative reconciliation', () {
     test(
       'drops absent keys (pending AND failed) and keeps present ones',

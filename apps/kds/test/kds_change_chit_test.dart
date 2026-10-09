@@ -134,9 +134,15 @@ KdsTicketView _unit({
   );
 }
 
-/// This device printed every unit itself, through [through].
+/// This device printed every unit itself, through [through] (one paper per
+/// unit, so the removal watermark is the same).
 KdsUnitPrintFacts Function(KdsTicketView) _localJob({int through = 0}) =>
-    (_) => (printed: true, fromLocalJob: true, through: through);
+    (_) => (
+      printed: true,
+      fromLocalJob: true,
+      through: through,
+      removalThrough: through,
+    );
 
 /// The REAL facts of a fresh print controller (no local job: the stage proxy).
 KdsUnitPrintFacts Function(KdsTicketView) _proxy() {

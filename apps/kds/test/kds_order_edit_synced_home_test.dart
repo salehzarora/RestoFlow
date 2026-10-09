@@ -123,6 +123,21 @@ KdsSyncState _state({
   },
 );
 
+/// The same preparing order BEFORE the edit: Burger ×2 and Fries, no edit.
+KdsSyncState _preEditState() => KdsSyncState(
+  status: KdsSyncStatus.data,
+  entities: {
+    'orders': [
+      {..._orderRow(), 'edit_count': 0},
+    ],
+    'order_items': [
+      _itemRow('i1', name: 'Burger', qty: 2, linePosition: 1),
+      _itemRow('i2', name: 'Fries', qty: 1, linePosition: 2),
+    ],
+    'order_edits': const <Map<String, dynamic>>[],
+  },
+);
+
 /// A synchronous source: [emit] updates `state` at once (so the repository's
 /// re-derive sees it), and [refresh] publishes [onRefresh] when set — the
 /// canonical immediate pull after a push.
@@ -413,6 +428,118 @@ void main() {
       await h.gotIt(tester);
       expect(h.transport.ops.single['operation_type'], 'order.edit_ack');
       expect(h.bridge.submitted, isEmpty);
+    });
+  });
+
+  group('the change pulse seeds only from an authoritative board', () {
+    const pulse = Key('kds-change-arrival-$_card|e1');
+
+    testWidgets('a change already pending when the board LOADS never pulses, '
+        'even after the empty initial / loading boards of an app start or '
+        'sign-in', (tester) async {
+      final h = _Harness(tester, initial: KdsSyncState.initial);
+      await h.pumpHome(tester);
+      await h.emit(tester, const KdsSyncState(status: KdsSyncStatus.loading));
+      await h.emit(tester, _state());
+      expect(find.byKey(const Key('kds-change-header-$_card')), findsOneWidget);
+      expect(find.byKey(pulse), findsNothing);
+    });
+
+    testWidgets('a change that ARRIVES after the first authoritative pull '
+        'still pulses', (tester) async {
+      final h = _Harness(tester, initial: KdsSyncState.initial);
+      await h.pumpHome(tester);
+      await h.emit(tester, const KdsSyncState(status: KdsSyncStatus.loading));
+      await h.emit(tester, _preEditState());
+      expect(find.byKey(pulse), findsNothing);
+      await h.emit(tester, _state());
+      expect(find.byKey(pulse), findsOneWidget);
+    });
+  });
+
+  group('a "Got it" whose outcome is UNKNOWN still owes its chit', () {
+    testWidgets('applied on the server but the reply was LOST: the next '
+        'authoritative pull without the change replays the SAME operation '
+        'id and prints the chit ONCE from the confirmed board', (tester) async {
+      final h = _Harness(tester, transport: _Transport(throwOnEditAck: true));
+      await h.pumpHome(tester);
+      await h.gotIt(tester);
+      expect(h.bridge.submitted, isEmpty);
+      final firstId = h.transport.ops.single['local_operation_id'];
+
+      // The server HAD applied it: a replay returns the stored result.
+      h.transport
+        ..throwOnEditAck = false
+        ..editAck = _applied(1);
+      // The next poll carries kitchen_ack_at: the card is back to normal and
+      // there is nothing left to re-tap.
+      await h.emit(tester, _state(ackAt: _tAck));
+      await h.settle(tester);
+      expect(find.byKey(const Key('kds-edit-ack-$_card')), findsNothing);
+      expect(h.transport.ops, hasLength(2));
+      expect(h.transport.ops.last['local_operation_id'], firstId);
+      expect(h.transport.ops.last['payload'], {
+        'order_id': _o1,
+        'up_to_edit_number': 1,
+      });
+      expect(h.bridge.submitted, hasLength(1));
+      expect(h.submittedTexts, contains('*** ORDER CHANGED · Change 1 ***'));
+      expect(h.submittedTexts, containsAllInOrder(['REMOVED', '2 × Burger']));
+
+      // Later pulls never replay or print again.
+      await h.emit(tester, _state(ackAt: _tAck));
+      await h.settle(tester);
+      expect(h.transport.ops, hasLength(2));
+      expect(h.bridge.submitted, hasLength(1));
+    });
+
+    testWidgets('while the change still shows nothing replays (the failed '
+        'card keeps its retry); a replay answered with count 0 prints '
+        'nothing and is never sent again', (tester) async {
+      final h = _Harness(tester, transport: _Transport(throwOnEditAck: true));
+      await h.pumpHome(tester);
+      await h.gotIt(tester);
+      h.transport
+        ..throwOnEditAck = false
+        ..editAck = _applied(0);
+      await h.emit(tester, _state());
+      await h.settle(tester);
+      expect(h.transport.ops, hasLength(1));
+      expect(
+        find.byKey(const Key('kds-edit-ack-failed-$_card')),
+        findsOneWidget,
+      );
+
+      // Another KDS confirmed it: the replay stamps nothing, no chit.
+      await h.emit(tester, _state(ackAt: _tAck));
+      await h.settle(tester);
+      expect(h.transport.ops, hasLength(2));
+      expect(h.bridge.submitted, isEmpty);
+      await h.emit(tester, _state(ackAt: _tAck));
+      await h.settle(tester);
+      expect(h.transport.ops, hasLength(2));
+    });
+
+    testWidgets('a re-tap that settles the same operation prints through the '
+        'normal path, and the later pull replays nothing', (tester) async {
+      final h = _Harness(tester, transport: _Transport(throwOnEditAck: true));
+      await h.pumpHome(tester);
+      await h.gotIt(tester);
+      h.transport
+        ..throwOnEditAck = false
+        ..editAck = _applied(1);
+      await h.gotIt(tester);
+      expect(h.transport.ops, hasLength(2));
+      expect(
+        h.transport.ops.last['local_operation_id'],
+        h.transport.ops.first['local_operation_id'],
+      );
+      expect(h.bridge.submitted, hasLength(1));
+
+      await h.emit(tester, _state(ackAt: _tAck));
+      await h.settle(tester);
+      expect(h.transport.ops, hasLength(2));
+      expect(h.bridge.submitted, hasLength(1));
     });
   });
 

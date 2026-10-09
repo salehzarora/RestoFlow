@@ -22,9 +22,19 @@ import 'print_document.dart';
 ///    reached Acknowledged was printed on Acknowledge somewhere);
 ///  * [fromLocalJob] — [printed] comes from this device's print job, so the
 ///    paper's content is known exactly;
-///  * [through] — the newest edit number the paper (or an earlier chit)
-///    already shows; lines of edits at or below it never print again.
-typedef KdsUnitPrintFacts = ({bool printed, bool fromLocalJob, int through});
+///  * [through] — the newest edit number whose live lines (ADD, "+N") the
+///    NEWEST paper (or an earlier chit) already shows; those lines of edits
+///    at or below it never print again;
+///  * [removalThrough] — the same for REMOVED and Was/Now lines, from the
+///    OLDEST paper still on the rail (or an earlier chit): no later paper
+///    can show a removal, so a Reprint never raises it (repeating such a
+///    line is safe, omitting it is not).
+typedef KdsUnitPrintFacts = ({
+  bool printed,
+  bool fromLocalJob,
+  int through,
+  int removalThrough,
+});
 
 /// The unit stages at edit time whose ticket was already on paper (printed on
 /// Acknowledge). A line removed from a `submitted` unit was never printed.
@@ -41,8 +51,9 @@ const Set<String> _printedStages = {'accepted', 'preparing', 'ready'};
 /// scanned. Units in New (never printed — an edit's own round included) add
 /// nothing: their dishes print on that unit's own Acknowledge, so no dish
 /// appears on two papers. REMAKE never prints (the paper has no REMAKE; that
-/// dish prints with its round). Lines at or below a unit's
-/// [KdsUnitPrintFacts.through] watermark are already on paper.
+/// dish prints with its round). ADD / "+N" lines at or below a unit's
+/// [KdsUnitPrintFacts.through] watermark, and REMOVED / Was-Now lines at or
+/// below its [KdsUnitPrintFacts.removalThrough], are already on paper.
 ///
 /// PURE: [board] is the board the cook confirmed and [facts] answers per
 /// unit. MONEY-FREE by construction (SECURITY T-003): every entry reuses the
@@ -64,13 +75,17 @@ OrderChangeSlipView? kdsChangeChitView({
   for (final unit in units) {
     final unitFacts = facts(unit);
     if (!unitFacts.printed) continue;
-    bool covered(int? editNumber) =>
+    bool after(int watermark, int? editNumber) =>
         editNumber != null &&
-        editNumber > unitFacts.through &&
+        editNumber > watermark &&
         editNumber <= upToEditNumber;
+    // REMOVED and Was/Now: news unless EVERY paper on the rail reflects it.
+    bool removalNews(int? n) => after(unitFacts.removalThrough, n);
+    // ADD and "+N": never repeated once ANY paper shows the live line.
+    bool liveNews(int? n) => after(unitFacts.through, n);
 
     for (final removed in unit.change!.removed) {
-      if (!covered(removed.editNumber)) continue;
+      if (!removalNews(removed.editNumber)) continue;
       // Without this device's own job, only a line removed from a unit that
       // was on paper at edit time is news to the kitchen.
       if (!unitFacts.fromLocalJob &&
@@ -85,16 +100,15 @@ OrderChangeSlipView? kdsChangeChitView({
     for (final item in unit.items) {
       final was = item.editWas;
       if (item.editMark != KdsEditLineMark.changed || was == null) continue;
-      if (!covered(item.editNumber)) continue;
+      if (!removalNews(item.editNumber)) continue;
       (groups[was.orderItemId ?? was] ??= <KdsItemView>[]).add(item);
     }
     final emitted = <Object>{};
     for (final item in unit.items) {
-      if (!covered(item.editNumber)) continue;
       switch (item.editMark) {
         case KdsEditLineMark.changed:
           final was = item.editWas;
-          if (was == null) continue;
+          if (was == null || !removalNews(item.editNumber)) continue;
           final groupKey = was.orderItemId ?? was;
           if (!emitted.add(groupKey)) continue;
           changes.add(
@@ -104,6 +118,7 @@ OrderChangeSlipView? kdsChangeChitView({
             ),
           );
         case KdsEditLineMark.increased:
+          if (!liveNews(item.editNumber)) continue;
           // The row's quantity IS the delta; the kept line it extends shares
           // its line position.
           final kept = _keptLine(unit, item);
@@ -116,6 +131,7 @@ OrderChangeSlipView? kdsChangeChitView({
                   ),
           );
         case KdsEditLineMark.added:
+          if (!liveNews(item.editNumber)) continue;
           changes.add(OrderChangeAdded([item]));
         case KdsEditLineMark.remake:
         case null:

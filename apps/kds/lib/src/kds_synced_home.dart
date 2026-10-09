@@ -60,10 +60,17 @@ class KdsSyncedHome extends ConsumerWidget {
       // entries whose change alert key the fresh pull no longer shows
       // (confirmed here or on another KDS, superseded by a void, or moved on
       // to a newer edit). Same exact-data gate, same COMPLETE ticket list.
-      ref.read(kdsEditAckControllerProvider.notifier).reconcile([
+      final changeAlertKeys = [
         for (final t in vs.tickets)
           if (t.changeAlertKey != null) t.changeAlertKey!,
-      ]);
+      ];
+      ref
+          .read(kdsEditAckControllerProvider.notifier)
+          .reconcile(changeAlertKeys);
+      // ORDER-EDIT-001D: a fresh pull proves the server is reachable — replay
+      // any "Got it" whose outcome was unknown once the board shows its edits
+      // confirmed, and print the chit it owes (once, from the tap's board).
+      unawaited(_printOwedChits(ref, l10n, vs.tickets));
     });
     final async = ref.watch(kdsViewStateProvider);
     return async.when(
@@ -148,6 +155,10 @@ class KdsSyncedHome extends ConsumerWidget {
           // A2: subtle new-arrival attention glow on the LIVE board (tickets that
           // ARRIVE during this session; not the ones already present on load).
           enableNewArrivalAlert: true,
+          // ORDER-EDIT-001D: the change pulse seeds "already on the board at
+          // load" only from a fresh pull — never from the temporary EMPTY
+          // initial / loading board of an app start or sign-in.
+          boardIsAuthoritative: vs.status == KdsSyncStatus.data,
           printStatusFor: (ticket) => _printStatusFor(
             ref,
             l10n,
@@ -258,7 +269,9 @@ class KdsSyncedHome extends ConsumerWidget {
   ///
   /// The chit is computed from [board] — the board the cook CONFIRMED,
   /// copied BEFORE the ack's immediate pull clears the change. A refusal, a
-  /// superseding void, an unknown outcome or a skipped tap prints nothing.
+  /// superseding void or a skipped tap prints nothing; an UNKNOWN outcome
+  /// owes its chit, printed by [_printOwedChits] once a fresh pull shows the
+  /// edits confirmed and the replay of the same operation applied.
   Future<void> _gotIt(
     WidgetRef ref,
     AppLocalizations l10n,
@@ -271,11 +284,51 @@ class KdsSyncedHome extends ConsumerWidget {
     final snapshot = List<KdsTicketView>.of(board);
     final result = await ref
         .read(kdsEditAckControllerProvider.notifier)
-        .acknowledge(ticket);
+        .acknowledge(ticket, confirmedBoard: snapshot);
     if (result.outcome != KdsEditAckOutcome.applied ||
         result.acknowledgedCount <= 0) {
       return;
     }
+    await _printChit(
+      ref,
+      l10n,
+      orderId: orderId,
+      upToEditNumber: change.upToEditNumber,
+      board: snapshot,
+    );
+  }
+
+  /// ORDER-EDIT-001D: replays the owed chits whose edits the fresh pull's
+  /// [board] shows confirmed and prints each one the server applied with
+  /// `acknowledged_count > 0`, from the board saved at the tap.
+  Future<void> _printOwedChits(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    List<KdsTicketView> board,
+  ) async {
+    final owed = await ref
+        .read(kdsEditAckControllerProvider.notifier)
+        .replayOwedChits(board);
+    for (final chit in owed) {
+      await _printChit(
+        ref,
+        l10n,
+        orderId: chit.orderId,
+        upToEditNumber: chit.upToEditNumber,
+        board: chit.board,
+      );
+    }
+  }
+
+  /// One change chit through the print controller (idempotent per order and
+  /// number; the controller applies the auto-print gating).
+  Future<void> _printChit(
+    WidgetRef ref,
+    AppLocalizations l10n, {
+    required String orderId,
+    required int upToEditNumber,
+    required List<KdsTicketView> board,
+  }) async {
     // BLUETOOTH-FIRST-PRINT: await the saved printer profile (as on
     // Acknowledge) so a chit right after process recreation still prints.
     final bridge = await ref.read(kdsActivePrintBridgeReadyProvider.future);
@@ -283,8 +336,8 @@ class KdsSyncedHome extends ConsumerWidget {
         .read(kdsKitchenPrintControllerProvider.notifier)
         .printChangeChit(
           orderId: orderId,
-          upToEditNumber: change.upToEditNumber,
-          board: snapshot,
+          upToEditNumber: upToEditNumber,
+          board: board,
           buildDocument: (view) => buildKdsChangeChitDocument(
             l10n,
             view,

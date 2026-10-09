@@ -1,4 +1,4 @@
-import 'dart:math' show max;
+import 'dart:math' show max, min;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_core/restoflow_core.dart';
@@ -38,6 +38,11 @@ enum KdsPrintJobStatus {
   failed,
 }
 
+/// ORDER-EDIT-001D: the edit watermarks of a work unit's papers on the
+/// kitchen rail — the NEWEST and the OLDEST [KdsPrintJob.printedThroughEdit]
+/// among them (0 for a paper printed with no unconfirmed change).
+typedef KdsPaperWatermarks = ({int newestThrough, int oldestThrough});
+
 class KdsPrintJob {
   const KdsPrintJob({
     required this.status,
@@ -46,6 +51,7 @@ class KdsPrintJob {
     this.failureMessage,
     this.at,
     this.printedThroughEdit,
+    this.earlierPapers,
   });
 
   final KdsPrintJobStatus status;
@@ -65,11 +71,19 @@ class KdsPrintJob {
   /// A later change chit never repeats lines of edits at or below it.
   final int? printedThroughEdit;
 
+  /// ORDER-EDIT-001D: the watermarks of the EARLIER papers of this work unit
+  /// that a Retry / Reprint replaced in the job map but that are still on the
+  /// kitchen rail; null when no earlier job reached the print path. A later
+  /// change chit keeps their REMOVED and Was/Now news (see
+  /// [KdsKitchenPrintController.printFactsFor]).
+  final KdsPaperWatermarks? earlierPapers;
+
   KdsPrintJob copyWith({
     KdsPrintJobStatus? status,
     PrinterErrorCategory? failureCategory,
     String? failureMessage,
     DateTime? at,
+    KdsPaperWatermarks? earlierPapers,
   }) => KdsPrintJob(
     status: status ?? this.status,
     document: document,
@@ -77,6 +91,7 @@ class KdsPrintJob {
     failureMessage: failureMessage,
     at: at ?? this.at,
     printedThroughEdit: printedThroughEdit,
+    earlierPapers: earlierPapers ?? this.earlierPapers,
   );
 }
 
@@ -218,6 +233,11 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   /// clears the existing entry, re-prepares with the given printer availability,
   /// and re-dispatches. Called from the ticket's explicit Retry action, so it
   /// does NOT re-check the auto-print toggle.
+  ///
+  /// ORDER-EDIT-001D: the replaced job's paper (and any paper before it)
+  /// stays on the kitchen rail, so its watermarks move to the new job's
+  /// [KdsPrintJob.earlierPapers] — a Reprint of a changed card must not hide
+  /// the REMOVED and Was/Now lines that earlier paper still needs.
   Future<void> retry(
     KdsTicketView ticket, {
     required bool hasEnabledPrinter,
@@ -225,12 +245,17 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
     KdsBridgeSubmit? submitToBridge,
   }) async {
     final key = keyFor(ticket);
+    final earlierPapers = _papersOnRail(state[key]);
     state = {...state}..remove(key);
     prepareForTicket(
       ticket,
       hasEnabledPrinter: hasEnabledPrinter,
       buildDocument: buildDocument,
     );
+    final job = state[key];
+    if (earlierPapers != null && job != null) {
+      state = {...state, key: job.copyWith(earlierPapers: earlierPapers)};
+    }
     await _dispatch(key, submitToBridge);
   }
 
@@ -340,24 +365,45 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
     KitchenTicketStatus.ready,
   };
 
+  /// ORDER-EDIT-001D: the watermarks of every paper of a unit still on the
+  /// rail — [job]'s own when it reached the print path, plus the
+  /// [KdsPrintJob.earlierPapers] it replaced — or null when none did.
+  static KdsPaperWatermarks? _papersOnRail(KdsPrintJob? job) {
+    if (job == null) return null;
+    final earlier = job.earlierPapers;
+    if (!_paperJobStatuses.contains(job.status)) return earlier;
+    final own = job.printedThroughEdit ?? 0;
+    if (earlier == null) return (newestThrough: own, oldestThrough: own);
+    return (
+      newestThrough: max(earlier.newestThrough, own),
+      oldestThrough: min(earlier.oldestThrough, own),
+    );
+  }
+
   /// ORDER-EDIT-001D: what this device knows about [unit]'s paper — its own
-  /// job when one exists, else the unit's stage — plus the edit watermark
-  /// (the job's [KdsPrintJob.printedThroughEdit] or an earlier chit).
+  /// job(s) when one exists, else the unit's stage — plus the edit
+  /// watermarks: ADD / "+N" lines are on the NEWEST paper, but REMOVED and
+  /// Was/Now lines never reach a later paper, so they use the OLDEST paper
+  /// still on the rail (a Reprint never raises it). An earlier chit covers
+  /// both.
   KdsUnitPrintFacts printFactsFor(KdsTicketView unit) {
     final key = keyFor(unit);
     final job = state[key];
-    final through = max(job?.printedThroughEdit ?? 0, _chitThrough[key] ?? 0);
+    final chit = _chitThrough[key] ?? 0;
     if (job != null) {
+      final papers = _papersOnRail(job);
       return (
-        printed: _paperJobStatuses.contains(job.status),
+        printed: papers != null,
         fromLocalJob: true,
-        through: through,
+        through: max(papers?.newestThrough ?? 0, chit),
+        removalThrough: max(papers?.oldestThrough ?? 0, chit),
       );
     }
     return (
       printed: _printedTicketStatuses.contains(unit.status),
       fromLocalJob: false,
-      through: through,
+      through: chit,
+      removalThrough: chit,
     );
   }
 
