@@ -12,7 +12,7 @@ import 'package:restoflow_domain/restoflow_domain.dart'
         aggregateOrderKitchenCounts,
         sortByMenuPrintOrder;
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
-    show KitchenTicketPrintLabels;
+    show KitchenChangeSlipLabels, KitchenTicketPrintLabels, OrderChangeSlipView;
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
     show KdsItemView, KdsTicketMapper, KdsTicketView;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
@@ -31,7 +31,8 @@ import '../state/pos_printer_transport.dart';
 import '../data/round_print_claim_store.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
-import 'kitchen_ticket_render.dart' show renderKitchenTicketBytes;
+import 'kitchen_ticket_render.dart'
+    show renderKitchenTicketBytes, renderOrderChangeSlipBytes;
 import 'native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 
@@ -140,6 +141,12 @@ final class ResolvedKitchenPrinter {
   final pp.MediaProfile mediaProfile;
 }
 
+/// ORDER-EDIT-001F — reads a provider exactly like `ProviderContainer.read`
+/// and a Notifier's `ref.read` do, so the kitchen print path can be driven
+/// from a widget-owned container OR from a controller (there is no
+/// `ref.container`). Pass `container.read` or `ref.read`.
+typedef PosProviderReader = T Function<T>(ProviderListenable<T> provider);
+
 /// Resolves the KITCHEN slot into a send target, or null when native printing
 /// is unavailable or no kitchen printer is configured. Independent of the
 /// customer_receipt slot: configuring/removing one never affects the other.
@@ -147,16 +154,24 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTarget(
   ProviderContainer container, {
   Duration networkTimeout = kPosNativePrintTimeout,
   Duration bluetoothTimeout = kBluetoothPrintTimeout,
+}) => resolveKitchenPrinterTargetWith(
+  container.read,
+  networkTimeout: networkTimeout,
+  bluetoothTimeout: bluetoothTimeout,
+);
+
+/// ORDER-EDIT-001F: [resolveKitchenPrinterTarget] through any
+/// [PosProviderReader].
+Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTargetWith(
+  PosProviderReader read, {
+  Duration networkTimeout = kPosNativePrintTimeout,
+  Duration bluetoothTimeout = kBluetoothPrintTimeout,
 }) async {
-  if (!container.read(posNativePrintingAvailableProvider)) return null;
-  final kind = await container.read(
-    posKitchenSelectedPrinterTransportProvider.future,
-  );
+  if (!read(posNativePrintingAvailableProvider)) return null;
+  final kind = await read(posKitchenSelectedPrinterTransportProvider.future);
   switch (kind) {
     case PosPrinterTransportKind.network:
-      final net = await container.read(
-        posKitchenNetworkPrinterConfigProvider.future,
-      );
+      final net = await read(posKitchenNetworkPrinterConfigProvider.future);
       if (net == null) return null;
       return ResolvedKitchenPrinter(
         destinationKey: pp.PrinterDestinationSendGate.networkKey(
@@ -171,11 +186,9 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTarget(
         ),
       );
     case PosPrinterTransportKind.bluetooth:
-      final bt = await container.read(
-        posKitchenBluetoothPrinterConfigProvider.future,
-      );
+      final bt = await read(posKitchenBluetoothPrinterConfigProvider.future);
       if (bt == null) return null;
-      final connector = container.read(bluetoothPrinterConnectorProvider);
+      final connector = read(bluetoothPrinterConnectorProvider);
       return ResolvedKitchenPrinter(
         destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(bt.address),
         mediaProfile: bt.mediaProfile,
@@ -443,17 +456,47 @@ typedef KitchenBytesBuilder =
       String? restaurantName,
     });
 
-/// Sends a money-free kitchen ticket to the resolved KITCHEN printer.
+/// ORDER-EDIT-001F — the signature of the money-free CHANGE-SLIP bytes
+/// builder (injectable for tests); `renderOrderChangeSlipBytes` by default.
+typedef ChangeSlipBytesBuilder =
+    Future<Uint8List> Function({
+      required OrderChangeSlipView slip,
+      required KitchenTicketPrintLabels labels,
+      required KitchenChangeSlipLabels changeLabels,
+      pp.ReceiptRasterizer? rasterizer,
+      pp.MediaProfile? mediaProfile,
+      String? restaurantName,
+    });
+
+/// Sends a money-free kitchen ticket — or, ORDER-EDIT-001F, a money-free
+/// change slip — to the resolved KITCHEN printer.
 class PosKitchenTicketPrinter {
   PosKitchenTicketPrinter(
-    this._container, {
+    ProviderContainer container, {
     KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
+    ChangeSlipBytesBuilder buildSlipBytes = renderOrderChangeSlipBytes,
+    ResolvedKitchenPrinter? targetOverride,
+  }) : this.withReader(
+         container.read,
+         buildBytes: buildBytes,
+         buildSlipBytes: buildSlipBytes,
+         targetOverride: targetOverride,
+       );
+
+  /// ORDER-EDIT-001F: the same printer driven through any
+  /// [PosProviderReader] — a controller passes its `ref.read`.
+  PosKitchenTicketPrinter.withReader(
+    this._read, {
+    KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
+    ChangeSlipBytesBuilder buildSlipBytes = renderOrderChangeSlipBytes,
     ResolvedKitchenPrinter? targetOverride,
   }) : _buildBytes = buildBytes,
+       _buildSlipBytes = buildSlipBytes,
        _targetOverride = targetOverride;
 
-  final ProviderContainer _container;
+  final PosProviderReader _read;
   final KitchenBytesBuilder _buildBytes;
+  final ChangeSlipBytesBuilder _buildSlipBytes;
 
   /// Injectable resolved target for tests; real callers leave it null so the
   /// kitchen slot is resolved from this device's local config.
@@ -464,32 +507,63 @@ class PosKitchenTicketPrinter {
   Future<PosKitchenPrintOutcome> printKitchenTicket({
     required KdsTicketView ticket,
     required KitchenTicketPrintLabels labels,
-  }) async {
-    if (!_container.read(posNativePrintingAvailableProvider)) {
+  }) => _send(
+    (resolved) => _buildBytes(
+      ticket: ticket,
+      labels: labels,
+      rasterizer: _read(nativePrintRasterizerProvider),
+      mediaProfile: resolved.mediaProfile,
+      // PRINT-LAYOUT-001B: the station's own restaurant name for the brand
+      // header — a stable device-level value, offline-safe (null => the
+      // shared builder uses the localized fallback on [labels]).
+      restaurantName: _read(posRestaurantNameProvider),
+    ),
+  );
+
+  /// ORDER-EDIT-001F (design §7.3): renders the money-free CHANGE SLIP through
+  /// the shared `renderOrderChangeSlipBytes` seam — the SAME paper the spool
+  /// prints for the same edit — and sends it exactly like a ticket: the
+  /// kitchen slot, its media profile, the restaurant name, the device
+  /// rasterizer and the shared destination gate. The device's AUTOMATIC
+  /// kitchen-print toggle is deliberately NOT consulted (decision D12): the
+  /// slip is the branch kitchen's only paper channel for the edit.
+  Future<PosKitchenPrintOutcome> printChangeSlip({
+    required OrderChangeSlipView slip,
+    required KitchenTicketPrintLabels labels,
+    required KitchenChangeSlipLabels changeLabels,
+  }) => _send(
+    (resolved) => _buildSlipBytes(
+      slip: slip,
+      labels: labels,
+      changeLabels: changeLabels,
+      rasterizer: _read(nativePrintRasterizerProvider),
+      mediaProfile: resolved.mediaProfile,
+      restaurantName: _read(posRestaurantNameProvider),
+    ),
+  );
+
+  /// Resolve, gate and transport — shared by every kitchen document. Only a
+  /// transport-accepted send is `printed`; a render failure, a refused or
+  /// thrown send is `failed` (never ambiguous on this path).
+  Future<PosKitchenPrintOutcome> _send(
+    Future<Uint8List> Function(ResolvedKitchenPrinter resolved) render,
+  ) async {
+    if (!_read(posNativePrintingAvailableProvider)) {
       return PosKitchenPrintOutcome.unavailable;
     }
     final resolved =
-        _targetOverride ?? await resolveKitchenPrinterTarget(_container);
+        _targetOverride ?? await resolveKitchenPrinterTargetWith(_read);
     if (resolved == null) return PosKitchenPrintOutcome.noPrinterConfigured;
 
     final Uint8List bytes;
     try {
-      bytes = await _buildBytes(
-        ticket: ticket,
-        labels: labels,
-        rasterizer: _container.read(nativePrintRasterizerProvider),
-        mediaProfile: resolved.mediaProfile,
-        // PRINT-LAYOUT-001B: the station's own restaurant name for the brand
-        // header — a stable device-level value, offline-safe (null => the
-        // shared builder uses the localized fallback on [labels]).
-        restaurantName: _container.read(posRestaurantNameProvider),
-      );
+      bytes = await render(resolved);
     } catch (_) {
       return PosKitchenPrintOutcome.failed;
     }
 
-    final gate = _container.read(posPrinterDestinationSendGateProvider);
-    final override = _container.read(kitchenPrintTransportOverrideProvider);
+    final gate = _read(posPrinterDestinationSendGateProvider);
+    final override = _read(kitchenPrintTransportOverrideProvider);
     final transport = override != null
         ? override(resolved)
         : resolved.transportFactory();
@@ -534,6 +608,31 @@ final posKitchenReprintProvider = Provider<PosKitchenReprint>(
             order: order,
             labels: labels,
           ),
+);
+
+/// ORDER-EDIT-001F — the CHANGE-SLIP print seam, the twin of
+/// [posKitchenReprintProvider]: one named door onto
+/// [PosKitchenTicketPrinter.printChangeSlip], so a test can observe exactly
+/// which slip went to the kitchen printer (and fake the outcome) without a
+/// socket. [read] is the caller's own reader (`ref.read` / `container.read`).
+typedef PosOrderEditSlipPrint =
+    Future<PosKitchenPrintOutcome> Function({
+      required PosProviderReader read,
+      required OrderChangeSlipView slip,
+      required KitchenTicketPrintLabels labels,
+      required KitchenChangeSlipLabels changeLabels,
+    });
+
+final posOrderEditSlipPrintProvider = Provider<PosOrderEditSlipPrint>(
+  (ref) =>
+      ({
+        required read,
+        required slip,
+        required labels,
+        required changeLabels,
+      }) => PosKitchenTicketPrinter.withReader(
+        read,
+      ).printChangeSlip(slip: slip, labels: labels, changeLabels: changeLabels),
 );
 
 /// The MANUAL "Print kitchen ticket" entry point — an intentional print/reprint
