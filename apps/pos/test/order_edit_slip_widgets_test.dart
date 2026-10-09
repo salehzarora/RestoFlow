@@ -17,6 +17,8 @@ import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:restoflow_pos/src/state/order_edit_slip_controller.dart'
+    show orderEditSlipClockProvider;
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/order_action_row.dart';
 import 'package:restoflow_pos/src/widgets/order_edit_slip_widgets.dart';
@@ -37,6 +39,12 @@ import 'support/order_edit_fixtures.dart';
 ///  * the order's own row carries Print again for its newest unsent slip.
 
 const _session = SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1');
+
+/// The slip clock, pinned to the day of every fixture below. The slip
+/// controller retires a record older than the recent-orders window (the start
+/// of yesterday), so an unpinned clock would retire these fixtures once the
+/// real date moves two days past them.
+final _now = DateTime.utc(2026, 10, 9, 12);
 
 class _Details implements OrderDetailRepository {
   PosOrderDetail? current;
@@ -154,6 +162,7 @@ class _H {
         orderEditSlipStoreProvider.overrideWithValue(store),
         orderDetailRepositoryProvider.overrideWithValue(details),
         posOrderEditSlipPrintProvider.overrideWithValue(printer.call),
+        orderEditSlipClockProvider.overrideWithValue(() => _now),
       ],
     );
     addTearDown(c.dispose);
