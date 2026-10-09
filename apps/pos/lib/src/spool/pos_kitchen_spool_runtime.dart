@@ -118,6 +118,8 @@ final class KitchenSpoolRunWorked extends PosKitchenSpoolRunReport {
     required this.acked,
     required this.retriesScheduled,
     required this.terminal,
+    this.editSuperseded = 0,
+    this.editLinks = 0,
   });
 
   final KitchenDispatchDrainReport drain;
@@ -127,6 +129,11 @@ final class KitchenSpoolRunWorked extends PosKitchenSpoolRunReport {
   final int recoveredStale;
   final int voidSuperseded;
   final int voidLinks;
+
+  /// ORDER-EDIT-001F: jobs the ORDERED order-edit sweeps (before and after
+  /// the drain) superseded, and possiblyPrinted jobs they only linked.
+  final int editSuperseded;
+  final int editLinks;
 
   /// Pending-ack coordinator flush totals across the run's flush points.
   final int acked;
@@ -165,6 +172,12 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     resolveCustomerPhone,
     PosRoundPrintClaimState? Function(String orderId)?
     readInitialKitchenPrintClaim,
+    PosRoundPrintClaimState? Function(String dispatchId)?
+    readOrderEditPrintClaim,
+    bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    Future<void> Function(String dispatchId)? onOrderEditImported,
+    Future<List<KitchenEditSupersessionEvidence>> Function()?
+    readLocalOrderEditEvidence,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -184,7 +197,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _keyStore = keyStore,
        _now = now ?? DateTime.now,
        _resolveCustomerPhone = resolveCustomerPhone,
-       _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim;
+       _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim,
+       _readOrderEditPrintClaim = readOrderEditPrintClaim,
+       _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
+       _onOrderEditImported = onOrderEditImported,
+       _readLocalOrderEditEvidence = readLocalOrderEditEvidence;
 
   final PosKitchenSpoolPlatform _platform;
   final DeviceContext? Function() _deviceContext;
@@ -226,6 +243,22 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   /// printed locally at submit. Null (tests / web) keeps prior behaviour.
   final PosRoundPrintClaimState? Function(String orderId)?
   _readInitialKitchenPrintClaim;
+
+  /// ORDER-EDIT-001F: the order-edit consult's inputs, handed to the import
+  /// coordinator — the dispatch-keyed mirror claim of this till's own direct
+  /// slip print, whether that print is in flight right now (D11), and the
+  /// hand-over once the spool imported the dispatch (D3). Null (tests / web)
+  /// keeps the pre-001F import.
+  final PosRoundPrintClaimState? Function(String dispatchId)?
+  _readOrderEditPrintClaim;
+  final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
+  final Future<void> Function(String dispatchId)? _onOrderEditImported;
+
+  /// ORDER-EDIT-001F: this till's DIRECT slip prints — external evidence for
+  /// the ordered order-edit sweep (their dispatches complete on the server
+  /// and never reach this spool). Null or failing reads as none.
+  final Future<List<KitchenEditSupersessionEvidence>> Function()?
+  _readLocalOrderEditEvidence;
 
   KitchenSpoolDatabase? _db;
   bool _running = false;
@@ -360,10 +393,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   /// 2. inspect/provision the key ONLY under D3;
   /// 3. recover stale printing rows (→ possiblyPrinted + pending ack);
   /// 4. flush due pending acknowledgements from previous runs;
-  /// 5. reconcile local VOID evidence before any new claim;
+  /// 5. reconcile local VOID evidence before any new claim — and
+  ///    (ORDER-EDIT-001F) the ORDERED order-edit evidence after it;
   /// 6. drain/import new dispatches (the C2B coordinator);
   /// 7. (import acks flush inside the drain + coordinator);
-  /// 8. re-run VOID reconciliation after the drain;
+  /// 8. re-run both reconciliations after the drain;
   /// 9. run the bounded kitchen print worker;
   /// 10. flush worker-generated pending acknowledgements;
   /// 11. return the typed safe report. No timer; disposal-safe.
@@ -445,12 +479,18 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       branchId: context.branchId,
     );
 
-    // 5: local VOID evidence applies BEFORE any new claim.
-    final voidsBefore = await reconcileLocalVoidEvidence(
+    // 5: local VOID evidence applies BEFORE any new claim, then
+    // (ORDER-EDIT-001F) the ORDERED order-edit evidence: imported edit rows
+    // plus this till's own direct slip prints.
+    final cipher = AesGcmKitchenSpoolCipher();
+    final sweepBefore = await reconcileLocalSupersessionEvidence(
       store,
+      cipher: cipher,
+      key: key,
       deviceId: deviceId,
       branchId: context.branchId,
       now: _now(),
+      externalEdits: await _localOrderEditEvidence(),
     );
 
     // The destination pins ONCE per run. A typed BLOCKED resolution is a
@@ -475,7 +515,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       pullRepository: pullRepository,
       importCoordinator: KitchenDispatchImportCoordinator(
         store: store,
-        cipher: AesGcmKitchenSpoolCipher(),
+        cipher: cipher,
         key: key,
         scope: scope,
         destination: destination,
@@ -487,23 +527,32 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         // order this POS already printed locally is acknowledged, not
         // re-printed.
         readInitialPrintClaim: _readInitialKitchenPrintClaim,
+        // ORDER-EDIT-001F: the same consult for an order-edit change slip
+        // this till printed (or is printing) itself, and the hand-over.
+        readOrderEditPrintClaim: _readOrderEditPrintClaim,
+        isOrderEditSlipInFlight: _isOrderEditSlipInFlight,
+        onOrderEditImported: _onOrderEditImported,
       ),
     ).drain();
 
-    // 8: VOID evidence again — a void imported by THIS drain must stop its
+    // 8: VOID + order-edit evidence again — a void or an edit imported by
+    // THIS drain (or a slip this till printed meanwhile) must stop its
     // order's earlier jobs before the worker can claim them.
-    final voidsAfter = await reconcileLocalVoidEvidence(
+    final sweepAfter = await reconcileLocalSupersessionEvidence(
       store,
+      cipher: cipher,
+      key: key,
       deviceId: deviceId,
       branchId: context.branchId,
       now: _now(),
+      externalEdits: await _localOrderEditEvidence(),
     );
 
     // 9: the bounded worker (claim → decrypt/render → gated single send →
     // atomic transition+ack). Disposal stops it before any further send.
     final workerReport = await KitchenPrintWorker(
       store: store,
-      cipher: AesGcmKitchenSpoolCipher(),
+      cipher: cipher,
       key: key,
       renderer: renderer,
       networkSend: networkSend,
@@ -527,12 +576,26 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       drain: drainReport,
       worker: workerReport,
       recoveredStale: recoveredStale,
-      voidSuperseded: voidsBefore.superseded + voidsAfter.superseded,
-      voidLinks: voidsBefore.links + voidsAfter.links,
+      voidSuperseded: sweepBefore.voidSuperseded + sweepAfter.voidSuperseded,
+      voidLinks: sweepBefore.voidLinks + sweepAfter.voidLinks,
+      editSuperseded: sweepBefore.editSuperseded + sweepAfter.editSuperseded,
+      editLinks: sweepBefore.editLinks + sweepAfter.editLinks,
       acked: preAcked + postAcked,
       retriesScheduled: preRetries + postRetries,
       terminal: preTerminal + postTerminal,
     );
+  }
+
+  /// This till's direct slip prints (ORDER-EDIT-001F); never throws.
+  Future<List<KitchenEditSupersessionEvidence>>
+  _localOrderEditEvidence() async {
+    final read = _readLocalOrderEditEvidence;
+    if (read == null) return const <KitchenEditSupersessionEvidence>[];
+    try {
+      return await read();
+    } on Object {
+      return const <KitchenEditSupersessionEvidence>[];
+    }
   }
 
   Future<void> _cacheMode(

@@ -82,6 +82,8 @@ final class KitchenDispatchDrainReport {
     this.rowsRejected = 0,
     this.rowsLocalStateConflict = 0,
     this.rowsAlreadyPrintedLocally = 0,
+    this.rowsDeferredInFlight = 0,
+    this.rowsOrderEditHandedOver = 0,
     this.acknowledgementsSucceeded = 0,
     this.acknowledgementsPending = 0,
     this.acknowledgementsTerminal = 0,
@@ -99,6 +101,14 @@ final class KitchenDispatchDrainReport {
   /// Pass C (C1): initial dispatches skipped (and acknowledged) because the
   /// mirror claim says this POS already printed the ticket locally at submit.
   final int rowsAlreadyPrintedLocally;
+
+  /// ORDER-EDIT-001F (D11): `order_edit` rows skipped because this till's
+  /// direct print of that slip was in flight (re-served by a later drain).
+  final int rowsDeferredInFlight;
+
+  /// ORDER-EDIT-001F (D3): `order_edit` rows handed from the till's direct
+  /// print to the spool.
+  final int rowsOrderEditHandedOver;
   final int acknowledgementsSucceeded;
 
   /// Acknowledgements persisted for RETRY (durable; the pending-ack
@@ -136,7 +146,7 @@ final class KitchenDispatchDrainCoordinator {
     var pagesPulled = 0;
     var rowsReceived = 0, rowsImported = 0, rowsAlreadyPresent = 0;
     var rowsBlocked = 0, rowsRejected = 0, rowsConflict = 0;
-    var rowsAlreadyPrinted = 0;
+    var rowsAlreadyPrinted = 0, rowsDeferred = 0, rowsHandedOver = 0;
     var acked = 0, pending = 0, terminal = 0;
 
     KitchenDispatchDrainReport report(KitchenDrainStopReason reason) =>
@@ -150,6 +160,8 @@ final class KitchenDispatchDrainCoordinator {
           rowsRejected: rowsRejected,
           rowsLocalStateConflict: rowsConflict,
           rowsAlreadyPrintedLocally: rowsAlreadyPrinted,
+          rowsDeferredInFlight: rowsDeferred,
+          rowsOrderEditHandedOver: rowsHandedOver,
           acknowledgementsSucceeded: acked,
           acknowledgementsPending: pending,
           acknowledgementsTerminal: terminal,
@@ -206,6 +218,8 @@ final class KitchenDispatchDrainCoordinator {
       rowsRejected += summary.rejected;
       rowsConflict += summary.localStateConflicts;
       rowsAlreadyPrinted += summary.alreadyPrintedLocally;
+      rowsDeferred += summary.deferredInFlight;
+      rowsHandedOver += summary.orderEditsHandedOver;
       acked += summary.acked;
       pending += summary.ackRetriesScheduled;
       terminal += summary.ackTerminal;
