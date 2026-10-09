@@ -32,6 +32,10 @@ import '../analytics/overview_recent_orders_query_key.dart';
 import '../data/owner_top_items.dart';
 import '../data/owner_top_items_repository.dart';
 import '../data/real_owner_top_items_repository.dart';
+import '../analytics/owner_order_edits_query_key.dart';
+import '../data/owner_order_edits.dart';
+import '../data/owner_order_edits_repository.dart';
+import '../data/real_owner_order_edits_repository.dart';
 import '../data/order_history_models.dart';
 import 'order_history_providers.dart';
 import 'setup_device_providers.dart';
@@ -603,6 +607,67 @@ final ownerTopItemsForKeyProvider =
           );
     }, dependencies: [ownerTopItemsRepositoryProvider]);
 
+// ===========================================================================
+// ORDER-EDIT-001G — the Overview "Order edits" block (`owner_order_edits`).
+// ===========================================================================
+
+/// ORDER-EDIT-001G — the Order edits data seam (API_CONTRACT §4.47).
+///
+/// The same demo/real switch every other Overview surface uses, so the block
+/// can never read a different source from the KPIs beside it.
+final ownerOrderEditsRepositoryProvider = Provider<OwnerOrderEditsRepository>(
+  (ref) {
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const DemoOwnerOrderEditsRepository();
+    }
+    return RealOwnerOrderEditsRepository(
+      scope: ref.watch(dashboardMembershipIdentityProvider)?.membership,
+      transport: ref.watch(dashboardAuthTransportProvider),
+    );
+  },
+  dependencies: [
+    dashboardMembershipIdentityProvider,
+    dashboardAuthTransportProvider,
+  ],
+);
+
+/// ORDER-EDIT-001G — the identity of the Order edits request the Overview
+/// currently needs: the SAME committed window and analytics scope as the KPIs,
+/// so the block can never describe different orders from the Voids beside it.
+final currentOwnerOrderEditsKeyProvider = Provider<OwnerOrderEditsQueryKey>(
+  (ref) {
+    final scope = ref.watch(dashboardAnalyticsScopeProvider);
+    return OwnerOrderEditsQueryKey(
+      organizationId: scope?.organizationId,
+      restaurantId: scope?.restaurantId,
+      branchId: scope?.branchId,
+      range: AnalyticsRange.fromReportRange(ref.watch(reportRangeProvider)),
+      customWindow: ref.watch(customAnalyticsWindowProvider),
+      isDemoMode: ref.watch(runtimeConfigProvider).isDemoMode,
+    );
+  },
+  dependencies: [
+    dashboardAnalyticsScopeProvider,
+    reportRangeProvider,
+    customAnalyticsWindowProvider,
+  ],
+);
+
+/// ORDER-EDIT-001G — the first page of the Order edits block FOR ONE EXACT
+/// REQUEST IDENTITY. Not `autoDispose`, like the other Overview families:
+/// leaving Overview and returning must not refetch.
+final ownerOrderEditsForKeyProvider =
+    FutureProvider.family<OwnerOrderEdits, OwnerOrderEditsQueryKey>((ref, key) {
+      return ref
+          .watch(ownerOrderEditsRepositoryProvider)
+          .loadOrderEdits(
+            range: key.range,
+            analyticsScope: key.analyticsScope,
+            customWindow: key.customWindow,
+            limit: key.limit,
+          );
+    }, dependencies: [ownerOrderEditsRepositoryProvider]);
+
 /// F3 — the identity of the Overview's Recent Orders request.
 ///
 /// Built from the SAME committed window and analytics scope as everything else
@@ -750,6 +815,13 @@ class DashboardRefreshController extends StateNotifier<bool> {
     _ref.invalidate(
       ownerTopItemsForKeyProvider(_ref.read(currentOwnerTopItemsKeyProvider)),
     );
+    // ORDER-EDIT-001G — the Order edits block refreshes with the page, for the
+    // CURRENT key only. Its "Load more" pages reset with it.
+    _ref.invalidate(
+      ownerOrderEditsForKeyProvider(
+        _ref.read(currentOwnerOrderEditsKeyProvider),
+      ),
+    );
     _ref.invalidate(
       overviewRecentOrdersForKeyProvider(
         _ref.read(currentOverviewRecentOrdersKeyProvider),
@@ -779,6 +851,8 @@ final dashboardRefreshControllerProvider =
         ownerSalesSeriesForKeyProvider,
         currentOwnerTopItemsKeyProvider,
         ownerTopItemsForKeyProvider,
+        currentOwnerOrderEditsKeyProvider,
+        ownerOrderEditsForKeyProvider,
         currentOverviewRecentOrdersKeyProvider,
         overviewRecentOrdersForKeyProvider,
         currentSetupScopeKeyProvider,
