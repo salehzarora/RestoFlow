@@ -1,5 +1,6 @@
 import 'package:crypto/crypto.dart' show sha256;
 import 'dart:convert' show utf8;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart'
@@ -675,6 +676,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         .whenComplete(() => _opening = null);
   }
 
+  /// Whether this runtime currently keeps a spool database handle.
+  @visibleForTesting
+  bool get holdsOpenDatabaseForTesting => _db != null;
+
   /// ORDER-EDIT-001F — whether this device's spool database durably holds a
   /// row for the `order_edit` dispatch [dispatchId], in ANY status: the
   /// spool then owns that slip (it prints the server's slip, or already
@@ -706,6 +711,14 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       }
     }
     if (_disposed) {
+      // A dispose overtook this lookup's open: release the handle it left
+      // behind (a run still using it keeps it, as before), so a lookup never
+      // keeps a disposed runtime's connection to the spool file.
+      if (!_running) {
+        final leftover = _db;
+        _db = null;
+        await leftover?.close();
+      }
       throw const KitchenSpoolDatabaseUnavailableException('runtime_disposed');
     }
     return await DriftKitchenSpoolStore(db).findByDispatchId(dispatchId) !=

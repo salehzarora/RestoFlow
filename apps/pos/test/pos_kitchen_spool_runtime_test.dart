@@ -1159,6 +1159,51 @@ void main() {
       );
     });
 
+    test(
+      'a lookup whose open a DISPOSE overtakes closes that handle: a '
+      'disposed runtime never keeps a connection to the spool file',
+      () async {
+        final seed = await factory().open();
+        await seed.close();
+
+        var calls = 0;
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        final rt = PosKitchenSpoolRuntime(
+          platform: native,
+          deviceContext: () => _context,
+          secretStore: secretStore,
+          modeRepository: null,
+          ackRepository: null,
+          databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+            documentsDirectoryProvider: () async {
+              // 1st call: the presence check; 2nd: the open, held open here.
+              if (++calls == 2) {
+                entered.complete();
+                await release.future;
+              }
+              return tempDir;
+            },
+          ),
+        );
+        final lookup = rt.holdsOrderEditDispatch('d-edit');
+        await entered.future;
+        await rt.dispose();
+        release.complete();
+        await expectLater(
+          lookup,
+          throwsA(
+            isA<KitchenSpoolDatabaseUnavailableException>().having(
+              (e) => e.reason,
+              'reason',
+              'runtime_disposed',
+            ),
+          ),
+        );
+        expect(rt.holdsOpenDatabaseForTesting, isFalse);
+      },
+    );
+
     test('a spool whose presence cannot be determined cannot tell (throws), '
         'and nothing is created', () async {
       final rt = PosKitchenSpoolRuntime(

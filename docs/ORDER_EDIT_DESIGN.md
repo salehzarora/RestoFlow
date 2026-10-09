@@ -570,8 +570,10 @@ or contract change):*
   in four ways:
   - **Order note (gap G1):** `pos_order_detail` has no order note, so the
     hand-built slip prints none (pinned by a fixture); the server slip prints it.
-  - **ORDER NOW:** it is read from the post-apply detail, so an add-items running
-    at the same time may show newer lines than the server slip.
+  - **ORDER NOW and the header:** ORDER NOW, the table label and the customer
+    name are read when the slip is built (the post-apply detail, a later replay,
+    or "Print again" of an unbuilt slip), so any add-items, table move or name
+    change since the edit shows; the server slip keeps them as at the edit.
   - **Staff line:** the staff first name is printed only when the signed-in worker
     made the edit. A replay under another worker, or with nobody signed in, omits
     the line, while the server payload carries the editing worker's first name
