@@ -323,6 +323,11 @@ class _OrderPass {
       if (!_retired(x) || shownAsWas.contains(x.id)) continue;
       final live = _liveDescendants(x);
       if (_written(x) && live.isNotEmpty) continue;
+      // An intermediate of a chain of pending edits whose root (the
+      // acknowledged line) is in the same unit: the root already reports the
+      // net change — as REMOVED, or as the "was" of a live line — so the
+      // intermediate is never listed a second time.
+      if (_written(x) && _root(x)?.unitKey == x.unitKey) continue;
       int? remadeIn;
       for (final d in live) {
         if (d.unitKey == x.unitKey || d.roundId == null) continue;
@@ -397,7 +402,15 @@ class _OrderPass {
       // an order that left the board while the change is unconfirmed.
       if (pendingEdits.isEmpty) continue;
       final retiredRows = unit.where(_retired).toList();
-      final liveWritten = unit.any((r) => r.live && _written(r));
+      // A reduce remainder or a modify continuation that the server wrote in
+      // place in a served unit (the only rows it writes there) is a copy of
+      // finished food, not kitchen work.
+      final liveWritten = unit.any(
+        (r) =>
+            r.live &&
+            _written(r) &&
+            (_root(r) ?? _byId[r.replaces])?.removedStage != 'served',
+      );
       // Finished food only (every pending removal was already served): there
       // is no kitchen work to tell about.
       if (!liveWritten &&

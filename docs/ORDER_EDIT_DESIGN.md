@@ -915,8 +915,8 @@ Work IDs are proposals pending owner approval.
   An edit round's ticket can print "Change N · Round M" when the optional label is
   supplied (the KDS wires it in 001D).
 - **Spool.** `packages/data_local` decodes the `order_edit` dispatch payload strictly
-  (each `edit_lines` op reads only its own keys; unknown ops and keys are rejected
-  without echoing them), and the `packages/feature_auth` pull and inspection clients
+  (each `edit_lines` op reads only its own keys; an unknown op is rejected without
+  echoing its value, and an unknown key is rejected by its name, never its value), and the `packages/feature_auth` pull and inspection clients
   accept the type. Until ORDER-EDIT-001F passes the slip labels, the canonical
   renderer and the legacy renderer refuse an `order_edit` job, so it is blocked
   visibly (`kitchen_render_failed`) and never misprinted as a new order.

@@ -99,8 +99,9 @@ const Set<String> _closedDispatchTypes = {
   'service_round',
   'void',
   // ORDER-EDIT-001C (D-044; API_CONTRACT §4.45.9): the paper-channel change
-  // slip. The server ranks it with the round deltas (`type_rank` 2), so the
-  // keyset cursor is unchanged.
+  // slip. The server puts it in the existing ELSE rank (`type_rank` 2, the
+  // rank `void` has; service rounds are rank 1), so the keyset cursor is
+  // unchanged.
   'order_edit',
 };
 

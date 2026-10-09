@@ -1433,6 +1433,191 @@ void main() {
       }
     });
   });
+
+  group('review fixes', () {
+    test('29. a served original reduced in an edit that also needs a "Got it" '
+        '(a removal from the live round) gets no standalone card', () {
+      final rows = _Rows(
+        orders: [_order(_o1, status: 'served', editCount: 1)],
+        items: [
+          _retired(
+            _item('a1', _o1, name: 'Burger', qty: 2),
+            by: _e1,
+            stage: 'served',
+          ),
+          // The reduce remainder, written in place with the old status.
+          _item('a1r', _o1, name: 'Burger', editId: _e1, replaces: 'a1'),
+          _retired(
+            _item('b1', _o1, name: 'Fries', linePosition: 2, round: _r2),
+            by: _e1,
+            stage: 'preparing',
+          ),
+          _item('b2', _o1, name: 'Salad', linePosition: 3, round: _r2),
+        ],
+        rounds: [_round(_r2, _o1, status: 'preparing')],
+        edits: [_edit(_e1, _o1, 1)],
+      );
+      final board = rows.map();
+      expect(board.map((t) => t.kitchenTicketId), [_roundKey(_o1, _r2)]);
+      expect(board.single.change!.removed.single.line.name, 'Fries');
+    });
+
+    test('30. a served round continued in place, with the replacement remade '
+        'in the edit round, gets no standalone card', () {
+      const r3 = '44444444-0000-4000-8000-0000000000b4';
+      final rows = _Rows(
+        orders: [_order(_o1, editCount: 1)],
+        items: [
+          _retired(
+            _item('f1', _o1, name: 'Soup'),
+            by: _e1,
+            stage: 'preparing',
+          ),
+          _item('g1', _o1, name: 'Cola', linePosition: 2),
+          _retired(
+            _item('b1', _o1, name: 'Burger', qty: 2, round: _r2),
+            by: _e1,
+            stage: 'served',
+          ),
+          // "Just 1 of 2": the continuation stays in the served round...
+          _item(
+            'b1c',
+            _o1,
+            name: 'Burger',
+            round: _r2,
+            editId: _e1,
+            replaces: 'b1',
+          ),
+          // ...and the changed dish is remade in the edit's round.
+          _item(
+            'b1r',
+            _o1,
+            name: 'Burger',
+            round: r3,
+            linePosition: 4,
+            editId: _e1,
+            replaces: 'b1',
+          ),
+        ],
+        mods: [_mod('m1', 'b1r', 'Cheese')],
+        rounds: [
+          _round(_r2, _o1, status: 'served'),
+          _round(r3, _o1, number: 3, editId: _e1),
+        ],
+        edits: [_edit(_e1, _o1, 1)],
+      );
+      final board = rows.map();
+      expect(board.map((t) => t.kitchenTicketId).toSet(), {
+        _original(_o1),
+        _roundKey(_o1, r3),
+      });
+      final remake = board.firstWhere((t) => t.roundId == r3).items.single;
+      expect(remake.editMark, KdsEditLineMark.remake);
+      expect(remake.editWas!.orderItemId, 'b1');
+      final original = board.firstWhere((t) => t.roundId == null);
+      expect(original.change!.removed.single.line.name, 'Soup');
+    });
+
+    test('31. reduce then remove, both pending: the line is REMOVED once, as '
+        'acknowledged', () {
+      final rows = _Rows(
+        orders: [_order(_o1, editCount: 2)],
+        items: [
+          _retired(
+            _item('a1', _o1, name: 'Burger', qty: 3),
+            by: _e1,
+            stage: 'preparing',
+          ),
+          _retired(
+            _item(
+              'a1r',
+              _o1,
+              name: 'Burger',
+              qty: 2,
+              editId: _e1,
+              replaces: 'a1',
+            ),
+            by: _e2,
+            stage: 'preparing',
+          ),
+          _item('f1', _o1, name: 'Fries', linePosition: 2),
+        ],
+        edits: [
+          _edit(_e1, _o1, 1),
+          _edit(_e2, _o1, 2, createdAt: _tEdit2),
+        ],
+      );
+      final change = rows.map().single.change!;
+      expect(change.removed.map((r) => r.line.orderItemId), ['a1']);
+      expect(change.removed.single.line.quantity, 3);
+    });
+
+    test('32. modify then remove, both pending: only the acknowledged line is '
+        'REMOVED', () {
+      final rows = _Rows(
+        orders: [_order(_o1, editCount: 2)],
+        items: [
+          _retired(
+            _item('a1', _o1, name: 'Burger'),
+            by: _e1,
+            stage: 'preparing',
+          ),
+          _retired(
+            _item('a1m', _o1, name: 'Burger', editId: _e1, replaces: 'a1'),
+            by: _e2,
+            stage: 'preparing',
+          ),
+          _item('f1', _o1, name: 'Fries', linePosition: 2),
+        ],
+        mods: [_mod('m1', 'a1m', 'Cheese')],
+        edits: [
+          _edit(_e1, _o1, 1),
+          _edit(_e2, _o1, 2, createdAt: _tEdit2),
+        ],
+      );
+      final change = rows.map().single.change!;
+      expect(change.removed.map((r) => r.line.orderItemId), ['a1']);
+      expect(change.removed.single.line.modifiers, isEmpty);
+    });
+
+    test('33. modify "just 1 of 3" then remove the replacement, both pending: '
+        'CHANGED 3 -> 2 and nothing REMOVED twice', () {
+      final rows = _Rows(
+        orders: [_order(_o1, editCount: 2)],
+        items: [
+          _retired(
+            _item('a1', _o1, name: 'Burger', qty: 3),
+            by: _e1,
+            stage: 'preparing',
+          ),
+          _item(
+            'a1c',
+            _o1,
+            name: 'Burger',
+            qty: 2,
+            editId: _e1,
+            replaces: 'a1',
+          ),
+          _retired(
+            _item('a1r', _o1, name: 'Burger', editId: _e1, replaces: 'a1'),
+            by: _e2,
+            stage: 'preparing',
+          ),
+        ],
+        mods: [_mod('m1', 'a1r', 'Cheese')],
+        edits: [
+          _edit(_e1, _o1, 1),
+          _edit(_e2, _o1, 2, createdAt: _tEdit2),
+        ],
+      );
+      final card = rows.map().single;
+      final line = card.items.single;
+      expect(line.orderItemId, 'a1c');
+      expect(line.editMark, KdsEditLineMark.changed);
+      expect(line.editWas!.quantity, 3);
+      expect(card.change!.removed, isEmpty);
+    });
+  });
 }
 
 /// Reads a feature_kitchen source file whether the test runs from the package
