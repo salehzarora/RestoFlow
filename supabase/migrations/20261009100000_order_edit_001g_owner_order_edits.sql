@@ -264,9 +264,17 @@ begin
     -- The rows each edit WROTE (edit_id), AS WRITTEN: never re-judged by their
     -- status NOW — a later edit or a whole-order void does not rewrite this
     -- edit's figures (MONEY §13, "live when that edit wrote them").
+    -- Valued at line_total_minor + line_discount_minor: app.edit_order writes
+    -- every row with line_discount_minor 0, and a LATER item-scope
+    -- app.apply_discount moves line_total_minor down by exactly the discount
+    -- it records, so the sum is the amount this edit wrote — a later discount
+    -- is reported under Discounts, never subtracted from this edit again.
+    -- Retired rows (above) stay on line_total_minor: once voided or cancelled
+    -- a line cannot be discounted, so that value is fixed at retirement and is
+    -- exactly what the retiring edit took off the subtotal.
     select n.edit_id,
-           sum(n.line_total_minor) filter (where n.replaces_order_item_id is not null) as replaced_in_minor,
-           sum(n.line_total_minor) filter (where n.replaces_order_item_id is null)     as added_minor
+           sum(n.line_total_minor + n.line_discount_minor) filter (where n.replaces_order_item_id is not null) as replaced_in_minor,
+           sum(n.line_total_minor + n.line_discount_minor) filter (where n.replaces_order_item_id is null)     as added_minor
     from public.order_items n
     join edits e
       on e.id = n.edit_id

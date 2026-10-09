@@ -289,7 +289,8 @@ class _DashboardShellState extends State<DashboardShell> {
 
   /// ORDER-EDIT-001G: the per-branch order-editing switches seam, built once on
   /// the same preconditions as the kitchen-workflow seam. Otherwise null and
-  /// the Settings section is omitted.
+  /// the Settings section is omitted; it is also withheld from Settings in
+  /// platform support mode, whose session the reader refuses.
   late final BranchOrderEditSettingsRepository? _orderEditSettingsRepo =
       _buildOrderEditSettingsRepo();
 
@@ -606,7 +607,13 @@ class _DashboardShellState extends State<DashboardShell> {
                   currencyCode: widget.currencyCode,
                   policyRepository: _shiftClosePolicyRepo,
                   kitchenWorkflowRepository: _kitchenWorkflowRepo,
-                  orderEditSettingsRepository: _orderEditSettingsRepo,
+                  // ORDER-EDIT-001G: omitted in platform support mode, like
+                  // the Overview "Order edits" block. Its reader uses the
+                  // member rank and refuses a support session (not_found),
+                  // so asking would only paint a false "not available" card.
+                  orderEditSettingsRepository: supportMode
+                      ? null
+                      : _orderEditSettingsRepo,
                   settingsRepository: _settingsRepo,
                   currencyChangeGuard: _currencyGuard,
                   brandingRepository: _brandingRepo,

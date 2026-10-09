@@ -808,7 +808,9 @@ shows no change card.
   `added_minor` means live when that edit wrote them: the figures are computed per
   edit as written, from provenance only (`removed_by_edit_id`, `edit_id`,
   `replaces_order_item_id`), so a later edit or a whole-order void never rewrites an
-  earlier edit's figures (ORDER-EDIT-001G; MONEY §13, API_CONTRACT §4.47).
+  earlier edit's figures; a written row counts at `line_total_minor` +
+  `line_discount_minor`, so a later item discount on it does not either
+  (ORDER-EDIT-001G; MONEY §13, API_CONTRACT §4.47).
 
 Worked example (tax off): Burger 4000 (+Tomato, +Cucumber, both free options), Fries
 1500, Cola 800 → subtotal 6300. Edit: burger without tomato, fries removed, one

@@ -5,11 +5,15 @@
 /// (MONEY §12.2); reasons are labelled, never raw codes; staff rows follow
 /// `staff_visible`; "Load more" follows the keyset cursor without duplicates;
 /// money is never relabelled across currencies; support mode never asks; the
-/// Overview refresh re-reads the block; and nothing overflows at phone width,
-/// in RTL or at 2x text.
+/// Overview refresh re-reads the block; nothing overflows at phone width, in
+/// RTL or at 2x text; and a signed net change keeps its sign on the left of
+/// the amount in Arabic and Hebrew.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/analytics/analytics_range.dart';
@@ -219,6 +223,45 @@ Future<void> _pumpOverview(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// The rendered paragraph inside [rowKey] whose text contains [needle].
+RenderParagraph _paragraphIn(
+  WidgetTester tester,
+  String rowKey,
+  String needle,
+) => tester.renderObject<RenderParagraph>(
+  find.descendant(
+    of: find.byKey(Key(rowKey)),
+    matching: find.byWidgetPredicate(
+      (w) => w is RichText && w.text.toPlainText().contains(needle),
+    ),
+  ),
+);
+
+/// Where the sign of [minor] and its amount are DRAWN in [para]: the sign's
+/// box and the left edge of the amount's boxes, in the paragraph's own space.
+({TextBox sign, double figureLeft}) _signAndAmount(
+  RenderParagraph para,
+  int minor,
+) {
+  final text = para.text.toPlainText();
+  final sign = minor < 0 ? '−' : '+';
+  final amount = MoneyFormatter.formatMinor(minor.abs(), 'ILS');
+  final signAt = text.lastIndexOf(sign);
+  final amountAt = text.indexOf(amount, signAt);
+  expect(signAt, greaterThanOrEqualTo(0), reason: 'sign in "$text"');
+  expect(amountAt, signAt + 1, reason: 'amount follows the sign in "$text"');
+  final signBoxes = para.getBoxesForSelection(
+    TextSelection(baseOffset: signAt, extentOffset: signAt + 1),
+  );
+  final amountBoxes = para.getBoxesForSelection(
+    TextSelection(baseOffset: amountAt, extentOffset: amountAt + amount.length),
+  );
+  return (
+    sign: signBoxes.single,
+    figureLeft: amountBoxes.map((b) => b.left).reduce(math.min),
+  );
 }
 
 void main() {
@@ -449,6 +492,35 @@ void main() {
           });
         }
       }
+    }
+
+    // A breakdown row's second line is a sentence in the ambient direction
+    // with the signed net change at its end. In Arabic and Hebrew the sign
+    // must still be DRAWN on the left of the amount, as the forced-LTR value
+    // column draws it — never "₪15.00−".
+    for (final code in ['ar', 'he']) {
+      testWidgets('RTL $code: a breakdown net change keeps its sign on the '
+          'left of the amount', (tester) async {
+        await _pumpCard(tester, _FakeRepo(), locale: code);
+        final l10n = await _l10n(code);
+        for (final (rowKey, minor) in [
+          ('order-edits-reason-customer_changed_mind', -1500),
+          ('order-edits-reason-none', 900),
+        ]) {
+          final para = _paragraphIn(
+            tester,
+            rowKey,
+            l10n.dashboardOrderEditsNetChange,
+          );
+          expect(para.textDirection, TextDirection.rtl);
+          final at = _signAndAmount(para, minor);
+          expect(
+            at.sign.right,
+            lessThanOrEqualTo(at.figureLeft + 0.01),
+            reason: '$rowKey: the sign is drawn left of the amount',
+          );
+        }
+      });
     }
 
     testWidgets('RTL: the Arabic and Hebrew titles render', (tester) async {

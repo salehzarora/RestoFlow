@@ -141,9 +141,14 @@ class _OrderEditsBody extends ConsumerWidget {
       ),
     );
 
+    // The signed amount sits inside a sentence in the ambient direction, so it
+    // is wrapped in a left-to-right isolate (LRI U+2066 … PDI U+2069): in
+    // Arabic and Hebrew the sign then stays on the left of the amount, as in
+    // the forced-LTR value column, instead of drifting to its right.
     String breakdownSecondary(OrderEditFigures f) => showMoney
         ? '${f.editCount} · ${l10n.dashboardOrderEditsEditCount} · '
-              '${l10n.dashboardOrderEditsNetChange} ${signed(f.netChangeMinor)}'
+              '${l10n.dashboardOrderEditsNetChange} '
+              '\u2066${signed(f.netChangeMinor)}\u2069'
         : '${f.editCount} · ${l10n.dashboardOrderEditsEditCount}';
 
     return Column(

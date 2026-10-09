@@ -17,6 +17,8 @@
 --   I. privacy (no reason_text, no ids, exact key sets)
 --   J. envelope (no audit, effective currency, currency_codes, the switch,
 --      empty window)
+--   K. a later item discount on the rows an edit wrote (fixed and 100 %)
+--      never rewrites that edit's figures
 -- Session pinned to UTC; hex-only UUIDs.
 -- ============================================================================
 begin;
@@ -24,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(67);
+select plan(73);
 
 -- ===== fixture ===============================================================
 -- Org A, restaurant A1 (no zone, no currency override), three branches:
@@ -707,6 +709,108 @@ select is((select r - 'currency_code' - 'range' - 'limit' - 'staff_visible' - 'o
 select ok((select not (r ->> 'order_edit_enabled_in_scope')::boolean and (r -> 'summary' ->> 'edit_count')::int = 0
              from t_r where k = 'own_off_b1e'),
   'J6 a scope with the switch off and no edits in the window reads hidden (enabled false, zero edits)');
+
+-- ===== K. a LATER item discount never rewrites an edit's figures =============
+-- Built after every assertion above, so none of their counts move. A row an
+-- edit wrote is valued as written (line_total_minor + line_discount_minor):
+-- app.apply_discount (scope order_item) later lowers its line_total_minor, and
+-- that discount belongs to Discounts, not to the edit.
+-- O10 add-only: Salad 2000, + Lemonade 900, + Cola 800 (subtotal 2000 -> 3700).
+select pg_temp.mk_order('9e0a0000-0000-0000-0000-00000000a010', '9e0a0000-0000-0000-0000-00000000009a');
+select pg_temp.mk_item('9e0a0000-0000-0000-0000-0000000c0001', '9e0a0000-0000-0000-0000-00000000a010', '9e0a0000-0000-0000-0000-000000001005', 'Salad', 1, 2000);
+select pg_temp.settle('9e0a0000-0000-0000-0000-00000000a010');
+select pg_temp.edit('e10', '9e0a0000-0000-0000-0000-00000000009a', '9e0a0000-0000-0000-0000-00000000a010',
+  '{"expected": {"subtotal_minor": 3700, "tax_total_minor": 0, "grand_total_minor": 3700},
+    "changes": [
+      {"op": "add", "item": {"menu_item_id": "9e0a0000-0000-0000-0000-000000001004", "quantity": 1,
+        "unit_price_minor_snapshot": 900, "menu_item_name_snapshot": "Lemonade", "modifiers": []}},
+      {"op": "add", "item": {"menu_item_id": "9e0a0000-0000-0000-0000-000000001003", "quantity": 1,
+        "unit_price_minor_snapshot": 800, "menu_item_name_snapshot": "Cola", "modifiers": []}}]}'::jsonb);
+-- O11 a reduction and an increase: Cola 3 -> 2 (remainder row 1600 replaces
+-- the 2400 line), Fries 1 -> 2 (a +1 delta row 1500). Subtotal 3900 -> 4600.
+select pg_temp.mk_order('9e0a0000-0000-0000-0000-00000000a011', '9e0a0000-0000-0000-0000-00000000009a');
+select pg_temp.mk_item('9e0a0000-0000-0000-0000-0000000c1001', '9e0a0000-0000-0000-0000-00000000a011', '9e0a0000-0000-0000-0000-000000001003', 'Cola', 3, 800);
+select pg_temp.mk_item('9e0a0000-0000-0000-0000-0000000c1002', '9e0a0000-0000-0000-0000-00000000a011', '9e0a0000-0000-0000-0000-000000001002', 'Fries', 1, 1500);
+select pg_temp.settle('9e0a0000-0000-0000-0000-00000000a011');
+select pg_temp.edit('e11', '9e0a0000-0000-0000-0000-00000000009a', '9e0a0000-0000-0000-0000-00000000a011',
+  '{"reason_code": "customer_changed_mind",
+    "expected": {"subtotal_minor": 4600, "tax_total_minor": 0, "grand_total_minor": 4600},
+    "changes": [
+      {"op": "set_quantity", "order_item_id": "9e0a0000-0000-0000-0000-0000000c1001", "quantity": 2},
+      {"op": "set_quantity", "order_item_id": "9e0a0000-0000-0000-0000-0000000c1002", "quantity": 2}]}'::jsonb);
+
+-- the rows each edit wrote
+create temp table t_k_rows as
+  select 'lemonade'::text as k, id from order_items
+   where edit_id = pg_temp.eid('e10')::uuid and menu_item_id = '9e0a0000-0000-0000-0000-000000001004'
+  union all
+  select 'cola_added', id from order_items
+   where edit_id = pg_temp.eid('e10')::uuid and menu_item_id = '9e0a0000-0000-0000-0000-000000001003'
+  union all
+  select 'cola_remainder', id from order_items
+   where edit_id = pg_temp.eid('e11')::uuid and replaces_order_item_id = '9e0a0000-0000-0000-0000-0000000c1001'
+  union all
+  select 'fries_delta', id from order_items
+   where edit_id = pg_temp.eid('e11')::uuid and replaces_order_item_id is null;
+
+-- before: Max (B1 manager) reads the block and the report range
+set local role authenticated;
+set local app.current_app_user_id = '9e0a0000-0000-0000-0000-00000000006b';
+insert into t_r values
+  ('k_before',    app.owner_order_edits('9e0a0000-0000-0000-0000-0000000000a0', '9e0a0000-0000-0000-0000-0000000000a1', '9e0a0000-0000-0000-0000-0000000000b1', 'today')),
+  ('k_rr_before', app.owner_report_range('9e0a0000-0000-0000-0000-0000000000a0', '9e0a0000-0000-0000-0000-0000000000a1', '9e0a0000-0000-0000-0000-0000000000b1', 'today'));
+reset role;
+
+-- Max discounts every written row at ITEM scope: fixed 100 and a 100 %
+-- percentage on O10's added lines; a 100 % percentage on O11's remainder row
+-- and fixed 200 on its +1 delta row.
+create temp table t_disc (k text primary key, r jsonb);
+insert into t_disc values ('lemonade', app.apply_discount('9e0a0000-0000-0000-0000-00000000009b', '9e0a0000-0000-0000-0000-00000000a010',
+  '9e0a0000-0000-0000-0000-0000000000d1', 'g-k-disc-1', 'order_item', (select id from t_k_rows where k = 'lemonade'), 'fixed', 100, 'loyalty'));
+insert into t_disc values ('cola_added', app.apply_discount('9e0a0000-0000-0000-0000-00000000009b', '9e0a0000-0000-0000-0000-00000000a010',
+  '9e0a0000-0000-0000-0000-0000000000d1', 'g-k-disc-2', 'order_item', (select id from t_k_rows where k = 'cola_added'), 'percentage', 10000, 'on the house'));
+insert into t_disc values ('cola_remainder', app.apply_discount('9e0a0000-0000-0000-0000-00000000009b', '9e0a0000-0000-0000-0000-00000000a011',
+  '9e0a0000-0000-0000-0000-0000000000d1', 'g-k-disc-3', 'order_item', (select id from t_k_rows where k = 'cola_remainder'), 'percentage', 10000, 'on the house'));
+insert into t_disc values ('fries_delta', app.apply_discount('9e0a0000-0000-0000-0000-00000000009b', '9e0a0000-0000-0000-0000-00000000a011',
+  '9e0a0000-0000-0000-0000-0000000000d1', 'g-k-disc-4', 'order_item', (select id from t_k_rows where k = 'fries_delta'), 'fixed', 200, 'loyalty'));
+
+-- after: the same reads
+set local role authenticated;
+set local app.current_app_user_id = '9e0a0000-0000-0000-0000-00000000006b';
+insert into t_r values
+  ('k_after',    app.owner_order_edits('9e0a0000-0000-0000-0000-0000000000a0', '9e0a0000-0000-0000-0000-0000000000a1', '9e0a0000-0000-0000-0000-0000000000b1', 'today')),
+  ('k_rr_after', app.owner_report_range('9e0a0000-0000-0000-0000-0000000000a0', '9e0a0000-0000-0000-0000-0000000000a1', '9e0a0000-0000-0000-0000-0000000000b1', 'today'));
+reset role;
+
+select ok((select bool_and(r ->> 'status' = 'applied') from t_ed where k in ('e10', 'e11'))
+      and (select count(*) = 4 and bool_and((r ->> 'ok')::boolean) from t_disc)
+      and (select count(*) = 4 from t_k_rows)
+      and (select string_agg(t.k || '=' || oi.line_total_minor || '+' || oi.line_discount_minor, ',' order by t.k)
+             from t_k_rows t join order_items oi on oi.id = t.id)
+          = 'cola_added=0+800,cola_remainder=0+1600,fries_delta=1300+200,lemonade=800+100'
+      and (select array_agg(subtotal_minor order by id) from orders
+            where id in ('9e0a0000-0000-0000-0000-00000000a010', '9e0a0000-0000-0000-0000-00000000a011')) = array[2800::bigint, 2800::bigint],
+  'K0 fixture: both edits applied, then four item discounts landed on the rows they wrote (fixed and 100 %)');
+select ok(pg_temp.figs((select r from t_r where k = 'k_before'), 'e10') = '0/0/0/1700/1700/0'
+      and pg_temp.figs((select r from t_r where k = 'k_after'), 'e10') = '0/0/0/1700/1700/0',
+  'K1 an add-only edit keeps added 1700 / net +1700 after a fixed and a 100 % item discount on the lines it added');
+select ok(pg_temp.figs((select r from t_r where k = 'k_before'), 'e11') = '0/2400/1600/1500/700/2400'
+      and pg_temp.figs((select r from t_r where k = 'k_after'), 'e11') = '0/2400/1600/1500/700/2400',
+  'K2 a reduction + increase keeps replaced_in 1600 / added 1500 / net +700 after a 100 % and a fixed item discount on its rows');
+select ok((select count(*) = 2 and bool_and((e ->> 'net_change_minor')::bigint
+                   = (a.new_values ->> 'subtotal_minor')::bigint - (a.old_values ->> 'subtotal_minor')::bigint)
+             from t_r, jsonb_array_elements(r -> 'edits') e
+             join audit_events a on a.action = 'order.edited' and a.new_values ->> 'order_edit_id' = e ->> 'order_edit_id'
+            where k = 'k_after' and e ->> 'order_edit_id' in (pg_temp.eid('e10'), pg_temp.eid('e11'))),
+  'K3 after the discounts, each edit''s net_change_minor still equals its order.edited audit''s new - old subtotal');
+select ok((select a.r -> 'summary' = b.r -> 'summary' and a.r -> 'by_reason' = b.r -> 'by_reason'
+                  and a.r -> 'by_staff' = b.r -> 'by_staff'
+             from t_r a, t_r b where a.k = 'k_after' and b.k = 'k_before'),
+  'K4 summary, by_reason and by_staff do not move when a later item discount lands on an edit''s rows');
+select is((select (a.r -> 'current' ->> 'discount_minor')::bigint - (b.r -> 'current' ->> 'discount_minor')::bigint
+             from t_r a, t_r b where a.k = 'k_rr_after' and b.k = 'k_rr_before'),
+  2700::bigint,
+  'K5 the 2700 of item discounts is reported once, under Discounts (owner_report_range)');
 
 select * from finish();
 rollback;
