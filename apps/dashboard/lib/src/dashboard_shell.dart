@@ -9,6 +9,7 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'admin/branch_kitchen_workflow_repository.dart';
+import 'admin/branch_order_edit_settings_repository.dart';
 import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/currency_change_guard.dart';
 import 'admin/real_admin_views.dart';
@@ -279,6 +280,31 @@ class _DashboardShellState extends State<DashboardShell> {
       return null;
     }
     return SupabaseBranchKitchenWorkflowRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
+
+  /// ORDER-EDIT-001G: the per-branch order-editing switches seam, built once on
+  /// the same preconditions as the kitchen-workflow seam. Otherwise null and
+  /// the Settings section is omitted.
+  late final BranchOrderEditSettingsRepository? _orderEditSettingsRepo =
+      _buildOrderEditSettingsRepo();
+
+  BranchOrderEditSettingsRepository? _buildOrderEditSettingsRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    final branchId = membership?.branchId;
+    if (transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        branchId == null) {
+      return null;
+    }
+    return SupabaseBranchOrderEditSettingsRepository(
       transport: transport,
       organizationId: membership.organizationId,
       restaurantId: restaurantId,
@@ -580,6 +606,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   currencyCode: widget.currencyCode,
                   policyRepository: _shiftClosePolicyRepo,
                   kitchenWorkflowRepository: _kitchenWorkflowRepo,
+                  orderEditSettingsRepository: _orderEditSettingsRepo,
                   settingsRepository: _settingsRepo,
                   currencyChangeGuard: _currencyGuard,
                   brandingRepository: _brandingRepo,

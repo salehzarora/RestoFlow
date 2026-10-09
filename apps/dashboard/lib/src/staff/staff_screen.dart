@@ -541,11 +541,21 @@ class _CapabilitiesSwitches extends StatelessWidget {
             ],
           ),
         ),
+        // ORDER-EDIT-001G (ORDER_EDIT_DESIGN §9.2): the same `void_order`
+        // capability also gates removing, reducing or changing items already
+        // sent to the kitchen when a cashier edits an order, so the label says
+        // so. The key and the payload (`p_void_order`) are unchanged.
         SwitchListTile(
           key: const Key('cap-void-order'),
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: Text(l10n.staffCapVoidOrder),
+          title: Text(l10n.staffCapVoidOrderAndEdits),
+          subtitle: Text(
+            l10n.staffCapVoidOrderAndEditsHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
           value: value.voidOrder,
           onChanged: enabled
               ? (v) => onChanged(value.copyWith(voidOrder: v))
