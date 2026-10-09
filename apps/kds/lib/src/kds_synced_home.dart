@@ -11,6 +11,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_sync/restoflow_sync.dart' show KdsSyncStatus;
 
 import 'kds_screen.dart';
+import 'print/kds_acknowledge_print.dart';
 import 'print/kds_native_printer.dart';
 import 'print/kds_ticket_document.dart';
 import 'state/kds_kitchen_print_controller.dart';
@@ -186,13 +187,24 @@ class KdsSyncedHome extends ConsumerWidget {
                     final bridge = await ref.read(
                       kdsActivePrintBridgeReadyProvider.future,
                     );
+                    // ORDER-EDIT-001D: print the ticket RE-DERIVED from the
+                    // board after the post-push pull, never the one captured
+                    // at tap time — an edit that landed before the tap's pull
+                    // prints fresh. Same work unit, so the same idempotency
+                    // key; nothing prints when the unit left the board, was
+                    // voided, or exists only as a change card.
+                    final printable = kdsTicketForAcknowledgePrint(
+                      ticket,
+                      ref.read(kdsRepositoryProvider).viewState.tickets,
+                    );
+                    if (printable == null) return;
                     ref
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
-                          ticket,
+                          printable,
                           buildDocument: () => buildKdsTicketDocument(
                             l10n,
-                            ticket,
+                            printable,
                             restaurantName: ref.read(kdsRestaurantNameProvider),
                           ),
                           submitToBridge: bridge == null ? null : bridge.submit,
