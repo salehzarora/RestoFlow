@@ -590,7 +590,7 @@ void main() {
       'lib/src/state/kds_edit_ack_controller.dart',
     ]) {
       final code = [
-        for (final line in File(path).readAsLinesSync())
+        for (final line in _appSource(path).readAsLinesSync())
           if (!line.trimLeft().startsWith('//')) line,
       ].join('\n');
       for (final pattern in forbidden) {
@@ -656,4 +656,14 @@ void main() {
     );
     expect(view, isNull);
   });
+}
+
+/// A KDS source file, whether the suite runs from `apps/kds` or from the
+/// repository root (CI runs `flutter test apps/kds`). Never passes vacuously.
+File _appSource(String relative) {
+  for (final candidate in [relative, 'apps/kds/$relative']) {
+    final file = File(candidate);
+    if (file.existsSync()) return file;
+  }
+  fail('could not locate $relative from ${Directory.current.path}');
 }
