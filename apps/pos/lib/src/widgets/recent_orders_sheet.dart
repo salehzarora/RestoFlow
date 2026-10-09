@@ -224,7 +224,13 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       final view = o.order;
       // Needs the device-owned order-time lines to print, a live (not voided,
       // not never-created) order, and this device's own outbox entry.
-      if (view == null || o.isNeverCreated || o.isVoided) return null;
+      // ORDER-EDIT-001F (decision D8): never for an EDITED order — its
+      // order-time lines are stale (removed food would come back on paper),
+      // and the edit's change slip already replaced every earlier ticket. A
+      // read-only hide: the durable claim itself is left untouched.
+      if (view == null || o.isNeverCreated || o.isVoided || o.editCount > 0) {
+        return null;
+      }
       final entryId = view.outboxEntryId;
       if (entryId == null) return null;
       OutboxEntry? entry;

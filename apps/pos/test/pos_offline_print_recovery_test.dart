@@ -35,6 +35,7 @@ import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
+import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
@@ -605,6 +606,82 @@ void main() {
       PosRoundPrintClaimState.sent,
     );
   });
+
+  // ORDER-EDIT-001F (decision D8): once the server reports an EDIT of the
+  // order, its owed initial ticket is stale (removed food would come back on
+  // paper; the edit's change slip already replaced it). The recovery action
+  // hides — read-only: the durable claim itself is untouched. A same-shape
+  // snapshot WITHOUT an edit keeps the action (the control).
+  for (final editCount in [0, 1]) {
+    testWidgets('D8 — after a restart, a server snapshot with editCount '
+        '$editCount ${editCount > 0 ? 'HIDES' : 'keeps'} the owed '
+        'initial-ticket action', (tester) async {
+      final printer = _ThrowingPrintTransport();
+      final h = await _pump(
+        tester,
+        transport: _ScriptedSyncTransport(const [_offlineFailure]),
+        printTransport: printer,
+      );
+      final prefs = h.prefs;
+      await h.submit();
+      await tester.pumpAndSettle();
+      final entry = h.entry;
+      final localKey = _localKeyOf(entry);
+      final orderNumber = entry.summary.orderNumber;
+      expect(
+        _sharedPrefsClaims(prefs).claimOf(localKey),
+        PosRoundPrintClaimState.failed,
+      );
+
+      final capture = _CapturingPrintTransport();
+      final restarted = await _bootContainer(
+        transport: _ScriptedSyncTransport(const [_offlineFailure]),
+        claims: _sharedPrefsClaims(prefs),
+        printTransport: capture,
+        prefs: prefs,
+      );
+      final at = DateTime.now().toUtc();
+      expect(
+        await restarted
+            .read(posRecentOrdersControllerProvider.notifier)
+            .applySnapshots([
+              PosOrderSnapshot(
+                orderId: entry.targetId,
+                orderCode: orderNumber,
+                revision: 2,
+                status: 'submitted',
+                settlement: PosSettlement.unpaid,
+                subtotalMinor: 4000,
+                discountTotalMinor: 0,
+                taxTotalMinor: 0,
+                grandTotalMinor: 4000,
+                createdAt: at,
+                updatedAt: at,
+                syncAt: at,
+                orderType: 'takeaway',
+                currencyCode: 'ILS',
+                editCount: editCount,
+              ),
+            ]),
+        isTrue,
+      );
+      final row = restarted
+          .read(posRecentOrdersControllerProvider)
+          .singleWhere((o) => o.orderId == entry.targetId);
+      expect(row.editCount, editCount);
+      expect(row.order, isNotNull, reason: 'the local lines are still there');
+
+      await _pumpRecentOrdersSheet(tester, restarted);
+      final action = find.byKey(Key('recent-print-kitchen-$orderNumber'));
+      expect(action, editCount > 0 ? findsNothing : findsOneWidget);
+      expect(capture.sent, isEmpty);
+      // Read-only: the durable claim is exactly as it was.
+      expect(
+        _sharedPrefsClaims(prefs).claimOf(localKey),
+        PosRoundPrintClaimState.failed,
+      );
+    });
+  }
 
   test('C2 — runPreclaimed consults the durable claim: `sent` suppresses the '
       'second send; `claimed` (crash re-attempt) and `failed` (released) '

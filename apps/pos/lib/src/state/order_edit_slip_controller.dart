@@ -5,6 +5,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show KitchenImportAckStatus, SupabaseKitchenDispatchAckRepository;
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
     show
+        KitchenChangeSlipLabels,
+        KitchenTicketPrintLabels,
         OrderChangeSlipView,
         kitchenChangeSlipLabelsForLanguageCode,
         kitchenTicketPrintLabelsForLanguageCode;
@@ -20,6 +22,7 @@ import '../data/round_print_claim_store.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show
         PosKitchenPrintOutcome,
+        PosProviderReader,
         posAutoKitchenPrintGuardProvider,
         posOrderEditSlipPrintProvider,
         posRoundPrintClaimStoreProvider;
@@ -952,4 +955,78 @@ bool orderEditSlipSupersededBy(PosRecentOrder? order, OrderEditSlipRecord r) {
   return order.editCount > r.editNumber ||
       order.isVoided ||
       order.serverStatus == 'cancelled';
+}
+
+/// ORDER-EDIT-001F (decision D6, "R2") — what the manual kitchen REPRINT of an
+/// EDITED order came to.
+final class PosKitchenChangeSlipReprintResult {
+  /// The ORDER-NOW slip went to the kitchen printer seam; [outcome] is its
+  /// answer.
+  const PosKitchenChangeSlipReprintResult.sent(
+    PosKitchenPrintOutcome this.outcome,
+  ) : fetchFailed = false;
+
+  /// The authoritative detail could not be read (`posReprintKitchenFetchFailed`).
+  /// Nothing printed.
+  const PosKitchenChangeSlipReprintResult.fetchFailed()
+    : outcome = null,
+      fetchFailed = true;
+
+  /// The detail has nothing to print (no live line, no edit, or another
+  /// order's answer). Nothing printed.
+  const PosKitchenChangeSlipReprintResult.nothingToPrint()
+    : outcome = null,
+      fetchFailed = false;
+
+  final PosKitchenPrintOutcome? outcome;
+  final bool fetchFailed;
+}
+
+/// The reprint seam of an edited order: one named door, so a test can observe
+/// that an edited order never reprints its stale order-time snapshot.
+typedef PosKitchenChangeSlipReprint =
+    Future<PosKitchenChangeSlipReprintResult> Function({
+      required PosProviderReader read,
+      required String orderId,
+      required KitchenTicketPrintLabels labels,
+      required KitchenChangeSlipLabels changeLabels,
+    });
+
+/// ORDER-EDIT-001F (decision D6, "R2") — THE REPRINT MARKER. Once an order has
+/// been edited, its kitchen paper is no longer the order-time ticket: the
+/// manual kitchen reprint prints the ORDER-NOW slip instead — "ORDER CHANGED ·
+/// Change N", every LIVE line from the authoritative `pos_order_detail`, and
+/// "Replaces earlier tickets" ([orderNowSlipFromDetail]). Deliberate and
+/// unguarded like every manual reprint: no claim, no acknowledgement, no order
+/// change; a second press prints a second copy. Money-free.
+final posKitchenChangeSlipReprintProvider =
+    Provider<PosKitchenChangeSlipReprint>((_) => reprintOrderNowChangeSlip);
+
+/// The default [PosKitchenChangeSlipReprint]: fetch → [orderNowSlipFromDetail]
+/// → the change-slip print seam.
+Future<PosKitchenChangeSlipReprintResult> reprintOrderNowChangeSlip({
+  required PosProviderReader read,
+  required String orderId,
+  required KitchenTicketPrintLabels labels,
+  required KitchenChangeSlipLabels changeLabels,
+}) async {
+  final PosOrderDetail detail;
+  try {
+    detail = await read(orderDetailRepositoryProvider).fetch(orderId);
+  } catch (_) {
+    return const PosKitchenChangeSlipReprintResult.fetchFailed();
+  }
+  final slip = detail.orderId == orderId
+      ? orderNowSlipFromDetail(detail)
+      : null;
+  if (slip == null) {
+    return const PosKitchenChangeSlipReprintResult.nothingToPrint();
+  }
+  final outcome = await read(posOrderEditSlipPrintProvider)(
+    read: read,
+    slip: slip,
+    labels: labels,
+    changeLabels: changeLabels,
+  );
+  return PosKitchenChangeSlipReprintResult.sent(outcome);
 }

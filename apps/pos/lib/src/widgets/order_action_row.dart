@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show kitchenChangeSlipLabelsFromL10n;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_actions.dart';
@@ -22,7 +24,10 @@ import '../state/cart_controller.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/order_edit_controller.dart';
 import '../state/order_edit_slip_controller.dart'
-    show orderEditPendingSlipsProvider, orderEditSlipSupersededBy;
+    show
+        orderEditPendingSlipsProvider,
+        orderEditSlipSupersededBy,
+        posKitchenChangeSlipReprintProvider;
 import '../state/parked_carts_controller.dart';
 import '../state/payment_controller.dart' show paymentControllerProvider;
 import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
@@ -796,19 +801,47 @@ class OrderActionRow extends ConsumerWidget {
   /// seam may SETTLE an owed direct-print claim on success — that is
   /// pre-existing print bookkeeping recording that the ticket physically went
   /// out, not a business-state change.)
+  ///
+  /// ORDER-EDIT-001F (decision D6, "R2"): an EDITED order (`editCount > 0`)
+  /// never reprints its order-time snapshot — removed food would come back on
+  /// paper. It prints the ORDER-NOW change slip from the authoritative detail
+  /// instead ([posKitchenChangeSlipReprintProvider]). An unedited order is
+  /// byte-identical to before.
   Future<void> _reprintKitchenTicket(
     BuildContext context,
     WidgetRef ref,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
+    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
+    final orderId = order.orderId;
+    if (order.editCount > 0 && !isDemo && orderId != null) {
+      final result = await ref.read(posKitchenChangeSlipReprintProvider)(
+        read: container.read,
+        orderId: orderId,
+        labels: kitchenTicketPrintLabelsFromL10n(l10n),
+        changeLabels: kitchenChangeSlipLabelsFromL10n(l10n),
+      );
+      final outcome = result.outcome;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            outcome != null
+                ? _kitchenReprintSnack(outcome)
+                : result.fetchFailed
+                ? l10n.posReprintKitchenFetchFailed
+                : l10n.posReprintKitchenUnavailable,
+          ),
+        ),
+      );
+      return;
+    }
     // KIOSK-PRINT-114B.5A: a DEVICE-OWNED order prints its local order-time
     // snapshot exactly as before. A BRANCH-DISCOVERED order (a kiosk order, or
     // one taken on another till) has no local snapshot — it used to refuse here
     // and nothing printed — so it is now resolved from the AUTHORITATIVE
     // detail, the same source the receipt reprint already trusts.
     final local = order.order;
-    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
     final view =
         local ??
         await authoritativeKitchenSource(
@@ -833,17 +866,7 @@ class OrderActionRow extends ConsumerWidget {
       labels: kitchenTicketPrintLabelsFromL10n(l10n),
     );
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(switch (outcome) {
-          PosKitchenPrintOutcome.printed => l10n.posKitchenTicketPrintedSnack,
-          PosKitchenPrintOutcome.noPrinterConfigured ||
-          PosKitchenPrintOutcome.unavailable =>
-            l10n.posKitchenPrinterNotConfiguredSnack,
-          PosKitchenPrintOutcome.failed ||
-          PosKitchenPrintOutcome.ineligibleOrder =>
-            l10n.posKitchenTicketPrintFailedSnack,
-        }),
-      ),
+      SnackBar(content: Text(_kitchenReprintSnack(outcome))),
     );
     // 114B.5A DETAIL-SOURCED LIMITATION (until 114B.5B): the authoritative
     // detail carries no prep/meat snapshots, so a branch-discovered reprint
@@ -859,6 +882,18 @@ class OrderActionRow extends ConsumerWidget {
       );
     }
   }
+
+  /// The honest kitchen-print snack for a manual reprint's [outcome].
+  String _kitchenReprintSnack(PosKitchenPrintOutcome outcome) =>
+      switch (outcome) {
+        PosKitchenPrintOutcome.printed => l10n.posKitchenTicketPrintedSnack,
+        PosKitchenPrintOutcome.noPrinterConfigured ||
+        PosKitchenPrintOutcome.unavailable =>
+          l10n.posKitchenPrinterNotConfiguredSnack,
+        PosKitchenPrintOutcome.failed ||
+        PosKitchenPrintOutcome.ineligibleOrder =>
+          l10n.posKitchenTicketPrintFailedSnack,
+      };
 
   Future<void> _reprintCustomerReceipt(
     BuildContext context,
