@@ -12,8 +12,10 @@ import 'package:restoflow_sync/restoflow_sync.dart' show KdsSyncStatus;
 
 import 'kds_screen.dart';
 import 'print/kds_acknowledge_print.dart';
+import 'print/kds_change_chit.dart';
 import 'print/kds_native_printer.dart';
 import 'print/kds_ticket_document.dart';
+import 'state/kds_edit_ack_controller.dart';
 import 'state/kds_kitchen_print_controller.dart';
 import 'state/kds_printer_assignments.dart';
 import 'state/kds_session.dart';
@@ -53,6 +55,14 @@ class KdsSyncedHome extends ConsumerWidget {
       ref.read(kdsVoidAckControllerProvider.notifier).reconcile([
         for (final t in vs.tickets)
           if (t.requiresAck && t.orderId != null) t.orderId!,
+      ]);
+      // ORDER-EDIT-001D: the same rule for "Got it" — drop pending/failed
+      // entries whose change alert key the fresh pull no longer shows
+      // (confirmed here or on another KDS, superseded by a void, or moved on
+      // to a newer edit). Same exact-data gate, same COMPLETE ticket list.
+      ref.read(kdsEditAckControllerProvider.notifier).reconcile([
+        for (final t in vs.tickets)
+          if (t.changeAlertKey != null) t.changeAlertKey!,
       ]);
     });
     final async = ref.watch(kdsViewStateProvider);
@@ -125,6 +135,9 @@ class KdsSyncedHome extends ConsumerWidget {
         // cancellation cards (pending until the authoritative pull clears the
         // card; failed stays visible + retryable).
         final ackState = ref.watch(kdsVoidAckControllerProvider);
+        // ORDER-EDIT-001D: the per-card "Got it" state, keyed by change alert
+        // key; a sibling card covered by an in-flight tap shows pending too.
+        final editAck = ref.watch(kdsEditAckControllerProvider);
         return KdsScreen(
           tickets: vs.tickets,
           allowRecall: false,
@@ -157,6 +170,23 @@ class KdsSyncedHome extends ConsumerWidget {
           },
           ackPendingOrderIds: ackState.pending,
           ackFailedOrderIds: ackState.failed,
+          // ORDER-EDIT-001D: "Got it" — the server-authoritative
+          // order.edit_ack through the existing sync path (online-only, like
+          // order.void_ack). No live session => no "Got it" (never a dead
+          // button). The change stays until the pull returns kitchen_ack_at.
+          onAcknowledgeChange: pusher == null
+              ? null
+              : (ticket) => unawaited(_gotIt(ref, l10n, ticket, vs.tickets)),
+          changeAckPendingKeys: {
+            for (final t in vs.tickets)
+              if (t.changeAlertKey != null && editAck.isPending(t))
+                t.changeAlertKey!,
+          },
+          changeAckFailedKeys: {
+            for (final t in vs.tickets)
+              if (t.changeAlertKey != null && editAck.isFailed(t))
+                t.changeAlertKey!,
+          },
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {
@@ -219,6 +249,52 @@ class KdsSyncedHome extends ConsumerWidget {
     );
   }
 
+  /// ORDER-EDIT-001D (design §7.2): one "Got it" tap. Sends
+  /// `order.edit_ack` for [ticket]'s newest pending edit and — ONLY when the
+  /// server applied it AND this tap stamped at least one edit
+  /// (`acknowledged_count > 0`; 0 means another KDS confirmed first and
+  /// printed its own) — prints ONE money-free change chit for the order's
+  /// units already on paper, when this device auto-prints.
+  ///
+  /// The chit is computed from [board] — the board the cook CONFIRMED,
+  /// copied BEFORE the ack's immediate pull clears the change. A refusal, a
+  /// superseding void, an unknown outcome or a skipped tap prints nothing.
+  Future<void> _gotIt(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    KdsTicketView ticket,
+    List<KdsTicketView> board,
+  ) async {
+    final orderId = ticket.orderId;
+    final change = ticket.change;
+    if (orderId == null || change == null) return;
+    final snapshot = List<KdsTicketView>.of(board);
+    final result = await ref
+        .read(kdsEditAckControllerProvider.notifier)
+        .acknowledge(ticket);
+    if (result.outcome != KdsEditAckOutcome.applied ||
+        result.acknowledgedCount <= 0) {
+      return;
+    }
+    // BLUETOOTH-FIRST-PRINT: await the saved printer profile (as on
+    // Acknowledge) so a chit right after process recreation still prints.
+    final bridge = await ref.read(kdsActivePrintBridgeReadyProvider.future);
+    await ref
+        .read(kdsKitchenPrintControllerProvider.notifier)
+        .printChangeChit(
+          orderId: orderId,
+          upToEditNumber: change.upToEditNumber,
+          board: snapshot,
+          buildDocument: (view) => buildKdsChangeChitDocument(
+            l10n,
+            view,
+            restaurantName: ref.read(kdsRestaurantNameProvider),
+          ),
+          submitToBridge: bridge == null ? null : bridge.submit,
+          nativePrinterConfigured: ref.read(hasNativePrinterProvider),
+        );
+  }
+
   /// The honest kitchen print-job status for a ticket, or null when no job
   /// exists yet (auto-print off / not acknowledged). A confirmed bridge write
   /// shows "sent to printer" (NOT a hardware-confirmed print, which stays
@@ -230,6 +306,9 @@ class KdsSyncedHome extends ConsumerWidget {
     KdsPrintJob? job,
   ) {
     if (job == null) return null;
+    // ORDER-EDIT-001D: a standalone change card keeps its old unit's key, so
+    // the job describes a ticket that no longer exists — show nothing.
+    if (ticket.change?.standalone == true) return null;
     // (label, isError, isReprint): error states show a danger-tone Retry;
     // PRINT-STABILITY-001 adds a quiet Reprint on an already-SENT ticket so staff
     // can print another money-free copy (paper jam / extra copy) without changing
@@ -273,6 +352,9 @@ class KdsSyncedHome extends ConsumerWidget {
     AppLocalizations l10n,
     KdsTicketView ticket,
   ) async {
+    // ORDER-EDIT-001D: never reprint from a standalone change card — it would
+    // print the emptied (or vanished) unit's ticket.
+    if (ticket.change?.standalone == true) return;
     final assignments = switch (ref
         .read(kdsPrinterAssignmentsProvider)
         .valueOrNull) {
