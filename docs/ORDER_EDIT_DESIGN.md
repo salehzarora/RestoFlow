@@ -404,7 +404,11 @@ change):*
   shows the failure line and the retry is a new operation; an unknown outcome (a
   throw or no matching result) reuses the same `local_operation_id` (D-022 replay).
   Pending and failed entries are reconciled only on a fresh `data` pull, from the
-  complete board, exactly like PSC-001D.
+  complete board, exactly like PSC-001D. A "Got it" whose outcome is unknown owes its
+  chit: once a fresh pull no longer shows any pending edit of that order up to N,
+  the same operation id is replayed (at most three times), so the server returns its
+  stored answer and the chit prints once, from the board the cook confirmed. The
+  record is in memory and belongs to the PIN session that tapped (D-004).
 - **Print on Acknowledge** prints the ticket re-derived from the board after the
   post-push pull (same work-unit key), and prints nothing when the unit left the
   board, became a red card, exists only as a standalone or emptied card, or has no
@@ -417,7 +421,10 @@ change):*
   unit's stage (Acknowledged and later) plus the removed line's stage. It lists
   REMOVED, CHANGE (Was/Now), "+N" and in-place ADD lines for edits above the unit's
   watermark and up to N; it never prints REMAKE or a unit still in New (those dishes
-  print on their own round's Acknowledge). A failed chit is recorded under its own
+  print on their own round's Acknowledge). A Reprint keeps the older paper's
+  watermark for REMOVED and Was/Now lines, which the older paper on the rail still
+  lists (safe to repeat); ADD and "+N" use the newest paper's watermark, so they are
+  never repeated. A failed chit is recorded under its own
   key only; there is no card left to show a Retry (follow-up S-2).
 - **Residuals** (R-002, R-007): `refresh()` does not pull while a poll is in flight,
   so the Acknowledge paper can be pre-edit (the later chit covers it); watermarks
