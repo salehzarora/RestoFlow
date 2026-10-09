@@ -101,9 +101,10 @@ final class KitchenImportSummary {
 
   /// ORDER-EDIT-001F (decision D11): NEW `order_edit` dispatches SKIPPED
   /// because this till's direct print of that very slip is in flight right
-  /// now — no local row, no acknowledgement. The dispatch is this till's own
-  /// claim, so the next drain re-serves it and the consult runs again once the
-  /// print has settled. Safe scalar count only.
+  /// now (or the till refused the spool's reservation of it) — no local row,
+  /// no acknowledgement. The dispatch is this till's own claim, so the next
+  /// drain re-serves it and the consult runs again once the print has
+  /// settled. Safe scalar count only.
   final int deferredInFlight;
 
   /// ORDER-EDIT-001F (decision D3): `order_edit` rows this pass handed to the
@@ -135,6 +136,8 @@ final class KitchenDispatchImportCoordinator {
     PosRoundPrintClaimState? Function(String dispatchId)?
     readOrderEditPrintClaim,
     bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
     Future<void> Function(String dispatchId)? onOrderEditImported,
   }) : _store = store,
        _cipher = cipher,
@@ -148,6 +151,8 @@ final class KitchenDispatchImportCoordinator {
        _readInitialPrintClaim = readInitialPrintClaim,
        _readOrderEditPrintClaim = readOrderEditPrintClaim,
        _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
+       _reserveOrderEditSlip = reserveOrderEditSlip,
+       _releaseOrderEditSlip = releaseOrderEditSlip,
        _onOrderEditImported = onOrderEditImported;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
@@ -197,6 +202,15 @@ final class KitchenDispatchImportCoordinator {
   /// ORDER-EDIT-001F (decision D11): whether this till's direct print of the
   /// dispatch's slip is in flight RIGHT NOW. Consulted first; null = never.
   final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
+
+  /// ORDER-EDIT-001F: the ownership decision for a dispatch the consult is
+  /// about to import, taken in the SAME synchronous section as the in-flight
+  /// check and the mirror read — the till then never prints it directly
+  /// (false: its print just started; the row is deferred like an in-flight
+  /// one). [_releaseOrderEditSlip] gives it back when this pass ends before
+  /// the row is durable. Null = no reservation (the pre-fix consult).
+  final bool Function(String dispatchId)? _reserveOrderEditSlip;
+  final void Function(String dispatchId)? _releaseOrderEditSlip;
 
   /// ORDER-EDIT-001F (decision D3): called once an `order_edit` row is durable
   /// in the spool — the till's mirror then reads `claimed` and its own slip
@@ -278,6 +292,31 @@ final class KitchenDispatchImportCoordinator {
   Future<KitchenImportSummary> importDispatches(
     List<PulledKitchenDispatch> dispatches,
   ) async {
+    // ORDER-EDIT-001F: dispatches the order-edit consult reserved whose rows
+    // are not durable yet. Whatever ends this pass first — a rejected
+    // payload, a thrown cipher or store error — gives each one back to the
+    // till, so a slip is never left without an owner.
+    final reserved = <String>{};
+    try {
+      return await _importDispatches(dispatches, reserved);
+    } finally {
+      final release = _releaseOrderEditSlip;
+      if (release != null) {
+        for (final dispatchId in reserved) {
+          try {
+            release(dispatchId);
+          } on Object {
+            // A torn-down container has no slip to give back.
+          }
+        }
+      }
+    }
+  }
+
+  Future<KitchenImportSummary> _importDispatches(
+    List<PulledKitchenDispatch> dispatches,
+    Set<String> reserved,
+  ) async {
     var imported = 0, duplicates = 0, blocked = 0, rejected = 0;
     var acked = 0, retries = 0, terminal = 0;
     var superseded = 0, links = 0, conflicts = 0;
@@ -340,11 +379,13 @@ final class KitchenDispatchImportCoordinator {
       //  * mirror `claimed` (pending, or a crash mid-print; also an unreadable
       //    mirror): paper MAY exist — `possibly_printed`;
       //  * mirror `failed` / absent: import it, so the drain prints the
-      //    server's own slip, and hand it over below (D3).
+      //    server's own slip, and hand it over below (D3) — reserved for the
+      //    spool first, in this same synchronous section.
       if (dispatch.dispatchType ==
               KitchenSpoolDispatchType.orderEdit.wireName &&
           (_isOrderEditSlipInFlight != null ||
-              _readOrderEditPrintClaim != null) &&
+              _readOrderEditPrintClaim != null ||
+              _reserveOrderEditSlip != null) &&
           await _store.findByDispatchId(dispatch.dispatchId) == null) {
         bool inFlight;
         try {
@@ -379,6 +420,24 @@ final class KitchenDispatchImportCoordinator {
             }
             continue;
           }
+        }
+        // No await since the in-flight check: the till's direct print checks
+        // this reservation in the same synchronous section as its own
+        // in-flight mark, so the slip is never printed by both. Refused =
+        // that print just started: deferred like an in-flight row.
+        final reserve = _reserveOrderEditSlip;
+        if (reserve != null) {
+          bool taken;
+          try {
+            taken = reserve(dispatch.dispatchId);
+          } on Object {
+            taken = false;
+          }
+          if (!taken) {
+            deferredInFlight++;
+            continue;
+          }
+          reserved.add(dispatch.dispatchId);
         }
       }
 
@@ -528,6 +587,9 @@ final class KitchenDispatchImportCoordinator {
           imported++;
         }
       }
+      // The row is durable: the spool owns the slip from here (the hand-over
+      // below ends the reservation), so this pass never gives it back.
+      reserved.remove(dispatch.dispatchId);
 
       // Server-derived supersession reconciliation: a durably imported VOID
       // marks this order's unresolved prior local jobs (possiblyPrinted

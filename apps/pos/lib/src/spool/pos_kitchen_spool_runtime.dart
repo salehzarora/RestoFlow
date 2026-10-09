@@ -175,6 +175,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     PosRoundPrintClaimState? Function(String dispatchId)?
     readOrderEditPrintClaim,
     bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
     Future<void> Function(String dispatchId)? onOrderEditImported,
     Future<List<KitchenEditSupersessionEvidence>> Function()?
     readLocalOrderEditEvidence,
@@ -200,6 +202,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _readInitialKitchenPrintClaim = readInitialKitchenPrintClaim,
        _readOrderEditPrintClaim = readOrderEditPrintClaim,
        _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
+       _reserveOrderEditSlip = reserveOrderEditSlip,
+       _releaseOrderEditSlip = releaseOrderEditSlip,
        _onOrderEditImported = onOrderEditImported,
        _readLocalOrderEditEvidence = readLocalOrderEditEvidence;
 
@@ -246,12 +250,16 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
 
   /// ORDER-EDIT-001F: the order-edit consult's inputs, handed to the import
   /// coordinator — the dispatch-keyed mirror claim of this till's own direct
-  /// slip print, whether that print is in flight right now (D11), and the
-  /// hand-over once the spool imported the dispatch (D3). Null (tests / web)
-  /// keeps the pre-001F import.
+  /// slip print, whether that print is in flight right now (D11), the
+  /// synchronous reservation of a dispatch the spool imports (and its
+  /// release when the import fails), and the hand-over once the spool
+  /// imported the dispatch (D3). Null (tests / web) keeps the pre-001F
+  /// import.
   final PosRoundPrintClaimState? Function(String dispatchId)?
   _readOrderEditPrintClaim;
   final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
+  final bool Function(String dispatchId)? _reserveOrderEditSlip;
+  final void Function(String dispatchId)? _releaseOrderEditSlip;
   final Future<void> Function(String dispatchId)? _onOrderEditImported;
 
   /// ORDER-EDIT-001F: this till's DIRECT slip prints — external evidence for
@@ -531,6 +539,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         // this till printed (or is printing) itself, and the hand-over.
         readOrderEditPrintClaim: _readOrderEditPrintClaim,
         isOrderEditSlipInFlight: _isOrderEditSlipInFlight,
+        reserveOrderEditSlip: _reserveOrderEditSlip,
+        releaseOrderEditSlip: _releaseOrderEditSlip,
         onOrderEditImported: _onOrderEditImported,
       ),
     ).drain();

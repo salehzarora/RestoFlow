@@ -4,17 +4,28 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DeviceSessionCredential, InMemoryDeviceSessionSecretStore;
+import 'package:restoflow_core/restoflow_core.dart' show SecretValue;
 import 'package:restoflow_data_local/kitchen_dispatch_document.dart'
     show KitchenDispatchDocument;
+import 'package:restoflow_data_local/restoflow_data_local.dart'
+    show
+        AesGcmKitchenSpoolCipher,
+        DriftKitchenSpoolStore,
+        KitchenSpoolAad,
+        KitchenSpoolCipher,
+        KitchenSpoolDatabase,
+        KitchenSpoolDatabaseFactory,
+        NetworkKitchenDestination;
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show SupabaseKitchenDispatchAckRepository;
+    show PulledKitchenDispatch, SupabaseKitchenDispatchAckRepository;
 import 'package:restoflow_feature_kitchen/kitchen_print.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
     show KdsItemView;
@@ -33,6 +44,9 @@ import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart'
     show PosPersistenceException;
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart'
+    show ResolvedKitchenDestination;
+import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/state/order_edit_controller.dart';
 import 'package:restoflow_pos/src/state/order_edit_slip_controller.dart';
 import 'package:restoflow_pos/src/state/pos_kitchen_dispatch_ack.dart';
@@ -276,6 +290,37 @@ class _Journal implements OrderEditJournalStore {
   ) => inner.persist(scopeKey, records);
 }
 
+/// The REAL spool cipher, whose `encrypt` waits on [gate]: the import's
+/// window between the consult and the hand-over, held open.
+class _GatedCipher implements KitchenSpoolCipher {
+  final AesGcmKitchenSpoolCipher inner = AesGcmKitchenSpoolCipher();
+  final Completer<void> entered = Completer<void>();
+  final Completer<void> gate = Completer<void>();
+  Object? failWith;
+
+  @override
+  int get encryptionVersion => inner.encryptionVersion;
+
+  @override
+  Future<Uint8List> encrypt({
+    required Uint8List plaintext,
+    required KitchenSpoolAad aad,
+    required SecretValue key,
+  }) async {
+    if (!entered.isCompleted) entered.complete();
+    await gate.future;
+    if (failWith case final e?) throw e;
+    return inner.encrypt(plaintext: plaintext, aad: aad, key: key);
+  }
+
+  @override
+  Future<Uint8List> decrypt({
+    required Uint8List envelope,
+    required KitchenSpoolAad aad,
+    required SecretValue key,
+  }) => inner.decrypt(envelope: envelope, aad: aad, key: key);
+}
+
 Future<void> _settle() async {
   for (var i = 0; i < 30; i++) {
     await Future<void>.delayed(Duration.zero);
@@ -295,6 +340,19 @@ PosOrderDetail _detailWith(
 PosOrderDetail _voided(_Edit e) =>
     _detailWith(_map(e.raw['after']), (_, order) => order['status'] = 'voided');
 
+/// [e]'s post-apply detail after ANOTHER till's newer edit (`edit_count` 2).
+PosOrderDetail _newer(_Edit e) =>
+    _detailWith(_map(e.raw['after']), (copy, order) {
+      final edits = (copy['edits']! as List).toList();
+      edits.add({
+        ..._map(edits.single),
+        'order_edit_id': 'edit-from-another-till',
+        'edit_number': 2,
+      });
+      copy['edits'] = edits;
+      order['edit_count'] = 2;
+    });
+
 class _H {
   _H({_Claims? claims, _Store? store, _Journal? journal, this.withAck = true}) {
     this.claims = claims ?? _Claims(log);
@@ -307,19 +365,17 @@ class _H {
         const DeviceSessionCredential(deviceId: 'dev-1', sessionToken: 'tok'),
       ),
     );
+    ack = SupabaseKitchenDispatchAckRepository(
+      transport: ackTransport,
+      secretStore: secrets,
+    );
     c = ProviderContainer(
       overrides: [
         posSyncSessionProvider.overrideWithValue(_session),
         orderEditSlipStoreProvider.overrideWithValue(this.store),
         posRoundPrintClaimStoreProvider.overrideWithValue(this.claims),
         posOrderEditSlipPrintProvider.overrideWithValue(printer.call),
-        if (withAck)
-          posKitchenDispatchAckProvider.overrideWithValue(
-            SupabaseKitchenDispatchAckRepository(
-              transport: ackTransport,
-              secretStore: secrets,
-            ),
-          ),
+        if (withAck) posKitchenDispatchAckProvider.overrideWithValue(ack),
         orderDetailRepositoryProvider.overrideWithValue(details),
         orderEditSlipClockProvider.overrideWithValue(() => _now),
         posRecentOrdersControllerProvider.overrideWith(() => recent),
@@ -338,6 +394,7 @@ class _H {
   late final _Store store;
   late final _Printer printer;
   late final _AckTransport ackTransport;
+  late final SupabaseKitchenDispatchAckRepository ack;
   final _Details details = _Details();
   final _Recent recent = _Recent();
   late final ProviderContainer c;
@@ -652,16 +709,7 @@ void main() {
 
     test('superseded on the server — a newer edit, or a void — prints '
         'nothing and reports nothing', () async {
-      final newer = _detailWith(_map(a1.raw['after']), (copy, order) {
-        final edits = (copy['edits']! as List).toList();
-        edits.add({
-          ..._map(edits.single),
-          'order_edit_id': 'edit-from-another-till',
-          'edit_number': 2,
-        });
-        copy['edits'] = edits;
-        order['edit_count'] = 2;
-      });
+      final newer = _newer(a1);
       expect(newer.editCount, 2);
       final voided = _voided(a1);
       expect(voided.status, 'voided');
@@ -757,6 +805,127 @@ void main() {
         );
       },
     );
+
+    test('bytes SENT before the crash and the journal already CLOSED (nothing '
+        'replays the print): the restart settles the slip — no banner, '
+        'transport_accepted — and Print again never sends it twice', () async {
+      final log = <String>[];
+      final claims = _Claims(log);
+      final store = _Store(log);
+      final first = _H(claims: claims, store: store);
+      await first.boot();
+      await first.slips.recordApplied(
+        attempt: a1.attempt(),
+        applied: a1.applied(),
+        fresh: a1.after,
+      );
+      // The transport accepted the bytes and the guard settled `sent`; the
+      // process died before the record was removed (the journal had closed).
+      claims.claims[a1.guardKey] = PosRoundPrintClaimState.sent;
+
+      final next = _H(claims: claims, store: store);
+      next.details.byId[a1.orderId] = a1.after;
+      await next.boot();
+      await _settle();
+      expect(next.pending, isEmpty);
+      expect(next.state.records, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.sent);
+      expect(
+        next.ackTransport.calls.single['p_client_status'],
+        'transport_accepted',
+      );
+      final again = await next.slips.printAgain(a1.editId);
+      expect(again.status, OrderEditPrintAgainStatus.notFound);
+      expect(next.printer.slips, isEmpty);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.sent);
+    });
+
+    test('Print again over a guard key that already reads SENT settles the '
+        'slip as printed: nothing is sent and `sent` is never downgraded '
+        'to `claimed`', () async {
+      final h = _H();
+      h.printer.script = [
+        PosKitchenPrintOutcome.failed,
+        PosKitchenPrintOutcome.printed,
+      ];
+      await h.boot();
+      await h.apply(a1);
+      await _settle();
+      h.details.byId[a1.orderId] = a1.after;
+      // The bytes went out after all (e.g. under the same key elsewhere in
+      // this session) while the record stayed.
+      h.claims.claims[a1.guardKey] = PosRoundPrintClaimState.sent;
+      h.log.clear();
+      final r = await h.slips.printAgain(a1.editId);
+      await _settle();
+      expect(r.status, OrderEditPrintAgainStatus.printed);
+      expect(h.printer.slips, hasLength(1), reason: 'only the failed attempt');
+      expect(h.log, isNot(contains('claim:${a1.guardKey}=claimed')));
+      expect(h.claims.claims[a1.guardKey], PosRoundPrintClaimState.sent);
+      expect(h.claims.claims[a1.mirrorKey], PosRoundPrintClaimState.sent);
+      expect(h.state.records, isEmpty);
+      expect(h.log.last, 'ack:transport_accepted');
+    });
+
+    test('a replay of an applied edit whose slip record ALREADY exists, after '
+        'a void or a newer edit on the server, retires it: nothing printed, '
+        'nothing acknowledged', () async {
+      for (final fresh in [_newer(a1), _voided(a1)]) {
+        final log = <String>[];
+        final claims = _Claims(log);
+        final store = _Store(log);
+        final first = _H(claims: claims, store: store);
+        await first.boot();
+        await first.slips.recordApplied(
+          attempt: a1.attempt(),
+          applied: a1.applied(),
+          fresh: a1.after,
+        );
+        // The process died before the journal close: the record is built
+        // and pending, the mirror claimed, no guard claim yet.
+        expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+        expect(claims.claims[a1.guardKey], isNull);
+
+        final next = _H(claims: claims, store: store);
+        await next.boot();
+        expect(
+          await next.apply(a1, fresh: fresh),
+          OrderEditSlipOutcome.superseded,
+        );
+        await _settle();
+        expect(next.printer.slips, isEmpty);
+        expect(next.ackTransport.calls, isEmpty);
+        expect(await store.stored(), isEmpty);
+        expect(next.pending, isEmpty);
+      }
+    });
+
+    test('a replay after a FAILED direct print the spool then took over is '
+        'handed over: never recorded or printed again', () async {
+      final log = <String>[];
+      final claims = _Claims(log);
+      final store = _Store(log);
+      final first = _H(claims: claims, store: store);
+      first.printer.script = [PosKitchenPrintOutcome.failed];
+      await first.boot();
+      expect(await first.apply(a1), OrderEditSlipOutcome.notPrinted);
+      // The next drain imported the dispatch (mirror `failed`).
+      await first.slips.handOverToSpool(a1.dispatchId);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(await store.stored(), isEmpty);
+
+      // The journal record stayed open, so the next process replays it.
+      final next = _H(claims: claims, store: store);
+      await next.boot();
+      expect(await next.apply(a1), OrderEditSlipOutcome.handedOver);
+      await _settle();
+      expect(next.printer.slips, isEmpty);
+      expect(next.ackTransport.calls, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(next.pending, isEmpty);
+    });
 
     test('a replay after a print never records it again; a replay after a '
         'hand-over to the spool never records it either', () async {
@@ -1097,5 +1266,221 @@ void main() {
       expect(next.state.hydrated, isTrue);
       expect(next.pending.single.orderEditId, a1.editId);
     });
+
+    test('a snapshot that PROVES the slip superseded (a newer edit, a void) '
+        'RETIRES it — it never resurfaces once the order leaves the recent '
+        'window, and nothing offers Print latest for it', () async {
+      for (final proof in [
+        row(a1.orderId, editCount: 2),
+        row(a1.orderId, status: 'voided'),
+      ]) {
+        final h = _H();
+        await h.boot();
+        await h.apply(a1, proven: false);
+        expect(h.pending.single.orderEditId, a1.editId);
+        h.recent.setOrders([proof]);
+        await _settle();
+        expect(h.state.records, isEmpty);
+        expect(await h.store.stored(), isEmpty);
+        // The order leaves the recent-orders window.
+        h.recent.setOrders(const []);
+        expect(h.pending, isEmpty);
+        expect(
+          (await h.slips.printAgain(a1.editId)).status,
+          OrderEditPrintAgainStatus.notFound,
+        );
+        expect(h.printer.slips, isEmpty);
+      }
+    });
+
+    test('a slip whose order is gone from the snapshot and whose record is '
+        'older than the recent-orders window (start of yesterday) is retired '
+        'at boot; a recent one is kept', () async {
+      final h = _H();
+      await h.store.persist('dev-1', {
+        a1.editId: OrderEditSlipRecord(
+          orderEditId: a1.editId,
+          orderId: a1.orderId,
+          orderCode: '#00A001',
+          editNumber: 1,
+          state: OrderEditSlipState.failed,
+          updatedAt: DateTime(_now.year, _now.month, _now.day - 2, 23, 59),
+        ),
+        b1.editId: OrderEditSlipRecord(
+          orderEditId: b1.editId,
+          orderId: b1.orderId,
+          orderCode: '#00B001',
+          editNumber: 1,
+          state: OrderEditSlipState.failed,
+          updatedAt: DateTime(_now.year, _now.month, _now.day - 1),
+        ),
+      });
+      h.details.byId[a1.orderId] = a2.after;
+      await h.boot();
+      await _settle();
+      expect(h.state.records.keys, [b1.editId]);
+      expect((await h.store.stored()).keys, [b1.editId]);
+      expect(h.pending.single.orderEditId, b1.editId);
+      final r = await h.slips.printAgain(a1.editId);
+      expect(r.status, OrderEditPrintAgainStatus.notFound);
+      expect(r.hasOffer, isFalse);
+      expect(h.printer.slips, isEmpty);
+      expect(h.details.fetches, 0);
+    });
+  });
+  group('the spool consult race', () {
+    late Directory tempDir;
+    late KitchenSpoolDatabase db;
+    late DriftKitchenSpoolStore spool;
+    final key = SecretValue(base64Url.encode(List<int>.filled(32, 7)));
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('rf_slip_spool_race');
+      db = await KitchenSpoolDatabaseFactory(
+        documentsDirectoryProvider: () async => tempDir,
+      ).open();
+      spool = DriftKitchenSpoolStore(db);
+    });
+
+    tearDown(() async {
+      await db.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    /// The REAL import coordinator over a REAL spool database, wired to
+    /// [h]'s slip controller exactly as the spool composition wires it.
+    KitchenDispatchImportCoordinator coordinator(_H h, _GatedCipher cipher) =>
+        KitchenDispatchImportCoordinator(
+          store: spool,
+          cipher: cipher,
+          key: key,
+          scope: const KitchenImportScope(
+            organizationId: 'org-1',
+            restaurantId: 'rest-1',
+            branchId: 'branch-1',
+            deviceId: 'dev-1',
+          ),
+          destination: const ResolvedKitchenDestination(
+            destination: NetworkKitchenDestination(
+              host: '10.0.0.5',
+              port: 9100,
+            ),
+            fingerprint: 'fp-net-1',
+            displayLabel: 'Kitchen',
+            transportKind: 'network',
+            paperWidth: '80mm',
+          ),
+          ackRepository: h.ack,
+          localJobIdGenerator: () => 'job-1',
+          now: () => _now,
+          readOrderEditPrintClaim: (dispatchId) =>
+              h.claims.claimOf(posOrderEditDispatchClaimKey(dispatchId)),
+          isOrderEditSlipInFlight: h.slips.isDispatchInFlight,
+          reserveOrderEditSlip: h.slips.reserveForSpool,
+          releaseOrderEditSlip: h.slips.releaseSpoolReservation,
+          onOrderEditImported: h.slips.handOverToSpool,
+        );
+
+    /// [e]'s dispatch as the drain pulls it (re-served: this till's claim).
+    PulledKitchenDispatch pulled(_Edit e) => PulledKitchenDispatch(
+      dispatchId: e.dispatchId,
+      dispatchType: 'order_edit',
+      orderId: e.orderId,
+      payloadVersion: 1,
+      moneyFreePayload: _map(e.raw['dispatch']),
+      createdAt: '2026-10-09T05:31:13Z',
+    );
+
+    test('the till never prints a slip the spool consult already took: '
+        'recordApplied and printRecorded interleaved between the consult and '
+        'the hand-over send nothing directly', () async {
+      final h = _H();
+      await h.boot();
+      final cipher = _GatedCipher();
+      final importing = coordinator(h, cipher).importDispatches([pulled(a1)]);
+      // The consult passed (not in flight, no mirror): the import is running.
+      await cipher.entered.future;
+      await h.slips.recordApplied(
+        attempt: a1.attempt(),
+        applied: a1.applied(),
+        fresh: a1.after,
+      );
+      final outcome = await h.slips.printRecorded(a1.editId);
+      cipher.gate.complete();
+      final summary = await importing;
+      await _settle();
+      expect(h.printer.slips, isEmpty);
+      expect(outcome, OrderEditSlipOutcome.handedOver);
+      expect(summary.imported, 1);
+      expect(summary.orderEditsHandedOver, 1);
+      expect(h.claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(h.claims.claims[a1.guardKey], isNull);
+      expect(h.state.records, isEmpty);
+      expect(await h.store.stored(), isEmpty);
+      expect(h.pending, isEmpty);
+    });
+
+    test(
+      'Print again cannot print a slip the spool consult already took',
+      () async {
+        final h = _H();
+        h.printer.script = [
+          PosKitchenPrintOutcome.failed,
+          PosKitchenPrintOutcome.printed,
+        ];
+        await h.boot();
+        // The direct print failed: the mirror reads `failed`, so the drain
+        // imports the dispatch.
+        expect(await h.apply(a1), OrderEditSlipOutcome.notPrinted);
+        await _settle();
+        h.details.byId[a1.orderId] = a1.after;
+        final cipher = _GatedCipher();
+        final importing = coordinator(h, cipher).importDispatches([pulled(a1)]);
+        await cipher.entered.future;
+        final again = await h.slips.printAgain(a1.editId);
+        cipher.gate.complete();
+        final summary = await importing;
+        await _settle();
+        expect(
+          h.printer.slips,
+          hasLength(1),
+          reason: 'the failed attempt only',
+        );
+        expect(again.status, isNot(OrderEditPrintAgainStatus.printed));
+        expect(summary.orderEditsHandedOver, 1);
+        expect(h.claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+        expect(h.state.records, isEmpty);
+        expect(h.pending, isEmpty);
+      },
+    );
+
+    test(
+      'an import that FAILS after the consult gives the slip back: the '
+      'record kept meanwhile shows its banner and Print again prints it',
+      () async {
+        final h = _H();
+        await h.boot();
+        final cipher = _GatedCipher()..failWith = StateError('disk full');
+        final importing = coordinator(h, cipher).importDispatches([pulled(a1)]);
+        await cipher.entered.future;
+        await h.slips.recordApplied(
+          attempt: a1.attempt(),
+          applied: a1.applied(),
+          fresh: a1.after,
+        );
+        await h.slips.printRecorded(a1.editId);
+        cipher.gate.complete();
+        await expectLater(importing, throwsStateError);
+        await _settle();
+        expect(h.printer.slips, isEmpty);
+        expect(await spool.findByDispatchId(a1.dispatchId), isNull);
+        expect(h.pending.single.orderEditId, a1.editId);
+        h.details.byId[a1.orderId] = a1.after;
+        final again = await h.slips.printAgain(a1.editId);
+        expect(again.status, OrderEditPrintAgainStatus.printed);
+        expect(h.printer.slips, hasLength(1));
+        expect(h.state.records, isEmpty);
+      },
+    );
   });
 }

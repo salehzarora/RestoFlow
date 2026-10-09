@@ -297,6 +297,28 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
         return true;
       }
     },
+    //  * the spool's reservation of a dispatch it is about to import, in the
+    //    consult's own synchronous section (the till never prints it from
+    //    then on), and its release when that import fails;
+    reserveOrderEditSlip: (dispatchId) {
+      try {
+        return ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .reserveForSpool(dispatchId);
+      } catch (_) {
+        // A torn-down container: leave the row for the next drain.
+        return false;
+      }
+    },
+    releaseOrderEditSlip: (dispatchId) {
+      try {
+        ref
+            .read(orderEditSlipControllerProvider.notifier)
+            .releaseSpoolReservation(dispatchId);
+      } catch (_) {
+        // A torn-down container has no slip to give back.
+      }
+    },
     //  * the hand-over once the spool holds the dispatch (the till's record
     //    and banner go away; the spool prints the server's slip);
     onOrderEditImported: (dispatchId) async {

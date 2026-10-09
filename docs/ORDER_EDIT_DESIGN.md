@@ -579,12 +579,16 @@ or contract change):*
   detail) is recorded unbuilt with the mirror `failed`, and it is never printed
   automatically: the spool prints the server's slip, or "Print again" builds it on
   demand. A guard claim left `claimed` by a crash mid-print is never re-sent
-  automatically. The direct print is acknowledged as `transport_accepted`, or as
-  `failed_retryable` with `pos_slip_no_printer`, `pos_slip_unavailable` or
-  `pos_slip_send_failed` (also with no printer or no native printing, D10). Every
-  answer is ignored: the dispatch is this till's claim, so the next drain converges
-  it. The device's kitchen auto-print toggle does not apply to slips (D12), and a
-  KDS edit never reaches this path.
+  automatically. A slip whose guard key already reads `sent` is never sent again:
+  a restart settles its leftover record as printed (no banner), "Print again"
+  settles instead of sending, and `sent` is never overwritten with `claimed`. A
+  replayed edit whose record already exists is still retired when the proving
+  detail shows a newer edit or a void. The direct print is acknowledged as
+  `transport_accepted`, or as `failed_retryable` with `pos_slip_no_printer`,
+  `pos_slip_unavailable` or `pos_slip_send_failed` (also with no printer or no
+  native printing, D10). Every answer is ignored: the dispatch is this till's
+  claim, so the next drain converges it. The device's kitchen auto-print toggle does
+  not apply to slips (D12), and a KDS edit never reaches this path.
 - **Surfaces.** The applied toast says "printed" only when the slip was sent.
   Otherwise it says "saved" and adds "Kitchen change slip not printed" with a
   "Print again" action on the toast itself, rather than a second snack, which would
@@ -595,7 +599,10 @@ or contract change):*
   exists it retires the record and offers "Print latest": a newer unsent slip of
   this till prints that slip, a newer slip this till already printed offers nothing,
   and another till's edit prints the ORDER-NOW slip from the detail, unguarded and
-  unacknowledged (D5).
+  unacknowledged (D5). A slip the recent-orders snapshot proves superseded (a newer
+  edit, a void or a cancel) is retired, not just hidden, and a slip whose order has
+  left that window and whose record is older than it (the start of yesterday) is
+  retired too, so no stale banner comes back.
 - **Spool** (inside `lib/src/spool` only). The drain renderer now has the slip
   labels (device locale), so an `order_edit` job prints instead of blocking as
   `kitchen_render_failed`. A NEW `order_edit` dispatch is consulted by its dispatch
@@ -603,9 +610,13 @@ or contract change):*
   - this till is printing that slip right now → skipped, no acknowledgement (D11);
   - mirror `sent` → `transport_accepted`;
   - mirror `claimed`, or unreadable → `possibly_printed`;
-  - mirror `failed` or absent → imported, and the till hands the slip over (mirror
-    `claimed`, record and banner removed, D3). A slip prints no phone, so none is
-    resolved.
+  - mirror `failed` or absent → reserved for the spool in the same synchronous step
+    as these checks, imported, and the till hands the slip over (mirror `claimed`,
+    record and banner removed, D3). The till's automatic print and "Print again"
+    check that reservation in the same synchronous step as their own in-flight
+    mark, so the spool and the till never both print a slip; an import that fails
+    gives the slip back. A replay finds the hand-over by a mirror `claimed` over no
+    guard claim or a `failed` one. A slip prints no phone, so none is resolved.
 - **Ordered supersession sweep (D4).** An imported `order_edit`, and this till's own
   direct prints (bounded evidence: 72 hours, 200 entries; an entry without a
   dispatch id cannot be linked and is dropped), supersede only OLDER unresolved
@@ -634,7 +645,9 @@ or contract change):*
     transport reports only success or failure, so a deliberate "Print again" after
     an ambiguous write may also duplicate.
   - A crash mid-print leaves the mirror `claimed`, so the next drain parks the
-    dispatch as `possibly_printed`; the banner still offers "Print again". An
+    dispatch as `possibly_printed`; the banner still offers "Print again". A slip
+    recorded while the spool's import of it was running, when that import then
+    fails, is not printed automatically; its banner offers "Print again". An
     unreadable claim store, or a crash between the record and the mirror write,
     withholds the automatic print (the banner still offers it). A spool-side
     failure after a hand-over is not shown in the UI yet (the spool capability has

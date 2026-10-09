@@ -35,7 +35,8 @@ import 'pos_session.dart'
         posSignedInEmployeeProfileIdProvider,
         posSignedInStaffNameProvider,
         posSyncSessionProvider;
-import 'recent_orders_controller.dart' show posRecentOrdersControllerProvider;
+import 'recent_orders_controller.dart'
+    show posRecentOrdersControllerProvider, posRecentOrdersWindowStart;
 
 /// ORDER-EDIT-001F — THE AWAITED, EXACTLY-ONCE PAPER CHANGE SLIP (design §7.3).
 ///
@@ -67,12 +68,17 @@ import 'recent_orders_controller.dart' show posRecentOrdersControllerProvider;
 ///    print settles, the dispatch is in flight in memory, and the spool's
 ///    consult ([isDispatchInFlight]) leaves it alone — no import, no
 ///    acknowledgement — instead of parking it in a `possibly_printed` hold;
+///  * ONE OWNER: the consult takes a dispatch it imports ([reserveForSpool])
+///    in the same synchronous section as its checks, and every direct print
+///    checks that reservation in the same synchronous section as its own
+///    in-flight mark — so the spool and the till never both print a slip;
 ///  * ACKNOWLEDGED, NEVER RELIED ON: `transport_accepted` when the bytes were
 ///    accepted, else `failed_retryable` with a safe code. Every answer
 ///    (terminal or transient) is ignored: the dispatch is this till's claim, so
 ///    the next drain re-serves it and the consult converges it;
 ///  * A NEWER EDIT RETIRES OLDER SLIPS, and an edit already superseded on the
-///    server (a newer edit, a void) prints nothing.
+///    server (a newer edit, a void) prints nothing — also when its record
+///    already exists, and when only the recent-orders snapshot proves it.
 ///
 /// MONEY-FREE (SECURITY T-003, D-007): every record, claim and evidence entry
 /// is money-free; the frozen request payload is read for its slip lines only.
@@ -226,6 +232,11 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
   /// a repeat call answers from here and never records again.
   final Map<String, OrderEditSlipOutcome> _decided = {};
 
+  /// Dispatches the spool's consult took this session ([reserveForSpool]):
+  /// `false` while its import runs, `true` once handed over. The till never
+  /// prints one of them.
+  final Map<String, bool> _spoolOwned = {};
+
   @override
   OrderEditSlipsState build() {
     _disposed = false;
@@ -235,6 +246,13 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
     _printing.clear();
     _againRunning.clear();
     _decided.clear();
+    _spoolOwned.clear();
+    // A slip the recent-orders snapshot proves superseded is RETIRED, not
+    // only hidden (see [_retireProvenStale]).
+    ref.listen<List<PosRecentOrder>>(
+      posRecentOrdersControllerProvider,
+      (_, orders) => unawaited(_ready.then((_) => _retireProvenStale(orders))),
+    );
     final store = ref.read(orderEditSlipStoreProvider);
     if (store == null || _scope.isEmpty) {
       _ready = Future<void>.value();
@@ -272,6 +290,26 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
       ...loaded,
       ..._records,
     });
+    // A slip whose bytes the transport already accepted (its guard key reads
+    // `sent`) but whose record outlived the process — a crash before the
+    // settle, or a refused removal — is settled now, exactly as its print
+    // would have been (mirror `sent`, record removed, evidence,
+    // `transport_accepted`). Nothing else would: its journal record is
+    // closed, so no replay prints it, and no banner may offer a slip that
+    // is already on paper.
+    final guard = ref.read(posAutoKitchenPrintGuardProvider);
+    for (final r in List<OrderEditSlipRecord>.of(_records.values)) {
+      final guardKey = posOrderEditKitchenPrintGuardKey(
+        orderId: r.orderId,
+        orderEditId: r.orderEditId,
+      );
+      if (guard.effectiveClaimOf(guardKey) == PosRoundPrintClaimState.sent) {
+        await _settle(r.orderEditId, PosKitchenPrintOutcome.printed);
+        if (_disposed) return;
+      }
+    }
+    await _retireProvenStale(ref.read(posRecentOrdersControllerProvider));
+    if (_disposed) return;
     state = state.copyWith(hydrated: true);
     _publish();
   }
@@ -330,7 +368,21 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
     await _ready;
     if (_disposed) return;
     final id = applied.orderEditId;
-    if (_records.containsKey(id) || _decided.containsKey(id)) return;
+    if (_decided.containsKey(id)) return;
+    if (_records[id] case final existing?) {
+      // A replay of an edit whose slip is already recorded (a crash before
+      // the journal closed): a newer edit or a void proven since supersedes
+      // it exactly like a new record — the server already superseded its
+      // dispatch, so it prints nothing and is acknowledged nothing.
+      if (fresh != null &&
+          !_inFlight.containsKey(id) &&
+          (fresh.editCount > existing.editNumber ||
+              _orderIsDead(fresh.status))) {
+        await _retire(id, OrderEditSlipOutcome.superseded);
+      }
+      await _retireOlder(attempt.orderId, applied.editNumber);
+      return;
+    }
 
     final dispatchId = applied.kitchenDispatch?.id;
     final claims = ref.read(posRoundPrintClaimStoreProvider);
@@ -344,13 +396,15 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
         : posOrderEditDispatchClaimKey(dispatchId);
     // A repeat after a restart whose journal close did not stick: the slip
     // already went out under its guard key, or the spool already took the
-    // dispatch over (its mirror `claimed` with no guard claim of ours).
+    // dispatch over — its mirror `claimed` over no guard claim of ours, or
+    // over a FAILED one (after a settled failure the till itself leaves the
+    // mirror `failed`; only the hand-over writes `claimed` over it).
     final guarded = guard.effectiveClaimOf(guardKey);
     if (guarded == PosRoundPrintClaimState.sent) {
       _decided[id] = OrderEditSlipOutcome.printed;
       return;
     }
-    if (guarded == null &&
+    if ((guarded == null || guarded == PosRoundPrintClaimState.failed) &&
         mirrorKey != null &&
         claims?.claimOf(mirrorKey) == PosRoundPrintClaimState.claimed) {
       _decided[id] = OrderEditSlipOutcome.handedOver;
@@ -404,12 +458,22 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
       staffFirstName: orderEditSlipStaffFirstName(staff),
       updatedAt: _now(),
     );
+    // The spool's consult took the dispatch: handed over already, or its
+    // import is running — then the record is kept only as the backup (no
+    // in-flight mark, no mirror claim) in case that import fails and gives
+    // the slip back. Checked in the same synchronous section as the mark.
+    final spool = dispatchId == null ? null : _spoolOwned[dispatchId];
+    if (spool == true) {
+      _decided[id] = OrderEditSlipOutcome.handedOver;
+      return;
+    }
+    final importing = spool == false;
     // In flight from here until the print settles: the spool's consult skips
     // it (D11). An unbuilt slip is the spool's, so it is never marked.
-    if (slip != null) _inFlight[id] = dispatchId;
+    if (slip != null && !importing) _inFlight[id] = dispatchId;
     await _mutate((m) => m[id] = record);
     if (_disposed) return;
-    if (mirrorKey != null && claims != null) {
+    if (mirrorKey != null && claims != null && !importing) {
       try {
         await claims.record(
           mirrorKey,
@@ -474,6 +538,12 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
           break;
       }
       final dispatchId = record.dispatchId;
+      // The spool's consult took this dispatch (it prints the server's slip).
+      // Checked in the same synchronous section as the in-flight mark and the
+      // send below, so the consult and this print never both own it.
+      if (dispatchId != null && _spoolOwned.containsKey(dispatchId)) {
+        return OrderEditSlipOutcome.handedOver;
+      }
       if (dispatchId != null &&
           claims != null &&
           claims.claimOf(posOrderEditDispatchClaimKey(dispatchId)) !=
@@ -536,6 +606,34 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
     if (edits.startupBlocked || edits.hasUnresolvedEditFor(orderId)) {
       return result(OrderEditPrintAgainStatus.blocked);
     }
+    // The spool's consult took the dispatch: it prints the server's slip
+    // (blocked while its import runs, gone once handed over). Checked in the
+    // same synchronous section as the in-flight mark below, which refuses
+    // any new reservation until this run ends — so no claim is ever written
+    // and nothing is sent for a dispatch the spool owns.
+    if (record.dispatchId case final d? when _spoolOwned.containsKey(d)) {
+      return result(
+        _spoolOwned[d]!
+            ? OrderEditPrintAgainStatus.notFound
+            : OrderEditPrintAgainStatus.blocked,
+      );
+    }
+    final guard = ref.read(posAutoKitchenPrintGuardProvider);
+    final guardKey = posOrderEditKitchenPrintGuardKey(
+      orderId: orderId,
+      orderEditId: orderEditId,
+    );
+    // The bytes already went out under this slip's identity (its guard key
+    // reads `sent`): settle it as printed — never send it twice, and never
+    // write `claimed` over that `sent` (nothing else writes this key while
+    // this run owns the slip).
+    if (guard.effectiveClaimOf(guardKey) == PosRoundPrintClaimState.sent) {
+      await _settle(orderEditId, PosKitchenPrintOutcome.printed);
+      return result(
+        OrderEditPrintAgainStatus.printed,
+        outcome: PosKitchenPrintOutcome.printed,
+      );
+    }
     _inFlight[orderEditId] = record.dispatchId;
     _againRunning.add(orderEditId);
     _publish();
@@ -588,11 +686,6 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
         if (_disposed) return result(OrderEditPrintAgainStatus.notFound);
       }
       final claims = ref.read(posRoundPrintClaimStoreProvider);
-      final guard = ref.read(posAutoKitchenPrintGuardProvider);
-      final guardKey = posOrderEditKitchenPrintGuardKey(
-        orderId: orderId,
-        orderEditId: orderEditId,
-      );
       // CLAIM, THEN SEND: the mirror first (so the spool's consult cannot
       // import the dispatch meanwhile), then the guard key. A claim that does
       // not stick sends nothing.
@@ -729,10 +822,30 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
   bool isDispatchInFlight(String dispatchId) =>
       _inFlight.values.contains(dispatchId);
 
+  /// The consult's ownership decision, taken in the SAME synchronous section
+  /// as its in-flight check and its mirror read: the spool takes
+  /// [dispatchId] for import — false (the row is deferred) while this till's
+  /// print of it is in flight. From here the till never prints it; the
+  /// import ends the reservation through [handOverToSpool] or
+  /// [releaseSpoolReservation].
+  bool reserveForSpool(String dispatchId) {
+    if (_disposed || isDispatchInFlight(dispatchId)) return false;
+    _spoolOwned.putIfAbsent(dispatchId, () => false);
+    return true;
+  }
+
+  /// The import of a reserved [dispatchId] failed before the spool held it:
+  /// the slip is the till's again (a record kept meanwhile keeps its banner).
+  void releaseSpoolReservation(String dispatchId) {
+    if (_spoolOwned[dispatchId] == false) _spoolOwned.remove(dispatchId);
+  }
+
   /// The spool imported [dispatchId] and prints the server's slip: the mirror
   /// reads `claimed` from now on and the till forgets its own record (the
   /// banner hides).
   Future<void> handOverToSpool(String dispatchId) async {
+    // Synchronously, before any await: no direct print may start from here.
+    _spoolOwned[dispatchId] = true;
     await _ready;
     if (_disposed) return;
     final claims = ref.read(posRoundPrintClaimStoreProvider);
@@ -909,6 +1022,37 @@ class OrderEditSlipController extends Notifier<OrderEditSlipsState> {
   Future<void> _retire(String id, OrderEditSlipOutcome why) async {
     _decided[id] = why;
     await _mutate((m) => m.remove(id));
+  }
+
+  /// Retires (never only hides) every unsent slip that [orders] — the
+  /// recent-orders snapshot — proves superseded: a newer edit, a void or a
+  /// cancel ([orderEditSlipSupersededBy]). Hiding is not enough: once the
+  /// order leaves the recent window the banner would come back. A slip
+  /// whose order is not in the snapshot and whose record is older than that
+  /// window (the start of yesterday, the recent-orders rule) is retired too,
+  /// so a long-gone order never resurfaces — nor offers "Print latest". One
+  /// printing right now is left to settle.
+  Future<void> _retireProvenStale(List<PosRecentOrder> orders) async {
+    if (_disposed || _records.isEmpty) return;
+    final byOrder = <String, PosRecentOrder>{
+      for (final o in orders)
+        if (o.orderId case final id?) id: o,
+    };
+    final windowStart = posRecentOrdersWindowStart(_now());
+    final ids = [
+      for (final r in _records.values)
+        if (!_inFlight.containsKey(r.orderEditId) &&
+            switch (byOrder[r.orderId]) {
+              final order? => orderEditSlipSupersededBy(order, r),
+              null => r.updatedAt.isBefore(windowStart),
+            })
+          r.orderEditId,
+    ];
+    if (ids.isEmpty) return;
+    for (final id in ids) {
+      _decided[id] = OrderEditSlipOutcome.superseded;
+    }
+    await _mutate((m) => ids.forEach(m.remove));
   }
 
   void _release(String id) {

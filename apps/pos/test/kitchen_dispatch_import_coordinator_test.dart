@@ -969,6 +969,8 @@ void main() {
         PosRoundPrintClaimState? Function(String dispatchId)? mirror,
         bool inFlight = false,
         bool wireHandOver = true,
+        bool Function(String dispatchId)? reserve,
+        void Function(String dispatchId)? release,
       }) => KitchenDispatchImportCoordinator(
         store: store,
         cipher: cipher,
@@ -987,6 +989,8 @@ void main() {
           return mirror?.call(dispatchId);
         },
         isOrderEditSlipInFlight: (_) => inFlight,
+        reserveOrderEditSlip: reserve,
+        releaseOrderEditSlip: release,
         onOrderEditImported: wireHandOver
             ? (dispatchId) async => handedOver.add(dispatchId)
             : null,
@@ -1162,6 +1166,73 @@ void main() {
         }
         expect(handedOver, ['d-failed', 'd-absent']);
         expect(phoneResolves, 0, reason: 'a change slip prints no phone');
+      });
+
+      test('the spool RESERVATION: taken in the consult only for a row it '
+          'imports and kept once that row is durable; refused -> deferred '
+          'untouched; given back when the import fails', () async {
+        final reservations = <String>[];
+        final releases = <String>[];
+        bool take(String id) {
+          reservations.add(id);
+          return true;
+        }
+
+        // Taken, then the row is durable: handed over, never given back.
+        transport.enqueue({'ok': true});
+        var summary = await editCoordinator(
+          reserve: take,
+          release: releases.add,
+        ).importDispatches([edit('d-taken')]);
+        expect(summary.imported, 1);
+        expect(reservations, ['d-taken']);
+        expect(releases, isEmpty);
+        expect(handedOver, ['d-taken']);
+
+        // Mirror `sent` / `claimed`: nothing is imported, nothing reserved.
+        for (final claim in [
+          PosRoundPrintClaimState.sent,
+          PosRoundPrintClaimState.claimed,
+        ]) {
+          transport.enqueue({'ok': true});
+          await editCoordinator(
+            mirror: (_) => claim,
+            reserve: take,
+            release: releases.add,
+          ).importDispatches([edit('d-${claim.name}')]);
+        }
+        expect(reservations, ['d-taken']);
+
+        // Refused (the till's print just started) or a throwing hook:
+        // deferred like an in-flight row — no row, no acknowledgement.
+        transport.calls.clear();
+        for (final refuse in <bool Function(String)>[
+          (_) => false,
+          (_) => throw StateError('torn down'),
+        ]) {
+          summary = await editCoordinator(
+            reserve: refuse,
+            release: releases.add,
+          ).importDispatches([edit('d-refused')]);
+          expect(summary.deferredInFlight, 1);
+          expect(summary.imported, 0);
+        }
+        expect(await store.findByDispatchId('d-refused'), isNull);
+        expect(transport.calls, isEmpty);
+        expect(releases, isEmpty);
+
+        // A rejected payload never becomes a row: the slip is given back.
+        summary = await editCoordinator(reserve: take, release: releases.add)
+            .importDispatches([
+              _dispatch(
+                dispatchId: 'd-bad',
+                dispatchType: 'order_edit',
+                payload: _roundPayload(_editCreatedAt),
+              ),
+            ]);
+        expect(summary.rejected, 1);
+        expect(releases, ['d-bad']);
+        expect(handedOver, ['d-taken']);
       });
 
       test(

@@ -188,6 +188,8 @@ void main() {
     PosRoundPrintClaimState? Function(String dispatchId)?
     readOrderEditPrintClaim,
     bool Function(String dispatchId)? isOrderEditSlipInFlight,
+    bool Function(String dispatchId)? reserveOrderEditSlip,
+    void Function(String dispatchId)? releaseOrderEditSlip,
     Future<void> Function(String dispatchId)? onOrderEditImported,
     Future<List<KitchenEditSupersessionEvidence>> Function()?
     readLocalOrderEditEvidence,
@@ -242,6 +244,8 @@ void main() {
     now: () => now,
     readOrderEditPrintClaim: readOrderEditPrintClaim,
     isOrderEditSlipInFlight: isOrderEditSlipInFlight,
+    reserveOrderEditSlip: reserveOrderEditSlip,
+    releaseOrderEditSlip: releaseOrderEditSlip,
     onOrderEditImported: onOrderEditImported,
     readLocalOrderEditEvidence: readLocalOrderEditEvidence,
   );
@@ -879,6 +883,8 @@ void main() {
     test('WITH the change-slip labels an order_edit dispatch is imported, '
         'handed over and PRINTED (transport accepted)', () async {
       final handedOver = <String>[];
+      final reserved = <String>[];
+      final released = <String>[];
       transport.enqueue(pageOf([editRow('d-edit')]));
       transport.enqueue({'ok': true}); // import ack
       transport.enqueue({'ok': true, 'completed': true}); // worker TA ack
@@ -889,6 +895,11 @@ void main() {
         renderer: canonical(slipLabels: true),
         readOrderEditPrintClaim: (_) => null,
         isOrderEditSlipInFlight: (_) => false,
+        reserveOrderEditSlip: (id) {
+          reserved.add(id);
+          return true;
+        },
+        releaseOrderEditSlip: released.add,
         onOrderEditImported: (id) async => handedOver.add(id),
       );
       final worked = await rt.onStartup() as KitchenSpoolRunWorked;
@@ -896,6 +907,8 @@ void main() {
       expect(worked.drain.rowsImported, 1);
       expect(worked.drain.rowsOrderEditHandedOver, 1);
       expect(worked.drain.rowsDeferredInFlight, 0);
+      expect(reserved, ['d-edit'], reason: 'reserved before the import');
+      expect(released, isEmpty, reason: 'the row is durable: never given back');
       expect(handedOver, ['d-edit']);
       expect(worked.worker.claimed, 1);
       expect(worked.worker.accepted, 1);
@@ -1077,6 +1090,10 @@ void main() {
           'posOrderEditDispatchClaimKey(dispatchId)',
           'isOrderEditSlipInFlight: (dispatchId)',
           '.isDispatchInFlight(dispatchId)',
+          'reserveOrderEditSlip: (dispatchId)',
+          '.reserveForSpool(dispatchId)',
+          'releaseOrderEditSlip: (dispatchId)',
+          '.releaseSpoolReservation(dispatchId)',
           'onOrderEditImported: (dispatchId) async',
           '.handOverToSpool(dispatchId)',
           'readLocalOrderEditEvidence: () async',
