@@ -35,6 +35,7 @@ import '../state/kitchen_finish_controller.dart';
 import '../state/pos_auto_print_prefs.dart'
     show posKitchenTicketAutoPrintProvider, posPrinterOnlyAutoPrintProvider;
 import '../state/addition_controller.dart';
+import '../state/order_edit_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart' show tablesSnapshotProvider;
@@ -590,11 +591,17 @@ class _FinishAllKitchenButton extends ConsumerWidget {
       );
       final addition = container.read(additionControllerProvider);
       final startupBlocked = additionNotifier.isStartupBlocked;
+      // ORDER-EDIT-001E: an unresolved sent-order edit may still move its
+      // order, so it is excluded like an unresolved amendment — and while the
+      // edit journal is unread, no order is provably free of one.
+      final edit = container.read(orderEditControllerProvider);
+      if (edit.startupBlocked) return const <KitchenFinishTarget>[];
       final blockedByAddition = <String>{
         ...additionNotifier.blockedOrderIds,
         if (addition.target case final t?)
           if (addition.sending || addition.failed || addition.awaitingRefresh)
             t.orderId,
+        ...edit.blockedOrderIds,
       };
       final verifiedMode = container.read(posVerifiedKitchenModeProvider);
       final completingIds = container.read(posOrderCompleteControllerProvider);

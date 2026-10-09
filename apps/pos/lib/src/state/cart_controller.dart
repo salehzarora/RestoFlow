@@ -3,6 +3,9 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
 import '../data/demo_menu.dart';
+import '../data/order_edit_baseline.dart';
+import '../data/order_edit_diff.dart';
+import '../data/order_edit_read_model.dart' show PosLineStage;
 import 'pos_menu_provider.dart';
 import 'submitted_order_view.dart';
 
@@ -383,6 +386,9 @@ class CartLineView {
     this.note,
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
+    this.editSource,
+    this.editRemoved = false,
+    this.editAdded = false,
   });
 
   final String lineId;
@@ -393,6 +399,28 @@ class CartLineView {
   final int lineTotalMinor;
   final String currencyCode;
   final List<SelectedModifier> modifiers;
+
+  /// ORDER-EDIT-001E — the SENT line this cart line is bound to while the cart
+  /// edits an order (design §7.1 point 2), or null: a normal cart line, or a
+  /// line the cashier added in edit mode. A bound line is priced from the
+  /// source's STORED snapshots, never from the live menu, and carries its
+  /// kitchen stage and its remove-only / keep-or-remove-only flags.
+  final OrderEditSourceLine? editSource;
+
+  /// ORDER-EDIT-001E: a bound line the cashier struck through (trash), shown
+  /// with Undo. It contributes nothing to the planned subtotal.
+  final bool editRemoved;
+
+  /// ORDER-EDIT-001E: a line the cashier added from the menu while editing —
+  /// badged "New" and sent as an `add` change.
+  final bool editAdded;
+
+  /// The `order_item_id` of [editSource], or null.
+  String? get editSourceOrderItemId => editSource?.orderItemId;
+
+  /// The kitchen stage chip of a bound line (Waiting / In kitchen / Ready /
+  /// Served / Printed), or null.
+  PosLineStage? get editStage => editSource?.stage;
 
   /// MENU-ORDER-001: the item's Dashboard print-order ranks (category rank,
   /// item-within-category rank), captured from the menu at add time. Used to
@@ -498,6 +526,130 @@ enum CartMutationResult {
   /// emitted. Callers keep their source record (the parked entry, the durable
   /// recovery) so the cashier can try again or read it on a later build.
   invalidDraft,
+
+  /// ORDER-EDIT-001E — the cart is EDITING a sent order (design §7.1). Its
+  /// lines are bound to the order's server lines, so it is not a free draft:
+  /// it cannot be cleared, replaced by a draft, submitted as a new order or
+  /// abandoned through "new order". Only the edit flow ends edit mode
+  /// ([CartController.exitEdit] / [CartController.finishEdit]).
+  lockedByEdit,
+}
+
+/// ORDER-EDIT-001E — the sent order the cart is editing (design §7.1 point 2).
+///
+/// The lines are BOUND to it: each sent line carries its source
+/// `order_item_id`, and its money is the [baseline]'s stored snapshot — never a
+/// live price (D-008). Published on [CartViewState.editContext] so the banner,
+/// the footer and the planner all read the ONE baseline the lines are bound to.
+class CartEditContext {
+  const CartEditContext({required this.baseline, required this.generation});
+
+  /// The authoritative detail the edit started from, or was last rebased onto.
+  final OrderEditBaseline baseline;
+
+  /// The edit controller's entry generation that loaded the cart.
+  final int generation;
+
+  String get orderId => baseline.orderId;
+  String get orderCode => baseline.orderCode;
+  String? get tableLabel => baseline.detail.tableLabel;
+}
+
+/// Why [CartController.loadForEdit] did or did not load an edit cart.
+enum CartEditLoadResult {
+  /// The edit cart was built, validated and swapped in.
+  loaded,
+
+  /// The cart holds an ordinary draft, or another order's edit — it is never
+  /// silently turned into an edit.
+  cartNotEmpty,
+
+  /// A frozen attempt owns the cart, or the startup hydration gate is shut.
+  locked,
+
+  /// The lines could not become a valid edit cart (a duplicate line id, a line
+  /// bound to a sent line the baseline does not have, a removed unbound line,
+  /// an impossible quantity). NOTHING changed and nothing was emitted.
+  invalid,
+}
+
+/// ORDER-EDIT-001E — the cart line id of a SENT line (`sent-<order_item_id>`).
+/// The diff engine orders a line's replacements by line id, so the primary
+/// sorts before its split parts (`sent-<order_item_id>-p<n>`).
+String orderEditLineIdFor(String orderItemId) => 'sent-$orderItemId';
+
+/// ORDER-EDIT-001E — the untouched edit-cart line of the sent line [s]: its
+/// stored base price, options, note and kitchen ranks, exactly as the server
+/// holds them.
+OrderEditCartLine orderEditSentLine(
+  OrderEditSourceLine s, {
+  required String currencyCode,
+}) => OrderEditCartLine(
+  sourceOrderItemId: s.orderItemId,
+  line: CartLineView(
+    lineId: orderEditLineIdFor(s.orderItemId),
+    menuItemId: s.menuItemId,
+    name: s.name,
+    quantity: s.quantity,
+    unitPriceMinor: s.unitPriceMinor,
+    lineTotalMinor: s.lineTotalMinor,
+    currencyCode: currencyCode,
+    modifiers: s.toSelectedModifiers(),
+    note: s.notes,
+    categoryDisplayOrder: s.categoryDisplayOrder,
+    itemDisplayOrder: s.itemDisplayOrder,
+    editSource: s,
+  ),
+);
+
+/// ORDER-EDIT-001E — the options of a BOUND line, with every option that also
+/// exists on its source line reset to the source's STORED snapshot (price,
+/// names, kitchen count, group) and only its quantity taken from [modifiers].
+///
+/// `app.edit_order` charges a kept option its OLD price whatever the request
+/// says (`edit_order.sql:1296-1305`); the modifier sheet re-prices a touched
+/// option at the LIVE price. Without this the cart would show a price the
+/// customer is never charged. Matched by lower-case id, first match — the
+/// server's kept-option lookup. A NEW option keeps its own snapshot.
+List<SelectedModifier> orderEditNormalizedModifiers(
+  OrderEditSourceLine source,
+  Iterable<SelectedModifier> modifiers,
+) => [
+  for (final m in modifiers)
+    if (_storedOptionOf(source, m.optionId) case final kept?)
+      SelectedModifier(
+        optionId: kept.optionId,
+        groupName: kept.groupName ?? '',
+        optionName: kept.optionName,
+        priceDeltaMinor: kept.priceMinor,
+        quantity: m.quantity,
+        kitchenMeat: kept.meat,
+        modifierGroupId: m.modifierGroupId ?? kept.groupId,
+      )
+    else
+      m,
+];
+
+OrderEditSourceModifier? _storedOptionOf(
+  OrderEditSourceLine source,
+  String optionId,
+) {
+  final id = optionId.toLowerCase();
+  for (final m in source.modifiers) {
+    if (m.optionId.toLowerCase() == id) return m;
+  }
+  return null;
+}
+
+/// ORDER-EDIT-001E — the note a BOUND line keeps: when [note] says the same as
+/// the source's note (both trimmed), the source's note VERBATIM, so re-saving a
+/// line in the sheet is never mistaken for a note change (the server compares
+/// space-trimmed notes); otherwise the trimmed new note, or null when blank.
+String? orderEditNormalizedNote(OrderEditSourceLine source, String? note) {
+  final next = note?.trim() ?? '';
+  final stored = source.notes?.trim() ?? '';
+  if (next == stored) return stored.isEmpty ? null : source.notes;
+  return next.isEmpty ? null : next;
 }
 
 /// Immutable snapshot of the cart for the POS UI (the Riverpod state value).
@@ -508,6 +660,7 @@ class CartViewState {
     required this.currencyCode,
     this.submittedOrder,
     this.lockedByAddition = false,
+    this.editContext,
   });
 
   /// Builds an immutable view from the mutable domain [Cart], optionally
@@ -522,21 +675,40 @@ class CartViewState {
     Map<String, String> lineNotes = const {},
     Map<String, (int, int)> lineDisplayOrders = const {},
     bool lockedByAddition = false,
+    CartEditContext? editContext,
+    Map<String, String> lineSources = const {},
+    Set<String> removedLines = const {},
   }) {
     var modifiersTotal = 0;
     final views = cart.lines
         .map((line) {
           final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
+          final note = lineNotes[line.lineId];
+          // ORDER-EDIT-001E: a line bound to a sent line is priced by the edit
+          // formula the planner uses — the source's STORED base and kept-option
+          // prices — never by the live-menu formula below.
+          final boundId = editContext == null ? null : lineSources[line.lineId];
+          final source = boundId == null
+              ? null
+              : editContext!.baseline.lineFor(boundId);
           // MONEY-PRICING-FORMULA-002A: the modifier surcharge belongs to the
           // per-unit price, so it is multiplied by the item quantity like the
           // base is. `line.unitPriceMinor` is the BARE unit price here (the POS
           // carries modifier snapshots out-of-band in `lineModifiers`, never on
           // the domain CartLine), and it stays bare on the wire.
-          final lineTotal = configuredLineTotalMinor(
-            basePriceMinor: line.unitPriceMinor,
-            modifiers: mods,
-            quantity: line.quantity,
-          );
+          final lineTotal = source != null
+              ? orderEditLineTotalMinor(
+                  source: source,
+                  quantity: line.quantity,
+                  modifiers: mods,
+                  unitPriceMinor: line.unitPriceMinor,
+                  note: note,
+                )
+              : configuredLineTotalMinor(
+                  basePriceMinor: line.unitPriceMinor,
+                  modifiers: mods,
+                  quantity: line.quantity,
+                );
           modifiersTotal += lineTotal - line.lineTotalMinor;
           final order = lineDisplayOrders[line.lineId];
           return CartLineView(
@@ -548,18 +720,28 @@ class CartViewState {
             lineTotalMinor: lineTotal,
             currencyCode: line.currencyCodeSnapshot,
             modifiers: mods,
-            note: lineNotes[line.lineId],
+            note: note,
             categoryDisplayOrder: order?.$1 ?? 0,
             itemDisplayOrder: order?.$2 ?? 0,
+            editSource: source,
+            editRemoved: source != null && removedLines.contains(line.lineId),
+            editAdded: editContext != null && source == null,
           );
         })
         .toList(growable: false);
+    final edit = editContext;
     return CartViewState(
       lines: views,
-      subtotalMinor: cart.subtotalMinor + modifiersTotal,
+      // ORDER-EDIT-001E: in edit mode the subtotal is the PLANNED one — struck
+      // lines excluded, sent lines at their stored prices — by construction
+      // equal to what the edit sends as `expected.subtotal_minor`.
+      subtotalMinor: edit == null
+          ? cart.subtotalMinor + modifiersTotal
+          : orderEditSubtotalMinor(edit.baseline, _editLinesOf(views)),
       currencyCode: cart.currencyCode,
       submittedOrder: submittedOrder,
       lockedByAddition: lockedByAddition,
+      editContext: edit,
     );
   }
 
@@ -574,20 +756,48 @@ class CartViewState {
   /// PSC-001C cart-safety: a frozen addition attempt owns the cart — every
   /// visible mutation control must be disabled (the controller refuses the
   /// mutation regardless).
+  ///
+  /// ORDER-EDIT-001E: also true while a frozen sent-order EDIT owns the cart
+  /// (it reuses the same owner-token lock from its freeze to its
+  /// reconciliation).
   final bool lockedByAddition;
+
+  /// ORDER-EDIT-001E — the sent order the cart is editing, or null for an
+  /// ordinary cart.
+  final CartEditContext? editContext;
 
   bool get hasSubmittedOrder => submittedOrder != null;
 
   bool get isEmpty => lines.isEmpty;
   bool get isNotEmpty => lines.isNotEmpty;
 
-  /// Total number of physical items (sum of line quantities).
-  int get itemCount => lines.fold(0, (count, line) => count + line.quantity);
+  /// ORDER-EDIT-001E: whether the cart is editing a sent order.
+  bool get isEditing => editContext != null;
+
+  /// Total number of physical items (sum of line quantities). A struck-through
+  /// sent line (edit mode) is not counted: it is being removed.
+  int get itemCount => lines.fold(
+    0,
+    (count, line) => line.editRemoved ? count : count + line.quantity,
+  );
+
+  /// ORDER-EDIT-001E — the lines as the edit planner consumes them
+  /// (`planOrderEdit`): each bound to its sent line, or added.
+  List<OrderEditCartLine> get editLines => _editLinesOf(lines);
 
   /// Non-authoritative subtotal preview as [Money] (no tax/discounts; the
   /// authoritative total is the server/money engine's job — RF-032/RF-036).
   Money get subtotal => Money(subtotalMinor, currencyCode);
 }
+
+List<OrderEditCartLine> _editLinesOf(List<CartLineView> lines) => [
+  for (final l in lines)
+    OrderEditCartLine(
+      line: l,
+      sourceOrderItemId: l.editSourceOrderItemId,
+      removed: l.editRemoved,
+    ),
+];
 
 /// Riverpod controller holding the in-memory POS draft [Cart] (RF-031) and
 /// exposing an immutable [CartViewState].
@@ -907,6 +1117,21 @@ class CartController extends Notifier<CartViewState> {
   /// menu at reprint time. Non-money.
   final Map<String, List<KitchenPrepComponent>> _linePrep = {};
 
+  /// ORDER-EDIT-001E — the sent order this cart is editing, or null. While set
+  /// the cart is NOT a free draft: [clear], [restoreDraft], [submitOrder] and
+  /// [startNewOrder] refuse with [CartMutationResult.lockedByEdit], and a menu
+  /// tap never merges into a sent line (the no-merge rule).
+  CartEditContext? _edit;
+
+  /// ORDER-EDIT-001E: line id -> the `order_item_id` of the sent line it is
+  /// bound to. Empty outside edit mode, so every normal-mode path that reads it
+  /// is byte-identical to before.
+  final Map<String, String> _lineSource = {};
+
+  /// ORDER-EDIT-001E: the PRIMARY bound lines the cashier struck through. A
+  /// struck line stays in the cart (with Undo) and contributes nothing.
+  final Set<String> _removed = {};
+
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
   /// cart currency always agree with the menu being sold from (D-007/D-008).
@@ -930,6 +1155,9 @@ class CartController extends Notifier<CartViewState> {
     _lineDisplayOrders.clear();
     _linePrep.clear();
     _lockOwner = null;
+    _edit = null;
+    _lineSource.clear();
+    _removed.clear();
     // F1: the gate may ALREADY be closed — `AdditionController.build()` closes
     // it synchronously and this controller is built lazily, often afterwards. The
     // published view must agree with `_locked` from its very first frame.
@@ -993,12 +1221,18 @@ class CartController extends Notifier<CartViewState> {
   /// item already exists, its quantity is incremented instead of adding a
   /// duplicate line. Adding an item while a confirmation is showing dismisses
   /// it and starts a fresh order.
+  ///
+  /// ORDER-EDIT-001E — THE NO-MERGE RULE (design §7.1 point 3): in edit mode a
+  /// menu tap never merges into a SENT line; it becomes (or grows) a line of
+  /// its own, badged "New". A sent line grows only through its own stepper.
   CartMutationResult addItem(DemoMenuItem item, {int quantity = 1}) {
     if (_locked) return CartMutationResult.lockedByAddition;
     _submittedOrder = null;
     // An EMPTY cart re-binds to the active menu currency before its first line
     // (the menu can finish loading after the cart was first built).
-    if (_cart.lines.isEmpty && _cart.currencyCode != _activeCurrency()) {
+    if (_edit == null &&
+        _cart.lines.isEmpty &&
+        _cart.currencyCode != _activeCurrency()) {
       _cart = _freshCart();
     }
     final existing = _lineForMenuItem(item.id);
@@ -1054,7 +1288,9 @@ class CartController extends Notifier<CartViewState> {
       return addItem(item, quantity: quantity);
     }
     _submittedOrder = null;
-    if (_cart.lines.isEmpty && _cart.currencyCode != _activeCurrency()) {
+    if (_edit == null &&
+        _cart.lines.isEmpty &&
+        _cart.currencyCode != _activeCurrency()) {
       _cart = _freshCart();
     }
     final lineId = 'line-${_lineSeq++}';
@@ -1088,6 +1324,13 @@ class CartController extends Notifier<CartViewState> {
   /// modifier snapshots + note change, so the line total recomputes through the
   /// same RF-052 formula. No-op when [lineId] is gone. Used by the cart's Edit
   /// action, which reopens the customization sheet prefilled with this line.
+  ///
+  /// ORDER-EDIT-001E: on a line BOUND to a sent line, every option the sent
+  /// line already had is reset to its stored snapshot
+  /// ([orderEditNormalizedModifiers]), a note equal to the stored one keeps it
+  /// verbatim ([orderEditNormalizedNote]), and [quantity] is IGNORED: a sent
+  /// line's quantity moves only through its own stepper, and a modify changes
+  /// options and note only (design §6). A struck-through line is not edited.
   CartMutationResult updateLineModifiers(
     String lineId,
     List<SelectedModifier> modifiers, {
@@ -1096,6 +1339,19 @@ class CartController extends Notifier<CartViewState> {
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_lineById(lineId) == null) return CartMutationResult.applied;
+    final source = _sourceOf(lineId);
+    if (source != null) {
+      if (_removed.contains(lineId)) return CartMutationResult.applied;
+      modifiers = orderEditNormalizedModifiers(source, modifiers);
+      _setNote(lineId, orderEditNormalizedNote(source, note));
+      if (modifiers.isEmpty) {
+        _lineModifiers.remove(lineId);
+      } else {
+        _lineModifiers[lineId] = List.unmodifiable(modifiers);
+      }
+      _emit();
+      return CartMutationResult.applied;
+    }
     if (modifiers.isEmpty) {
       _lineModifiers.remove(lineId);
     } else {
@@ -1132,6 +1388,14 @@ class CartController extends Notifier<CartViewState> {
   CartMutationResult updateLineNote(String lineId, String? note) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_lineById(lineId) == null) return CartMutationResult.applied;
+    // ORDER-EDIT-001E: a bound line's unchanged note stays verbatim.
+    final source = _sourceOf(lineId);
+    if (source != null) {
+      if (_removed.contains(lineId)) return CartMutationResult.applied;
+      _setNote(lineId, orderEditNormalizedNote(source, note));
+      _emit();
+      return CartMutationResult.applied;
+    }
     final trimmedNote = note?.trim();
     if (trimmedNote != null && trimmedNote.isNotEmpty) {
       _lineNotes[lineId] = trimmedNote;
@@ -1143,22 +1407,41 @@ class CartController extends Notifier<CartViewState> {
   }
 
   /// Increases the quantity of [lineId] by one.
+  ///
+  /// ORDER-EDIT-001E: in edit mode a line stops at 999 (the `order.edit`
+  /// quantity limit), and a struck-through line does not grow.
   CartMutationResult increaseQuantity(String lineId) {
     if (_locked) return CartMutationResult.lockedByAddition;
     final line = _lineById(lineId);
     if (line == null) return CartMutationResult.applied;
+    if (_edit != null) {
+      if (_removed.contains(lineId)) return CartMutationResult.applied;
+      if (line.quantity >= kOrderEditMaxQuantity) {
+        return CartMutationResult.applied;
+      }
+    }
     _cart.changeQuantity(lineId, line.quantity + 1);
     _emit();
     return CartMutationResult.applied;
   }
 
   /// Decreases the quantity of [lineId] by one; removes the line at quantity 1.
+  ///
+  /// ORDER-EDIT-001E: at quantity 1 a PRIMARY sent line is struck through
+  /// (with Undo) rather than deleted — it is a `remove` change, and the cashier
+  /// can take it back. A split part or an added line is deleted as usual.
   CartMutationResult decreaseQuantity(String lineId) {
     if (_locked) return CartMutationResult.lockedByAddition;
     final line = _lineById(lineId);
     if (line == null) return CartMutationResult.applied;
+    if (_removed.contains(lineId)) return CartMutationResult.applied;
     if (line.quantity <= 1) {
-      _cart.removeLine(lineId);
+      if (_isEditPrimary(lineId)) {
+        _removed.add(lineId);
+      } else {
+        _cart.removeLine(lineId);
+        _forgetEditLine(lineId);
+      }
     } else {
       _cart.changeQuantity(lineId, line.quantity - 1);
     }
@@ -1167,12 +1450,85 @@ class CartController extends Notifier<CartViewState> {
   }
 
   /// Removes the line [lineId] entirely.
+  ///
+  /// ORDER-EDIT-001E: a PRIMARY sent line is struck through instead (the trash
+  /// icon of design §7.1 point 3); [undoRemove] restores it.
   CartMutationResult removeLine(String lineId) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_lineById(lineId) == null) return CartMutationResult.applied;
+    if (_isEditPrimary(lineId)) {
+      _removed.add(lineId);
+      _emit();
+      return CartMutationResult.applied;
+    }
     _cart.removeLine(lineId);
     _lineModifiers.remove(lineId);
     _lineNotes.remove(lineId);
+    _forgetEditLine(lineId);
+    _emit();
+    return CartMutationResult.applied;
+  }
+
+  /// ORDER-EDIT-001E — Undo on a struck-through sent line: it is kept again,
+  /// exactly as it was before the strike.
+  CartMutationResult undoRemove(String lineId) {
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (!_removed.remove(lineId)) return CartMutationResult.applied;
+    _emit();
+    return CartMutationResult.applied;
+  }
+
+  /// ORDER-EDIT-001E — "Apply to: just 1" (design §7.1 point 3): one unit of
+  /// the sent line [lineId] is split off into a PART line of quantity 1 bound
+  /// to the SAME sent line, carrying [modifiers] and [note] (normalized like
+  /// [updateLineModifiers]); the line keeps the rest. The planner then sends
+  /// one `modify` with a replacement per configuration ("one of the three
+  /// burgers without tomato").
+  ///
+  /// The part sits right after its line. Refused with
+  /// [CartMutationResult.invalidDraft] — nothing changed — unless [lineId] is
+  /// a bound, kept line with at least two units.
+  CartMutationResult splitForEdit(
+    String lineId,
+    List<SelectedModifier> modifiers, {
+    String? note,
+  }) {
+    if (_locked) return CartMutationResult.lockedByAddition;
+    final line = _lineById(lineId);
+    final source = _sourceOf(lineId);
+    if (line == null ||
+        source == null ||
+        _removed.contains(lineId) ||
+        line.quantity < 2) {
+      return CartMutationResult.invalidDraft;
+    }
+    final partId = _nextPartId(source.orderItemId);
+    final part = CartLine.snapshot(
+      lineId: partId,
+      menuItemId: line.menuItemId,
+      itemNameSnapshot: line.itemNameSnapshot,
+      basePriceMinorSnapshot: line.basePriceMinorSnapshot,
+      currencyCodeSnapshot: line.currencyCodeSnapshot,
+    );
+    final next = Cart(
+      orderId: 'demo-order',
+      organizationId: 'demo-org',
+      restaurantId: 'demo-restaurant',
+      branchId: 'demo-branch',
+      currencyCode: _cart.currencyCode,
+    );
+    for (final l in _cart.lines) {
+      next.addLine(l.lineId == lineId ? l.withQuantity(l.quantity - 1) : l);
+      if (l.lineId == lineId) next.addLine(part);
+    }
+    _cart = next;
+    final mods = orderEditNormalizedModifiers(source, modifiers);
+    if (mods.isNotEmpty) _lineModifiers[partId] = List.unmodifiable(mods);
+    _setNote(partId, orderEditNormalizedNote(source, note));
+    if (_lineDisplayOrders[lineId] case final ranks?) {
+      _lineDisplayOrders[partId] = ranks;
+    }
+    _lineSource[partId] = source.orderItemId;
     _emit();
     return CartMutationResult.applied;
   }
@@ -1183,6 +1539,7 @@ class CartController extends Notifier<CartViewState> {
   /// [clearForAddition] is the only clear a locked cart accepts.
   CartMutationResult clear() {
     if (_locked) return CartMutationResult.lockedByAddition;
+    if (_edit != null) return CartMutationResult.lockedByEdit;
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
@@ -1249,6 +1606,7 @@ class CartController extends Notifier<CartViewState> {
   /// record.
   CartMutationResult restoreDraft(CartDraftSnapshot draft) {
     if (_locked) return CartMutationResult.lockedByAddition;
+    if (_edit != null) return CartMutationResult.lockedByEdit;
 
     // ---- build into TEMPORARIES; the live state is not touched yet ---------
     final nextCart = Cart(
@@ -1382,6 +1740,8 @@ class CartController extends Notifier<CartViewState> {
     Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
+    // ORDER-EDIT-001E: an edit cart is never submitted as a NEW order.
+    if (_edit != null) return CartMutationResult.lockedByEdit;
     if (_cart.isEmpty) return CartMutationResult.applied;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
     _orderSeq++;
@@ -1624,6 +1984,7 @@ class CartController extends Notifier<CartViewState> {
   /// Dismisses the confirmation and returns to an empty cart (RF-101).
   CartMutationResult startNewOrder() {
     if (_locked) return CartMutationResult.lockedByAddition;
+    if (_edit != null) return CartMutationResult.lockedByEdit;
     _submittedOrder = null;
     _cart = _freshCart();
     _lineModifiers.clear();
@@ -1645,9 +2006,218 @@ class CartController extends Notifier<CartViewState> {
 
   CartLine? _lineForMenuItem(String menuItemId) {
     for (final line in _cart.lines) {
+      // ORDER-EDIT-001E — the no-merge rule: a sent line is never a merge
+      // target. `_lineSource` is empty outside edit mode.
+      if (_lineSource.containsKey(line.lineId)) continue;
       if (line.menuItemId == menuItemId) return line;
     }
     return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // ORDER-EDIT-001E — edit mode (design §7.1 points 2-3). Entered only through
+  // [loadForEdit], driven by the OrderEditController; left only through
+  // [exitEdit] (unsent) or the privileged [finishEdit] (verified reconcile).
+  // The send freeze reuses the owner-token lock above.
+  // -------------------------------------------------------------------------
+
+  /// Loads the edit cart of [context]: the sent lines of its baseline,
+  /// untouched — or [replay], the cashier's intents re-applied after a rebase.
+  ///
+  /// BUILD, VALIDATE, THEN SWAP ONCE (the [restoreDraft] pattern): every line
+  /// is assembled into temporaries and nothing this controller owns changes
+  /// until the whole edit cart exists and is valid. A bound line is rebuilt
+  /// from its SOURCE — stored base price, name, item and kitchen ranks — and
+  /// its kept options are reset to their stored snapshots, so a replay can
+  /// never smuggle a live price onto a sent line.
+  ///
+  /// Allowed on an EMPTY, unlocked cart, or on the SAME order's edit (the
+  /// rebase reload). Any other cart is refused, untouched.
+  CartEditLoadResult loadForEdit(
+    CartEditContext context, {
+    List<OrderEditCartLine>? replay,
+  }) {
+    if (_locked) return CartEditLoadResult.locked;
+    final current = _edit;
+    if (current == null
+        ? _cart.isNotEmpty
+        : current.orderId != context.orderId) {
+      return CartEditLoadResult.cartNotEmpty;
+    }
+    final baseline = context.baseline;
+    final lines =
+        replay ??
+        [
+          for (final s in baseline.lines)
+            orderEditSentLine(s, currencyCode: baseline.currencyCode),
+        ];
+
+    // ---- build into TEMPORARIES; the live state is not touched yet ---------
+    final nextCart = Cart(
+      orderId: 'demo-order',
+      organizationId: 'demo-org',
+      restaurantId: 'demo-restaurant',
+      branchId: 'demo-branch',
+      currencyCode: baseline.currencyCode,
+    );
+    final nextModifiers = <String, List<SelectedModifier>>{};
+    final nextNotes = <String, String>{};
+    final nextDisplayOrders = <String, (int, int)>{};
+    final nextPrep = <String, List<KitchenPrepComponent>>{};
+    final nextSource = <String, String>{};
+    final nextRemoved = <String>{};
+    var nextSeq = _lineSeq;
+    try {
+      for (final l in lines) {
+        final v = l.line;
+        final boundId = l.sourceOrderItemId;
+        final source = boundId == null ? null : baseline.lineFor(boundId);
+        if (boundId != null && source == null) {
+          return CartEditLoadResult.invalid; // bound to a line that is gone
+        }
+        if (source == null && l.removed) return CartEditLoadResult.invalid;
+        nextCart.addLine(
+          CartLine.snapshot(
+            lineId: v.lineId,
+            menuItemId: source?.menuItemId ?? v.menuItemId,
+            itemNameSnapshot: source?.name ?? v.name,
+            basePriceMinorSnapshot: source?.unitPriceMinor ?? v.unitPriceMinor,
+            currencyCodeSnapshot: v.currencyCode,
+            quantity: v.quantity,
+          ),
+        );
+        final mods = source == null
+            ? v.modifiers
+            : orderEditNormalizedModifiers(source, v.modifiers);
+        if (mods.isNotEmpty) nextModifiers[v.lineId] = List.unmodifiable(mods);
+        // Verbatim: a bound line's note is compared space-trimmed by the
+        // planner, exactly like the server's continuation test.
+        final note = v.note;
+        if (note != null && note.isNotEmpty) nextNotes[v.lineId] = note;
+        nextDisplayOrders[v.lineId] = source == null
+            ? (v.categoryDisplayOrder, v.itemDisplayOrder)
+            : (source.categoryDisplayOrder, source.itemDisplayOrder);
+        if (source == null) {
+          // An added line keeps the prep it was added with (a rebase reload).
+          if (_linePrep[v.lineId] case final prep?) nextPrep[v.lineId] = prep;
+        } else {
+          nextSource[v.lineId] = source.orderItemId;
+          if (l.removed) nextRemoved.add(v.lineId);
+        }
+        final seq = RegExp(r'^line-(\d+)$').firstMatch(v.lineId);
+        if (seq != null) {
+          final n = int.tryParse(seq.group(1)!) ?? -1;
+          if (n >= nextSeq) nextSeq = n + 1;
+        }
+      }
+    } on CartException {
+      return CartEditLoadResult.invalid; // nothing swapped, nothing emitted
+    }
+
+    // ---- ONE committed swap ------------------------------------------------
+    _cart = nextCart;
+    _lineModifiers
+      ..clear()
+      ..addAll(nextModifiers);
+    _lineNotes
+      ..clear()
+      ..addAll(nextNotes);
+    _lineDisplayOrders
+      ..clear()
+      ..addAll(nextDisplayOrders);
+    _linePrep
+      ..clear()
+      ..addAll(nextPrep);
+    _lineSource
+      ..clear()
+      ..addAll(nextSource);
+    _removed
+      ..clear()
+      ..addAll(nextRemoved);
+    _lineSeq = nextSeq;
+    _edit = context;
+    _submittedOrder = null;
+    _emit();
+    return CartEditLoadResult.loaded;
+  }
+
+  /// Leaves edit mode while the edit is UNSENT — "Discard changes", or a
+  /// refusal that ends the edit. The order stays exactly as it was sent; the
+  /// cart returns empty. Refused (false, nothing changes) outside edit mode
+  /// and while a frozen attempt owns the cart: then the server may own it.
+  bool exitEdit() {
+    if (_edit == null || _lockOwner != null) return false;
+    _resetEditCart();
+    _emit();
+    return true;
+  }
+
+  /// PRIVILEGED owner-token end of an edit — the edit twin of
+  /// [clearForAddition]: after the authoritative reconcile verified the
+  /// applied edit, clears the edit cart AND releases the lock in one step,
+  /// only for the matching [owner]. Fails closed (false, cart and lock
+  /// untouched) on any mismatch or outside edit mode.
+  bool finishEdit(CartLockOwner owner) {
+    final current = _lockOwner;
+    if (_edit == null || current == null || !owner.matches(current)) {
+      return false;
+    }
+    _lockOwner = null;
+    _resetEditCart();
+    _emit();
+    return true;
+  }
+
+  /// ORDER-EDIT-001E — the lines the edit planner consumes.
+  List<OrderEditCartLine> editLines() => state.editLines;
+
+  void _resetEditCart() {
+    _edit = null;
+    _cart = _freshCart();
+    _lineModifiers.clear();
+    _lineNotes.clear();
+    _lineDisplayOrders.clear();
+    _linePrep.clear();
+    _lineSource.clear();
+    _removed.clear();
+    _submittedOrder = null;
+  }
+
+  /// The sent line [lineId] is bound to, in edit mode.
+  OrderEditSourceLine? _sourceOf(String lineId) {
+    final edit = _edit;
+    final bound = _lineSource[lineId];
+    if (edit == null || bound == null) return null;
+    return edit.baseline.lineFor(bound);
+  }
+
+  /// A PRIMARY bound line (`sent-<order_item_id>`), as opposed to a split part.
+  bool _isEditPrimary(String lineId) {
+    final bound = _lineSource[lineId];
+    return bound != null && lineId == orderEditLineIdFor(bound);
+  }
+
+  /// Drops the edit bookkeeping of a deleted line.
+  void _forgetEditLine(String lineId) {
+    _lineSource.remove(lineId);
+    _removed.remove(lineId);
+  }
+
+  String _nextPartId(String orderItemId) {
+    final base = orderEditLineIdFor(orderItemId);
+    var n = 1;
+    while (_lineById('$base-p$n') != null) {
+      n++;
+    }
+    return '$base-p$n';
+  }
+
+  void _setNote(String lineId, String? note) {
+    if (note != null && note.isNotEmpty) {
+      _lineNotes[lineId] = note;
+    } else {
+      _lineNotes.remove(lineId);
+    }
   }
 
   void _emit() => state = CartViewState.fromCart(
@@ -1657,6 +2227,9 @@ class CartController extends Notifier<CartViewState> {
     lineNotes: _lineNotes,
     lineDisplayOrders: _lineDisplayOrders,
     lockedByAddition: _locked,
+    editContext: _edit,
+    lineSources: _lineSource,
+    removedLines: _removed,
   );
 }
 

@@ -6,6 +6,7 @@ import '../data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
 import '../state/addition_controller.dart';
 import '../state/discount_controller.dart';
+import '../state/order_edit_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_order_complete_controller.dart';
 import 'order_actions.dart';
@@ -107,19 +108,41 @@ class PosOrderActionsAssembly {
         if (addition.sending || addition.failed || addition.awaitingRefresh)
           t.orderId,
     };
+    // ORDER-EDIT-001E: the SAME rule for a sent-order edit (design §7.1
+    // point 7). An edit this device froze — sending, outcome unknown, in
+    // conflict, or applied but not yet proven — withdraws Pay, Discount,
+    // Cancel, Add items, Move and Edit on its order; and while the edit journal
+    // is being read (or could not be), every order is held.
+    final edit = ref.watch(orderEditControllerProvider);
+    final editHydrating = edit.startupBlocked;
+    final editBlockedIds = edit.blockedOrderIds;
     // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Which rows carry the
     // `itemsAdd` stamp ONLY because the journal has not been read yet. The
     // blanket is a fail-closed for MONEY actions; this set lets the central
     // policy relax the READ-ONLY pre-bill for rows it has no actual evidence
     // against. A row with a REAL blocked amendment is never in it.
     final hydrationBlanketOnly = <String>{};
-    if (hydrating || blockedOrderIds.isNotEmpty) {
+    if (hydrating ||
+        blockedOrderIds.isNotEmpty ||
+        editHydrating ||
+        editBlockedIds.isNotEmpty) {
       for (final o in orders) {
         final id = o.orderId;
+        final key = o.identity.key;
         final reallyBlocked = id != null && blockedOrderIds.contains(id);
         if (hydrating || reallyBlocked) {
-          pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
-          if (!reallyBlocked) hydrationBlanketOnly.add(o.identity.key);
+          pendingByIdentity[key] = PosPendingKind.itemsAdd;
+          if (!reallyBlocked) hydrationBlanketOnly.add(key);
+        }
+        // ORDER-EDIT-001E: a REAL edit block wins over any blanket; the edit
+        // journal's own blanket stamps `orderEdit` where the addition blanket
+        // has not already stamped the row.
+        if (id != null && editBlockedIds.contains(id)) {
+          pendingByIdentity[key] = PosPendingKind.orderEdit;
+          hydrationBlanketOnly.remove(key);
+        } else if (editHydrating && !reallyBlocked) {
+          if (!hydrating) pendingByIdentity[key] = PosPendingKind.orderEdit;
+          hydrationBlanketOnly.add(key);
         }
       }
     }
