@@ -486,24 +486,37 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.56",
-    "versionCode": 56,
+    "versionName": "0.0.57",
+    "versionCode": 57,
     "signing": "restoflow-production",
     "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main after the merge of this prep PR (carries PR #297, 2ee47f54); the exact SHA is recorded at build time",
+    "intendedSource": "main after the merge of this prep PR (carries PRs #304, #305, #306-#311 and #312 (ORDER-EDIT-001F, merged at 24f080d3)); the exact SHA is recorded at build time",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V56 (2026-10-06): the POS manual cash-drawer button",
-      "(POS-CASH-DRAWER-MANUAL-OPEN-001, PR #297, merged at 2ee47f54) requires a new",
-      "official POS/KDS pair. versionSymmetry holds: POS and KDS both 0.0.56 / 56",
-      "from one main SHA; 56 > 55 keeps both lineages strictly monotonic. Package ids,",
-      "signing identity, RESTOFLOW_* names, storage keys and channels are unchanged:",
-      "v56 updates IN PLACE over 0.0.55.",
-      "The button relies on hosted migration 20261006140000, applied separately by the owner.",
+      "BIZBOT-ANDROID-RELEASE-V57 (2026-10-09): editing an order after it reached the",
+      "kitchen (ORDER-EDIT-001A..001G: POS edit flow and printed change slip, KDS",
+      "change overlay and acknowledgement) plus the fail-closed kitchen dispatch",
+      "(KITCHEN-DISPATCH-HARDEN-001, PR #304) and the order-detail ids",
+      "(POS-ORDER-DETAIL-IDS-001, PR #305), on top of everything planned for v56",
+      "(POS manual cash-drawer button, PR #297). versionSymmetry holds: POS and KDS",
+      "both 0.0.57 / 57 from one main SHA; 57 > 56 > 55 keeps both lineages strictly",
+      "monotonic. Package ids, signing identity, RESTOFLOW_* names, storage keys and",
+      "channels are unchanged: v57 updates IN PLACE over 0.0.55 (or a v56 built",
+      "outside this ledger).",
+      "Hosted migrations 20261006140000 (if still pending), 20261008120000,",
+      "20261008150000, 20261008170000, 20261008170100, 20261008170200,",
+      "20261008190000, 20261009100000, 20261009100100 and 20261009140000 must be",
+      "applied by the owner BEFORE the v57 apps are installed. Install KDS first",
+      "(where a kitchen screen is used), then POS. The branch setting 'Editing sent",
+      "orders' stays OFF until the owner has tested the pair, then is switched on in",
+      "Dashboard Settings (owner only).",
       "Build with tools/android_release/build_official_pair.ps1 from main at the",
       "intended source only after this prep PR merges and the owner authorizes BUILD.",
       "The runner never installs, uploads or publishes; rollout is a separate owner step.",
-      "Kiosk is not part of v56 (no kiosk change since 0.2.24 / 26).",
-      "Dashboard keeps its existing independent lineage."
+      "Kiosk is not part of v57: no kiosk app code changed since 0.2.24 / 26, and the",
+      "shared-package changes it compiles in (ORDER-EDIT-001C) only add the",
+      "order-edit types and labels that the kiosk never produces or prints.",
+      "Dashboard keeps its existing independent lineage; the hosted web Dashboard",
+      "carries the ORDER-EDIT-001G screens from main."
     ]
   },
   "androidRendererPolicy": {
@@ -526,6 +539,20 @@
         "id com.restoflow.pos. Any official build numbered below 25 would sit",
         "beneath already-installed transitional codes, so 22 was skipped",
         "without ever being built. No artifact named v22 exists anywhere."
+      ]
+    },
+    {
+      "versionName": "0.0.56",
+      "versionCode": 56,
+      "status": "SUPERSEDED BEFORE ANY RECORDED BUILD - code 56 stays consumed",
+      "reason": [
+        "v56 was planned on 2026-10-06 (BIZBOT-ANDROID-RELEASE-V56, PR #298) for the",
+        "POS manual cash-drawer button (PR #297). No v56 build was ever recorded in",
+        "this ledger before the sent-order editing work (ORDER-EDIT-001A..001G)",
+        "landed, so the next official candidate moves straight to v57, which carries",
+        "the cash-drawer button too. If a v56 pair was built outside this ledger,",
+        "record its facts here and never reuse versionCode 56: v57 > 56 updates in",
+        "place over it either way."
       ]
     }
   ],
@@ -669,8 +696,8 @@
     "intendedSource": "to be decided when a kiosk change needs a new build",
     "notes": [
       "Independent lineage outside the POS/KDS pair contract: 0.2.24 / 26 is built and",
-      "recorded in kioskReleases. The v56 pair changes no kiosk code, so no kiosk build",
-      "is planned with it. 0.2.25 / 27 follows the 0.2.<code-2> progression and is",
+      "recorded in kioskReleases. The v56 and v57 pairs change no kiosk code, so no kiosk build",
+      "is planned with them. 0.2.25 / 27 follows the 0.2.<code-2> progression and is",
       "reserved for the next kiosk change; build only when the owner authorizes it."
     ]
   },
