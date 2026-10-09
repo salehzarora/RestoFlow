@@ -794,16 +794,21 @@ shows no change card.
   - `replaced_out_minor` = Σ `line_total_minor` of retired lines that a row with
     `replaces_order_item_id` replaces;
   - `replaced_in_minor` = Σ `line_total_minor` of those live replacement or
-    continuation rows;
+    continuation rows (live when that edit wrote them; see below);
   - `added_minor` = Σ `line_total_minor` of live rows with `edit_id` set and no
-    `replaces_order_item_id` (added lines and +N delta rows);
+    `replaces_order_item_id` (added lines and +N delta rows; live when that edit
+    wrote them; see below);
   - `net_change_minor` = `replaced_in_minor` + `added_minor` − `removed_minor` −
     `replaced_out_minor`.
 
   Each figure is also broken down by `reason_code` and by employee. The gross retired
   value (`removed_minor` + `replaced_out_minor`) is always shown, so the gross void
   amounts stay visible as MONEY §12.2 requires. Net of replacements is a derived
-  column and never replaces the gross figure.
+  column and never replaces the gross figure. "Live" in `replaced_in_minor` and
+  `added_minor` means live when that edit wrote them: the figures are computed per
+  edit as written, from provenance only (`removed_by_edit_id`, `edit_id`,
+  `replaces_order_item_id`), so a later edit or a whole-order void never rewrites an
+  earlier edit's figures (ORDER-EDIT-001G; MONEY §13, API_CONTRACT §4.47).
 
 Worked example (tax off): Burger 4000 (+Tomato, +Cucumber, both free options), Fries
 1500, Cola 800 → subtotal 6300. Edit: burger without tomato, fries removed, one
