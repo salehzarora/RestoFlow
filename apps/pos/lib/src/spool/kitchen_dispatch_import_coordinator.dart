@@ -423,8 +423,10 @@ final class KitchenDispatchImportCoordinator {
         }
         // No await since the in-flight check: the till's direct print checks
         // this reservation in the same synchronous section as its own
-        // in-flight mark, so the slip is never printed by both. Refused =
-        // that print just started: deferred like an in-flight row.
+        // in-flight mark, so neither starts once the other owns the slip (a
+        // hand-over a crash cut short after the durable insert is found by
+        // the till asking this spool's database). Refused = that print just
+        // started: deferred like an in-flight row.
         final reserve = _reserveOrderEditSlip;
         if (reserve != null) {
           bool taken;

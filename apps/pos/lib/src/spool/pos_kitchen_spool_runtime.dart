@@ -269,6 +269,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   _readLocalOrderEditEvidence;
 
   KitchenSpoolDatabase? _db;
+
+  /// The open in progress, shared: a run and an order-edit lookup that race
+  /// get ONE handle, never two connections to the same file.
+  Future<KitchenSpoolDatabase>? _opening;
   bool _running = false;
   bool _disposed = false;
 
@@ -361,7 +365,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     }
     final KitchenSpoolDatabase db;
     try {
-      db = _db ??= await factory.open();
+      db = await _openDatabase(factory);
     } on KitchenSpoolDatabaseUnavailableException catch (e) {
       return KitchenSpoolRunBlocked(e.reason);
     }
@@ -434,7 +438,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     final factory = _databaseFactoryBuilder();
     final KitchenSpoolDatabase db;
     try {
-      db = _db ??= await factory.open();
+      db = await _openDatabase(factory);
     } on KitchenSpoolDatabaseUnavailableException catch (e) {
       return KitchenSpoolRunBlocked(e.reason);
     }
@@ -657,6 +661,55 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     } on Exception {
       // Cache write failure is non-fatal; the cache stays UNKNOWN.
     }
+  }
+
+  /// Opens the dedicated database once and keeps it (closed by [dispose]).
+  Future<KitchenSpoolDatabase> _openDatabase(
+    KitchenSpoolDatabaseFactory factory,
+  ) {
+    final open = _db;
+    if (open != null) return Future<KitchenSpoolDatabase>.value(open);
+    return _opening ??= factory
+        .open()
+        .then((db) => _db = db)
+        .whenComplete(() => _opening = null);
+  }
+
+  /// ORDER-EDIT-001F — whether this device's spool database durably holds a
+  /// row for the `order_edit` dispatch [dispatchId], in ANY status: the
+  /// spool then owns that slip (it prints the server's slip, or already
+  /// printed, superseded or blocked it). The till's slip controller asks
+  /// this as the source of truth for a hand-over a crash left half done
+  /// (between the import's durable insert and the hand-over).
+  ///
+  /// READ-ONLY and zero-footprint: a confirmed ABSENT spool file answers
+  /// `false` without creating anything. It THROWS when it cannot tell — an
+  /// undeterminable file, a database that cannot open, a disposed runtime —
+  /// and the caller then neither prints the slip nor forgets it. No key is
+  /// read and nothing is decrypted (the dispatch id is row metadata).
+  Future<bool> holdsOrderEditDispatch(String dispatchId) async {
+    if (_disposed) {
+      throw const KitchenSpoolDatabaseUnavailableException('runtime_disposed');
+    }
+    var db = _db;
+    if (db == null) {
+      final factory = _databaseFactoryBuilder();
+      switch (await factory.inspectSpoolFilePresence()) {
+        case KitchenSpoolFilePresence.absent:
+          return false;
+        case KitchenSpoolFilePresence.unknown:
+          throw const KitchenSpoolDatabaseUnavailableException(
+            'spool_presence_unknown',
+          );
+        case KitchenSpoolFilePresence.present:
+          db = await _openDatabase(factory);
+      }
+    }
+    if (_disposed) {
+      throw const KitchenSpoolDatabaseUnavailableException('runtime_disposed');
+    }
+    return await DriftKitchenSpoolStore(db).findByDispatchId(dispatchId) !=
+        null;
   }
 
   /// Disposes runtime handles on logout/unpair/scope change (rows and key

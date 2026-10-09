@@ -354,7 +354,13 @@ PosOrderDetail _newer(_Edit e) =>
     });
 
 class _H {
-  _H({_Claims? claims, _Store? store, _Journal? journal, this.withAck = true}) {
+  _H({
+    _Claims? claims,
+    _Store? store,
+    _Journal? journal,
+    this.withAck = true,
+    OrderEditSpoolHoldsDispatch? spoolHolds,
+  }) {
     this.claims = claims ?? _Claims(log);
     this.store = store ?? _Store(log);
     printer = _Printer(log);
@@ -384,6 +390,11 @@ class _H {
       ],
     );
     addTearDown(c.dispose);
+    // The spool's own answer, as the native composition attaches it (before
+    // the slip controller restores, like the first frame's spool read).
+    if (spoolHolds != null) {
+      c.read(orderEditSpoolLookupProvider).attach(spoolHolds);
+    }
     // The worker who froze the attempts below is the signed-in one.
     c.read(posSignedInStaffNameProvider.notifier).set('Dana Cashier');
   }
@@ -902,7 +913,8 @@ void main() {
     });
 
     test('a replay after a FAILED direct print the spool then took over is '
-        'handed over: never recorded or printed again', () async {
+        'handed over — the spool PROVES it holds the dispatch: never '
+        'recorded or printed again', () async {
       final log = <String>[];
       final claims = _Claims(log);
       final store = _Store(log);
@@ -916,8 +928,13 @@ void main() {
       expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
       expect(await store.stored(), isEmpty);
 
-      // The journal record stayed open, so the next process replays it.
-      final next = _H(claims: claims, store: store);
+      // The journal record stayed open, so the next process replays it; the
+      // spool database holds the imported row.
+      final next = _H(
+        claims: claims,
+        store: store,
+        spoolHolds: (dispatchId) async => dispatchId == a1.dispatchId,
+      );
       await next.boot();
       expect(await next.apply(a1), OrderEditSlipOutcome.handedOver);
       await _settle();
@@ -925,6 +942,77 @@ void main() {
       expect(next.ackTransport.calls, isEmpty);
       expect(await store.stored(), isEmpty);
       expect(next.pending, isEmpty);
+    });
+
+    /// The F4 inference's false positive: a FAILED direct print whose
+    /// slip-store write AND mirror `failed` write were refused — the record
+    /// lives only in memory and the mirror still reads `claimed` from the
+    /// record step, exactly as a hand-over leaves it, but the spool never
+    /// imported the dispatch (a `claimed` mirror is acknowledged
+    /// `possibly_printed`, never imported).
+    Future<(_Claims, _Store)> refusedFailedPrint() async {
+      final log = <String>[];
+      final claims = _Claims(log);
+      final store = _Store(log);
+      final first = _H(claims: claims, store: store);
+      first.printer.script = [PosKitchenPrintOutcome.failed];
+      await first.boot();
+      store.failWrites = true;
+      await first.slips.recordApplied(
+        attempt: a1.attempt(),
+        applied: a1.applied(),
+        fresh: a1.after,
+      );
+      claims.refuse.add(a1.mirrorKey);
+      expect(
+        await first.slips.printRecorded(a1.editId),
+        OrderEditSlipOutcome.notPrinted,
+      );
+      await _settle();
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(await store.stored(), isEmpty);
+      store.failWrites = false;
+      claims.refuse.clear();
+      return (claims, store);
+    }
+
+    test('D3: a replay over a FAILED guard and a `claimed` mirror the spool '
+        'does NOT hold is no hand-over: the slip is recorded again and '
+        'printed', () async {
+      final (claims, store) = await refusedFailedPrint();
+      // The journal record stayed open, so the next process replays it.
+      final next = _H(
+        claims: claims,
+        store: store,
+        spoolHolds: (_) async => false,
+      );
+      await next.boot();
+      expect(await next.apply(a1), OrderEditSlipOutcome.printed);
+      await _settle();
+      expect(next.printer.slips, hasLength(1));
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.sent);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.sent);
+      expect(await store.stored(), isEmpty);
+      expect(next.pending, isEmpty);
+    });
+
+    test('D3: the same replay while the spool cannot tell is never a silent '
+        'drop: recorded, not printed automatically, and offered by its '
+        'banner', () async {
+      final (claims, store) = await refusedFailedPrint();
+      final next = _H(
+        claims: claims,
+        store: store,
+        spoolHolds: (_) async => throw StateError('the spool is locked'),
+      );
+      await next.boot();
+      expect(await next.apply(a1), OrderEditSlipOutcome.notPrinted);
+      await _settle();
+      expect(next.printer.slips, isEmpty);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect((await store.stored()).keys, [a1.editId]);
+      expect(next.pending.single.orderEditId, a1.editId);
     });
 
     test('a replay after a print never records it again; a replay after a '
@@ -1348,38 +1436,44 @@ void main() {
     });
 
     /// The REAL import coordinator over a REAL spool database, wired to
-    /// [h]'s slip controller exactly as the spool composition wires it.
-    KitchenDispatchImportCoordinator coordinator(_H h, _GatedCipher cipher) =>
-        KitchenDispatchImportCoordinator(
-          store: spool,
-          cipher: cipher,
-          key: key,
-          scope: const KitchenImportScope(
-            organizationId: 'org-1',
-            restaurantId: 'rest-1',
-            branchId: 'branch-1',
-            deviceId: 'dev-1',
-          ),
-          destination: const ResolvedKitchenDestination(
-            destination: NetworkKitchenDestination(
-              host: '10.0.0.5',
-              port: 9100,
-            ),
-            fingerprint: 'fp-net-1',
-            displayLabel: 'Kitchen',
-            transportKind: 'network',
-            paperWidth: '80mm',
-          ),
-          ackRepository: h.ack,
-          localJobIdGenerator: () => 'job-1',
-          now: () => _now,
-          readOrderEditPrintClaim: (dispatchId) =>
-              h.claims.claimOf(posOrderEditDispatchClaimKey(dispatchId)),
-          isOrderEditSlipInFlight: h.slips.isDispatchInFlight,
-          reserveOrderEditSlip: h.slips.reserveForSpool,
-          releaseOrderEditSlip: h.slips.releaseSpoolReservation,
-          onOrderEditImported: h.slips.handOverToSpool,
-        );
+    /// [h]'s slip controller exactly as the spool composition wires it —
+    /// without the hand-over when [handOver] is false (the process dies
+    /// right after the durable insert, before the till hears of it).
+    KitchenDispatchImportCoordinator coordinator(
+      _H h,
+      _GatedCipher cipher, {
+      bool handOver = true,
+    }) => KitchenDispatchImportCoordinator(
+      store: spool,
+      cipher: cipher,
+      key: key,
+      scope: const KitchenImportScope(
+        organizationId: 'org-1',
+        restaurantId: 'rest-1',
+        branchId: 'branch-1',
+        deviceId: 'dev-1',
+      ),
+      destination: const ResolvedKitchenDestination(
+        destination: NetworkKitchenDestination(host: '10.0.0.5', port: 9100),
+        fingerprint: 'fp-net-1',
+        displayLabel: 'Kitchen',
+        transportKind: 'network',
+        paperWidth: '80mm',
+      ),
+      ackRepository: h.ack,
+      localJobIdGenerator: () => 'job-1',
+      now: () => _now,
+      readOrderEditPrintClaim: (dispatchId) =>
+          h.claims.claimOf(posOrderEditDispatchClaimKey(dispatchId)),
+      isOrderEditSlipInFlight: h.slips.isDispatchInFlight,
+      reserveOrderEditSlip: h.slips.reserveForSpool,
+      releaseOrderEditSlip: h.slips.releaseSpoolReservation,
+      onOrderEditImported: handOver ? h.slips.handOverToSpool : null,
+    );
+
+    /// The spool's own answer, read from the REAL spool database.
+    Future<bool> spoolHolds(String dispatchId) async =>
+        await spool.findByDispatchId(dispatchId) != null;
 
     /// [e]'s dispatch as the drain pulls it (re-served: this till's claim).
     PulledKitchenDispatch pulled(_Edit e) => PulledKitchenDispatch(
@@ -1482,5 +1576,165 @@ void main() {
         expect(h.state.records, isEmpty);
       },
     );
+
+    /// Session 1: the direct print fails (guard and mirror `failed`), the
+    /// next drain imports the dispatch durably, and the process dies before
+    /// the hand-over: the record, its banner and the `failed` mirror survive
+    /// next to a spool row the worker will print.
+    Future<(_Claims, _Store)> crashBeforeHandOver() async {
+      final log = <String>[];
+      final claims = _Claims(log);
+      final store = _Store(log);
+      final first = _H(claims: claims, store: store);
+      first.printer.script = [PosKitchenPrintOutcome.failed];
+      await first.boot();
+      expect(await first.apply(a1), OrderEditSlipOutcome.notPrinted);
+      await _settle();
+      final cipher = _GatedCipher()..gate.complete();
+      final summary = await coordinator(
+        first,
+        cipher,
+        handOver: false,
+      ).importDispatches([pulled(a1)]);
+      expect(summary.imported, 1);
+      expect(await spool.findByDispatchId(a1.dispatchId), isNotNull);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.failed);
+      expect((await store.stored()).keys, [a1.editId]);
+      return (claims, store);
+    }
+
+    test('D2: after a crash between the spool\'s durable insert and the '
+        'hand-over, the restart asks the spool and hands the slip over — no '
+        'banner — and Print again sends nothing', () async {
+      final (claims, store) = await crashBeforeHandOver();
+      final next = _H(claims: claims, store: store, spoolHolds: spoolHolds);
+      next.details.byId[a1.orderId] = a1.after;
+      await next.boot();
+      await _settle();
+      expect(next.pending, isEmpty);
+      expect(next.state.records, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      final again = await next.slips.printAgain(a1.editId);
+      expect(again.status, OrderEditPrintAgainStatus.notFound);
+      expect(next.printer.slips, isEmpty);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect(next.ackTransport.calls, isEmpty);
+    });
+
+    test('D2: a spool lookup that attaches only AFTER the restore (the '
+        'runtime is composed on the first frame) re-asks for the restored '
+        'slips; a detached lookup reads "not held"', () async {
+      final (claims, store) = await crashBeforeHandOver();
+      final next = _H(claims: claims, store: store);
+      await next.boot();
+      await _settle();
+      expect(next.pending.single.orderEditId, a1.editId);
+      final lookup = next.c.read(orderEditSpoolLookupProvider);
+      lookup.attach(spoolHolds);
+      await _settle();
+      expect(next.pending, isEmpty);
+      expect(next.state.records, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(next.printer.slips, isEmpty);
+      expect(await lookup.spoolHoldsOrderEditDispatch(a1.dispatchId), isTrue);
+      lookup.detach(spoolHolds);
+      expect(await lookup.spoolHoldsOrderEditDispatch(a1.dispatchId), isFalse);
+    });
+
+    test('D2: Print again asks the spool AFTER its in-flight mark (no import '
+        'can start meanwhile) and BEFORE any claim or send: a held dispatch '
+        'is handed over and nothing is sent', () async {
+      final (claims, store) = await crashBeforeHandOver();
+      // The spool cannot be read while the till restores, so the slip keeps
+      // its banner; by the time the cashier taps Print again it can.
+      var readable = false;
+      bool? inFlightWhenAsked;
+      bool? reservableWhenAsked;
+      late _H next;
+      next = _H(
+        claims: claims,
+        store: store,
+        spoolHolds: (dispatchId) async {
+          if (!readable) throw StateError('the spool is still opening');
+          inFlightWhenAsked = next.slips.isDispatchInFlight(dispatchId);
+          reservableWhenAsked = next.slips.reserveForSpool(dispatchId);
+          return spoolHolds(dispatchId);
+        },
+      );
+      next.details.byId[a1.orderId] = a1.after;
+      await next.boot();
+      await _settle();
+      expect(next.pending.single.orderEditId, a1.editId);
+      readable = true;
+      final again = await next.slips.printAgain(a1.editId);
+      await _settle();
+      expect(inFlightWhenAsked, isTrue);
+      expect(reservableWhenAsked, isFalse);
+      expect(again.status, OrderEditPrintAgainStatus.notFound);
+      expect(next.printer.slips, isEmpty);
+      expect(claims.claims[a1.guardKey], PosRoundPrintClaimState.failed);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(next.state.records, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(next.pending, isEmpty);
+    });
+
+    test('D2: the automatic print asks the spool after its in-flight mark: a '
+        'replayed edit whose dispatch the spool imported (the hand-over lost '
+        'to a crash) is handed over, never sent', () async {
+      final log = <String>[];
+      final claims = _Claims(log);
+      final store = _Store(log);
+      // Session 1 died after `edit_order` applied, before the slip record;
+      // its drain imported the dispatch (no mirror yet) and died before the
+      // hand-over.
+      final first = _H(claims: claims, store: store);
+      await first.boot();
+      final cipher = _GatedCipher()..gate.complete();
+      await coordinator(
+        first,
+        cipher,
+        handOver: false,
+      ).importDispatches([pulled(a1)]);
+      expect(await spool.findByDispatchId(a1.dispatchId), isNotNull);
+      expect(claims.claims[a1.mirrorKey], isNull);
+
+      // The journal replays the edit: no record, no claim, no session memory.
+      final next = _H(claims: claims, store: store, spoolHolds: spoolHolds);
+      await next.boot();
+      expect(await next.apply(a1), OrderEditSlipOutcome.handedOver);
+      await _settle();
+      expect(next.printer.slips, isEmpty);
+      expect(claims.claims[a1.guardKey], isNull);
+      expect(claims.claims[a1.mirrorKey], PosRoundPrintClaimState.claimed);
+      expect(next.state.records, isEmpty);
+      expect(await store.stored(), isEmpty);
+      expect(next.pending, isEmpty);
+      expect(next.ackTransport.calls, isEmpty);
+    });
+
+    test('D2: a spool that cannot tell never risks a second slip and never '
+        'drops one: no automatic print, Print again sends nothing, and the '
+        'record keeps its banner', () async {
+      final h = _H(
+        spoolHolds: (_) async => throw StateError('the spool is locked'),
+      );
+      await h.boot();
+      expect(await h.apply(a1), OrderEditSlipOutcome.notPrinted);
+      await _settle();
+      expect(h.printer.slips, isEmpty);
+      expect(h.claims.claims[a1.guardKey], isNull);
+      expect(h.pending.single.orderEditId, a1.editId);
+      h.details.byId[a1.orderId] = a1.after;
+      final again = await h.slips.printAgain(a1.editId);
+      expect(again.status, OrderEditPrintAgainStatus.notPrinted);
+      expect(h.printer.slips, isEmpty);
+      expect(h.claims.claims[a1.guardKey], isNull);
+      expect((await h.store.stored()).keys, [a1.editId]);
+      expect(h.pending.single.orderEditId, a1.editId);
+    });
   });
 }

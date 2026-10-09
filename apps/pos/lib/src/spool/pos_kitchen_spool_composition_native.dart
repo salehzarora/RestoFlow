@@ -64,7 +64,7 @@ import '../state/pos_bluetooth_printer_config.dart'
     show posKitchenBluetoothPrinterConfigProvider;
 import '../state/pos_device_context.dart' show posDeviceContextProvider;
 import '../state/order_edit_slip_controller.dart'
-    show orderEditSlipControllerProvider;
+    show orderEditSlipControllerProvider, orderEditSpoolLookupProvider;
 import '../state/outbox_controller.dart' show outboxRepositoryProvider;
 import '../state/recent_orders_controller.dart'
     show posRecentOrdersControllerProvider;
@@ -82,7 +82,7 @@ import 'kitchen_ticket_renderer.dart';
 import 'kitchen_void_reconciliation.dart' show KitchenEditSupersessionEvidence;
 import 'pos_kitchen_spool_capability.dart';
 import 'pos_kitchen_spool_composition.dart'
-    show posKitchenSpoolCapabilityProvider;
+    show posKitchenSpoolCapabilityProvider, posKitchenSpoolRuntimeProvider;
 import 'pos_kitchen_spool_hooks.dart';
 import 'pos_kitchen_spool_platform.dart';
 import 'pos_kitchen_spool_runtime.dart';
@@ -341,6 +341,17 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
       }
     },
   );
+  // ORDER-EDIT-001F: the spool database's own answer to "do you hold this
+  // order_edit dispatch?", attached for the till's slip controller, which
+  // asks it (the source of truth) before every direct slip print and at its
+  // restore, so a hand-over a crash left half done never prints a second
+  // slip. Read-only and zero-footprint. It resolves the CURRENT runtime at
+  // each call — this one is disposed as soon as any input above changes and
+  // rebuilt only on the next read — so it is never left detached.
+  final container = ref.container;
+  ref
+      .read(orderEditSpoolLookupProvider)
+      .attach((dispatchId) => holdsOrderEditDispatchNow(container, dispatchId));
   // REAL disposal: logout/unpair/scope change (the device-context watch) or
   // provider teardown closes the dedicated DB and stops an in-flight worker
   // before its next send. Rows and key are preserved.
@@ -352,6 +363,19 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
       // The provider container may already be disposed mid-run teardown.
     }
   });
+}
+
+/// ORDER-EDIT-001F — whether the CURRENT spool runtime of [container] holds a
+/// durable row for the `order_edit` dispatch [dispatchId]
+/// ([PosKitchenSpoolRuntime.holdsOrderEditDispatch]). No runtime (web, demo,
+/// no paired transport) holds nothing: `false`. A failure throws (unknown).
+Future<bool> holdsOrderEditDispatchNow(
+  ProviderContainer container,
+  String dispatchId,
+) async {
+  final hooks = container.read(posKitchenSpoolRuntimeProvider);
+  if (hooks is! _CapabilityReportingHooks) return false;
+  return hooks._runtime.holdsOrderEditDispatch(dispatchId);
 }
 
 /// ORDER-EDIT-001F — maps this till's DIRECT slip prints (the slip store's

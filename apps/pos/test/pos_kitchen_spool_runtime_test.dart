@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' show sha256;
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -34,6 +35,10 @@ import 'package:restoflow_printing/restoflow_printing.dart'
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         PrinterDestinationSendGate;
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition.dart'
+    show posKitchenSpoolRuntimeProvider;
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition_native.dart'
+    show holdsOrderEditDispatchNow;
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_runtime.dart';
 import 'package:restoflow_pos/src/spool/pos_secure_kitchen_mode_cache.dart';
@@ -1103,6 +1108,109 @@ void main() {
         }
       },
     );
+  });
+
+  group('ORDER-EDIT-001F: the order-edit spool lookup', () {
+    test('NO spool file -> "not held", with ZERO footprint (no directory, no '
+        'database)', () async {
+      final rt = runtime();
+      expect(await rt.holdsOrderEditDispatch('d-edit'), isFalse);
+      expect(
+        Directory(p.join(tempDir.path, 'restoflow_kitchen_spool')).existsSync(),
+        isFalse,
+      );
+      await rt.dispose();
+    });
+
+    test('an existing spool answers from its durable rows (any status); a '
+        'disposed runtime cannot tell (throws)', () async {
+      final seed = await factory().open();
+      final store = DriftKitchenSpoolStore(seed);
+      await store.insertImportedJob(_job('edit'));
+      await store.insertImportedJob(_job('done'));
+      await store.markSupersededFromServerEvidence(
+        dispatchId: 'd-done',
+        supersededByDispatchId: 'd-void',
+        now: now,
+      );
+      await seed.close();
+
+      final rt = runtime();
+      expect(await rt.holdsOrderEditDispatch('d-edit'), isTrue);
+      expect(await rt.holdsOrderEditDispatch('d-done'), isTrue);
+      expect(await rt.holdsOrderEditDispatch('d-other'), isFalse);
+      // The lookup and a run share the ONE handle the lookup opened.
+      transport.enqueue({
+        'ok': true,
+        'entity': 'kitchen_workflow_mode',
+        'kitchen_workflow_mode': 'kds',
+        'server_ts': 'x',
+      });
+      await provisionKey();
+      final both = await Future.wait<Object?>([
+        rt.onStartup(),
+        rt.holdsOrderEditDispatch('d-edit'),
+      ]);
+      expect(both.last, isTrue);
+      await rt.dispose();
+      await expectLater(
+        rt.holdsOrderEditDispatch('d-edit'),
+        throwsA(isA<KitchenSpoolDatabaseUnavailableException>()),
+      );
+    });
+
+    test('a spool whose presence cannot be determined cannot tell (throws), '
+        'and nothing is created', () async {
+      final rt = PosKitchenSpoolRuntime(
+        platform: native,
+        deviceContext: () => _context,
+        secretStore: secretStore,
+        modeRepository: null,
+        ackRepository: null,
+        databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+          documentsDirectoryProvider: () async =>
+              throw const FileSystemException('no documents directory'),
+        ),
+      );
+      await expectLater(
+        rt.holdsOrderEditDispatch('d-edit'),
+        throwsA(isA<KitchenSpoolDatabaseUnavailableException>()),
+      );
+      expect(
+        Directory(p.join(tempDir.path, 'restoflow_kitchen_spool')).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('no composed runtime (web, demo, no paired transport) holds '
+        'nothing', () async {
+      final container = ProviderContainer(
+        overrides: [posKitchenSpoolRuntimeProvider.overrideWithValue(null)],
+      );
+      addTearDown(container.dispose);
+      expect(await holdsOrderEditDispatchNow(container, 'd-edit'), isFalse);
+    });
+
+    test('the NATIVE composition attaches the lookup for the slip controller, '
+        'resolving the CURRENT runtime at each call (source pin)', () {
+      final source = File(
+        p.join(
+          locatePosPackageRoot().path,
+          'lib',
+          'src',
+          'spool',
+          'pos_kitchen_spool_composition_native.dart',
+        ),
+      ).readAsStringSync();
+      for (final wiring in [
+        '.read(orderEditSpoolLookupProvider)',
+        '(dispatchId) => holdsOrderEditDispatchNow(container, dispatchId)',
+        'final hooks = container.read(posKitchenSpoolRuntimeProvider);',
+        'hooks._runtime.holdsOrderEditDispatch(dispatchId);',
+      ]) {
+        expect(source, contains(wiring), reason: wiring);
+      }
+    });
   });
 
   group('CORRECTION-001: lifecycle async safety', () {
