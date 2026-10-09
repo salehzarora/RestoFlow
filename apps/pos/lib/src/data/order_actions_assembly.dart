@@ -6,6 +6,7 @@ import '../data/kitchen_mode_readiness.dart'
     show posVerifiedKitchenModeProvider;
 import '../state/addition_controller.dart';
 import '../state/discount_controller.dart';
+import '../state/order_edit_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_order_complete_controller.dart';
 import 'order_actions.dart';
@@ -42,13 +43,15 @@ class PosOrderActionsAssembly {
     required Set<String> hydrationBlanketOnly,
     required KitchenModeResult? verifiedMode,
     required Set<String> completingIds,
+    required OrderEditState edit,
   }) : _capabilities = capabilities,
        _isDemo = isDemo,
        _pendingByIdentity = pendingByIdentity,
        _submitByIdentity = submitByIdentity,
        _hydrationBlanketOnly = hydrationBlanketOnly,
        _verifiedMode = verifiedMode,
-       _completingIds = completingIds;
+       _completingIds = completingIds,
+       _edit = edit;
 
   /// Watches every input provider and builds the per-identity joins over the
   /// FULL loaded collection [orders] (always pass the whole
@@ -107,19 +110,41 @@ class PosOrderActionsAssembly {
         if (addition.sending || addition.failed || addition.awaitingRefresh)
           t.orderId,
     };
+    // ORDER-EDIT-001E: the SAME rule for a sent-order edit (design §7.1
+    // point 7). An edit this device froze — sending, outcome unknown, in
+    // conflict, or applied but not yet proven — withdraws Pay, Discount,
+    // Cancel, Add items, Move and Edit on its order; and while the edit journal
+    // is being read (or could not be), every order is held.
+    final edit = ref.watch(orderEditControllerProvider);
+    final editHydrating = edit.startupBlocked;
+    final editBlockedIds = edit.blockedOrderIds;
     // [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] Which rows carry the
     // `itemsAdd` stamp ONLY because the journal has not been read yet. The
     // blanket is a fail-closed for MONEY actions; this set lets the central
     // policy relax the READ-ONLY pre-bill for rows it has no actual evidence
     // against. A row with a REAL blocked amendment is never in it.
     final hydrationBlanketOnly = <String>{};
-    if (hydrating || blockedOrderIds.isNotEmpty) {
+    if (hydrating ||
+        blockedOrderIds.isNotEmpty ||
+        editHydrating ||
+        editBlockedIds.isNotEmpty) {
       for (final o in orders) {
         final id = o.orderId;
+        final key = o.identity.key;
         final reallyBlocked = id != null && blockedOrderIds.contains(id);
         if (hydrating || reallyBlocked) {
-          pendingByIdentity[o.identity.key] = PosPendingKind.itemsAdd;
-          if (!reallyBlocked) hydrationBlanketOnly.add(o.identity.key);
+          pendingByIdentity[key] = PosPendingKind.itemsAdd;
+          if (!reallyBlocked) hydrationBlanketOnly.add(key);
+        }
+        // ORDER-EDIT-001E: a REAL edit block wins over any blanket; the edit
+        // journal's own blanket stamps `orderEdit` where the addition blanket
+        // has not already stamped the row.
+        if (id != null && editBlockedIds.contains(id)) {
+          pendingByIdentity[key] = PosPendingKind.orderEdit;
+          hydrationBlanketOnly.remove(key);
+        } else if (editHydrating && !reallyBlocked) {
+          if (!hydrating) pendingByIdentity[key] = PosPendingKind.orderEdit;
+          hydrationBlanketOnly.add(key);
         }
       }
     }
@@ -132,6 +157,7 @@ class PosOrderActionsAssembly {
       hydrationBlanketOnly: hydrationBlanketOnly,
       verifiedMode: verifiedMode,
       completingIds: completingIds,
+      edit: edit,
     );
   }
 
@@ -142,6 +168,10 @@ class PosOrderActionsAssembly {
   final Set<String> _hydrationBlanketOnly;
   final KitchenModeResult? _verifiedMode;
   final Set<String> _completingIds;
+
+  /// ORDER-EDIT-001E: the WATCHED edit state — the source of each order's
+  /// Retry and of what its `orderEdit` stamp means.
+  final OrderEditState _edit;
 
   /// This device's queued mutation for [order], if any (after the amendment
   /// blanket stamping) — the same value fed into [resolveFor].
@@ -160,14 +190,27 @@ class PosOrderActionsAssembly {
   /// sheet has always computed per row.
   PosOrderActions resolveFor(PosRecentOrder order) {
     final unacknowledged = submitUnacknowledgedFor(order);
+    final id = order.orderId;
+    final pending = pendingFor(order);
+    final hold = pending == PosPendingKind.orderEdit ? _editHoldFor(id) : null;
     return resolveOrderActions(
       order,
       capabilities: _capabilities,
-      pending: pendingFor(order),
+      pending: pending,
       submitUnacknowledged: unacknowledged,
       // Pass C: this row's `itemsAdd` stamp is the startup blanket, not a
       // known amendment — it relaxes the read-only pre-bill and nothing else.
       amendmentsHydrating: _hydrationBlanketOnly.contains(order.identity.key),
+      // ORDER-EDIT-001E: Edit needs a real backend; the policy fails closed
+      // without this, so only this shared assembly ever offers it.
+      isRealMode: !_isDemo,
+      // ORDER-EDIT-001E: the unresolved edit's Retry rides the row whenever a
+      // retryable record exists — that edit withdrew every other action, so
+      // a host skipping an "empty" row must not hide it.
+      editRetryable:
+          id != null && id.isNotEmpty && _edit.retryableRecordFor(id) != null,
+      editHold: hold?.$1,
+      appliedEditNumber: hold?.$2,
       // Gap B: the central close-eligibility policy decides the printer-only
       // Complete safety net (server re-enforces).
       completeEligible:
@@ -185,5 +228,38 @@ class PosOrderActionsAssembly {
           ) ==
           PosOrderCloseEligibility.allowed,
     );
+  }
+
+  /// ORDER-EDIT-001E: what this device's `orderEdit` stamp on [orderId] is
+  /// (and, for an applied edit, its `edit_number`). An order no edit record
+  /// or attempt holds carries the stamp only as the journal's startup
+  /// blanket.
+  (PosOrderEditHold, int?) _editHoldFor(String? orderId) {
+    final edit = _edit;
+    if (orderId == null || !edit.blockedOrderIds.contains(orderId)) {
+      return (PosOrderEditHold.journalLoading, null);
+    }
+    if (edit.conflictingOrderIds.contains(orderId)) {
+      return (PosOrderEditHold.conflict, null);
+    }
+    final attempt = edit.attempt;
+    if (attempt != null && attempt.orderId == orderId) {
+      if (edit.phase == OrderEditPhase.appliedAwaitingRefresh) {
+        return (
+          PosOrderEditHold.appliedAwaitingRefresh,
+          edit.applied?.editNumber,
+        );
+      }
+      if (edit.phase == OrderEditPhase.sending ||
+          edit.phase == OrderEditPhase.rebasing) {
+        return (PosOrderEditHold.sending, null);
+      }
+    }
+    for (final r in edit.records.values) {
+      if (r.orderId == orderId && r.awaitingRefresh) {
+        return (PosOrderEditHold.appliedAwaitingRefresh, r.applied?.editNumber);
+      }
+    }
+    return (PosOrderEditHold.sending, null);
   }
 }

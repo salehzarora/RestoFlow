@@ -206,6 +206,9 @@ class ParkedCartsController extends Notifier<ParkedCartsState> {
     // A frozen amendment owns this cart; its payload must stay exactly what was
     // frozen. Checked BEFORE emptiness so the refusal reason is the honest one.
     if (cart.lockedByAddition) return ParkResult.blockedByAddition;
+    // ORDER-EDIT-001E: an edit cart is bound to a sent order's lines — it is
+    // not a draft that can be set aside and restored as a new order.
+    if (cart.isEditing) return ParkResult.blockedByAddition;
     final addition = ref.read(additionControllerProvider);
     if (addition.active || addition.hasOpenAttempt) {
       return ParkResult.blockedByAddition;
@@ -296,7 +299,10 @@ class ParkedCartsController extends Notifier<ParkedCartsState> {
     // work — matching how the production recovery path refuses.
     final cart = ref.read(cartControllerProvider);
     final addition = ref.read(additionControllerProvider);
-    if (cart.lockedByAddition || addition.active || addition.hasOpenAttempt) {
+    if (cart.lockedByAddition ||
+        cart.isEditing ||
+        addition.active ||
+        addition.hasOpenAttempt) {
       return const RestoreOutcome(RestoreStatus.blockedByAddition);
     }
     if (_busy) return const RestoreOutcome(RestoreStatus.busy);
@@ -329,7 +335,7 @@ class ParkedCartsController extends Notifier<ParkedCartsState> {
 
       // Re-check the interlock after the awaits: an amendment may have started.
       final freshCart = ref.read(cartControllerProvider);
-      if (freshCart.lockedByAddition) {
+      if (freshCart.lockedByAddition || freshCart.isEditing) {
         return const RestoreOutcome(RestoreStatus.blockedByAddition);
       }
       if (freshCart.isNotEmpty) {

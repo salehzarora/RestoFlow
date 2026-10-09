@@ -14,7 +14,11 @@ import '../data/demo_tables.dart';
 import '../design/pos_motion.dart';
 import '../design/pos_visual_tokens.dart';
 import '../data/kitchen_mode_readiness.dart';
+import '../data/order_edit_diff.dart'
+    show OrderEditPlan, OrderEditSendBlock, orderEditSendBlock;
+import '../data/order_identity.dart' show PosOrderIdentity;
 import '../data/outbox_repository.dart';
+import '../data/recent_order.dart' show PosRecentOrder;
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
@@ -34,8 +38,10 @@ import '../print/pos_kitchen_ticket_printer.dart'
         runOfflineDirectPrintKitchenTicket;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
+import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/parked_carts_controller.dart';
 import '../state/draft_recovery_controller.dart';
+import '../state/order_edit_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
@@ -45,8 +51,13 @@ import '../state/pos_offline_session_policy.dart';
 import '../state/pos_offline_state.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
+import 'cancel_order_sheet.dart';
+import 'discount_sheet.dart';
 import 'modifier_selection_sheet.dart';
+import 'order_action_row.dart' show printOrderBill;
 import 'order_confirmation.dart';
+import 'order_edit_cart_widgets.dart';
+import 'order_edit_messages.dart' show orderEditResultMessage;
 import 'quantity_stepper.dart';
 import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
@@ -312,9 +323,26 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           ? taxMinorExclusive(cart.subtotalMinor, tax.rateBp)
           : 0;
 
+      // ORDER-EDIT-001E: EDIT MODE — the cart's lines are bound to a SENT
+      // order's lines. The edit flow is read ONLY while the cart edits, so an
+      // ordinary cart never builds it and stays byte-identical.
+      final editContext = cart.editContext;
+      final edit = editContext == null
+          ? null
+          : ref.watch(orderEditControllerProvider);
+      final editPlan = editContext == null
+          ? null
+          : ref.watch(orderEditPlanProvider);
+      final editCapabilities = editContext == null
+          ? null
+          : ref.watch(staffCapabilitiesProvider).valueOrNull;
+      final editView = editContext != null && edit != null && editPlan != null
+          ? (context: editContext, state: edit, plan: editPlan)
+          : null;
+
       // POS-CART-VERTICAL-FIT-001: the totals/actions footer is built ONCE and
       // placed by whichever branch below owns the remaining space.
-      final footer = _CartFooter(
+      final cartFooter = _CartFooter(
         l10n: l10n,
         subtotalMinor: cart.subtotalMinor,
         taxMinor: taxMinor,
@@ -380,6 +408,17 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               )
             : null,
       );
+      // ORDER-EDIT-001E: in edit mode the edit footer takes its place.
+      final footer = editView != null
+          ? _orderEditFooter(
+              l10n: l10n,
+              cart: cart,
+              editContext: editView.context,
+              edit: editView.state,
+              plan: editView.plan,
+              taxRateBp: tax.rateBp,
+            )
+          : cartFooter;
 
       // POS-CART-VERTICAL-FIT-001 — the cart body is ONE scroll view.
       //
@@ -436,8 +475,13 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                           attachFlyTarget: !widget.isSheet,
                           // Cart-safety: a frozen addition attempt owns the
                           // cart — the Clear control is disabled (the
-                          // controller refuses regardless).
-                          onClear: cart.isEmpty || cart.lockedByAddition
+                          // controller refuses regardless). ORDER-EDIT-001E:
+                          // an edit cart is never cleared either — it leaves
+                          // through "Discard changes".
+                          onClear:
+                              cart.isEmpty ||
+                                  cart.lockedByAddition ||
+                                  cart.isEditing
                               ? null
                               : controller.clear,
                         ),
@@ -445,10 +489,27 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       ],
                     ),
                   ),
+                  // ORDER-EDIT-001E: while EDITING a sent order the setup
+                  // section is replaced by the edit banner — the order's
+                  // type, table and customer are not edited here (design §6).
+                  if (editView != null)
+                    OrderEditBanner(
+                      orderCode: editView.context.orderCode,
+                      tableLabel: editView.context.tableLabel,
+                      edit: editView.state,
+                      removalNotAllowed: editCapabilities?.voidOrder == false,
+                      onDiscard: _discardEdit,
+                      onRetry: () => _handleEditSend(l10n),
+                      onRetryRefresh: () => unawaited(
+                        ref
+                            .read(orderEditControllerProvider.notifier)
+                            .retryRefresh(),
+                      ),
+                    )
                   // PSC-001C: while ADDING to an existing order the setup
                   // section (type/table) is replaced by the target banner — the
                   // parent order's context is fixed and must stay visible.
-                  if (addition.active)
+                  else if (addition.active)
                     _AdditionBanner(
                       l10n: l10n,
                       orderCode: addition.target!.orderCode,
@@ -513,6 +574,38 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       // cart, every line control is disabled — the visible lines
                       // ARE the frozen payload.
                       final locked = cart.lockedByAddition;
+                      if (editView != null) {
+                        // ORDER-EDIT-001E: a sent line's controls follow its
+                        // flags and the session's rights (design §7.1 point 3).
+                        final controls = orderEditLineControls(
+                          line,
+                          baseline: editView.context.baseline,
+                          capabilities: editCapabilities,
+                          locked: locked,
+                        );
+                        return _CartLineTile(
+                          line: line,
+                          l10n: l10n,
+                          dense: dense,
+                          thumbnailUrl: thumbByItemId[line.menuItemId],
+                          editControls: controls,
+                          onIncrease: controls.canIncrease
+                              ? () => controller.increaseQuantity(line.lineId)
+                              : null,
+                          onDecrease: controls.canDecrease
+                              ? () => controller.decreaseQuantity(line.lineId)
+                              : null,
+                          onRemove: controls.canRemove
+                              ? () => controller.removeLine(line.lineId)
+                              : null,
+                          onEdit: controls.canEdit
+                              ? () => _editLine(context, menu, line, controller)
+                              : null,
+                          onUndo: controls.canUndo
+                              ? () => controller.undoRemove(line.lineId)
+                              : null,
+                        );
+                      }
                       return _CartLineTile(
                         line: line,
                         l10n: l10n,
@@ -595,6 +688,292 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       if (mounted) setState(() => _submitting = false);
     }
   }
+
+  /// ORDER-EDIT-001E — the edit-mode footer (design §7.1 points 4-5): the
+  /// live plan's figures, the ONE reason Send is disabled, the reason chips
+  /// when something is removed, reduced or modified, and "Send changes".
+  ///
+  /// While the frozen attempt's outcome is unknown Send RETRIES it — the same
+  /// identity, the verbatim payload — so no reason can be changed then.
+  Widget _orderEditFooter({
+    required AppLocalizations l10n,
+    required CartViewState cart,
+    required CartEditContext editContext,
+    required OrderEditState edit,
+    required OrderEditPlan plan,
+    required int taxRateBp,
+  }) {
+    final online =
+        ref.watch(posOfflineModeProvider).phase == PosOfflinePhase.online;
+    final draft = ref.watch(orderEditReasonDraftProvider);
+    final generation = editContext.generation;
+    final reason = orderEditEffectiveReason(
+      draft,
+      generation: generation,
+      plan: plan,
+    );
+    final conflict = edit.lastError == 'conflict';
+    final retrying = edit.phase == OrderEditPhase.failed && !conflict;
+    final active =
+        edit.phase == OrderEditPhase.active && !cart.lockedByAddition;
+    final block = active
+        ? orderEditSendBlock(
+            plan,
+            online: online,
+            reasonCode: reason.code,
+            reasonText: reason.text,
+          )
+        : null;
+    final canSend = !_submitting && ((active && block == null) || retrying);
+    // "Cancel order" is offered only for an order this till can show the
+    // existing cancel sheet for.
+    final cancelTarget = block == OrderEditSendBlock.wouldEmpty
+        ? ref.watch(
+            posRecentOrdersControllerProvider.select(
+              (orders) => _recentOrderFor(orders, editContext.orderId),
+            ),
+          )
+        : null;
+    void setDraft({String? code, required String text}) =>
+        ref
+            .read(orderEditReasonDraftProvider.notifier)
+            .state = OrderEditReasonDraft(
+          generation: generation,
+          code: code,
+          text: text,
+          chosen: true,
+        );
+    return OrderEditFooter(
+      plan: plan,
+      currencyCode: editContext.baseline.currencyCode,
+      taxRateBp: plan.taxMinor > 0 ? taxRateBp : 0,
+      block: block,
+      sending: _submitting || edit.sending,
+      onSend: canSend ? () => _handleEditSend(l10n) : null,
+      onCancelOrder: cancelTarget == null
+          ? null
+          : () => _cancelOrderFromEdit(cancelTarget),
+      onLowerDiscount: block == OrderEditSendBlock.discountExceeds
+          ? () => _lowerDiscountFromEdit(editContext, l10n)
+          : null,
+      reasons: plan.hasRemoving
+          ? OrderEditReasonChips(
+              selected: reason.code,
+              otherText: reason.text,
+              enabled: active,
+              onSelected: (code) => setDraft(code: code, text: reason.text),
+              onOtherChanged: (text) => setDraft(code: reason.code, text: text),
+            )
+          : null,
+    );
+  }
+
+  /// "Discard changes", after its confirm. The controller refuses it once
+  /// anything reached the server (the button is disabled then as well).
+  Future<void> _discardEdit() async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    if (!await confirmOrderEditDiscard(context)) return;
+    container.read(orderEditControllerProvider.notifier).discard();
+  }
+
+  /// The guarded edit send — the same `_submitting` re-entry gate as Send.
+  /// The finished-food confirm is asked FIRST, so Send shows its spinner only
+  /// while something is actually being sent.
+  Future<void> _handleEditSend(AppLocalizations l10n) async {
+    if (_submitting) return;
+    if (!await confirmOrderEditFinishedFood(context) || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      await submitOrderEditFromCart(
+        context: context,
+        l10n: l10n,
+        finishedFoodConfirmed: true,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// Decision D10 — "Lower discount": the EXISTING discount sheet for the
+  /// order (a separate committed `order.discount`), then the edit is
+  /// re-baselined in place with every intent kept. Discarding the edit later
+  /// leaves the lowered discount in place: it was its own change.
+  ///
+  /// The sheet is opened on the order's CURRENT revision and totals, never on
+  /// the ones the edit was opened with: a kitchen bump moves `orders.revision`
+  /// all the time (API_CONTRACT §4.45.5), and `apply_discount` refuses a
+  /// stale `expected_revision` as a conflict. So the edit is re-baselined
+  /// FIRST (the same in-place refresh, every intent kept) and the sheet reads
+  /// the fresh detail. A refresh that could not load, ended the edit or had
+  /// to leave an intent out says so and opens nothing — the cashier looks
+  /// again before discounting.
+  Future<void> _lowerDiscountFromEdit(
+    CartEditContext editContext,
+    AppLocalizations l10n,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final edit = container.read(orderEditControllerProvider.notifier);
+    final current = await edit.refreshBaseline();
+    if (!mounted) return;
+    final fresh = container.read(cartControllerProvider).editContext;
+    if (current.effect != OrderEditRefusalEffect.rebaseline ||
+        current.notice != null ||
+        fresh == null ||
+        fresh.orderId != editContext.orderId) {
+      final message = orderEditResultMessage(l10n, current);
+      if (message != null && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
+    final detail = fresh.baseline.detail;
+    await DiscountSheet.show(
+      context,
+      orderId: detail.orderId,
+      subtotalMinor: detail.subtotalMinor,
+      taxTotalMinor: detail.taxTotalMinor,
+      currencyCode: detail.currencyCode,
+      expectedRevision: detail.revision,
+    );
+    final result = await edit.refreshBaseline();
+    final message = orderEditResultMessage(l10n, result);
+    if (message != null && messenger.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  /// Every line would be removed: that is a cancellation (design §7.1 point
+  /// 4), so the EXISTING cancel flow opens for the order. The edit is then
+  /// re-baselined: a cancelled order is no longer editable and the edit ends
+  /// quietly (the cancel sheet already said what happened); a cancel that was
+  /// backed out of leaves the edit as it was.
+  Future<void> _cancelOrderFromEdit(PosRecentOrder order) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final l10n = AppLocalizations.of(context);
+    await CancelOrderSheet.show(context, order: order);
+    final result = await container
+        .read(orderEditControllerProvider.notifier)
+        .refreshBaseline();
+    if (result.effect == OrderEditRefusalEffect.exit) return;
+    final message = orderEditResultMessage(l10n, result);
+    if (message != null && messenger.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+}
+
+PosRecentOrder? _recentOrderFor(List<PosRecentOrder> orders, String orderId) {
+  for (final o in orders) {
+    if (o.orderId == orderId) return o;
+  }
+  return null;
+}
+
+/// ORDER-EDIT-001E — the ONE finished-food confirm (design §7.1 point 6),
+/// asked only when the open, unsent edit takes food the kitchen already
+/// finished. True when there is nothing to confirm, or the cashier chose
+/// "Send changes"; dismissing it sends nothing.
+Future<bool> confirmOrderEditFinishedFood(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final editContext = container.read(cartControllerProvider).editContext;
+  if (editContext == null ||
+      container.read(orderEditControllerProvider).phase !=
+          OrderEditPhase.active) {
+    return true;
+  }
+  final plan = container.read(orderEditPlanProvider);
+  if (plan == null || !plan.needsFinishedFoodConfirm) return true;
+  return OrderEditFinishedFoodSheet.show(
+    context,
+    plan: plan,
+    currencyCode: editContext.baseline.currencyCode,
+  );
+}
+
+/// ORDER-EDIT-001E — "Send changes" (design §7.1 points 6-8).
+///
+///  1. When the plan takes food the kitchen already finished, the ONE
+///     finished-food confirm comes first ([confirmOrderEditFinishedFood],
+///     unless the caller already asked it — [finishedFoodConfirmed]);
+///     dismissing it sends nothing.
+///  2. The reason is the cashier's chip, or the plan's preselect.
+///  3. `bill_presented_at` rides along only when THIS session handed a bill
+///     for the order to a printer (decision D7).
+///  4. The controller freezes, journals and sends; this only reports what it
+///     came to — the result toast, "Refresh orders" for an applied edit not
+///     yet proven, and "Bill changed: print new bill?" when a pre-bill was
+///     presented. A refusal's message is the typed one (§8b); a send the
+///     footer already explains says nothing more.
+///
+/// While the frozen attempt's outcome is unknown this RETRIES it verbatim —
+/// the controller ignores the reason then.
+///
+/// PUBLIC (visible for testing): the Send button's edit handler.
+@visibleForTesting
+Future<void> submitOrderEditFromCart({
+  required BuildContext context,
+  required AppLocalizations l10n,
+  bool finishedFoodConfirmed = false,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  // Captured BEFORE the first await: the container and the notifiers it owns
+  // outlive the widget.
+  final container = ProviderScope.containerOf(context, listen: false);
+  final controller = container.read(orderEditControllerProvider.notifier);
+  final edit = container.read(orderEditControllerProvider);
+  final editContext = container.read(cartControllerProvider).editContext;
+  final orderId = editContext?.orderId ?? edit.entryOrderId;
+  String? reasonCode;
+  String? reasonText;
+  DateTime? billPresentedAt;
+  if (edit.phase == OrderEditPhase.active && editContext != null) {
+    if (!finishedFoodConfirmed &&
+        !await confirmOrderEditFinishedFood(context)) {
+      return;
+    }
+    final plan = container.read(orderEditPlanProvider);
+    if (plan == null) return;
+    final reason = orderEditEffectiveReason(
+      container.read(orderEditReasonDraftProvider),
+      generation: editContext.generation,
+      plan: plan,
+    );
+    reasonCode = reason.code;
+    reasonText = reason.text;
+    billPresentedAt = orderEditBillPresentedAtFor(
+      container,
+      editContext.orderId,
+    );
+  }
+  final result = await controller.submit(
+    reasonCode: reasonCode,
+    reasonText: reasonText,
+    billPresentedAt: billPresentedAt,
+  );
+  if (!messenger.mounted) return;
+  showOrderEditResult(
+    messenger,
+    l10n,
+    result,
+    onRefresh: () => unawaited(controller.retryRefresh()),
+    onPrintBill: orderId == null
+        ? null
+        : () => unawaited(
+            printOrderBill(
+              container: container,
+              messenger: messenger,
+              l10n: l10n,
+              orderId: orderId,
+              identity: PosOrderIdentity.server(orderId),
+              localView: _recentOrderFor(
+                container.read(posRecentOrdersControllerProvider),
+                orderId,
+              )?.order,
+            ),
+          ),
+  );
 }
 
 /// PARKED-CARTS-001 — the Park handler.
@@ -682,6 +1061,12 @@ Future<void> submitOrderFromCart({
   int taxTotalMinor = 0,
   int taxRateBp = 0,
 }) async {
+  // ORDER-EDIT-001E: an EDIT cart is never submitted as a new order or as an
+  // addition — its Send is "Send changes", routed BEFORE the addition branch.
+  if (cart.isEditing) {
+    await submitOrderEditFromCart(context: context, l10n: l10n);
+    return;
+  }
   final messenger = ScaffoldMessenger.of(context);
   // PSC-001C: ADDITION MODE routes the SAME send action to one
   // `order.items_add` operation for the target order — the original items are
@@ -1391,6 +1776,46 @@ void _editLine(
   // sheet separately explains why options are missing, and blocks Save when
   // groups DID resolve but a stored selection cannot be represented.
   final noteOnly = groups.isEmpty && line.modifiers.isNotEmpty;
+  // ORDER-EDIT-001E: a line bound to a SENT line edits its modifiers and note
+  // only (design §6) — no stepper; "Apply to: All N / Just 1" when it has
+  // several units; kept options priced at their STORED price. "Just 1" splits
+  // one unit off into a part line bound to the same sent line.
+  final source = line.editSource;
+  if (source != null) {
+    ModifierSelectionSheet.show(
+      context,
+      item: item,
+      groups: groups,
+      currencyCode: currency,
+      category: category,
+      quickNotes: menu?.quickNotePresets ?? const <PosQuickNotePreset>[],
+      initialSelections: line.modifiers,
+      initialNote: line.note,
+      isEdit: true,
+      initialQuantity: line.quantity,
+      displayBasePriceMinor: line.unitPriceMinor,
+      editMode: true,
+      applyToCount: line.quantity,
+      normalizeSelections: (selections) =>
+          orderEditNormalizedModifiers(source, selections),
+      // Never called in edit mode (onConfirmEdit is); kept money-safe anyway.
+      onConfirm: (selections, note, quantity) =>
+          controller.updateLineNote(line.lineId, note),
+      onConfirmEdit: (selections, note, applyToOne) {
+        // The note-only fallback stays note-only: the line's OWN options ride
+        // a split, never the sheet's (empty) ones.
+        final options = noteOnly ? line.modifiers : selections;
+        if (applyToOne) {
+          controller.splitForEdit(line.lineId, options, note: note);
+        } else if (noteOnly) {
+          controller.updateLineNote(line.lineId, note);
+        } else {
+          controller.updateLineModifiers(line.lineId, options, note: note);
+        }
+      },
+    );
+    return;
+  }
   ModifierSelectionSheet.show(
     context,
     item: item,
@@ -1681,10 +2106,21 @@ class _CartLineTile extends StatelessWidget {
     required this.onEdit,
     this.dense = false,
     this.thumbnailUrl,
+    this.editControls,
+    this.onUndo,
   });
 
   final CartLineView line;
   final AppLocalizations l10n;
+
+  /// ORDER-EDIT-001E — the line's edit-mode verdict (null outside edit mode):
+  /// its stage chip, "New" badge, "Manager needed" and hint are drawn under
+  /// the name, and a struck-through sent line offers [onUndo] where the trash
+  /// was.
+  final OrderEditLineControls? editControls;
+
+  /// ORDER-EDIT-001E: Undo on a struck-through sent line; null = disabled.
+  final VoidCallback? onUndo;
 
   /// POS-REFERENCE-REDESIGN-002: the product photo for the row's leading
   /// thumbnail (presentation only; a quiet tinted glyph stands in when the
@@ -1725,6 +2161,10 @@ class _CartLineTile extends StatelessWidget {
     // meta, line total — with no card chrome of its own; the list's hairline
     // separators carry the rhythm.
     final summary = posCartModifierSummary(line.modifiers, line.currencyCode);
+    final edit = editControls;
+    // ORDER-EDIT-001E: a struck-through sent line reads as removed — its name
+    // crossed out and its figures muted — until Undo.
+    final struck = edit != null && line.editRemoved;
     return Padding(
       padding: dense
           ? const EdgeInsetsDirectional.fromSTEB(
@@ -1755,7 +2195,8 @@ class _CartLineTile extends StatelessWidget {
                   line.name,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: kRestoflowInk,
+                    color: struck ? kRestoflowInk3 : kRestoflowInk,
+                    decoration: struck ? TextDecoration.lineThrough : null,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1769,10 +2210,18 @@ class _CartLineTile extends StatelessWidget {
                 formatted: lineTotalText,
                 digitSize: 15,
                 symbolSize: 11,
-                color: PosThemePair.of(context).action,
+                color: struck
+                    ? kRestoflowInk3
+                    : PosThemePair.of(context).action,
               ),
             ],
           ),
+          if (edit != null)
+            OrderEditLineBadges(
+              key: Key('cart-line-edit-${line.lineId}'),
+              line: line,
+              controls: edit,
+            ),
           // Roomy: the meta on its own line. Dense: folded into the controls row.
           if (!dense) qtyUnit,
           // The selected modifiers (order-time snapshots) as ONE wrapped line
@@ -1822,6 +2271,14 @@ class _CartLineTile extends StatelessWidget {
                 onTrack: true,
                 onIncrease: onIncrease,
                 onDecrease: onDecrease,
+                // ORDER-EDIT-001E: addressable in edit mode only — a normal
+                // cart line's tree is unchanged.
+                decreaseKey: edit == null
+                    ? null
+                    : Key('cart-decrease-${line.lineId}'),
+                increaseKey: edit == null
+                    ? null
+                    : Key('cart-increase-${line.lineId}'),
               ),
               // Dense folds the '× qty · unit' meta into this row (Expanded so
               // it uses all free width and ellipsises only when truly cramped);
@@ -1843,15 +2300,25 @@ class _CartLineTile extends StatelessWidget {
                 dense: dense,
                 onPressed: onEdit,
               ),
-              _LineActionButton(
-                buttonKey: Key('cart-remove-${line.lineId}'),
-                icon: Icons.delete_outline,
-                tooltip: l10n.posRemoveItem,
-                color: RestoflowTone.danger.styleOf(theme).onContainer,
-                background: RestoflowTone.danger.styleOf(theme).container,
-                dense: dense,
-                onPressed: onRemove,
-              ),
+              // ORDER-EDIT-001E: a struck-through sent line offers Undo where
+              // its trash was (design §7.1 point 3).
+              if (struck)
+                TextButton.icon(
+                  key: Key('cart-undo-remove-${line.lineId}'),
+                  onPressed: onUndo,
+                  icon: const Icon(Icons.undo, size: 17),
+                  label: Text(l10n.posOrderEditUndoRemove),
+                )
+              else
+                _LineActionButton(
+                  buttonKey: Key('cart-remove-${line.lineId}'),
+                  icon: Icons.delete_outline,
+                  tooltip: l10n.posRemoveItem,
+                  color: RestoflowTone.danger.styleOf(theme).onContainer,
+                  background: RestoflowTone.danger.styleOf(theme).container,
+                  dense: dense,
+                  onPressed: onRemove,
+                ),
             ],
           ),
         ],

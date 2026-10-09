@@ -421,6 +421,9 @@ class OrderConfirmation extends ConsumerWidget {
                                   // confirmation speaks the same words as the
                                   // orders centre.
                                   orderType: authoritative.orderType,
+                                  // ORDER-EDIT-001E: a served order with a live
+                                  // round reads "In kitchen" (STATE_MACHINES §1).
+                                  hasActiveRound: authoritative.hasActiveRound,
                                 ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),

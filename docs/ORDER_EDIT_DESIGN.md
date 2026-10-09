@@ -227,6 +227,66 @@ a new one, which is priced at the current menu price (M4). The POS does not offe
 size or variant picker in edit mode. Order-level fields (type, table, customer, order
 note) are not edited here; table moves keep using the existing Move table action.
 
+*Implemented — ORDER-EDIT-001E (POS app only; no shared-package, l10n or server
+change):*
+
+- **Read surface and labels.** The POS reads the 001B detail fields (kitchen
+  channel, unit status, legacy flag, `edits[]`, branch switches), the snapshot
+  fields (`edit_count`, `kitchen_edit_ack_pending`, `has_active_round`) and the
+  capability projection. `void_order` is tri-state: absent is unknown, never
+  denied (D14). A `served` order with an active round reads "In kitchen" (the
+  detail preview refines it to "Ready"), never "Picked up". Order rows show
+  "Edited" and "Kitchen to confirm"; "Kitchen confirmed" is shown in the preview
+  only (D13). At equal revision and sync time a snapshot carrying the edit fields
+  wins over one without them (D4, RISK R-002).
+- **Entry.** "Edit order" follows "Add items" in `OrderActionRow` (Orders sheet,
+  detail preview and strip, table recovery; not the confirmation screen). It needs
+  the Add-items interlocks, an acknowledged submit (D2), real mode, an open status
+  (D3), the branch switch ON (hidden when unknown) and a role `edit_order` accepts;
+  `void_order` is not part of the gate. Offline the tap is refused without calling
+  the controller. A non-empty cart offers Park or Clear. A not-found order reads
+  "Waiting for the order to reach the server".
+- **Edit mode.** The cart loads the sent lines bound to their `order_item_id` at
+  their stored prices, and its subtotal is the planned one. A menu tap never merges
+  into a sent line. Lines show their stage ("Printed" on paper), "New", and a
+  strike-through with Undo. "Apply to: All N / Just 1" splits one unit into a part
+  line. Remove-only and keep-or-remove-only lines keep the trash alone (D11). An
+  unsellable item has no "+". With `void_order` known false, or for a cashier on a
+  Ready / Served KDS line with the finished-food switch ON ("Manager needed"), the
+  removing controls are disabled and "+" stays. The modifier sheet hides its
+  stepper and shows kept options at their stored price.
+- **Footer and send.** "Was → Now (±)" with LTR-isolated money, the tax recomputed
+  with the server's rule, "Discount kept", and the first reason Send is disabled:
+  no changes; every line removed (with "Cancel order", the existing cancel sheet);
+  a discount above the new subtotal (with "Lower discount": the existing discount
+  sheet, then an in-place re-baseline that keeps every intent, D10); a free order
+  without the full-comp right; too many changes; offline; a missing reason. Reason
+  chips appear only for a removing change, and "Customer changed mind" is
+  preselected only when every removing change touches a Waiting KDS ticket. The
+  finished-food confirm comes before anything is sent. The attempt is frozen and
+  journaled before `sync_push` sends one `order.edit` (device-scoped journal, D12).
+  While it is unresolved the order's other actions are withdrawn, and the row
+  carries a Retry that replays the same identity and payload.
+- **Results and refusals.** Toasts follow §7.1 point 8, except that a paper edit
+  reads "Change N saved" until ORDER-EDIT-001F prints the change slip; the
+  `kitchen_dispatch` is kept in the journal for it (D1). The remake count is the
+  frozen plan's allotment (D8). `bill_presented_at` is sent only when this session
+  sent the order's bill to a printer, and the result then offers "Print bill"
+  (D7). Every §4.45.6 refusal has its message and effect. `line_changed` and
+  `totals_mismatch` rebase onto the fresh detail and need a new Send under a new
+  identity; a second `totals_mismatch` in a row stops, and the server's figures
+  are never adopted (D9). An applied edit is closed only when the detail proves it;
+  until then it reads "Change N saved" with "Refresh orders".
+- **Residuals.** A rebase re-applies intents only to lines that are still live
+  (`pos_order_detail` has no replacement provenance); the dropped intents are
+  named. An inclusive-tax branch is learnt only from `tax_mode_unsupported`. Floor
+  rows use `kitchen_work_open` for "In kitchen". A retry by another worker of an
+  uncertain edit is attributed to that worker unless the server had already
+  applied it (RISK R-007). A bill printed on another till is not known (D7).
+- The STATE_MACHINES §1 label-rule note ("not yet implemented … 001E"), the
+  API_CONTRACT §4.45 and the IMPLEMENTATION_CHECKLIST markers for this slice are
+  reconciled after #288 merges, because those files are in #288's diff.
+
 ## 7. Behaviour
 
 ### 7.1 Cashier (POS)

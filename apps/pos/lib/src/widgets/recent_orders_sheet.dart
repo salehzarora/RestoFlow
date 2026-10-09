@@ -35,6 +35,7 @@ import '../state/kitchen_finish_controller.dart';
 import '../state/pos_auto_print_prefs.dart'
     show posKitchenTicketAutoPrintProvider, posPrinterOnlyAutoPrintProvider;
 import '../state/addition_controller.dart';
+import '../state/order_edit_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart' show tablesSnapshotProvider;
@@ -46,6 +47,7 @@ import '../state/recent_orders_controller.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'order_action_row.dart';
 import 'order_detail_preview.dart';
+import 'order_edit_messages.dart' show orderEditHoldLabel;
 import 'order_status_pills.dart';
 import 'recovery_coordinator.dart';
 
@@ -590,11 +592,17 @@ class _FinishAllKitchenButton extends ConsumerWidget {
       );
       final addition = container.read(additionControllerProvider);
       final startupBlocked = additionNotifier.isStartupBlocked;
+      // ORDER-EDIT-001E: an unresolved sent-order edit may still move its
+      // order, so it is excluded like an unresolved amendment — and while the
+      // edit journal is unread, no order is provably free of one.
+      final edit = container.read(orderEditControllerProvider);
+      if (edit.startupBlocked) return const <KitchenFinishTarget>[];
       final blockedByAddition = <String>{
         ...additionNotifier.blockedOrderIds,
         if (addition.target case final t?)
           if (addition.sending || addition.failed || addition.awaitingRefresh)
             t.orderId,
+        ...edit.blockedOrderIds,
       };
       final verifiedMode = container.read(posVerifiedKitchenModeProvider);
       final completingIds = container.read(posOrderCompleteControllerProvider);
@@ -1097,13 +1105,25 @@ class _OrderCard extends ConsumerWidget {
                           // A takeaway's `served` reads "Picked up" - same state machine,
                           // honest operational words (RESTAURANT-OPERATIONS-V1-001).
                           orderType: order.orderType,
+                          // ORDER-EDIT-001E: ...unless a round is still active, when
+                          // it reads "In kitchen" (STATE_MACHINES §1).
+                          hasActiveRound: order.hasActiveRound,
+                        ),
+                      // ORDER-EDIT-001E: "Edited" / "Kitchen to confirm" from the
+                      // snapshot's two server facts (never for a not-created shell).
+                      if (!order.isNeverCreated)
+                        ...orderEditChips(
+                          l10n,
+                          keySuffix: order.orderNumber,
+                          editCount: order.editCount,
+                          kitchenAckPending: order.kitchenEditAckPending,
                         ),
                       // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
                       // "My payment is syncing" is a fact about this till, not the order.
                       if (actions.pendingKind case final p?)
                         RestoflowStatusPill(
                           key: Key('order-pending-${order.orderNumber}'),
-                          label: _pendingLabel(l10n, p),
+                          label: _pendingLabel(l10n, p, actions),
                           tone: RestoflowTone.info,
                           icon: Icons.sync,
                         ),
@@ -1421,13 +1441,25 @@ String _typeLabel(AppLocalizations l10n, PosOrderTypeFilter t) => switch (t) {
   PosOrderTypeFilter.takeaway => l10n.posOrderTypeTakeaway,
 };
 
-String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
+String _pendingLabel(
+  AppLocalizations l10n,
+  PosPendingKind k,
+  PosOrderActions actions,
+) => switch (k) {
   PosPendingKind.submit ||
   PosPendingKind.payment => l10n.posOrdersPendingPayment,
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
   // PSC-001C: an addition in flight for this order from THIS device.
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
+  // ORDER-EDIT-001E: a sent-order edit of THIS device — worded by what it
+  // actually is (sending, applied awaiting its refresh, in conflict, or the
+  // journal's startup blanket), never "Sending changes…" for all of them.
+  PosPendingKind.orderEdit => orderEditHoldLabel(
+    l10n,
+    actions.editHold,
+    appliedEditNumber: actions.appliedEditNumber,
+  ),
 };
 
 /// POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: convert to LOCAL exactly once before

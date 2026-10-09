@@ -202,7 +202,15 @@ class _OpenOrdersStripState extends ConsumerState<OpenOrdersStrip>
 /// green "ready/collected". Soft semantic CONTAINERS only — never the
 /// saturated accents, and never color alone (the card always carries the
 /// status text + icon).
-RestoflowTone posOpenOrderStripTone(String? status) => switch (status) {
+///
+/// ORDER-EDIT-001E: a `served` order whose round is still active is not
+/// collected — the kitchen is working on it again, so it tints like
+/// "being prepared" (its label reads "In kitchen", STATE_MACHINES §1).
+RestoflowTone posOpenOrderStripTone(
+  String? status, {
+  bool hasActiveRound = false,
+}) => switch (status) {
+  'served' when hasActiveRound => RestoflowTone.warning,
   'submitted' => RestoflowTone.danger,
   'accepted' || 'preparing' => RestoflowTone.warning,
   'ready' || 'served' => RestoflowTone.success,
@@ -270,11 +278,23 @@ class _OpenOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = order.serverStatus;
-    final tone = posOpenOrderStripTone(status).styleOf(theme);
+    // ORDER-EDIT-001E: the snapshot's live-round flag (STATE_MACHINES §1).
+    final activeRound = order.hasActiveRound;
+    final tone = posOpenOrderStripTone(
+      status,
+      hasActiveRound: activeRound,
+    ).styleOf(theme);
     final statusLabel = status == null
         ? l10n.posOfflineAwaitingSync
-        : orderStatusLabelFor(l10n, status, order.orderType);
-    final statusIcon = status == null ? Icons.sync : orderStatusIcon(status);
+        : orderStatusLabelFor(
+            l10n,
+            status,
+            order.orderType,
+            hasActiveRound: activeRound,
+          );
+    final statusIcon = status == null
+        ? Icons.sync
+        : orderStatusIcon(status, hasActiveRound: activeRound);
     final elapsed = posOpenOrderElapsedLabel(l10n, now, order.sortAt);
     // 2x text scale: the metadata line is the first thing shed — the order
     // number and the status always survive inside the fixed band.

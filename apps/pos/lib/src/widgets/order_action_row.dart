@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_actions.dart';
+import '../data/order_identity.dart' show PosOrderIdentity;
 import '../data/payment.dart';
 import '../data/order_detail_repository.dart';
 import '../data/recent_order.dart';
@@ -17,7 +18,11 @@ import '../print/pos_kitchen_ticket_printer.dart'
         posKitchenReprintProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
+import '../state/discount_controller.dart' show staffCapabilitiesProvider;
+import '../state/order_edit_controller.dart';
+import '../state/parked_carts_controller.dart';
 import '../state/payment_controller.dart' show paymentControllerProvider;
+import '../state/pos_offline_state.dart' show blockPosActionWhileOffline;
 import '../state/pos_order_complete_controller.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_receipt_logo.dart';
@@ -27,6 +32,13 @@ import 'cancel_order_sheet.dart';
 import 'cash_payment_sheet.dart';
 import 'discount_sheet.dart';
 import 'move_table_sheet.dart';
+import 'order_edit_cart_widgets.dart'
+    show
+        OrderEditCartChoice,
+        showOrderEditCartNotEmptyPrompt,
+        showOrderEditResult;
+import 'order_edit_messages.dart'
+    show orderEditEntryMessage, orderEditRetryLabel;
 import 'receipt_print_preview.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the SHARED order action row.
@@ -289,6 +301,52 @@ class OrderActionRow extends ConsumerWidget {
       );
     }
 
+    // ORDER-EDIT-001E: edit a SENT order in place (remove, change quantity,
+    // modify, add) — right after Add items (ORDER_EDIT_DESIGN §7.1 step 1).
+    // Drawn only when the central policy says so (`canEditOrder`: the
+    // add-items interlocks, an acknowledged submit, the branch switch ON and a
+    // role the server accepts); the label is the existing, translated
+    // "Edit order".
+    if (actions.canEditOrder) {
+      children.add(
+        OrderActionButton(
+          child: OutlinedButton.icon(
+            key: Key('$keyPrefix-edit-order-${order.orderNumber}'),
+            onPressed: () => _startEdit(context, ref),
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: Text(l10n.posRecoveryEditOrder),
+          ),
+        ),
+      );
+    }
+
+    // ORDER-EDIT-001E: an edit of this order whose outcome is unknown (or that
+    // is applied but not yet proven) blocks the order's money actions until it
+    // is resolved — so its retry rides the row itself, whatever else the
+    // policy withdrew (the policy's `canRetryEdit` keeps every host drawing
+    // the row for it). It replays the SAME identity; it never mints a new
+    // one — and for an APPLIED edit it only refreshes, so it says so.
+    final editOrderId = order.orderId;
+    final retryable = editOrderId == null || editOrderId.isEmpty
+        ? null
+        : ref.watch(
+            orderEditControllerProvider.select(
+              (s) => s.retryableRecordFor(editOrderId),
+            ),
+          );
+    if (editOrderId != null && retryable != null) {
+      children.add(
+        OrderActionButton(
+          child: OutlinedButton.icon(
+            key: Key('$keyPrefix-edit-retry-${order.orderNumber}'),
+            onPressed: () => _retryEdit(context, editOrderId),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(orderEditRetryLabel(l10n, retryable)),
+          ),
+        ),
+      );
+    }
+
     if (actions.canOpenReceipt) {
       children.add(
         OrderActionButton(
@@ -378,6 +436,109 @@ class OrderActionRow extends ConsumerWidget {
     }
   }
 
+  /// ORDER-EDIT-001E: the "Edit order" entry (design §7.1 points 1-2).
+  ///
+  /// Editing is ONLINE-ONLY (API_CONTRACT §4.45.1): the kitchen has to be told,
+  /// so offline the tap is refused at this entry with the edit's own reason —
+  /// the controller is never called, and nothing is reserved, fetched or
+  /// loaded. The entry transition itself (the reservation, the authoritative
+  /// load and the cart's edit mode) is owned by
+  /// [OrderEditController.enterForOrder]; this only says what it came to.
+  ///
+  /// A cart holding other work is not a dead end: the cashier may park it or
+  /// clear it, and the entry runs again (design §7.1 point 2).
+  Future<void> _startEdit(BuildContext context, WidgetRef ref) async {
+    final orderId = order.orderId;
+    if (orderId == null) return;
+    if (blockPosActionWhileOffline(
+      context,
+      message: l10n.posOrderEditNeedsConnection,
+    )) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    // Captured BEFORE the first await: the row's ref dies with the tree, the
+    // container and the notifiers it owns do not.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final edit = container.read(orderEditControllerProvider.notifier);
+    var entry = await edit.enterForOrder(orderId);
+    if (entry == OrderEditEntryResult.cartNotEmpty) {
+      if (!context.mounted) return;
+      final choice = await showOrderEditCartNotEmptyPrompt(
+        context,
+        canPark: container.read(parkedCartsControllerProvider.notifier).canPark,
+      );
+      switch (choice) {
+        case null:
+          return;
+        case OrderEditCartChoice.park:
+          final parked = await container
+              .read(parkedCartsControllerProvider.notifier)
+              .park();
+          if (parked != ParkResult.parked) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  parked == ParkResult.blockedByAddition
+                      ? l10n.posParkedBlockedByAddition
+                      : l10n.posParkedParkFailed,
+                ),
+              ),
+            );
+            return;
+          }
+        case OrderEditCartChoice.clear:
+          if (container.read(cartControllerProvider.notifier).clear() !=
+              CartMutationResult.applied) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.posOrderEditCartNotEmptyBody)),
+            );
+            return;
+          }
+      }
+      entry = await edit.enterForOrder(orderId);
+    }
+    if (entry == OrderEditEntryResult.entered) {
+      if (navigator.canPop()) navigator.pop();
+      return;
+    }
+    // The switch is fresher on the authoritative detail than in the session
+    // probe: re-read the probe so the button follows.
+    if (entry == OrderEditEntryResult.featureDisabled) {
+      container.invalidate(staffCapabilitiesProvider);
+    }
+    final message = orderEditEntryMessage(l10n, entry);
+    if (message != null) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  /// ORDER-EDIT-001E: the row's retry of an edit whose outcome is unknown
+  /// (this session's, or a record restored after a restart): it replays the
+  /// FROZEN identity and payload verbatim — or, for an edit the server already
+  /// applied, retries only the authoritative refresh. Never a new identity.
+  Future<void> _retryEdit(BuildContext context, String orderId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final edit = container.read(orderEditControllerProvider.notifier);
+    final result = await edit.retryOrder(orderId);
+    showOrderEditResult(
+      messenger,
+      l10n,
+      result,
+      onRefresh: () => edit.retryOrder(orderId),
+      onPrintBill: () => printOrderBill(
+        container: container,
+        messenger: messenger,
+        l10n: l10n,
+        orderId: orderId,
+        identity: order.identity,
+        localView: order.order,
+      ),
+    );
+  }
+
   /// The COMBINED order view + payment for the receipt surfaces — the ONE
   /// [authoritativeReceiptSource] policy: a server-backed order's receipt
   /// comes from `pos_order_detail` (Finding 4 — a failed load/parse is an
@@ -408,96 +569,22 @@ class OrderActionRow extends ConsumerWidget {
   /// Reprints the receipt from the COMBINED authoritative source — see
   /// [_receiptSource]; an unavailable source is an honest retry message,
   /// never a partial receipt presented as complete.
-  /// Prints the customer-facing UNPAID bill for this order.
+  /// Prints the customer-facing UNPAID bill for this order (unlike [_reprint],
+  /// through the canonical readiness lifecycle — see [printOrderBill]).
   ///
-  /// Read-only with respect to the order: it never calls payment, never
-  /// transitions status or settlement, never touches the table or the outbox. A
-  /// print failure is a print failure only.
-  ///
-  /// Unlike [_reprint] this resolves the bridge through
-  /// `posActivePrintBridgeReadyProvider` and goes through the canonical
-  /// readiness lifecycle, so the FIRST bill after a cold start is not lost to a
-  /// synchronously-sampled null bridge.
-  ///
-  /// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] It NO LONGER requires a
-  /// server round-trip. [printableUnpaidOrderSource] prefers the authoritative
-  /// detail and falls back to this device's stored snapshot when that call fails
-  /// — which offline it always does — and the printed document says so. Every
-  /// other input was already local: the printer transport/config
-  /// (SharedPreferences), the restaurant name (the loaded assignments snapshot)
-  /// and the logo (a durable raster cache).
-  Future<void> _printBill(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    final source = await printableUnpaidOrderSource(
-      isDemoMode: isDemo,
-      orderId: order.orderId,
-      localView: order.order,
-      repository: ref.read(orderDetailRepositoryProvider),
-    );
-    // FAIL CLOSED: no server answer AND no local snapshot means there is no
-    // honest document to build, so nothing is printed at all.
-    if (source == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
+  /// ORDER-EDIT-001E: the body moved to the top-level [printOrderBill] so the
+  /// edit's "Bill changed: print new bill?" action prints the SAME document
+  /// through the SAME job; this row's behaviour is unchanged.
+  Future<void> _printBill(BuildContext context, WidgetRef ref) =>
+      printOrderBill(
+        container: ProviderScope.containerOf(context, listen: false),
+        messenger: ScaffoldMessenger.of(context),
+        l10n: l10n,
+        orderId: order.orderId,
+        identity: order.identity,
+        localView: order.order,
+        isMounted: () => context.mounted,
       );
-      return;
-    }
-    // A DISTINCT key from the paid receipt: the two documents are separate jobs
-    // for one order, and the bill is intentionally repeatable.
-    final billKey = 'bill:${order.identity.key}';
-    final printer = ref.read(receiptPrintControllerProvider.notifier);
-    await printer.requestRepeatableDocument(
-      orderKey: billKey,
-      resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
-      awaitLogoReady: () =>
-          ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
-      buildDocument: () => buildBillDocument(
-        l10n,
-        source.view,
-        isDemo: isDemo,
-        restaurantName: ref.read(posRestaurantNameProvider),
-        branding: ref.read(posReceiptLogoAssetProvider),
-        isLocalReference: source.isLocalSnapshot,
-      ),
-      resolveBridge: () async =>
-          (await ref.read(posActivePrintBridgeReadyProvider.future))?.submit,
-    );
-    if (!context.mounted) return;
-    // OUTCOME-AWARE. The old message claimed "Printing bill" whatever happened —
-    // including with no printer configured or an unreachable one, which is how a
-    // cashier ends up believing a customer was handed paper that never existed.
-    // The job's own status is the same one every other print surface reads.
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          _billPrintFailed(printer.jobFor(billKey)?.status)
-              ? l10n.posPrintBillFailed
-              : l10n.posPrintBillStarted,
-        ),
-      ),
-    );
-  }
-
-  /// Whether a finished bill request must be reported as a FAILURE.
-  ///
-  /// It reports failure only on the statuses that mean nothing reached a
-  /// printer: no printer configured, a bridge that could not be reached, and an
-  /// outright build/send failure. `sentToPrinter` (and `printed`) are successes;
-  /// `prepared` is NOT a failure — a demo/sink bridge legitimately accepts a
-  /// document without hardware, and that path has always been honest about being
-  /// only prepared. A null job (nothing was recorded) is treated as a failure
-  /// rather than a claim.
-  static bool _billPrintFailed(PrintJobStatus? status) => switch (status) {
-    PrintJobStatus.sentToPrinter ||
-    PrintJobStatus.printed ||
-    PrintJobStatus.prepared ||
-    PrintJobStatus.waitingForPrinter => false,
-    PrintJobStatus.notConfigured ||
-    PrintJobStatus.bridgeUnavailable ||
-    PrintJobStatus.failed ||
-    null => true,
-  };
 
   /// ORDER-REPRINT-CHOOSER-038 — the reprint control now ASKS which document.
   ///
@@ -786,3 +873,108 @@ class OrderActionButton extends StatelessWidget {
     child: child,
   );
 }
+
+/// Prints the customer-facing UNPAID bill for one order — the order row's
+/// Print → Bill, and (ORDER-EDIT-001E, decision D7) the edit's "Bill changed:
+/// print new bill?" action, which reprints the SAME document under the SAME
+/// job key once an edit changed a bill this till had presented.
+///
+/// Read-only with respect to the order: it never calls payment, never
+/// transitions status or settlement, never touches the table or the outbox. A
+/// print failure is a print failure only.
+///
+/// It resolves the bridge through `posActivePrintBridgeReadyProvider` and goes
+/// through the canonical readiness lifecycle, so the FIRST bill after a cold
+/// start is not lost to a synchronously-sampled null bridge.
+///
+/// [POS-OFFLINE-RECONNECT-PAYMENT-PREBILL-001 Pass C] It does NOT require a
+/// server round-trip. [printableUnpaidOrderSource] prefers the authoritative
+/// detail and falls back to this device's stored snapshot when that call fails
+/// — which offline it always does — and the printed document says so. Every
+/// other input was already local: the printer transport/config
+/// (SharedPreferences), the restaurant name (the loaded assignments snapshot)
+/// and the logo (a durable raster cache).
+///
+/// Reads through [container] (not a widget ref), so the action still works
+/// when the surface that offered it has gone; [isMounted] gates the final
+/// outcome message for a caller whose context may have.
+Future<void> printOrderBill({
+  required ProviderContainer container,
+  required ScaffoldMessengerState messenger,
+  required AppLocalizations l10n,
+  required String? orderId,
+  required PosOrderIdentity identity,
+  required SubmittedOrderView? localView,
+  bool Function()? isMounted,
+}) async {
+  final isDemo = container.read(runtimeConfigProvider).isDemoMode;
+  final source = await printableUnpaidOrderSource(
+    isDemoMode: isDemo,
+    orderId: orderId,
+    localView: localView,
+    repository: container.read(orderDetailRepositoryProvider),
+  );
+  // FAIL CLOSED: no server answer AND no local snapshot means there is no
+  // honest document to build, so nothing is printed at all.
+  if (source == null) {
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
+    );
+    return;
+  }
+  // A DISTINCT key from the paid receipt: the two documents are separate jobs
+  // for one order, and the bill is intentionally repeatable.
+  final billKey = 'bill:${identity.key}';
+  final printer = container.read(receiptPrintControllerProvider.notifier);
+  await printer.requestRepeatableDocument(
+    orderKey: billKey,
+    resolveReadiness: container.read(posReceiptReadinessResolverProvider),
+    awaitLogoReady: () =>
+        container.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+    buildDocument: () => buildBillDocument(
+      l10n,
+      source.view,
+      isDemo: isDemo,
+      restaurantName: container.read(posRestaurantNameProvider),
+      branding: container.read(posReceiptLogoAssetProvider),
+      isLocalReference: source.isLocalSnapshot,
+    ),
+    resolveBridge: () async => (await container.read(
+      posActivePrintBridgeReadyProvider.future,
+    ))?.submit,
+  );
+  if (!(isMounted?.call() ?? true) || !messenger.mounted) return;
+  // OUTCOME-AWARE. The old message claimed "Printing bill" whatever happened —
+  // including with no printer configured or an unreachable one, which is how a
+  // cashier ends up believing a customer was handed paper that never existed.
+  // The job's own status is the same one every other print surface reads.
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        _billPrintFailed(printer.jobFor(billKey)?.status)
+            ? l10n.posPrintBillFailed
+            : l10n.posPrintBillStarted,
+      ),
+    ),
+  );
+}
+
+/// Whether a finished bill request must be reported as a FAILURE.
+///
+/// It reports failure only on the statuses that mean nothing reached a
+/// printer: no printer configured, a bridge that could not be reached, and an
+/// outright build/send failure. `sentToPrinter` (and `printed`) are successes;
+/// `prepared` is NOT a failure — a demo/sink bridge legitimately accepts a
+/// document without hardware, and that path has always been honest about being
+/// only prepared. A null job (nothing was recorded) is treated as a failure
+/// rather than a claim.
+bool _billPrintFailed(PrintJobStatus? status) => switch (status) {
+  PrintJobStatus.sentToPrinter ||
+  PrintJobStatus.printed ||
+  PrintJobStatus.prepared ||
+  PrintJobStatus.waitingForPrinter => false,
+  PrintJobStatus.notConfigured ||
+  PrintJobStatus.bridgeUnavailable ||
+  PrintJobStatus.failed ||
+  null => true,
+};

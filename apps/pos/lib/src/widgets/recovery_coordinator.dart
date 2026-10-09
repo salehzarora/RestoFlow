@@ -48,7 +48,10 @@ class PosRecoveryCoordinator {
     // Nothing changes here: the cart, the addition attempt, the shell and the
     // recovery record all stay exactly as they are, and the same recovery
     // remains fully available after the lock releases.
-    if (ref.read(cartControllerProvider).lockedByAddition) {
+    // ORDER-EDIT-001E: an edit cart is refused the same way — it is bound to
+    // a sent order and must never meet the Replace / Keep-current choice.
+    final cart = ref.read(cartControllerProvider);
+    if (cart.lockedByAddition || cart.isEditing) {
       return PosRecoveryOutcome.lockedByAddition;
     }
     // A non-empty cart (real lines) is work the operator built while this attempt was

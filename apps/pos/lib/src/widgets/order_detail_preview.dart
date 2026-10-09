@@ -11,6 +11,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../state/order_preview_controller.dart';
 import 'order_action_row.dart';
+import 'order_edit_messages.dart' show orderEditHoldLabel;
 import 'order_status_pills.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the READ-ONLY order detail preview.
@@ -73,7 +74,12 @@ class OrderDetailPreview extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Header(l10n: l10n, order: order, actions: actions),
+          _Header(
+            l10n: l10n,
+            order: order,
+            actions: actions,
+            model: state.model,
+          ),
           const Divider(height: 1),
           Flexible(
             child: switch (state.phase) {
@@ -137,11 +143,18 @@ class _Header extends StatelessWidget {
     required this.l10n,
     required this.order,
     required this.actions,
+    required this.model,
   });
 
   final AppLocalizations l10n;
   final PosRecentOrder order;
   final PosOrderActions actions;
+
+  /// ORDER-EDIT-001E: the loaded model, when there is one. Its authoritative
+  /// edit surface (fresher than this device's snapshot, and the only source
+  /// of the active rounds' STAGE and of the edit history) wins; a local copy
+  /// carries none of it, so the snapshot speaks.
+  final OrderDetailPreviewModel? model;
 
   @override
   Widget build(BuildContext context) {
@@ -212,13 +225,28 @@ class _Header extends StatelessWidget {
                 settlement: order.settlement,
                 keySuffix: 'preview-${order.orderNumber}',
                 orderType: order.orderType,
+                // ORDER-EDIT-001E (STATE_MACHINES §1): a served order with a
+                // live round reads its stage — refined to "Ready" here, the
+                // one surface that has the rounds.
+                hasActiveRound: model?.hasActiveRound ?? order.hasActiveRound,
+                roundStage: model?.activeRoundStage,
+              ),
+              // ORDER-EDIT-001E: Edited / Kitchen to confirm / Kitchen
+              // confirmed — the last only here, from the edit history (D13).
+              ...orderEditChips(
+                l10n,
+                keySuffix: 'preview-${order.orderNumber}',
+                editCount: model?.editCount ?? order.editCount,
+                kitchenAckPending:
+                    model?.kitchenEditAckPending ?? order.kitchenEditAckPending,
+                kitchenConfirmed: model?.kitchenEditsConfirmed ?? false,
               ),
               // THIS device's queued work, reported separately from the order's
               // own lifecycle.
               if (actions.pendingKind case final p?)
                 RestoflowStatusPill(
                   key: Key('preview-pending-${order.orderNumber}'),
-                  label: _pendingLabel(l10n, p),
+                  label: _pendingLabel(l10n, p, actions),
                   tone: RestoflowTone.info,
                   icon: Icons.sync,
                 ),
@@ -230,12 +258,24 @@ class _Header extends StatelessWidget {
   }
 }
 
-String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
+String _pendingLabel(
+  AppLocalizations l10n,
+  PosPendingKind k,
+  PosOrderActions actions,
+) => switch (k) {
   PosPendingKind.submit ||
   PosPendingKind.payment => l10n.posOrdersPendingPayment,
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
+  // ORDER-EDIT-001E: a sent-order edit of THIS device — worded by what it
+  // actually is (sending, applied awaiting its refresh, in conflict, or the
+  // journal's startup blanket), never "Sending changes…" for all of them.
+  PosPendingKind.orderEdit => orderEditHoldLabel(
+    l10n,
+    actions.editHold,
+    appliedEditNumber: actions.appliedEditNumber,
+  ),
 };
 
 /// A STATIC skeleton: an indeterminate spinner never settles, so a widget test

@@ -10,6 +10,7 @@ import '../data/ids.dart';
 import '../data/order_detail_repository.dart';
 import '../data/order_submission.dart';
 import 'cart_controller.dart';
+import 'order_edit_controller.dart' show orderEditControllerProvider;
 import 'order_sync_controller.dart';
 import 'pos_menu_provider.dart';
 import 'pos_session.dart';
@@ -945,6 +946,18 @@ class AdditionController extends Notifier<AdditionState> {
     // next submit would mint a second identity for an operation the server may
     // already own. Refused until hydration settles — it is a disk read.
     if (s.startupBlocked) return AdditionEntryResult.blockedHydrating;
+    // ORDER-EDIT-001E — MUTUAL EXCLUSION with a sent-order edit. Both flows own
+    // the ONE cart. While the edit journal is unread, this order may carry an
+    // edit nobody knows about yet; while an edit is open — or unresolved for
+    // this order — an addition would freeze a payload against a total the edit
+    // is about to move.
+    final edit = ref.read(orderEditControllerProvider);
+    if (edit.startupBlocked) return AdditionEntryResult.blockedHydrating;
+    if (edit.isEditing ||
+        edit.hasUnresolvedEditFor(orderId) ||
+        ref.read(cartControllerProvider).isEditing) {
+      return AdditionEntryResult.blockedPendingAttempt;
+    }
     // MONEY-CODEX-FINAL-CLOSURE-005 (F4): two live records claim this order.
     // Neither may be resumed and no third identity may be created; a person has
     // to decide which operation is real.
