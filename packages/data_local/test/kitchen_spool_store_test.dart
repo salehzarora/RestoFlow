@@ -1,6 +1,5 @@
 import 'dart:convert' show utf8;
 import 'dart:io' show Directory, File;
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
@@ -45,22 +44,27 @@ void main() {
     String dispatchId, {
     String customer = 'Layla',
     String host = '10.0.0.5',
+    KitchenDispatchDocument? dispatch,
   }) async {
     final payload = KitchenSpoolLocalPayload(
-      dispatch: KitchenDispatchDocument(
-        serverPayloadVersion: 1,
-        kind: KitchenSpoolDispatchType.initialOrder,
-        orderCode: '#AB12CD',
-        orderType: 'dine_in',
-        customerDisplayName: customer,
-        items: [
-          KitchenDispatchItem(
-            qty: 2,
-            name: 'Falafel Deluxe',
-            modifiers: [KitchenDispatchModifier(qty: 1, name: 'Extra pickles')],
+      dispatch:
+          dispatch ??
+          KitchenDispatchDocument(
+            serverPayloadVersion: 1,
+            kind: KitchenSpoolDispatchType.initialOrder,
+            orderCode: '#AB12CD',
+            orderType: 'dine_in',
+            customerDisplayName: customer,
+            items: [
+              KitchenDispatchItem(
+                qty: 2,
+                name: 'Falafel Deluxe',
+                modifiers: [
+                  KitchenDispatchModifier(qty: 1, name: 'Extra pickles'),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
       destination: NetworkKitchenDestination(host: host, port: 9100),
       paperWidth: '80mm',
       documentVersion: 1,
@@ -220,6 +224,103 @@ void main() {
         await newJob('disp-label', displayLabel: 'EPSON 10.0.0.5:9100'),
       );
       expect(row.destinationDisplayLabel, 'kitchen-printer');
+    });
+
+    test('ORDER-EDIT-001C: an order_edit job persists through the converter, '
+        'is listed as unresolved, and its blob decrypts to the edit', () async {
+      final edit = KitchenDispatchDocument(
+        serverPayloadVersion: 1,
+        kind: KitchenSpoolDispatchType.orderEdit,
+        orderCode: '#AB12CD',
+        orderType: 'dine_in',
+        createdAt: '2026-10-08T10:00:00Z',
+        editNumber: 1,
+        reasonCode: 'entry_mistake',
+        staffName: 'Dana',
+        editLines: [
+          KitchenDispatchEditRemove(
+            was: KitchenDispatchItem(qty: 1, name: 'Fries'),
+          ),
+        ],
+        orderNow: [KitchenDispatchItem(qty: 2, name: 'Falafel Deluxe')],
+      );
+      final row = await store.insertImportedJob(
+        NewKitchenSpoolJob(
+          localJobId: 'job-edit-1',
+          dispatchId: 'disp-edit-1',
+          organizationId: orgId,
+          restaurantId: restId,
+          branchId: branchId,
+          deviceId: deviceId,
+          orderId: 'ord-1',
+          dispatchType: KitchenSpoolDispatchType.orderEdit,
+          initialStatus: KitchenSpoolJobStatus.imported,
+          encryptedPayloadBlob: await encryptedPayload(
+            'disp-edit-1',
+            dispatch: edit,
+          ),
+          encryptionVersion: cipher.encryptionVersion,
+          destinationFingerprint: 'fp-default',
+          destinationDisplayLabel: 'Kitchen Printer',
+          transportKind: 'network',
+          paperWidth: '80mm',
+          payloadVersion: 1,
+          documentVersion: 1,
+          rasterVersion: 1,
+          createdAt: t0,
+        ),
+      );
+      expect(row.dispatchType, KitchenSpoolDispatchType.orderEdit);
+      expect(row.serviceRoundId, isNull);
+
+      // The plaintext column holds the closed wire text.
+      final stored = await db
+          .customSelect(
+            'SELECT dispatch_type FROM kitchen_spool_jobs '
+            'WHERE local_job_id = ?',
+            variables: [Variable.withString('job-edit-1')],
+          )
+          .getSingle();
+      expect(stored.read<String>('dispatch_type'), 'order_edit');
+
+      final reread = await store.getByLocalJobId('job-edit-1');
+      expect(reread!.dispatchType, KitchenSpoolDispatchType.orderEdit);
+      final unresolved = await store.listUnresolved(
+        deviceId: deviceId,
+        branchId: branchId,
+      );
+      expect(unresolved.map((r) => r.localJobId), ['job-edit-1']);
+      expect(
+        await store.countUnresolved(deviceId: deviceId, branchId: branchId),
+        1,
+      );
+
+      final clear = await cipher.decrypt(
+        envelope: Uint8List.fromList(row.encryptedPayloadBlob),
+        aad: KitchenSpoolAad(
+          dispatchId: row.dispatchId,
+          organizationId: row.organizationId,
+          restaurantId: row.restaurantId,
+          branchId: row.branchId,
+          deviceId: row.deviceId,
+          encryptionVersion: row.encryptionVersion,
+        ),
+        key: key,
+      );
+      final decoded = KitchenSpoolLocalPayload.fromBytes(clear);
+      expect(decoded.dispatch.kind, KitchenSpoolDispatchType.orderEdit);
+      expect(decoded.dispatch.editNumber, 1);
+      expect(decoded.dispatch.staffName, 'Dana');
+      expect(
+        decoded.dispatch.editLines.single,
+        isA<KitchenDispatchEditRemove>(),
+      );
+      expect(decoded.dispatch.orderNow.single.name, 'Falafel Deluxe');
+      // The staff name and edit content live ONLY inside the ciphertext.
+      final blobText = String.fromCharCodes(row.encryptedPayloadBlob);
+      for (final needle in ['Dana', 'Fries', 'entry_mistake', 'edit_lines']) {
+        expect(blobText, isNot(contains(needle)));
+      }
     });
   });
 

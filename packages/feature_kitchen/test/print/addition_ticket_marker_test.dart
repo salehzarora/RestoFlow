@@ -188,6 +188,74 @@ void main() {
       );
       expect(_texts(doc).where((t) => t.contains('Addition')), isEmpty);
     });
+
+    test('B7 ORDER-EDIT-001C (O-6): a round OPENED by an edit prints '
+        '"Change 1 · Round 2" ONLY when the label is set; the document is '
+        'otherwise the addition ticket, line for line', () {
+      KdsTicketView editRound() => KdsTicketView(
+        kitchenTicketId: 'kt-1',
+        stationId: KdsTicketMapper.unassignedStation,
+        items: _ticket().items,
+        status: KitchenTicketStatus.newTicket,
+        orderNumber: '#A1B2C3',
+        orderType: 'dine_in',
+        tableLabel: 'T7',
+        kitchenCounts: _ticket().kitchenCounts,
+        roundId: 'r-2',
+        roundNumber: 2,
+        openedByEditNumber: 1,
+      );
+      final labelled = KitchenTicketPrintLabels(
+        ticketLabel: 'Ticket',
+        previewTitle: 'Kitchen ticket preview',
+        dineIn: 'Dine-in',
+        takeaway: 'Takeaway',
+        tableLabel: 'Table',
+        customerLabel: 'Customer',
+        customerPhoneLabel: 'Phone',
+        stationLabel: 'Station',
+        noteLabel: 'Note',
+        kitchenTotal: (count, unit) => 'KTotal $count $unit',
+        additionLabel: 'Addition',
+        roundLabel: (n) => 'Round $n',
+        restaurantNameFallback: 'Restaurant',
+        changeNumberLabel: (n) => 'Change $n',
+      );
+
+      final withLabel = buildKdsTicketPrintDocument(
+        ticket: editRound(),
+        labels: labelled,
+      );
+      final codeAt = _texts(withLabel).indexOf('#A1B2C3');
+      expect(_texts(withLabel)[codeAt + 1], 'Change 1 · Round 2');
+      expect(withLabel.lines[codeAt + 1].kind, PrintLineKind.title);
+      expect(_texts(withLabel).where((t) => t.contains('Addition')), isEmpty);
+
+      // Without the label (every pre-001C construction site) the SAME ticket
+      // keeps the addition marker.
+      final withoutLabel = buildKdsTicketPrintDocument(
+        ticket: editRound(),
+        labels: _labels(),
+      );
+      expect(_texts(withoutLabel), contains('Addition · Round 2'));
+      expect(_texts(withoutLabel).where((t) => t.contains('Change')), isEmpty);
+
+      // The marker is the ONLY difference.
+      expect(withLabel.lines.length, withoutLabel.lines.length);
+      for (var i = 0; i < withLabel.lines.length; i++) {
+        if (i == codeAt + 1) continue;
+        expect(withLabel.lines[i].kind, withoutLabel.lines[i].kind);
+        expect(withLabel.lines[i].left, withoutLabel.lines[i].left);
+      }
+
+      // An add-items round (no edit) keeps "Addition" even with the label.
+      final addItems = buildKdsTicketPrintDocument(
+        ticket: _ticket(roundId: 'r-2', roundNumber: 2),
+        labels: labelled,
+      );
+      expect(_texts(addItems), contains('Addition · Round 2'));
+      expect(_texts(addItems).where((t) => t.contains('Change')), isEmpty);
+    });
   });
 
   group('C. the addition ticket stays a correct kitchen ticket', () {

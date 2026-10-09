@@ -20,6 +20,9 @@ export 'package:restoflow_data_remote/restoflow_data_remote.dart'
         RealtimeInvalidationSource,
         RealtimeScope;
 
+// ORDER-EDIT-001C: the money-free sent-order edit models the KDS overlay
+// attaches to its tickets (change header, line marks, removed lines).
+export 'src/kds_order_edit.dart';
 export 'src/kds_providers.dart';
 export 'src/kds_repository.dart';
 export 'src/kds_ticket_mapper.dart';

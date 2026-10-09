@@ -883,6 +883,50 @@ Work IDs are proposals pending owner approval.
 | 9 | **ORDER-EDIT-001G** | Reports, dashboard and settings: "Order edits" block via the new `owner_order_edits` reader (contract in API §4.47), "Edited ×N" badge and timeline, `has_active_round` status labels, Dashboard branch toggles over the 001A setter, staff label. On a branch with `kitchen_workflow_mode = 'printer_only'` the finished-food toggle shows "No effect without a kitchen screen: the system cannot tell when food is ready" (the value is kept, so it applies if the branch moves to KDS, Q-046). Activity Log titles are NOT here; they ship with each writer in 001A (§9.2) | 3, 5 |
 | 10 | **ORDER-EDIT-001R** | Release and enablement (operations, no code) — §11 | all |
 
+*Implemented — ORDER-EDIT-001C (shared packages; no app UI, no migration):*
+
+- **Pull entity.** `packages/sync` `kKdsPullEntities` requests `order_edits` after the
+  items, modifiers and rounds (one statement per entity, in request order). Rows are
+  stored by id, so an acknowledged edit re-delivered by the next pull replaces the
+  stored row. A KDS build with 001C needs the 001B migration on the server first:
+  an older server refuses the unknown entity (`42501`) and the board stays in error.
+- **KDS post-pass** (`packages/feature_kitchen`, `KdsTicketMapper.map(orderEdits:)`).
+  A pure pass over the pulled rows, run only when edit rows exist (otherwise the
+  board is byte-identical). Pending = a KDS-channel edit that requires a
+  confirmation not yet given, on an order that is not voided, cancelled or
+  `direct_print`; paper-channel edits are ignored. Against the last confirmed state
+  it marks live lines NEW / "+N" / CHANGED "was → now" / REMAKE "instead of", lists
+  REMOVED lines from the retired rows (with "Remade in Round M" when the replacement
+  landed elsewhere), heads each touched card with the pending edits that touch it
+  (`upToEditNumber` = the newest on that card, `alsoAcknowledges` = older pending
+  numbers of the order, alert key `<ticket id>|e<N>`), and adds a standalone card
+  for a touched unit that has no ticket left (an emptied round, the original unit
+  after the served jump, or an order that already left the board). An order with a
+  pending confirmation is admitted whatever its status, except voided. The voided
+  red card skips lines with `removed_by_edit_id` and keeps round and edit-written
+  lines (API §4.46). Kitchen counts and FIFO order are unchanged. The edit view model
+  plucks only the money-free, identity-free fields it needs.
+- **Change slip** (`orderChange`). `buildOrderChangeSlipPrintDocument` and
+  `renderOrderChangeSlipBytes` print, money-free: `*** ORDER CHANGED · Change N ***`,
+  the code, order type, table or customer, the edit's time, the staff first name and
+  the reason; REMOVED; CHANGE as "Was:" / "Now:" lines (no arrow, because a raster
+  line has one direction, Q-015) with set-quantity decreases; ADD with "+N ×" for
+  increases; ORDER NOW in the server's order; the footer. Paper never prints REMAKE.
+  An edit round's ticket can print "Change N · Round M" when the optional label is
+  supplied (the KDS wires it in 001D).
+- **Spool.** `packages/data_local` decodes the `order_edit` dispatch payload strictly
+  (each `edit_lines` op reads only its own keys; an unknown op is rejected without
+  echoing its value, and an unknown key is rejected by its name, never its value), and the `packages/feature_auth` pull and inspection clients
+  accept the type. Until ORDER-EDIT-001F passes the slip labels, the canonical
+  renderer and the legacy renderer refuse an `order_edit` job, so it is blocked
+  visibly (`kitchen_render_failed`) and never misprinted as a new order.
+- **l10n.** 127 keys inserted mid-file (POS, KDS, kitchen chrome, change slip, the
+  five reasons, the 001G Dashboard strings); no Activity Log strings. A shared helper
+  maps the reason codes (`kOrderEditReasonCodes`, `orderEditReasonLabel`).
+- The API_CONTRACT §4.45.9 line that has ORDER-EDIT-001F build the spool decoder is
+  superseded by this slice (design §10 row 5); that line is reconciled after #288
+  merges, because API_CONTRACT is in #288's diff.
+
 "Depends on 0" means the merged §12 register transcription, not just this note. Every
 code slice (1–9) depends on it directly or through other slices.
 
@@ -936,7 +980,9 @@ Key tests:
 3. Only then turn on **"Allow editing sent orders"** for the branch in the Dashboard.
    An old KDS would silently drop removed lines and an old POS spool would reject the
    `order_edit` dispatch, so the switch is the gate and the fast rollback (APKs cannot
-   be downgraded).
+   be downgraded). *(ORDER-EDIT-001C: more precisely, a POS built before 001C rejects
+   the whole dispatch pull page that contains an `order_edit` row, so its spool drain
+   stalls until it is updated, not just that one dispatch.)*
 4. Run the smoke checklist plus the edit scenarios in both kitchen modes.
 
 ## 12. Register entries to transcribe (outline; provisional IDs — header note rules a–c; merged to main before any §10 slice moves to Ready)

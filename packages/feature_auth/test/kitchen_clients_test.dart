@@ -238,6 +238,97 @@ void main() {
       },
     );
 
+    test('ORDER-EDIT-001C: an order_edit row parses beside an initial_order; '
+        'the type_rank 2 cursor is forwarded verbatim', () async {
+      // The order_edit row exactly as `pull_kitchen_print_dispatches` serves it
+      // to a second till once the acting till's lease has lapsed (captured from
+      // a rolled-back probe against the real migrations): no service round, no
+      // edit id, the money-free change-slip payload carried through untouched.
+      final editRow = <String, Object?>{
+        'id': '91817436-324b-4e0d-9cfa-a4b835bee4eb',
+        'payload': {
+          'v': 1,
+          'kind': 'order_edit',
+          'order_now': [
+            {
+              'qty': 1,
+              'name': 'Burger',
+              'modifiers': [
+                {'qty': 1, 'name': 'cucumber'},
+              ],
+            },
+            {'qty': 1, 'name': 'Water', 'modifiers': <Object?>[]},
+          ],
+          'created_at': '2026-10-08T22:33:30.46448+00:00',
+          'edit_lines': [
+            {
+              'op': 'remove',
+              'was': {'qty': 1, 'name': 'Fries', 'modifiers': <Object?>[]},
+            },
+            {
+              'op': 'set_quantity',
+              'was': {'qty': 3, 'name': 'Cola', 'modifiers': <Object?>[]},
+              'now_qty': 1,
+            },
+          ],
+          'order_code': '#00A001',
+          'order_type': 'dine_in',
+          'staff_name': 'Dana',
+          'edit_number': 1,
+          'reason_code': 'entry_mistake',
+        },
+        'order_id': 'e1ed0000-0000-0000-0000-00000000a001',
+        'created_at': '2026-10-08T22:33:30.46448+00:00',
+        'dispatch_type': 'order_edit',
+        'payload_version': 1,
+        'claim_expires_at': '2026-10-08T22:43:30.46448+00:00',
+        'service_round_id': null,
+      };
+      transport.enqueue({
+        'ok': true,
+        'entity': 'kitchen_print_dispatches',
+        'server_ts': '2026-10-08T22:33:30.46448+00:00',
+        'dispatches': [row('d-1', 'initial_order'), editRow],
+        'has_more': true,
+        'next_cursor': {
+          'id': '91817436-324b-4e0d-9cfa-a4b835bee4eb',
+          'type_rank': 2,
+          'created_at': '2026-10-08T22:33:30.46448+00:00',
+        },
+      });
+      final result = await (await repo()).pull(limit: 20);
+      expect(result, isA<KitchenDispatchPullSuccess>());
+      final page = (result as KitchenDispatchPullSuccess).page;
+      expect(page.dispatches.map((d) => d.dispatchType), [
+        'initial_order',
+        'order_edit',
+      ]);
+      final edit = page.dispatches.last;
+      expect(edit.dispatchId, '91817436-324b-4e0d-9cfa-a4b835bee4eb');
+      expect(edit.orderId, 'e1ed0000-0000-0000-0000-00000000a001');
+      expect(edit.serviceRoundId, isNull);
+      expect(edit.payloadVersion, 1);
+      expect(edit.claimExpiresAt, '2026-10-08T22:43:30.46448+00:00');
+      expect(edit.moneyFreePayload, editRow['payload']);
+      expect(edit.moneyFreePayload['edit_number'], 1);
+      expect(page.hasMore, isTrue);
+      expect(page.nextCursor!.typeRank, 2);
+      expect(page.nextCursor!.id, '91817436-324b-4e0d-9cfa-a4b835bee4eb');
+      expect(page.nextCursor!.createdAt, '2026-10-08T22:33:30.46448+00:00');
+
+      // The set stays CLOSED: a near-miss spelling still fails the page.
+      transport.enqueue({
+        'ok': true,
+        'dispatches': [row('d-3', 'order_edits')],
+        'has_more': false,
+      });
+      final nearMiss = await (await repo()).pull();
+      expect(
+        (nearMiss as KitchenDispatchPullFailure).error,
+        KitchenDispatchPullError.malformedResponse,
+      );
+    });
+
     test('an empty page terminates cleanly', () async {
       transport.enqueue({'ok': true, 'dispatches': [], 'has_more': false});
       final result = await (await repo()).pull();
@@ -257,6 +348,74 @@ void main() {
         KitchenDispatchPullError.transientFailure,
       );
     });
+  });
+
+  group('SupabaseKitchenDispatchInspectionRepository (ORDER-EDIT-001C)', () {
+    late _FakeTransport transport;
+    late SupabaseKitchenDispatchInspectionRepository repo;
+
+    setUp(() {
+      transport = _FakeTransport();
+      repo = SupabaseKitchenDispatchInspectionRepository(transport: transport);
+    });
+
+    Map<String, Object?> row(String id, String type) => {
+      'dispatch_id': id,
+      'dispatch_type': type,
+      'order_id': 'o-1',
+      'created_at': '2026-10-08T10:00:00+00:00',
+      'claimed': true,
+      'last_client_status': null,
+      'last_error_code': null,
+      'completed_at': null,
+      'possibly_printed': false,
+      'superseded': false,
+    };
+
+    test('an order_edit entry parses beside the older types', () async {
+      transport.enqueue({
+        'ok': true,
+        'dispatches': [
+          row('d-1', 'initial_order'),
+          row('d-2', 'order_edit'),
+          row('d-3', 'void'),
+        ],
+        'has_more': false,
+        'next_cursor': null,
+      });
+      final result = await repo.list(
+        organizationId: 'org-1',
+        restaurantId: 'rest-1',
+        branchId: 'branch-1',
+      );
+      expect(result, isA<KitchenDispatchInspectionPage>());
+      final page = result as KitchenDispatchInspectionPage;
+      expect(page.entries.map((e) => e.dispatchType), [
+        'initial_order',
+        'order_edit',
+        'void',
+      ]);
+      expect(page.entries[1].dispatchId, 'd-2');
+      expect(page.entries[1].claimed, isTrue);
+    });
+
+    test(
+      'the type set stays closed: an unknown type fails the response',
+      () async {
+        transport.enqueue({
+          'ok': true,
+          'dispatches': [row('d-1', 'order_edits')],
+          'has_more': false,
+          'next_cursor': null,
+        });
+        final result = await repo.list(
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+        );
+        expect(result, isA<KitchenDispatchInspectionMalformedResponse>());
+      },
+    );
   });
 
   group('SupabaseKitchenDispatchAckRepository (closed 001C2B API)', () {

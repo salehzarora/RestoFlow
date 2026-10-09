@@ -279,6 +279,471 @@ class AppLocalizationsEn extends AppLocalizations {
       'Takeaway orders can\'t take additions';
 
   @override
+  String get posOrderEditBlockedUnacknowledged =>
+      'Waiting for the order to reach the server';
+
+  @override
+  String get posOrderEditNeedsConnection =>
+      'Editing needs a connection so the kitchen is told';
+
+  @override
+  String get posOrderEditCartNotEmptyBody =>
+      'Park or clear the current cart before editing this order.';
+
+  @override
+  String get posOrderEditParkCurrentCart => 'Park current cart';
+
+  @override
+  String posOrderEditBanner(String orderCode) {
+    return 'Editing $orderCode';
+  }
+
+  @override
+  String posOrderEditBannerWithTable(String orderCode, String table) {
+    return 'Editing $orderCode · Table $table';
+  }
+
+  @override
+  String get posOrderEditDiscard => 'Discard changes';
+
+  @override
+  String get posOrderEditDiscardConfirmTitle => 'Discard your changes?';
+
+  @override
+  String get posOrderEditDiscardConfirmBody =>
+      'The order stays exactly as it was sent.';
+
+  @override
+  String get posOrderEditStageWaiting => 'Waiting';
+
+  @override
+  String get posOrderEditStageInKitchen => 'In kitchen';
+
+  @override
+  String get posOrderEditStageReady => 'Ready';
+
+  @override
+  String get posOrderEditStageServed => 'Served';
+
+  @override
+  String get posOrderEditStagePrinted => 'Printed';
+
+  @override
+  String get posOrderEditApplyToLabel => 'Apply to';
+
+  @override
+  String posOrderEditApplyToAll(int count) {
+    return 'All $count';
+  }
+
+  @override
+  String get posOrderEditApplyToOne => 'Just 1';
+
+  @override
+  String get posOrderEditNewBadge => 'New';
+
+  @override
+  String get posOrderEditUndoRemove => 'Undo';
+
+  @override
+  String get posOrderEditKeepOrRemoveOnly =>
+      'No longer on the menu: keep or remove only';
+
+  @override
+  String get posOrderEditRemoveOnlyDiscount => 'Discounted item: remove only';
+
+  @override
+  String get posOrderEditRemoveOnlyLegacy => 'Older item: remove only';
+
+  @override
+  String get posOrderEditRemovalNotAllowedHint =>
+      'You can add items. Removing, reducing or changing sent items needs a manager.';
+
+  @override
+  String get posOrderEditManagerNeeded => 'Manager needed';
+
+  @override
+  String posOrderEditTotalsChange(String before, String after, String delta) {
+    return 'Was $before → Now $after ($delta)';
+  }
+
+  @override
+  String posOrderEditDiscountKept(String amount) {
+    return 'Discount $amount kept';
+  }
+
+  @override
+  String get posOrderEditSendChanges => 'Send changes';
+
+  @override
+  String get posOrderEditNoChanges => 'No changes yet';
+
+  @override
+  String get posOrderEditAllRemovedUseCancel =>
+      'Every item would be removed. Cancel the order instead.';
+
+  @override
+  String get posOrderEditLowerDiscount => 'Lower discount';
+
+  @override
+  String get posOrderEditDiscountExceedsNewSubtotal =>
+      'The discount is more than the new subtotal.';
+
+  @override
+  String get posOrderEditReasonTitle => 'Reason for the change';
+
+  @override
+  String get posOrderEditReasonOtherHint =>
+      'Describe the reason (up to 200 characters)';
+
+  @override
+  String get posOrderEditReasonRequired => 'Choose a reason for the change';
+
+  @override
+  String get posOrderEditReasonOtherRequired => 'Describe the reason';
+
+  @override
+  String get posOrderEditAlreadyCookedTitle => 'Already cooked';
+
+  @override
+  String get posOrderEditAlreadyCookedBody =>
+      'These items are recorded as removed after the kitchen made them.';
+
+  @override
+  String get posOrderEditSending => 'Sending changes…';
+
+  @override
+  String get posOrderEditPendingBlocked =>
+      'Changes to this order are still being sent';
+
+  @override
+  String get posOrderEditRetry => 'Changes not sent — tap to retry';
+
+  @override
+  String posOrderEditResultKitchenMustConfirm(int number) {
+    return 'Change $number sent: kitchen must confirm';
+  }
+
+  @override
+  String posOrderEditResultNewTicket(int number) {
+    return 'Change $number sent: new ticket for the kitchen';
+  }
+
+  @override
+  String posOrderEditResultPrinted(int number) {
+    return 'Change $number printed for the kitchen';
+  }
+
+  @override
+  String posOrderEditResultSaved(int number) {
+    return 'Change $number saved';
+  }
+
+  @override
+  String posOrderEditResultRemake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Already cooked: $count dishes will be remade',
+      one: 'Already cooked: 1 dish will be remade',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posOrderEditedChip => 'Edited';
+
+  @override
+  String get posOrderEditKitchenPendingChip => 'Kitchen to confirm';
+
+  @override
+  String get posOrderEditKitchenConfirmedChip => 'Kitchen confirmed';
+
+  @override
+  String get posOrderEditBillChanged => 'Bill changed: print new bill?';
+
+  @override
+  String get posOrderEditRebased =>
+      'This order changed on another till. Your changes were applied again — check them and send.';
+
+  @override
+  String posOrderEditRebaseDropped(String items) {
+    return 'No longer possible, left out: $items';
+  }
+
+  @override
+  String get posOrderEditErrorNotAllowed =>
+      'Orders can\'t be edited from this device or role.';
+
+  @override
+  String get posOrderEditErrorInvalid =>
+      'The change couldn\'t be sent. Review it and try again.';
+
+  @override
+  String get posOrderEditErrorTooManyChanges =>
+      'Too many changes at once. Send them as smaller edits.';
+
+  @override
+  String get posOrderEditErrorFeatureDisabled =>
+      'Editing sent orders is turned off for this branch.';
+
+  @override
+  String get posOrderEditErrorNotEditable =>
+      'This order can no longer be edited.';
+
+  @override
+  String get posOrderEditErrorAlreadyPaid =>
+      'This order is already paid, so it can\'t be edited.';
+
+  @override
+  String get posOrderEditErrorKitchenModeChanged =>
+      'The branch\'s kitchen setup changed after this order was sent, so it can\'t be edited.';
+
+  @override
+  String get posOrderEditErrorLineHasDiscount =>
+      'A discounted item can only be removed.';
+
+  @override
+  String get posOrderEditErrorLegacyLine =>
+      'This older item can only be removed.';
+
+  @override
+  String get posOrderEditErrorRemovalNotPermitted =>
+      'You can\'t remove, reduce or change sent items — ask a manager.';
+
+  @override
+  String get posOrderEditErrorFinishedFoodNeedsManager =>
+      'Only a manager can change food that is Ready or Served.';
+
+  @override
+  String posOrderEditErrorItemUnavailable(String items) {
+    return 'Not available right now: $items. Remove them and send again.';
+  }
+
+  @override
+  String get posOrderEditErrorOptionNotInScope =>
+      'An option no longer belongs to this item. Refresh the menu and choose the options again.';
+
+  @override
+  String get posOrderEditErrorTaxModeUnsupported =>
+      'Orders can\'t be edited while prices include tax.';
+
+  @override
+  String get posOrderEditErrorSlipTooLarge =>
+      'This change is too large for one kitchen slip. Split it into smaller edits.';
+
+  @override
+  String get posOrderEditSlipNotPrinted => 'Kitchen change slip not printed';
+
+  @override
+  String get posOrderEditPrintAgain => 'Print again';
+
+  @override
+  String get posOrderEditNewerSlipOffer =>
+      'This order has a newer change. Print the latest change slip instead?';
+
+  @override
+  String get posOrderEditPrintLatest => 'Print latest';
+
+  @override
+  String get posOrdersStatusInKitchen => 'In kitchen';
+
+  @override
+  String get kdsEditChangedLabel => 'CHANGED';
+
+  @override
+  String get kdsEditNewBadge => 'NEW';
+
+  @override
+  String kdsEditWas(String item) {
+    return 'was: $item';
+  }
+
+  @override
+  String kdsEditQuantityIncrease(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get kdsEditRemake => 'REMAKE';
+
+  @override
+  String kdsEditInsteadOf(String item) {
+    return 'instead of: $item';
+  }
+
+  @override
+  String get kdsEditAllItemsRemovedTitle => 'All items of this ticket removed';
+
+  @override
+  String get kdsEditAllItemsRemovedBody =>
+      'The cashier removed everything on this ticket — stop preparing it.';
+
+  @override
+  String get kdsEditGotIt => 'Got it';
+
+  @override
+  String kdsEditAlsoConfirms(String numbers) {
+    return 'Also confirms change $numbers';
+  }
+
+  @override
+  String kdsEditRemadeInRound(int round) {
+    return 'Remade in Round $round';
+  }
+
+  @override
+  String kitchenEditChangeNumber(int number) {
+    return 'Change $number';
+  }
+
+  @override
+  String get kitchenEditRemovedLabel => 'REMOVED';
+
+  @override
+  String get kitchenChangeSlipTitle => 'ORDER CHANGED';
+
+  @override
+  String get kitchenChangeSlipChangeLabel => 'CHANGE';
+
+  @override
+  String get kitchenChangeSlipAddLabel => 'ADD';
+
+  @override
+  String get kitchenChangeSlipWasLabel => 'Was';
+
+  @override
+  String get kitchenChangeSlipNowLabel => 'Now';
+
+  @override
+  String get kitchenChangeSlipOrderNow => 'ORDER NOW';
+
+  @override
+  String kitchenChangeSlipFooter(String orderCode) {
+    return 'Replaces earlier tickets for $orderCode';
+  }
+
+  @override
+  String get kitchenChangeSlipStaffLabel => 'Staff';
+
+  @override
+  String get kitchenChangeSlipReasonLabel => 'Reason';
+
+  @override
+  String get orderEditReasonCustomerChangedMind => 'Customer changed mind';
+
+  @override
+  String get orderEditReasonEntryMistake => 'Order entry mistake';
+
+  @override
+  String get orderEditReasonItemUnavailable => 'Item unavailable';
+
+  @override
+  String get orderEditReasonKitchenIssue => 'Kitchen issue';
+
+  @override
+  String get orderEditReasonOther => 'Other';
+
+  @override
+  String get ordersStatusInKitchen => 'In kitchen';
+
+  @override
+  String ordersEditedBadge(int count) {
+    return 'Edited ×$count';
+  }
+
+  @override
+  String get ordersEditTimelineTitle => 'Changes';
+
+  @override
+  String ordersEditKitchenConfirmedAt(String time) {
+    return 'Kitchen confirmed at $time';
+  }
+
+  @override
+  String get ordersEditKitchenPending => 'Waiting for the kitchen to confirm';
+
+  @override
+  String get ordersEditKitchenPrinted => 'Printed for the kitchen';
+
+  @override
+  String get dashboardOrderEditsTitle => 'Order edits';
+
+  @override
+  String get dashboardOrderEditsSubtitle =>
+      'Changes to sent orders. Not counted in Voids.';
+
+  @override
+  String get dashboardOrderEditsEditCount => 'Edits';
+
+  @override
+  String get dashboardOrderEditsEditedOrders => 'Edited orders';
+
+  @override
+  String get dashboardOrderEditsRemoved => 'Removed';
+
+  @override
+  String get dashboardOrderEditsReplacedOut => 'Replaced (before)';
+
+  @override
+  String get dashboardOrderEditsReplacedIn => 'Replaced (after)';
+
+  @override
+  String get dashboardOrderEditsAdded => 'Added';
+
+  @override
+  String get dashboardOrderEditsNetChange => 'Net change';
+
+  @override
+  String get dashboardOrderEditsGrossRemoved => 'Gross removed value';
+
+  @override
+  String get dashboardOrderEditsByReason => 'By reason';
+
+  @override
+  String get dashboardOrderEditsByStaff => 'By staff member';
+
+  @override
+  String get dashboardOrderEditsEmpty => 'No order edits in this period';
+
+  @override
+  String get dashboardOrderEditSectionTitle => 'Editing sent orders';
+
+  @override
+  String get dashboardOrderEditEnabledLabel => 'Allow editing sent orders';
+
+  @override
+  String get dashboardOrderEditEnabledHelp =>
+      'Cashiers can change an open, unpaid order after it was sent to the kitchen. Update every kitchen screen, then every POS, before turning this on.';
+
+  @override
+  String get dashboardOrderEditFinishedFoodLabel =>
+      'Only managers may remove food that is Ready or Served';
+
+  @override
+  String get dashboardOrderEditFinishedFoodHelp =>
+      'When off, any cashier allowed to cancel orders may do it, with a reason.';
+
+  @override
+  String get dashboardOrderEditFinishedFoodPrinterOnlyNote =>
+      'No effect without a kitchen screen: the system cannot tell when food is ready';
+
+  @override
+  String get dashboardOrderEditSaved => 'Order editing settings saved.';
+
+  @override
+  String get dashboardOrderEditSaveFailed =>
+      'Couldn\'t save the order editing settings. Please try again.';
+
+  @override
+  String get staffCapVoidOrderAndEdits =>
+      'Can cancel unpaid orders and remove sent items';
+
+  @override
+  String get staffCapVoidOrderAndEditsHint =>
+      'Also covers removing, reducing or changing items already sent to the kitchen when editing an order.';
+
+  @override
   String get activityLogTitleDiscountApplied => 'Discount applied';
 
   @override

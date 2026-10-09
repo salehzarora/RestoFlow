@@ -17,3 +17,6 @@ export 'src/print/kitchen_dispatch_ticket_adapter.dart';
 export 'src/print/kitchen_print_document.dart';
 export 'src/print/kitchen_ticket_labels.dart';
 export 'src/print/kitchen_ticket_render.dart';
+// ORDER-EDIT-001C: the money-free change-slip view + its chrome labels, printed
+// through `buildOrderChangeSlipPrintDocument` / `renderOrderChangeSlipBytes`.
+export 'src/print/order_change_slip_view.dart';

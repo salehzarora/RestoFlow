@@ -147,6 +147,53 @@ void main() {
     expect(second.single.kitchenTicketId, first.single.kitchenTicketId);
   });
 
+  test('ORDER-EDIT-001C: the red card excludes EDIT-RETIRED lines '
+      '(removed_by_edit_id) but keeps round items and edit-written lines', () {
+    // app.edit_order retired i1 (removed_by_edit_id) and wrote i3 into an edit
+    // round; the order was then voided while the kitchen still had work.
+    final tickets = KdsTicketMapper.map(
+      orders: [
+        _order(
+          'o1',
+          status: 'voided',
+          ackRequired: true,
+          voidedAt: '2026-07-21T10:05:00Z',
+          voidedFrom: 'preparing',
+        ),
+      ],
+      orderItems: [
+        {
+          ..._item('i1', 'o1', status: 'voided'),
+          'menu_item_name_snapshot': 'Retired burger',
+          'removed_by_edit_id': 'e1',
+          'removed_kitchen_stage': 'preparing',
+        },
+        _item('i2', 'o1', status: 'voided'),
+        {
+          ..._item('i3', 'o1', status: 'voided'),
+          'menu_item_name_snapshot': 'Edit fries',
+          'edit_id': 'e1',
+          'service_round_id': 'r2',
+        },
+      ],
+      modifiers: const [],
+      serviceRounds: const [
+        {
+          'id': 'r2',
+          'order_id': 'o1',
+          'round_number': 2,
+          'status': 'voided',
+          'edit_id': 'e1',
+        },
+      ],
+    );
+    final card = tickets.single;
+    expect(card.status, KitchenTicketStatus.cancelled);
+    expect(card.requiresAck, isTrue);
+    expect(card.items.map((i) => i.name), ['Burger', 'Edit fries']);
+    expect(card.items.map((i) => i.orderItemId), ['i2', 'i3']);
+  });
+
   test('a pending-ack card contributes NO kitchen prep counts', () {
     final tickets = KdsTicketMapper.map(
       orders: [

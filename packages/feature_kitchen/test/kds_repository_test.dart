@@ -191,6 +191,84 @@ void main() {
       },
     );
 
+    test('ORDER-EDIT-001C: order_edits rows flow through to the change '
+        'overlay; without them the view state is unchanged', () {
+      final source = _FakeKdsSyncSource();
+      final repo = KdsRepository(source);
+      addTearDown(repo.dispose);
+
+      final orders = [
+        {'id': 'o1', 'status': 'preparing', 'edit_count': 1},
+      ];
+      final items = [
+        {
+          'id': 'i1',
+          'order_id': 'o1',
+          'status': 'pending',
+          'quantity': 1,
+          'menu_item_name_snapshot': 'Burger',
+          'line_position': 1,
+        },
+        {
+          'id': 'i2',
+          'order_id': 'o1',
+          'status': 'voided',
+          'quantity': 1,
+          'menu_item_name_snapshot': 'Fries',
+          'line_position': 2,
+          'removed_by_edit_id': 'e1',
+          'removed_kitchen_stage': 'preparing',
+        },
+      ];
+      final edit = {
+        'id': 'e1',
+        'order_id': 'o1',
+        'edit_number': 1,
+        'kitchen_channel': 'kds',
+        'kitchen_ack_required': true,
+        'kitchen_ack_at': null,
+        'reason_code': 'item_unavailable',
+        'created_at': '2026-10-08T10:20:00Z',
+      };
+
+      source.emit(_dataState(orders, items));
+      final before = repo.viewState.tickets.single;
+      expect(before.change, isNull);
+      expect(before.items.single.name, 'Burger');
+
+      source.emit(
+        KdsSyncState(
+          status: KdsSyncStatus.data,
+          entities: {
+            'orders': orders,
+            'order_items': items,
+            'order_edits': [edit],
+          },
+        ),
+      );
+      final after = repo.viewState.tickets.single;
+      expect(after.requiresChangeAck, isTrue);
+      expect(after.change!.upToEditNumber, 1);
+      expect(after.change!.latest.reasonCode, 'item_unavailable');
+      expect(after.change!.removed.single.line.name, 'Fries');
+      expect(after.changeAlertKey, 'o1:unassigned|e1');
+
+      // The kitchen's "Got it" re-delivers the edit acknowledged.
+      source.emit(
+        KdsSyncState(
+          status: KdsSyncStatus.data,
+          entities: {
+            'orders': orders,
+            'order_items': items,
+            'order_edits': [
+              {...edit, 'kitchen_ack_at': '2026-10-08T10:30:00Z'},
+            ],
+          },
+        ),
+      );
+      expect(repo.viewState.tickets.single.change, isNull);
+    });
+
     test('exposes the reauthRequired state to the UI', () {
       final source = _FakeKdsSyncSource();
       final repo = KdsRepository(source);

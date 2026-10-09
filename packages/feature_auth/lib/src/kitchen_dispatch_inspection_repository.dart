@@ -38,7 +38,8 @@ final class KitchenDispatchInspectionEntry {
 
   final String dispatchId;
 
-  /// `initial_order` / `service_round` / `void` (server CHECK-closed).
+  /// `initial_order` / `service_round` / `void` / `order_edit`
+  /// (ORDER-EDIT-001C) — server CHECK-closed.
   final String dispatchType;
 
   final String orderId;
@@ -201,7 +202,12 @@ class SupabaseKitchenDispatchInspectionRepository {
           superseded is! bool) {
         return const KitchenDispatchInspectionMalformedResponse();
       }
-      const dispatchTypes = {'initial_order', 'service_round', 'void'};
+      const dispatchTypes = {
+        'initial_order',
+        'service_round',
+        'void',
+        'order_edit',
+      };
       if (!dispatchTypes.contains(dispatchType)) {
         return const KitchenDispatchInspectionMalformedResponse();
       }

@@ -62,7 +62,8 @@ class KitchenSpoolJobStatusConverter
 }
 
 /// Drift [TypeConverter] persisting [KitchenSpoolDispatchType] as the server
-/// ledger's wire text (`initial_order` / `service_round` / `void`).
+/// ledger's wire text (`initial_order` / `service_round` / `void` /
+/// `order_edit` — ORDER-EDIT-001C; a plain text column, so no migration).
 class KitchenSpoolDispatchTypeConverter
     extends TypeConverter<KitchenSpoolDispatchType, String> {
   const KitchenSpoolDispatchTypeConverter();
