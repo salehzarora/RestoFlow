@@ -565,12 +565,24 @@ or contract change):*
   baseline, the now-quantities from the frozen request, the new lines and ORDER NOW
   from the post-apply `pos_order_detail`, and the time and reason from
   `detail.edits[]`. Tests render it byte-identical to the slip decoded from three
-  real stored server payloads, in en, ar and he. Gap G1: `pos_order_detail` has no
-  order note, so the hand-built slip prints none (pinned by a fixture). The staff
-  first name is printed only when the signed-in worker made the edit. A replay
-  after a restart builds the same slip from the money-free "was" lines frozen in the
-  journal record (`slip_was`, D2). A record from a 001E build has none, so its
-  "Print again" prints the ORDER-NOW slip of that edit, never a partial change list.
+  real stored server payloads, in en, ar and he (no order note, the editing worker
+  signed in, one label language). It is the same view as the server payload except
+  in four ways:
+  - **Order note (gap G1):** `pos_order_detail` has no order note, so the
+    hand-built slip prints none (pinned by a fixture); the server slip prints it.
+  - **ORDER NOW:** it is read from the post-apply detail, so an add-items running
+    at the same time may show newer lines than the server slip.
+  - **Staff line:** the staff first name is printed only when the signed-in worker
+    made the edit. A replay under another worker, or with nobody signed in, omits
+    the line, while the server payload carries the editing worker's first name
+    (`staff_name`) whoever replays it.
+  - **Label language:** the direct slip prints its labels in the UI language, the
+    spool in the device language (as for tickets).
+
+  A replay after a restart builds the same slip from the money-free "was" lines
+  frozen in the journal record (`slip_was`, D2). A record from a 001E build has
+  none, so its "Print again" prints the ORDER-NOW slip of that edit, never a
+  partial change list.
 - **Exactly once, awaited.** The slip record is persisted before anything is sent,
   then the spool mirror `edit-dispatch:<dispatchId>` is written `claimed`, then the
   slip prints under the guard key `<orderId>|edit:<orderEditId>` (claim before
@@ -616,9 +628,35 @@ or contract change):*
     as these checks, imported, and the till hands the slip over (mirror `claimed`,
     record and banner removed, D3). The till's automatic print and "Print again"
     check that reservation in the same synchronous step as their own in-flight
-    mark, so the spool and the till never both print a slip; an import that fails
-    gives the slip back. A replay finds the hand-over by a mirror `claimed` over no
-    guard claim or a `failed` one. A slip prints no phone, so none is resolved.
+    mark, so neither starts once the other owns the slip; an import that fails
+    gives the slip back. A slip prints no phone, so none is resolved.
+- **The spool database decides a hand-over.** A crash between the spool's durable
+  insert and the hand-over leaves the till's record, its banner and the old mirror
+  next to a spool row the worker prints, and the next session remembers no
+  reservation. So the till asks the spool database itself:
+  `PosKitchenSpoolRuntime.holdsOrderEditDispatch`, a read-only lookup by dispatch id
+  (any row status) that never creates a spool file and reads no key. The native
+  composition attaches it through `orderEditSpoolLookupProvider`, and it resolves
+  the current runtime at each call; with none attached (web, demo, no paired
+  transport) it reads "not held".
+  - The restore hands over every loaded slip whose dispatch the spool holds, so no
+    banner shows for it, and asks again when the lookup attaches.
+  - The automatic print and "Print again" ask after their in-flight mark (which
+    defers any new import) and before any claim or send, and hand a held dispatch
+    over instead of printing it.
+  - A spool that cannot tell (presence undeterminable, database not opening)
+    withholds the direct print and keeps the record and its banner.
+  - A replay that finds the mirror `claimed` over no guard claim reads it as a
+    hand-over, as before. Over a `failed` guard claim it needs the spool's positive
+    proof, because a failed print whose slip-store and mirror `failed` writes were
+    both refused leaves the same pair. Without the proof the slip is recorded and
+    printed again; when the spool cannot tell, it is recorded and offered by its
+    banner.
+  - Retention: the spool keeps every row. Nothing in production prunes it, and
+    `pruneTransportAcceptedOlderThan` (no caller) would remove only fully
+    acknowledged `transport_accepted` rows. A slip record is retired once the
+    recent-orders window (the start of yesterday) passes it, so the lookup outlives
+    every record that asks it; any future pruning must keep rows longer than that.
 - **Ordered supersession sweep (D4).** An imported `order_edit`, and this till's own
   direct prints (bounded evidence: 72 hours, 200 entries; an entry without a
   dispatch id cannot be linked and is dropped), supersede only OLDER unresolved
@@ -659,11 +697,21 @@ or contract change):*
     supersession feed is a follow-up, §13). Two tills racing in the same instant
     may order a round and an edit wrongly by `created_at`; the server's own
     supersession stays authoritative.
-  - ORDER NOW comes from the post-apply detail, so a concurrent add-items may show
-    newer lines than the server slip.
-  - The direct slip uses the UI language and the spool the device language, as for
-    tickets. The claim store keeps two keys per paper edit, with no pruning (the
-    existing pattern).
+  - The till never prints a slip the spool database holds, but the lookup is
+    attached only when the spool runtime is first composed (the first frame of the
+    POS surface). A direct print before that could miss a held row; none runs that
+    early, and the restore asks again once it attaches. While the spool database
+    cannot be read (its presence undeterminable, or it does not open), the till
+    prints no change slip directly, automatically or by "Print again": each keeps
+    its banner until the spool can answer.
+  - A replay that finds the mirror `claimed` over no guard claim still reads it as
+    a hand-over without asking the spool. Besides a hand-over, that pair is left by
+    a retired slip (nothing to print) or by a refused slip-store write followed by
+    a crash before the print; the last leaves that slip unprinted and without a
+    banner (the spool acknowledges it `possibly_printed`).
+  - The hand-built slip differs from the server slip as listed above (order note,
+    concurrent ORDER NOW lines, staff line, label language). The claim store keeps
+    two keys per paper edit, with no pruning (the existing pattern).
 - The API_CONTRACT §4.45.5–§4.45.10 notes for this slice (23514 already mapped by
   001E, the decoder line superseded by 001C, the POS paper rules, the void count)
   and the IMPLEMENTATION_CHECKLIST marker are reconciled after #288 merges, because
